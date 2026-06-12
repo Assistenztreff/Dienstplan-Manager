@@ -122,6 +122,7 @@ export const ListContractsResponseItem = zod.object({
   "userId": zod.number(),
   "weeklyHours": zod.number(),
   "vacationDays": zod.number(),
+  "vacationDaysUsed": zod.number(),
   "startDate": zod.coerce.date(),
   "endDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
@@ -171,6 +172,7 @@ export const GetContractResponse = zod.object({
   "userId": zod.number(),
   "weeklyHours": zod.number(),
   "vacationDays": zod.number(),
+  "vacationDaysUsed": zod.number(),
   "startDate": zod.coerce.date(),
   "endDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
@@ -199,11 +201,14 @@ export const updateContractBodyWeeklyHoursMin = 0;
 
 export const updateContractBodyVacationDaysMin = 0;
 
+export const updateContractBodyVacationDaysUsedMin = 0;
+
 
 
 export const UpdateContractBody = zod.object({
   "weeklyHours": zod.number().min(updateContractBodyWeeklyHoursMin).optional(),
   "vacationDays": zod.number().min(updateContractBodyVacationDaysMin).optional(),
+  "vacationDaysUsed": zod.number().min(updateContractBodyVacationDaysUsedMin).optional(),
   "endDate": zod.string().nullish(),
   "notes": zod.string().nullish()
 })
@@ -213,6 +218,7 @@ export const UpdateContractResponse = zod.object({
   "userId": zod.number(),
   "weeklyHours": zod.number(),
   "vacationDays": zod.number(),
+  "vacationDaysUsed": zod.number(),
   "startDate": zod.coerce.date(),
   "endDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
@@ -245,7 +251,7 @@ export const ListShiftsQueryParams = zod.object({
   "userId": zod.coerce.number().optional(),
   "month": zod.coerce.number().optional(),
   "year": zod.coerce.number().optional(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day']).optional()
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick']).optional()
 })
 
 export const ListShiftsResponseItem = zod.object({
@@ -253,7 +259,7 @@ export const ListShiftsResponseItem = zod.object({
   "userId": zod.number(),
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day']),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick']),
   "notes": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "user": zod.object({
@@ -277,7 +283,7 @@ export const CreateShiftBody = zod.object({
   "userId": zod.number(),
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day']),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick']),
   "notes": zod.string().optional()
 })
 
@@ -294,7 +300,7 @@ export const GetShiftResponse = zod.object({
   "userId": zod.number(),
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day']),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick']),
   "notes": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "user": zod.object({
@@ -320,7 +326,7 @@ export const UpdateShiftParams = zod.object({
 export const UpdateShiftBody = zod.object({
   "startTime": zod.coerce.date().optional(),
   "endTime": zod.coerce.date().optional(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day']).optional(),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick']).optional(),
   "notes": zod.string().nullish()
 })
 
@@ -329,7 +335,7 @@ export const UpdateShiftResponse = zod.object({
   "userId": zod.number(),
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day']),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick']),
   "notes": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "user": zod.object({
@@ -535,6 +541,22 @@ export const InviteUserResponse = zod.object({
 
 
 /**
+ * @summary Urlaubskontigent abrufen
+ */
+export const GetVacationBalanceParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetVacationBalanceResponse = zod.object({
+  "contractId": zod.number(),
+  "userId": zod.number(),
+  "vacationDays": zod.number(),
+  "vacationDaysUsed": zod.number(),
+  "vacationDaysRemaining": zod.number()
+})
+
+
+/**
  * @summary Dashboard-Zusammenfassung
  */
 export const GetDashboardSummaryQueryParams = zod.object({
@@ -554,7 +576,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "userId": zod.number(),
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day']),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick']),
   "notes": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "user": zod.object({
@@ -608,6 +630,9 @@ export const GetHoursBalanceResponseItem = zod.object({
   "plannedHours": zod.number(),
   "actualHours": zod.number(),
   "balance": zod.number(),
+  "workedHours": zod.number(),
+  "sickHours": zod.number(),
+  "vacationDaysTaken": zod.number(),
   "vacationDaysUsed": zod.number(),
   "vacationDaysRemaining": zod.number()
 })

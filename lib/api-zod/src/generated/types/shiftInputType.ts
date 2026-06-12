@@ -14,4 +14,6 @@ export const ShiftInputType = {
   standby: 'standby',
   night: 'night',
   full_day: 'full_day',
+  vacation: 'vacation',
+  sick: 'sick',
 } as const;

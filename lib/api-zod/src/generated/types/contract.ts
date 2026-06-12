@@ -12,6 +12,7 @@ export interface Contract {
   userId: number;
   weeklyHours: number;
   vacationDays: number;
+  vacationDaysUsed: number;
   startDate: Date;
   /** @nullable */
   endDate?: string | null;

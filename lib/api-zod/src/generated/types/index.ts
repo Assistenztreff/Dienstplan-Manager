@@ -39,3 +39,4 @@ export * from './userInput';
 export * from './userInputRole';
 export * from './userRole';
 export * from './userUpdate';
+export * from './vacationBalance';

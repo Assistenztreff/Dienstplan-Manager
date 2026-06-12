@@ -28,11 +28,8 @@ type ShiftForEdit = {
 type ShiftDialogProps = {
   open: boolean;
   onClose: () => void;
-  /** Pre-selected date when clicking a day/cell */
   preselectedDate?: Date;
-  /** Pre-selected assistant when clicking a table cell */
   preselectedUserId?: number;
-  /** Existing shift data when editing */
   editShift?: ShiftForEdit;
   assistants: Assistant[];
   month: number;
@@ -44,9 +41,13 @@ const SHIFT_TYPES = [
   { value: "standby", label: "Bereitschaftsdienst" },
   { value: "night", label: "Nachtdienst" },
   { value: "full_day", label: "24h-Dienst" },
+  { value: "vacation", label: "Urlaub" },
+  { value: "sick", label: "Krank" },
 ] as const;
 
 type ShiftTypeValue = (typeof SHIFT_TYPES)[number]["value"];
+
+const ABSENCE_TYPES: ShiftTypeValue[] = ["vacation", "sick"];
 
 type FormState = {
   userId: string;
@@ -94,7 +95,7 @@ export function ShiftDialog({
     userId: editShift ? String(editShift.userId) : preselectedUserId ? String(preselectedUserId) : "",
     date: editShift ? toDateString(editShift.startTime) : defaultDate,
     startTime: editShift ? toTimeString(editShift.startTime) : "08:00",
-    endTime: editShift ? toTimeString(editShift.endTime) : "14:00",
+    endTime: editShift ? toTimeString(editShift.endTime) : "16:00",
     type: editShift && SHIFT_TYPES.find(t => t.value === editShift.type) ? editShift.type as ShiftTypeValue : "active",
     notes: editShift?.notes ?? "",
   }));
@@ -103,7 +104,6 @@ export function ShiftDialog({
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // Reset form when dialog opens
   useEffect(() => {
     if (open) {
       setErrors({});
@@ -112,7 +112,7 @@ export function ShiftDialog({
         userId: editShift ? String(editShift.userId) : preselectedUserId ? String(preselectedUserId) : "",
         date: editShift ? toDateString(editShift.startTime) : defaultDate,
         startTime: editShift ? toTimeString(editShift.startTime) : "08:00",
-        endTime: editShift ? toTimeString(editShift.endTime) : "14:00",
+        endTime: editShift ? toTimeString(editShift.endTime) : "16:00",
         type: editShift && SHIFT_TYPES.find(t => t.value === editShift.type) ? editShift.type as ShiftTypeValue : "active",
         notes: editShift?.notes ?? "",
       });
@@ -125,14 +125,19 @@ export function ShiftDialog({
     setErrors(e => ({ ...e, [field]: undefined }));
   }
 
+  const isAbsence = ABSENCE_TYPES.includes(form.type);
+  const is24h = form.type === "full_day";
+
   function validate(): boolean {
     const errs: Partial<Record<keyof FormState, string>> = {};
     if (!form.userId) errs.userId = "Assistent auswählen";
     if (!form.date) errs.date = "Datum angeben";
-    if (!form.startTime) errs.startTime = "Startzeit angeben";
-    if (!form.endTime) errs.endTime = "Endzeit angeben";
-    if (form.startTime && form.endTime && form.startTime >= form.endTime && form.type !== "full_day") {
-      errs.endTime = "Endzeit muss nach der Startzeit liegen";
+    if (!isAbsence) {
+      if (!form.startTime) errs.startTime = "Startzeit angeben";
+      if (!form.endTime) errs.endTime = "Endzeit angeben";
+      if (form.startTime && form.endTime && form.startTime >= form.endTime && !is24h) {
+        errs.endTime = "Endzeit muss nach der Startzeit liegen";
+      }
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -146,14 +151,18 @@ export function ShiftDialog({
     if (!validate()) return;
     setSaving(true);
     try {
-      const startIso = buildIso(form.date, form.startTime);
-      // For 24h-shifts, end is always the next day at the same time
+      let startIso: string;
       let endIso: string;
-      if (form.type === "full_day") {
+
+      if (isAbsence) {
+        startIso = new Date(`${form.date}T00:00:00`).toISOString();
+        endIso = new Date(`${form.date}T23:59:59`).toISOString();
+      } else if (is24h) {
+        startIso = buildIso(form.date, form.startTime);
         const startDate = new Date(`${form.date}T${form.startTime}:00`);
-        const endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
-        endIso = endDate.toISOString();
+        endIso = new Date(startDate.getTime() + 24 * 60 * 60 * 1000).toISOString();
       } else {
+        startIso = buildIso(form.date, form.startTime);
         endIso = buildIso(form.date, form.endTime);
       }
 
@@ -203,8 +212,6 @@ export function ShiftDialog({
     }
   }
 
-  const is24h = form.type === "full_day";
-
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent className="sm:max-w-md">
@@ -251,7 +258,7 @@ export function ShiftDialog({
 
           {/* Schicht-Typ */}
           <div className="space-y-1.5">
-            <Label>Schicht-Typ *</Label>
+            <Label>Typ *</Label>
             <Select value={form.type} onValueChange={v => set("type", v as ShiftTypeValue)}>
               <SelectTrigger>
                 <SelectValue />
@@ -266,35 +273,45 @@ export function ShiftDialog({
             </Select>
           </div>
 
-          {/* Zeiten */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>Startzeit *</Label>
-              <Input
-                type="time"
-                value={form.startTime}
-                onChange={e => set("startTime", e.target.value)}
-                className={errors.startTime ? "border-destructive" : ""}
-              />
-              {errors.startTime && <p className="text-xs text-destructive">{errors.startTime}</p>}
+          {/* Zeiten (nur für reguläre Schichten) */}
+          {!isAbsence && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Startzeit *</Label>
+                <Input
+                  type="time"
+                  value={form.startTime}
+                  onChange={e => set("startTime", e.target.value)}
+                  className={errors.startTime ? "border-destructive" : ""}
+                />
+                {errors.startTime && <p className="text-xs text-destructive">{errors.startTime}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label>Endzeit {is24h ? "(auto)" : "*"}</Label>
+                <Input
+                  type="time"
+                  value={is24h ? form.startTime : form.endTime}
+                  onChange={e => set("endTime", e.target.value)}
+                  disabled={is24h}
+                  className={errors.endTime ? "border-destructive" : ""}
+                />
+                {is24h && (
+                  <p className="text-xs text-muted-foreground">24h nach Startzeit</p>
+                )}
+                {errors.endTime && !is24h && (
+                  <p className="text-xs text-destructive">{errors.endTime}</p>
+                )}
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Endzeit {is24h ? "(auto)" : "*"}</Label>
-              <Input
-                type="time"
-                value={is24h ? form.startTime : form.endTime}
-                onChange={e => set("endTime", e.target.value)}
-                disabled={is24h}
-                className={errors.endTime ? "border-destructive" : ""}
-              />
-              {is24h && (
-                <p className="text-xs text-muted-foreground">24h nach Startzeit</p>
-              )}
-              {errors.endTime && !is24h && (
-                <p className="text-xs text-destructive">{errors.endTime}</p>
-              )}
-            </div>
-          </div>
+          )}
+
+          {isAbsence && (
+            <p className="text-xs text-muted-foreground rounded-md bg-muted/50 px-3 py-2">
+              {form.type === "vacation"
+                ? "Urlaubstag wird als ganzer Tag eingetragen und vom Urlaubskontigent abgezogen."
+                : "Krankheitstag wird als ganzer Tag eingetragen. Vertragsstunden werden als Lohnfortzahlung gutgeschrieben."}
+            </p>
+          )}
 
           {/* Hinweise */}
           <div className="space-y-1.5">

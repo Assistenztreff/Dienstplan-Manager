@@ -64,6 +64,7 @@ export interface Contract {
   userId: number;
   weeklyHours: number;
   vacationDays: number;
+  vacationDaysUsed: number;
   startDate: string;
   /** @nullable */
   endDate?: string | null;
@@ -89,6 +90,8 @@ export interface ContractUpdate {
   weeklyHours?: number;
   /** @minimum 0 */
   vacationDays?: number;
+  /** @minimum 0 */
+  vacationDaysUsed?: number;
   /** @nullable */
   endDate?: string | null;
   /** @nullable */
@@ -103,6 +106,8 @@ export const ShiftType = {
   standby: 'standby',
   night: 'night',
   full_day: 'full_day',
+  vacation: 'vacation',
+  sick: 'sick',
 } as const;
 
 export interface Shift {
@@ -125,6 +130,8 @@ export const ShiftInputType = {
   standby: 'standby',
   night: 'night',
   full_day: 'full_day',
+  vacation: 'vacation',
+  sick: 'sick',
 } as const;
 
 export interface ShiftInput {
@@ -143,6 +150,8 @@ export const ShiftUpdateType = {
   standby: 'standby',
   night: 'night',
   full_day: 'full_day',
+  vacation: 'vacation',
+  sick: 'sick',
 } as const;
 
 export interface ShiftUpdate {
@@ -236,6 +245,17 @@ export interface HoursBalance {
   plannedHours: number;
   actualHours: number;
   balance: number;
+  workedHours: number;
+  sickHours: number;
+  vacationDaysTaken: number;
+  vacationDaysUsed: number;
+  vacationDaysRemaining: number;
+}
+
+export interface VacationBalance {
+  contractId: number;
+  userId: number;
+  vacationDays: number;
   vacationDaysUsed: number;
   vacationDaysRemaining: number;
 }
@@ -271,6 +291,8 @@ export const ListShiftsType = {
   standby: 'standby',
   night: 'night',
   full_day: 'full_day',
+  vacation: 'vacation',
+  sick: 'sick',
 } as const;
 
 export type ListTimeEntriesParams = {

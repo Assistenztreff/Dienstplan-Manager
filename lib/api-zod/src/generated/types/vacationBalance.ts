@@ -6,15 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HoursBalance {
+export interface VacationBalance {
+  contractId: number;
   userId: number;
-  userName: string;
-  plannedHours: number;
-  actualHours: number;
-  balance: number;
-  workedHours: number;
-  sickHours: number;
-  vacationDaysTaken: number;
+  vacationDays: number;
   vacationDaysUsed: number;
   vacationDaysRemaining: number;
 }

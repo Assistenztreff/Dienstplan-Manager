@@ -13,6 +13,28 @@ import {
 
 const router = Router();
 
+const CONTRACT_SELECT = {
+  id: contractsTable.id,
+  userId: contractsTable.userId,
+  weeklyHours: contractsTable.weeklyHours,
+  vacationDays: contractsTable.vacationDays,
+  vacationDaysUsed: contractsTable.vacationDaysUsed,
+  startDate: contractsTable.startDate,
+  endDate: contractsTable.endDate,
+  notes: contractsTable.notes,
+  createdAt: contractsTable.createdAt,
+  user: {
+    id: usersTable.id,
+    name: usersTable.name,
+    email: usersTable.email,
+    role: usersTable.role,
+    phone: usersTable.phone,
+    address: usersTable.address,
+    isActive: usersTable.isActive,
+    createdAt: usersTable.createdAt,
+  },
+};
+
 router.get("/contracts", async (req, res) => {
   const query = ListContractsQueryParams.safeParse({
     userId: req.query.userId ? Number(req.query.userId) : undefined,
@@ -21,26 +43,7 @@ router.get("/contracts", async (req, res) => {
     return res.status(400).json({ error: "Invalid query parameters" });
   }
   const rows = await db
-    .select({
-      id: contractsTable.id,
-      userId: contractsTable.userId,
-      weeklyHours: contractsTable.weeklyHours,
-      vacationDays: contractsTable.vacationDays,
-      startDate: contractsTable.startDate,
-      endDate: contractsTable.endDate,
-      notes: contractsTable.notes,
-      createdAt: contractsTable.createdAt,
-      user: {
-        id: usersTable.id,
-        name: usersTable.name,
-        email: usersTable.email,
-        role: usersTable.role,
-        phone: usersTable.phone,
-        address: usersTable.address,
-        isActive: usersTable.isActive,
-        createdAt: usersTable.createdAt,
-      },
-    })
+    .select(CONTRACT_SELECT)
     .from(contractsTable)
     .leftJoin(usersTable, eq(contractsTable.userId, usersTable.id))
     .where(query.data.userId ? eq(contractsTable.userId, query.data.userId) : undefined);
@@ -54,26 +57,7 @@ router.post("/contracts", async (req, res) => {
   }
   const [contract] = await db.insert(contractsTable).values(body.data).returning();
   const [withUser] = await db
-    .select({
-      id: contractsTable.id,
-      userId: contractsTable.userId,
-      weeklyHours: contractsTable.weeklyHours,
-      vacationDays: contractsTable.vacationDays,
-      startDate: contractsTable.startDate,
-      endDate: contractsTable.endDate,
-      notes: contractsTable.notes,
-      createdAt: contractsTable.createdAt,
-      user: {
-        id: usersTable.id,
-        name: usersTable.name,
-        email: usersTable.email,
-        role: usersTable.role,
-        phone: usersTable.phone,
-        address: usersTable.address,
-        isActive: usersTable.isActive,
-        createdAt: usersTable.createdAt,
-      },
-    })
+    .select(CONTRACT_SELECT)
     .from(contractsTable)
     .leftJoin(usersTable, eq(contractsTable.userId, usersTable.id))
     .where(eq(contractsTable.id, contract.id));
@@ -84,26 +68,7 @@ router.get("/contracts/:id", async (req, res) => {
   const params = GetContractParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) return res.status(400).json({ error: "Invalid id" });
   const [row] = await db
-    .select({
-      id: contractsTable.id,
-      userId: contractsTable.userId,
-      weeklyHours: contractsTable.weeklyHours,
-      vacationDays: contractsTable.vacationDays,
-      startDate: contractsTable.startDate,
-      endDate: contractsTable.endDate,
-      notes: contractsTable.notes,
-      createdAt: contractsTable.createdAt,
-      user: {
-        id: usersTable.id,
-        name: usersTable.name,
-        email: usersTable.email,
-        role: usersTable.role,
-        phone: usersTable.phone,
-        address: usersTable.address,
-        isActive: usersTable.isActive,
-        createdAt: usersTable.createdAt,
-      },
-    })
+    .select(CONTRACT_SELECT)
     .from(contractsTable)
     .leftJoin(usersTable, eq(contractsTable.userId, usersTable.id))
     .where(eq(contractsTable.id, params.data.id));
@@ -124,26 +89,7 @@ router.patch("/contracts/:id", async (req, res) => {
     .returning();
   if (!updated) return res.status(404).json({ error: "Not found" });
   const [withUser] = await db
-    .select({
-      id: contractsTable.id,
-      userId: contractsTable.userId,
-      weeklyHours: contractsTable.weeklyHours,
-      vacationDays: contractsTable.vacationDays,
-      startDate: contractsTable.startDate,
-      endDate: contractsTable.endDate,
-      notes: contractsTable.notes,
-      createdAt: contractsTable.createdAt,
-      user: {
-        id: usersTable.id,
-        name: usersTable.name,
-        email: usersTable.email,
-        role: usersTable.role,
-        phone: usersTable.phone,
-        address: usersTable.address,
-        isActive: usersTable.isActive,
-        createdAt: usersTable.createdAt,
-      },
-    })
+    .select(CONTRACT_SELECT)
     .from(contractsTable)
     .leftJoin(usersTable, eq(contractsTable.userId, usersTable.id))
     .where(eq(contractsTable.id, params.data.id));
@@ -155,6 +101,24 @@ router.delete("/contracts/:id", async (req, res) => {
   if (!params.success) return res.status(400).json({ error: "Invalid id" });
   await db.delete(contractsTable).where(eq(contractsTable.id, params.data.id));
   res.status(204).send();
+});
+
+router.get("/contracts/:id/vacation-balance", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id || isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+  const [contract] = await db
+    .select()
+    .from(contractsTable)
+    .where(eq(contractsTable.id, id))
+    .limit(1);
+  if (!contract) return res.status(404).json({ error: "Not found" });
+  res.json({
+    contractId: contract.id,
+    userId: contract.userId,
+    vacationDays: contract.vacationDays,
+    vacationDaysUsed: contract.vacationDaysUsed,
+    vacationDaysRemaining: contract.vacationDays - contract.vacationDaysUsed,
+  });
 });
 
 export default router;

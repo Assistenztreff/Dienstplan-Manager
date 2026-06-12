@@ -248,7 +248,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [active, standby, night, full_day]
+            enum: [active, standby, night, full_day, vacation, sick]
       responses:
         "200":
           description: Liste der Schichten
@@ -486,6 +486,27 @@ paths:
         "404":
           description: Nicht gefunden
 
+  /contracts/{id}/vacation-balance:
+    get:
+      operationId: getVacationBalance
+      tags: [contracts]
+      summary: Urlaubskontigent abrufen
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Urlaubskontigent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VacationBalance"
+        "404":
+          description: Nicht gefunden
+
   /dashboard/summary:
     get:
       operationId: getDashboardSummary
@@ -603,7 +624,7 @@ components:
 
     Contract:
       type: object
-      required: [id, userId, weeklyHours, vacationDays, startDate, createdAt]
+      required: [id, userId, weeklyHours, vacationDays, vacationDaysUsed, startDate, createdAt]
       properties:
         id:
           type: integer
@@ -612,6 +633,8 @@ components:
         weeklyHours:
           type: number
         vacationDays:
+          type: integer
+        vacationDaysUsed:
           type: integer
         startDate:
           type: string
@@ -656,6 +679,9 @@ components:
         vacationDays:
           type: integer
           minimum: 0
+        vacationDaysUsed:
+          type: integer
+          minimum: 0
         endDate:
           type: ["string", "null"]
         notes:
@@ -677,7 +703,7 @@ components:
           format: date-time
         type:
           type: string
-          enum: [active, standby, night, full_day]
+          enum: [active, standby, night, full_day, vacation, sick]
         notes:
           type: ["string", "null"]
         createdAt:
@@ -700,7 +726,7 @@ components:
           format: date-time
         type:
           type: string
-          enum: [active, standby, night, full_day]
+          enum: [active, standby, night, full_day, vacation, sick]
         notes:
           type: string
 
@@ -715,7 +741,7 @@ components:
           format: date-time
         type:
           type: string
-          enum: [active, standby, night, full_day]
+          enum: [active, standby, night, full_day, vacation, sick]
         notes:
           type: ["string", "null"]
 
@@ -837,7 +863,7 @@ components:
 
     HoursBalance:
       type: object
-      required: [userId, userName, plannedHours, actualHours, balance, vacationDaysUsed, vacationDaysRemaining]
+      required: [userId, userName, plannedHours, actualHours, balance, workedHours, sickHours, vacationDaysTaken, vacationDaysUsed, vacationDaysRemaining]
       properties:
         userId:
           type: integer
@@ -849,6 +875,27 @@ components:
           type: number
         balance:
           type: number
+        workedHours:
+          type: number
+        sickHours:
+          type: number
+        vacationDaysTaken:
+          type: integer
+        vacationDaysUsed:
+          type: integer
+        vacationDaysRemaining:
+          type: integer
+
+    VacationBalance:
+      type: object
+      required: [contractId, userId, vacationDays, vacationDaysUsed, vacationDaysRemaining]
+      properties:
+        contractId:
+          type: integer
+        userId:
+          type: integer
+        vacationDays:
+          type: integer
         vacationDaysUsed:
           type: integer
         vacationDaysRemaining:

@@ -1,9 +1,29 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { usersTable, shiftsTable, timeTrackingTable, contractsTable } from "@workspace/db";
-import { eq, and, sql, count, sum } from "drizzle-orm";
+import { eq, and, sql, count, or, isNull } from "drizzle-orm";
 
 const router = Router();
+
+async function activeContractFor(userId: number, date: Date) {
+  const dateStr = date.toISOString().split("T")[0];
+  const contracts = await db
+    .select()
+    .from(contractsTable)
+    .where(
+      and(
+        eq(contractsTable.userId, userId),
+        sql`${contractsTable.startDate} <= ${dateStr}`,
+        or(
+          isNull(contractsTable.endDate),
+          sql`${contractsTable.endDate} >= ${dateStr}`
+        )
+      )
+    )
+    .orderBy(sql`${contractsTable.startDate} DESC`)
+    .limit(1);
+  return contracts[0] ?? null;
+}
 
 router.get("/dashboard/summary", async (req, res) => {
   const month = req.query.month ? Number(req.query.month) : new Date().getMonth() + 1;
@@ -33,7 +53,7 @@ router.get("/dashboard/summary", async (req, res) => {
     .where(eq(timeTrackingTable.status, "pending"));
 
   const monthShifts = await db
-    .select({ actualHours: shiftsTable.endTime, startTime: shiftsTable.startTime, endTime: shiftsTable.endTime })
+    .select({ startTime: shiftsTable.startTime, endTime: shiftsTable.endTime })
     .from(shiftsTable)
     .where(
       and(
@@ -131,6 +151,9 @@ router.get("/dashboard/hours-balance", async (req, res) => {
     .from(usersTable)
     .where(and(eq(usersTable.role, "assistant"), eq(usersTable.isActive, true)));
 
+  // Use the first day of the requested month to find the active contract
+  const referenceDate = new Date(year, month - 1, 1);
+
   const result = await Promise.all(
     assistants.map(async (assistant) => {
       const shifts = await db
@@ -143,13 +166,20 @@ router.get("/dashboard/hours-balance", async (req, res) => {
             sql`EXTRACT(YEAR FROM ${shiftsTable.startTime}) = ${year}`,
           )
         );
-      const plannedHours = shifts.reduce((acc, s) => {
-        return acc + (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3_600_000;
-      }, 0);
 
-      const timeEntries = await db
-        .select()
+      const plannedHours = shifts
+        .filter(s => s.type !== "vacation" && s.type !== "sick")
+        .reduce((acc, s) => {
+          return acc + (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3_600_000;
+        }, 0);
+
+      const timeEntriesWithShift = await db
+        .select({
+          actualHours: timeTrackingTable.actualHours,
+          shiftType: shiftsTable.type,
+        })
         .from(timeTrackingTable)
+        .leftJoin(shiftsTable, eq(timeTrackingTable.shiftId, shiftsTable.id))
         .where(
           and(
             eq(timeTrackingTable.userId, assistant.id),
@@ -158,14 +188,24 @@ router.get("/dashboard/hours-balance", async (req, res) => {
             eq(timeTrackingTable.status, "confirmed"),
           )
         );
-      const actualHours = timeEntries.reduce((acc, e) => acc + (e.actualHours ?? 0), 0);
 
-      const contract = await db
-        .select()
-        .from(contractsTable)
-        .where(eq(contractsTable.userId, assistant.id))
-        .limit(1);
-      const vacationDays = contract[0]?.vacationDays ?? 30;
+      let workedHours = 0;
+      let sickHours = 0;
+      for (const entry of timeEntriesWithShift) {
+        const hours = entry.actualHours ?? 0;
+        if (entry.shiftType === "sick") {
+          sickHours += hours;
+        } else if (entry.shiftType !== "vacation") {
+          workedHours += hours;
+        }
+      }
+
+      const actualHours = workedHours + sickHours;
+
+      const contract = await activeContractFor(assistant.id, referenceDate);
+      const vacationDays = contract?.vacationDays ?? 30;
+      const vacationDaysUsed = contract?.vacationDaysUsed ?? 0;
+      const vacationDaysTaken = vacationDaysUsed;
 
       return {
         userId: assistant.id,
@@ -173,8 +213,11 @@ router.get("/dashboard/hours-balance", async (req, res) => {
         plannedHours: Math.round(plannedHours * 100) / 100,
         actualHours: Math.round(actualHours * 100) / 100,
         balance: Math.round((actualHours - plannedHours) * 100) / 100,
-        vacationDaysUsed: 0,
-        vacationDaysRemaining: vacationDays,
+        workedHours: Math.round(workedHours * 100) / 100,
+        sickHours: Math.round(sickHours * 100) / 100,
+        vacationDaysTaken,
+        vacationDaysUsed,
+        vacationDaysRemaining: vacationDays - vacationDaysUsed,
       };
     })
   );

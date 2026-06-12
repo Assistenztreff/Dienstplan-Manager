@@ -42,7 +42,8 @@ import type {
   TimeEntryUpdate,
   User,
   UserInput,
-  UserUpdate
+  UserUpdate,
+  VacationBalance
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -1772,6 +1773,83 @@ export const useInviteUser = <TError = ErrorType<void>,
       > => {
       return useMutation(getInviteUserMutationOptions(options));
     }
+
+export const getGetVacationBalanceUrl = (id: number,) => {
+
+
+
+
+  return `/api/contracts/${id}/vacation-balance`
+}
+
+/**
+ * @summary Urlaubskontigent abrufen
+ */
+export const getVacationBalance = async (id: number, options?: RequestInit): Promise<VacationBalance> => {
+
+  return customFetch<VacationBalance>(getGetVacationBalanceUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVacationBalanceQueryKey = (id: number,) => {
+    return [
+    `/api/contracts/${id}/vacation-balance`
+    ] as const;
+    }
+
+
+export const getGetVacationBalanceQueryOptions = <TData = Awaited<ReturnType<typeof getVacationBalance>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVacationBalance>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVacationBalanceQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVacationBalance>>> = ({ signal }) => getVacationBalance(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVacationBalance>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVacationBalanceQueryResult = NonNullable<Awaited<ReturnType<typeof getVacationBalance>>>
+export type GetVacationBalanceQueryError = ErrorType<void>
+
+
+/**
+ * @summary Urlaubskontigent abrufen
+ */
+
+export function useGetVacationBalance<TData = Awaited<ReturnType<typeof getVacationBalance>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVacationBalance>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVacationBalanceQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getGetDashboardSummaryUrl = (params?: GetDashboardSummaryParams,) => {
   const normalizedParams = new URLSearchParams();

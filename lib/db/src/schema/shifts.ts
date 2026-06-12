@@ -4,7 +4,7 @@ import { z } from "zod/v4";
 import { usersTable } from "./users";
 import { relations } from "drizzle-orm";
 
-export const shiftTypeEnum = pgEnum("shift_type", ["active", "standby", "night", "full_day"]);
+export const shiftTypeEnum = pgEnum("shift_type", ["active", "standby", "night", "full_day", "vacation", "sick"]);
 
 export const shiftsTable = pgTable("shifts", {
   id: serial("id").primaryKey(),

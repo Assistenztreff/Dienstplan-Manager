@@ -9,6 +9,7 @@ export const contractsTable = pgTable("contracts", {
   userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   weeklyHours: real("weekly_hours").notNull(),
   vacationDays: integer("vacation_days").notNull().default(30),
+  vacationDaysUsed: integer("vacation_days_used").notNull().default(0),
   startDate: date("start_date").notNull(),
   endDate: date("end_date"),
   notes: text("notes"),

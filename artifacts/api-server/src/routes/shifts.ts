@@ -1,8 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { shiftsTable, usersTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
-import { sql } from "drizzle-orm";
+import { shiftsTable, usersTable, contractsTable, timeTrackingTable } from "@workspace/db";
+import { eq, and, sql, or, isNull } from "drizzle-orm";
 import {
   ListShiftsQueryParams,
   CreateShiftBody,
@@ -13,6 +12,46 @@ import {
 } from "@workspace/api-zod";
 
 const router = Router();
+
+const SHIFT_SELECT = {
+  id: shiftsTable.id,
+  userId: shiftsTable.userId,
+  startTime: shiftsTable.startTime,
+  endTime: shiftsTable.endTime,
+  type: shiftsTable.type,
+  notes: shiftsTable.notes,
+  createdAt: shiftsTable.createdAt,
+  user: {
+    id: usersTable.id,
+    name: usersTable.name,
+    email: usersTable.email,
+    role: usersTable.role,
+    phone: usersTable.phone,
+    address: usersTable.address,
+    isActive: usersTable.isActive,
+    createdAt: usersTable.createdAt,
+  },
+};
+
+async function activeContractFor(userId: number, date: Date) {
+  const dateStr = date.toISOString().split("T")[0];
+  const contracts = await db
+    .select()
+    .from(contractsTable)
+    .where(
+      and(
+        eq(contractsTable.userId, userId),
+        sql`${contractsTable.startDate} <= ${dateStr}`,
+        or(
+          isNull(contractsTable.endDate),
+          sql`${contractsTable.endDate} >= ${dateStr}`
+        )
+      )
+    )
+    .orderBy(sql`${contractsTable.startDate} DESC`)
+    .limit(1);
+  return contracts[0] ?? null;
+}
 
 router.get("/shifts", async (req, res) => {
   const query = ListShiftsQueryParams.safeParse({
@@ -27,32 +66,14 @@ router.get("/shifts", async (req, res) => {
 
   const conditions = [];
   if (query.data.userId) conditions.push(eq(shiftsTable.userId, query.data.userId));
-  if (query.data.type) conditions.push(eq(shiftsTable.type, query.data.type as "active" | "standby" | "night" | "full_day"));
+  if (query.data.type) conditions.push(eq(shiftsTable.type, query.data.type as "active" | "standby" | "night" | "full_day" | "vacation" | "sick"));
   if (query.data.month && query.data.year) {
     conditions.push(sql`EXTRACT(MONTH FROM ${shiftsTable.startTime}) = ${query.data.month}`);
     conditions.push(sql`EXTRACT(YEAR FROM ${shiftsTable.startTime}) = ${query.data.year}`);
   }
 
   const rows = await db
-    .select({
-      id: shiftsTable.id,
-      userId: shiftsTable.userId,
-      startTime: shiftsTable.startTime,
-      endTime: shiftsTable.endTime,
-      type: shiftsTable.type,
-      notes: shiftsTable.notes,
-      createdAt: shiftsTable.createdAt,
-      user: {
-        id: usersTable.id,
-        name: usersTable.name,
-        email: usersTable.email,
-        role: usersTable.role,
-        phone: usersTable.phone,
-        address: usersTable.address,
-        isActive: usersTable.isActive,
-        createdAt: usersTable.createdAt,
-      },
-    })
+    .select(SHIFT_SELECT)
     .from(shiftsTable)
     .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
     .where(conditions.length > 0 ? and(...conditions) : undefined);
@@ -65,26 +86,30 @@ router.post("/shifts", async (req, res) => {
     return res.status(400).json({ error: "Invalid request body" });
   }
   const [shift] = await db.insert(shiftsTable).values(body.data).returning();
+
+  if (shift.type === "vacation" || shift.type === "sick") {
+    const contract = await activeContractFor(shift.userId, new Date(shift.startTime));
+    const dailyHours = contract ? Math.round((contract.weeklyHours / 5) * 100) / 100 : 8;
+
+    await db.insert(timeTrackingTable).values({
+      userId: shift.userId,
+      shiftId: shift.id,
+      actualStart: shift.startTime,
+      actualEnd: shift.endTime,
+      actualHours: dailyHours,
+      status: "confirmed",
+    });
+
+    if (shift.type === "vacation" && contract) {
+      await db
+        .update(contractsTable)
+        .set({ vacationDaysUsed: contract.vacationDaysUsed + 1 })
+        .where(eq(contractsTable.id, contract.id));
+    }
+  }
+
   const [withUser] = await db
-    .select({
-      id: shiftsTable.id,
-      userId: shiftsTable.userId,
-      startTime: shiftsTable.startTime,
-      endTime: shiftsTable.endTime,
-      type: shiftsTable.type,
-      notes: shiftsTable.notes,
-      createdAt: shiftsTable.createdAt,
-      user: {
-        id: usersTable.id,
-        name: usersTable.name,
-        email: usersTable.email,
-        role: usersTable.role,
-        phone: usersTable.phone,
-        address: usersTable.address,
-        isActive: usersTable.isActive,
-        createdAt: usersTable.createdAt,
-      },
-    })
+    .select(SHIFT_SELECT)
     .from(shiftsTable)
     .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
     .where(eq(shiftsTable.id, shift.id));
@@ -95,25 +120,7 @@ router.get("/shifts/:id", async (req, res) => {
   const params = GetShiftParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) return res.status(400).json({ error: "Invalid id" });
   const [row] = await db
-    .select({
-      id: shiftsTable.id,
-      userId: shiftsTable.userId,
-      startTime: shiftsTable.startTime,
-      endTime: shiftsTable.endTime,
-      type: shiftsTable.type,
-      notes: shiftsTable.notes,
-      createdAt: shiftsTable.createdAt,
-      user: {
-        id: usersTable.id,
-        name: usersTable.name,
-        email: usersTable.email,
-        role: usersTable.role,
-        phone: usersTable.phone,
-        address: usersTable.address,
-        isActive: usersTable.isActive,
-        createdAt: usersTable.createdAt,
-      },
-    })
+    .select(SHIFT_SELECT)
     .from(shiftsTable)
     .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
     .where(eq(shiftsTable.id, params.data.id));
@@ -127,32 +134,88 @@ router.patch("/shifts/:id", async (req, res) => {
   if (!params.success || !body.success) {
     return res.status(400).json({ error: "Invalid request" });
   }
+
+  const [oldShift] = await db
+    .select()
+    .from(shiftsTable)
+    .where(eq(shiftsTable.id, params.data.id))
+    .limit(1);
+  if (!oldShift) return res.status(404).json({ error: "Not found" });
+
   const [updated] = await db
     .update(shiftsTable)
     .set(body.data)
     .where(eq(shiftsTable.id, params.data.id))
     .returning();
   if (!updated) return res.status(404).json({ error: "Not found" });
+
+  const newType = updated.type;
+  const oldType = oldShift.type;
+  const typeChanged = body.data.type !== undefined && newType !== oldType;
+
+  if (typeChanged) {
+    const shiftDate = new Date(updated.startTime);
+    const wasAbsence = oldType === "vacation" || oldType === "sick";
+    const isAbsence = newType === "vacation" || newType === "sick";
+
+    if (wasAbsence && !isAbsence) {
+      // Absence → regular: remove time entry, reverse vacation counter
+      await db.delete(timeTrackingTable).where(eq(timeTrackingTable.shiftId, updated.id));
+      if (oldType === "vacation") {
+        const contract = await activeContractFor(updated.userId, shiftDate);
+        if (contract && contract.vacationDaysUsed > 0) {
+          await db
+            .update(contractsTable)
+            .set({ vacationDaysUsed: contract.vacationDaysUsed - 1 })
+            .where(eq(contractsTable.id, contract.id));
+        }
+      }
+    } else if (!wasAbsence && isAbsence) {
+      // Regular → absence: create time entry, increment vacation counter
+      const contract = await activeContractFor(updated.userId, shiftDate);
+      const dailyHours = contract ? Math.round((contract.weeklyHours / 5) * 100) / 100 : 8;
+      await db.insert(timeTrackingTable).values({
+        userId: updated.userId,
+        shiftId: updated.id,
+        actualStart: updated.startTime,
+        actualEnd: updated.endTime,
+        actualHours: dailyHours,
+        status: "confirmed",
+      });
+      if (newType === "vacation" && contract) {
+        await db
+          .update(contractsTable)
+          .set({ vacationDaysUsed: contract.vacationDaysUsed + 1 })
+          .where(eq(contractsTable.id, contract.id));
+      }
+    } else if (wasAbsence && isAbsence && oldType !== newType) {
+      // Absence type changed (vacation ↔ sick): update hours, reconcile vacation counter
+      const contract = await activeContractFor(updated.userId, shiftDate);
+      const dailyHours = contract ? Math.round((contract.weeklyHours / 5) * 100) / 100 : 8;
+      await db
+        .update(timeTrackingTable)
+        .set({ actualHours: dailyHours, actualStart: updated.startTime, actualEnd: updated.endTime })
+        .where(eq(timeTrackingTable.shiftId, updated.id));
+      if (oldType === "vacation" && contract && contract.vacationDaysUsed > 0) {
+        await db
+          .update(contractsTable)
+          .set({ vacationDaysUsed: contract.vacationDaysUsed - 1 })
+          .where(eq(contractsTable.id, contract.id));
+      }
+      if (newType === "vacation" && contract) {
+        const refreshed = await activeContractFor(updated.userId, shiftDate);
+        if (refreshed) {
+          await db
+            .update(contractsTable)
+            .set({ vacationDaysUsed: refreshed.vacationDaysUsed + 1 })
+            .where(eq(contractsTable.id, refreshed.id));
+        }
+      }
+    }
+  }
+
   const [withUser] = await db
-    .select({
-      id: shiftsTable.id,
-      userId: shiftsTable.userId,
-      startTime: shiftsTable.startTime,
-      endTime: shiftsTable.endTime,
-      type: shiftsTable.type,
-      notes: shiftsTable.notes,
-      createdAt: shiftsTable.createdAt,
-      user: {
-        id: usersTable.id,
-        name: usersTable.name,
-        email: usersTable.email,
-        role: usersTable.role,
-        phone: usersTable.phone,
-        address: usersTable.address,
-        isActive: usersTable.isActive,
-        createdAt: usersTable.createdAt,
-      },
-    })
+    .select(SHIFT_SELECT)
     .from(shiftsTable)
     .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
     .where(eq(shiftsTable.id, params.data.id));
@@ -162,6 +225,29 @@ router.patch("/shifts/:id", async (req, res) => {
 router.delete("/shifts/:id", async (req, res) => {
   const params = DeleteShiftParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) return res.status(400).json({ error: "Invalid id" });
+
+  const [shift] = await db
+    .select()
+    .from(shiftsTable)
+    .where(eq(shiftsTable.id, params.data.id))
+    .limit(1);
+
+  if (!shift) return res.status(404).json({ error: "Not found" });
+
+  if (shift.type === "vacation" || shift.type === "sick") {
+    await db.delete(timeTrackingTable).where(eq(timeTrackingTable.shiftId, shift.id));
+  }
+
+  if (shift.type === "vacation") {
+    const contract = await activeContractFor(shift.userId, new Date(shift.startTime));
+    if (contract && contract.vacationDaysUsed > 0) {
+      await db
+        .update(contractsTable)
+        .set({ vacationDaysUsed: contract.vacationDaysUsed - 1 })
+        .where(eq(contractsTable.id, contract.id));
+    }
+  }
+
   await db.delete(shiftsTable).where(eq(shiftsTable.id, params.data.id));
   res.status(204).send();
 });

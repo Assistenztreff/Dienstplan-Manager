@@ -10,11 +10,11 @@ import { Progress } from "@/components/ui/progress";
 
 export default function Auswertungen() {
   const [currentDate, setCurrentDate] = useState(new Date());
-  
+
   const month = currentDate.getMonth() + 1;
   const year = currentDate.getFullYear();
-  
-  const { data: balances, isLoading } = useGetHoursBalance({ month, year }) as any; // Usually returns array of HoursBalance
+
+  const { data: balances, isLoading } = useGetHoursBalance({ month, year }) as any;
 
   const prevMonth = () => setCurrentDate(new Date(year, month - 2, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month, 1));
@@ -23,16 +23,16 @@ export default function Auswertungen() {
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-serif font-bold text-foreground">Auswertungen</h2>
-          <p className="text-muted-foreground mt-1">Soll/Ist-Abgleich der Stunden</p>
+          <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Auswertungen</h2>
+          <p className="text-muted-foreground mt-1 text-sm">Soll/Ist-Abgleich der Stunden</p>
         </div>
-        
-        <div className="flex items-center gap-4">
+
+        <div className="flex items-center gap-2 md:gap-4">
           <Button variant="outline" size="icon" onClick={prevMonth}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="font-medium text-lg min-w-40 text-center">
-            {format(currentDate, 'MMMM yyyy', { locale: de })}
+          <span className="font-medium text-sm md:text-lg min-w-[120px] md:min-w-40 text-center">
+            {format(currentDate, "MMMM yyyy", { locale: de })}
           </span>
           <Button variant="outline" size="icon" onClick={nextMonth}>
             <ChevronRight className="h-4 w-4" />
@@ -43,42 +43,90 @@ export default function Auswertungen() {
       <div className="grid grid-cols-1 gap-6">
         {isLoading ? (
           <>
-            <Skeleton className="h-32 w-full rounded-xl" />
-            <Skeleton className="h-32 w-full rounded-xl" />
+            <Skeleton className="h-48 w-full rounded-xl" />
+            <Skeleton className="h-48 w-full rounded-xl" />
           </>
-        ) : balances && Array.isArray(balances) ? (
+        ) : balances && Array.isArray(balances) && balances.length > 0 ? (
           balances.map((balance: any) => {
-            const percentage = Math.min(100, Math.max(0, (balance.actualHours / balance.plannedHours) * 100)) || 0;
-            const isOvertime = balance.actualHours > balance.plannedHours;
-            
+            const percentage =
+              balance.plannedHours > 0
+                ? Math.min(100, Math.max(0, (balance.workedHours / balance.plannedHours) * 100))
+                : 0;
+            const isOvertime = balance.workedHours > balance.plannedHours;
+
             return (
               <Card key={balance.userId} className="border-border/50 shadow-sm">
-                <CardContent className="p-6">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                    <div className="flex-1">
-                      <h3 className="text-lg font-semibold mb-1">{balance.userName}</h3>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
-                        <div>Soll: <span className="font-medium text-foreground">{balance.plannedHours} h</span></div>
-                        <div>Ist: <span className="font-medium text-foreground">{balance.actualHours} h</span></div>
-                        <div>Differenz: <span className={`font-medium ${isOvertime ? 'text-primary' : balance.actualHours < balance.plannedHours ? 'text-amber-600' : 'text-green-600'}`}>
-                          {balance.balance > 0 ? '+' : ''}{balance.balance} h
-                        </span></div>
-                      </div>
-                      
-                      <div className="space-y-2">
+                <CardContent className="p-5 md:p-6">
+                  <h3 className="text-lg font-semibold mb-4">{balance.userName}</h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Stunden-Seite */}
+                    <div className="space-y-4">
+                      {/* Geleistete Arbeitsstunden */}
+                      <div>
+                        <div className="flex items-center justify-between text-sm mb-1.5">
+                          <span className="text-muted-foreground">Geleistete Arbeitsstunden</span>
+                          <span className="font-medium">
+                            {balance.workedHours} / {balance.plannedHours} h
+                          </span>
+                        </div>
                         <Progress value={percentage} className="h-2" />
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>0 h</span>
-                          <span>{percentage.toFixed(0)}% erreicht</span>
-                          <span>{balance.plannedHours} h</span>
+                        <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                          <span>
+                            Differenz:{" "}
+                            <span
+                              className={
+                                isOvertime
+                                  ? "text-primary font-medium"
+                                  : balance.workedHours < balance.plannedHours
+                                  ? "text-amber-600 font-medium"
+                                  : "text-green-600 font-medium"
+                              }
+                            >
+                              {balance.balance > 0 ? "+" : ""}
+                              {balance.balance} h
+                            </span>
+                          </span>
+                          <span>{percentage.toFixed(0)}% geleistet</span>
                         </div>
                       </div>
+
+                      {/* Krankheitsstunden */}
+                      <div className="flex items-center justify-between text-sm py-2.5 px-3 bg-slate-50 rounded-lg border border-slate-200">
+                        <span className="text-slate-600">Krankheitsstunden (Lohnfortzahlung)</span>
+                        <span className="font-semibold text-slate-700">{balance.sickHours} h</span>
+                      </div>
                     </div>
-                    
-                    <div className="w-full md:w-48 p-4 bg-muted/30 rounded-lg border border-border/50 flex flex-col items-center justify-center">
-                      <span className="text-sm text-muted-foreground mb-1">Urlaubstage</span>
-                      <span className="text-2xl font-bold">{balance.vacationDaysRemaining}</span>
-                      <span className="text-xs text-muted-foreground mt-1">von {balance.vacationDaysUsed + balance.vacationDaysRemaining} verfuegbar</span>
+
+                    {/* Urlaubs-Seite */}
+                    <div className="space-y-3">
+                      <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                        <div className="text-xs text-yellow-700 mb-1 font-medium uppercase tracking-wide">
+                          Urlaubstage
+                        </div>
+                        <div className="flex items-end gap-2">
+                          <span className="text-3xl font-bold text-yellow-800">
+                            {balance.vacationDaysTaken}
+                          </span>
+                          <span className="text-sm text-yellow-700 mb-0.5">
+                            genommen
+                          </span>
+                        </div>
+                        <div className="mt-2 text-sm text-yellow-700">
+                          <span className="font-medium">{balance.vacationDaysRemaining}</span> von{" "}
+                          {balance.vacationDaysRemaining + balance.vacationDaysTaken} verbleibend
+                        </div>
+                        {balance.vacationDaysRemaining + balance.vacationDaysTaken > 0 && (
+                          <Progress
+                            value={Math.round(
+                              (balance.vacationDaysTaken /
+                                (balance.vacationDaysRemaining + balance.vacationDaysTaken)) *
+                                100
+                            )}
+                            className="h-1.5 mt-2 bg-yellow-200 [&>div]:bg-yellow-500"
+                          />
+                        )}
+                      </div>
                     </div>
                   </div>
                 </CardContent>
