@@ -210,6 +210,15 @@ export interface TimeEntryConfirm {
   notes?: string;
 }
 
+export interface InviteResult {
+  userId: number;
+  userName: string;
+  inviteUrl: string;
+  token: string;
+  expiresIn: string;
+  note: string;
+}
+
 export interface DashboardSummary {
   totalAssistants: number;
   activeShiftsToday: number;

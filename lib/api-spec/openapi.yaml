@@ -20,6 +20,8 @@ tags:
     description: Zeiterfassung
   - name: dashboard
     description: Dashboard-Übersicht
+  - name: invitations
+    description: Team-Einladungen
 paths:
   /healthz:
     get:
@@ -463,6 +465,27 @@ paths:
               schema:
                 $ref: "#/components/schemas/TimeEntry"
 
+  /users/{id}/invite:
+    post:
+      operationId: inviteUser
+      tags: [invitations]
+      summary: Einladungslink für Assistenten generieren
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Einladungslink
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InviteResult"
+        "404":
+          description: Nicht gefunden
+
   /dashboard/summary:
     get:
       operationId: getDashboardSummary
@@ -768,6 +791,23 @@ components:
         confirmedBy:
           type: integer
         notes:
+          type: string
+
+    InviteResult:
+      type: object
+      required: [userId, userName, inviteUrl, token, expiresIn, note]
+      properties:
+        userId:
+          type: integer
+        userName:
+          type: string
+        inviteUrl:
+          type: string
+        token:
+          type: string
+        expiresIn:
+          type: string
+        note:
           type: string
 
     DashboardSummary:

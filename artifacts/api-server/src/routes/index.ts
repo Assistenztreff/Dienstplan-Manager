@@ -5,6 +5,7 @@ import contractsRouter from "./contracts";
 import shiftsRouter from "./shifts";
 import timeTrackingRouter from "./time_tracking";
 import dashboardRouter from "./dashboard";
+import invitationsRouter from "./invitations";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(contractsRouter);
 router.use(shiftsRouter);
 router.use(timeTrackingRouter);
 router.use(dashboardRouter);
+router.use(invitationsRouter);
 
 export default router;

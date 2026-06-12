@@ -518,6 +518,23 @@ export const ConfirmTimeEntryResponse = zod.object({
 
 
 /**
+ * @summary Einladungslink für Assistenten generieren
+ */
+export const InviteUserParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const InviteUserResponse = zod.object({
+  "userId": zod.number(),
+  "userName": zod.string(),
+  "inviteUrl": zod.string(),
+  "token": zod.string(),
+  "expiresIn": zod.string(),
+  "note": zod.string()
+})
+
+
+/**
  * @summary Dashboard-Zusammenfassung
  */
 export const GetDashboardSummaryQueryParams = zod.object({

@@ -5,7 +5,8 @@ import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ShiftDialog } from "@/components/shift-dialog";
 
 type Shift = {
   id: number;
@@ -18,23 +19,42 @@ type Shift = {
 };
 
 const SHIFT_TYPE_LABELS: Record<string, string> = {
-  active: "Aktiv",
+  active: "Aktivdienst",
   standby: "Bereitschaft",
-  night: "Nacht",
+  night: "Nachtdienst",
   full_day: "24h-Dienst",
 };
 
 const SHIFT_TYPE_CLASSES: Record<string, string> = {
-  active: "bg-primary/10 text-primary border-primary/25",
-  standby: "bg-amber-50 text-amber-800 border-amber-200",
-  night: "bg-blue-50 text-blue-800 border-blue-200",
-  full_day: "bg-purple-50 text-purple-800 border-purple-200",
+  active: "bg-primary/10 text-primary border-primary/25 hover:bg-primary/20",
+  standby: "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100",
+  night: "bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100",
+  full_day: "bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100",
 };
 
-function ShiftBadge({ shift, showName }: { shift: Shift; showName?: boolean }) {
-  const classes = SHIFT_TYPE_CLASSES[shift.type] ?? "bg-secondary text-secondary-foreground border-border/50";
+type DialogState =
+  | { mode: "closed" }
+  | { mode: "create"; date: Date; userId?: number }
+  | { mode: "edit"; shift: Shift };
+
+type Assistant = { id: number; name: string };
+
+function ShiftBadge({
+  shift,
+  showName,
+  onClick,
+}: {
+  shift: Shift;
+  showName?: boolean;
+  onClick?: (e: React.MouseEvent) => void;
+}) {
+  const classes =
+    SHIFT_TYPE_CLASSES[shift.type] ?? "bg-secondary text-secondary-foreground border-border/50 hover:bg-muted";
   return (
-    <div className={`text-xs rounded border px-2 py-1 leading-snug ${classes}`}>
+    <div
+      className={`text-xs rounded border px-2 py-1 leading-snug cursor-pointer transition-colors ${classes}`}
+      onClick={onClick}
+    >
       {showName && shift.user && (
         <div className="font-medium truncate">{shift.user.name}</div>
       )}
@@ -46,9 +66,17 @@ function ShiftBadge({ shift, showName }: { shift: Shift; showName?: boolean }) {
   );
 }
 
-function AgendaView({ days, shifts }: { days: Date[]; shifts: Shift[] }) {
-  const today = new Date();
-
+function AgendaView({
+  days,
+  shifts,
+  onDayClick,
+  onShiftClick,
+}: {
+  days: Date[];
+  shifts: Shift[];
+  onDayClick: (day: Date) => void;
+  onShiftClick: (shift: Shift) => void;
+}) {
   return (
     <div className="space-y-1">
       {days.map((day) => {
@@ -57,43 +85,48 @@ function AgendaView({ days, shifts }: { days: Date[]; shifts: Shift[] }) {
 
         return (
           <div key={day.toISOString()} className="rounded-lg border border-border/40 overflow-hidden">
-            <div
-              className={`flex items-center gap-3 px-4 py-2 ${
+            {/* Day header — tap to add a shift */}
+            <button
+              type="button"
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
                 isCurrentDay
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted/40 text-foreground"
+                  ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                  : "bg-muted/40 text-foreground hover:bg-muted/70"
               }`}
+              onClick={() => onDayClick(day)}
             >
-              <span className="text-sm font-semibold min-w-[24px]">
-                {format(day, "d")}
+              <span className="text-sm font-semibold min-w-[24px]">{format(day, "d")}</span>
+              <span className="text-sm">{format(day, "EEEE", { locale: de })}</span>
+              <span
+                className={`ml-auto flex items-center gap-1 text-xs ${
+                  isCurrentDay ? "opacity-80" : "text-muted-foreground"
+                }`}
+              >
+                {dayShifts.length > 0 && (
+                  <span className="font-medium">{dayShifts.length}</span>
+                )}
+                <Plus className="h-3.5 w-3.5" />
               </span>
-              <span className="text-sm">
-                {format(day, "EEEE", { locale: de })}
-              </span>
-              {dayShifts.length > 0 && (
-                <span
-                  className={`ml-auto text-xs px-1.5 py-0.5 rounded-full font-medium ${
-                    isCurrentDay ? "bg-white/20" : "bg-border/60"
-                  }`}
-                >
-                  {dayShifts.length}
-                </span>
+            </button>
+
+            {/* Shift cards */}
+            <div className="bg-card px-3 py-2 space-y-1.5">
+              {dayShifts.length > 0 ? (
+                dayShifts.map((shift) => (
+                  <ShiftBadge
+                    key={shift.id}
+                    shift={shift}
+                    showName
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onShiftClick(shift);
+                    }}
+                  />
+                ))
+              ) : (
+                <p className="text-xs text-muted-foreground">Keine Schichten — tippen zum Hinzufügen</p>
               )}
             </div>
-
-            {dayShifts.length > 0 ? (
-              <div className="px-3 py-2 space-y-1.5 bg-card">
-                {dayShifts.map((shift) => (
-                  <div key={shift.id} className="flex items-start gap-2">
-                    <ShiftBadge shift={shift} showName />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="px-4 py-2 bg-card text-xs text-muted-foreground">
-                Keine Schichten
-              </div>
-            )}
           </div>
         );
       })}
@@ -103,6 +136,7 @@ function AgendaView({ days, shifts }: { days: Date[]; shifts: Shift[] }) {
 
 export default function Dienstplan() {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [dialog, setDialog] = useState<DialogState>({ mode: "closed" });
 
   const month = currentDate.getMonth() + 1;
   const year = currentDate.getFullYear();
@@ -117,10 +151,24 @@ export default function Dienstplan() {
   const end = endOfMonth(currentDate);
   const days = eachDayOfInterval({ start, end });
 
-  const assistants = users?.filter((u) => u.role === "assistant") ?? [];
-  const allShifts: Shift[] = shifts ?? [];
+  const assistants: Assistant[] = (users ?? [])
+    .filter((u) => u.role === "assistant")
+    .map((u) => ({ id: u.id, name: u.name }));
 
+  const allShifts: Shift[] = shifts ?? [];
   const isLoading = shiftsLoading || usersLoading;
+
+  function openCreate(date: Date, userId?: number) {
+    setDialog({ mode: "create", date, userId });
+  }
+
+  function openEdit(shift: Shift) {
+    setDialog({ mode: "edit", shift });
+  }
+
+  function closeDialog() {
+    setDialog({ mode: "closed" });
+  }
 
   const Header = () => (
     <div className="flex items-center justify-between">
@@ -161,7 +209,12 @@ export default function Dienstplan() {
 
       {/* Mobile: Agenda-Ansicht */}
       <div className="md:hidden">
-        <AgendaView days={days} shifts={allShifts} />
+        <AgendaView
+          days={days}
+          shifts={allShifts}
+          onDayClick={(day) => openCreate(day)}
+          onShiftClick={openEdit}
+        />
       </div>
 
       {/* Desktop: Tabellen-Ansicht */}
@@ -175,7 +228,7 @@ export default function Dienstplan() {
               {days.map((day) => (
                 <th
                   key={day.toISOString()}
-                  className={`p-3 font-medium text-center min-w-16 ${
+                  className={`p-2 font-medium text-center min-w-[56px] ${
                     isToday(day) ? "bg-primary/10" : ""
                   }`}
                 >
@@ -194,48 +247,72 @@ export default function Dienstplan() {
             </tr>
           </thead>
           <tbody>
-            {assistants.map((assistant) => (
-              <tr
-                key={assistant.id}
-                className="border-b last:border-0 hover:bg-muted/30 transition-colors"
-              >
-                <td className="p-3 font-medium sticky left-0 bg-card hover:bg-muted/30 transition-colors z-10 shadow-[1px_0_0_0_hsl(var(--border))]">
-                  {assistant.name}
-                </td>
-                {days.map((day) => {
-                  const dayShifts = allShifts.filter(
-                    (s) => s.userId === assistant.id && isSameDay(new Date(s.startTime), day)
-                  );
-                  return (
-                    <td
-                      key={day.toISOString()}
-                      className={`p-1.5 text-center border-l border-border/30 align-top ${
-                        isToday(day) ? "bg-primary/5" : ""
-                      }`}
-                    >
-                      <div className="space-y-1">
-                        {dayShifts.map((s) => (
-                          <ShiftBadge key={s.id} shift={s} />
-                        ))}
-                      </div>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-            {assistants.length === 0 && (
+            {assistants.length === 0 ? (
               <tr>
-                <td
-                  colSpan={days.length + 1}
-                  className="p-8 text-center text-muted-foreground"
-                >
+                <td colSpan={days.length + 1} className="p-8 text-center text-muted-foreground">
                   Keine Assistenten gefunden.
                 </td>
               </tr>
+            ) : (
+              assistants.map((assistant) => (
+                <tr
+                  key={assistant.id}
+                  className="border-b last:border-0 hover:bg-muted/20 transition-colors"
+                >
+                  <td className="p-3 font-medium sticky left-0 bg-card hover:bg-muted/20 transition-colors z-10 shadow-[1px_0_0_0_hsl(var(--border))]">
+                    {assistant.name}
+                  </td>
+                  {days.map((day) => {
+                    const dayShifts = allShifts.filter(
+                      (s) => s.userId === assistant.id && isSameDay(new Date(s.startTime), day)
+                    );
+                    return (
+                      <td
+                        key={day.toISOString()}
+                        className={`p-1 border-l border-border/30 align-top cursor-pointer group ${
+                          isToday(day) ? "bg-primary/5" : "hover:bg-muted/30"
+                        }`}
+                        onClick={() => openCreate(day, assistant.id)}
+                        title="Klicken zum Anlegen einer Schicht"
+                      >
+                        <div className="space-y-1 min-h-[32px]">
+                          {dayShifts.map((s) => (
+                            <ShiftBadge
+                              key={s.id}
+                              shift={s}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEdit(s);
+                              }}
+                            />
+                          ))}
+                          {dayShifts.length === 0 && (
+                            <div className="hidden group-hover:flex items-center justify-center h-8 text-muted-foreground/40">
+                              <Plus className="h-3.5 w-3.5" />
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))
             )}
           </tbody>
         </table>
       </Card>
+
+      {/* Shift Dialog */}
+      <ShiftDialog
+        open={dialog.mode !== "closed"}
+        onClose={closeDialog}
+        preselectedDate={dialog.mode === "create" ? dialog.date : undefined}
+        preselectedUserId={dialog.mode === "create" ? dialog.userId : undefined}
+        editShift={dialog.mode === "edit" ? dialog.shift : undefined}
+        assistants={assistants}
+        month={month}
+        year={year}
+      />
     </div>
   );
 }

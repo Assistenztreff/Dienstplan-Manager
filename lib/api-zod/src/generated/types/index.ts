@@ -14,6 +14,7 @@ export * from './getDashboardSummaryParams';
 export * from './getHoursBalanceParams';
 export * from './healthStatus';
 export * from './hoursBalance';
+export * from './inviteResult';
 export * from './listContractsParams';
 export * from './listShiftsParams';
 export * from './listShiftsType';

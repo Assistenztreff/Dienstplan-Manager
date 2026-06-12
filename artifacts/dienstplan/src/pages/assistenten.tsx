@@ -6,6 +6,7 @@ import {
   useUpdateUser,
   useCreateContract,
   useUpdateContract,
+  useInviteUser,
   getListUsersQueryKey,
   getListContractsQueryKey,
 } from "@workspace/api-client-react";
@@ -17,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Plus, Mail, Phone, MapPin, Calendar, Pencil, UserPlus } from "lucide-react";
+import { Plus, Mail, Phone, MapPin, Calendar, Pencil, UserPlus, Send, Copy, Check } from "lucide-react";
 import { format } from "date-fns";
 
 type User = {
@@ -70,6 +71,119 @@ function splitName(name: string): { vorname: string; nachname: string } {
     vorname: parts[0] ?? "",
     nachname: parts.slice(1).join(" "),
   };
+}
+
+type InviteDialogProps = {
+  open: boolean;
+  onClose: () => void;
+  userId: number;
+  userName: string;
+};
+
+function InviteDialog({ open, onClose, userId, userName }: InviteDialogProps) {
+  const inviteUser = useInviteUser();
+  const [result, setResult] = useState<{ inviteUrl: string; token: string; expiresIn: string; note: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function generate() {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await inviteUser.mutateAsync({ params: { id: userId } });
+      setResult(data);
+    } catch {
+      setError("Einladungslink konnte nicht generiert werden.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function copyLink() {
+    if (!result) return;
+    await navigator.clipboard.writeText(result.inviteUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  function handleClose() {
+    setResult(null);
+    setError(null);
+    setCopied(false);
+    onClose();
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-xl">Teammitglied einladen</DialogTitle>
+        </DialogHeader>
+
+        <div className="py-2 space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Generiere einen temporären Einladungslink für{" "}
+            <span className="font-medium text-foreground">{userName}</span>. Der Link ist{" "}
+            {result?.expiresIn ?? "48 Stunden"} gültig.
+          </p>
+
+          {!result && (
+            <Button onClick={generate} disabled={loading} className="w-full gap-2">
+              <Send className="h-4 w-4" />
+              {loading ? "Wird generiert..." : "Einladungslink generieren"}
+            </Button>
+          )}
+
+          {error && (
+            <p className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">{error}</p>
+          )}
+
+          {result && (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Einladungslink</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={result.inviteUrl}
+                    readOnly
+                    className="font-mono text-xs bg-muted"
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                  />
+                  <Button variant="outline" size="icon" onClick={copyLink} title="Link kopieren">
+                    {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Token (alternativ)</Label>
+                <Input
+                  value={result.token}
+                  readOnly
+                  className="font-mono text-xs bg-muted"
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                />
+              </div>
+
+              <p className="text-xs text-muted-foreground border-l-2 border-border pl-3">
+                {result.note}
+              </p>
+
+              <Button variant="outline" className="w-full gap-2" onClick={generate} disabled={loading}>
+                <Send className="h-4 w-4" />
+                Neuen Link generieren
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={handleClose}>Schliessen</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function FieldRow({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
@@ -319,6 +433,7 @@ export default function Assistenten() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editUser, setEditUser] = useState<User | undefined>();
   const [editContract, setEditContract] = useState<Contract | undefined>();
+  const [inviteUser, setInviteUser] = useState<User | undefined>();
 
   const isLoading = usersLoading || contractsLoading;
 
@@ -436,7 +551,17 @@ export default function Assistenten() {
                     </div>
                   )}
 
-                  <div className="flex justify-end">
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1.5 text-muted-foreground hover:text-foreground"
+                      onClick={() => setInviteUser(user as User)}
+                      title="Einladungslink generieren"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Einladen</span>
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -469,6 +594,15 @@ export default function Assistenten() {
         editUser={editUser}
         editContract={editContract}
       />
+
+      {inviteUser && (
+        <InviteDialog
+          open={!!inviteUser}
+          onClose={() => setInviteUser(undefined)}
+          userId={inviteUser.id}
+          userName={inviteUser.name}
+        />
+      )}
     </div>
   );
 }

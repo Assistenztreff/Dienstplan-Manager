@@ -28,6 +28,7 @@ import type {
   GetHoursBalanceParams,
   HealthStatus,
   HoursBalance,
+  InviteResult,
   ListContractsParams,
   ListShiftsParams,
   ListTimeEntriesParams,
@@ -1700,6 +1701,76 @@ export const useConfirmTimeEntry = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getConfirmTimeEntryMutationOptions(options));
+    }
+
+export const getInviteUserUrl = (id: number,) => {
+
+
+
+
+  return `/api/users/${id}/invite`
+}
+
+/**
+ * @summary Einladungslink für Assistenten generieren
+ */
+export const inviteUser = async (id: number, options?: RequestInit): Promise<InviteResult> => {
+
+  return customFetch<InviteResult>(getInviteUserUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getInviteUserMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof inviteUser>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof inviteUser>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['inviteUser'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof inviteUser>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  inviteUser(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type InviteUserMutationResult = NonNullable<Awaited<ReturnType<typeof inviteUser>>>
+
+    export type InviteUserMutationError = ErrorType<void>
+
+    /**
+ * @summary Einladungslink für Assistenten generieren
+ */
+export const useInviteUser = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof inviteUser>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof inviteUser>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getInviteUserMutationOptions(options));
     }
 
 export const getGetDashboardSummaryUrl = (params?: GetDashboardSummaryParams,) => {
