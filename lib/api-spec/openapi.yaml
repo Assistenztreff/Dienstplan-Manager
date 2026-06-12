@@ -3,13 +3,23 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Dienstplan-App API für Persönliche Assistenz
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: users
+    description: Benutzer und Rollen
+  - name: contracts
+    description: Verträge und Konditionen
+  - name: shifts
+    description: Dienstplan und Schichten
+  - name: time-tracking
+    description: Zeiterfassung
+  - name: dashboard
+    description: Dashboard-Übersicht
 paths:
   /healthz:
     get:
@@ -24,6 +34,481 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: Alle Benutzer auflisten
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [admin, assistant]
+      responses:
+        "200":
+          description: Liste der Benutzer
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Neuen Benutzer anlegen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserInput"
+      responses:
+        "201":
+          description: Erstellt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Benutzer abrufen
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Benutzer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Nicht gefunden
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Benutzer aktualisieren
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: Aktualisiert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Benutzer löschen
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Gelöscht
+
+  /contracts:
+    get:
+      operationId: listContracts
+      tags: [contracts]
+      summary: Alle Verträge auflisten
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Liste der Verträge
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Contract"
+    post:
+      operationId: createContract
+      tags: [contracts]
+      summary: Vertrag anlegen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContractInput"
+      responses:
+        "201":
+          description: Erstellt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contract"
+
+  /contracts/{id}:
+    get:
+      operationId: getContract
+      tags: [contracts]
+      summary: Vertrag abrufen
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Vertrag
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contract"
+        "404":
+          description: Nicht gefunden
+    patch:
+      operationId: updateContract
+      tags: [contracts]
+      summary: Vertrag aktualisieren
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContractUpdate"
+      responses:
+        "200":
+          description: Aktualisiert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contract"
+    delete:
+      operationId: deleteContract
+      tags: [contracts]
+      summary: Vertrag löschen
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Gelöscht
+
+  /shifts:
+    get:
+      operationId: listShifts
+      tags: [shifts]
+      summary: Schichten auflisten
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: integer
+        - name: month
+          in: query
+          schema:
+            type: integer
+        - name: year
+          in: query
+          schema:
+            type: integer
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [active, standby, night, full_day]
+      responses:
+        "200":
+          description: Liste der Schichten
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Shift"
+    post:
+      operationId: createShift
+      tags: [shifts]
+      summary: Schicht anlegen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftInput"
+      responses:
+        "201":
+          description: Erstellt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+
+  /shifts/{id}:
+    get:
+      operationId: getShift
+      tags: [shifts]
+      summary: Schicht abrufen
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Schicht
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+        "404":
+          description: Nicht gefunden
+    patch:
+      operationId: updateShift
+      tags: [shifts]
+      summary: Schicht aktualisieren
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftUpdate"
+      responses:
+        "200":
+          description: Aktualisiert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+    delete:
+      operationId: deleteShift
+      tags: [shifts]
+      summary: Schicht löschen
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Gelöscht
+
+  /time-tracking:
+    get:
+      operationId: listTimeEntries
+      tags: [time-tracking]
+      summary: Zeiteinträge auflisten
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: integer
+        - name: month
+          in: query
+          schema:
+            type: integer
+        - name: year
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, confirmed, rejected]
+      responses:
+        "200":
+          description: Liste der Zeiteinträge
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimeEntry"
+    post:
+      operationId: createTimeEntry
+      tags: [time-tracking]
+      summary: Zeiteintrag erstellen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimeEntryInput"
+      responses:
+        "201":
+          description: Erstellt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeEntry"
+
+  /time-tracking/{id}:
+    get:
+      operationId: getTimeEntry
+      tags: [time-tracking]
+      summary: Zeiteintrag abrufen
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Zeiteintrag
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeEntry"
+        "404":
+          description: Nicht gefunden
+    patch:
+      operationId: updateTimeEntry
+      tags: [time-tracking]
+      summary: Zeiteintrag aktualisieren
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimeEntryUpdate"
+      responses:
+        "200":
+          description: Aktualisiert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeEntry"
+    delete:
+      operationId: deleteTimeEntry
+      tags: [time-tracking]
+      summary: Zeiteintrag löschen
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Gelöscht
+
+  /time-tracking/{id}/confirm:
+    patch:
+      operationId: confirmTimeEntry
+      tags: [time-tracking]
+      summary: Zeiteintrag bestätigen
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimeEntryConfirm"
+      responses:
+        "200":
+          description: Bestätigt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeEntry"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Dashboard-Zusammenfassung
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: integer
+        - name: year
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Zusammenfassung
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/hours-balance:
+    get:
+      operationId: getHoursBalance
+      tags: [dashboard]
+      summary: Soll/Ist-Stunden-Abgleich
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: integer
+        - name: year
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Stundenbilanz
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HoursBalance"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +519,297 @@ components:
       required:
         - status
 
+    User:
+      type: object
+      required: [id, name, email, role, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, assistant]
+        phone:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    UserInput:
+      type: object
+      required: [name, email, role]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, assistant]
+        phone:
+          type: string
+        address:
+          type: string
+        isActive:
+          type: boolean
+
+    UserUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+        phone:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+
+    Contract:
+      type: object
+      required: [id, userId, weeklyHours, vacationDays, startDate, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        weeklyHours:
+          type: number
+        vacationDays:
+          type: integer
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        user:
+          $ref: "#/components/schemas/User"
+
+    ContractInput:
+      type: object
+      required: [userId, weeklyHours, vacationDays, startDate]
+      properties:
+        userId:
+          type: integer
+        weeklyHours:
+          type: number
+          minimum: 0
+        vacationDays:
+          type: integer
+          minimum: 0
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        notes:
+          type: string
+
+    ContractUpdate:
+      type: object
+      properties:
+        weeklyHours:
+          type: number
+          minimum: 0
+        vacationDays:
+          type: integer
+          minimum: 0
+        endDate:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+
+    Shift:
+      type: object
+      required: [id, userId, startTime, endTime, type, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        type:
+          type: string
+          enum: [active, standby, night, full_day]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        user:
+          $ref: "#/components/schemas/User"
+
+    ShiftInput:
+      type: object
+      required: [userId, startTime, endTime, type]
+      properties:
+        userId:
+          type: integer
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        type:
+          type: string
+          enum: [active, standby, night, full_day]
+        notes:
+          type: string
+
+    ShiftUpdate:
+      type: object
+      properties:
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        type:
+          type: string
+          enum: [active, standby, night, full_day]
+        notes:
+          type: ["string", "null"]
+
+    TimeEntry:
+      type: object
+      required: [id, userId, shiftId, actualStart, actualEnd, status, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        shiftId:
+          type: ["integer", "null"]
+        actualStart:
+          type: string
+          format: date-time
+        actualEnd:
+          type: string
+          format: date-time
+        actualHours:
+          type: number
+        status:
+          type: string
+          enum: [pending, confirmed, rejected]
+        notes:
+          type: ["string", "null"]
+        confirmedBy:
+          type: ["integer", "null"]
+        confirmedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        user:
+          $ref: "#/components/schemas/User"
+
+    TimeEntryInput:
+      type: object
+      required: [userId, actualStart, actualEnd]
+      properties:
+        userId:
+          type: integer
+        shiftId:
+          type: integer
+        actualStart:
+          type: string
+          format: date-time
+        actualEnd:
+          type: string
+          format: date-time
+        notes:
+          type: string
+
+    TimeEntryUpdate:
+      type: object
+      properties:
+        actualStart:
+          type: string
+          format: date-time
+        actualEnd:
+          type: string
+          format: date-time
+        notes:
+          type: ["string", "null"]
+
+    TimeEntryConfirm:
+      type: object
+      required: [status, confirmedBy]
+      properties:
+        status:
+          type: string
+          enum: [confirmed, rejected]
+        confirmedBy:
+          type: integer
+        notes:
+          type: string
+
+    DashboardSummary:
+      type: object
+      required: [totalAssistants, activeShiftsToday, pendingTimeEntries, monthlyPlannedHours, monthlyActualHours]
+      properties:
+        totalAssistants:
+          type: integer
+        activeShiftsToday:
+          type: integer
+        pendingTimeEntries:
+          type: integer
+        monthlyPlannedHours:
+          type: number
+        monthlyActualHours:
+          type: number
+        hoursBalance:
+          type: number
+        upcomingShifts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Shift"
+        recentTimeEntries:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimeEntry"
+
+    HoursBalance:
+      type: object
+      required: [userId, userName, plannedHours, actualHours, balance, vacationDaysUsed, vacationDaysRemaining]
+      properties:
+        userId:
+          type: integer
+        userName:
+          type: string
+        plannedHours:
+          type: number
+        actualHours:
+          type: number
+        balance:
+          type: number
+        vacationDaysUsed:
+          type: integer
+        vacationDaysRemaining:
+          type: integer

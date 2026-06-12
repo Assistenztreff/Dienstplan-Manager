@@ -1,45 +1,66 @@
-# [Project name]
+# Dienstplan-App
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Eine Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermodell, orientiert an "Assistenz-Connect".
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `pnpm --filter @workspace/api-server run dev` — API-Server starten (Port 8080, erreichbar über `/api`)
+- `pnpm --filter @workspace/dienstplan run dev` — Frontend starten (Port dynamisch, Pfad `/`)
+- `pnpm run typecheck` — Vollständiger Typecheck über alle Pakete
+- `pnpm run build` — Typecheck + Build aller Pakete
+- `pnpm --filter @workspace/api-spec run codegen` — API-Hooks und Zod-Schemas aus OpenAPI-Spec regenerieren
+- `pnpm --filter @workspace/db run push` — DB-Schema pushen (nur Dev)
+- Required env: `DATABASE_URL` — Postgres-Verbindungsstring
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
+- API: Express 5 (artifacts/api-server)
+- Frontend: React + Vite + Tailwind (artifacts/dienstplan)
 - DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Validation: Zod (zod/v4), drizzle-zod
+- API codegen: Orval (aus OpenAPI-Spec)
+- Build: esbuild (CJS Bundle)
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `lib/api-spec/openapi.yaml` — OpenAPI-Spec (Single Source of Truth für alle API-Verträge)
+- `lib/db/src/schema/` — Drizzle-Tabellendefinitionen (users, contracts, shifts, time_tracking)
+- `artifacts/api-server/src/routes/` — Express-Routen (users, contracts, shifts, time_tracking, dashboard)
+- `artifacts/dienstplan/src/pages/` — React-Seiten (Dashboard, Dienstplan, Assistenten, Zeiterfassung, Auswertungen)
+- `lib/api-client-react/src/generated/` — Generierte React-Query-Hooks (nicht manuell editieren)
+- `lib/api-zod/src/generated/` — Generierte Zod-Schemas (nicht manuell editieren)
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Contract-first: OpenAPI-Spec zuerst, dann Codegen → Hooks + Zod-Schemas automatisch generiert
+- Drizzle ORM mit PostgreSQL — kein Raw-SQL in Routen
+- Express-Routen nutzen generierte Zod-Schemas zur Validierung (aus `@workspace/api-zod`)
+- Frontend nutzt ausschließlich generierte React-Query-Hooks (aus `@workspace/api-client-react`)
+- Shared Express-Backend für alle Frontends (auch zukünftige Expo-App möglich)
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Kernfunktionen (Task 1 — Grundstruktur):
+- **Benutzerrollen**: Admin (Assistenznehmer) und Assistent (Mitarbeiter)
+- **Stammdaten**: Assistenten mit Vertragsdaten (Wochenstunden, Urlaubstage, Kontaktdaten)
+- **Dienstplan-Kalender**: Monatsansicht, Schichttypen: Aktiv, Bereitschaft, Nacht, 24h
+- **Zeiterfassung**: Ist-Zeiten eintragen, Status (offen / bestätigt / abgelehnt)
+- **Auswertungen**: Soll/Ist-Abgleich pro Assistent und Monat
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Strikt task-orientiertes Vorgehen: nach jedem Task auf Feedback warten
+- Keine Emojis in der App-UI
+- Mobil-optimiert (Assistenten nutzen Smartphones)
+- Datenbankschema: PostgreSQL mit Drizzle ORM
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Nach jeder Änderung an `lib/api-spec/openapi.yaml` muss Codegen neu ausgeführt werden: `pnpm --filter @workspace/api-spec run codegen`
+- Nach DB-Schema-Änderungen: `pnpm --filter @workspace/db run push`
+- Zod-Schema-Namen aus `@workspace/api-zod` per grep ermitteln, nicht raten (Orval-Namenskonventionen variieren)
 
 ## Pointers
 
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- Siehe `pnpm-workspace` Skill für Workspace-Struktur, TypeScript-Setup und Paketdetails
