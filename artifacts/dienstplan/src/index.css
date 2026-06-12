@@ -115,14 +115,14 @@
   --card-foreground: 225 35% 15%;
   --card-border: 170 25% 82%;
 
-  --sidebar: 0 0% 100%;
-  --sidebar-foreground: 225 35% 15%;
-  --sidebar-border: 170 25% 82%;
-  --sidebar-primary: 225 58% 24%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 170 35% 86%;
-  --sidebar-accent-foreground: 225 35% 15%;
-  --sidebar-ring: 225 58% 24%;
+  --sidebar: 225 58% 24%; /* Deep navy */
+  --sidebar-foreground: 0 0% 100%;
+  --sidebar-border: 225 45% 18%;
+  --sidebar-primary: 70 78% 65%; /* Lime for active items */
+  --sidebar-primary-foreground: 70 40% 18%;
+  --sidebar-accent: 225 45% 32%; /* Slightly lighter navy for hover */
+  --sidebar-accent-foreground: 0 0% 100%;
+  --sidebar-ring: 70 78% 65%;
 
   --popover: 0 0% 100%;
   --popover-foreground: 225 35% 15%;
