@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { setCookieGetter } from "@workspace/api-client-react";
 import React, { createContext, useContext, useEffect, useState } from "react";
 
 export type AppUser = {
@@ -11,25 +12,38 @@ export type AppUser = {
 type UserContextType = {
   currentUser: AppUser | null;
   setCurrentUser: (user: AppUser | null) => void;
+  sessionCookie: string | null;
+  setSessionCookie: (cookie: string | null) => void;
   isLoading: boolean;
 };
 
 const UserContext = createContext<UserContextType>({
   currentUser: null,
   setCurrentUser: () => {},
+  sessionCookie: null,
+  setSessionCookie: () => {},
   isLoading: true,
 });
 
-const STORAGE_KEY = "dienstplan_user";
+const USER_KEY = "dienstplan_user";
+const COOKIE_KEY = "dienstplan_session_cookie";
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUserState] = useState<AppUser | null>(null);
+  const [sessionCookie, setSessionCookieState] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((stored) => {
-        if (stored) setCurrentUserState(JSON.parse(stored) as AppUser);
+    Promise.all([
+      AsyncStorage.getItem(USER_KEY),
+      AsyncStorage.getItem(COOKIE_KEY),
+    ])
+      .then(([storedUser, storedCookie]) => {
+        if (storedUser) setCurrentUserState(JSON.parse(storedUser) as AppUser);
+        if (storedCookie) {
+          setSessionCookieState(storedCookie);
+          setCookieGetter(() => storedCookie);
+        }
       })
       .catch(() => {})
       .finally(() => setIsLoading(false));
@@ -38,14 +52,27 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const setCurrentUser = (user: AppUser | null) => {
     setCurrentUserState(user);
     if (user) {
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(user)).catch(() => {});
+      AsyncStorage.setItem(USER_KEY, JSON.stringify(user)).catch(() => {});
     } else {
-      AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+      AsyncStorage.removeItem(USER_KEY).catch(() => {});
+    }
+  };
+
+  const setSessionCookie = (cookie: string | null) => {
+    setSessionCookieState(cookie);
+    if (cookie) {
+      AsyncStorage.setItem(COOKIE_KEY, cookie).catch(() => {});
+      setCookieGetter(() => cookie);
+    } else {
+      AsyncStorage.removeItem(COOKIE_KEY).catch(() => {});
+      setCookieGetter(null);
     }
   };
 
   return (
-    <UserContext.Provider value={{ currentUser, setCurrentUser, isLoading }}>
+    <UserContext.Provider
+      value={{ currentUser, setCurrentUser, sessionCookie, setSessionCookie, isLoading }}
+    >
       {children}
     </UserContext.Provider>
   );

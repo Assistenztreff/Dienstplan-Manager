@@ -17,6 +17,22 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
 let _baseUrl: string | null = null;
 let _authTokenGetter: AuthTokenGetter | null = null;
+let _cookieGetter: (() => Promise<string | null> | string | null) | null = null;
+
+/**
+ * Register a getter that supplies a raw Cookie header value.  Before every
+ * fetch the getter is invoked; when it returns a non-null string, a
+ * `Cookie: <value>` header is attached to the request.
+ *
+ * Useful for React Native / Expo apps that must manually forward session
+ * cookies because the native fetch implementation does not persist cookies.
+ * Pass `null` to clear the getter.
+ */
+export function setCookieGetter(
+  getter: (() => Promise<string | null> | string | null) | null,
+): void {
+  _cookieGetter = getter;
+}
 
 /**
  * Set a base URL that is prepended to every relative request URL
@@ -355,6 +371,15 @@ export async function customFetch<T = unknown>(
     const token = await _authTokenGetter();
     if (token) {
       headers.set("authorization", `Bearer ${token}`);
+    }
+  }
+
+  // Attach session cookie when a cookie getter is configured and no
+  // Cookie header has been explicitly provided.
+  if (_cookieGetter && !headers.has("cookie")) {
+    const cookie = await _cookieGetter();
+    if (cookie) {
+      headers.set("cookie", cookie);
     }
   }
 

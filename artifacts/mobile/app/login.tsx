@@ -1,14 +1,14 @@
-import { useListUsers } from "@workspace/api-client-react";
 import { Feather } from "@expo/vector-icons";
 import { Redirect, router } from "expo-router";
-import React from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
+  KeyboardAvoidingView,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
-  TouchableOpacity,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -18,156 +18,152 @@ import { useCurrentUser, type AppUser } from "@/context/UserContext";
 export default function LoginScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { currentUser, setCurrentUser } = useCurrentUser();
+  const { currentUser, setCurrentUser, setSessionCookie } = useCurrentUser();
 
-  const { data: users, isLoading, isError } = useListUsers();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (currentUser) {
     return <Redirect href="/(tabs)/dienstplan" />;
   }
 
-  const topPad =
-    Platform.OS === "web" ? 67 : insets.top;
+  const baseUrl = process.env.EXPO_PUBLIC_DOMAIN
+    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+    : "";
 
-  const handleSelect = (user: AppUser) => {
-    setCurrentUser(user);
-    router.replace("/(tabs)/dienstplan");
+  const handleLogin = async () => {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
+      setError("E-Mail und Passwort eingeben");
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      const response = await fetch(`${baseUrl}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: trimmedEmail, password }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({})) as { error?: string };
+        setError(data.error ?? "Anmeldung fehlgeschlagen");
+        return;
+      }
+
+      const user = await response.json() as AppUser;
+
+      const rawCookie = response.headers.get("set-cookie");
+      if (rawCookie) {
+        const cookieValue = rawCookie.split(";")[0];
+        setSessionCookie(cookieValue);
+      }
+
+      setCurrentUser(user);
+      router.replace("/(tabs)/dienstplan");
+    } catch {
+      setError("Server nicht erreichbar");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const roleLabel = (role: string) =>
-    role === "admin" ? "Admin" : "Assistent";
-
-  const roleColor = (role: string) =>
-    role === "admin" ? colors.accent : colors.primary;
-
-  const roleTextColor = (role: string) =>
-    role === "admin" ? colors.accentForeground : colors.primaryForeground;
+  const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: colors.background, paddingTop: topPad },
-      ]}
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <View
-        style={[styles.hero, { backgroundColor: colors.primary }]}
-      >
-        <View
-          style={[
-            styles.iconCircle,
-            { backgroundColor: colors.accent },
-          ]}
-        >
+      <View style={[styles.hero, { backgroundColor: colors.primary, paddingTop: topPad + 40 }]}>
+        <View style={[styles.iconCircle, { backgroundColor: colors.accent }]}>
           <Feather name="calendar" size={32} color={colors.accentForeground} />
         </View>
         <Text style={[styles.heroTitle, { color: colors.primaryForeground }]}>
           Dienstplan PA
         </Text>
         <Text style={[styles.heroSub, { color: colors.primaryForeground + "CC" }]}>
-          Profil auswahlen
+          Bitte anmelden
         </Text>
       </View>
 
-      <View style={styles.listContainer}>
-        {isLoading ? (
-          <View style={styles.centered}>
-            <ActivityIndicator color={colors.primary} size="large" />
+      <View style={styles.form}>
+        {error ? (
+          <View style={[styles.errorBox, { backgroundColor: colors.card, borderColor: "#EF4444" }]}>
+            <Feather name="alert-circle" size={16} color="#EF4444" />
+            <Text style={[styles.errorText, { color: "#EF4444" }]}>{error}</Text>
           </View>
-        ) : isError ? (
-          <View style={styles.centered}>
-            <Feather name="wifi-off" size={40} color={colors.mutedForeground} />
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              Server nicht erreichbar
-            </Text>
-          </View>
-        ) : !users?.length ? (
-          <View style={styles.centered}>
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              Keine Benutzer gefunden
-            </Text>
-          </View>
-        ) : (
-          <FlatList
-            data={users}
-            keyExtractor={(item) => String(item.id)}
-            contentContainerStyle={styles.list}
-            showsVerticalScrollIndicator={false}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[
-                  styles.card,
-                  {
-                    backgroundColor: colors.card,
-                    borderColor: colors.border,
-                    borderRadius: colors.radius,
-                  },
-                ]}
-                onPress={() =>
-                  handleSelect({
-                    id: item.id,
-                    name: item.name,
-                    email: item.email,
-                    role: item.role as "admin" | "assistant",
-                  })
-                }
-                activeOpacity={0.75}
-              >
-                <View
-                  style={[
-                    styles.avatar,
-                    {
-                      backgroundColor: colors.secondary,
-                      borderRadius: 24,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[styles.avatarText, { color: colors.primary }]}
-                  >
-                    {item.name
-                      .split(" ")
-                      .map((n: string) => n[0])
-                      .join("")
-                      .slice(0, 2)
-                      .toUpperCase()}
-                  </Text>
-                </View>
-                <View style={styles.cardBody}>
-                  <Text style={[styles.cardName, { color: colors.foreground }]}>
-                    {item.name}
-                  </Text>
-                  <Text
-                    style={[styles.cardEmail, { color: colors.mutedForeground }]}
-                    numberOfLines={1}
-                  >
-                    {item.email}
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.badge,
-                    {
-                      backgroundColor: roleColor(item.role),
-                      borderRadius: 6,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.badgeText,
-                      { color: roleTextColor(item.role) },
-                    ]}
-                  >
-                    {roleLabel(item.role)}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            )}
+        ) : null}
+
+        <View style={styles.field}>
+          <Text style={[styles.label, { color: colors.foreground }]}>E-Mail</Text>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                color: colors.foreground,
+              },
+            ]}
+            placeholder="name@beispiel.de"
+            placeholderTextColor={colors.mutedForeground}
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            autoComplete="email"
+            keyboardType="email-address"
+            textContentType="emailAddress"
+            editable={!loading}
           />
-        )}
+        </View>
+
+        <View style={styles.field}>
+          <Text style={[styles.label, { color: colors.foreground }]}>Passwort</Text>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                color: colors.foreground,
+              },
+            ]}
+            placeholder="Passwort"
+            placeholderTextColor={colors.mutedForeground}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoComplete="password"
+            textContentType="password"
+            editable={!loading}
+          />
+        </View>
+
+        <Pressable
+          onPress={() => void handleLogin()}
+          disabled={loading}
+          style={({ pressed }) => [
+            styles.button,
+            {
+              backgroundColor: loading ? colors.primary + "99" : colors.primary,
+              opacity: pressed ? 0.9 : 1,
+            },
+          ]}
+        >
+          {loading ? (
+            <ActivityIndicator color={colors.primaryForeground} size="small" />
+          ) : (
+            <Text style={[styles.buttonText, { color: colors.primaryForeground }]}>
+              Anmelden
+            </Text>
+          )}
+        </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -177,7 +173,6 @@ const styles = StyleSheet.create({
   },
   hero: {
     paddingHorizontal: 24,
-    paddingTop: 40,
     paddingBottom: 36,
     alignItems: "center",
     gap: 10,
@@ -200,69 +195,48 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Inter_400Regular",
   },
-  listContainer: {
-    flex: 1,
+  form: {
+    padding: 24,
+    gap: 16,
   },
-  list: {
-    padding: 16,
-    gap: 10,
-  },
-  centered: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-    paddingTop: 60,
-  },
-  emptyText: {
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-    textAlign: "center",
-  },
-  card: {
+  errorBox: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
+    gap: 8,
+    padding: 12,
+    borderRadius: 8,
     borderWidth: 1,
-    gap: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
   },
-  avatar: {
-    width: 48,
-    height: 48,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  avatarText: {
-    fontSize: 16,
-    fontWeight: "700",
-    fontFamily: "Inter_700Bold",
-  },
-  cardBody: {
+  errorText: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
     flex: 1,
-    gap: 2,
   },
-  cardName: {
-    fontSize: 16,
-    fontWeight: "600",
-    fontFamily: "Inter_600SemiBold",
+  field: {
+    gap: 6,
   },
-  cardEmail: {
-    fontSize: 13,
+  label: {
+    fontSize: 14,
+    fontWeight: "500",
+    fontFamily: "Inter_500Medium",
+  },
+  input: {
+    height: 48,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    fontSize: 15,
     fontFamily: "Inter_400Regular",
   },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    flexShrink: 0,
+  button: {
+    height: 50,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
   },
-  badgeText: {
-    fontSize: 11,
+  buttonText: {
+    fontSize: 16,
     fontWeight: "600",
     fontFamily: "Inter_600SemiBold",
   },
