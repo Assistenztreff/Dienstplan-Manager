@@ -5,7 +5,8 @@ import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, List, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { ShiftDialog } from "@/components/shift-dialog";
 import { useAuth } from "@/context/auth";
 import { colorBadgeClass, colorDotClass } from "@/lib/shift-model-colors";
@@ -310,6 +311,78 @@ function MonthGrid({
   );
 }
 
+function ViewToggle({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string; icon: LucideIcon }[];
+}) {
+  return (
+    <div className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5">
+      {options.map((opt) => {
+        const Icon = opt.icon;
+        const active = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+            }`}
+          >
+            <Icon className="h-4 w-4" />
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function AssistantFilter({
+  assistants,
+  selected,
+  onSelect,
+}: {
+  assistants: Assistant[];
+  selected: number | "all";
+  onSelect: (val: number | "all") => void;
+}) {
+  return (
+    <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
+      <button
+        type="button"
+        onClick={() => onSelect("all")}
+        className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition-colors ${
+          selected === "all"
+            ? "bg-primary text-primary-foreground border-primary"
+            : "bg-card text-muted-foreground border-border"
+        }`}
+      >
+        Alle
+      </button>
+      {assistants.map((a) => (
+        <button
+          key={a.id}
+          type="button"
+          onClick={() => onSelect(a.id)}
+          className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition-colors ${
+            selected === a.id
+              ? "bg-primary text-primary-foreground border-primary"
+              : "bg-card text-muted-foreground border-border"
+          }`}
+        >
+          {a.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function Dienstplan() {
   const { currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin";
@@ -317,6 +390,7 @@ export default function Dienstplan() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [dialog, setDialog] = useState<DialogState>({ mode: "closed" });
   const [mobileView, setMobileView] = useState<"list" | "grid">("grid");
+  const [desktopView, setDesktopView] = useState<"table" | "grid">("table");
   const [selectedAssistant, setSelectedAssistant] = useState<number | "all">("all");
   const [selectedDay, setSelectedDay] = useState<Date>(() => new Date());
 
@@ -353,6 +427,10 @@ export default function Dienstplan() {
     selectedAssistant === "all"
       ? allShifts
       : allShifts.filter((s) => s.userId === selectedAssistant);
+  const tableAssistants: Assistant[] =
+    selectedAssistant === "all"
+      ? assistants
+      : assistants.filter((a) => a.id === selectedAssistant);
   const isLoading = shiftsLoading || (isAdmin && usersLoading);
 
   function openCreate(date: Date, userId?: number) {
@@ -409,62 +487,22 @@ export default function Dienstplan() {
       {/* Mobile: umschaltbare Ansicht (Liste / Monatsgitter) */}
       <div className="md:hidden space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <div className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5">
-            <button
-              type="button"
-              onClick={() => setMobileView("list")}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                mobileView === "list"
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground"
-              }`}
-            >
-              <List className="h-4 w-4" />
-              Liste
-            </button>
-            <button
-              type="button"
-              onClick={() => setMobileView("grid")}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                mobileView === "grid"
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground"
-              }`}
-            >
-              <CalendarDays className="h-4 w-4" />
-              Monat
-            </button>
-          </div>
+          <ViewToggle
+            value={mobileView}
+            onChange={(v) => setMobileView(v as "list" | "grid")}
+            options={[
+              { value: "list", label: "Liste", icon: List },
+              { value: "grid", label: "Monat", icon: CalendarDays },
+            ]}
+          />
         </div>
 
         {isAdmin && assistants.length > 0 && (
-          <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
-            <button
-              type="button"
-              onClick={() => setSelectedAssistant("all")}
-              className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition-colors ${
-                selectedAssistant === "all"
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-card text-muted-foreground border-border"
-              }`}
-            >
-              Alle
-            </button>
-            {assistants.map((a) => (
-              <button
-                key={a.id}
-                type="button"
-                onClick={() => setSelectedAssistant(a.id)}
-                className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition-colors ${
-                  selectedAssistant === a.id
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-card text-muted-foreground border-border"
-                }`}
-              >
-                {a.name}
-              </button>
-            ))}
-          </div>
+          <AssistantFilter
+            assistants={assistants}
+            selected={selectedAssistant}
+            onSelect={setSelectedAssistant}
+          />
         )}
 
         {mobileView === "list" ? (
@@ -491,8 +529,40 @@ export default function Dienstplan() {
         )}
       </div>
 
-      {/* Desktop: Tabellen-Ansicht */}
-      <Card className="hidden md:block overflow-x-auto border-border/50 shadow-sm">
+      {/* Desktop: umschaltbare Ansicht (Tabelle / Monatsgitter) */}
+      <div className="hidden md:block space-y-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <ViewToggle
+            value={desktopView}
+            onChange={(v) => setDesktopView(v as "table" | "grid")}
+            options={[
+              { value: "table", label: "Tabelle", icon: Table2 },
+              { value: "grid", label: "Monat", icon: CalendarDays },
+            ]}
+          />
+          {isAdmin && assistants.length > 0 && (
+            <AssistantFilter
+              assistants={assistants}
+              selected={selectedAssistant}
+              onSelect={setSelectedAssistant}
+            />
+          )}
+        </div>
+
+        {desktopView === "grid" ? (
+          <MonthGrid
+            days={days}
+            monthStart={start}
+            shifts={visibleShifts}
+            modelMap={modelMap}
+            selectedDay={selectedDay}
+            onSelectDay={setSelectedDay}
+            onAddShift={(day) => openCreate(day)}
+            onShiftClick={openEdit}
+            canEdit={isAdmin}
+          />
+        ) : (
+      <Card className="overflow-x-auto border-border/50 shadow-sm">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/50">
@@ -521,14 +591,14 @@ export default function Dienstplan() {
             </tr>
           </thead>
           <tbody>
-            {assistants.length === 0 ? (
+            {tableAssistants.length === 0 ? (
               <tr>
                 <td colSpan={days.length + 1} className="p-8 text-center text-muted-foreground">
                   Keine Einträge gefunden.
                 </td>
               </tr>
             ) : (
-              assistants.map((assistant) => (
+              tableAssistants.map((assistant) => (
                 <tr
                   key={assistant.id}
                   className="border-b last:border-0 hover:bg-muted/20 transition-colors"
@@ -573,6 +643,8 @@ export default function Dienstplan() {
           </tbody>
         </table>
       </Card>
+        )}
+      </div>
 
       {isAdmin && (
         <ShiftDialog
