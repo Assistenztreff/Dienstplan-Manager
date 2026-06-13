@@ -14,13 +14,24 @@ import { requireAdmin, requireAuth } from "../middleware/auth";
 
 const router = Router();
 
+const SAFE_USER_SELECT = {
+  id: usersTable.id,
+  name: usersTable.name,
+  email: usersTable.email,
+  role: usersTable.role,
+  phone: usersTable.phone,
+  address: usersTable.address,
+  isActive: usersTable.isActive,
+  createdAt: usersTable.createdAt,
+};
+
 router.get("/users", requireAdmin, async (req, res): Promise<void> => {
   const query = ListUsersQueryParams.safeParse(req.query);
   if (!query.success) {
     res.status(400).json({ error: "Invalid query parameters" });
     return;
   }
-  let rows = await db.select().from(usersTable);
+  let rows = await db.select(SAFE_USER_SELECT).from(usersTable);
   if (query.data.role) {
     rows = rows.filter((u) => u.role === query.data.role);
   }
@@ -33,7 +44,10 @@ router.post("/users", requireAdmin, async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid request body" });
     return;
   }
-  const [user] = await db.insert(usersTable).values(body.data).returning();
+  const [user] = await db
+    .insert(usersTable)
+    .values(body.data)
+    .returning(SAFE_USER_SELECT);
   res.status(201).json(user);
 });
 
@@ -43,7 +57,15 @@ router.get("/users/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid id" });
     return;
   }
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, params.data.id));
+  const requestedId = params.data.id;
+  if (req.session.role !== "admin" && req.session.userId !== requestedId) {
+    res.status(403).json({ error: "Keine Berechtigung" });
+    return;
+  }
+  const [user] = await db
+    .select(SAFE_USER_SELECT)
+    .from(usersTable)
+    .where(eq(usersTable.id, requestedId));
   if (!user) {
     res.status(404).json({ error: "Not found" });
     return;
@@ -62,7 +84,7 @@ router.patch("/users/:id", requireAdmin, async (req, res): Promise<void> => {
     .update(usersTable)
     .set(body.data)
     .where(eq(usersTable.id, params.data.id))
-    .returning();
+    .returning(SAFE_USER_SELECT);
   if (!user) {
     res.status(404).json({ error: "Not found" });
     return;
