@@ -440,6 +440,55 @@ export const DeleteShiftModelParams = zod.object({
 
 
 /**
+ * @summary Zuschlags-Einstellungen lesen
+ */
+export const GetAllowanceSettingsResponse = zod.object({
+  "id": zod.number(),
+  "nightPercent": zod.number(),
+  "nightStart": zod.string(),
+  "nightEnd": zod.string(),
+  "sundayPercent": zod.number(),
+  "holidayPercent": zod.number(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Zuschlags-Einstellungen aktualisieren
+ */
+export const updateAllowanceSettingsBodyNightPercentMin = 0;
+export const updateAllowanceSettingsBodyNightPercentMax = 100;
+
+export const updateAllowanceSettingsBodyNightStartRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+export const updateAllowanceSettingsBodyNightEndRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+export const updateAllowanceSettingsBodySundayPercentMin = 0;
+export const updateAllowanceSettingsBodySundayPercentMax = 100;
+
+export const updateAllowanceSettingsBodyHolidayPercentMin = 0;
+export const updateAllowanceSettingsBodyHolidayPercentMax = 100;
+
+
+
+export const UpdateAllowanceSettingsBody = zod.object({
+  "nightPercent": zod.number().min(updateAllowanceSettingsBodyNightPercentMin).max(updateAllowanceSettingsBodyNightPercentMax),
+  "nightStart": zod.string().regex(updateAllowanceSettingsBodyNightStartRegExp),
+  "nightEnd": zod.string().regex(updateAllowanceSettingsBodyNightEndRegExp),
+  "sundayPercent": zod.number().min(updateAllowanceSettingsBodySundayPercentMin).max(updateAllowanceSettingsBodySundayPercentMax),
+  "holidayPercent": zod.number().min(updateAllowanceSettingsBodyHolidayPercentMin).max(updateAllowanceSettingsBodyHolidayPercentMax)
+})
+
+export const UpdateAllowanceSettingsResponse = zod.object({
+  "id": zod.number(),
+  "nightPercent": zod.number(),
+  "nightStart": zod.string(),
+  "nightEnd": zod.string(),
+  "sundayPercent": zod.number(),
+  "holidayPercent": zod.number(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Zeiteinträge auflisten
  */
 export const ListTimeEntriesQueryParams = zod.object({

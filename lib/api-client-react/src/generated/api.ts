@@ -20,6 +20,8 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AllowanceSettings,
+  AllowanceSettingsInput,
   AuthUser,
   Contract,
   ContractInput,
@@ -1560,6 +1562,154 @@ export const useDeleteShiftModel = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getDeleteShiftModelMutationOptions(options));
+    }
+
+export const getGetAllowanceSettingsUrl = () => {
+
+
+
+
+  return `/api/allowance-settings`
+}
+
+/**
+ * @summary Zuschlags-Einstellungen lesen
+ */
+export const getAllowanceSettings = async ( options?: RequestInit): Promise<AllowanceSettings> => {
+
+  return customFetch<AllowanceSettings>(getGetAllowanceSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAllowanceSettingsQueryKey = () => {
+    return [
+    `/api/allowance-settings`
+    ] as const;
+    }
+
+
+export const getGetAllowanceSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getAllowanceSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAllowanceSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAllowanceSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAllowanceSettings>>> = ({ signal }) => getAllowanceSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAllowanceSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAllowanceSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getAllowanceSettings>>>
+export type GetAllowanceSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Zuschlags-Einstellungen lesen
+ */
+
+export function useGetAllowanceSettings<TData = Awaited<ReturnType<typeof getAllowanceSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAllowanceSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAllowanceSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateAllowanceSettingsUrl = () => {
+
+
+
+
+  return `/api/allowance-settings`
+}
+
+/**
+ * @summary Zuschlags-Einstellungen aktualisieren
+ */
+export const updateAllowanceSettings = async (allowanceSettingsInput: AllowanceSettingsInput, options?: RequestInit): Promise<AllowanceSettings> => {
+
+  return customFetch<AllowanceSettings>(getUpdateAllowanceSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      allowanceSettingsInput,)
+  }
+);}
+
+
+
+
+export const getUpdateAllowanceSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAllowanceSettings>>, TError,{data: BodyType<AllowanceSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAllowanceSettings>>, TError,{data: BodyType<AllowanceSettingsInput>}, TContext> => {
+
+const mutationKey = ['updateAllowanceSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAllowanceSettings>>, {data: BodyType<AllowanceSettingsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateAllowanceSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAllowanceSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateAllowanceSettings>>>
+    export type UpdateAllowanceSettingsMutationBody = BodyType<AllowanceSettingsInput>
+    export type UpdateAllowanceSettingsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Zuschlags-Einstellungen aktualisieren
+ */
+export const useUpdateAllowanceSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAllowanceSettings>>, TError,{data: BodyType<AllowanceSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAllowanceSettings>>,
+        TError,
+        {data: BodyType<AllowanceSettingsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateAllowanceSettingsMutationOptions(options));
     }
 
 export const getListTimeEntriesUrl = (params?: ListTimeEntriesParams,) => {

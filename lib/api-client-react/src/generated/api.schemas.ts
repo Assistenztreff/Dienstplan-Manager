@@ -201,6 +201,38 @@ export interface ShiftModelUpdate {
   isActive?: boolean;
 }
 
+export interface AllowanceSettings {
+  id: number;
+  nightPercent: number;
+  nightStart: string;
+  nightEnd: string;
+  sundayPercent: number;
+  holidayPercent: number;
+  updatedAt: string;
+}
+
+export interface AllowanceSettingsInput {
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  nightPercent: number;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  nightStart: string;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  nightEnd: string;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  sundayPercent: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  holidayPercent: number;
+}
+
 export type TimeEntryStatus = typeof TimeEntryStatus[keyof typeof TimeEntryStatus];
 
 

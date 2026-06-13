@@ -414,6 +414,36 @@ paths:
         "404":
           description: Nicht gefunden
 
+  /allowance-settings:
+    get:
+      operationId: getAllowanceSettings
+      tags: [allowance-settings]
+      summary: Zuschlags-Einstellungen lesen
+      responses:
+        "200":
+          description: Zuschlags-Einstellungen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AllowanceSettings"
+    put:
+      operationId: updateAllowanceSettings
+      tags: [allowance-settings]
+      summary: Zuschlags-Einstellungen aktualisieren
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AllowanceSettingsInput"
+      responses:
+        "200":
+          description: Aktualisiert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AllowanceSettings"
+
   /time-tracking:
     get:
       operationId: listTimeEntries
@@ -950,6 +980,58 @@ components:
           type: integer
         isActive:
           type: boolean
+
+    AllowanceSettings:
+      type: object
+      required:
+        [
+          id,
+          nightPercent,
+          nightStart,
+          nightEnd,
+          sundayPercent,
+          holidayPercent,
+          updatedAt,
+        ]
+      properties:
+        id:
+          type: integer
+        nightPercent:
+          type: integer
+        nightStart:
+          type: string
+        nightEnd:
+          type: string
+        sundayPercent:
+          type: integer
+        holidayPercent:
+          type: integer
+        updatedAt:
+          type: string
+          format: date-time
+
+    AllowanceSettingsInput:
+      type: object
+      required: [nightPercent, nightStart, nightEnd, sundayPercent, holidayPercent]
+      properties:
+        nightPercent:
+          type: integer
+          minimum: 0
+          maximum: 100
+        nightStart:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        nightEnd:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        sundayPercent:
+          type: integer
+          minimum: 0
+          maximum: 100
+        holidayPercent:
+          type: integer
+          minimum: 0
+          maximum: 100
 
     TimeEntry:
       type: object

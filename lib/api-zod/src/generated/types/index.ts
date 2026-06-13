@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './allowanceSettings';
+export * from './allowanceSettingsInput';
 export * from './authUser';
 export * from './authUserRole';
 export * from './contract';

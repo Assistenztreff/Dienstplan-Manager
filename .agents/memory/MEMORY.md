@@ -1,1 +1,2 @@
 - [Drizzle push needs TTY](drizzle-push-tty.md) — drizzle-kit push/push-force hang on TTY prompts in this env; apply additive schema via SQL DDL instead.
+- [Singleton settings table](singleton-settings-table.md) — global single-row config needs CHECK(id=1) + onConflictDoNothing upsert; hydrate forms once (useRef guard) to avoid clobbering edits.

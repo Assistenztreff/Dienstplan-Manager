@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, GripVertical } from "lucide-react";
 import { SHIFT_MODEL_COLORS, colorDotClass } from "@/lib/shift-model-colors";
+import { AllowanceSettingsForm } from "@/components/allowance-settings-form";
 
 type ShiftModel = {
   id: number;
@@ -326,6 +327,13 @@ export default function Einstellungen() {
       <p className="text-xs text-muted-foreground">
         Schichtmodelle stehen beim Anlegen einer Schicht im Dienstplan zur Auswahl. Die Zeitwertung
         bestimmt, wie die geleistete Zeit in der Auswertung auf die Sollstunden angerechnet wird.
+      </p>
+
+      <AllowanceSettingsForm />
+
+      <p className="text-xs text-muted-foreground">
+        Zuschläge werden zentral gespeichert und bei der Auswertung angewandt. Änderungen wirken sich
+        rückwirkend auf alle Auswertungen aus, ohne dass Schichten neu gespeichert werden müssen.
       </p>
 
       {dialogOpen && (
