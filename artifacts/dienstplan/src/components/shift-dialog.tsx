@@ -5,6 +5,7 @@ import {
   useUpdateShift,
   useDeleteShift,
   getListShiftsQueryKey,
+  ApiError,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -189,8 +190,14 @@ export function ShiftDialog({
       }
       await invalidate();
       onClose();
-    } catch {
-      setErrors({ notes: "Speichern fehlgeschlagen. Bitte erneut versuchen." });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setErrors({ notes: "Sitzung abgelaufen. Bitte Seite neu laden und erneut anmelden." });
+      } else if (err instanceof ApiError && err.status === 403) {
+        setErrors({ notes: "Keine Berechtigung zum Speichern." });
+      } else {
+        setErrors({ notes: "Speichern fehlgeschlagen. Bitte erneut versuchen." });
+      }
     } finally {
       setSaving(false);
     }
