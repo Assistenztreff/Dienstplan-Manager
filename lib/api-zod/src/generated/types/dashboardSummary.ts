@@ -5,6 +5,7 @@
  * Dienstplan-App API für Persönliche Assistenz
  * OpenAPI spec version: 0.1.0
  */
+import type { DashboardWarnings } from './dashboardWarnings';
 import type { Shift } from './shift';
 import type { TimeEntry } from './timeEntry';
 
@@ -17,4 +18,5 @@ export interface DashboardSummary {
   hoursBalance?: number;
   upcomingShifts?: Shift[];
   recentTimeEntries?: TimeEntry[];
+  warnings?: DashboardWarnings;
 }

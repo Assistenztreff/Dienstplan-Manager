@@ -129,6 +129,62 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       .leftJoin(usersTable, eq(timeTrackingTable.userId, usersTable.id))
       .limit(5);
 
+    // --- Warnhinweise (nur Admin) ---
+    const LOW_VACATION_THRESHOLD = 5;
+    const HORIZON_DAYS = 14;
+
+    const localDateKey = (d: Date | string): string => {
+      const dt = new Date(d);
+      return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+    };
+
+    const assistants = await db
+      .select({ id: usersTable.id, name: usersTable.name })
+      .from(usersTable)
+      .where(and(eq(usersTable.role, "assistant"), eq(usersTable.isActive, true)));
+
+    const lowVacationAssistants: { userId: number; userName: string; vacationDaysRemaining: number }[] = [];
+    for (const assistant of assistants) {
+      const contract = await activeContractFor(assistant.id, todayStart);
+      if (!contract) continue;
+      const remaining = (contract.vacationDays ?? 0) - (contract.vacationDaysUsed ?? 0);
+      if (remaining <= LOW_VACATION_THRESHOLD) {
+        lowVacationAssistants.push({ userId: assistant.id, userName: assistant.name, vacationDaysRemaining: remaining });
+      }
+    }
+    lowVacationAssistants.sort((a, b) => a.vacationDaysRemaining - b.vacationDaysRemaining);
+
+    const horizonEnd = new Date(todayStart);
+    horizonEnd.setDate(horizonEnd.getDate() + HORIZON_DAYS);
+    // Eine Schicht deckt jeden Tag ab, den sie überlappt (auch über Mitternacht
+    // laufende Nachtdienste), nicht nur ihren Starttag.
+    const horizonShifts = await db
+      .select({ startTime: shiftsTable.startTime, endTime: shiftsTable.endTime })
+      .from(shiftsTable)
+      .where(
+        and(
+          sql`${shiftsTable.startTime} < ${horizonEnd}`,
+          sql`${shiftsTable.endTime} > ${todayStart}`,
+        )
+      );
+    const coveredDates = new Set<string>();
+    for (const s of horizonShifts) {
+      const end = new Date(s.endTime);
+      const startDate = new Date(s.startTime);
+      let cur = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+      while (cur < end) {
+        coveredDates.add(localDateKey(cur));
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+    const uncoveredDays: string[] = [];
+    for (let i = 0; i < HORIZON_DAYS; i++) {
+      const d = new Date(todayStart);
+      d.setDate(d.getDate() + i);
+      const key = localDateKey(d);
+      if (!coveredDates.has(key)) uncoveredDays.push(key);
+    }
+
     res.json({
       totalAssistants: Number(totalAssistants),
       activeShiftsToday: Number(activeShiftsToday),
@@ -138,6 +194,13 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       hoursBalance: Math.round((monthlyActualHours - monthlyPlannedHours) * 100) / 100,
       upcomingShifts,
       recentTimeEntries,
+      warnings: {
+        pendingTimeEntries: Number(pendingTimeEntries),
+        lowVacationAssistants,
+        uncoveredDays,
+        lowVacationThreshold: LOW_VACATION_THRESHOLD,
+        horizonDays: HORIZON_DAYS,
+      },
     });
     return;
   }

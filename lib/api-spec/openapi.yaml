@@ -1198,6 +1198,43 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TimeEntry"
+        warnings:
+          $ref: "#/components/schemas/DashboardWarnings"
+
+    DashboardWarnings:
+      type: object
+      required: [pendingTimeEntries, lowVacationAssistants, uncoveredDays, lowVacationThreshold, horizonDays]
+      properties:
+        pendingTimeEntries:
+          type: integer
+          description: Anzahl noch nicht bestätigter Zeiterfassungen
+        lowVacationAssistants:
+          type: array
+          items:
+            $ref: "#/components/schemas/LowVacationAssistant"
+        uncoveredDays:
+          type: array
+          description: Kommende Tage ohne geplante Schicht (ISO-Datum)
+          items:
+            type: string
+            format: date
+        lowVacationThreshold:
+          type: integer
+          description: Schwelle (Resturlaubstage), ab der gewarnt wird
+        horizonDays:
+          type: integer
+          description: Vorausschau-Zeitraum in Tagen für unbesetzte Tage
+
+    LowVacationAssistant:
+      type: object
+      required: [userId, userName, vacationDaysRemaining]
+      properties:
+        userId:
+          type: integer
+        userName:
+          type: string
+        vacationDaysRemaining:
+          type: integer
 
     HoursBalance:
       type: object

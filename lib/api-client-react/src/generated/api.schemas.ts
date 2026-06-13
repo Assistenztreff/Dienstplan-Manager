@@ -387,6 +387,24 @@ export interface InviteResult {
   note: string;
 }
 
+export interface LowVacationAssistant {
+  userId: number;
+  userName: string;
+  vacationDaysRemaining: number;
+}
+
+export interface DashboardWarnings {
+  /** Anzahl noch nicht bestätigter Zeiterfassungen */
+  pendingTimeEntries: number;
+  lowVacationAssistants: LowVacationAssistant[];
+  /** Kommende Tage ohne geplante Schicht (ISO-Datum) */
+  uncoveredDays: string[];
+  /** Schwelle (Resturlaubstage), ab der gewarnt wird */
+  lowVacationThreshold: number;
+  /** Vorausschau-Zeitraum in Tagen für unbesetzte Tage */
+  horizonDays: number;
+}
+
 export interface DashboardSummary {
   totalAssistants: number;
   activeShiftsToday: number;
@@ -396,6 +414,7 @@ export interface DashboardSummary {
   hoursBalance?: number;
   upcomingShifts?: Shift[];
   recentTimeEntries?: TimeEntry[];
+  warnings?: DashboardWarnings;
 }
 
 export interface HoursBalance {

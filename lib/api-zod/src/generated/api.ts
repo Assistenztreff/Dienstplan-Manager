@@ -863,7 +863,18 @@ export const GetDashboardSummaryResponse = zod.object({
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
-})).optional()
+})).optional(),
+  "warnings": zod.object({
+  "pendingTimeEntries": zod.number().describe('Anzahl noch nicht bestätigter Zeiterfassungen'),
+  "lowVacationAssistants": zod.array(zod.object({
+  "userId": zod.number(),
+  "userName": zod.string(),
+  "vacationDaysRemaining": zod.number()
+})),
+  "uncoveredDays": zod.array(zod.coerce.date()).describe('Kommende Tage ohne geplante Schicht (ISO-Datum)'),
+  "lowVacationThreshold": zod.number().describe('Schwelle (Resturlaubstage), ab der gewarnt wird'),
+  "horizonDays": zod.number().describe('Vorausschau-Zeitraum in Tagen für unbesetzte Tage')
+}).optional()
 })
 
 
