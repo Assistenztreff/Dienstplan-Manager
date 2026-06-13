@@ -5,6 +5,7 @@ import {
   Users,
   Clock,
   BarChart3,
+  Settings,
   Menu,
   LogOut,
 } from "lucide-react";
@@ -19,6 +20,7 @@ const ALL_NAV_ITEMS = [
   { href: "/assistenten", label: "Assistenten", icon: Users, adminOnly: true },
   { href: "/zeiterfassung", label: "Zeiterfassung", icon: Clock, adminOnly: false },
   { href: "/auswertungen", label: "Auswertungen", icon: BarChart3, adminOnly: true },
+  { href: "/einstellungen", label: "Einstellungen", icon: Settings, adminOnly: true },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {

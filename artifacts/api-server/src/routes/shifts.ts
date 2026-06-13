@@ -20,6 +20,7 @@ const SHIFT_SELECT = {
   startTime: shiftsTable.startTime,
   endTime: shiftsTable.endTime,
   type: shiftsTable.type,
+  shiftModelId: shiftsTable.shiftModelId,
   notes: shiftsTable.notes,
   createdAt: shiftsTable.createdAt,
   user: {
@@ -71,7 +72,7 @@ router.get("/shifts", requireAuth, async (req, res): Promise<void> => {
 
   const conditions = [];
   if (effectiveUserId) conditions.push(eq(shiftsTable.userId, effectiveUserId));
-  if (query.data.type) conditions.push(eq(shiftsTable.type, query.data.type as "active" | "standby" | "night" | "full_day" | "vacation" | "sick"));
+  if (query.data.type) conditions.push(eq(shiftsTable.type, query.data.type as "active" | "standby" | "night" | "full_day" | "vacation" | "sick" | "work"));
   if (query.data.month && query.data.year) {
     conditions.push(sql`EXTRACT(MONTH FROM ${shiftsTable.startTime}) = ${query.data.month}`);
     conditions.push(sql`EXTRACT(YEAR FROM ${shiftsTable.startTime}) = ${query.data.year}`);

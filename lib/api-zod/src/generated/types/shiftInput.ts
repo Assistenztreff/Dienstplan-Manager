@@ -12,5 +12,7 @@ export interface ShiftInput {
   startTime: Date;
   endTime: Date;
   type: ShiftInputType;
+  /** @nullable */
+  shiftModelId?: number | null;
   notes?: string;
 }

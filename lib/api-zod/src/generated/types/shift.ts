@@ -15,6 +15,8 @@ export interface Shift {
   endTime: Date;
   type: ShiftType;
   /** @nullable */
+  shiftModelId?: number | null;
+  /** @nullable */
   notes?: string | null;
   createdAt: Date;
   user?: User;

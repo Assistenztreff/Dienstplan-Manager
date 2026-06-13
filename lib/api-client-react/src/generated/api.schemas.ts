@@ -108,6 +108,7 @@ export const ShiftType = {
   full_day: 'full_day',
   vacation: 'vacation',
   sick: 'sick',
+  work: 'work',
 } as const;
 
 export interface Shift {
@@ -116,6 +117,8 @@ export interface Shift {
   startTime: string;
   endTime: string;
   type: ShiftType;
+  /** @nullable */
+  shiftModelId?: number | null;
   /** @nullable */
   notes?: string | null;
   createdAt: string;
@@ -132,6 +135,7 @@ export const ShiftInputType = {
   full_day: 'full_day',
   vacation: 'vacation',
   sick: 'sick',
+  work: 'work',
 } as const;
 
 export interface ShiftInput {
@@ -139,6 +143,8 @@ export interface ShiftInput {
   startTime: string;
   endTime: string;
   type: ShiftInputType;
+  /** @nullable */
+  shiftModelId?: number | null;
   notes?: string;
 }
 
@@ -152,6 +158,7 @@ export const ShiftUpdateType = {
   full_day: 'full_day',
   vacation: 'vacation',
   sick: 'sick',
+  work: 'work',
 } as const;
 
 export interface ShiftUpdate {
@@ -159,7 +166,39 @@ export interface ShiftUpdate {
   endTime?: string;
   type?: ShiftUpdateType;
   /** @nullable */
+  shiftModelId?: number | null;
+  /** @nullable */
   notes?: string | null;
+}
+
+export interface ShiftModel {
+  id: number;
+  name: string;
+  valuationPercent: number;
+  color: string;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface ShiftModelInput {
+  /** @minLength 1 */
+  name: string;
+  /** @minimum 0 */
+  valuationPercent?: number;
+  color?: string;
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
+export interface ShiftModelUpdate {
+  /** @minLength 1 */
+  name?: string;
+  /** @minimum 0 */
+  valuationPercent?: number;
+  color?: string;
+  sortOrder?: number;
+  isActive?: boolean;
 }
 
 export type TimeEntryStatus = typeof TimeEntryStatus[keyof typeof TimeEntryStatus];
@@ -319,7 +358,12 @@ export const ListShiftsType = {
   full_day: 'full_day',
   vacation: 'vacation',
   sick: 'sick',
+  work: 'work',
 } as const;
+
+export type ListShiftModelsParams = {
+activeOnly?: boolean;
+};
 
 export type ListTimeEntriesParams = {
 userId?: number;

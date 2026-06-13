@@ -1,4 +1,1 @@
-- [Expo mobile setup](expo-mobile-setup.md) — setBaseUrl from @workspace/api-client-react must be called at top level of _layout.tsx outside any component, gated on EXPO_PUBLIC_DOMAIN.
-- [Orval hook params](orval-hook-params.md) — mutations take flat { id, data }, query hooks take params as first arg; never nest under { params: { id }, data }.
-- [Auth & Route Handler Patterns](auth-patterns.md) — TS7030 fix + Express middleware patterns for this project
-- [Orval Date Coercion vs Drizzle](orval-date-drizzle.md) — Date vs string mismatch between Orval body coercion and Drizzle text columns
+- [Drizzle push needs TTY](drizzle-push-tty.md) — drizzle-kit push/push-force hang on TTY prompts in this env; apply additive schema via SQL DDL instead.

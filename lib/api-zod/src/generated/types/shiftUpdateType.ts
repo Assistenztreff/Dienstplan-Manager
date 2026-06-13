@@ -16,4 +16,5 @@ export const ShiftUpdateType = {
   full_day: 'full_day',
   vacation: 'vacation',
   sick: 'sick',
+  work: 'work',
 } as const;

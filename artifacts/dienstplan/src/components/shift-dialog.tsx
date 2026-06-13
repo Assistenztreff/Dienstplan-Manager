@@ -4,8 +4,11 @@ import {
   useCreateShift,
   useUpdateShift,
   useDeleteShift,
+  useListShiftModels,
   getListShiftsQueryKey,
   ApiError,
+  type ShiftInputType,
+  type ShiftUpdateType,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -14,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Trash2 } from "lucide-react";
+import { colorDotClass } from "@/lib/shift-model-colors";
 
 type Assistant = { id: number; name: string };
 
@@ -23,6 +27,7 @@ type ShiftForEdit = {
   startTime: string;
   endTime: string;
   type: string;
+  shiftModelId?: number | null;
   notes?: string | null;
 };
 
@@ -37,25 +42,19 @@ type ShiftDialogProps = {
   year: number;
 };
 
-const SHIFT_TYPES = [
-  { value: "active", label: "Aktivdienst" },
-  { value: "standby", label: "Bereitschaftsdienst" },
-  { value: "night", label: "Nachtdienst" },
-  { value: "full_day", label: "24h-Dienst" },
-  { value: "vacation", label: "Urlaub" },
-  { value: "sick", label: "Krank" },
-] as const;
-
-type ShiftTypeValue = (typeof SHIFT_TYPES)[number]["value"];
-
-const ABSENCE_TYPES: ShiftTypeValue[] = ["vacation", "sick"];
+const LEGACY_TYPE_LABELS: Record<string, string> = {
+  active: "Aktivdienst",
+  standby: "Bereitschaftsdienst",
+  night: "Nachtdienst",
+  full_day: "24h-Dienst",
+};
 
 type FormState = {
   userId: string;
   date: string;
   startTime: string;
   endTime: string;
-  type: ShiftTypeValue;
+  selection: string;
   notes: string;
 };
 
@@ -69,6 +68,13 @@ function toDateString(isoString: string): string {
 
 function buildIso(date: string, time: string): string {
   return new Date(`${date}T${time}:00`).toISOString();
+}
+
+function initialSelection(editShift: ShiftForEdit | undefined, firstModelId: number | undefined): string {
+  if (!editShift) return firstModelId ? `model:${firstModelId}` : "";
+  if (editShift.type === "vacation" || editShift.type === "sick") return editShift.type;
+  if (editShift.type === "work" && editShift.shiftModelId) return `model:${editShift.shiftModelId}`;
+  return `legacy:${editShift.type}`;
 }
 
 export function ShiftDialog({
@@ -85,6 +91,11 @@ export function ShiftDialog({
   const createShift = useCreateShift();
   const updateShift = useUpdateShift();
   const deleteShift = useDeleteShift();
+  const { data: models } = useListShiftModels();
+
+  const allModels = models ?? [];
+  const activeModels = allModels.filter((m) => m.isActive);
+  const firstModelId = activeModels[0]?.id;
 
   const isEditing = !!editShift;
 
@@ -92,42 +103,62 @@ export function ShiftDialog({
     ? format(preselectedDate, "yyyy-MM-dd")
     : format(new Date(), "yyyy-MM-dd");
 
-  const [form, setForm] = useState<FormState>(() => ({
-    userId: editShift ? String(editShift.userId) : preselectedUserId ? String(preselectedUserId) : "",
-    date: editShift ? toDateString(editShift.startTime) : defaultDate,
-    startTime: editShift ? toTimeString(editShift.startTime) : "08:00",
-    endTime: editShift ? toTimeString(editShift.endTime) : "16:00",
-    type: editShift && SHIFT_TYPES.find(t => t.value === editShift.type) ? editShift.type as ShiftTypeValue : "active",
-    notes: editShift?.notes ?? "",
-  }));
+  function buildInitialForm(): FormState {
+    return {
+      userId: editShift ? String(editShift.userId) : preselectedUserId ? String(preselectedUserId) : "",
+      date: editShift ? toDateString(editShift.startTime) : defaultDate,
+      startTime: editShift ? toTimeString(editShift.startTime) : "08:00",
+      endTime: editShift ? toTimeString(editShift.endTime) : "16:00",
+      selection: initialSelection(editShift, firstModelId),
+      notes: editShift?.notes ?? "",
+    };
+  }
 
+  const [form, setForm] = useState<FormState>(buildInitialForm);
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // Formular nur beim Öffnen / beim Wechsel des Bearbeitungsziels zurücksetzen,
+  // nicht wenn die Schichtmodelle asynchron nachladen (sonst gehen Eingaben verloren).
   useEffect(() => {
     if (open) {
       setErrors({});
       setConfirmDelete(false);
-      setForm({
-        userId: editShift ? String(editShift.userId) : preselectedUserId ? String(preselectedUserId) : "",
-        date: editShift ? toDateString(editShift.startTime) : defaultDate,
-        startTime: editShift ? toTimeString(editShift.startTime) : "08:00",
-        endTime: editShift ? toTimeString(editShift.endTime) : "16:00",
-        type: editShift && SHIFT_TYPES.find(t => t.value === editShift.type) ? editShift.type as ShiftTypeValue : "active",
-        notes: editShift?.notes ?? "",
-      });
+      setForm(buildInitialForm());
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, editShift?.id, preselectedUserId, preselectedDate]);
+
+  // Sobald die Modelle geladen sind, im Anlegen-Modus eine Standardauswahl setzen,
+  // falls der Nutzer noch nichts gewählt hat.
+  useEffect(() => {
+    if (open && !isEditing && firstModelId) {
+      setForm((f) => (f.selection === "" ? { ...f, selection: `model:${firstModelId}` } : f));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, firstModelId, isEditing]);
 
   function set<K extends keyof FormState>(field: K, value: FormState[K]) {
-    setForm(f => ({ ...f, [field]: value }));
-    setErrors(e => ({ ...e, [field]: undefined }));
+    setForm((f) => ({ ...f, [field]: value }));
+    setErrors((e) => ({ ...e, [field]: undefined }));
   }
 
-  const isAbsence = ABSENCE_TYPES.includes(form.type);
-  const is24h = form.type === "full_day";
+  const isAbsence = form.selection === "vacation" || form.selection === "sick";
+  const is24h = form.selection === "legacy:full_day";
+
+  // Wenn das bearbeitete Modell inaktiv ist, trotzdem als Option anzeigen.
+  const editModelId =
+    editShift?.type === "work" && editShift.shiftModelId ? editShift.shiftModelId : undefined;
+  const inactiveEditModel =
+    editModelId && !activeModels.some((m) => m.id === editModelId)
+      ? allModels.find((m) => m.id === editModelId)
+      : undefined;
+
+  const legacyEditOption =
+    editShift && form.selection.startsWith("legacy:")
+      ? { value: form.selection, label: LEGACY_TYPE_LABELS[editShift.type] ?? editShift.type }
+      : undefined;
 
   function validate(): boolean {
     const errs: Partial<Record<keyof FormState, string>> = {};
@@ -146,6 +177,22 @@ export function ShiftDialog({
 
   async function invalidate() {
     await queryClient.invalidateQueries({ queryKey: getListShiftsQueryKey({ month, year }) });
+  }
+
+  function deriveTypeAndModel(): { type: ShiftInputType & ShiftUpdateType; shiftModelId: number | null } {
+    if (form.selection.startsWith("model:")) {
+      return {
+        type: "work" as ShiftInputType & ShiftUpdateType,
+        shiftModelId: Number(form.selection.slice("model:".length)),
+      };
+    }
+    if (form.selection.startsWith("legacy:")) {
+      return {
+        type: form.selection.slice("legacy:".length) as ShiftInputType & ShiftUpdateType,
+        shiftModelId: null,
+      };
+    }
+    return { type: form.selection as ShiftInputType & ShiftUpdateType, shiftModelId: null };
   }
 
   async function handleSave() {
@@ -167,13 +214,16 @@ export function ShiftDialog({
         endIso = buildIso(form.date, form.endTime);
       }
 
+      const { type, shiftModelId } = deriveTypeAndModel();
+
       if (isEditing && editShift) {
         await updateShift.mutateAsync({
           id: editShift.id,
           data: {
             startTime: startIso,
             endTime: endIso,
-            type: form.type,
+            type,
+            shiftModelId,
             notes: form.notes || null,
           },
         });
@@ -183,7 +233,8 @@ export function ShiftDialog({
             userId: Number(form.userId),
             startTime: startIso,
             endTime: endIso,
-            type: form.type,
+            type,
+            shiftModelId,
             notes: form.notes || undefined,
           },
         });
@@ -220,7 +271,7 @@ export function ShiftDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={v => !v && onClose()}>
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-serif text-xl">
@@ -234,14 +285,14 @@ export function ShiftDialog({
             <Label>Assistent *</Label>
             <Select
               value={form.userId}
-              onValueChange={v => set("userId", v)}
+              onValueChange={(v) => set("userId", v)}
               disabled={isEditing}
             >
               <SelectTrigger className={errors.userId ? "border-destructive" : ""}>
                 <SelectValue placeholder="Assistent auswählen..." />
               </SelectTrigger>
               <SelectContent>
-                {assistants.map(a => (
+                {assistants.map((a) => (
                   <SelectItem key={a.id} value={String(a.id)}>
                     {a.name}
                   </SelectItem>
@@ -257,27 +308,48 @@ export function ShiftDialog({
             <Input
               type="date"
               value={form.date}
-              onChange={e => set("date", e.target.value)}
+              onChange={(e) => set("date", e.target.value)}
               className={errors.date ? "border-destructive" : ""}
             />
             {errors.date && <p className="text-xs text-destructive">{errors.date}</p>}
           </div>
 
-          {/* Schicht-Typ */}
+          {/* Schicht-Typ / Modell */}
           <div className="space-y-1.5">
             <Label>Typ *</Label>
-            <Select value={form.type} onValueChange={v => set("type", v as ShiftTypeValue)}>
+            <Select value={form.selection} onValueChange={(v) => set("selection", v)}>
               <SelectTrigger>
-                <SelectValue />
+                <SelectValue placeholder="Typ auswählen..." />
               </SelectTrigger>
               <SelectContent>
-                {SHIFT_TYPES.map(t => (
-                  <SelectItem key={t.value} value={t.value}>
-                    {t.label}
+                {legacyEditOption && (
+                  <SelectItem value={legacyEditOption.value}>{legacyEditOption.label}</SelectItem>
+                )}
+                {activeModels.map((m) => (
+                  <SelectItem key={m.id} value={`model:${m.id}`}>
+                    <span className="flex items-center gap-2">
+                      <span className={`inline-block h-2.5 w-2.5 rounded-full ${colorDotClass(m.color)}`} />
+                      {m.name}
+                    </span>
                   </SelectItem>
                 ))}
+                {inactiveEditModel && (
+                  <SelectItem value={`model:${inactiveEditModel.id}`}>
+                    <span className="flex items-center gap-2">
+                      <span className={`inline-block h-2.5 w-2.5 rounded-full ${colorDotClass(inactiveEditModel.color)}`} />
+                      {inactiveEditModel.name} (inaktiv)
+                    </span>
+                  </SelectItem>
+                )}
+                <SelectItem value="vacation">Urlaub</SelectItem>
+                <SelectItem value="sick">Krank</SelectItem>
               </SelectContent>
             </Select>
+            {activeModels.length === 0 && !isAbsence && !legacyEditOption && (
+              <p className="text-xs text-muted-foreground">
+                Noch keine Schichtmodelle angelegt. Lege sie unter Einstellungen an.
+              </p>
+            )}
           </div>
 
           {/* Zeiten (nur für reguläre Schichten) */}
@@ -288,7 +360,7 @@ export function ShiftDialog({
                 <Input
                   type="time"
                   value={form.startTime}
-                  onChange={e => set("startTime", e.target.value)}
+                  onChange={(e) => set("startTime", e.target.value)}
                   className={errors.startTime ? "border-destructive" : ""}
                 />
                 {errors.startTime && <p className="text-xs text-destructive">{errors.startTime}</p>}
@@ -298,7 +370,7 @@ export function ShiftDialog({
                 <Input
                   type="time"
                   value={is24h ? form.startTime : form.endTime}
-                  onChange={e => set("endTime", e.target.value)}
+                  onChange={(e) => set("endTime", e.target.value)}
                   disabled={is24h}
                   className={errors.endTime ? "border-destructive" : ""}
                 />
@@ -314,7 +386,7 @@ export function ShiftDialog({
 
           {isAbsence && (
             <p className="text-xs text-muted-foreground rounded-md bg-muted/50 px-3 py-2">
-              {form.type === "vacation"
+              {form.selection === "vacation"
                 ? "Urlaubstag wird als ganzer Tag eingetragen und vom Urlaubskontigent abgezogen."
                 : "Krankheitstag wird als ganzer Tag eingetragen. Vertragsstunden werden als Lohnfortzahlung gutgeschrieben."}
             </p>
@@ -325,7 +397,7 @@ export function ShiftDialog({
             <Label>Hinweise</Label>
             <Input
               value={form.notes}
-              onChange={e => set("notes", e.target.value)}
+              onChange={(e) => set("notes", e.target.value)}
               placeholder="Optional"
             />
             {errors.notes && <p className="text-xs text-destructive">{errors.notes}</p>}

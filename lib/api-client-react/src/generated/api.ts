@@ -31,6 +31,7 @@ import type {
   HoursBalance,
   InviteResult,
   ListContractsParams,
+  ListShiftModelsParams,
   ListShiftsParams,
   ListTimeEntriesParams,
   ListUsersParams,
@@ -38,6 +39,9 @@ import type {
   SetPasswordInput,
   Shift,
   ShiftInput,
+  ShiftModel,
+  ShiftModelInput,
+  ShiftModelUpdate,
   ShiftUpdate,
   TimeEntry,
   TimeEntryConfirm,
@@ -1259,6 +1263,303 @@ export const useDeleteShift = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteShiftMutationOptions(options));
+    }
+
+export const getListShiftModelsUrl = (params?: ListShiftModelsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/shift-models?${stringifiedParams}` : `/api/shift-models`
+}
+
+/**
+ * @summary Schichtmodelle auflisten
+ */
+export const listShiftModels = async (params?: ListShiftModelsParams, options?: RequestInit): Promise<ShiftModel[]> => {
+
+  return customFetch<ShiftModel[]>(getListShiftModelsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListShiftModelsQueryKey = (params?: ListShiftModelsParams,) => {
+    return [
+    `/api/shift-models`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListShiftModelsQueryOptions = <TData = Awaited<ReturnType<typeof listShiftModels>>, TError = ErrorType<unknown>>(params?: ListShiftModelsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShiftModels>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListShiftModelsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listShiftModels>>> = ({ signal }) => listShiftModels(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listShiftModels>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListShiftModelsQueryResult = NonNullable<Awaited<ReturnType<typeof listShiftModels>>>
+export type ListShiftModelsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Schichtmodelle auflisten
+ */
+
+export function useListShiftModels<TData = Awaited<ReturnType<typeof listShiftModels>>, TError = ErrorType<unknown>>(
+ params?: ListShiftModelsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShiftModels>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListShiftModelsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateShiftModelUrl = () => {
+
+
+
+
+  return `/api/shift-models`
+}
+
+/**
+ * @summary Schichtmodell anlegen
+ */
+export const createShiftModel = async (shiftModelInput: ShiftModelInput, options?: RequestInit): Promise<ShiftModel> => {
+
+  return customFetch<ShiftModel>(getCreateShiftModelUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      shiftModelInput,)
+  }
+);}
+
+
+
+
+export const getCreateShiftModelMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createShiftModel>>, TError,{data: BodyType<ShiftModelInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createShiftModel>>, TError,{data: BodyType<ShiftModelInput>}, TContext> => {
+
+const mutationKey = ['createShiftModel'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createShiftModel>>, {data: BodyType<ShiftModelInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createShiftModel(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateShiftModelMutationResult = NonNullable<Awaited<ReturnType<typeof createShiftModel>>>
+    export type CreateShiftModelMutationBody = BodyType<ShiftModelInput>
+    export type CreateShiftModelMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Schichtmodell anlegen
+ */
+export const useCreateShiftModel = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createShiftModel>>, TError,{data: BodyType<ShiftModelInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createShiftModel>>,
+        TError,
+        {data: BodyType<ShiftModelInput>},
+        TContext
+      > => {
+      return useMutation(getCreateShiftModelMutationOptions(options));
+    }
+
+export const getUpdateShiftModelUrl = (id: number,) => {
+
+
+
+
+  return `/api/shift-models/${id}`
+}
+
+/**
+ * @summary Schichtmodell aktualisieren
+ */
+export const updateShiftModel = async (id: number,
+    shiftModelUpdate: ShiftModelUpdate, options?: RequestInit): Promise<ShiftModel> => {
+
+  return customFetch<ShiftModel>(getUpdateShiftModelUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      shiftModelUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateShiftModelMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateShiftModel>>, TError,{id: number;data: BodyType<ShiftModelUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateShiftModel>>, TError,{id: number;data: BodyType<ShiftModelUpdate>}, TContext> => {
+
+const mutationKey = ['updateShiftModel'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateShiftModel>>, {id: number;data: BodyType<ShiftModelUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateShiftModel(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateShiftModelMutationResult = NonNullable<Awaited<ReturnType<typeof updateShiftModel>>>
+    export type UpdateShiftModelMutationBody = BodyType<ShiftModelUpdate>
+    export type UpdateShiftModelMutationError = ErrorType<void>
+
+    /**
+ * @summary Schichtmodell aktualisieren
+ */
+export const useUpdateShiftModel = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateShiftModel>>, TError,{id: number;data: BodyType<ShiftModelUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateShiftModel>>,
+        TError,
+        {id: number;data: BodyType<ShiftModelUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateShiftModelMutationOptions(options));
+    }
+
+export const getDeleteShiftModelUrl = (id: number,) => {
+
+
+
+
+  return `/api/shift-models/${id}`
+}
+
+/**
+ * @summary Schichtmodell löschen
+ */
+export const deleteShiftModel = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteShiftModelUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteShiftModelMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteShiftModel>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteShiftModel>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteShiftModel'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteShiftModel>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteShiftModel(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteShiftModelMutationResult = NonNullable<Awaited<ReturnType<typeof deleteShiftModel>>>
+
+    export type DeleteShiftModelMutationError = ErrorType<void>
+
+    /**
+ * @summary Schichtmodell löschen
+ */
+export const useDeleteShiftModel = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteShiftModel>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteShiftModel>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteShiftModelMutationOptions(options));
     }
 
 export const getListTimeEntriesUrl = (params?: ListTimeEntriesParams,) => {

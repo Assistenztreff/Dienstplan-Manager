@@ -10,6 +10,7 @@ import Dienstplan from "@/pages/dienstplan";
 import Assistenten from "@/pages/assistenten";
 import Zeiterfassung from "@/pages/zeiterfassung";
 import Auswertungen from "@/pages/auswertungen";
+import Einstellungen from "@/pages/einstellungen";
 import Login from "@/pages/login";
 import Einladung from "@/pages/einladung";
 import NotFound from "@/pages/not-found";
@@ -69,6 +70,9 @@ function Router() {
         )}
         {currentUser.role === "admin" && (
           <Route path="/auswertungen" component={Auswertungen} />
+        )}
+        {currentUser.role === "admin" && (
+          <Route path="/einstellungen" component={Einstellungen} />
         )}
         <Route component={NotFound} />
       </Switch>

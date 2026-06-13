@@ -250,7 +250,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [active, standby, night, full_day, vacation, sick]
+            enum: [active, standby, night, full_day, vacation, sick, work]
       responses:
         "200":
           description: Liste der Schichten
@@ -334,6 +334,85 @@ paths:
       responses:
         "204":
           description: Gelöscht
+
+  /shift-models:
+    get:
+      operationId: listShiftModels
+      tags: [shift-models]
+      summary: Schichtmodelle auflisten
+      parameters:
+        - name: activeOnly
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Liste der Schichtmodelle
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ShiftModel"
+    post:
+      operationId: createShiftModel
+      tags: [shift-models]
+      summary: Schichtmodell anlegen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftModelInput"
+      responses:
+        "201":
+          description: Erstellt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShiftModel"
+
+  /shift-models/{id}:
+    patch:
+      operationId: updateShiftModel
+      tags: [shift-models]
+      summary: Schichtmodell aktualisieren
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftModelUpdate"
+      responses:
+        "200":
+          description: Aktualisiert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShiftModel"
+        "404":
+          description: Nicht gefunden
+    delete:
+      operationId: deleteShiftModel
+      tags: [shift-models]
+      summary: Schichtmodell löschen
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Gelöscht
+        "404":
+          description: Nicht gefunden
 
   /time-tracking:
     get:
@@ -771,7 +850,9 @@ components:
           format: date-time
         type:
           type: string
-          enum: [active, standby, night, full_day, vacation, sick]
+          enum: [active, standby, night, full_day, vacation, sick, work]
+        shiftModelId:
+          type: ["integer", "null"]
         notes:
           type: ["string", "null"]
         createdAt:
@@ -794,7 +875,9 @@ components:
           format: date-time
         type:
           type: string
-          enum: [active, standby, night, full_day, vacation, sick]
+          enum: [active, standby, night, full_day, vacation, sick, work]
+        shiftModelId:
+          type: ["integer", "null"]
         notes:
           type: string
 
@@ -809,9 +892,64 @@ components:
           format: date-time
         type:
           type: string
-          enum: [active, standby, night, full_day, vacation, sick]
+          enum: [active, standby, night, full_day, vacation, sick, work]
+        shiftModelId:
+          type: ["integer", "null"]
         notes:
           type: ["string", "null"]
+
+    ShiftModel:
+      type: object
+      required: [id, name, valuationPercent, color, sortOrder, isActive, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        valuationPercent:
+          type: integer
+        color:
+          type: string
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    ShiftModelInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        valuationPercent:
+          type: integer
+          minimum: 0
+        color:
+          type: string
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+
+    ShiftModelUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        valuationPercent:
+          type: integer
+          minimum: 0
+        color:
+          type: string
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
 
     TimeEntry:
       type: object

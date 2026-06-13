@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useListShifts, useListUsers } from "@workspace/api-client-react";
+import { useListShifts, useListUsers, useListShiftModels } from "@workspace/api-client-react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday } from "date-fns";
 import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { ShiftDialog } from "@/components/shift-dialog";
 import { useAuth } from "@/context/auth";
+import { colorBadgeClass } from "@/lib/shift-model-colors";
 
 type Shift = {
   id: number;
@@ -15,9 +16,12 @@ type Shift = {
   startTime: string;
   endTime: string;
   type: string;
+  shiftModelId?: number | null;
   notes?: string | null;
   user?: { name: string } | null;
 };
+
+type ShiftModelInfo = { name: string; color: string };
 
 const SHIFT_TYPE_LABELS: Record<string, string> = {
   active: "Aktivdienst",
@@ -37,6 +41,24 @@ const SHIFT_TYPE_CLASSES: Record<string, string> = {
   sick: "bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200",
 };
 
+function shiftLabel(shift: Shift, modelMap: Map<number, ShiftModelInfo>): string {
+  if (shift.type === "work") {
+    return (shift.shiftModelId ? modelMap.get(shift.shiftModelId)?.name : undefined) ?? "Dienst";
+  }
+  return SHIFT_TYPE_LABELS[shift.type] ?? shift.type;
+}
+
+function shiftBadgeClasses(shift: Shift, modelMap: Map<number, ShiftModelInfo>): string {
+  if (shift.type === "work" && shift.shiftModelId) {
+    const model = modelMap.get(shift.shiftModelId);
+    if (model) return colorBadgeClass(model.color);
+    return "bg-secondary text-secondary-foreground border-border/50 hover:bg-muted";
+  }
+  return (
+    SHIFT_TYPE_CLASSES[shift.type] ?? "bg-secondary text-secondary-foreground border-border/50 hover:bg-muted"
+  );
+}
+
 type DialogState =
   | { mode: "closed" }
   | { mode: "create"; date: Date; userId?: number }
@@ -47,14 +69,15 @@ type Assistant = { id: number; name: string };
 function ShiftBadge({
   shift,
   showName,
+  modelMap,
   onClick,
 }: {
   shift: Shift;
   showName?: boolean;
+  modelMap: Map<number, ShiftModelInfo>;
   onClick?: (e: React.MouseEvent) => void;
 }) {
-  const classes =
-    SHIFT_TYPE_CLASSES[shift.type] ?? "bg-secondary text-secondary-foreground border-border/50 hover:bg-muted";
+  const classes = shiftBadgeClasses(shift, modelMap);
   return (
     <div
       className={`text-xs rounded border px-2 py-1 leading-snug cursor-pointer transition-colors ${classes}`}
@@ -66,7 +89,7 @@ function ShiftBadge({
       <div>
         {format(new Date(shift.startTime), "HH:mm")}–{format(new Date(shift.endTime), "HH:mm")}
       </div>
-      <div className="text-[11px] opacity-70">{SHIFT_TYPE_LABELS[shift.type] ?? shift.type}</div>
+      <div className="text-[11px] opacity-70">{shiftLabel(shift, modelMap)}</div>
     </div>
   );
 }
@@ -74,12 +97,14 @@ function ShiftBadge({
 function AgendaView({
   days,
   shifts,
+  modelMap,
   onDayClick,
   onShiftClick,
   canEdit,
 }: {
   days: Date[];
   shifts: Shift[];
+  modelMap: Map<number, ShiftModelInfo>;
   onDayClick: (day: Date) => void;
   onShiftClick: (shift: Shift) => void;
   canEdit: boolean;
@@ -124,6 +149,7 @@ function AgendaView({
                     key={shift.id}
                     shift={shift}
                     showName={canEdit}
+                    modelMap={modelMap}
                     onClick={canEdit ? (e) => { e.stopPropagation(); onShiftClick(shift); } : undefined}
                   />
                 ))
@@ -165,6 +191,11 @@ export default function Dienstplan() {
     : currentUser
     ? [{ id: currentUser.id, name: currentUser.name }]
     : [];
+
+  const { data: shiftModels } = useListShiftModels();
+  const modelMap = new Map<number, ShiftModelInfo>(
+    (shiftModels ?? []).map((m) => [m.id, { name: m.name, color: m.color }])
+  );
 
   const allShifts: Shift[] = shifts ?? [];
   const isLoading = shiftsLoading || (isAdmin && usersLoading);
@@ -225,6 +256,7 @@ export default function Dienstplan() {
         <AgendaView
           days={days}
           shifts={allShifts}
+          modelMap={modelMap}
           onDayClick={(day) => openCreate(day)}
           onShiftClick={openEdit}
           canEdit={isAdmin}
@@ -294,6 +326,7 @@ export default function Dienstplan() {
                             <ShiftBadge
                               key={s.id}
                               shift={s}
+                              modelMap={modelMap}
                               onClick={isAdmin ? (e) => { e.stopPropagation(); openEdit(s); } : undefined}
                             />
                           ))}

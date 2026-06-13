@@ -251,7 +251,7 @@ export const ListShiftsQueryParams = zod.object({
   "userId": zod.coerce.number().optional(),
   "month": zod.coerce.number().optional(),
   "year": zod.coerce.number().optional(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick']).optional()
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work']).optional()
 })
 
 export const ListShiftsResponseItem = zod.object({
@@ -259,7 +259,8 @@ export const ListShiftsResponseItem = zod.object({
   "userId": zod.number(),
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick']),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work']),
+  "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "user": zod.object({
@@ -283,7 +284,8 @@ export const CreateShiftBody = zod.object({
   "userId": zod.number(),
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick']),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work']),
+  "shiftModelId": zod.number().nullish(),
   "notes": zod.string().optional()
 })
 
@@ -300,7 +302,8 @@ export const GetShiftResponse = zod.object({
   "userId": zod.number(),
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick']),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work']),
+  "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "user": zod.object({
@@ -326,7 +329,8 @@ export const UpdateShiftParams = zod.object({
 export const UpdateShiftBody = zod.object({
   "startTime": zod.coerce.date().optional(),
   "endTime": zod.coerce.date().optional(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick']).optional(),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work']).optional(),
+  "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish()
 })
 
@@ -335,7 +339,8 @@ export const UpdateShiftResponse = zod.object({
   "userId": zod.number(),
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick']),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work']),
+  "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "user": zod.object({
@@ -355,6 +360,81 @@ export const UpdateShiftResponse = zod.object({
  * @summary Schicht löschen
  */
 export const DeleteShiftParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Schichtmodelle auflisten
+ */
+export const ListShiftModelsQueryParams = zod.object({
+  "activeOnly": zod.coerce.boolean().optional()
+})
+
+export const ListShiftModelsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "valuationPercent": zod.number(),
+  "color": zod.string(),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+export const ListShiftModelsResponse = zod.array(ListShiftModelsResponseItem)
+
+
+/**
+ * @summary Schichtmodell anlegen
+ */
+
+export const createShiftModelBodyValuationPercentMin = 0;
+
+
+
+export const CreateShiftModelBody = zod.object({
+  "name": zod.string().min(1),
+  "valuationPercent": zod.number().min(createShiftModelBodyValuationPercentMin).optional(),
+  "color": zod.string().optional(),
+  "sortOrder": zod.number().optional(),
+  "isActive": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Schichtmodell aktualisieren
+ */
+export const UpdateShiftModelParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+export const updateShiftModelBodyValuationPercentMin = 0;
+
+
+
+export const UpdateShiftModelBody = zod.object({
+  "name": zod.string().min(1).optional(),
+  "valuationPercent": zod.number().min(updateShiftModelBodyValuationPercentMin).optional(),
+  "color": zod.string().optional(),
+  "sortOrder": zod.number().optional(),
+  "isActive": zod.boolean().optional()
+})
+
+export const UpdateShiftModelResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "valuationPercent": zod.number(),
+  "color": zod.string(),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Schichtmodell löschen
+ */
+export const DeleteShiftModelParams = zod.object({
   "id": zod.coerce.number()
 })
 
@@ -576,7 +656,8 @@ export const GetDashboardSummaryResponse = zod.object({
   "userId": zod.number(),
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick']),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work']),
+  "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "user": zod.object({

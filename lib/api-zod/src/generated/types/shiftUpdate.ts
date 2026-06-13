@@ -12,5 +12,7 @@ export interface ShiftUpdate {
   endTime?: Date;
   type?: ShiftUpdateType;
   /** @nullable */
+  shiftModelId?: number | null;
+  /** @nullable */
   notes?: string | null;
 }

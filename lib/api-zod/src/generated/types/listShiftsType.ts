@@ -16,4 +16,5 @@ export const ListShiftsType = {
   full_day: 'full_day',
   vacation: 'vacation',
   sick: 'sick',
+  work: 'work',
 } as const;
