@@ -1,26 +1,98 @@
-import { useListTimeEntries, useListUsers, useConfirmTimeEntry } from "@workspace/api-client-react";
+import { useMemo, useState } from "react";
+import {
+  useListTimeEntries,
+  useListUsers,
+  useListShifts,
+  useConfirmTimeEntry,
+  useCreateTimeEntry,
+  ApiError,
+  type Shift,
+} from "@workspace/api-client-react";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
-import { Check, X } from "lucide-react";
+import { Check, X, CalendarClock, ArrowRight } from "lucide-react";
 import { useAuth } from "@/context/auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
+const SHIFT_TYPE_LABEL: Record<string, string> = {
+  active: "Aktivdienst",
+  standby: "Bereitschaftsdienst",
+  night: "Nachtdienst",
+  full_day: "24h-Dienst",
+  work: "Arbeitszeit",
+};
+
+function shiftTypeLabel(type: string): string {
+  return SHIFT_TYPE_LABEL[type] ?? "Dienst";
+}
+
+function isAbsenceType(type: string): boolean {
+  return type === "vacation" || type === "sick";
+}
+
+// datetime-local-Wert (yyyy-MM-ddTHH:mm) aus ISO-Zeitstempel, lokale Zeitzone.
+function toLocalInput(iso: string): string {
+  return format(new Date(iso), "yyyy-MM-dd'T'HH:mm");
+}
+
 export default function Zeiterfassung() {
   const { currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin";
+  const isAssistant = currentUser?.role === "assistant";
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: entries, isLoading: entriesLoading } = useListTimeEntries();
   const { data: users, isLoading: usersLoading } = useListUsers();
-  const { mutate: confirmEntry, isPending: isConfirming } = useConfirmTimeEntry();
+  // Eigene geplante Schichten des Assistenten (Server erzwingt die eigene userId).
+  const { data: shifts, isLoading: shiftsLoading } = useListShifts(undefined, {
+    query: { enabled: isAssistant },
+  } as Parameters<typeof useListShifts>[1]);
 
-  const isLoading = entriesLoading || (isAdmin && usersLoading);
+  const { mutate: confirmEntry, isPending: isConfirming } = useConfirmTimeEntry();
+  const createEntry = useCreateTimeEntry();
+
+  const isLoading =
+    entriesLoading || (isAdmin && usersLoading) || (isAssistant && shiftsLoading);
+
+  // Schichten, für die bereits eine Ist-Zeit erfasst wurde (verhindert Doppelbuchung).
+  const bookedShiftIds = useMemo(() => {
+    const set = new Set<number>();
+    for (const e of entries ?? []) {
+      if (e.shiftId != null) set.add(e.shiftId);
+    }
+    return set;
+  }, [entries]);
+
+  // Offene geplante Schichten: reguläre Dienste ohne erfasste Ist-Zeit, neueste zuerst.
+  const openShifts = useMemo(() => {
+    return ((shifts ?? []) as Shift[])
+      .filter((s) => !isAbsenceType(s.type) && !bookedShiftIds.has(s.id))
+      .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+  }, [shifts, bookedShiftIds]);
+
+  const [dialogShift, setDialogShift] = useState<Shift | null>(null);
+  const [startInput, setStartInput] = useState("");
+  const [endInput, setEndInput] = useState("");
+  const [notes, setNotes] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const getUserName = (entry: { userId: number; user?: { name: string } | null }) => {
     if (entry.user?.name) return entry.user.name;
@@ -55,6 +127,68 @@ export default function Zeiterfassung() {
     );
   };
 
+  // Übernehmen: Soll-Zeiten der Schicht ins Formular vorbefüllen, Assistent kann anpassen.
+  function openAdopt(shift: Shift) {
+    setDialogShift(shift);
+    setStartInput(toLocalInput(shift.startTime));
+    setEndInput(toLocalInput(shift.endTime));
+    setNotes("");
+    setFormError(null);
+  }
+
+  function closeDialog() {
+    setDialogShift(null);
+  }
+
+  async function handleSave() {
+    if (!dialogShift || !currentUser) return;
+    setFormError(null);
+    if (!startInput || !endInput) {
+      setFormError("Bitte Start- und Endzeit angeben.");
+      return;
+    }
+    const start = new Date(startInput);
+    const end = new Date(endInput);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      setFormError("Ungültige Zeitangabe.");
+      return;
+    }
+    if (end <= start) {
+      setFormError("Die Endzeit muss nach der Startzeit liegen.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await createEntry.mutateAsync({
+        data: {
+          userId: currentUser.id,
+          shiftId: dialogShift.id,
+          actualStart: start.toISOString(),
+          actualEnd: end.toISOString(),
+          ...(notes.trim() ? { notes: notes.trim() } : {}),
+        },
+      });
+      await queryClient.invalidateQueries({
+        predicate: (q) => {
+          const k = q.queryKey[0];
+          return k === "/api/time-tracking" || k === "/api/shifts";
+        },
+      });
+      toast({ title: "Zeit übernommen", description: "Der Eintrag wartet auf Bestätigung." });
+      closeDialog();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setFormError("Sitzung abgelaufen. Bitte Seite neu laden und erneut anmelden.");
+      } else if (err instanceof ApiError && err.status === 409) {
+        setFormError("Für diese Schicht wurde bereits eine Zeit erfasst.");
+      } else {
+        setFormError("Speichern fehlgeschlagen. Bitte erneut versuchen.");
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-center justify-between">
@@ -65,6 +199,57 @@ export default function Zeiterfassung() {
           </p>
         </div>
       </div>
+
+      {/* Offene geplante Schichten (nur Assistent) */}
+      {isAssistant && (
+        <Card className="border-border/50 shadow-sm">
+          <div className="p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <CalendarClock className="h-5 w-5 text-muted-foreground" />
+              <h3 className="font-semibold">Geplante Schichten übernehmen</h3>
+            </div>
+            {isLoading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+            ) : openShifts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Keine offenen Schichten. Alle geplanten Dienste sind bereits erfasst.
+              </p>
+            ) : (
+              <div className="space-y-2" data-testid="open-shifts">
+                {openShifts.map((shift) => (
+                  <div
+                    key={shift.id}
+                    className="flex items-center justify-between gap-3 py-2.5 px-3 rounded-lg border border-border/40 hover:bg-muted/20 transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-medium">
+                        {format(new Date(shift.startTime), "EEEE, dd.MM.yyyy", { locale: de })}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {shiftTypeLabel(shift.type)} · {format(new Date(shift.startTime), "HH:mm")} –{" "}
+                        {format(new Date(shift.endTime), "HH:mm")}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 shrink-0"
+                      onClick={() => openAdopt(shift)}
+                      data-testid="adopt-shift"
+                    >
+                      Übernehmen
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       <Card className="border-border/50 shadow-sm overflow-hidden">
         {isLoading ? (
@@ -147,6 +332,62 @@ export default function Zeiterfassung() {
           </div>
         )}
       </Card>
+
+      <Dialog open={dialogShift !== null} onOpenChange={(v) => !v && closeDialog()}>
+        <DialogContent className="sm:max-w-md" data-testid="adopt-dialog">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-xl">Geplante Zeit übernehmen</DialogTitle>
+            <DialogDescription>
+              Soll-Zeiten der geplanten Schicht als Ist-Zeit erfassen.
+            </DialogDescription>
+          </DialogHeader>
+          {dialogShift && (
+            <div className="space-y-4 py-2">
+              <p className="text-sm text-muted-foreground">
+                {shiftTypeLabel(dialogShift.type)} am{" "}
+                {format(new Date(dialogShift.startTime), "EEEE, dd.MM.yyyy", { locale: de })}.
+                Zeiten bei Bedarf anpassen.
+              </p>
+              <div className="space-y-1.5">
+                <Label>Von</Label>
+                <Input
+                  type="datetime-local"
+                  value={startInput}
+                  onChange={(e) => setStartInput(e.target.value)}
+                  data-testid="adopt-start"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Bis</Label>
+                <Input
+                  type="datetime-local"
+                  value={endInput}
+                  onChange={(e) => setEndInput(e.target.value)}
+                  data-testid="adopt-end"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Notiz (optional)</Label>
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Kurze Anmerkung..."
+                  rows={3}
+                />
+              </div>
+              {formError && <p className="text-sm text-destructive">{formError}</p>}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={closeDialog} disabled={saving}>
+              Abbrechen
+            </Button>
+            <Button onClick={handleSave} disabled={saving} data-testid="adopt-save">
+              {saving ? "Speichern..." : "Ist-Zeit speichern"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

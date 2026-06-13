@@ -2,6 +2,7 @@ import {
   useListTimeEntries,
   useListShifts,
   useCreateTimeEntry,
+  ApiError,
 } from "@workspace/api-client-react";
 import { Feather } from "@expo/vector-icons";
 import { Redirect } from "expo-router";
@@ -56,6 +57,29 @@ const DE_MONTHS = [
   "Juli","August","September","Oktober","November","Dezember",
 ];
 
+const SHIFT_TYPE_LABEL: Record<string, string> = {
+  active: "Aktivdienst",
+  standby: "Bereitschaftsdienst",
+  night: "Nachtdienst",
+  full_day: "24h-Dienst",
+  work: "Arbeitszeit",
+};
+
+function shiftTypeLabel(type: string): string {
+  return SHIFT_TYPE_LABEL[type] ?? "Dienst";
+}
+
+function isAbsenceType(type: string): boolean {
+  return type === "vacation" || type === "sick";
+}
+
+function shiftTimeRange(shift: Shift): string {
+  const s = new Date(shift.startTime);
+  const e = new Date(shift.endTime);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(s.getHours())}:${pad(s.getMinutes())} – ${pad(e.getHours())}:${pad(e.getMinutes())}`;
+}
+
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -78,6 +102,12 @@ function nowTimeStr(): string {
 
 function buildISO(date: string, time: string): string {
   return `${date}T${time}:00`;
+}
+
+function addOneDay(date: string): string {
+  const d = new Date(`${date}T00:00:00`);
+  d.setDate(d.getDate() + 1);
+  return `${String(d.getFullYear())}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export default function ZeiterfassungScreen() {
@@ -115,7 +145,17 @@ export default function ZeiterfassungScreen() {
   );
 
   const entries = (rawEntries ?? []) as TimeEntry[];
-  const shifts = (rawShifts ?? []) as Shift[];
+  const allShifts = (rawShifts ?? []) as Shift[];
+
+  // Schichten, für die bereits eine Ist-Zeit erfasst wurde, sind nicht erneut
+  // übernehmbar (verhindert Doppelbuchung). Abwesenheiten (Urlaub/Krank) werden
+  // automatisch verbucht und daher nicht zur Übernahme angeboten.
+  const bookedShiftIds = new Set(
+    entries.map((e) => e.shiftId).filter((id): id is number => id != null)
+  );
+  const shifts = allShifts.filter(
+    (s) => !isAbsenceType(s.type) && !bookedShiftIds.has(s.id)
+  );
 
   const createEntry = useCreateTimeEntry();
 
@@ -157,7 +197,10 @@ export default function ZeiterfassungScreen() {
       return;
     }
     const actualStart = buildISO(date, startTime);
-    const actualEnd = buildISO(date, endTime);
+    // Nachtschichten/24h-Dienste laufen ueber Mitternacht: liegt die Endzeit
+    // nicht nach der Startzeit, gilt sie als am Folgetag.
+    const endDate = endTime <= startTime ? addOneDay(date) : date;
+    const actualEnd = buildISO(endDate, endTime);
     if (new Date(actualEnd) <= new Date(actualStart)) {
       setError("Endzeit muss nach Startzeit liegen.");
       return;
@@ -177,8 +220,12 @@ export default function ZeiterfassungScreen() {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setModalVisible(false);
       void refetch();
-    } catch {
-      setError("Speichern fehlgeschlagen. Bitte erneut versuchen.");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setError("Fur diese Schicht wurde bereits eine Zeit erfasst.");
+      } else {
+        setError("Speichern fehlgeschlagen. Bitte erneut versuchen.");
+      }
     } finally {
       setSaving(false);
     }
@@ -420,7 +467,7 @@ export default function ZeiterfassungScreen() {
                   ]}
                 >
                   {selectedShift
-                    ? `${selectedShift.startTime.slice(0, 10)} — ${selectedShift.type}`
+                    ? `${selectedShift.startTime.slice(0, 10)} — ${shiftTypeLabel(selectedShift.type)}`
                     : "Keine Schicht ausgewahlt"}
                 </Text>
                 <Feather
@@ -448,7 +495,7 @@ export default function ZeiterfassungScreen() {
                         { color: colors.mutedForeground },
                       ]}
                     >
-                      Keine Schichten
+                      Keine offenen Schichten
                     </Text>
                   ) : (
                     (shifts ?? []).map((shift) => (
@@ -471,7 +518,7 @@ export default function ZeiterfassungScreen() {
                             { color: colors.foreground },
                           ]}
                         >
-                          {shift.startTime.slice(0, 10)} — {shift.type}
+                          {shift.startTime.slice(0, 10)} · {shiftTypeLabel(shift.type)} · {shiftTimeRange(shift)}
                         </Text>
                       </TouchableOpacity>
                     ))

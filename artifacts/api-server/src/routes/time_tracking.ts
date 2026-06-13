@@ -84,6 +84,23 @@ router.post("/time-tracking", requireAuth, async (req, res): Promise<void> => {
   const userId =
     req.session.role === "assistant" ? req.session.userId! : body.data.userId;
 
+  // Doppelbuchung verhindern: pro geplanter Schicht darf nur eine Ist-Zeit
+  // erfasst werden. Serverseitiger Schutz, unabhängig von der UI-Filterung.
+  if (body.data.shiftId != null) {
+    const [existing] = await db
+      .select({ id: timeTrackingTable.id })
+      .from(timeTrackingTable)
+      .where(eq(timeTrackingTable.shiftId, body.data.shiftId))
+      .limit(1);
+    if (existing) {
+      res.status(409).json({
+        error: "Für diese Schicht wurde bereits eine Zeit erfasst.",
+        code: "shift_already_booked",
+      });
+      return;
+    }
+  }
+
   const actualStart = new Date(body.data.actualStart as unknown as string);
   const actualEnd = new Date(body.data.actualEnd as unknown as string);
   const actualHours = calcHours(actualStart, actualEnd);
