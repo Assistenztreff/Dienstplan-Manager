@@ -111,6 +111,9 @@ function ShiftBadge({
       )}
       <div>
         {format(new Date(shift.startTime), "HH:mm")}–{format(new Date(shift.endTime), "HH:mm")}
+        {!isSameDay(new Date(shift.startTime), new Date(shift.endTime)) && (
+          <span className="opacity-70"> (+1)</span>
+        )}
       </div>
       <div className="text-[11px] opacity-70">{shiftLabel(shift, modelMap)}</div>
     </div>

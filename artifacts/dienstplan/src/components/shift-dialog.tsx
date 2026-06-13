@@ -79,6 +79,14 @@ function buildIso(date: string, time: string): string {
   return new Date(`${date}T${time}:00`).toISOString();
 }
 
+// Liefert das Folgedatum ("yyyy-MM-dd") zu einem Datum. Wird genutzt, wenn eine
+// Schicht über Mitternacht läuft und die Endzeit am nächsten Tag liegt.
+function nextDayString(date: string): string {
+  const d = new Date(`${date}T00:00:00`);
+  d.setDate(d.getDate() + 1);
+  return format(d, "yyyy-MM-dd");
+}
+
 function initialSelection(editShift: ShiftForEdit | undefined, firstModelId: number | undefined): string {
   if (!editShift) return firstModelId ? `model:${firstModelId}` : "";
   if (editShift.type === "vacation" || editShift.type === "sick") return editShift.type;
@@ -176,8 +184,10 @@ export function ShiftDialog({
     if (!isAbsence) {
       if (!form.startTime) errs.startTime = "Startzeit angeben";
       if (!form.endTime) errs.endTime = "Endzeit angeben";
-      if (form.startTime && form.endTime && form.startTime >= form.endTime && !is24h) {
-        errs.endTime = "Endzeit muss nach der Startzeit liegen";
+      // Eine kleinere Endzeit bedeutet künftig "endet am Folgetag" (Nachtdienst
+      // über Mitternacht). Nur identische Start-/Endzeit ist ein echter Fehler.
+      if (form.startTime && form.endTime && form.startTime === form.endTime && !is24h) {
+        errs.endTime = "Start- und Endzeit dürfen nicht identisch sein";
       }
     }
     setErrors(errs);
@@ -220,7 +230,12 @@ export function ShiftDialog({
         endIso = new Date(startDate.getTime() + 24 * 60 * 60 * 1000).toISOString();
       } else {
         startIso = buildIso(form.date, form.startTime);
-        endIso = buildIso(form.date, form.endTime);
+        // Endzeit <= Startzeit bedeutet Tagesübergang: Endzeitstempel auf den
+        // Folgetag legen, damit eine korrekte positive Dauer gespeichert wird.
+        const endsNextDay = form.endTime <= form.startTime;
+        endIso = endsNextDay
+          ? buildIso(nextDayString(form.date), form.endTime)
+          : buildIso(form.date, form.endTime);
       }
 
       const { type, shiftModelId } = deriveTypeAndModel();

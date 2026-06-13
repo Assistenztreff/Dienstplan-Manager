@@ -64,6 +64,17 @@ function formatTime(iso: string): string {
   return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
 }
 
+// True, wenn die Schicht über Mitternacht auf den Folgetag läuft (Nachtdienst).
+function crossesMidnight(startIso: string, endIso: string): boolean {
+  const s = new Date(startIso);
+  const e = new Date(endIso);
+  return (
+    s.getFullYear() !== e.getFullYear() ||
+    s.getMonth() !== e.getMonth() ||
+    s.getDate() !== e.getDate()
+  );
+}
+
 // Returns number of days in a month
 function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
@@ -228,6 +239,7 @@ function ShiftCard({ shift, colors }: { shift: Shift; colors: ReturnType<typeof 
       {!isAbsence && (
         <Text style={[styles.shiftTime, { color: sc.text + "BB" }]}>
           {formatTime(shift.startTime)} – {formatTime(shift.endTime)}
+          {crossesMidnight(shift.startTime, shift.endTime) ? " (+1)" : ""}
         </Text>
       )}
       {shift.notes ? (
