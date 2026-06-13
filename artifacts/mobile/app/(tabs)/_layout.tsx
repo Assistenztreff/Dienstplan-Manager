@@ -62,6 +62,10 @@ function ClassicTabLayout() {
       }}
     >
       <Tabs.Screen
+        name="index"
+        options={{ href: null }}
+      />
+      <Tabs.Screen
         name="dienstplan"
         options={{
           title: "Dienstplan",
