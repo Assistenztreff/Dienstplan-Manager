@@ -53,11 +53,13 @@ async function exportPdf(
     // --- Summary box ---
     const summaryRows = [
       ["Soll-Stunden", `${balance.plannedHours} h`],
-      ["Ist-Stunden (gearbeitet)", `${balance.workedHours} h`],
+      ["Geleistete Stunden (gewertet)", `${balance.valuedHours} h`],
       [
         "Differenz",
         `${balance.balance > 0 ? "+" : ""}${balance.balance} h`,
       ],
+      ["Erfuellt gesamt (inkl. Urlaub/Krank)", `${balance.totalFulfilledHours} h`],
+      ["Urlaubsstunden (erfuellt)", `${balance.vacationFulfilledHours} h`],
       ["Krankheitsstunden", `${balance.sickHours} h`],
       [
         "Urlaubstage (genommen)",
@@ -67,7 +69,6 @@ async function exportPdf(
         "Urlaubstage (verbleibend)",
         `${balance.vacationDaysRemaining} Tage`,
       ],
-      ["Bewertete Stunden", `${balance.valuedHours} h`],
       [
         `Nachtstunden (Zuschlag ${balance.nightPercent}%)`,
         `${balance.nightHours} h (+${balance.nightSurchargeHours} h)`,
@@ -221,9 +222,9 @@ export default function Auswertungen() {
           balances.map((balance: any) => {
             const percentage =
               balance.plannedHours > 0
-                ? Math.min(100, Math.max(0, (balance.workedHours / balance.plannedHours) * 100))
+                ? Math.min(100, Math.max(0, (balance.valuedHours / balance.plannedHours) * 100))
                 : 0;
-            const isOvertime = balance.workedHours > balance.plannedHours;
+            const isOvertime = balance.valuedHours > balance.plannedHours;
 
             return (
               <Card key={balance.userId} className="border-border/50 shadow-sm">
@@ -233,12 +234,12 @@ export default function Auswertungen() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Stunden-Seite */}
                     <div className="space-y-4">
-                      {/* Geleistete Arbeitsstunden */}
+                      {/* Geleistete (gewertete) Arbeitsstunden */}
                       <div>
                         <div className="flex items-center justify-between text-sm mb-1.5">
-                          <span className="text-muted-foreground">Geleistete Arbeitsstunden</span>
+                          <span className="text-muted-foreground">Geleistete Stunden (gewertet)</span>
                           <span className="font-medium">
-                            {balance.workedHours} / {balance.plannedHours} h
+                            {balance.valuedHours} / {balance.plannedHours} h
                           </span>
                         </div>
                         <Progress value={percentage} className="h-2" />
@@ -249,7 +250,7 @@ export default function Auswertungen() {
                               className={
                                 isOvertime
                                   ? "text-primary font-medium"
-                                  : balance.workedHours < balance.plannedHours
+                                  : balance.valuedHours < balance.plannedHours
                                   ? "text-amber-600 font-medium"
                                   : "text-green-600 font-medium"
                               }
@@ -260,6 +261,12 @@ export default function Auswertungen() {
                           </span>
                           <span>{percentage.toFixed(0)}% geleistet</span>
                         </div>
+                      </div>
+
+                      {/* Erfüllt gesamt inkl. Urlaub/Krank */}
+                      <div className="flex items-center justify-between text-sm py-2.5 px-3 bg-primary/5 rounded-lg border border-primary/20">
+                        <span className="text-muted-foreground">Erfüllt gesamt (inkl. Urlaub/Krank)</span>
+                        <span className="font-semibold text-primary">{balance.totalFulfilledHours} h</span>
                       </div>
 
                       {/* Krankheitsstunden */}

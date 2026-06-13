@@ -289,6 +289,17 @@ router.get("/dashboard/hours-balance", requireAdmin, async (req, res): Promise<v
       const sundaySurchargeHours = (sundayHours * sundayPercent) / 100;
       const holidaySurchargeHours = (holidayHours * holidayPercent) / 100;
 
+      // Urlaub/Krank: gespeicherte gewertete Stunden = volle geplante Tagesstunden,
+      // die als erfüllt zählen.
+      const vacationFulfilledHours = shifts
+        .filter(s => s.type === "vacation")
+        .reduce((acc, s) => acc + (s.valuedHours ?? 0), 0);
+      const sickFulfilledHours = shifts
+        .filter(s => s.type === "sick")
+        .reduce((acc, s) => acc + (s.valuedHours ?? 0), 0);
+      // Gesamt erfüllte (gewertete) Stunden inkl. Urlaub und Krankheit.
+      const totalFulfilledHours = valuedHours + vacationFulfilledHours + sickFulfilledHours;
+
       const timeEntriesWithShift = await db
         .select({
           actualHours: timeTrackingTable.actualHours,
@@ -305,18 +316,18 @@ router.get("/dashboard/hours-balance", requireAdmin, async (req, res): Promise<v
           )
         );
 
-      let workedHours = 0;
-      let sickHours = 0;
+      // Tatsächlich erfasste Arbeitsstunden aus der Zeiterfassung (optional, falls
+      // Assistenten Ist-Zeiten bestätigen). Krank-Stunden werden plan-basiert
+      // (gewertete Stunden der Schicht) gezählt, daher hier nur Arbeitseinträge.
+      let trackedHours = 0;
       for (const entry of timeEntriesWithShift) {
         const hours = entry.actualHours ?? 0;
-        if (entry.shiftType === "sick") {
-          sickHours += hours;
-        } else if (entry.shiftType !== "vacation") {
-          workedHours += hours;
+        if (entry.shiftType !== "sick" && entry.shiftType !== "vacation") {
+          trackedHours += hours;
         }
       }
 
-      const actualHours = workedHours + sickHours;
+      const sickHours = sickFulfilledHours;
       const contract = await activeContractFor(assistant.id, referenceDate);
       const vacationDays = contract?.vacationDays ?? 30;
       const vacationDaysUsed = contract?.vacationDaysUsed ?? 0;
@@ -325,14 +336,16 @@ router.get("/dashboard/hours-balance", requireAdmin, async (req, res): Promise<v
         userId: assistant.id,
         userName: assistant.name,
         plannedHours: Math.round(plannedHours * 100) / 100,
-        actualHours: Math.round(actualHours * 100) / 100,
-        balance: Math.round((actualHours - plannedHours) * 100) / 100,
-        workedHours: Math.round(workedHours * 100) / 100,
-        sickHours: Math.round(sickHours * 100) / 100,
+        actualHours: round2(totalFulfilledHours),
+        balance: round2(totalFulfilledHours - plannedHours),
+        workedHours: round2(trackedHours),
+        sickHours: round2(sickHours),
         vacationDaysTaken: vacationDaysUsed,
         vacationDaysUsed,
         vacationDaysRemaining: vacationDays - vacationDaysUsed,
         valuedHours: round2(valuedHours),
+        vacationFulfilledHours: round2(vacationFulfilledHours),
+        totalFulfilledHours: round2(totalFulfilledHours),
         nightHours: round2(nightHours),
         nightSurchargeHours: round2(nightSurchargeHours),
         sundayHours: round2(sundayHours),

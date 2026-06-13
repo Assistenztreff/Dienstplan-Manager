@@ -49,13 +49,15 @@ function shiftLabel(shift: Shift, modelMap: Map<number, ShiftModelInfo>): string
 }
 
 function shiftBadgeClasses(shift: Shift, modelMap: Map<number, ShiftModelInfo>): string {
-  if (shift.type === "work" && shift.shiftModelId) {
-    const model = modelMap.get(shift.shiftModelId);
+  // Reguläre Dienste: Modellfarbe, sonst Dunkelblau aus dem Branding (primary).
+  if (shift.type === "work") {
+    const model = shift.shiftModelId ? modelMap.get(shift.shiftModelId) : undefined;
     if (model) return colorBadgeClass(model.color);
-    return "bg-secondary text-secondary-foreground border-border/50 hover:bg-muted";
+    return "bg-primary/10 text-primary border-primary/25 hover:bg-primary/20";
   }
+  // Urlaub = Gelb, Krank = Grau; Legacy-Dienste behalten ihre Farbe.
   return (
-    SHIFT_TYPE_CLASSES[shift.type] ?? "bg-secondary text-secondary-foreground border-border/50 hover:bg-muted"
+    SHIFT_TYPE_CLASSES[shift.type] ?? "bg-primary/10 text-primary border-primary/25 hover:bg-primary/20"
   );
 }
 

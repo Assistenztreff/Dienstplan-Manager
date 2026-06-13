@@ -161,22 +161,31 @@ async function nightWindow(): Promise<NightWindow> {
 // Ermittelt die Roh-Kennzahlen einer Schicht und speichert sie an der Schicht.
 async function storeShiftMetrics(shift: {
   id: number;
+  userId: number;
   type: string;
   shiftModelId: number | null;
   startTime: Date;
   endTime: Date;
 }): Promise<void> {
-  const valuationPercent = await valuationPercentFor(shift.type, shift.shiftModelId);
-  const window = await nightWindow();
-  const metrics = computeShiftMetrics(
-    {
-      startTime: new Date(shift.startTime),
-      endTime: new Date(shift.endTime),
-      isAbsence: isAbsenceType(shift.type),
-      valuationPercent,
-    },
-    window
-  );
+  let metrics;
+  if (isAbsenceType(shift.type)) {
+    // Urlaub/Krankheit: die vollen geplanten Tagesstunden gelten als erfüllt
+    // (gewertete Stunden = Vertrags-Soll des Tages). Keine Zuschläge.
+    const planned = await dailyTargetHours(shift.userId, new Date(shift.startTime));
+    metrics = { valuedHours: planned, nightHours: 0, sundayHours: 0, holidayHours: 0 };
+  } else {
+    const valuationPercent = await valuationPercentFor(shift.type, shift.shiftModelId);
+    const window = await nightWindow();
+    metrics = computeShiftMetrics(
+      {
+        startTime: new Date(shift.startTime),
+        endTime: new Date(shift.endTime),
+        isAbsence: false,
+        valuationPercent,
+      },
+      window
+    );
+  }
   await db.update(shiftsTable).set(metrics).where(eq(shiftsTable.id, shift.id));
 }
 

@@ -1159,7 +1159,7 @@ components:
 
     HoursBalance:
       type: object
-      required: [userId, userName, plannedHours, actualHours, balance, workedHours, sickHours, vacationDaysTaken, vacationDaysUsed, vacationDaysRemaining, valuedHours, nightHours, nightSurchargeHours, sundayHours, sundaySurchargeHours, holidayHours, holidaySurchargeHours, nightPercent, sundayPercent, holidayPercent]
+      required: [userId, userName, plannedHours, actualHours, balance, workedHours, sickHours, vacationDaysTaken, vacationDaysUsed, vacationDaysRemaining, valuedHours, vacationFulfilledHours, totalFulfilledHours, nightHours, nightSurchargeHours, sundayHours, sundaySurchargeHours, holidayHours, holidaySurchargeHours, nightPercent, sundayPercent, holidayPercent]
       properties:
         userId:
           type: integer
@@ -1182,6 +1182,10 @@ components:
         vacationDaysRemaining:
           type: integer
         valuedHours:
+          type: number
+        vacationFulfilledHours:
+          type: number
+        totalFulfilledHours:
           type: number
         nightHours:
           type: number

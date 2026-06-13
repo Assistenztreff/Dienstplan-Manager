@@ -18,6 +18,8 @@ export interface HoursBalance {
   vacationDaysUsed: number;
   vacationDaysRemaining: number;
   valuedHours: number;
+  vacationFulfilledHours: number;
+  totalFulfilledHours: number;
   nightHours: number;
   nightSurchargeHours: number;
   sundayHours: number;

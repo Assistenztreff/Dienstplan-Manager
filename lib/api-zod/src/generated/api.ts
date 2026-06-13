@@ -782,6 +782,8 @@ export const GetHoursBalanceResponseItem = zod.object({
   "vacationDaysUsed": zod.number(),
   "vacationDaysRemaining": zod.number(),
   "valuedHours": zod.number(),
+  "vacationFulfilledHours": zod.number(),
+  "totalFulfilledHours": zod.number(),
   "nightHours": zod.number(),
   "nightSurchargeHours": zod.number(),
   "sundayHours": zod.number(),
