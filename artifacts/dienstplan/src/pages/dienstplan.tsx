@@ -226,9 +226,9 @@ function MonthGrid({
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-1">
+        <div className="grid grid-cols-7 gap-1" data-testid="month-grid">
           {blanks.map((_, i) => (
-            <div key={`blank-${i}`} />
+            <div key={`blank-${i}`} data-testid="month-grid-blank" />
           ))}
           {days.map((day) => {
             const dayShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), day));
@@ -239,6 +239,8 @@ function MonthGrid({
               <button
                 key={day.toISOString()}
                 type="button"
+                data-testid={`day-cell-${format(day, "yyyy-MM-dd")}`}
+                data-selected={selected ? "true" : "false"}
                 onClick={() => onSelectDay(day)}
                 className={`aspect-square rounded-lg bg-card flex flex-col items-center justify-start pt-1.5 gap-1 border transition-colors ${
                   selected
@@ -273,7 +275,7 @@ function MonthGrid({
       <div className="rounded-lg border border-border/40 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2.5 bg-muted/40">
           <div>
-            <p className="text-sm font-semibold">
+            <p className="text-sm font-semibold" data-testid="day-detail-header">
               {format(selectedDay, "EEEE, d. MMMM", { locale: de })}
             </p>
             <p className="text-xs text-muted-foreground">
@@ -329,6 +331,8 @@ function ViewToggle({
           <button
             key={opt.value}
             type="button"
+            data-testid={`view-toggle-${opt.value}`}
+            data-active={active ? "true" : "false"}
             onClick={() => onChange(opt.value)}
             className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
@@ -353,9 +357,11 @@ function AssistantFilter({
   onSelect: (val: number | "all") => void;
 }) {
   return (
-    <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
+    <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1" data-testid="assistant-filter">
       <button
         type="button"
+        data-testid="assistant-chip-all"
+        data-active={selected === "all" ? "true" : "false"}
         onClick={() => onSelect("all")}
         className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition-colors ${
           selected === "all"
@@ -369,6 +375,8 @@ function AssistantFilter({
         <button
           key={a.id}
           type="button"
+          data-testid={`assistant-chip-${a.id}`}
+          data-active={selected === a.id ? "true" : "false"}
           onClick={() => onSelect(a.id)}
           className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition-colors ${
             selected === a.id
@@ -454,13 +462,16 @@ export default function Dienstplan() {
         <p className="text-muted-foreground mt-1 text-sm">Monatsansicht der Schichten</p>
       </div>
       <div className="flex items-center gap-2 md:gap-4">
-        <Button variant="outline" size="icon" onClick={prevMonth}>
+        <Button variant="outline" size="icon" onClick={prevMonth} data-testid="prev-month">
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <span className="font-medium text-sm md:text-lg min-w-[120px] md:min-w-40 text-center">
+        <span
+          className="font-medium text-sm md:text-lg min-w-[120px] md:min-w-40 text-center"
+          data-testid="month-label"
+        >
           {format(currentDate, "MMMM yyyy", { locale: de })}
         </span>
-        <Button variant="outline" size="icon" onClick={nextMonth}>
+        <Button variant="outline" size="icon" onClick={nextMonth} data-testid="next-month">
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
@@ -485,7 +496,7 @@ export default function Dienstplan() {
       <Header />
 
       {/* Mobile: umschaltbare Ansicht (Liste / Monatsgitter) */}
-      <div className="md:hidden space-y-3">
+      <div className="md:hidden space-y-3" data-testid="dienstplan-mobile">
         <div className="flex items-center justify-between gap-2">
           <ViewToggle
             value={mobileView}

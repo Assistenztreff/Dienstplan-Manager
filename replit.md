@@ -7,6 +7,7 @@ Eine Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgeb
 - `pnpm --filter @workspace/api-server run dev` — API-Server starten (Port 8080, erreichbar über `/api`)
 - `pnpm --filter @workspace/dienstplan run dev` — Frontend starten (Port dynamisch, Pfad `/`)
 - `pnpm run typecheck` — Vollständiger Typecheck über alle Pakete
+- `pnpm --filter @workspace/dienstplan run test:e2e` — Playwright-E2E-Tests (API-Server + Frontend müssen laufen; nutzt Admin-Login admin@dienstplan.local / admin1234)
 - `pnpm run build` — Typecheck + Build aller Pakete
 - `pnpm --filter @workspace/api-spec run codegen` — API-Hooks und Zod-Schemas aus OpenAPI-Spec regenerieren
 - `pnpm --filter @workspace/db run push` — DB-Schema pushen (nur Dev)
