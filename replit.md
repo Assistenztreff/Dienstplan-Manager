@@ -72,6 +72,9 @@ Kernfunktionen (Task 1 — Grundstruktur):
 - Zod-Schema-Namen aus `@workspace/api-zod` per grep ermitteln, nicht raten (Orval-Namenskonventionen variieren)
 - `useListUsers` für Nicht-Admins gibt 401 zurück (Query-Error, kein UI-Crash) — Daten nur unter `isAdmin`-Bedingung nutzen
 - Route-Handler-Pattern: `async (req, res): Promise<void> =>` mit `res.json(); return;` (kein `return res.json()`) — sonst TS7030
+- `session`-Tabelle (connect-pg-simple) ist als Drizzle-Schema in `lib/db/src/schema/session.ts` abgebildet, damit `db push` (auch im Post-Merge non-interaktiv) sie NICHT als Datenverlust löschen will. Struktur nicht ändern.
+- Mobile: generierte Query-Hooks erwarten `queryKey` im vollen `UseQueryOptions`. Für `enabled` Cast nutzen: Optionen `as Parameters<typeof useXyz>[1]` UND Ergebnis casten (`(rawData ?? []) as Xyz[]`), da der Optionen-Cast die TData-Inferenz auf `{}` reduziert.
+- `@workspace/scripts` braucht `pg` als eigene Dependency (Workspace-Pakete teilen Deps nicht implizit)
 
 ## Pointers
 

@@ -100,19 +100,22 @@ export default function ZeiterfassungScreen() {
   const [error, setError] = useState("");
 
   const {
-    data: entries,
+    data: rawEntries,
     isLoading,
     isError,
     refetch,
   } = useListTimeEntries(
     { userId: currentUser?.id, month, year },
-    { query: { enabled: !!currentUser } }
+    { query: { enabled: !!currentUser } } as Parameters<typeof useListTimeEntries>[1]
   );
 
-  const { data: shifts } = useListShifts(
+  const { data: rawShifts } = useListShifts(
     { userId: currentUser?.id, month, year },
-    { query: { enabled: !!currentUser && modalVisible } }
+    { query: { enabled: !!currentUser && modalVisible } } as Parameters<typeof useListShifts>[1]
   );
+
+  const entries = (rawEntries ?? []) as TimeEntry[];
+  const shifts = (rawShifts ?? []) as Shift[];
 
   const createEntry = useCreateTimeEntry();
 

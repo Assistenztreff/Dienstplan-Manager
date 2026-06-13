@@ -1,2 +1,2 @@
-- [Running one-off scripts that import workspace TS packages](workspace-oneoff-scripts.md) — sandbox/node can't resolve @workspace/* from repo root; bundle with esbuild from the consuming artifact and run the .mjs.
-- [Shift metrics architecture](shift-metrics-architecture.md) — store RAW per-shift hours; apply surcharge % only at evaluation so rate changes are retroactive.
+- [DB push & session table](db-push-session-table.md) — connect-pg-simple's session table must live in the Drizzle schema or `db push` (incl. non-interactive post-merge) tries to drop it as data loss.
+- [Orval query hooks enabled cast](orval-query-hooks-enabled.md) — generated query hooks require queryKey in full UseQueryOptions; pass `enabled` via dual cast (options + result), or data infers to `{}`.
