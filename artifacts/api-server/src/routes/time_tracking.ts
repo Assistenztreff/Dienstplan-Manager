@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { timeTrackingTable, usersTable } from "@workspace/db";
+import { timeTrackingTable, usersTable, shiftsTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import {
   ListTimeEntriesQueryParams,
@@ -84,9 +84,29 @@ router.post("/time-tracking", requireAuth, async (req, res): Promise<void> => {
   const userId =
     req.session.role === "assistant" ? req.session.userId! : body.data.userId;
 
-  // Doppelbuchung verhindern: pro geplanter Schicht darf nur eine Ist-Zeit
-  // erfasst werden. Serverseitiger Schutz, unabhängig von der UI-Filterung.
   if (body.data.shiftId != null) {
+    // Zugehörigkeit prüfen: die verknüpfte Schicht muss dem Benutzer gehören,
+    // für den die Ist-Zeit erfasst wird. Sonst könnte eine fremde Schicht
+    // verknüpft und (durch den 409-Guard) für den Berechtigten blockiert werden.
+    const [shift] = await db
+      .select({ id: shiftsTable.id, userId: shiftsTable.userId })
+      .from(shiftsTable)
+      .where(eq(shiftsTable.id, body.data.shiftId))
+      .limit(1);
+    if (!shift) {
+      res.status(404).json({ error: "Schicht nicht gefunden." });
+      return;
+    }
+    if (shift.userId !== userId) {
+      res.status(403).json({
+        error: "Die Schicht gehört nicht zu diesem Benutzer.",
+        code: "shift_not_owned",
+      });
+      return;
+    }
+
+    // Doppelbuchung verhindern: pro geplanter Schicht darf nur eine Ist-Zeit
+    // erfasst werden. Serverseitiger Schutz, unabhängig von der UI-Filterung.
     const [existing] = await db
       .select({ id: timeTrackingTable.id })
       .from(timeTrackingTable)
