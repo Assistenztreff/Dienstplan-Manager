@@ -4,6 +4,7 @@ import {
   CalendarDays,
   Users,
   Clock,
+  CalendarOff,
   BarChart3,
   Settings,
   Menu,
@@ -20,6 +21,7 @@ const ALL_NAV_ITEMS = [
   { href: "/dienstplan", label: "Dienstplan", icon: CalendarDays, adminOnly: false },
   { href: "/assistenten", label: "Assistenten", icon: Users, adminOnly: true },
   { href: "/zeiterfassung", label: "Zeiterfassung", icon: Clock, adminOnly: false },
+  { href: "/abwesenheiten", label: "Abwesenheiten", icon: CalendarOff, adminOnly: true },
   { href: "/auswertungen", label: "Auswertungen", icon: BarChart3, adminOnly: true },
   { href: "/einstellungen", label: "Einstellungen", icon: Settings, adminOnly: true },
 ];

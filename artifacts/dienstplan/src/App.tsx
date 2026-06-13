@@ -9,6 +9,7 @@ import Dashboard from "@/pages/dashboard";
 import Dienstplan from "@/pages/dienstplan";
 import Assistenten from "@/pages/assistenten";
 import Zeiterfassung from "@/pages/zeiterfassung";
+import Abwesenheiten from "@/pages/abwesenheiten";
 import Auswertungen from "@/pages/auswertungen";
 import Einstellungen from "@/pages/einstellungen";
 import Login from "@/pages/login";
@@ -65,6 +66,9 @@ function Router() {
         <Route path="/" component={Dashboard} />
         <Route path="/dienstplan" component={Dienstplan} />
         <Route path="/zeiterfassung" component={Zeiterfassung} />
+        {currentUser.role === "admin" && (
+          <Route path="/abwesenheiten" component={Abwesenheiten} />
+        )}
         {currentUser.role === "admin" && (
           <Route path="/assistenten" component={Assistenten} />
         )}
