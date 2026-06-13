@@ -10,7 +10,7 @@ import {
   computeShiftMetrics,
   type NightWindow,
 } from "@workspace/db";
-import { eq, and, sql, or, isNull } from "drizzle-orm";
+import { eq, and, sql, or, isNull, ne, notInArray, lt, gt } from "drizzle-orm";
 import {
   ListShiftsQueryParams,
   CreateShiftBody,
@@ -189,6 +189,57 @@ async function storeShiftMetrics(shift: {
   await db.update(shiftsTable).set(metrics).where(eq(shiftsTable.id, shift.id));
 }
 
+type ShiftConflict = {
+  id: number;
+  startTime: Date;
+  endTime: Date;
+  type: string;
+};
+
+// Findet zeitlich überlappende Schichten desselben Assistenten. Überlappung gilt,
+// wenn bestehende.start < neu.ende UND bestehende.ende > neu.start. Abwesenheiten
+// (ganztägige Urlaub-/Krank-Einträge) werden ausgenommen, damit reguläre Schichten
+// am selben Tag keine Falschwarnungen auslösen. Schichten über Mitternacht werden
+// korrekt verglichen, da Start/Ende als echte Zeitstempel (Ende ggf. Folgetag) vorliegen.
+async function findOverlappingShifts(
+  userId: number,
+  startTime: Date,
+  endTime: Date,
+  excludeShiftId: number | null
+): Promise<ShiftConflict[]> {
+  const conditions = [
+    eq(shiftsTable.userId, userId),
+    notInArray(shiftsTable.type, ["vacation", "sick"]),
+    lt(shiftsTable.startTime, endTime),
+    gt(shiftsTable.endTime, startTime),
+  ];
+  if (excludeShiftId !== null) conditions.push(ne(shiftsTable.id, excludeShiftId));
+  return db
+    .select({
+      id: shiftsTable.id,
+      startTime: shiftsTable.startTime,
+      endTime: shiftsTable.endTime,
+      type: shiftsTable.type,
+    })
+    .from(shiftsTable)
+    .where(and(...conditions));
+}
+
+// Strukturierte 409-Antwort mit den kollidierenden Schichten (ISO-Zeitstempel,
+// damit das Frontend zeitzonenkorrekt formatieren kann).
+function overlapResponseBody(conflicts: ShiftConflict[]) {
+  return {
+    error: "Diese Schicht überschneidet sich mit einer bestehenden Schicht desselben Assistenten.",
+    code: "shift_overlap" as const,
+    conflicts: conflicts.map((c) => ({
+      id: c.id,
+      startTime: c.startTime.toISOString(),
+      endTime: c.endTime.toISOString(),
+      type: c.type,
+    })),
+  };
+}
+
 router.get("/shifts", requireAuth, async (req, res): Promise<void> => {
   const query = ListShiftsQueryParams.safeParse({
     userId: req.query.userId ? Number(req.query.userId) : undefined,
@@ -226,6 +277,24 @@ router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid request body" });
     return;
   }
+
+  // Kollisionsprüfung: nur für reguläre Schichten und nur, wenn der Admin nicht
+  // bewusst überschreibt (force). force kommt aus dem Roh-Body, nicht aus dem
+  // validierten Schema, damit die OpenAPI-Spec unverändert bleibt.
+  const force = req.body?.force === true;
+  if (!isAbsenceType(body.data.type) && !force) {
+    const conflicts = await findOverlappingShifts(
+      body.data.userId,
+      body.data.startTime,
+      body.data.endTime,
+      null
+    );
+    if (conflicts.length > 0) {
+      res.status(409).json(overlapResponseBody(conflicts));
+      return;
+    }
+  }
+
   const [shift] = await db.insert(shiftsTable).values(body.data).returning();
 
   await storeShiftMetrics(shift);
@@ -283,6 +352,25 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
   if (!oldShift) {
     res.status(404).json({ error: "Not found" });
     return;
+  }
+
+  // Kollisionsprüfung mit den effektiven (ggf. teil-aktualisierten) Werten, die
+  // eigene Schicht ausgenommen. force überschreibt bewusst, ohne Schema-Änderung.
+  const force = req.body?.force === true;
+  const effectiveType = body.data.type ?? oldShift.type;
+  const effectiveStart = body.data.startTime ?? oldShift.startTime;
+  const effectiveEnd = body.data.endTime ?? oldShift.endTime;
+  if (!isAbsenceType(effectiveType) && !force) {
+    const conflicts = await findOverlappingShifts(
+      oldShift.userId,
+      effectiveStart,
+      effectiveEnd,
+      oldShift.id
+    );
+    if (conflicts.length > 0) {
+      res.status(409).json(overlapResponseBody(conflicts));
+      return;
+    }
   }
 
   const [updated] = await db

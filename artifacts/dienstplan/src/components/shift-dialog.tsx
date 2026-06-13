@@ -58,6 +58,23 @@ const LEGACY_TYPE_LABELS: Record<string, string> = {
   full_day: "24h-Dienst",
 };
 
+type ConflictInfo = {
+  id: number;
+  startTime: string;
+  endTime: string;
+  type: string;
+};
+
+// Lesbares Label für eine kollidierende Schicht (Datum + Zeit, ggf. Folgetag).
+function conflictLabel(c: ConflictInfo): string {
+  const start = new Date(c.startTime);
+  const end = new Date(c.endTime);
+  const startStr = format(start, "dd.MM.yyyy HH:mm");
+  const sameDay = format(start, "yyyy-MM-dd") === format(end, "yyyy-MM-dd");
+  const endStr = sameDay ? format(end, "HH:mm") : `${format(end, "dd.MM. HH:mm")} (+1)`;
+  return `${startStr}–${endStr}`;
+}
+
 type FormState = {
   userId: string;
   date: string;
@@ -135,6 +152,7 @@ export function ShiftDialog({
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [overlapConflicts, setOverlapConflicts] = useState<ConflictInfo[] | null>(null);
 
   // Formular nur beim Öffnen / beim Wechsel des Bearbeitungsziels zurücksetzen,
   // nicht wenn die Schichtmodelle asynchron nachladen (sonst gehen Eingaben verloren).
@@ -142,6 +160,7 @@ export function ShiftDialog({
     if (open) {
       setErrors({});
       setConfirmDelete(false);
+      setOverlapConflicts(null);
       setForm(buildInitialForm());
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -159,6 +178,9 @@ export function ShiftDialog({
   function set<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [field]: value }));
     setErrors((e) => ({ ...e, [field]: undefined }));
+    // Sobald die Eingaben geändert werden, ist eine frühere Kollisionswarnung
+    // hinfällig — beim nächsten Speichern wird neu geprüft (ohne force).
+    setOverlapConflicts(null);
   }
 
   const isAbsence = form.selection === "vacation" || form.selection === "sick";
@@ -214,7 +236,7 @@ export function ShiftDialog({
     return { type: form.selection as ShiftInputType & ShiftUpdateType, shiftModelId: null };
   }
 
-  async function handleSave() {
+  async function handleSave(force = false) {
     if (!validate()) return;
     setSaving(true);
     try {
@@ -241,26 +263,28 @@ export function ShiftDialog({
       const { type, shiftModelId } = deriveTypeAndModel();
 
       if (isEditing && editShift) {
+        const data = {
+          startTime: startIso,
+          endTime: endIso,
+          type,
+          shiftModelId,
+          notes: form.notes || null,
+        };
         await updateShift.mutateAsync({
           id: editShift.id,
-          data: {
-            startTime: startIso,
-            endTime: endIso,
-            type,
-            shiftModelId,
-            notes: form.notes || null,
-          },
+          data: { ...data, ...(force ? { force: true } : {}) } as typeof data,
         });
       } else {
+        const data = {
+          userId: Number(form.userId),
+          startTime: startIso,
+          endTime: endIso,
+          type,
+          shiftModelId,
+          notes: form.notes || undefined,
+        };
         await createShift.mutateAsync({
-          data: {
-            userId: Number(form.userId),
-            startTime: startIso,
-            endTime: endIso,
-            type,
-            shiftModelId,
-            notes: form.notes || undefined,
-          },
+          data: { ...data, ...(force ? { force: true } : {}) } as typeof data,
         });
       }
       await invalidate();
@@ -270,6 +294,13 @@ export function ShiftDialog({
         setErrors({ notes: "Sitzung abgelaufen. Bitte Seite neu laden und erneut anmelden." });
       } else if (err instanceof ApiError && err.status === 403) {
         setErrors({ notes: "Keine Berechtigung zum Speichern." });
+      } else if (
+        err instanceof ApiError &&
+        err.status === 409 &&
+        (err.data as { code?: string } | null)?.code === "shift_overlap"
+      ) {
+        const conflicts = (err.data as { conflicts?: ConflictInfo[] }).conflicts ?? [];
+        setOverlapConflicts(conflicts);
       } else {
         setErrors({ notes: "Speichern fehlgeschlagen. Bitte erneut versuchen." });
       }
@@ -437,6 +468,28 @@ export function ShiftDialog({
             </p>
           )}
 
+          {/* Kollisionswarnung */}
+          {overlapConflicts && overlapConflicts.length > 0 && (
+            <div
+              className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2.5 text-sm"
+              data-testid="shift-dialog-overlap"
+            >
+              <p className="font-medium text-destructive">
+                Überschneidung mit bestehender{" "}
+                {overlapConflicts.length > 1 ? "Schichten" : "Schicht"}
+              </p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-4 text-destructive">
+                {overlapConflicts.map((c) => (
+                  <li key={c.id}>{conflictLabel(c)}</li>
+                ))}
+              </ul>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Du kannst trotzdem speichern, falls die Überschneidung gewollt ist
+                (z. B. Bereitschaft parallel zu einem anderen Dienst).
+              </p>
+            </div>
+          )}
+
           {/* Hinweise */}
           <div className="space-y-1.5">
             <Label>Hinweise</Label>
@@ -466,8 +519,19 @@ export function ShiftDialog({
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Abbrechen
           </Button>
-          <Button onClick={handleSave} disabled={saving} data-testid="shift-dialog-save">
-            {saving ? "Speichern..." : isEditing ? "Aktualisieren" : "Anlegen"}
+          <Button
+            onClick={() => handleSave(overlapConflicts !== null)}
+            disabled={saving}
+            variant={overlapConflicts ? "destructive" : "default"}
+            data-testid="shift-dialog-save"
+          >
+            {saving
+              ? "Speichern..."
+              : overlapConflicts
+                ? "Trotzdem speichern"
+                : isEditing
+                  ? "Aktualisieren"
+                  : "Anlegen"}
           </Button>
         </DialogFooter>
       </DialogContent>
