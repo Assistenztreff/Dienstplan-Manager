@@ -16,6 +16,18 @@ export interface User {
   phone?: string | null;
   /** @nullable */
   address?: string | null;
+  /** @nullable */
+  birthDate?: string | null;
+  /** @nullable */
+  socialSecurityNumber?: string | null;
+  /** @nullable */
+  taxId?: string | null;
+  /** @nullable */
+  taxClass?: string | null;
+  /** @nullable */
+  healthInsurance?: string | null;
+  /** @nullable */
+  iban?: string | null;
   isActive?: boolean;
   createdAt: Date;
 }

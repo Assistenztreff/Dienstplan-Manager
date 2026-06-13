@@ -757,6 +757,18 @@ components:
           type: ["string", "null"]
         address:
           type: ["string", "null"]
+        birthDate:
+          type: ["string", "null"]
+        socialSecurityNumber:
+          type: ["string", "null"]
+        taxId:
+          type: ["string", "null"]
+        taxClass:
+          type: ["string", "null"]
+        healthInsurance:
+          type: ["string", "null"]
+        iban:
+          type: ["string", "null"]
         isActive:
           type: boolean
         createdAt:
@@ -780,6 +792,18 @@ components:
           type: string
         address:
           type: string
+        birthDate:
+          type: string
+        socialSecurityNumber:
+          type: string
+        taxId:
+          type: string
+        taxClass:
+          type: string
+        healthInsurance:
+          type: string
+        iban:
+          type: string
         isActive:
           type: boolean
 
@@ -795,6 +819,18 @@ components:
         phone:
           type: ["string", "null"]
         address:
+          type: ["string", "null"]
+        birthDate:
+          type: ["string", "null"]
+        socialSecurityNumber:
+          type: ["string", "null"]
+        taxId:
+          type: ["string", "null"]
+        taxClass:
+          type: ["string", "null"]
+        healthInsurance:
+          type: ["string", "null"]
+        iban:
           type: ["string", "null"]
         isActive:
           type: boolean

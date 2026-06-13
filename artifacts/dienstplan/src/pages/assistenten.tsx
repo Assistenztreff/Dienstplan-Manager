@@ -18,6 +18,13 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Plus, Mail, Phone, MapPin, Calendar, Pencil, UserPlus, Send, Copy, Check } from "lucide-react";
 import { format } from "date-fns";
 
@@ -28,6 +35,12 @@ type User = {
   role: string;
   phone?: string | null;
   address?: string | null;
+  birthDate?: string | null;
+  socialSecurityNumber?: string | null;
+  taxId?: string | null;
+  taxClass?: string | null;
+  healthInsurance?: string | null;
+  iban?: string | null;
   isActive: boolean;
 };
 
@@ -47,6 +60,12 @@ type FormState = {
   email: string;
   phone: string;
   address: string;
+  birthDate: string;
+  socialSecurityNumber: string;
+  taxId: string;
+  taxClass: string;
+  healthInsurance: string;
+  iban: string;
   weeklyHours: string;
   vacationDays: string;
   startDate: string;
@@ -59,6 +78,12 @@ const EMPTY_FORM: FormState = {
   email: "",
   phone: "",
   address: "",
+  birthDate: "",
+  socialSecurityNumber: "",
+  taxId: "",
+  taxClass: "",
+  healthInsurance: "",
+  iban: "",
   weeklyHours: "20",
   vacationDays: "30",
   startDate: format(new Date(), "yyyy-MM-dd"),
@@ -221,6 +246,12 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
         email: editUser.email,
         phone: editUser.phone ?? "",
         address: editUser.address ?? "",
+        birthDate: editUser.birthDate ?? "",
+        socialSecurityNumber: editUser.socialSecurityNumber ?? "",
+        taxId: editUser.taxId ?? "",
+        taxClass: editUser.taxClass ?? "",
+        healthInsurance: editUser.healthInsurance ?? "",
+        iban: editUser.iban ?? "",
         weeklyHours: editContract ? String(editContract.weeklyHours) : "20",
         vacationDays: editContract ? String(editContract.vacationDays) : "30",
         startDate: editContract ? editContract.startDate : format(new Date(), "yyyy-MM-dd"),
@@ -262,7 +293,18 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
       if (isEditing && editUser) {
         await updateUser.mutateAsync({
           id: editUser.id,
-          data: { name, email: form.email, phone: form.phone || null, address: form.address },
+          data: {
+            name,
+            email: form.email,
+            phone: form.phone || null,
+            address: form.address,
+            birthDate: form.birthDate || null,
+            socialSecurityNumber: form.socialSecurityNumber || null,
+            taxId: form.taxId || null,
+            taxClass: form.taxClass || null,
+            healthInsurance: form.healthInsurance || null,
+            iban: form.iban || null,
+          },
         });
 
         if (editContract) {
@@ -287,7 +329,19 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
         }
       } else {
         const newUser = await createUser.mutateAsync({
-          data: { name, email: form.email, role: "assistant", phone: form.phone || undefined, address: form.address },
+          data: {
+            name,
+            email: form.email,
+            role: "assistant",
+            phone: form.phone || undefined,
+            address: form.address,
+            birthDate: form.birthDate || undefined,
+            socialSecurityNumber: form.socialSecurityNumber || undefined,
+            taxId: form.taxId || undefined,
+            taxClass: form.taxClass || undefined,
+            healthInsurance: form.healthInsurance || undefined,
+            iban: form.iban || undefined,
+          },
         });
 
         await createContract.mutateAsync({
@@ -357,6 +411,72 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
                   value={form.address}
                   onChange={(e) => set("address", e.target.value)}
                   placeholder="Musterstr. 1, 12345 Musterstadt"
+                />
+              </FieldRow>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+              Lohndaten / Sozialversicherung
+            </h3>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <FieldRow label="Geburtsdatum">
+                  <Input
+                    type="date"
+                    value={form.birthDate}
+                    onChange={(e) => set("birthDate", e.target.value)}
+                  />
+                </FieldRow>
+                <FieldRow label="Steuerklasse">
+                  <Select
+                    value={form.taxClass || undefined}
+                    onValueChange={(v) => set("taxClass", v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Wählen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["1", "2", "3", "4", "5", "6"].map((c) => (
+                        <SelectItem key={c} value={c}>
+                          Klasse {c}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FieldRow>
+              </div>
+
+              <FieldRow label="Sozialversicherungsnummer">
+                <Input
+                  value={form.socialSecurityNumber}
+                  onChange={(e) => set("socialSecurityNumber", e.target.value)}
+                  placeholder="12 123456 A 123"
+                />
+              </FieldRow>
+
+              <FieldRow label="Steuer-Identifikationsnummer">
+                <Input
+                  value={form.taxId}
+                  onChange={(e) => set("taxId", e.target.value)}
+                  placeholder="12 345 678 901"
+                />
+              </FieldRow>
+
+              <FieldRow label="Krankenkasse">
+                <Input
+                  value={form.healthInsurance}
+                  onChange={(e) => set("healthInsurance", e.target.value)}
+                  placeholder="z.B. AOK, TK, Barmer"
+                />
+              </FieldRow>
+
+              <FieldRow label="IBAN">
+                <Input
+                  value={form.iban}
+                  onChange={(e) => set("iban", e.target.value)}
+                  placeholder="DE00 0000 0000 0000 0000 00"
                 />
               </FieldRow>
             </div>

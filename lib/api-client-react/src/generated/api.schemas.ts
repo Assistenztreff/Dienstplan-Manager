@@ -26,6 +26,18 @@ export interface User {
   phone?: string | null;
   /** @nullable */
   address?: string | null;
+  /** @nullable */
+  birthDate?: string | null;
+  /** @nullable */
+  socialSecurityNumber?: string | null;
+  /** @nullable */
+  taxId?: string | null;
+  /** @nullable */
+  taxClass?: string | null;
+  /** @nullable */
+  healthInsurance?: string | null;
+  /** @nullable */
+  iban?: string | null;
   isActive?: boolean;
   createdAt: string;
 }
@@ -45,6 +57,12 @@ export interface UserInput {
   role: UserInputRole;
   phone?: string;
   address?: string;
+  birthDate?: string;
+  socialSecurityNumber?: string;
+  taxId?: string;
+  taxClass?: string;
+  healthInsurance?: string;
+  iban?: string;
   isActive?: boolean;
 }
 
@@ -56,6 +74,18 @@ export interface UserUpdate {
   phone?: string | null;
   /** @nullable */
   address?: string | null;
+  /** @nullable */
+  birthDate?: string | null;
+  /** @nullable */
+  socialSecurityNumber?: string | null;
+  /** @nullable */
+  taxId?: string | null;
+  /** @nullable */
+  taxClass?: string | null;
+  /** @nullable */
+  healthInsurance?: string | null;
+  /** @nullable */
+  iban?: string | null;
   isActive?: boolean;
 }
 

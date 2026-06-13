@@ -21,6 +21,12 @@ const SAFE_USER_SELECT = {
   role: usersTable.role,
   phone: usersTable.phone,
   address: usersTable.address,
+  birthDate: usersTable.birthDate,
+  socialSecurityNumber: usersTable.socialSecurityNumber,
+  taxId: usersTable.taxId,
+  taxClass: usersTable.taxClass,
+  healthInsurance: usersTable.healthInsurance,
+  iban: usersTable.iban,
   isActive: usersTable.isActive,
   createdAt: usersTable.createdAt,
 };

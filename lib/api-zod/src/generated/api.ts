@@ -31,6 +31,12 @@ export const ListUsersResponseItem = zod.object({
   "role": zod.enum(['admin', 'assistant']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "birthDate": zod.string().nullish(),
+  "socialSecurityNumber": zod.string().nullish(),
+  "taxId": zod.string().nullish(),
+  "taxClass": zod.string().nullish(),
+  "healthInsurance": zod.string().nullish(),
+  "iban": zod.string().nullish(),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 })
@@ -49,6 +55,12 @@ export const CreateUserBody = zod.object({
   "role": zod.enum(['admin', 'assistant']),
   "phone": zod.string().optional(),
   "address": zod.string().optional(),
+  "birthDate": zod.string().optional(),
+  "socialSecurityNumber": zod.string().optional(),
+  "taxId": zod.string().optional(),
+  "taxClass": zod.string().optional(),
+  "healthInsurance": zod.string().optional(),
+  "iban": zod.string().optional(),
   "isActive": zod.boolean().optional()
 })
 
@@ -67,6 +79,12 @@ export const GetUserResponse = zod.object({
   "role": zod.enum(['admin', 'assistant']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "birthDate": zod.string().nullish(),
+  "socialSecurityNumber": zod.string().nullish(),
+  "taxId": zod.string().nullish(),
+  "taxClass": zod.string().nullish(),
+  "healthInsurance": zod.string().nullish(),
+  "iban": zod.string().nullish(),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 })
@@ -87,6 +105,12 @@ export const UpdateUserBody = zod.object({
   "email": zod.string().email().optional(),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "birthDate": zod.string().nullish(),
+  "socialSecurityNumber": zod.string().nullish(),
+  "taxId": zod.string().nullish(),
+  "taxClass": zod.string().nullish(),
+  "healthInsurance": zod.string().nullish(),
+  "iban": zod.string().nullish(),
   "isActive": zod.boolean().optional()
 })
 
@@ -97,6 +121,12 @@ export const UpdateUserResponse = zod.object({
   "role": zod.enum(['admin', 'assistant']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "birthDate": zod.string().nullish(),
+  "socialSecurityNumber": zod.string().nullish(),
+  "taxId": zod.string().nullish(),
+  "taxClass": zod.string().nullish(),
+  "healthInsurance": zod.string().nullish(),
+  "iban": zod.string().nullish(),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 })
@@ -134,6 +164,12 @@ export const ListContractsResponseItem = zod.object({
   "role": zod.enum(['admin', 'assistant']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "birthDate": zod.string().nullish(),
+  "socialSecurityNumber": zod.string().nullish(),
+  "taxId": zod.string().nullish(),
+  "taxClass": zod.string().nullish(),
+  "healthInsurance": zod.string().nullish(),
+  "iban": zod.string().nullish(),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -184,6 +220,12 @@ export const GetContractResponse = zod.object({
   "role": zod.enum(['admin', 'assistant']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "birthDate": zod.string().nullish(),
+  "socialSecurityNumber": zod.string().nullish(),
+  "taxId": zod.string().nullish(),
+  "taxClass": zod.string().nullish(),
+  "healthInsurance": zod.string().nullish(),
+  "iban": zod.string().nullish(),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -230,6 +272,12 @@ export const UpdateContractResponse = zod.object({
   "role": zod.enum(['admin', 'assistant']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "birthDate": zod.string().nullish(),
+  "socialSecurityNumber": zod.string().nullish(),
+  "taxId": zod.string().nullish(),
+  "taxClass": zod.string().nullish(),
+  "healthInsurance": zod.string().nullish(),
+  "iban": zod.string().nullish(),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -274,6 +322,12 @@ export const ListShiftsResponseItem = zod.object({
   "role": zod.enum(['admin', 'assistant']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "birthDate": zod.string().nullish(),
+  "socialSecurityNumber": zod.string().nullish(),
+  "taxId": zod.string().nullish(),
+  "taxClass": zod.string().nullish(),
+  "healthInsurance": zod.string().nullish(),
+  "iban": zod.string().nullish(),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -321,6 +375,12 @@ export const GetShiftResponse = zod.object({
   "role": zod.enum(['admin', 'assistant']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "birthDate": zod.string().nullish(),
+  "socialSecurityNumber": zod.string().nullish(),
+  "taxId": zod.string().nullish(),
+  "taxClass": zod.string().nullish(),
+  "healthInsurance": zod.string().nullish(),
+  "iban": zod.string().nullish(),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -362,6 +422,12 @@ export const UpdateShiftResponse = zod.object({
   "role": zod.enum(['admin', 'assistant']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "birthDate": zod.string().nullish(),
+  "socialSecurityNumber": zod.string().nullish(),
+  "taxId": zod.string().nullish(),
+  "taxClass": zod.string().nullish(),
+  "healthInsurance": zod.string().nullish(),
+  "iban": zod.string().nullish(),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -529,6 +595,12 @@ export const ListTimeEntriesResponseItem = zod.object({
   "role": zod.enum(['admin', 'assistant']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "birthDate": zod.string().nullish(),
+  "socialSecurityNumber": zod.string().nullish(),
+  "taxId": zod.string().nullish(),
+  "taxClass": zod.string().nullish(),
+  "healthInsurance": zod.string().nullish(),
+  "iban": zod.string().nullish(),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -574,6 +646,12 @@ export const GetTimeEntryResponse = zod.object({
   "role": zod.enum(['admin', 'assistant']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "birthDate": zod.string().nullish(),
+  "socialSecurityNumber": zod.string().nullish(),
+  "taxId": zod.string().nullish(),
+  "taxClass": zod.string().nullish(),
+  "healthInsurance": zod.string().nullish(),
+  "iban": zod.string().nullish(),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -612,6 +690,12 @@ export const UpdateTimeEntryResponse = zod.object({
   "role": zod.enum(['admin', 'assistant']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "birthDate": zod.string().nullish(),
+  "socialSecurityNumber": zod.string().nullish(),
+  "taxId": zod.string().nullish(),
+  "taxClass": zod.string().nullish(),
+  "healthInsurance": zod.string().nullish(),
+  "iban": zod.string().nullish(),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -658,6 +742,12 @@ export const ConfirmTimeEntryResponse = zod.object({
   "role": zod.enum(['admin', 'assistant']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "birthDate": zod.string().nullish(),
+  "socialSecurityNumber": zod.string().nullish(),
+  "taxId": zod.string().nullish(),
+  "taxClass": zod.string().nullish(),
+  "healthInsurance": zod.string().nullish(),
+  "iban": zod.string().nullish(),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -732,6 +822,12 @@ export const GetDashboardSummaryResponse = zod.object({
   "role": zod.enum(['admin', 'assistant']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "birthDate": zod.string().nullish(),
+  "socialSecurityNumber": zod.string().nullish(),
+  "taxId": zod.string().nullish(),
+  "taxClass": zod.string().nullish(),
+  "healthInsurance": zod.string().nullish(),
+  "iban": zod.string().nullish(),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -755,6 +851,12 @@ export const GetDashboardSummaryResponse = zod.object({
   "role": zod.enum(['admin', 'assistant']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "birthDate": zod.string().nullish(),
+  "socialSecurityNumber": zod.string().nullish(),
+  "taxId": zod.string().nullish(),
+  "taxClass": zod.string().nullish(),
+  "healthInsurance": zod.string().nullish(),
+  "iban": zod.string().nullish(),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()

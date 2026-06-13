@@ -14,5 +14,11 @@ export interface UserInput {
   role: UserInputRole;
   phone?: string;
   address?: string;
+  birthDate?: string;
+  socialSecurityNumber?: string;
+  taxId?: string;
+  taxClass?: string;
+  healthInsurance?: string;
+  iban?: string;
   isActive?: boolean;
 }
