@@ -296,7 +296,7 @@ export function ShiftDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" data-testid="shift-dialog">
         <DialogHeader>
           <DialogTitle className="font-serif text-xl">
             {isEditing ? "Schicht bearbeiten" : "Neue Schicht anlegen"}
@@ -312,7 +312,7 @@ export function ShiftDialog({
               onValueChange={(v) => set("userId", v)}
               disabled={isEditing}
             >
-              <SelectTrigger className={errors.userId ? "border-destructive" : ""}>
+              <SelectTrigger data-testid="shift-dialog-user" className={errors.userId ? "border-destructive" : ""}>
                 <SelectValue placeholder="Assistent auswählen..." />
               </SelectTrigger>
               <SelectContent>
@@ -342,7 +342,7 @@ export function ShiftDialog({
           <div className="space-y-1.5">
             <Label>Typ *</Label>
             <Select value={form.selection} onValueChange={(v) => set("selection", v)}>
-              <SelectTrigger>
+              <SelectTrigger data-testid="shift-dialog-type">
                 <SelectValue placeholder="Typ auswählen..." />
               </SelectTrigger>
               <SelectContent>
@@ -402,6 +402,7 @@ export function ShiftDialog({
                 <Label>Startzeit *</Label>
                 <Input
                   type="time"
+                  data-testid="shift-dialog-start"
                   value={form.startTime}
                   onChange={(e) => set("startTime", e.target.value)}
                   className={errors.startTime ? "border-destructive" : ""}
@@ -412,6 +413,7 @@ export function ShiftDialog({
                 <Label>Endzeit {is24h ? "(auto)" : "*"}</Label>
                 <Input
                   type="time"
+                  data-testid="shift-dialog-end"
                   value={is24h ? form.startTime : form.endTime}
                   onChange={(e) => set("endTime", e.target.value)}
                   disabled={is24h}
@@ -439,6 +441,7 @@ export function ShiftDialog({
           <div className="space-y-1.5">
             <Label>Hinweise</Label>
             <Input
+              data-testid="shift-dialog-notes"
               value={form.notes}
               onChange={(e) => set("notes", e.target.value)}
               placeholder="Optional"
@@ -463,7 +466,7 @@ export function ShiftDialog({
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Abbrechen
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button onClick={handleSave} disabled={saving} data-testid="shift-dialog-save">
             {saving ? "Speichern..." : isEditing ? "Aktualisieren" : "Anlegen"}
           </Button>
         </DialogFooter>

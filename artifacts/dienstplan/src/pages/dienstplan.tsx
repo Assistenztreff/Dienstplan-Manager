@@ -103,6 +103,7 @@ function ShiftBadge({
   const classes = shiftBadgeClasses(shift, modelMap);
   return (
     <div
+      data-testid={`shift-badge-${shift.id}`}
       className={`text-xs rounded border px-2 py-1 leading-snug cursor-pointer transition-colors ${classes}`}
       onClick={onClick}
     >
@@ -288,7 +289,7 @@ function MonthGrid({
             </p>
           </div>
           {canEdit && (
-            <Button size="sm" variant="outline" className="gap-1" onClick={() => onAddShift(selectedDay)}>
+            <Button size="sm" variant="outline" className="gap-1" data-testid="add-shift" onClick={() => onAddShift(selectedDay)}>
               <Plus className="h-3.5 w-3.5" />
               Schicht
             </Button>
