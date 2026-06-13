@@ -10,6 +10,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { Button } from "./ui/button";
+import logoUrl from "@assets/Arbeitgebermodell_oder_Assistenzdienst_20260613_225218_0000_1781384051438.svg";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
 import { useAuth } from "@/context/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -81,7 +82,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-background flex flex-col md:flex-row font-sans text-foreground">
       {/* Mobile header */}
       <header className="md:hidden flex items-center justify-between p-4 border-b bg-sidebar text-sidebar-foreground">
-        <h1 className="font-serif text-xl font-semibold text-sidebar-foreground">Dienstplan PA</h1>
+        <img src={logoUrl} alt="AssistenzTreff" className="h-8 w-auto" />
         <Sheet>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon" className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
