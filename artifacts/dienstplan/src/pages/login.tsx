@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { CalendarDays, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import logoUrl from "@assets/Arbeitgebermodell_oder_Assistenzdienst_20260613_225739_0000_1781384277556.svg";
 
 export default function Login() {
   const { login } = useAuth();
@@ -32,11 +33,8 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <div className="w-12 h-12 rounded-xl bg-sidebar flex items-center justify-center">
-            <CalendarDays className="h-6 w-6 text-sidebar-foreground" />
-          </div>
-          <h1 className="text-2xl font-serif font-bold text-foreground">Dienstplan PA</h1>
+        <div className="flex flex-col items-center gap-4 text-center">
+          <img src={logoUrl} alt="AssistenzTreff" className="h-12 w-auto" />
           <p className="text-sm text-muted-foreground">Melden Sie sich mit Ihrer E-Mail an</p>
         </div>
 

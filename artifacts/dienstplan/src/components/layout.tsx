@@ -90,7 +90,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="w-64 p-4 bg-sidebar text-sidebar-foreground border-sidebar-border flex flex-col">
-            <h2 className="font-serif text-lg font-semibold text-sidebar-foreground mb-6">Dienstplan PA</h2>
+            <img src={logoUrl} alt="AssistenzTreff" className="h-8 w-auto mb-6 self-start" />
             <nav className="flex flex-col gap-2 flex-1">
               <NavLinks />
             </nav>
@@ -101,7 +101,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Desktop sidebar */}
       <aside className="hidden md:flex flex-col w-64 border-r border-sidebar-border bg-sidebar p-6">
-        <h1 className="font-serif text-2xl font-semibold text-sidebar-foreground mb-8 px-2">Dienstplan PA</h1>
+        <img src={logoUrl} alt="AssistenzTreff" className="h-9 w-auto mb-8 px-2 self-start" />
         <nav className="flex flex-col gap-2 flex-1">
           <NavLinks />
         </nav>
