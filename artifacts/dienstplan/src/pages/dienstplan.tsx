@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { useListShifts, useListUsers, useListShiftModels } from "@workspace/api-client-react";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday } from "date-fns";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, getDay } from "date-fns";
 import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, List, CalendarDays } from "lucide-react";
 import { ShiftDialog } from "@/components/shift-dialog";
 import { useAuth } from "@/context/auth";
-import { colorBadgeClass } from "@/lib/shift-model-colors";
+import { colorBadgeClass, colorDotClass } from "@/lib/shift-model-colors";
 
 type Shift = {
   id: number;
@@ -59,6 +59,26 @@ function shiftBadgeClasses(shift: Shift, modelMap: Map<number, ShiftModelInfo>):
   return (
     SHIFT_TYPE_CLASSES[shift.type] ?? "bg-primary/10 text-primary border-primary/25 hover:bg-primary/20"
   );
+}
+
+const WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+
+const SHIFT_TYPE_DOTS: Record<string, string> = {
+  active: "bg-primary",
+  standby: "bg-amber-500",
+  night: "bg-blue-500",
+  full_day: "bg-purple-500",
+  vacation: "bg-yellow-400",
+  sick: "bg-slate-400",
+};
+
+function shiftDotClass(shift: Shift, modelMap: Map<number, ShiftModelInfo>): string {
+  if (shift.type === "work") {
+    const model = shift.shiftModelId ? modelMap.get(shift.shiftModelId) : undefined;
+    if (model) return colorDotClass(model.color);
+    return "bg-primary";
+  }
+  return SHIFT_TYPE_DOTS[shift.type] ?? "bg-primary";
 }
 
 type DialogState =
@@ -168,12 +188,137 @@ function AgendaView({
   );
 }
 
+function MonthGrid({
+  days,
+  monthStart,
+  shifts,
+  modelMap,
+  selectedDay,
+  onSelectDay,
+  onAddShift,
+  onShiftClick,
+  canEdit,
+}: {
+  days: Date[];
+  monthStart: Date;
+  shifts: Shift[];
+  modelMap: Map<number, ShiftModelInfo>;
+  selectedDay: Date;
+  onSelectDay: (day: Date) => void;
+  onAddShift: (day: Date) => void;
+  onShiftClick: (shift: Shift) => void;
+  canEdit: boolean;
+}) {
+  // Montag als erster Wochentag (date-fns: 0 = Sonntag).
+  const offset = (getDay(monthStart) + 6) % 7;
+  const blanks = Array.from({ length: offset });
+  const selectedShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), selectedDay));
+
+  return (
+    <div className="space-y-3">
+      {/* Monatsgitter mit hellblauem Rahmen, weißen Kästchen */}
+      <div className="rounded-2xl bg-sky-50 border border-sky-100 p-2">
+        <div className="grid grid-cols-7 gap-1 mb-1">
+          {WEEKDAY_LABELS.map((d) => (
+            <div key={d} className="text-center text-[11px] font-medium text-muted-foreground py-1">
+              {d}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {blanks.map((_, i) => (
+            <div key={`blank-${i}`} />
+          ))}
+          {days.map((day) => {
+            const dayShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), day));
+            const selected = isSameDay(day, selectedDay);
+            const today = isToday(day);
+            const dots = dayShifts.slice(0, 3);
+            return (
+              <button
+                key={day.toISOString()}
+                type="button"
+                onClick={() => onSelectDay(day)}
+                className={`aspect-square rounded-lg bg-card flex flex-col items-center justify-start pt-1.5 gap-1 border transition-colors ${
+                  selected
+                    ? "border-primary ring-1 ring-primary"
+                    : "border-transparent hover:bg-muted/40"
+                }`}
+              >
+                <span
+                  className={`text-xs leading-none flex items-center justify-center h-6 w-6 ${
+                    today
+                      ? "bg-primary text-primary-foreground rounded-full font-semibold"
+                      : "font-medium"
+                  }`}
+                >
+                  {format(day, "d")}
+                </span>
+                <span className="flex items-center gap-0.5 h-1.5">
+                  {dots.map((s) => (
+                    <span
+                      key={s.id}
+                      className={`h-1.5 w-1.5 rounded-full ${shiftDotClass(s, modelMap)}`}
+                    />
+                  ))}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Tagesdetails */}
+      <div className="rounded-lg border border-border/40 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-2.5 bg-muted/40">
+          <div>
+            <p className="text-sm font-semibold">
+              {format(selectedDay, "EEEE, d. MMMM", { locale: de })}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {selectedShifts.length === 0
+                ? "Keine Schichten"
+                : `${selectedShifts.length} ${selectedShifts.length === 1 ? "Schicht" : "Schichten"}`}
+            </p>
+          </div>
+          {canEdit && (
+            <Button size="sm" variant="outline" className="gap-1" onClick={() => onAddShift(selectedDay)}>
+              <Plus className="h-3.5 w-3.5" />
+              Schicht
+            </Button>
+          )}
+        </div>
+        <div className="bg-card px-3 py-2 space-y-1.5">
+          {selectedShifts.length > 0 ? (
+            selectedShifts.map((shift) => (
+              <ShiftBadge
+                key={shift.id}
+                shift={shift}
+                showName={canEdit}
+                modelMap={modelMap}
+                onClick={canEdit ? (e) => { e.stopPropagation(); onShiftClick(shift); } : undefined}
+              />
+            ))
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {canEdit ? "Keine Schichten — tippen zum Hinzufügen" : "Keine Schichten"}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dienstplan() {
   const { currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin";
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [dialog, setDialog] = useState<DialogState>({ mode: "closed" });
+  const [mobileView, setMobileView] = useState<"list" | "grid">("grid");
+  const [selectedAssistant, setSelectedAssistant] = useState<number | "all">("all");
+  const [selectedDay, setSelectedDay] = useState<Date>(() => new Date());
 
   const month = currentDate.getMonth() + 1;
   const year = currentDate.getFullYear();
@@ -181,8 +326,12 @@ export default function Dienstplan() {
   const { data: shifts, isLoading: shiftsLoading } = useListShifts({ month, year });
   const { data: users, isLoading: usersLoading } = useListUsers();
 
-  const prevMonth = () => setCurrentDate(new Date(year, month - 2, 1));
-  const nextMonth = () => setCurrentDate(new Date(year, month, 1));
+  const goToMonth = (newDate: Date) => {
+    setCurrentDate(newDate);
+    setSelectedDay(startOfMonth(newDate));
+  };
+  const prevMonth = () => goToMonth(new Date(year, month - 2, 1));
+  const nextMonth = () => goToMonth(new Date(year, month, 1));
 
   const start = startOfMonth(currentDate);
   const end = endOfMonth(currentDate);
@@ -200,6 +349,10 @@ export default function Dienstplan() {
   );
 
   const allShifts: Shift[] = shifts ?? [];
+  const visibleShifts: Shift[] =
+    selectedAssistant === "all"
+      ? allShifts
+      : allShifts.filter((s) => s.userId === selectedAssistant);
   const isLoading = shiftsLoading || (isAdmin && usersLoading);
 
   function openCreate(date: Date, userId?: number) {
@@ -253,16 +406,89 @@ export default function Dienstplan() {
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <Header />
 
-      {/* Mobile: Agenda-Ansicht */}
-      <div className="md:hidden">
-        <AgendaView
-          days={days}
-          shifts={allShifts}
-          modelMap={modelMap}
-          onDayClick={(day) => openCreate(day)}
-          onShiftClick={openEdit}
-          canEdit={isAdmin}
-        />
+      {/* Mobile: umschaltbare Ansicht (Liste / Monatsgitter) */}
+      <div className="md:hidden space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5">
+            <button
+              type="button"
+              onClick={() => setMobileView("list")}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                mobileView === "list"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground"
+              }`}
+            >
+              <List className="h-4 w-4" />
+              Liste
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileView("grid")}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                mobileView === "grid"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground"
+              }`}
+            >
+              <CalendarDays className="h-4 w-4" />
+              Monat
+            </button>
+          </div>
+        </div>
+
+        {isAdmin && assistants.length > 0 && (
+          <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
+            <button
+              type="button"
+              onClick={() => setSelectedAssistant("all")}
+              className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                selectedAssistant === "all"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-card text-muted-foreground border-border"
+              }`}
+            >
+              Alle
+            </button>
+            {assistants.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => setSelectedAssistant(a.id)}
+                className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                  selectedAssistant === a.id
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-card text-muted-foreground border-border"
+                }`}
+              >
+                {a.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {mobileView === "list" ? (
+          <AgendaView
+            days={days}
+            shifts={visibleShifts}
+            modelMap={modelMap}
+            onDayClick={(day) => openCreate(day)}
+            onShiftClick={openEdit}
+            canEdit={isAdmin}
+          />
+        ) : (
+          <MonthGrid
+            days={days}
+            monthStart={start}
+            shifts={visibleShifts}
+            modelMap={modelMap}
+            selectedDay={selectedDay}
+            onSelectDay={setSelectedDay}
+            onAddShift={(day) => openCreate(day)}
+            onShiftClick={openEdit}
+            canEdit={isAdmin}
+          />
+        )}
       </div>
 
       {/* Desktop: Tabellen-Ansicht */}
