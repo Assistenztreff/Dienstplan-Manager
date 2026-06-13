@@ -1,9 +1,11 @@
 import { Feather } from "@expo/vector-icons";
-import React, { useEffect, useRef, useState } from "react";
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
+import React, { useState } from "react";
 import {
   Modal,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -11,13 +13,6 @@ import {
 } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
-
-const ITEM_HEIGHT = 44;
-const VISIBLE_ITEMS = 5;
-const LIST_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
-
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
-const MINUTES = Array.from({ length: 60 }, (_, i) => i);
 
 function pad(n: number): string {
   return String(n).padStart(2, "0");
@@ -33,69 +28,15 @@ function parseTime(value: string): { hour: number; minute: number } {
   };
 }
 
-function WheelColumn({
-  values,
-  selected,
-  onSelect,
-  colors,
-}: {
-  values: number[];
-  selected: number;
-  onSelect: (value: number) => void;
-  colors: ReturnType<typeof useColors>;
-}) {
-  const ref = useRef<ScrollView>(null);
+function toDate(value: string): Date {
+  const { hour, minute } = parseTime(value);
+  const d = new Date();
+  d.setHours(hour, minute, 0, 0);
+  return d;
+}
 
-  useEffect(() => {
-    const idx = values.indexOf(selected);
-    if (idx >= 0) {
-      ref.current?.scrollTo({ y: idx * ITEM_HEIGHT, animated: false });
-    }
-  }, [selected, values]);
-
-  return (
-    <ScrollView
-      ref={ref}
-      style={{ height: LIST_HEIGHT }}
-      contentContainerStyle={{ paddingVertical: ITEM_HEIGHT * 2 }}
-      showsVerticalScrollIndicator={false}
-      snapToInterval={ITEM_HEIGHT}
-      decelerationRate="fast"
-      onMomentumScrollEnd={(e) => {
-        const idx = Math.round(e.nativeEvent.contentOffset.y / ITEM_HEIGHT);
-        const clamped = Math.min(values.length - 1, Math.max(0, idx));
-        const value = values[clamped];
-        if (value !== selected) onSelect(value);
-      }}
-    >
-      {values.map((value) => {
-        const isActive = value === selected;
-        return (
-          <TouchableOpacity
-            key={value}
-            style={styles.wheelItem}
-            activeOpacity={0.7}
-            onPress={() => onSelect(value)}
-          >
-            <Text
-              style={[
-                styles.wheelItemText,
-                {
-                  color: isActive ? colors.foreground : colors.mutedForeground,
-                  fontFamily: isActive
-                    ? "Inter_700Bold"
-                    : "Inter_400Regular",
-                  fontSize: isActive ? 24 : 20,
-                },
-              ]}
-            >
-              {pad(value)}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </ScrollView>
-  );
+function fromDate(d: Date): string {
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export function TimePickerField({
@@ -111,26 +52,60 @@ export function TimePickerField({
 }) {
   const colors = useColors();
   const [open, setOpen] = useState(false);
-  const [hour, setHour] = useState(0);
-  const [minute, setMinute] = useState(0);
+  const [tempDate, setTempDate] = useState<Date>(() => toDate(value));
+
+  const fieldLabel = (
+    <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
+      {label}
+    </Text>
+  );
+
+  // Web: natives HTML-Zeit-Eingabefeld (Browser-eigener Zeit-Picker).
+  if (Platform.OS === "web") {
+    return (
+      <View style={styles.fieldGroup}>
+        {fieldLabel}
+        <View
+          style={[
+            styles.field,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              borderRadius: colors.radius,
+            },
+          ]}
+        >
+          {React.createElement("input", {
+            type: "time",
+            value,
+            "data-testid": testID,
+            "aria-label": label,
+            onChange: (e: { target: { value: string } }) =>
+              onChange(e.target.value),
+            style: {
+              flex: 1,
+              border: "none",
+              outline: "none",
+              background: "transparent",
+              color: colors.foreground,
+              fontSize: 15,
+              fontFamily: "Inter_500Medium",
+            },
+          })}
+          <Feather name="clock" size={18} color={colors.mutedForeground} />
+        </View>
+      </View>
+    );
+  }
 
   const openPicker = () => {
-    const parsed = parseTime(value);
-    setHour(parsed.hour);
-    setMinute(parsed.minute);
+    setTempDate(toDate(value));
     setOpen(true);
   };
 
-  const confirm = () => {
-    onChange(`${pad(hour)}:${pad(minute)}`);
-    setOpen(false);
-  };
-
-  return (
+  const trigger = (
     <View style={styles.fieldGroup}>
-      <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
-        {label}
-      </Text>
+      {fieldLabel}
       <TouchableOpacity
         testID={testID}
         style={[
@@ -149,7 +124,36 @@ export function TimePickerField({
         </Text>
         <Feather name="clock" size={18} color={colors.mutedForeground} />
       </TouchableOpacity>
+    </View>
+  );
 
+  // Android: nativer Dialog-Picker (imperativ, eigene OK/Abbrechen-Buttons).
+  if (Platform.OS === "android") {
+    return (
+      <>
+        {trigger}
+        {open && (
+          <DateTimePicker
+            mode="time"
+            display="clock"
+            is24Hour
+            value={tempDate}
+            onChange={(event: DateTimePickerEvent, date?: Date) => {
+              setOpen(false);
+              if (event.type === "set" && date) {
+                onChange(fromDate(date));
+              }
+            }}
+          />
+        )}
+      </>
+    );
+  }
+
+  // iOS: nativer Spinner-Picker in einem Modal mit Fertig-Button.
+  return (
+    <>
+      {trigger}
       <Modal
         visible={open}
         transparent
@@ -165,10 +169,7 @@ export function TimePickerField({
             activeOpacity={1}
             style={[
               styles.sheet,
-              {
-                backgroundColor: colors.background,
-                borderRadius: colors.radius,
-              },
+              { backgroundColor: colors.background, borderRadius: colors.radius },
             ]}
           >
             <View
@@ -184,42 +185,32 @@ export function TimePickerField({
               <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
                 {label}
               </Text>
-              <TouchableOpacity onPress={confirm} testID="time-picker-confirm">
+              <TouchableOpacity
+                testID="time-picker-confirm"
+                onPress={() => {
+                  onChange(fromDate(tempDate));
+                  setOpen(false);
+                }}
+              >
                 <Text style={[styles.sheetAction, { color: colors.primary }]}>
                   Fertig
                 </Text>
               </TouchableOpacity>
             </View>
 
-            <View style={styles.wheelRow}>
-              <WheelColumn
-                values={HOURS}
-                selected={hour}
-                onSelect={setHour}
-                colors={colors}
-              />
-              <Text style={[styles.wheelSep, { color: colors.foreground }]}>
-                :
-              </Text>
-              <WheelColumn
-                values={MINUTES}
-                selected={minute}
-                onSelect={setMinute}
-                colors={colors}
-              />
-              {/* Auswahl-Markierung in der Mitte der Räder */}
-              <View
-                pointerEvents="none"
-                style={[
-                  styles.selectionBand,
-                  { borderColor: colors.border },
-                ]}
-              />
-            </View>
+            <DateTimePicker
+              mode="time"
+              display="spinner"
+              is24Hour
+              value={tempDate}
+              onChange={(_event: DateTimePickerEvent, date?: Date) => {
+                if (date) setTempDate(date);
+              }}
+            />
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
-    </View>
+    </>
   );
 }
 
@@ -273,35 +264,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Inter_600SemiBold",
     fontWeight: "600",
-  },
-  wheelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    gap: 8,
-  },
-  wheelItem: {
-    height: ITEM_HEIGHT,
-    width: 64,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  wheelItemText: {
-    textAlign: "center",
-  },
-  wheelSep: {
-    fontSize: 24,
-    fontFamily: "Inter_700Bold",
-    fontWeight: "700",
-  },
-  selectionBand: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    top: 12 + ITEM_HEIGHT * 2,
-    height: ITEM_HEIGHT,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
   },
 });
