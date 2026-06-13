@@ -91,7 +91,7 @@ function InviteDialog({ open, onClose, userId, userName }: InviteDialogProps) {
     setLoading(true);
     setError(null);
     try {
-      const data = await inviteUser.mutateAsync({ params: { id: userId } });
+      const data = await inviteUser.mutateAsync({ id: userId });
       setResult(data);
     } catch {
       setError("Einladungslink konnte nicht generiert werden.");
@@ -261,13 +261,13 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
 
       if (isEditing && editUser) {
         await updateUser.mutateAsync({
-          params: { id: editUser.id },
+          id: editUser.id,
           data: { name, email: form.email, phone: form.phone || null, address: form.address },
         });
 
         if (editContract) {
           await updateContract.mutateAsync({
-            params: { id: editContract.id },
+            id: editContract.id,
             data: {
               weeklyHours: Number(form.weeklyHours),
               vacationDays: Number(form.vacationDays),

@@ -168,7 +168,7 @@ export function ShiftDialog({
 
       if (isEditing && editShift) {
         await updateShift.mutateAsync({
-          params: { id: editShift.id },
+          id: editShift.id,
           data: {
             startTime: startIso,
             endTime: endIso,
@@ -204,7 +204,7 @@ export function ShiftDialog({
     }
     setSaving(true);
     try {
-      await deleteShift.mutateAsync({ params: { id: editShift.id } });
+      await deleteShift.mutateAsync({ id: editShift.id });
       await invalidate();
       onClose();
     } finally {
