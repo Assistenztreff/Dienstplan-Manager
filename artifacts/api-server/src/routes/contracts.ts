@@ -10,7 +10,7 @@ import {
   UpdateContractBody,
   DeleteContractParams,
 } from "@workspace/api-zod";
-import { requireAdmin } from "../middleware/auth";
+import { requireAdmin, requireAuth } from "../middleware/auth";
 
 const router = Router();
 
@@ -41,7 +41,7 @@ function toDateString(val: unknown): string {
   return String(val);
 }
 
-router.get("/contracts", requireAdmin, async (req, res): Promise<void> => {
+router.get("/contracts", requireAuth, async (req, res): Promise<void> => {
   const query = ListContractsQueryParams.safeParse({
     userId: req.query.userId ? Number(req.query.userId) : undefined,
   });
@@ -49,11 +49,15 @@ router.get("/contracts", requireAdmin, async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid query parameters" });
     return;
   }
+  // Nicht-Admins (Assistenten) dürfen ausschließlich ihren eigenen Vertrag
+  // lesen — der userId-Filter wird zwingend auf die eigene Session gesetzt.
+  const filterUserId =
+    req.session.role === "admin" ? query.data.userId : req.session.userId;
   const rows = await db
     .select(CONTRACT_SELECT)
     .from(contractsTable)
     .leftJoin(usersTable, eq(contractsTable.userId, usersTable.id))
-    .where(query.data.userId ? eq(contractsTable.userId, query.data.userId) : undefined);
+    .where(filterUserId ? eq(contractsTable.userId, filterUserId) : undefined);
   res.json(rows);
 });
 

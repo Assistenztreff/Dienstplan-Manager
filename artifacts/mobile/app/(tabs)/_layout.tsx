@@ -21,6 +21,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "clock", selected: "clock.fill" }} />
         <Label>Zeiterfassung</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="stundenstand">
+        <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
+        <Label>Stundenstand</Label>
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
@@ -86,6 +90,18 @@ function ClassicTabLayout() {
               <SymbolView name="clock" tintColor={color} size={24} />
             ) : (
               <Feather name="clock" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="stundenstand"
+        options={{
+          title: "Stundenstand",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="chart.bar" tintColor={color} size={24} />
+            ) : (
+              <Feather name="bar-chart-2" size={22} color={color} />
             ),
         }}
       />

@@ -2,3 +2,4 @@
 - [Orval query hooks enabled cast](orval-query-hooks-enabled.md) — generated query hooks require queryKey in full UseQueryOptions; pass `enabled` via dual cast (options + result), or data infers to `{}`.
 - [Time-tracking shift linkage](time-tracking-shift-link.md) — validate shift ownership (403) before the global shiftId dedupe (409) on POST /api/time-tracking
 - [Restart dev after codegen/db push](dev-restart-after-codegen.md) — running api-server keeps stale Zod/Drizzle schema; new fields silently stripped until workflow restart
+- [Contracts self-scoping](contracts-self-scoping.md) — GET /api/contracts is shared: admin sees all/by-param, assistant forced to own userId; relax admin endpoints over adding new ones.

@@ -24,6 +24,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useCurrentUser } from "@/context/UserContext";
+import { TimePickerField } from "@/components/TimePickerField";
 
 type TimeEntry = {
   id: number;
@@ -551,50 +552,18 @@ export default function ZeiterfassungScreen() {
             </View>
 
             <View style={styles.timeRow}>
-              <View style={[styles.fieldGroup, { flex: 1 }]}>
-                <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
-                  VON
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      backgroundColor: colors.card,
-                      borderColor: colors.border,
-                      borderRadius: colors.radius,
-                      color: colors.foreground,
-                    },
-                  ]}
-                  value={startTime}
-                  onChangeText={setStartTime}
-                  placeholder="HH:MM"
-                  placeholderTextColor={colors.mutedForeground}
-                  keyboardType="numbers-and-punctuation"
-                  maxLength={5}
-                />
-              </View>
-              <View style={[styles.fieldGroup, { flex: 1 }]}>
-                <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
-                  BIS
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      backgroundColor: colors.card,
-                      borderColor: colors.border,
-                      borderRadius: colors.radius,
-                      color: colors.foreground,
-                    },
-                  ]}
-                  value={endTime}
-                  onChangeText={setEndTime}
-                  placeholder="HH:MM"
-                  placeholderTextColor={colors.mutedForeground}
-                  keyboardType="numbers-and-punctuation"
-                  maxLength={5}
-                />
-              </View>
+              <TimePickerField
+                label="VON"
+                value={startTime}
+                onChange={setStartTime}
+                testID="time-picker-start"
+              />
+              <TimePickerField
+                label="BIS"
+                value={endTime}
+                onChange={setEndTime}
+                testID="time-picker-end"
+              />
             </View>
 
             <View style={styles.fieldGroup}>
