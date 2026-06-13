@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable, shiftsTable, timeTrackingTable, contractsTable } from "@workspace/db";
+import { usersTable, shiftsTable, timeTrackingTable, contractsTable, allowanceSettingsTable } from "@workspace/db";
 import { eq, and, sql, count, or, isNull } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middleware/auth";
 
@@ -250,6 +250,17 @@ router.get("/dashboard/hours-balance", requireAdmin, async (req, res): Promise<v
 
   const referenceDate = new Date(year, month - 1, 1);
 
+  // Aktuelle Zuschlags-Prozentsätze: werden erst hier (nicht beim Speichern der
+  // Schicht) angewandt, damit Änderungen rückwirkend greifen.
+  const [allowance] = await db
+    .select()
+    .from(allowanceSettingsTable)
+    .where(eq(allowanceSettingsTable.id, 1));
+  const nightPercent = allowance?.nightPercent ?? 25;
+  const sundayPercent = allowance?.sundayPercent ?? 50;
+  const holidayPercent = allowance?.holidayPercent ?? 100;
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+
   const result = await Promise.all(
     assistants.map(async (assistant) => {
       const shifts = await db
@@ -263,11 +274,20 @@ router.get("/dashboard/hours-balance", requireAdmin, async (req, res): Promise<v
           )
         );
 
-      const plannedHours = shifts
-        .filter(s => s.type !== "vacation" && s.type !== "sick")
-        .reduce((acc, s) => {
-          return acc + (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3_600_000;
-        }, 0);
+      const workShifts = shifts.filter(s => s.type !== "vacation" && s.type !== "sick");
+
+      const plannedHours = workShifts.reduce((acc, s) => {
+        return acc + (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3_600_000;
+      }, 0);
+
+      // Roh-Kennzahlen aus den Schichten summieren; Zuschläge erst danach anwenden.
+      const valuedHours = workShifts.reduce((acc, s) => acc + (s.valuedHours ?? 0), 0);
+      const nightHours = workShifts.reduce((acc, s) => acc + (s.nightHours ?? 0), 0);
+      const sundayHours = workShifts.reduce((acc, s) => acc + (s.sundayHours ?? 0), 0);
+      const holidayHours = workShifts.reduce((acc, s) => acc + (s.holidayHours ?? 0), 0);
+      const nightSurchargeHours = (nightHours * nightPercent) / 100;
+      const sundaySurchargeHours = (sundayHours * sundayPercent) / 100;
+      const holidaySurchargeHours = (holidayHours * holidayPercent) / 100;
 
       const timeEntriesWithShift = await db
         .select({
@@ -312,6 +332,16 @@ router.get("/dashboard/hours-balance", requireAdmin, async (req, res): Promise<v
         vacationDaysTaken: vacationDaysUsed,
         vacationDaysUsed,
         vacationDaysRemaining: vacationDays - vacationDaysUsed,
+        valuedHours: round2(valuedHours),
+        nightHours: round2(nightHours),
+        nightSurchargeHours: round2(nightSurchargeHours),
+        sundayHours: round2(sundayHours),
+        sundaySurchargeHours: round2(sundaySurchargeHours),
+        holidayHours: round2(holidayHours),
+        holidaySurchargeHours: round2(holidaySurchargeHours),
+        nightPercent,
+        sundayPercent,
+        holidayPercent,
       };
     })
   );

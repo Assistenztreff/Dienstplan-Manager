@@ -18,6 +18,10 @@ export interface Shift {
   shiftModelId?: number | null;
   /** @nullable */
   notes?: string | null;
+  valuedHours?: number;
+  nightHours?: number;
+  sundayHours?: number;
+  holidayHours?: number;
   createdAt: Date;
   user?: User;
 }

@@ -262,6 +262,10 @@ export const ListShiftsResponseItem = zod.object({
   "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work']),
   "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish(),
+  "valuedHours": zod.number().optional(),
+  "nightHours": zod.number().optional(),
+  "sundayHours": zod.number().optional(),
+  "holidayHours": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "user": zod.object({
   "id": zod.number(),
@@ -305,6 +309,10 @@ export const GetShiftResponse = zod.object({
   "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work']),
   "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish(),
+  "valuedHours": zod.number().optional(),
+  "nightHours": zod.number().optional(),
+  "sundayHours": zod.number().optional(),
+  "holidayHours": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "user": zod.object({
   "id": zod.number(),
@@ -342,6 +350,10 @@ export const UpdateShiftResponse = zod.object({
   "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work']),
   "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish(),
+  "valuedHours": zod.number().optional(),
+  "nightHours": zod.number().optional(),
+  "sundayHours": zod.number().optional(),
+  "holidayHours": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "user": zod.object({
   "id": zod.number(),
@@ -708,6 +720,10 @@ export const GetDashboardSummaryResponse = zod.object({
   "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work']),
   "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish(),
+  "valuedHours": zod.number().optional(),
+  "nightHours": zod.number().optional(),
+  "sundayHours": zod.number().optional(),
+  "holidayHours": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "user": zod.object({
   "id": zod.number(),
@@ -764,7 +780,17 @@ export const GetHoursBalanceResponseItem = zod.object({
   "sickHours": zod.number(),
   "vacationDaysTaken": zod.number(),
   "vacationDaysUsed": zod.number(),
-  "vacationDaysRemaining": zod.number()
+  "vacationDaysRemaining": zod.number(),
+  "valuedHours": zod.number(),
+  "nightHours": zod.number(),
+  "nightSurchargeHours": zod.number(),
+  "sundayHours": zod.number(),
+  "sundaySurchargeHours": zod.number(),
+  "holidayHours": zod.number(),
+  "holidaySurchargeHours": zod.number(),
+  "nightPercent": zod.number(),
+  "sundayPercent": zod.number(),
+  "holidayPercent": zod.number()
 })
 export const GetHoursBalanceResponse = zod.array(GetHoursBalanceResponseItem)
 

@@ -885,6 +885,14 @@ components:
           type: ["integer", "null"]
         notes:
           type: ["string", "null"]
+        valuedHours:
+          type: number
+        nightHours:
+          type: number
+        sundayHours:
+          type: number
+        holidayHours:
+          type: number
         createdAt:
           type: string
           format: date-time
@@ -1151,7 +1159,7 @@ components:
 
     HoursBalance:
       type: object
-      required: [userId, userName, plannedHours, actualHours, balance, workedHours, sickHours, vacationDaysTaken, vacationDaysUsed, vacationDaysRemaining]
+      required: [userId, userName, plannedHours, actualHours, balance, workedHours, sickHours, vacationDaysTaken, vacationDaysUsed, vacationDaysRemaining, valuedHours, nightHours, nightSurchargeHours, sundayHours, sundaySurchargeHours, holidayHours, holidaySurchargeHours, nightPercent, sundayPercent, holidayPercent]
       properties:
         userId:
           type: integer
@@ -1172,6 +1180,26 @@ components:
         vacationDaysUsed:
           type: integer
         vacationDaysRemaining:
+          type: integer
+        valuedHours:
+          type: number
+        nightHours:
+          type: number
+        nightSurchargeHours:
+          type: number
+        sundayHours:
+          type: number
+        sundaySurchargeHours:
+          type: number
+        holidayHours:
+          type: number
+        holidaySurchargeHours:
+          type: number
+        nightPercent:
+          type: integer
+        sundayPercent:
+          type: integer
+        holidayPercent:
           type: integer
 
     VacationBalance:

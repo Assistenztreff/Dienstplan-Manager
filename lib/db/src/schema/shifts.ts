@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, real, text, timestamp, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -15,6 +15,11 @@ export const shiftsTable = pgTable("shifts", {
   type: shiftTypeEnum("type").notNull().default("active"),
   shiftModelId: integer("shift_model_id").references(() => shiftModelsTable.id, { onDelete: "set null" }),
   notes: text("notes"),
+  // Berechnete Roh-Kennzahlen (beim Speichern ermittelt, Zuschlags-% erst bei Auswertung).
+  valuedHours: real("valued_hours").notNull().default(0),
+  nightHours: real("night_hours").notNull().default(0),
+  sundayHours: real("sunday_hours").notNull().default(0),
+  holidayHours: real("holiday_hours").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

@@ -67,6 +67,19 @@ async function exportPdf(
         "Urlaubstage (verbleibend)",
         `${balance.vacationDaysRemaining} Tage`,
       ],
+      ["Bewertete Stunden", `${balance.valuedHours} h`],
+      [
+        `Nachtstunden (Zuschlag ${balance.nightPercent}%)`,
+        `${balance.nightHours} h (+${balance.nightSurchargeHours} h)`,
+      ],
+      [
+        `Sonntagsstunden (Zuschlag ${balance.sundayPercent}%)`,
+        `${balance.sundayHours} h (+${balance.sundaySurchargeHours} h)`,
+      ],
+      [
+        `Feiertagsstunden (Zuschlag ${balance.holidayPercent}%)`,
+        `${balance.holidayHours} h (+${balance.holidaySurchargeHours} h)`,
+      ],
     ];
 
     autoTable(doc, {
@@ -253,6 +266,44 @@ export default function Auswertungen() {
                       <div className="flex items-center justify-between text-sm py-2.5 px-3 bg-slate-50 rounded-lg border border-slate-200">
                         <span className="text-slate-600">Krankheitsstunden (Lohnfortzahlung)</span>
                         <span className="font-semibold text-slate-700">{balance.sickHours} h</span>
+                      </div>
+
+                      {/* Bewertete Stunden & Zuschläge */}
+                      <div className="rounded-lg border border-border/60 bg-muted/30 p-3 space-y-2">
+                        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Bewertete Stunden & Zuschläge
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Bewertete Stunden</span>
+                          <span className="font-semibold">{balance.valuedHours} h</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">
+                            Nacht ({balance.nightPercent}%)
+                          </span>
+                          <span className="font-medium">
+                            {balance.nightHours} h
+                            <span className="text-primary"> (+{balance.nightSurchargeHours} h)</span>
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">
+                            Sonntag ({balance.sundayPercent}%)
+                          </span>
+                          <span className="font-medium">
+                            {balance.sundayHours} h
+                            <span className="text-primary"> (+{balance.sundaySurchargeHours} h)</span>
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">
+                            Feiertag ({balance.holidayPercent}%)
+                          </span>
+                          <span className="font-medium">
+                            {balance.holidayHours} h
+                            <span className="text-primary"> (+{balance.holidaySurchargeHours} h)</span>
+                          </span>
+                        </div>
                       </div>
                     </div>
 

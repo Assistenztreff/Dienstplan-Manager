@@ -1,2 +1,2 @@
-- [Drizzle push needs TTY](drizzle-push-tty.md) — drizzle-kit push/push-force hang on TTY prompts in this env; apply additive schema via SQL DDL instead.
-- [Singleton settings table](singleton-settings-table.md) — global single-row config needs CHECK(id=1) + onConflictDoNothing upsert; hydrate forms once (useRef guard) to avoid clobbering edits.
+- [Running one-off scripts that import workspace TS packages](workspace-oneoff-scripts.md) — sandbox/node can't resolve @workspace/* from repo root; bundle with esbuild from the consuming artifact and run the .mjs.
+- [Shift metrics architecture](shift-metrics-architecture.md) — store RAW per-shift hours; apply surcharge % only at evaluation so rate changes are retroactive.

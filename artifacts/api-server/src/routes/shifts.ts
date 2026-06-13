@@ -1,6 +1,15 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { shiftsTable, usersTable, contractsTable, timeTrackingTable } from "@workspace/db";
+import {
+  shiftsTable,
+  usersTable,
+  contractsTable,
+  timeTrackingTable,
+  shiftModelsTable,
+  allowanceSettingsTable,
+  computeShiftMetrics,
+  type NightWindow,
+} from "@workspace/db";
 import { eq, and, sql, or, isNull } from "drizzle-orm";
 import {
   ListShiftsQueryParams,
@@ -22,6 +31,10 @@ const SHIFT_SELECT = {
   type: shiftsTable.type,
   shiftModelId: shiftsTable.shiftModelId,
   notes: shiftsTable.notes,
+  valuedHours: shiftsTable.valuedHours,
+  nightHours: shiftsTable.nightHours,
+  sundayHours: shiftsTable.sundayHours,
+  holidayHours: shiftsTable.holidayHours,
   createdAt: shiftsTable.createdAt,
   user: {
     id: usersTable.id,
@@ -121,6 +134,52 @@ async function adjustVacationDaysUsed(userId: number, date: Date, delta: number)
   await applyVacationDelta(contract, delta);
 }
 
+// Zeitwertung in Prozent: aus dem Schichtmodell (type "work"), sonst 100 (Legacy ohne Modell).
+async function valuationPercentFor(type: string, shiftModelId: number | null): Promise<number> {
+  if (type === "work" && shiftModelId) {
+    const [model] = await db
+      .select({ valuationPercent: shiftModelsTable.valuationPercent })
+      .from(shiftModelsTable)
+      .where(eq(shiftModelsTable.id, shiftModelId));
+    return model?.valuationPercent ?? 100;
+  }
+  return 100;
+}
+
+// Aktuelles Nachtfenster aus den Zuschlags-Einstellungen (Fallback 23:00–06:00).
+async function nightWindow(): Promise<NightWindow> {
+  const [settings] = await db
+    .select()
+    .from(allowanceSettingsTable)
+    .where(eq(allowanceSettingsTable.id, 1));
+  return {
+    nightStart: settings?.nightStart ?? "23:00",
+    nightEnd: settings?.nightEnd ?? "06:00",
+  };
+}
+
+// Ermittelt die Roh-Kennzahlen einer Schicht und speichert sie an der Schicht.
+async function storeShiftMetrics(shift: {
+  id: number;
+  type: string;
+  shiftModelId: number | null;
+  startTime: Date;
+  endTime: Date;
+}): Promise<void> {
+  const valuationPercent = await valuationPercentFor(shift.type, shift.shiftModelId);
+  const window = await nightWindow();
+  const metrics = computeShiftMetrics(
+    {
+      startTime: new Date(shift.startTime),
+      endTime: new Date(shift.endTime),
+      isAbsence: isAbsenceType(shift.type),
+      valuationPercent,
+    },
+    window
+  );
+  await db.update(shiftsTable).set(metrics).where(eq(shiftsTable.id, shift.id));
+}
+
 router.get("/shifts", requireAuth, async (req, res): Promise<void> => {
   const query = ListShiftsQueryParams.safeParse({
     userId: req.query.userId ? Number(req.query.userId) : undefined,
@@ -159,6 +218,8 @@ router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
     return;
   }
   const [shift] = await db.insert(shiftsTable).values(body.data).returning();
+
+  await storeShiftMetrics(shift);
 
   if (isAbsenceType(shift.type)) {
     await bookAbsenceTimeTracking(shift);
@@ -255,6 +316,9 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
     if (oldVacationContract) await applyVacationDelta(oldVacationContract, -1);
     if (newVacationContract) await applyVacationDelta(newVacationContract, 1);
   }
+
+  // Kennzahlen nach der Änderung (Zeiten/Typ/Modell) neu berechnen und speichern.
+  await storeShiftMetrics(updated);
 
   const [withUser] = await db
     .select(SHIFT_SELECT)

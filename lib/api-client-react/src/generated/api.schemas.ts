@@ -121,6 +121,10 @@ export interface Shift {
   shiftModelId?: number | null;
   /** @nullable */
   notes?: string | null;
+  valuedHours?: number;
+  nightHours?: number;
+  sundayHours?: number;
+  holidayHours?: number;
   createdAt: string;
   user?: User;
 }
@@ -321,6 +325,16 @@ export interface HoursBalance {
   vacationDaysTaken: number;
   vacationDaysUsed: number;
   vacationDaysRemaining: number;
+  valuedHours: number;
+  nightHours: number;
+  nightSurchargeHours: number;
+  sundayHours: number;
+  sundaySurchargeHours: number;
+  holidayHours: number;
+  holidaySurchargeHours: number;
+  nightPercent: number;
+  sundayPercent: number;
+  holidayPercent: number;
 }
 
 export interface VacationBalance {
