@@ -5,6 +5,7 @@
  * Dienstplan-App API für Persönliche Assistenz
  * OpenAPI spec version: 0.1.0
  */
+import type { AllowanceSettingsInputState } from './allowanceSettingsInputState';
 
 export interface AllowanceSettingsInput {
   /**
@@ -26,4 +27,6 @@ export interface AllowanceSettingsInput {
      * @maximum 100
      */
   holidayPercent: number;
+  /** @nullable */
+  state?: AllowanceSettingsInputState;
 }

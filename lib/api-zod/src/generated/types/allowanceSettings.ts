@@ -5,6 +5,7 @@
  * Dienstplan-App API für Persönliche Assistenz
  * OpenAPI spec version: 0.1.0
  */
+import type { AllowanceSettingsState } from './allowanceSettingsState';
 
 export interface AllowanceSettings {
   id: number;
@@ -13,5 +14,7 @@ export interface AllowanceSettings {
   nightEnd: string;
   sundayPercent: number;
   holidayPercent: number;
+  /** @nullable */
+  state?: AllowanceSettingsState;
   updatedAt: Date;
 }

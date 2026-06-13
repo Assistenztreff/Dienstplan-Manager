@@ -1050,6 +1050,9 @@ components:
           type: integer
         holidayPercent:
           type: integer
+        state:
+          type: ["string", "null"]
+          enum: [BW, BY, BE, BB, HB, HH, HE, MV, NI, NW, RP, SL, SN, ST, SH, TH, null]
         updatedAt:
           type: string
           format: date-time
@@ -1076,6 +1079,9 @@ components:
           type: integer
           minimum: 0
           maximum: 100
+        state:
+          type: ["string", "null"]
+          enum: [BW, BY, BE, BB, HB, HH, HE, MV, NI, NW, RP, SL, SN, ST, SH, TH, null]
 
     TimeEntry:
       type: object

@@ -527,6 +527,7 @@ export const GetAllowanceSettingsResponse = zod.object({
   "nightEnd": zod.string(),
   "sundayPercent": zod.number(),
   "holidayPercent": zod.number(),
+  "state": zod.union([zod.literal('BW'),zod.literal('BY'),zod.literal('BE'),zod.literal('BB'),zod.literal('HB'),zod.literal('HH'),zod.literal('HE'),zod.literal('MV'),zod.literal('NI'),zod.literal('NW'),zod.literal('RP'),zod.literal('SL'),zod.literal('SN'),zod.literal('ST'),zod.literal('SH'),zod.literal('TH'),zod.literal(null)]).nullish(),
   "updatedAt": zod.coerce.date()
 })
 
@@ -552,7 +553,8 @@ export const UpdateAllowanceSettingsBody = zod.object({
   "nightStart": zod.string().regex(updateAllowanceSettingsBodyNightStartRegExp),
   "nightEnd": zod.string().regex(updateAllowanceSettingsBodyNightEndRegExp),
   "sundayPercent": zod.number().min(updateAllowanceSettingsBodySundayPercentMin).max(updateAllowanceSettingsBodySundayPercentMax),
-  "holidayPercent": zod.number().min(updateAllowanceSettingsBodyHolidayPercentMin).max(updateAllowanceSettingsBodyHolidayPercentMax)
+  "holidayPercent": zod.number().min(updateAllowanceSettingsBodyHolidayPercentMin).max(updateAllowanceSettingsBodyHolidayPercentMax),
+  "state": zod.union([zod.literal('BW'),zod.literal('BY'),zod.literal('BE'),zod.literal('BB'),zod.literal('HB'),zod.literal('HH'),zod.literal('HE'),zod.literal('MV'),zod.literal('NI'),zod.literal('NW'),zod.literal('RP'),zod.literal('SL'),zod.literal('SN'),zod.literal('ST'),zod.literal('SH'),zod.literal('TH'),zod.literal(null)]).nullish()
 })
 
 export const UpdateAllowanceSettingsResponse = zod.object({
@@ -562,6 +564,7 @@ export const UpdateAllowanceSettingsResponse = zod.object({
   "nightEnd": zod.string(),
   "sundayPercent": zod.number(),
   "holidayPercent": zod.number(),
+  "state": zod.union([zod.literal('BW'),zod.literal('BY'),zod.literal('BE'),zod.literal('BB'),zod.literal('HB'),zod.literal('HH'),zod.literal('HE'),zod.literal('MV'),zod.literal('NI'),zod.literal('NW'),zod.literal('RP'),zod.literal('SL'),zod.literal('SN'),zod.literal('ST'),zod.literal('SH'),zod.literal('TH'),zod.literal(null)]).nullish(),
   "updatedAt": zod.coerce.date()
 })
 

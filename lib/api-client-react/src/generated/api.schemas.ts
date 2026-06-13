@@ -235,6 +235,31 @@ export interface ShiftModelUpdate {
   isActive?: boolean;
 }
 
+/**
+ * @nullable
+ */
+export type AllowanceSettingsState = typeof AllowanceSettingsState[keyof typeof AllowanceSettingsState] | null;
+
+
+export const AllowanceSettingsState = {
+  BW: 'BW',
+  BY: 'BY',
+  BE: 'BE',
+  BB: 'BB',
+  HB: 'HB',
+  HH: 'HH',
+  HE: 'HE',
+  MV: 'MV',
+  NI: 'NI',
+  NW: 'NW',
+  RP: 'RP',
+  SL: 'SL',
+  SN: 'SN',
+  ST: 'ST',
+  SH: 'SH',
+  TH: 'TH',
+} as const;
+
 export interface AllowanceSettings {
   id: number;
   nightPercent: number;
@@ -242,8 +267,35 @@ export interface AllowanceSettings {
   nightEnd: string;
   sundayPercent: number;
   holidayPercent: number;
+  /** @nullable */
+  state?: AllowanceSettingsState;
   updatedAt: string;
 }
+
+/**
+ * @nullable
+ */
+export type AllowanceSettingsInputState = typeof AllowanceSettingsInputState[keyof typeof AllowanceSettingsInputState] | null;
+
+
+export const AllowanceSettingsInputState = {
+  BW: 'BW',
+  BY: 'BY',
+  BE: 'BE',
+  BB: 'BB',
+  HB: 'HB',
+  HH: 'HH',
+  HE: 'HE',
+  MV: 'MV',
+  NI: 'NI',
+  NW: 'NW',
+  RP: 'RP',
+  SL: 'SL',
+  SN: 'SN',
+  ST: 'ST',
+  SH: 'SH',
+  TH: 'TH',
+} as const;
 
 export interface AllowanceSettingsInput {
   /**
@@ -265,6 +317,8 @@ export interface AllowanceSettingsInput {
      * @maximum 100
      */
   holidayPercent: number;
+  /** @nullable */
+  state?: AllowanceSettingsInputState;
 }
 
 export type TimeEntryStatus = typeof TimeEntryStatus[keyof typeof TimeEntryStatus];

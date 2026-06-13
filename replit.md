@@ -48,6 +48,7 @@ Kernfunktionen (Task 1 — Grundstruktur):
 - **Dienstplan-Kalender**: Monatsansicht, Schichttypen: Aktiv, Bereitschaft, Nacht, 24h
 - **Zeiterfassung**: Ist-Zeiten eintragen, Status (offen / bestätigt / abgelehnt)
 - **Auswertungen**: Soll/Ist-Abgleich pro Assistent und Monat
+- **Regionale Feiertage**: In den Einstellungen wählbares Bundesland; die Feiertagsberechnung berücksichtigt dann landesspezifische gesetzliche Feiertage (inkl. beweglicher wie Fronleichnam). Ohne Bundesland gelten nur bundesweite Feiertage. Bundesland-genaue Näherung, keine rückwirkende Neuberechnung bestehender Schichten.
 
 ## User preferences
 

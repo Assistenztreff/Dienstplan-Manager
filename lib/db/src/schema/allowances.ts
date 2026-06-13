@@ -12,6 +12,7 @@ export const allowanceSettingsTable = pgTable(
     nightEnd: text("night_end").notNull().default("06:00"),
     sundayPercent: integer("sunday_percent").notNull().default(50),
     holidayPercent: integer("holiday_percent").notNull().default(100),
+    state: text("state"),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [check("allowance_settings_singleton", sql`${t.id} = 1`)]

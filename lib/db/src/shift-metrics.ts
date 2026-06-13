@@ -72,12 +72,121 @@ function addDays(d: Date, days: number): Date {
   return new Date(d.getTime() + days * DAY_MS);
 }
 
-const holidayCache = new Map<number, Set<string>>();
+// Die 16 Bundesländer als ISO-3166-2-Kürzel (ohne "DE-"-Präfix).
+export type GermanState =
+  | "BW"
+  | "BY"
+  | "BE"
+  | "BB"
+  | "HB"
+  | "HH"
+  | "HE"
+  | "MV"
+  | "NI"
+  | "NW"
+  | "RP"
+  | "SL"
+  | "SN"
+  | "ST"
+  | "SH"
+  | "TH";
 
-// Bundesweite gesetzliche Feiertage (inkl. beweglicher, Oster-abhängiger) als
-// Menge von "YYYY-MM-DD" (UTC). Bundesland-spezifische Feiertage sind außen vor.
-export function germanHolidays(year: number): Set<string> {
-  const cached = holidayCache.get(year);
+export const GERMAN_STATES: GermanState[] = [
+  "BW", "BY", "BE", "BB", "HB", "HH", "HE", "MV",
+  "NI", "NW", "RP", "SL", "SN", "ST", "SH", "TH",
+];
+
+function isGermanState(value: string | null | undefined): value is GermanState {
+  return value != null && (GERMAN_STATES as string[]).includes(value);
+}
+
+// Buß- und Bettag: der Mittwoch vor dem 23. November (liegt im Bereich 16.–22.11.).
+function bussUndBettag(year: number): Date {
+  let d = new Date(Date.UTC(year, 10, 22));
+  while (d.getUTCDay() !== 3) d = addDays(d, -1);
+  return d;
+}
+
+// Namen der landesspezifischen Feiertage, die je Bundesland zusätzlich gelten.
+type RegionalHolidayKey =
+  | "heiligeDreiKoenige"
+  | "frauentag"
+  | "ostersonntag"
+  | "fronleichnam"
+  | "pfingstsonntag"
+  | "mariaeHimmelfahrt"
+  | "weltkindertag"
+  | "reformationstag"
+  | "allerheiligen"
+  | "bussUndBettag";
+
+function regionalHolidayDate(key: RegionalHolidayKey, year: number, easter: Date): Date {
+  switch (key) {
+    case "heiligeDreiKoenige":
+      return new Date(Date.UTC(year, 0, 6));
+    case "frauentag":
+      return new Date(Date.UTC(year, 2, 8));
+    case "ostersonntag":
+      return easter;
+    case "fronleichnam":
+      return addDays(easter, 60);
+    case "pfingstsonntag":
+      return addDays(easter, 49);
+    case "mariaeHimmelfahrt":
+      return new Date(Date.UTC(year, 7, 15));
+    case "weltkindertag":
+      return new Date(Date.UTC(year, 8, 20));
+    case "reformationstag":
+      return new Date(Date.UTC(year, 9, 31));
+    case "allerheiligen":
+      return new Date(Date.UTC(year, 10, 1));
+    case "bussUndBettag":
+      return bussUndBettag(year);
+  }
+}
+
+// Zuordnung Bundesland -> zusätzliche gesetzliche Feiertage (über die bundesweiten
+// hinaus). Quelle: gesetzliche Feiertage der Länder.
+//
+// Bundesland-genaue Näherung: Feiertage werden landesweit angesetzt. Feiertage,
+// die rechtlich nur in einzelnen Gemeinden gelten, werden auf Landesebene
+// angenähert: Mariä Himmelfahrt (15.08.) gilt in Bayern nur in überwiegend
+// katholischen Gemeinden, wird hier aber landesweit gewertet (im Saarland ist es
+// ohnehin landesweiter Feiertag). Eine gemeindegenaue Behandlung ist nicht im
+// Umfang dieser Funktion.
+//
+// Ostersonntag/Pfingstsonntag sind nur in Brandenburg gesetzliche Feiertage. Sie
+// fallen stets auf einen Sonntag; da Feiertag Vorrang vor Sonntag hat, sind sie
+// hier explizit gelistet, damit in Brandenburg der Feiertags- statt des
+// Sonntagszuschlags greift.
+const STATE_HOLIDAYS: Record<GermanState, RegionalHolidayKey[]> = {
+  BW: ["heiligeDreiKoenige", "fronleichnam", "allerheiligen"],
+  BY: ["heiligeDreiKoenige", "fronleichnam", "mariaeHimmelfahrt", "allerheiligen"],
+  BE: ["frauentag"],
+  BB: ["ostersonntag", "pfingstsonntag", "reformationstag"],
+  HB: ["reformationstag"],
+  HH: ["reformationstag"],
+  HE: ["fronleichnam"],
+  MV: ["frauentag", "reformationstag"],
+  NI: ["reformationstag"],
+  NW: ["fronleichnam", "allerheiligen"],
+  RP: ["fronleichnam", "allerheiligen"],
+  SL: ["fronleichnam", "mariaeHimmelfahrt", "allerheiligen"],
+  SN: ["reformationstag", "bussUndBettag"],
+  ST: ["heiligeDreiKoenige", "reformationstag"],
+  SH: ["reformationstag"],
+  TH: ["weltkindertag", "reformationstag"],
+};
+
+// Cache pro "year:state" (state "" = nur bundesweit).
+const holidayCache = new Map<string, Set<string>>();
+
+// Gesetzliche Feiertage als Menge von "YYYY-MM-DD" (UTC). Ohne Bundesland werden
+// nur die bundesweiten Feiertage berücksichtigt; mit Bundesland zusätzlich dessen
+// landesspezifische (inkl. beweglicher wie Fronleichnam, Buß- und Bettag).
+export function germanHolidays(year: number, state?: GermanState | null): Set<string> {
+  const key = `${year}:${state ?? ""}`;
+  const cached = holidayCache.get(key);
   if (cached) return cached;
 
   const set = new Set<string>();
@@ -96,12 +205,18 @@ export function germanHolidays(year: number): Set<string> {
   set.add(ymdUTC(addDays(easter, 39))); // Christi Himmelfahrt
   set.add(ymdUTC(addDays(easter, 50))); // Pfingstmontag
 
-  holidayCache.set(year, set);
+  if (isGermanState(state)) {
+    for (const hk of STATE_HOLIDAYS[state]) {
+      set.add(ymdUTC(regionalHolidayDate(hk, year, easter)));
+    }
+  }
+
+  holidayCache.set(key, set);
   return set;
 }
 
-export function isGermanHoliday(date: Date): boolean {
-  return germanHolidays(date.getUTCFullYear()).has(ymdUTC(date));
+export function isGermanHoliday(date: Date, state?: GermanState | null): boolean {
+  return germanHolidays(date.getUTCFullYear(), state).has(ymdUTC(date));
 }
 
 function overlapMs(aStart: number, aEnd: number, bStart: number, bEnd: number): number {
@@ -138,7 +253,8 @@ export function computeNightHours(
 // ein Feiertag, der auf einen Sonntag fällt, keinen doppelten Zuschlag auslöst.
 export function computeDayCategoryHours(
   start: Date,
-  end: Date
+  end: Date,
+  state?: GermanState | null
 ): { sundayHours: number; holidayHours: number } {
   const e = end.getTime();
   let cursor = start.getTime();
@@ -151,14 +267,18 @@ export function computeDayCategoryHours(
     const nextMidnight = Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth(), cur.getUTCDate() + 1);
     const segEnd = Math.min(e, nextMidnight);
     const segMs = segEnd - cursor;
-    if (isGermanHoliday(cur)) holidayMs += segMs;
+    if (isGermanHoliday(cur, state)) holidayMs += segMs;
     else if (cur.getUTCDay() === 0) sundayMs += segMs;
     cursor = segEnd;
   }
   return { sundayHours: round2(sundayMs / HOUR_MS), holidayHours: round2(holidayMs / HOUR_MS) };
 }
 
-export function computeShiftMetrics(input: ShiftMetricsInput, window: NightWindow): ShiftMetrics {
+export function computeShiftMetrics(
+  input: ShiftMetricsInput,
+  window: NightWindow,
+  state?: GermanState | null
+): ShiftMetrics {
   // Abwesenheiten (Urlaub/Krank) lösen keine Bewertung/Zuschläge aus.
   if (input.isAbsence) {
     return { valuedHours: 0, nightHours: 0, sundayHours: 0, holidayHours: 0 };
@@ -172,6 +292,10 @@ export function computeShiftMetrics(input: ShiftMetricsInput, window: NightWindo
     window.nightStart,
     window.nightEnd
   );
-  const { sundayHours, holidayHours } = computeDayCategoryHours(input.startTime, input.endTime);
+  const { sundayHours, holidayHours } = computeDayCategoryHours(
+    input.startTime,
+    input.endTime,
+    state
+  );
   return { valuedHours, nightHours, sundayHours, holidayHours };
 }

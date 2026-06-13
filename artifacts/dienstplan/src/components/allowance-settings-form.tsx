@@ -3,6 +3,7 @@ import {
   useGetAllowanceSettings,
   useUpdateAllowanceSettings,
   getGetAllowanceSettingsQueryKey,
+  type AllowanceSettingsInputState,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type FormState = {
   nightPercent: string;
@@ -17,9 +19,32 @@ type FormState = {
   nightEnd: string;
   sundayPercent: string;
   holidayPercent: string;
+  state: string;
 };
 
 const TIME_PATTERN = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+
+// "" steht für "kein Bundesland" (nur bundesweite Feiertage).
+const NO_STATE = "none";
+
+const GERMAN_STATE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "BW", label: "Baden-Württemberg" },
+  { value: "BY", label: "Bayern" },
+  { value: "BE", label: "Berlin" },
+  { value: "BB", label: "Brandenburg" },
+  { value: "HB", label: "Bremen" },
+  { value: "HH", label: "Hamburg" },
+  { value: "HE", label: "Hessen" },
+  { value: "MV", label: "Mecklenburg-Vorpommern" },
+  { value: "NI", label: "Niedersachsen" },
+  { value: "NW", label: "Nordrhein-Westfalen" },
+  { value: "RP", label: "Rheinland-Pfalz" },
+  { value: "SL", label: "Saarland" },
+  { value: "SN", label: "Sachsen" },
+  { value: "ST", label: "Sachsen-Anhalt" },
+  { value: "SH", label: "Schleswig-Holstein" },
+  { value: "TH", label: "Thüringen" },
+];
 
 function PercentField({
   id,
@@ -70,6 +95,7 @@ export function AllowanceSettingsForm() {
     nightEnd: "06:00",
     sundayPercent: "50",
     holidayPercent: "100",
+    state: NO_STATE,
   });
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [saving, setSaving] = useState(false);
@@ -87,6 +113,7 @@ export function AllowanceSettingsForm() {
         nightEnd: settings.nightEnd,
         sundayPercent: String(settings.sundayPercent),
         holidayPercent: String(settings.holidayPercent),
+        state: settings.state ?? NO_STATE,
       });
     }
   }, [settings]);
@@ -127,6 +154,7 @@ export function AllowanceSettingsForm() {
           nightEnd: form.nightEnd,
           sundayPercent: Number(form.sundayPercent),
           holidayPercent: Number(form.holidayPercent),
+          state: (form.state === NO_STATE ? null : form.state) as AllowanceSettingsInputState,
         },
       });
       await queryClient.invalidateQueries({ queryKey: getGetAllowanceSettingsQueryKey() });
@@ -205,6 +233,28 @@ export function AllowanceSettingsForm() {
                 error={errors.holidayPercent}
                 onChange={(v) => set("holidayPercent", v)}
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="state">Bundesland</Label>
+              <Select value={form.state} onValueChange={(v) => set("state", v)}>
+                <SelectTrigger id="state">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_STATE}>Kein Bundesland (nur bundesweit)</SelectItem>
+                  {GERMAN_STATE_OPTIONS.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>
+                      {s.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Bestimmt, welche regionalen gesetzlichen Feiertage (z.B. Fronleichnam) für den
+                Feiertagszuschlag berücksichtigt werden. Ohne Auswahl gelten nur die bundesweiten
+                Feiertage. Die Änderung wirkt sich auf neu gespeicherte Schichten aus.
+              </p>
             </div>
 
             <div className="flex items-center gap-3 pt-1">

@@ -8,6 +8,8 @@
 
 export * from './allowanceSettings';
 export * from './allowanceSettingsInput';
+export * from './allowanceSettingsInputState';
+export * from './allowanceSettingsState';
 export * from './authUser';
 export * from './authUserRole';
 export * from './contract';

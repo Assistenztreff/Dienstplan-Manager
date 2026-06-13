@@ -9,6 +9,7 @@ import {
   allowanceSettingsTable,
   computeShiftMetrics,
   type NightWindow,
+  type GermanState,
 } from "@workspace/db";
 import { eq, and, sql, or, isNull, ne, notInArray, lt, gt } from "drizzle-orm";
 import {
@@ -146,15 +147,19 @@ async function valuationPercentFor(type: string, shiftModelId: number | null): P
   return 100;
 }
 
-// Aktuelles Nachtfenster aus den Zuschlags-Einstellungen (Fallback 23:00–06:00).
-async function nightWindow(): Promise<NightWindow> {
+// Aktuelles Nachtfenster und gewähltes Bundesland aus den Zuschlags-Einstellungen
+// (Fallback 23:00–06:00; ohne Bundesland nur bundesweite Feiertage).
+async function allowanceContext(): Promise<{ window: NightWindow; state: GermanState | null }> {
   const [settings] = await db
     .select()
     .from(allowanceSettingsTable)
     .where(eq(allowanceSettingsTable.id, 1));
   return {
-    nightStart: settings?.nightStart ?? "23:00",
-    nightEnd: settings?.nightEnd ?? "06:00",
+    window: {
+      nightStart: settings?.nightStart ?? "23:00",
+      nightEnd: settings?.nightEnd ?? "06:00",
+    },
+    state: (settings?.state as GermanState | null) ?? null,
   };
 }
 
@@ -175,7 +180,7 @@ async function storeShiftMetrics(shift: {
     metrics = { valuedHours: planned, nightHours: 0, sundayHours: 0, holidayHours: 0 };
   } else {
     const valuationPercent = await valuationPercentFor(shift.type, shift.shiftModelId);
-    const window = await nightWindow();
+    const { window, state } = await allowanceContext();
     metrics = computeShiftMetrics(
       {
         startTime: new Date(shift.startTime),
@@ -183,7 +188,8 @@ async function storeShiftMetrics(shift: {
         isAbsence: false,
         valuationPercent,
       },
-      window
+      window,
+      state
     );
   }
   await db.update(shiftsTable).set(metrics).where(eq(shiftsTable.id, shift.id));
