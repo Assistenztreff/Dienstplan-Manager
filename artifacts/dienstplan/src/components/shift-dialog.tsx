@@ -15,7 +15,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Trash2 } from "lucide-react";
 import { colorDotClass } from "@/lib/shift-model-colors";
 
@@ -322,27 +331,46 @@ export function ShiftDialog({
                 <SelectValue placeholder="Typ auswählen..." />
               </SelectTrigger>
               <SelectContent>
-                {legacyEditOption && (
-                  <SelectItem value={legacyEditOption.value}>{legacyEditOption.label}</SelectItem>
+                {(activeModels.length > 0 || legacyEditOption || inactiveEditModel) && (
+                  <SelectGroup>
+                    <SelectLabel>Dienst</SelectLabel>
+                    {legacyEditOption && (
+                      <SelectItem value={legacyEditOption.value}>{legacyEditOption.label}</SelectItem>
+                    )}
+                    {activeModels.map((m) => (
+                      <SelectItem key={m.id} value={`model:${m.id}`}>
+                        <span className="flex items-center gap-2">
+                          <span className={`inline-block h-2.5 w-2.5 rounded-full ${colorDotClass(m.color)}`} />
+                          {m.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                    {inactiveEditModel && (
+                      <SelectItem value={`model:${inactiveEditModel.id}`}>
+                        <span className="flex items-center gap-2">
+                          <span className={`inline-block h-2.5 w-2.5 rounded-full ${colorDotClass(inactiveEditModel.color)}`} />
+                          {inactiveEditModel.name} (inaktiv)
+                        </span>
+                      </SelectItem>
+                    )}
+                  </SelectGroup>
                 )}
-                {activeModels.map((m) => (
-                  <SelectItem key={m.id} value={`model:${m.id}`}>
+                {(activeModels.length > 0 || legacyEditOption || inactiveEditModel) && <SelectSeparator />}
+                <SelectGroup>
+                  <SelectLabel>Abwesenheit</SelectLabel>
+                  <SelectItem value="vacation">
                     <span className="flex items-center gap-2">
-                      <span className={`inline-block h-2.5 w-2.5 rounded-full ${colorDotClass(m.color)}`} />
-                      {m.name}
+                      <span className="inline-block h-2.5 w-2.5 rounded-full bg-yellow-400" />
+                      Urlaub
                     </span>
                   </SelectItem>
-                ))}
-                {inactiveEditModel && (
-                  <SelectItem value={`model:${inactiveEditModel.id}`}>
+                  <SelectItem value="sick">
                     <span className="flex items-center gap-2">
-                      <span className={`inline-block h-2.5 w-2.5 rounded-full ${colorDotClass(inactiveEditModel.color)}`} />
-                      {inactiveEditModel.name} (inaktiv)
+                      <span className="inline-block h-2.5 w-2.5 rounded-full bg-slate-400" />
+                      Krank
                     </span>
                   </SelectItem>
-                )}
-                <SelectItem value="vacation">Urlaub</SelectItem>
-                <SelectItem value="sick">Krank</SelectItem>
+                </SelectGroup>
               </SelectContent>
             </Select>
             {activeModels.length === 0 && !isAbsence && !legacyEditOption && (

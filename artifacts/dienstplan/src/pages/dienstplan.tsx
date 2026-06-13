@@ -37,8 +37,8 @@ const SHIFT_TYPE_CLASSES: Record<string, string> = {
   standby: "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100",
   night: "bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100",
   full_day: "bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100",
-  vacation: "bg-yellow-50 text-yellow-800 border-yellow-300 hover:bg-yellow-100",
-  sick: "bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200",
+  vacation: "bg-yellow-100 text-yellow-900 border-yellow-400 hover:bg-yellow-200",
+  sick: "bg-slate-200 text-slate-700 border-slate-400 hover:bg-slate-300",
 };
 
 function shiftLabel(shift: Shift, modelMap: Map<number, ShiftModelInfo>): string {
