@@ -541,7 +541,7 @@ export default function Dienstplan() {
       </div>
 
       {/* Desktop: umschaltbare Ansicht (Tabelle / Monatsgitter) */}
-      <div className="hidden md:block space-y-4">
+      <div className="hidden md:block space-y-4" data-testid="dienstplan-desktop">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <ViewToggle
             value={desktopView}
