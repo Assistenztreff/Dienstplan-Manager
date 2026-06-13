@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { ShiftDialog } from "@/components/shift-dialog";
+import { useAuth } from "@/context/auth";
 
 type Shift = {
   id: number;
@@ -75,11 +76,13 @@ function AgendaView({
   shifts,
   onDayClick,
   onShiftClick,
+  canEdit,
 }: {
   days: Date[];
   shifts: Shift[];
   onDayClick: (day: Date) => void;
   onShiftClick: (shift: Shift) => void;
+  canEdit: boolean;
 }) {
   return (
     <div className="space-y-1">
@@ -89,46 +92,45 @@ function AgendaView({
 
         return (
           <div key={day.toISOString()} className="rounded-lg border border-border/40 overflow-hidden">
-            {/* Day header — tap to add a shift */}
             <button
               type="button"
               className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
                 isCurrentDay
                   ? "bg-primary text-primary-foreground hover:bg-primary/90"
                   : "bg-muted/40 text-foreground hover:bg-muted/70"
-              }`}
-              onClick={() => onDayClick(day)}
+              } ${!canEdit ? "cursor-default pointer-events-none" : ""}`}
+              onClick={() => canEdit && onDayClick(day)}
             >
               <span className="text-sm font-semibold min-w-[24px]">{format(day, "d")}</span>
               <span className="text-sm">{format(day, "EEEE", { locale: de })}</span>
-              <span
-                className={`ml-auto flex items-center gap-1 text-xs ${
-                  isCurrentDay ? "opacity-80" : "text-muted-foreground"
-                }`}
-              >
-                {dayShifts.length > 0 && (
-                  <span className="font-medium">{dayShifts.length}</span>
-                )}
-                <Plus className="h-3.5 w-3.5" />
-              </span>
+              {canEdit && (
+                <span
+                  className={`ml-auto flex items-center gap-1 text-xs ${
+                    isCurrentDay ? "opacity-80" : "text-muted-foreground"
+                  }`}
+                >
+                  {dayShifts.length > 0 && (
+                    <span className="font-medium">{dayShifts.length}</span>
+                  )}
+                  <Plus className="h-3.5 w-3.5" />
+                </span>
+              )}
             </button>
 
-            {/* Shift cards */}
             <div className="bg-card px-3 py-2 space-y-1.5">
               {dayShifts.length > 0 ? (
                 dayShifts.map((shift) => (
                   <ShiftBadge
                     key={shift.id}
                     shift={shift}
-                    showName
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onShiftClick(shift);
-                    }}
+                    showName={canEdit}
+                    onClick={canEdit ? (e) => { e.stopPropagation(); onShiftClick(shift); } : undefined}
                   />
                 ))
               ) : (
-                <p className="text-xs text-muted-foreground">Keine Schichten — tippen zum Hinzufügen</p>
+                <p className="text-xs text-muted-foreground">
+                  {canEdit ? "Keine Schichten — tippen zum Hinzufügen" : "Keine Schichten"}
+                </p>
               )}
             </div>
           </div>
@@ -139,6 +141,9 @@ function AgendaView({
 }
 
 export default function Dienstplan() {
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser?.role === "admin";
+
   const [currentDate, setCurrentDate] = useState(new Date());
   const [dialog, setDialog] = useState<DialogState>({ mode: "closed" });
 
@@ -155,18 +160,22 @@ export default function Dienstplan() {
   const end = endOfMonth(currentDate);
   const days = eachDayOfInterval({ start, end });
 
-  const assistants: Assistant[] = (users ?? [])
-    .filter((u) => u.role === "assistant")
-    .map((u) => ({ id: u.id, name: u.name }));
+  const assistants: Assistant[] = isAdmin
+    ? (users ?? []).filter((u) => u.role === "assistant").map((u) => ({ id: u.id, name: u.name }))
+    : currentUser
+    ? [{ id: currentUser.id, name: currentUser.name }]
+    : [];
 
   const allShifts: Shift[] = shifts ?? [];
-  const isLoading = shiftsLoading || usersLoading;
+  const isLoading = shiftsLoading || (isAdmin && usersLoading);
 
   function openCreate(date: Date, userId?: number) {
+    if (!isAdmin) return;
     setDialog({ mode: "create", date, userId });
   }
 
   function openEdit(shift: Shift) {
+    if (!isAdmin) return;
     setDialog({ mode: "edit", shift });
   }
 
@@ -218,6 +227,7 @@ export default function Dienstplan() {
           shifts={allShifts}
           onDayClick={(day) => openCreate(day)}
           onShiftClick={openEdit}
+          canEdit={isAdmin}
         />
       </div>
 
@@ -227,7 +237,7 @@ export default function Dienstplan() {
           <thead>
             <tr className="border-b bg-muted/50">
               <th className="p-3 text-left font-medium sticky left-0 bg-muted/50 backdrop-blur-sm z-10 w-48">
-                Assistent
+                {isAdmin ? "Assistent" : "Schicht"}
               </th>
               {days.map((day) => (
                 <th
@@ -254,7 +264,7 @@ export default function Dienstplan() {
             {assistants.length === 0 ? (
               <tr>
                 <td colSpan={days.length + 1} className="p-8 text-center text-muted-foreground">
-                  Keine Assistenten gefunden.
+                  Keine Einträge gefunden.
                 </td>
               </tr>
             ) : (
@@ -264,7 +274,7 @@ export default function Dienstplan() {
                   className="border-b last:border-0 hover:bg-muted/20 transition-colors"
                 >
                   <td className="p-3 font-medium sticky left-0 bg-card hover:bg-muted/20 transition-colors z-10 shadow-[1px_0_0_0_hsl(var(--border))]">
-                    {assistant.name}
+                    {isAdmin ? assistant.name : "Meine Schichten"}
                   </td>
                   {days.map((day) => {
                     const dayShifts = allShifts.filter(
@@ -273,24 +283,21 @@ export default function Dienstplan() {
                     return (
                       <td
                         key={day.toISOString()}
-                        className={`p-1 border-l border-border/30 align-top cursor-pointer group ${
-                          isToday(day) ? "bg-primary/5" : "hover:bg-muted/30"
-                        }`}
-                        onClick={() => openCreate(day, assistant.id)}
-                        title="Klicken zum Anlegen einer Schicht"
+                        className={`p-1 border-l border-border/30 align-top ${
+                          isAdmin ? "cursor-pointer group" : ""
+                        } ${isToday(day) ? "bg-primary/5" : isAdmin ? "hover:bg-muted/30" : ""}`}
+                        onClick={isAdmin ? () => openCreate(day, assistant.id) : undefined}
+                        title={isAdmin ? "Klicken zum Anlegen einer Schicht" : undefined}
                       >
                         <div className="space-y-1 min-h-[32px]">
                           {dayShifts.map((s) => (
                             <ShiftBadge
                               key={s.id}
                               shift={s}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openEdit(s);
-                              }}
+                              onClick={isAdmin ? (e) => { e.stopPropagation(); openEdit(s); } : undefined}
                             />
                           ))}
-                          {dayShifts.length === 0 && (
+                          {dayShifts.length === 0 && isAdmin && (
                             <div className="hidden group-hover:flex items-center justify-center h-8 text-muted-foreground/40">
                               <Plus className="h-3.5 w-3.5" />
                             </div>
@@ -306,17 +313,18 @@ export default function Dienstplan() {
         </table>
       </Card>
 
-      {/* Shift Dialog */}
-      <ShiftDialog
-        open={dialog.mode !== "closed"}
-        onClose={closeDialog}
-        preselectedDate={dialog.mode === "create" ? dialog.date : undefined}
-        preselectedUserId={dialog.mode === "create" ? dialog.userId : undefined}
-        editShift={dialog.mode === "edit" ? dialog.shift : undefined}
-        assistants={assistants}
-        month={month}
-        year={year}
-      />
+      {isAdmin && (
+        <ShiftDialog
+          open={dialog.mode !== "closed"}
+          onClose={closeDialog}
+          preselectedDate={dialog.mode === "create" ? dialog.date : undefined}
+          preselectedUserId={dialog.mode === "create" ? dialog.userId : undefined}
+          editShift={dialog.mode === "edit" ? dialog.shift : undefined}
+          assistants={assistants}
+          month={month}
+          year={year}
+        />
+      )}
     </div>
   );
 }

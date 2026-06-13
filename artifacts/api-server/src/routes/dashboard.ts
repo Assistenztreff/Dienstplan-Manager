@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { usersTable, shiftsTable, timeTrackingTable, contractsTable } from "@workspace/db";
 import { eq, and, sql, count, or, isNull } from "drizzle-orm";
+import { requireAuth, requireAdmin } from "../middleware/auth";
 
 const router = Router();
 
@@ -25,7 +26,7 @@ async function activeContractFor(userId: number, date: Date) {
   return contracts[0] ?? null;
 }
 
-router.get("/dashboard/summary", async (req, res) => {
+router.get("/dashboard/summary", requireAuth, async (req, res) => {
   const month = req.query.month ? Number(req.query.month) : new Date().getMonth() + 1;
   const year = req.query.year ? Number(req.query.year) : new Date().getFullYear();
 
@@ -142,7 +143,7 @@ router.get("/dashboard/summary", async (req, res) => {
   });
 });
 
-router.get("/dashboard/hours-balance", async (req, res) => {
+router.get("/dashboard/hours-balance", requireAdmin, async (req, res) => {
   const month = req.query.month ? Number(req.query.month) : new Date().getMonth() + 1;
   const year = req.query.year ? Number(req.query.year) : new Date().getFullYear();
 

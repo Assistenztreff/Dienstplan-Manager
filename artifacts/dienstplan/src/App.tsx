@@ -1,14 +1,19 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "@/components/layout";
+import { AuthProvider, useAuth } from "@/context/auth";
 import Dashboard from "@/pages/dashboard";
 import Dienstplan from "@/pages/dienstplan";
 import Assistenten from "@/pages/assistenten";
 import Zeiterfassung from "@/pages/zeiterfassung";
 import Auswertungen from "@/pages/auswertungen";
+import Login from "@/pages/login";
+import Einladung from "@/pages/einladung";
 import NotFound from "@/pages/not-found";
+import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -19,15 +24,52 @@ const queryClient = new QueryClient({
   },
 });
 
+const PUBLIC_PATHS = ["/login", "/einladung"];
+
 function Router() {
+  const { currentUser, isLoading } = useAuth();
+  const [location, navigate] = useLocation();
+
+  useEffect(() => {
+    if (isLoading) return;
+    const isPublic = PUBLIC_PATHS.some((p) => location.startsWith(p));
+    if (!currentUser && !isPublic) {
+      navigate("/login");
+    } else if (currentUser && location === "/login") {
+      navigate("/");
+    }
+  }, [isLoading, currentUser, location]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <Switch>
+        <Route path="/login" component={Login} />
+        <Route path="/einladung" component={Einladung} />
+        <Route>{() => null}</Route>
+      </Switch>
+    );
+  }
+
   return (
     <Layout>
       <Switch>
         <Route path="/" component={Dashboard} />
         <Route path="/dienstplan" component={Dienstplan} />
-        <Route path="/assistenten" component={Assistenten} />
         <Route path="/zeiterfassung" component={Zeiterfassung} />
-        <Route path="/auswertungen" component={Auswertungen} />
+        {currentUser.role === "admin" && (
+          <Route path="/assistenten" component={Assistenten} />
+        )}
+        {currentUser.role === "admin" && (
+          <Route path="/auswertungen" component={Auswertungen} />
+        )}
         <Route component={NotFound} />
       </Switch>
     </Layout>
@@ -39,7 +81,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
+          <AuthProvider>
+            <Router />
+          </AuthProvider>
         </WouterRouter>
         <Toaster />
       </TooltipProvider>

@@ -12,6 +12,7 @@ import {
   ConfirmTimeEntryParams,
   ConfirmTimeEntryBody,
 } from "@workspace/api-zod";
+import { requireAuth, requireAdmin } from "../middleware/auth";
 
 const router = Router();
 
@@ -43,7 +44,7 @@ const withUserSelect = {
   },
 };
 
-router.get("/time-tracking", async (req, res) => {
+router.get("/time-tracking", requireAuth, async (req, res): Promise<void> => {
   const query = ListTimeEntriesQueryParams.safeParse({
     userId: req.query.userId ? Number(req.query.userId) : undefined,
     month: req.query.month ? Number(req.query.month) : undefined,
@@ -51,11 +52,15 @@ router.get("/time-tracking", async (req, res) => {
     status: req.query.status,
   });
   if (!query.success) {
-    return res.status(400).json({ error: "Invalid query parameters" });
+    res.status(400).json({ error: "Invalid query parameters" });
+    return;
   }
 
+  const effectiveUserId =
+    req.session.role === "assistant" ? req.session.userId! : query.data.userId;
+
   const conditions = [];
-  if (query.data.userId) conditions.push(eq(timeTrackingTable.userId, query.data.userId));
+  if (effectiveUserId) conditions.push(eq(timeTrackingTable.userId, effectiveUserId));
   if (query.data.status) conditions.push(eq(timeTrackingTable.status, query.data.status as "pending" | "confirmed" | "rejected"));
   if (query.data.month && query.data.year) {
     conditions.push(sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${query.data.month}`);
@@ -70,17 +75,21 @@ router.get("/time-tracking", async (req, res) => {
   res.json(rows);
 });
 
-router.post("/time-tracking", async (req, res) => {
+router.post("/time-tracking", requireAuth, async (req, res): Promise<void> => {
   const body = CreateTimeEntryBody.safeParse(req.body);
   if (!body.success) {
-    return res.status(400).json({ error: "Invalid request body" });
+    res.status(400).json({ error: "Invalid request body" });
+    return;
   }
-  const actualStart = new Date(body.data.actualStart);
-  const actualEnd = new Date(body.data.actualEnd);
+  const userId =
+    req.session.role === "assistant" ? req.session.userId! : body.data.userId;
+
+  const actualStart = new Date(body.data.actualStart as unknown as string);
+  const actualEnd = new Date(body.data.actualEnd as unknown as string);
   const actualHours = calcHours(actualStart, actualEnd);
   const [entry] = await db
     .insert(timeTrackingTable)
-    .values({ ...body.data, actualHours })
+    .values({ ...body.data, userId, actualHours })
     .returning();
   const [withUser] = await db
     .select(withUserSelect)
@@ -90,34 +99,51 @@ router.post("/time-tracking", async (req, res) => {
   res.status(201).json(withUser);
 });
 
-router.get("/time-tracking/:id", async (req, res) => {
-  const params = GetTimeEntryParams.safeParse({ id: Number(req.params.id) });
-  if (!params.success) return res.status(400).json({ error: "Invalid id" });
+router.get("/time-tracking/:id", requireAuth, async (req, res): Promise<void> => {
+  const params = GetTimeEntryParams.safeParse({ id: Number(req.params["id"]) });
+  if (!params.success) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
   const [row] = await db
     .select(withUserSelect)
     .from(timeTrackingTable)
     .leftJoin(usersTable, eq(timeTrackingTable.userId, usersTable.id))
     .where(eq(timeTrackingTable.id, params.data.id));
-  if (!row) return res.status(404).json({ error: "Not found" });
+  if (!row) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (req.session.role === "assistant" && row.userId !== req.session.userId!) {
+    res.status(403).json({ error: "Keine Berechtigung" });
+    return;
+  }
   res.json(row);
 });
 
-router.patch("/time-tracking/:id", async (req, res) => {
-  const params = UpdateTimeEntryParams.safeParse({ id: Number(req.params.id) });
+router.patch("/time-tracking/:id", requireAdmin, async (req, res): Promise<void> => {
+  const params = UpdateTimeEntryParams.safeParse({ id: Number(req.params["id"]) });
   const body = UpdateTimeEntryBody.safeParse(req.body);
   if (!params.success || !body.success) {
-    return res.status(400).json({ error: "Invalid request" });
+    res.status(400).json({ error: "Invalid request" });
+    return;
   }
   const updateData: Record<string, unknown> = { ...body.data };
   if (body.data.actualStart && body.data.actualEnd) {
-    updateData.actualHours = calcHours(new Date(body.data.actualStart), new Date(body.data.actualEnd));
+    updateData.actualHours = calcHours(
+      new Date(body.data.actualStart as unknown as string),
+      new Date(body.data.actualEnd as unknown as string)
+    );
   }
   const [updated] = await db
     .update(timeTrackingTable)
     .set(updateData)
     .where(eq(timeTrackingTable.id, params.data.id))
     .returning();
-  if (!updated) return res.status(404).json({ error: "Not found" });
+  if (!updated) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   const [withUser] = await db
     .select(withUserSelect)
     .from(timeTrackingTable)
@@ -126,18 +152,22 @@ router.patch("/time-tracking/:id", async (req, res) => {
   res.json(withUser);
 });
 
-router.delete("/time-tracking/:id", async (req, res) => {
-  const params = DeleteTimeEntryParams.safeParse({ id: Number(req.params.id) });
-  if (!params.success) return res.status(400).json({ error: "Invalid id" });
+router.delete("/time-tracking/:id", requireAdmin, async (req, res): Promise<void> => {
+  const params = DeleteTimeEntryParams.safeParse({ id: Number(req.params["id"]) });
+  if (!params.success) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
   await db.delete(timeTrackingTable).where(eq(timeTrackingTable.id, params.data.id));
   res.status(204).send();
 });
 
-router.patch("/time-tracking/:id/confirm", async (req, res) => {
-  const params = ConfirmTimeEntryParams.safeParse({ id: Number(req.params.id) });
+router.patch("/time-tracking/:id/confirm", requireAdmin, async (req, res): Promise<void> => {
+  const params = ConfirmTimeEntryParams.safeParse({ id: Number(req.params["id"]) });
   const body = ConfirmTimeEntryBody.safeParse(req.body);
   if (!params.success || !body.success) {
-    return res.status(400).json({ error: "Invalid request" });
+    res.status(400).json({ error: "Invalid request" });
+    return;
   }
   const [updated] = await db
     .update(timeTrackingTable)
@@ -148,7 +178,10 @@ router.patch("/time-tracking/:id/confirm", async (req, res) => {
     })
     .where(eq(timeTrackingTable.id, params.data.id))
     .returning();
-  if (!updated) return res.status(404).json({ error: "Not found" });
+  if (!updated) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   const [withUser] = await db
     .select(withUserSelect)
     .from(timeTrackingTable)

@@ -639,3 +639,50 @@ export const GetHoursBalanceResponseItem = zod.object({
 export const GetHoursBalanceResponse = zod.array(GetHoursBalanceResponseItem)
 
 
+/**
+ * @summary Anmelden
+ */
+export const LoginBody = zod.object({
+  "email": zod.string().email(),
+  "password": zod.string()
+})
+
+export const LoginResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "role": zod.enum(['admin', 'assistant'])
+})
+
+
+/**
+ * @summary Aktuell eingeloggter Benutzer
+ */
+export const GetMeResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "role": zod.enum(['admin', 'assistant'])
+})
+
+
+/**
+ * @summary Passwort über Einladungstoken setzen
+ */
+export const setPasswordBodyPasswordMin = 8;
+
+
+
+export const SetPasswordBody = zod.object({
+  "token": zod.string(),
+  "password": zod.string().min(setPasswordBodyPasswordMin)
+})
+
+export const SetPasswordResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "role": zod.enum(['admin', 'assistant'])
+})
+
+

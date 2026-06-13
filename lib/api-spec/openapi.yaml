@@ -22,6 +22,8 @@ tags:
     description: Dashboard-Übersicht
   - name: invitations
     description: Team-Einladungen
+  - name: auth
+    description: Authentifizierung
 paths:
   /healthz:
     get:
@@ -553,6 +555,72 @@ paths:
                 items:
                   $ref: "#/components/schemas/HoursBalance"
 
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Anmelden
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Erfolgreich angemeldet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "401":
+          description: Falsche Zugangsdaten
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Abmelden
+      responses:
+        "200":
+          description: Abgemeldet
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Aktuell eingeloggter Benutzer
+      responses:
+        "200":
+          description: Eingeloggter Benutzer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "401":
+          description: Nicht angemeldet
+
+  /auth/set-password:
+    post:
+      operationId: setPassword
+      tags: [auth]
+      summary: Passwort über Einladungstoken setzen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetPasswordInput"
+      responses:
+        "200":
+          description: Passwort gesetzt und angemeldet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "400":
+          description: Ungültiger oder abgelaufener Token
+
 components:
   schemas:
     HealthStatus:
@@ -900,3 +968,37 @@ components:
           type: integer
         vacationDaysRemaining:
           type: integer
+
+    AuthUser:
+      type: object
+      required: [id, name, email, role]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, assistant]
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    SetPasswordInput:
+      type: object
+      required: [token, password]
+      properties:
+        token:
+          type: string
+        password:
+          type: string
+          minLength: 8

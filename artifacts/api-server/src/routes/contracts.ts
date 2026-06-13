@@ -10,6 +10,7 @@ import {
   UpdateContractBody,
   DeleteContractParams,
 } from "@workspace/api-zod";
+import { requireAdmin } from "../middleware/auth";
 
 const router = Router();
 
@@ -35,12 +36,18 @@ const CONTRACT_SELECT = {
   },
 };
 
-router.get("/contracts", async (req, res) => {
+function toDateString(val: unknown): string {
+  if (val instanceof Date) return val.toISOString().split("T")[0]!;
+  return String(val);
+}
+
+router.get("/contracts", requireAdmin, async (req, res): Promise<void> => {
   const query = ListContractsQueryParams.safeParse({
     userId: req.query.userId ? Number(req.query.userId) : undefined,
   });
   if (!query.success) {
-    return res.status(400).json({ error: "Invalid query parameters" });
+    res.status(400).json({ error: "Invalid query parameters" });
+    return;
   }
   const rows = await db
     .select(CONTRACT_SELECT)
@@ -50,12 +57,20 @@ router.get("/contracts", async (req, res) => {
   res.json(rows);
 });
 
-router.post("/contracts", async (req, res) => {
+router.post("/contracts", requireAdmin, async (req, res): Promise<void> => {
   const body = CreateContractBody.safeParse(req.body);
   if (!body.success) {
-    return res.status(400).json({ error: "Invalid request body" });
+    res.status(400).json({ error: "Invalid request body" });
+    return;
   }
-  const [contract] = await db.insert(contractsTable).values(body.data).returning();
+  const [contract] = await db
+    .insert(contractsTable)
+    .values({
+      ...body.data,
+      startDate: toDateString(body.data.startDate),
+      endDate: body.data.endDate ? toDateString(body.data.endDate) : undefined,
+    })
+    .returning();
   const [withUser] = await db
     .select(CONTRACT_SELECT)
     .from(contractsTable)
@@ -64,30 +79,42 @@ router.post("/contracts", async (req, res) => {
   res.status(201).json(withUser);
 });
 
-router.get("/contracts/:id", async (req, res) => {
-  const params = GetContractParams.safeParse({ id: Number(req.params.id) });
-  if (!params.success) return res.status(400).json({ error: "Invalid id" });
+router.get("/contracts/:id", requireAdmin, async (req, res): Promise<void> => {
+  const params = GetContractParams.safeParse({ id: Number(req.params["id"]) });
+  if (!params.success) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
   const [row] = await db
     .select(CONTRACT_SELECT)
     .from(contractsTable)
     .leftJoin(usersTable, eq(contractsTable.userId, usersTable.id))
     .where(eq(contractsTable.id, params.data.id));
-  if (!row) return res.status(404).json({ error: "Not found" });
+  if (!row) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   res.json(row);
 });
 
-router.patch("/contracts/:id", async (req, res) => {
-  const params = UpdateContractParams.safeParse({ id: Number(req.params.id) });
+router.patch("/contracts/:id", requireAdmin, async (req, res): Promise<void> => {
+  const params = UpdateContractParams.safeParse({ id: Number(req.params["id"]) });
   const body = UpdateContractBody.safeParse(req.body);
   if (!params.success || !body.success) {
-    return res.status(400).json({ error: "Invalid request" });
+    res.status(400).json({ error: "Invalid request" });
+    return;
   }
+  const updateValues: Record<string, unknown> = { ...body.data };
+
   const [updated] = await db
     .update(contractsTable)
-    .set(body.data)
+    .set(updateValues)
     .where(eq(contractsTable.id, params.data.id))
     .returning();
-  if (!updated) return res.status(404).json({ error: "Not found" });
+  if (!updated) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   const [withUser] = await db
     .select(CONTRACT_SELECT)
     .from(contractsTable)
@@ -96,22 +123,31 @@ router.patch("/contracts/:id", async (req, res) => {
   res.json(withUser);
 });
 
-router.delete("/contracts/:id", async (req, res) => {
-  const params = DeleteContractParams.safeParse({ id: Number(req.params.id) });
-  if (!params.success) return res.status(400).json({ error: "Invalid id" });
+router.delete("/contracts/:id", requireAdmin, async (req, res): Promise<void> => {
+  const params = DeleteContractParams.safeParse({ id: Number(req.params["id"]) });
+  if (!params.success) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
   await db.delete(contractsTable).where(eq(contractsTable.id, params.data.id));
   res.status(204).send();
 });
 
-router.get("/contracts/:id/vacation-balance", async (req, res) => {
-  const id = Number(req.params.id);
-  if (!id || isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+router.get("/contracts/:id/vacation-balance", requireAdmin, async (req, res): Promise<void> => {
+  const id = Number(req.params["id"]);
+  if (!id || isNaN(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
   const [contract] = await db
     .select()
     .from(contractsTable)
     .where(eq(contractsTable.id, id))
     .limit(1);
-  if (!contract) return res.status(404).json({ error: "Not found" });
+  if (!contract) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   res.json({
     contractId: contract.id,
     userId: contract.userId,

@@ -55,11 +55,22 @@ Kernfunktionen (Task 1 — Grundstruktur):
 - Mobil-optimiert (Assistenten nutzen Smartphones)
 - Datenbankschema: PostgreSQL mit Drizzle ORM
 
+## Auth (Task 8)
+
+- Session-basierte Authentifizierung mit `express-session` (Cookie: `connect.sid`, 7 Tage)
+- Rollen: `admin` (Assistenznehmer, Vollzugriff) und `assistant` (nur eigene Daten)
+- Middleware: `requireAuth` (alle eingeloggten), `requireAdmin` (nur Admin)
+- Einladungsflow: Admin generiert Token via `POST /api/users/:id/invite`, Assistent setzt Passwort via `/einladung?token=...`
+- Erster Admin-User anlegen: `pnpm --filter @workspace/scripts run setup-admin` (Standard: admin@dienstplan.local / admin1234)
+- Session-Secret via Umgebungsvariable `SESSION_SECRET` (bereits als Secret gesetzt)
+
 ## Gotchas
 
 - Nach jeder Änderung an `lib/api-spec/openapi.yaml` muss Codegen neu ausgeführt werden: `pnpm --filter @workspace/api-spec run codegen`
 - Nach DB-Schema-Änderungen: `pnpm --filter @workspace/db run push`
 - Zod-Schema-Namen aus `@workspace/api-zod` per grep ermitteln, nicht raten (Orval-Namenskonventionen variieren)
+- `useListUsers` für Nicht-Admins gibt 401 zurück (Query-Error, kein UI-Crash) — Daten nur unter `isAdmin`-Bedingung nutzen
+- Route-Handler-Pattern: `async (req, res): Promise<void> =>` mit `res.json(); return;` (kein `return res.json()`) — sonst TS7030
 
 ## Pointers
 

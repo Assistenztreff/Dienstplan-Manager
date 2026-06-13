@@ -260,6 +260,32 @@ export interface VacationBalance {
   vacationDaysRemaining: number;
 }
 
+export type AuthUserRole = typeof AuthUserRole[keyof typeof AuthUserRole];
+
+
+export const AuthUserRole = {
+  admin: 'admin',
+  assistant: 'assistant',
+} as const;
+
+export interface AuthUser {
+  id: number;
+  name: string;
+  email: string;
+  role: AuthUserRole;
+}
+
+export interface LoginInput {
+  email: string;
+  password: string;
+}
+
+export interface SetPasswordInput {
+  token: string;
+  /** @minLength 8 */
+  password: string;
+}
+
 export type ListUsersParams = {
 role?: ListUsersRole;
 };

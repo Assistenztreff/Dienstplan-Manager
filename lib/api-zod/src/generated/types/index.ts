@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './authUser';
+export * from './authUserRole';
 export * from './contract';
 export * from './contractInput';
 export * from './contractUpdate';
@@ -22,6 +24,8 @@ export * from './listTimeEntriesParams';
 export * from './listTimeEntriesStatus';
 export * from './listUsersParams';
 export * from './listUsersRole';
+export * from './loginInput';
+export * from './setPasswordInput';
 export * from './shift';
 export * from './shiftInput';
 export * from './shiftInputType';

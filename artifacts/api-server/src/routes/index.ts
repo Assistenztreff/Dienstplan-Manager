@@ -6,9 +6,11 @@ import shiftsRouter from "./shifts";
 import timeTrackingRouter from "./time_tracking";
 import dashboardRouter from "./dashboard";
 import invitationsRouter from "./invitations";
+import authRouter from "./auth";
 
 const router: IRouter = Router();
 
+router.use(authRouter);
 router.use(healthRouter);
 router.use(usersRouter);
 router.use(contractsRouter);

@@ -12,9 +12,18 @@ export const usersTable = pgTable("users", {
   phone: text("phone"),
   address: text("address"),
   isActive: boolean("is_active").notNull().default(true),
+  passwordHash: text("password_hash"),
+  inviteToken: text("invite_token"),
+  inviteTokenExpiry: timestamp("invite_token_expiry"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true });
+export const insertUserSchema = createInsertSchema(usersTable).omit({
+  id: true,
+  createdAt: true,
+  passwordHash: true,
+  inviteToken: true,
+  inviteTokenExpiry: true,
+});
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof usersTable.$inferSelect;

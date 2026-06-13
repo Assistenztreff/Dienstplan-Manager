@@ -10,6 +10,7 @@ import {
   UpdateShiftBody,
   DeleteShiftParams,
 } from "@workspace/api-zod";
+import { requireAuth, requireAdmin } from "../middleware/auth";
 
 const router = Router();
 
@@ -53,7 +54,7 @@ async function activeContractFor(userId: number, date: Date) {
   return contracts[0] ?? null;
 }
 
-router.get("/shifts", async (req, res) => {
+router.get("/shifts", requireAuth, async (req, res): Promise<void> => {
   const query = ListShiftsQueryParams.safeParse({
     userId: req.query.userId ? Number(req.query.userId) : undefined,
     month: req.query.month ? Number(req.query.month) : undefined,
@@ -61,11 +62,15 @@ router.get("/shifts", async (req, res) => {
     type: req.query.type,
   });
   if (!query.success) {
-    return res.status(400).json({ error: "Invalid query parameters" });
+    res.status(400).json({ error: "Invalid query parameters" });
+    return;
   }
 
+  const effectiveUserId =
+    req.session.role === "assistant" ? req.session.userId! : query.data.userId;
+
   const conditions = [];
-  if (query.data.userId) conditions.push(eq(shiftsTable.userId, query.data.userId));
+  if (effectiveUserId) conditions.push(eq(shiftsTable.userId, effectiveUserId));
   if (query.data.type) conditions.push(eq(shiftsTable.type, query.data.type as "active" | "standby" | "night" | "full_day" | "vacation" | "sick"));
   if (query.data.month && query.data.year) {
     conditions.push(sql`EXTRACT(MONTH FROM ${shiftsTable.startTime}) = ${query.data.month}`);
@@ -80,10 +85,11 @@ router.get("/shifts", async (req, res) => {
   res.json(rows);
 });
 
-router.post("/shifts", async (req, res) => {
+router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
   const body = CreateShiftBody.safeParse(req.body);
   if (!body.success) {
-    return res.status(400).json({ error: "Invalid request body" });
+    res.status(400).json({ error: "Invalid request body" });
+    return;
   }
   const [shift] = await db.insert(shiftsTable).values(body.data).returning();
 
@@ -116,23 +122,34 @@ router.post("/shifts", async (req, res) => {
   res.status(201).json(withUser);
 });
 
-router.get("/shifts/:id", async (req, res) => {
-  const params = GetShiftParams.safeParse({ id: Number(req.params.id) });
-  if (!params.success) return res.status(400).json({ error: "Invalid id" });
+router.get("/shifts/:id", requireAuth, async (req, res): Promise<void> => {
+  const params = GetShiftParams.safeParse({ id: Number(req.params["id"]) });
+  if (!params.success) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
   const [row] = await db
     .select(SHIFT_SELECT)
     .from(shiftsTable)
     .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
     .where(eq(shiftsTable.id, params.data.id));
-  if (!row) return res.status(404).json({ error: "Not found" });
+  if (!row) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (req.session.role === "assistant" && row.userId !== req.session.userId!) {
+    res.status(403).json({ error: "Keine Berechtigung" });
+    return;
+  }
   res.json(row);
 });
 
-router.patch("/shifts/:id", async (req, res) => {
-  const params = UpdateShiftParams.safeParse({ id: Number(req.params.id) });
+router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
+  const params = UpdateShiftParams.safeParse({ id: Number(req.params["id"]) });
   const body = UpdateShiftBody.safeParse(req.body);
   if (!params.success || !body.success) {
-    return res.status(400).json({ error: "Invalid request" });
+    res.status(400).json({ error: "Invalid request" });
+    return;
   }
 
   const [oldShift] = await db
@@ -140,14 +157,20 @@ router.patch("/shifts/:id", async (req, res) => {
     .from(shiftsTable)
     .where(eq(shiftsTable.id, params.data.id))
     .limit(1);
-  if (!oldShift) return res.status(404).json({ error: "Not found" });
+  if (!oldShift) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
 
   const [updated] = await db
     .update(shiftsTable)
     .set(body.data)
     .where(eq(shiftsTable.id, params.data.id))
     .returning();
-  if (!updated) return res.status(404).json({ error: "Not found" });
+  if (!updated) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
 
   const newType = updated.type;
   const oldType = oldShift.type;
@@ -159,7 +182,6 @@ router.patch("/shifts/:id", async (req, res) => {
     const isAbsence = newType === "vacation" || newType === "sick";
 
     if (wasAbsence && !isAbsence) {
-      // Absence → regular: remove time entry, reverse vacation counter
       await db.delete(timeTrackingTable).where(eq(timeTrackingTable.shiftId, updated.id));
       if (oldType === "vacation") {
         const contract = await activeContractFor(updated.userId, shiftDate);
@@ -171,7 +193,6 @@ router.patch("/shifts/:id", async (req, res) => {
         }
       }
     } else if (!wasAbsence && isAbsence) {
-      // Regular → absence: create time entry, increment vacation counter
       const contract = await activeContractFor(updated.userId, shiftDate);
       const dailyHours = contract ? Math.round((contract.weeklyHours / 5) * 100) / 100 : 8;
       await db.insert(timeTrackingTable).values({
@@ -189,7 +210,6 @@ router.patch("/shifts/:id", async (req, res) => {
           .where(eq(contractsTable.id, contract.id));
       }
     } else if (wasAbsence && isAbsence && oldType !== newType) {
-      // Absence type changed (vacation ↔ sick): update hours, reconcile vacation counter
       const contract = await activeContractFor(updated.userId, shiftDate);
       const dailyHours = contract ? Math.round((contract.weeklyHours / 5) * 100) / 100 : 8;
       await db
@@ -222,9 +242,12 @@ router.patch("/shifts/:id", async (req, res) => {
   res.json(withUser);
 });
 
-router.delete("/shifts/:id", async (req, res) => {
-  const params = DeleteShiftParams.safeParse({ id: Number(req.params.id) });
-  if (!params.success) return res.status(400).json({ error: "Invalid id" });
+router.delete("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
+  const params = DeleteShiftParams.safeParse({ id: Number(req.params["id"]) });
+  if (!params.success) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
 
   const [shift] = await db
     .select()
@@ -232,7 +255,10 @@ router.delete("/shifts/:id", async (req, res) => {
     .where(eq(shiftsTable.id, params.data.id))
     .limit(1);
 
-  if (!shift) return res.status(404).json({ error: "Not found" });
+  if (!shift) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
 
   if (shift.type === "vacation" || shift.type === "sick") {
     await db.delete(timeTrackingTable).where(eq(timeTrackingTable.shiftId, shift.id));

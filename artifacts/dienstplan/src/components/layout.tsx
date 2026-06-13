@@ -1,29 +1,46 @@
 import { Link, useLocation } from "wouter";
-import { 
-  LayoutDashboard, 
-  CalendarDays, 
-  Users, 
-  Clock, 
+import {
+  LayoutDashboard,
+  CalendarDays,
+  Users,
+  Clock,
   BarChart3,
-  Menu
+  Menu,
+  LogOut,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
+import { useAuth } from "@/context/auth";
+import { useToast } from "@/hooks/use-toast";
 
-const NAV_ITEMS = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dienstplan", label: "Dienstplan", icon: CalendarDays },
-  { href: "/assistenten", label: "Assistenten", icon: Users },
-  { href: "/zeiterfassung", label: "Zeiterfassung", icon: Clock },
-  { href: "/auswertungen", label: "Auswertungen", icon: BarChart3 },
+const ALL_NAV_ITEMS = [
+  { href: "/", label: "Dashboard", icon: LayoutDashboard, adminOnly: false },
+  { href: "/dienstplan", label: "Dienstplan", icon: CalendarDays, adminOnly: false },
+  { href: "/assistenten", label: "Assistenten", icon: Users, adminOnly: true },
+  { href: "/zeiterfassung", label: "Zeiterfassung", icon: Clock, adminOnly: false },
+  { href: "/auswertungen", label: "Auswertungen", icon: BarChart3, adminOnly: true },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  const { currentUser, logout } = useAuth();
+  const { toast } = useToast();
+
+  const navItems = ALL_NAV_ITEMS.filter(
+    (item) => !item.adminOnly || currentUser?.role === "admin"
+  );
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch {
+      toast({ title: "Fehler beim Abmelden", variant: "destructive" });
+    }
+  };
 
   const NavLinks = ({ onNav }: { onNav?: () => void } = {}) => (
     <>
-      {NAV_ITEMS.map((item) => (
+      {navItems.map((item) => (
         <Link key={item.href} href={item.href} onClick={onNav}>
           <div
             className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors cursor-pointer ${
@@ -40,6 +57,24 @@ export function Layout({ children }: { children: React.ReactNode }) {
     </>
   );
 
+  const UserSection = () => (
+    <div className="pt-4 border-t border-sidebar-border space-y-3">
+      <div className="px-3">
+        <p className="text-sm font-medium text-sidebar-foreground leading-tight">{currentUser?.name}</p>
+        <p className="text-xs text-sidebar-foreground/50 capitalize">
+          {currentUser?.role === "admin" ? "Administrator" : "Assistent"}
+        </p>
+      </div>
+      <button
+        onClick={() => void handleLogout()}
+        className="flex items-center gap-3 px-3 py-2 rounded-md w-full text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors text-sm"
+      >
+        <LogOut className="h-4 w-4" />
+        <span>Abmelden</span>
+      </button>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row font-sans text-foreground">
       {/* Mobile header */}
@@ -51,11 +86,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Menu className="h-5 w-5" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-64 p-4 bg-sidebar text-sidebar-foreground border-sidebar-border">
+          <SheetContent side="left" className="w-64 p-4 bg-sidebar text-sidebar-foreground border-sidebar-border flex flex-col">
             <h2 className="font-serif text-lg font-semibold text-sidebar-foreground mb-6">Dienstplan PA</h2>
-            <nav className="flex flex-col gap-2">
+            <nav className="flex flex-col gap-2 flex-1">
               <NavLinks />
             </nav>
+            <UserSection />
           </SheetContent>
         </Sheet>
       </header>
@@ -66,6 +102,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <nav className="flex flex-col gap-2 flex-1">
           <NavLinks />
         </nav>
+        <UserSection />
       </aside>
 
       {/* Main content */}
