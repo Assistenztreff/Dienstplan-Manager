@@ -54,6 +54,30 @@ router.get("/users", requireAdmin, async (req, res): Promise<void> => {
     res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
     return;
   }
+  // Bewusste Bootstrap-Ausnahme – ausschließlich für privat-Konten: Hat ein
+  // privat-Admin (Einzel-Assistenznehmer, kein Mandant) weder ein eigenes Team
+  // noch eine Mitgliedschaft UND fragt kein teamId an, fällt die Antwort auf den
+  // globalen Pool zurück. Sonst wäre die Liste bei Erst-Einrichtung leer – der
+  // Admin könnte sich nicht einmal selbst sehen oder Nutzer anlegen/zuordnen.
+  // Der Konto-Typ wird frisch aus der DB gelesen (wie requireDienstleister),
+  // damit ein Wechsel sofort greift. WICHTIG: Für dienstleister-Konten gilt IMMER
+  // strikte Team-Trennung – sie bekommen niemals den globalen Pool, auch nicht bei
+  // null Teams (sie sehen dann eine leere Liste, bis sie ein Team anlegen). Sobald
+  // ein privat-Admin ≥1 Team hat, greift ebenfalls wieder strikte Trennung.
+  if (teamId == null && allowedTeams.length === 0) {
+    const [requester] = await db
+      .select({ accountType: usersTable.accountType })
+      .from(usersTable)
+      .where(eq(usersTable.id, req.session.userId!));
+    if (requester?.accountType === "privat") {
+      let rows = await db.select(SAFE_USER_SELECT).from(usersTable);
+      if (query.data.role) {
+        rows = rows.filter((u) => u.role === query.data.role);
+      }
+      res.json(rows);
+      return;
+    }
+  }
   const teamScope = teamId != null ? [teamId] : allowedTeams;
   const joined =
     teamScope.length > 0
