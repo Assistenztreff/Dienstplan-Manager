@@ -11,6 +11,7 @@ import {
   DeleteContractParams,
 } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../middleware/auth";
+import { resolveTeamId } from "../lib/teams";
 
 const router = Router();
 
@@ -67,10 +68,16 @@ router.post("/contracts", requireAdmin, async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid request body" });
     return;
   }
+  const teamId = await resolveTeamId(req.session.userId!);
+  if (teamId == null) {
+    res.status(400).json({ error: "Kein Team zugeordnet" });
+    return;
+  }
   const [contract] = await db
     .insert(contractsTable)
     .values({
       ...body.data,
+      teamId,
       startDate: toDateString(body.data.startDate),
       endDate: body.data.endDate ? toDateString(body.data.endDate) : undefined,
     })

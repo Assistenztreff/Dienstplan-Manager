@@ -3,12 +3,14 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 export const roleEnum = pgEnum("role", ["admin", "assistant"]);
+export const accountTypeEnum = pgEnum("account_type", ["privat", "dienstleister"]);
 
 export const usersTable = pgTable("users", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   role: roleEnum("role").notNull().default("assistant"),
+  accountType: accountTypeEnum("account_type").notNull().default("privat"),
   phone: text("phone"),
   address: text("address"),
   birthDate: date("birth_date"),

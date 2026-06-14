@@ -5,6 +5,7 @@ export type AuthUser = {
   name: string;
   email: string;
   role: "admin" | "assistant";
+  accountType: "privat" | "dienstleister";
 };
 
 type AuthContextType = {
@@ -13,6 +14,7 @@ type AuthContextType = {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   setPassword: (token: string, password: string) => Promise<AuthUser>;
+  refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType>({
@@ -21,6 +23,7 @@ const AuthContext = createContext<AuthContextType>({
   login: async () => {},
   logout: async () => {},
   setPassword: async () => { throw new Error("not initialized"); },
+  refreshUser: async () => {},
 });
 
 async function apiFetch(path: string, init?: RequestInit) {
@@ -59,6 +62,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setCurrentUser(null);
   };
 
+  const refreshUser = async () => {
+    const r = await apiFetch("/api/auth/me");
+    if (r.ok) {
+      const user = (await r.json()) as AuthUser;
+      setCurrentUser(user);
+    }
+  };
+
   const setPassword = async (token: string, password: string): Promise<AuthUser> => {
     const r = await apiFetch("/api/auth/set-password", {
       method: "POST",
@@ -75,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, isLoading, login, logout, setPassword }}>
+    <AuthContext.Provider value={{ currentUser, isLoading, login, logout, setPassword, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

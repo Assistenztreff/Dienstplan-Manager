@@ -50,6 +50,15 @@ Kernfunktionen (Task 1 — Grundstruktur):
 - **Auswertungen**: Soll/Ist-Abgleich pro Assistent und Monat
 - **Regionale Feiertage**: In den Einstellungen wählbares Bundesland; die Feiertagsberechnung berücksichtigt dann landesspezifische gesetzliche Feiertage (inkl. beweglicher wie Fronleichnam). Ohne Bundesland gelten nur bundesweite Feiertage. Bundesland-genaue Näherung, keine rückwirkende Neuberechnung bestehender Schichten.
 
+## Multi-Team (Task 42 — Stufe 1: Fundament & Team anlegen)
+
+- **Konto-Typ** auf `users`: `account_type` Enum (`privat` | `dienstleister`, Default `privat`). Privat = einzelner Assistenznehmer; Dienstleister = Verwaltung mehrerer Teams.
+- **Tabellen**: `teams` (owner_id → users, cascade) und `team_members` (unique team_id+user_id). Alle Domänen-Tabellen (shifts, contracts, shift_models, time_tracking) haben jetzt `team_id NOT NULL`.
+- **Team-CRUD**: `/api/teams` (GET/POST/PATCH/DELETE), strikt owner-scoped (`owner_id = session.userId`). DELETE liefert 409, solange Mitglieder oder Daten am Team hängen.
+- **Gating**: Middleware `requireDienstleister` (Admin + accountType `dienstleister`, frisch aus DB gelesen). Frontend: Nav + Route `/team-verwaltung` nur für Dienstleister; Konto-Typ-Umschalter in den Einstellungen (ruft `refreshUser` im Auth-Context).
+- **teamId-Injektion**: Helper `resolveTeamId(userId)` (bevorzugt eigenes Team, sonst erste Mitgliedschaft) wird in alle Insert-Handler eingehängt; time_tracking erbt team_id von der verknüpften Schicht.
+- **Migration**: `pnpm --filter @workspace/scripts run migrate-teams` (idempotent, läuft in post-merge VOR `db push`). Datentrennung über Teams folgt in Stufe 2/3 (#43 Zuweisung, #44 Wechsler).
+
 ## User preferences
 
 - Strikt task-orientiertes Vorgehen: nach jedem Task auf Feedback warten

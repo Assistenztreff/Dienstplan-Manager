@@ -2,6 +2,7 @@ import { pgTable, serial, integer, real, text, timestamp, pgEnum } from "drizzle
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
+import { teamsTable } from "./teams";
 import { shiftModelsTable } from "./shift_models";
 import { relations } from "drizzle-orm";
 
@@ -9,6 +10,7 @@ export const shiftTypeEnum = pgEnum("shift_type", ["active", "standby", "night",
 
 export const shiftsTable = pgTable("shifts", {
   id: serial("id").primaryKey(),
+  teamId: integer("team_id").notNull().references(() => teamsTable.id),
   userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   startTime: timestamp("start_time").notNull(),
   endTime: timestamp("end_time").notNull(),

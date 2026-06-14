@@ -17,11 +17,20 @@ export const UserRole = {
   assistant: 'assistant',
 } as const;
 
+export type UserAccountType = typeof UserAccountType[keyof typeof UserAccountType];
+
+
+export const UserAccountType = {
+  privat: 'privat',
+  dienstleister: 'dienstleister',
+} as const;
+
 export interface User {
   id: number;
   name: string;
   email: string;
   role: UserRole;
+  accountType: UserAccountType;
   /** @nullable */
   phone?: string | null;
   /** @nullable */
@@ -66,10 +75,19 @@ export interface UserInput {
   isActive?: boolean;
 }
 
+export type UserUpdateAccountType = typeof UserUpdateAccountType[keyof typeof UserUpdateAccountType];
+
+
+export const UserUpdateAccountType = {
+  privat: 'privat',
+  dienstleister: 'dienstleister',
+} as const;
+
 export interface UserUpdate {
   /** @minLength 1 */
   name?: string;
   email?: string;
+  accountType?: UserUpdateAccountType;
   /** @nullable */
   phone?: string | null;
   /** @nullable */
@@ -87,6 +105,23 @@ export interface UserUpdate {
   /** @nullable */
   iban?: string | null;
   isActive?: boolean;
+}
+
+export interface Team {
+  id: number;
+  name: string;
+  ownerId: number;
+  createdAt: string;
+}
+
+export interface TeamInput {
+  /** @minLength 1 */
+  name: string;
+}
+
+export interface TeamUpdate {
+  /** @minLength 1 */
+  name: string;
 }
 
 export interface Contract {

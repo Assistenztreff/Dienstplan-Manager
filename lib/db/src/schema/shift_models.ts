@@ -1,9 +1,11 @@
 import { pgTable, serial, integer, text, boolean, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { teamsTable } from "./teams";
 
 export const shiftModelsTable = pgTable("shift_models", {
   id: serial("id").primaryKey(),
+  teamId: integer("team_id").notNull().references(() => teamsTable.id),
   name: text("name").notNull(),
   valuationPercent: integer("valuation_percent").notNull().default(100),
   color: text("color").notNull().default("slate"),

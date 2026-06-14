@@ -5,11 +5,13 @@
  * Dienstplan-App API für Persönliche Assistenz
  * OpenAPI spec version: 0.1.0
  */
+import type { UserUpdateAccountType } from './userUpdateAccountType';
 
 export interface UserUpdate {
   /** @minLength 1 */
   name?: string;
   email?: string;
+  accountType?: UserUpdateAccountType;
   /** @nullable */
   phone?: string | null;
   /** @nullable */

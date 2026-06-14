@@ -21,6 +21,7 @@ import {
   DeleteShiftParams,
 } from "@workspace/api-zod";
 import { requireAuth, requireAdmin } from "../middleware/auth";
+import { resolveTeamId } from "../lib/teams";
 
 const router = Router();
 
@@ -78,6 +79,7 @@ function isAbsenceType(type: string): boolean {
 type AbsenceShift = {
   id: number;
   userId: number;
+  teamId: number;
   startTime: Date;
   endTime: Date;
 };
@@ -94,6 +96,7 @@ async function bookAbsenceTimeTracking(shift: AbsenceShift): Promise<void> {
   const dailyHours = await dailyTargetHours(shift.userId, new Date(shift.startTime));
   await db.insert(timeTrackingTable).values({
     userId: shift.userId,
+    teamId: shift.teamId,
     shiftId: shift.id,
     actualStart: shift.startTime,
     actualEnd: shift.endTime,
@@ -301,7 +304,13 @@ router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
     }
   }
 
-  const [shift] = await db.insert(shiftsTable).values(body.data).returning();
+  const teamId = await resolveTeamId(req.session.userId!);
+  if (teamId == null) {
+    res.status(400).json({ error: "Kein Team zugeordnet" });
+    return;
+  }
+
+  const [shift] = await db.insert(shiftsTable).values({ ...body.data, teamId }).returning();
 
   await storeShiftMetrics(shift);
 

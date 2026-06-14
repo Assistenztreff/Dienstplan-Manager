@@ -5,6 +5,7 @@
  * Dienstplan-App API für Persönliche Assistenz
  * OpenAPI spec version: 0.1.0
  */
+import type { UserAccountType } from './userAccountType';
 import type { UserRole } from './userRole';
 
 export interface User {
@@ -12,6 +13,7 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  accountType: UserAccountType;
   /** @nullable */
   phone?: string | null;
   /** @nullable */

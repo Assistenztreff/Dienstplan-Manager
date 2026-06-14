@@ -13,6 +13,7 @@ import {
   ConfirmTimeEntryBody,
 } from "@workspace/api-zod";
 import { requireAuth, requireAdmin } from "../middleware/auth";
+import { resolveTeamId } from "../lib/teams";
 
 const router = Router();
 
@@ -84,12 +85,13 @@ router.post("/time-tracking", requireAuth, async (req, res): Promise<void> => {
   const userId =
     req.session.role === "assistant" ? req.session.userId! : body.data.userId;
 
+  let teamId: number | null = null;
   if (body.data.shiftId != null) {
     // Zugehörigkeit prüfen: die verknüpfte Schicht muss dem Benutzer gehören,
     // für den die Ist-Zeit erfasst wird. Sonst könnte eine fremde Schicht
     // verknüpft und (durch den 409-Guard) für den Berechtigten blockiert werden.
     const [shift] = await db
-      .select({ id: shiftsTable.id, userId: shiftsTable.userId })
+      .select({ id: shiftsTable.id, userId: shiftsTable.userId, teamId: shiftsTable.teamId })
       .from(shiftsTable)
       .where(eq(shiftsTable.id, body.data.shiftId))
       .limit(1);
@@ -104,6 +106,7 @@ router.post("/time-tracking", requireAuth, async (req, res): Promise<void> => {
       });
       return;
     }
+    teamId = shift.teamId;
 
     // Doppelbuchung verhindern: pro geplanter Schicht darf nur eine Ist-Zeit
     // erfasst werden. Serverseitiger Schutz, unabhängig von der UI-Filterung.
@@ -121,12 +124,20 @@ router.post("/time-tracking", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
+  if (teamId == null) {
+    teamId = await resolveTeamId(userId);
+  }
+  if (teamId == null) {
+    res.status(400).json({ error: "Kein Team zugeordnet" });
+    return;
+  }
+
   const actualStart = new Date(body.data.actualStart as unknown as string);
   const actualEnd = new Date(body.data.actualEnd as unknown as string);
   const actualHours = calcHours(actualStart, actualEnd);
   const [entry] = await db
     .insert(timeTrackingTable)
-    .values({ ...body.data, userId, actualHours })
+    .values({ ...body.data, userId, teamId, actualHours })
     .returning();
   const [withUser] = await db
     .select(withUserSelect)

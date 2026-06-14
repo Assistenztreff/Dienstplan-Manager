@@ -29,6 +29,7 @@ export const ListUsersResponseItem = zod.object({
   "name": zod.string(),
   "email": zod.string(),
   "role": zod.enum(['admin', 'assistant']),
+  "accountType": zod.enum(['privat', 'dienstleister']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
   "birthDate": zod.string().nullish(),
@@ -77,6 +78,7 @@ export const GetUserResponse = zod.object({
   "name": zod.string(),
   "email": zod.string(),
   "role": zod.enum(['admin', 'assistant']),
+  "accountType": zod.enum(['privat', 'dienstleister']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
   "birthDate": zod.string().nullish(),
@@ -103,6 +105,7 @@ export const UpdateUserParams = zod.object({
 export const UpdateUserBody = zod.object({
   "name": zod.string().min(1).optional(),
   "email": zod.string().email().optional(),
+  "accountType": zod.enum(['privat', 'dienstleister']).optional(),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
   "birthDate": zod.string().nullish(),
@@ -119,6 +122,7 @@ export const UpdateUserResponse = zod.object({
   "name": zod.string(),
   "email": zod.string(),
   "role": zod.enum(['admin', 'assistant']),
+  "accountType": zod.enum(['privat', 'dienstleister']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
   "birthDate": zod.string().nullish(),
@@ -162,6 +166,7 @@ export const ListContractsResponseItem = zod.object({
   "name": zod.string(),
   "email": zod.string(),
   "role": zod.enum(['admin', 'assistant']),
+  "accountType": zod.enum(['privat', 'dienstleister']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
   "birthDate": zod.string().nullish(),
@@ -218,6 +223,7 @@ export const GetContractResponse = zod.object({
   "name": zod.string(),
   "email": zod.string(),
   "role": zod.enum(['admin', 'assistant']),
+  "accountType": zod.enum(['privat', 'dienstleister']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
   "birthDate": zod.string().nullish(),
@@ -270,6 +276,7 @@ export const UpdateContractResponse = zod.object({
   "name": zod.string(),
   "email": zod.string(),
   "role": zod.enum(['admin', 'assistant']),
+  "accountType": zod.enum(['privat', 'dienstleister']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
   "birthDate": zod.string().nullish(),
@@ -320,6 +327,7 @@ export const ListShiftsResponseItem = zod.object({
   "name": zod.string(),
   "email": zod.string(),
   "role": zod.enum(['admin', 'assistant']),
+  "accountType": zod.enum(['privat', 'dienstleister']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
   "birthDate": zod.string().nullish(),
@@ -373,6 +381,7 @@ export const GetShiftResponse = zod.object({
   "name": zod.string(),
   "email": zod.string(),
   "role": zod.enum(['admin', 'assistant']),
+  "accountType": zod.enum(['privat', 'dienstleister']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
   "birthDate": zod.string().nullish(),
@@ -420,6 +429,7 @@ export const UpdateShiftResponse = zod.object({
   "name": zod.string(),
   "email": zod.string(),
   "role": zod.enum(['admin', 'assistant']),
+  "accountType": zod.enum(['privat', 'dienstleister']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
   "birthDate": zod.string().nullish(),
@@ -518,6 +528,59 @@ export const DeleteShiftModelParams = zod.object({
 
 
 /**
+ * @summary Teams auflisten
+ */
+export const ListTeamsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "ownerId": zod.number(),
+  "createdAt": zod.coerce.date()
+})
+export const ListTeamsResponse = zod.array(ListTeamsResponseItem)
+
+
+/**
+ * @summary Team anlegen
+ */
+
+
+
+export const CreateTeamBody = zod.object({
+  "name": zod.string().min(1)
+})
+
+
+/**
+ * @summary Team aktualisieren
+ */
+export const UpdateTeamParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const UpdateTeamBody = zod.object({
+  "name": zod.string().min(1)
+})
+
+export const UpdateTeamResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "ownerId": zod.number(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Team löschen
+ */
+export const DeleteTeamParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
  * @summary Zuschlags-Einstellungen lesen
  */
 export const GetAllowanceSettingsResponse = zod.object({
@@ -596,6 +659,7 @@ export const ListTimeEntriesResponseItem = zod.object({
   "name": zod.string(),
   "email": zod.string(),
   "role": zod.enum(['admin', 'assistant']),
+  "accountType": zod.enum(['privat', 'dienstleister']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
   "birthDate": zod.string().nullish(),
@@ -647,6 +711,7 @@ export const GetTimeEntryResponse = zod.object({
   "name": zod.string(),
   "email": zod.string(),
   "role": zod.enum(['admin', 'assistant']),
+  "accountType": zod.enum(['privat', 'dienstleister']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
   "birthDate": zod.string().nullish(),
@@ -691,6 +756,7 @@ export const UpdateTimeEntryResponse = zod.object({
   "name": zod.string(),
   "email": zod.string(),
   "role": zod.enum(['admin', 'assistant']),
+  "accountType": zod.enum(['privat', 'dienstleister']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
   "birthDate": zod.string().nullish(),
@@ -743,6 +809,7 @@ export const ConfirmTimeEntryResponse = zod.object({
   "name": zod.string(),
   "email": zod.string(),
   "role": zod.enum(['admin', 'assistant']),
+  "accountType": zod.enum(['privat', 'dienstleister']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
   "birthDate": zod.string().nullish(),
@@ -823,6 +890,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "name": zod.string(),
   "email": zod.string(),
   "role": zod.enum(['admin', 'assistant']),
+  "accountType": zod.enum(['privat', 'dienstleister']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
   "birthDate": zod.string().nullish(),
@@ -852,6 +920,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "name": zod.string(),
   "email": zod.string(),
   "role": zod.enum(['admin', 'assistant']),
+  "accountType": zod.enum(['privat', 'dienstleister']),
   "phone": zod.string().nullish(),
   "address": zod.string().nullish(),
   "birthDate": zod.string().nullish(),

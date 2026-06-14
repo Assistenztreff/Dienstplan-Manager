@@ -12,6 +12,7 @@ import Zeiterfassung from "@/pages/zeiterfassung";
 import Abwesenheiten from "@/pages/abwesenheiten";
 import Auswertungen from "@/pages/auswertungen";
 import Einstellungen from "@/pages/einstellungen";
+import TeamVerwaltung from "@/pages/team-verwaltung";
 import Login from "@/pages/login";
 import Einladung from "@/pages/einladung";
 import NotFound from "@/pages/not-found";
@@ -77,6 +78,9 @@ function Router() {
         )}
         {currentUser.role === "admin" && (
           <Route path="/einstellungen" component={Einstellungen} />
+        )}
+        {currentUser.role === "admin" && currentUser.accountType === "dienstleister" && (
+          <Route path="/team-verwaltung" component={TeamVerwaltung} />
         )}
         <Route component={NotFound} />
       </Switch>

@@ -2,6 +2,7 @@ import { pgTable, serial, integer, real, text, timestamp, pgEnum } from "drizzle
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
+import { teamsTable } from "./teams";
 import { shiftsTable } from "./shifts";
 import { relations } from "drizzle-orm";
 
@@ -9,6 +10,7 @@ export const timeEntryStatusEnum = pgEnum("time_entry_status", ["pending", "conf
 
 export const timeTrackingTable = pgTable("time_tracking", {
   id: serial("id").primaryKey(),
+  teamId: integer("team_id").notNull().references(() => teamsTable.id),
   userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   shiftId: integer("shift_id").references(() => shiftsTable.id, { onDelete: "set null" }),
   actualStart: timestamp("actual_start").notNull(),

@@ -8,6 +8,7 @@ import allowancesRouter from "./allowances";
 import timeTrackingRouter from "./time_tracking";
 import dashboardRouter from "./dashboard";
 import invitationsRouter from "./invitations";
+import teamsRouter from "./teams";
 import authRouter from "./auth";
 
 const router: IRouter = Router();
@@ -22,5 +23,6 @@ router.use(allowancesRouter);
 router.use(timeTrackingRouter);
 router.use(dashboardRouter);
 router.use(invitationsRouter);
+router.use(teamsRouter);
 
 export default router;

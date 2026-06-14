@@ -10,6 +10,7 @@ import {
   DeleteShiftModelParams,
 } from "@workspace/api-zod";
 import { requireAuth, requireAdmin } from "../middleware/auth";
+import { resolveTeamId } from "../lib/teams";
 
 const router = Router();
 
@@ -36,7 +37,12 @@ router.post("/shift-models", requireAdmin, async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid request body" });
     return;
   }
-  const [model] = await db.insert(shiftModelsTable).values(body.data).returning();
+  const teamId = await resolveTeamId(req.session.userId!);
+  if (teamId == null) {
+    res.status(400).json({ error: "Kein Team zugeordnet" });
+    return;
+  }
+  const [model] = await db.insert(shiftModelsTable).values({ ...body.data, teamId }).returning();
   res.status(201).json(model);
 });
 

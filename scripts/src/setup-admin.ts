@@ -34,6 +34,25 @@ async function main() {
     [name, email.toLowerCase().trim(), passwordHash]
   );
 
+  const adminId = result.rows[0].id;
+
+  // Standard-Team für den neuen Admin anlegen (idempotent) und Mitgliedschaft sicherstellen.
+  const teamResult = await client.query(
+    `INSERT INTO teams (name, owner_id)
+     SELECT 'Standard-Team', $1
+     WHERE NOT EXISTS (SELECT 1 FROM teams)
+     RETURNING id`,
+    [adminId]
+  );
+  if (teamResult.rows.length > 0) {
+    await client.query(
+      `INSERT INTO team_members (team_id, user_id)
+       VALUES ($1, $2)
+       ON CONFLICT (team_id, user_id) DO NOTHING`,
+      [teamResult.rows[0].id, adminId]
+    );
+  }
+
   console.log(`Admin-Benutzer erstellt:`);
   console.log(`  ID:       ${result.rows[0].id}`);
   console.log(`  Name:     ${name}`);

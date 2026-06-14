@@ -5,8 +5,10 @@ import {
   useUpdateShiftModel,
   useDeleteShiftModel,
   getListShiftModelsQueryKey,
+  useUpdateUser,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/context/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -208,6 +210,54 @@ function ModelDialog({ open, onClose, editModel, nextSortOrder }: ModelDialogPro
   );
 }
 
+function AccountTypeCard() {
+  const { currentUser, refreshUser } = useAuth();
+  const updateUser = useUpdateUser();
+  const [saving, setSaving] = useState(false);
+
+  const accountType = currentUser?.accountType ?? "privat";
+
+  async function setAccountType(value: "privat" | "dienstleister") {
+    if (!currentUser || value === accountType) return;
+    setSaving(true);
+    try {
+      await updateUser.mutateAsync({ id: currentUser.id, data: { accountType: value } });
+      await refreshUser();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card className="border-border/50 shadow-sm">
+      <CardContent className="p-4 space-y-3">
+        <div>
+          <h3 className="font-serif text-lg font-bold text-foreground">Konto-Typ</h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Privat: einzelner Assistenznehmer. Dienstleister: Verwaltung mehrerer Teams.
+          </p>
+        </div>
+        <div className="max-w-xs space-y-1.5">
+          <Label>Aktueller Konto-Typ</Label>
+          <Select
+            value={accountType}
+            onValueChange={(v) => void setAccountType(v as "privat" | "dienstleister")}
+            disabled={saving}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="privat">Privat (Assistenznehmer)</SelectItem>
+              <SelectItem value="dienstleister">Dienstleister (Assistenzdienst)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Einstellungen() {
   const queryClient = useQueryClient();
   const { data: models, isLoading } = useListShiftModels();
@@ -328,6 +378,8 @@ export default function Einstellungen() {
         Schichtmodelle stehen beim Anlegen einer Schicht im Dienstplan zur Auswahl. Die Zeitwertung
         bestimmt, wie die geleistete Zeit in der Auswertung auf die Sollstunden angerechnet wird.
       </p>
+
+      <AccountTypeCard />
 
       <AllowanceSettingsForm />
 

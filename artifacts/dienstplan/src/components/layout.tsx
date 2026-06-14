@@ -7,6 +7,7 @@ import {
   CalendarOff,
   BarChart3,
   Settings,
+  Building2,
   Menu,
   LogOut,
 } from "lucide-react";
@@ -17,13 +18,14 @@ import { useAuth } from "@/context/auth";
 import { useToast } from "@/hooks/use-toast";
 
 const ALL_NAV_ITEMS = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard, adminOnly: false },
-  { href: "/dienstplan", label: "Dienstplan", icon: CalendarDays, adminOnly: false },
-  { href: "/assistenten", label: "Assistenten", icon: Users, adminOnly: true },
-  { href: "/zeiterfassung", label: "Zeiterfassung", icon: Clock, adminOnly: false },
-  { href: "/abwesenheiten", label: "Abwesenheiten", icon: CalendarOff, adminOnly: true },
-  { href: "/auswertungen", label: "Auswertungen", icon: BarChart3, adminOnly: true },
-  { href: "/einstellungen", label: "Einstellungen", icon: Settings, adminOnly: true },
+  { href: "/", label: "Dashboard", icon: LayoutDashboard, adminOnly: false, dienstleisterOnly: false },
+  { href: "/dienstplan", label: "Dienstplan", icon: CalendarDays, adminOnly: false, dienstleisterOnly: false },
+  { href: "/assistenten", label: "Assistenten", icon: Users, adminOnly: true, dienstleisterOnly: false },
+  { href: "/zeiterfassung", label: "Zeiterfassung", icon: Clock, adminOnly: false, dienstleisterOnly: false },
+  { href: "/abwesenheiten", label: "Abwesenheiten", icon: CalendarOff, adminOnly: true, dienstleisterOnly: false },
+  { href: "/auswertungen", label: "Auswertungen", icon: BarChart3, adminOnly: true, dienstleisterOnly: false },
+  { href: "/team-verwaltung", label: "Team-Verwaltung", icon: Building2, adminOnly: true, dienstleisterOnly: true },
+  { href: "/einstellungen", label: "Einstellungen", icon: Settings, adminOnly: true, dienstleisterOnly: false },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -32,7 +34,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { toast } = useToast();
 
   const navItems = ALL_NAV_ITEMS.filter(
-    (item) => !item.adminOnly || currentUser?.role === "admin"
+    (item) =>
+      (!item.adminOnly || currentUser?.role === "admin") &&
+      (!item.dienstleisterOnly || currentUser?.accountType === "dienstleister")
   );
 
   const handleLogout = async () => {

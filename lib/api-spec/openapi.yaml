@@ -414,6 +414,82 @@ paths:
         "404":
           description: Nicht gefunden
 
+  /teams:
+    get:
+      operationId: listTeams
+      tags: [teams]
+      summary: Teams auflisten
+      responses:
+        "200":
+          description: Liste der Teams
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Team"
+    post:
+      operationId: createTeam
+      tags: [teams]
+      summary: Team anlegen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamInput"
+      responses:
+        "201":
+          description: Erstellt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+
+  /teams/{id}:
+    patch:
+      operationId: updateTeam
+      tags: [teams]
+      summary: Team aktualisieren
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamUpdate"
+      responses:
+        "200":
+          description: Aktualisiert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+        "404":
+          description: Nicht gefunden
+    delete:
+      operationId: deleteTeam
+      tags: [teams]
+      summary: Team löschen
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Gelöscht
+        "404":
+          description: Nicht gefunden
+        "409":
+          description: Team enthält noch Daten oder Mitglieder
+
   /allowance-settings:
     get:
       operationId: getAllowanceSettings
@@ -742,7 +818,7 @@ components:
 
     User:
       type: object
-      required: [id, name, email, role, createdAt]
+      required: [id, name, email, role, accountType, createdAt]
       properties:
         id:
           type: integer
@@ -753,6 +829,9 @@ components:
         role:
           type: string
           enum: [admin, assistant]
+        accountType:
+          type: string
+          enum: [privat, dienstleister]
         phone:
           type: ["string", "null"]
         address:
@@ -816,6 +895,9 @@ components:
         email:
           type: string
           format: email
+        accountType:
+          type: string
+          enum: [privat, dienstleister]
         phone:
           type: ["string", "null"]
         address:
@@ -834,6 +916,36 @@ components:
           type: ["string", "null"]
         isActive:
           type: boolean
+
+    Team:
+      type: object
+      required: [id, name, ownerId, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        ownerId:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    TeamInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+
+    TeamUpdate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
 
     Contract:
       type: object

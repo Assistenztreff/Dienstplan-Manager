@@ -19,6 +19,7 @@ const SAFE_USER_SELECT = {
   name: usersTable.name,
   email: usersTable.email,
   role: usersTable.role,
+  accountType: usersTable.accountType,
   phone: usersTable.phone,
   address: usersTable.address,
   birthDate: usersTable.birthDate,

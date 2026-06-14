@@ -11,6 +11,7 @@ const USER_SELECT = {
   name: usersTable.name,
   email: usersTable.email,
   role: usersTable.role,
+  accountType: usersTable.accountType,
 };
 
 router.post("/auth/login", async (req, res) => {
@@ -36,7 +37,7 @@ router.post("/auth/login", async (req, res) => {
   req.session.userId = user.id;
   req.session.role = user.role;
 
-  return res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
+  return res.json({ id: user.id, name: user.name, email: user.email, role: user.role, accountType: user.accountType });
 });
 
 router.post("/auth/logout", (req, res) => {
@@ -99,7 +100,7 @@ router.post("/auth/set-password", async (req, res) => {
   req.session.userId = user.id;
   req.session.role = user.role;
 
-  return res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
+  return res.json({ id: user.id, name: user.name, email: user.email, role: user.role, accountType: user.accountType });
 });
 
 export default router;
