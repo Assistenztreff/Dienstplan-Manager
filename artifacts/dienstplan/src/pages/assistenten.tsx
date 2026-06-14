@@ -12,6 +12,7 @@ import {
   getListContractsQueryKey,
 } from "@workspace/api-client-react";
 import { useTeam } from "@/context/team";
+import { readableApiError } from "@/lib/api-error";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -367,8 +368,10 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
       await queryClient.invalidateQueries({ queryKey: getListUsersQueryKey({ role: "assistant" }) });
       await queryClient.invalidateQueries({ queryKey: getListContractsQueryKey() });
       onClose();
-    } catch {
-      setErrors({ email: "Speichern fehlgeschlagen. Bitte pruefen und erneut versuchen." });
+    } catch (err) {
+      setErrors({
+        email: readableApiError(err, "Speichern fehlgeschlagen. Bitte pruefen und erneut versuchen."),
+      });
     } finally {
       setSaving(false);
     }

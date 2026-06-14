@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { Trash2 } from "lucide-react";
 import { colorDotClass } from "@/lib/shift-model-colors";
+import { readableApiError } from "@/lib/api-error";
 
 type Assistant = { id: number; name: string };
 
@@ -308,7 +309,9 @@ export function ShiftDialog({
         const conflicts = (err.data as { conflicts?: ConflictInfo[] }).conflicts ?? [];
         setOverlapConflicts(conflicts);
       } else {
-        setErrors({ notes: "Speichern fehlgeschlagen. Bitte erneut versuchen." });
+        setErrors({
+          notes: readableApiError(err, "Speichern fehlgeschlagen. Bitte erneut versuchen."),
+        });
       }
     } finally {
       setSaving(false);
