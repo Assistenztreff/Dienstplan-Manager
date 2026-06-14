@@ -108,6 +108,31 @@ function shiftDotClass(shift: Shift, modelMap: Map<number, ShiftModelInfo>): str
   return SHIFT_TYPE_DOTS[shift.type] ?? "bg-primary";
 }
 
+// Abwesenheiten (Urlaub/Krank) werden als ganztägige Tagesblöcke gespeichert —
+// ein Datensatz pro Tag. Mehrtägige Abwesenheiten bestehen aus mehreren
+// aufeinanderfolgenden Datensätzen desselben Typs.
+const ABSENCE_TYPES = new Set(["vacation", "sick"]);
+function isAbsenceShift(shift: Shift): boolean {
+  return ABSENCE_TYPES.has(shift.type);
+}
+
+// Lokaler Datumsschlüssel (yyyy-MM-dd). Wichtig: aus dem ISO-String NICHT per
+// slice extrahieren — die gespeicherte Startzeit ist UTC und kann lokal auf
+// einen anderen Tag fallen. Daher über die lokale Date-Repräsentation.
+function dayKey(date: Date): string {
+  return format(date, "yyyy-MM-dd");
+}
+
+// Indexiert Abwesenheiten nach lokalem Tagesschlüssel (für eine bereits auf
+// einen Assistenten gefilterte Schichtmenge).
+function absenceMapFor(shifts: Shift[]): Map<string, Shift> {
+  const m = new Map<string, Shift>();
+  for (const s of shifts) {
+    if (isAbsenceShift(s)) m.set(dayKey(new Date(s.startTime)), s);
+  }
+  return m;
+}
+
 type DialogState =
   | { mode: "closed" }
   | { mode: "create"; date: Date; userId?: number }
@@ -150,6 +175,39 @@ function ShiftBadge({
           <div className="text-[11px] opacity-70">{shiftLabel(shift, modelMap)}</div>
         </>
       )}
+    </div>
+  );
+}
+
+// Segment eines durchgehenden Abwesenheitsbalkens in der Desktop-Tabelle.
+// Jeder Tag einer mehrtägigen Abwesenheit ist ein eigener Datensatz; die
+// Segmente werden über negative Ränder visuell zu einem Balken verbunden.
+// Der Typ-Name erscheint nur am Anfang (isStart) des Balkens.
+function AbsenceTableBar({
+  shift,
+  isStart,
+  isEnd,
+  modelMap,
+  onClick,
+}: {
+  shift: Shift;
+  isStart: boolean;
+  isEnd: boolean;
+  modelMap: Map<number, ShiftModelInfo>;
+  onClick?: (e: React.MouseEvent) => void;
+}) {
+  const classes = shiftBadgeClasses(shift, modelMap);
+  const cap = `${isStart ? "rounded-l" : "border-l-0 -ml-[5px]"} ${
+    isEnd ? "rounded-r" : "border-r-0 -mr-1"
+  }`;
+  return (
+    <div
+      data-testid={`shift-badge-${shift.id}`}
+      className={`w-full h-6 flex items-center text-xs leading-none px-2 border cursor-pointer transition-colors overflow-hidden ${classes} ${cap}`}
+      onClick={onClick}
+      title={shiftLabel(shift, modelMap)}
+    >
+      {isStart && <span className="font-medium truncate">{shiftLabel(shift, modelMap)}</span>}
     </div>
   );
 }
@@ -252,6 +310,19 @@ function MonthGrid({
   const blanks = Array.from({ length: offset });
   const selectedShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), selectedDay));
 
+  // Abwesenheits-Typen je Tag (über alle sichtbaren Assistenten aggregiert), um
+  // zusammenhängende Urlaubs-/Kranktage als durchgehenden Balken mit klar
+  // erkennbarem Anfang/Ende darzustellen.
+  const absenceTypesByDay = new Map<string, Set<string>>();
+  for (const s of shifts) {
+    if (!isAbsenceShift(s)) continue;
+    const k = dayKey(new Date(s.startTime));
+    if (!absenceTypesByDay.has(k)) absenceTypesByDay.set(k, new Set());
+    absenceTypesByDay.get(k)!.add(s.type);
+  }
+  const hasAbsence = (day: Date | undefined, type: string): boolean =>
+    day != null && (absenceTypesByDay.get(dayKey(day))?.has(type) ?? false);
+
   return (
     <div className="space-y-3">
       {/* Monatsgitter mit hellblauem Rahmen, weißen Kästchen */}
@@ -267,11 +338,28 @@ function MonthGrid({
           {blanks.map((_, i) => (
             <div key={`blank-${i}`} data-testid="month-grid-blank" />
           ))}
-          {days.map((day) => {
+          {days.map((day, dayIdx) => {
             const dayShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), day));
             const selected = isSameDay(day, selectedDay);
             const today = isToday(day);
-            const dots = dayShifts.slice(0, 3);
+            // Reguläre Dienste als Punkte; Abwesenheiten als verbundener Balken.
+            const dots = dayShifts.filter((s) => !isAbsenceShift(s)).slice(0, 3);
+            const prevDay = dayIdx > 0 ? days[dayIdx - 1] : undefined;
+            const nextDay = dayIdx < days.length - 1 ? days[dayIdx + 1] : undefined;
+            const absenceBars = (["vacation", "sick"] as const)
+              .filter((type) => hasAbsence(day, type))
+              .map((type) => {
+                const isStart = !hasAbsence(prevDay, type);
+                const isEnd = !hasAbsence(nextDay, type);
+                return (
+                  <span
+                    key={type}
+                    className={`block h-1.5 w-full ${SHIFT_TYPE_DOTS[type]} ${
+                      isStart ? "rounded-l-full" : "-ml-0.5"
+                    } ${isEnd ? "rounded-r-full" : "-mr-0.5"}`}
+                  />
+                );
+              });
             return (
               <button
                 key={day.toISOString()}
@@ -294,13 +382,18 @@ function MonthGrid({
                 >
                   {format(day, "d")}
                 </span>
-                <span className="flex items-center gap-0.5 h-1.5">
-                  {dots.map((s) => (
-                    <span
-                      key={s.id}
-                      className={`h-1.5 w-1.5 rounded-full ${shiftDotClass(s, modelMap)}`}
-                    />
-                  ))}
+                <span className="flex flex-col items-stretch gap-0.5 w-full">
+                  {absenceBars}
+                  {dots.length > 0 && (
+                    <span className="flex items-center justify-center gap-0.5 h-1.5">
+                      {dots.map((s) => (
+                        <span
+                          key={s.id}
+                          className={`h-1.5 w-1.5 rounded-full ${shiftDotClass(s, modelMap)}`}
+                        />
+                      ))}
+                    </span>
+                  )}
                 </span>
               </button>
             );
@@ -634,7 +727,10 @@ export default function Dienstplan() {
                 </td>
               </tr>
             ) : (
-              tableAssistants.map((assistant) => (
+              tableAssistants.map((assistant) => {
+                const assistantShifts = allShifts.filter((s) => s.userId === assistant.id);
+                const absMap = absenceMapFor(assistantShifts);
+                return (
                 <tr
                   key={assistant.id}
                   className="border-b last:border-0 hover:bg-muted/20 transition-colors"
@@ -642,10 +738,23 @@ export default function Dienstplan() {
                   <td className="p-3 font-medium sticky left-0 bg-card hover:bg-muted/20 transition-colors z-10 shadow-[1px_0_0_0_hsl(var(--border))]">
                     {isAdmin ? assistant.name : "Meine Schichten"}
                   </td>
-                  {days.map((day) => {
-                    const dayShifts = allShifts.filter(
-                      (s) => s.userId === assistant.id && isSameDay(new Date(s.startTime), day)
+                  {days.map((day, dayIdx) => {
+                    const dayShifts = assistantShifts.filter(
+                      (s) => isSameDay(new Date(s.startTime), day)
                     );
+                    const regular = dayShifts.filter((s) => !isAbsenceShift(s));
+                    const absence = absMap.get(dayKey(day));
+                    // Anfang/Ende eines durchgehenden Balkens: Vortag bzw. Folgetag
+                    // ohne gleichartige Abwesenheit (oder Monatsrand).
+                    let isStart = true;
+                    let isEnd = true;
+                    if (absence) {
+                      const prev = dayIdx > 0 ? absMap.get(dayKey(days[dayIdx - 1])) : undefined;
+                      const next =
+                        dayIdx < days.length - 1 ? absMap.get(dayKey(days[dayIdx + 1])) : undefined;
+                      isStart = !prev || prev.type !== absence.type;
+                      isEnd = !next || next.type !== absence.type;
+                    }
                     return (
                       <td
                         key={day.toISOString()}
@@ -656,7 +765,20 @@ export default function Dienstplan() {
                         title={isAdmin ? "Klicken zum Anlegen einer Schicht" : undefined}
                       >
                         <div className="space-y-1 min-h-[32px]">
-                          {dayShifts.map((s) => (
+                          {absence && (
+                            <AbsenceTableBar
+                              shift={absence}
+                              isStart={isStart}
+                              isEnd={isEnd}
+                              modelMap={modelMap}
+                              onClick={
+                                isAdmin
+                                  ? (e) => { e.stopPropagation(); openEdit(absence); }
+                                  : undefined
+                              }
+                            />
+                          )}
+                          {regular.map((s) => (
                             <ShiftBadge
                               key={s.id}
                               shift={s}
@@ -674,7 +796,8 @@ export default function Dienstplan() {
                     );
                   })}
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>

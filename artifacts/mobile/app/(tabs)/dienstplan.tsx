@@ -96,6 +96,31 @@ function groupByDay(shifts: Shift[]): Map<string, Shift[]> {
   return map;
 }
 
+// Urlaub/Krank werden als ganztägige Tagesblöcke gespeichert (ein Datensatz pro
+// Tag). Mehrtägige Abwesenheiten = mehrere aufeinanderfolgende Datensätze.
+function isAbsenceType(type: string): boolean {
+  return type === "vacation" || type === "sick";
+}
+
+// Lokaler Datumsschlüssel (yyyy-MM-dd) — Abwesenheiten haben Startzeit 00:00,
+// daher über die lokale Date-Repräsentation statt ISO-Slice (sonst Off-by-one).
+function localDayKey(iso: string): string {
+  const d = new Date(iso);
+  return isoDate(d.getFullYear(), d.getMonth() + 1, d.getDate());
+}
+
+// Pro Tag: welche Abwesenheitstypen sind vorhanden (über alle Schichten).
+function absenceTypesByDay(shifts: Shift[]): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>();
+  for (const s of shifts) {
+    if (!isAbsenceType(s.type)) continue;
+    const key = localDayKey(s.startTime);
+    if (!map.has(key)) map.set(key, new Set());
+    map.get(key)!.add(s.type);
+  }
+  return map;
+}
+
 // ─── Calendar Month Grid ──────────────────────────────────────────────────────
 
 function CalendarView({
@@ -115,8 +140,12 @@ function CalendarView({
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const byDay = useMemo(() => groupByDay(shifts), [shifts]);
+  const absenceByDay = useMemo(() => absenceTypesByDay(shifts), [shifts]);
   const totalDays = daysInMonth(year, month);
   const firstWeekday = weekdayMon(year, month, 1); // 0=Mo … 6=So
+
+  const hasAbsence = (day: number, type: string): boolean =>
+    day >= 1 && day <= totalDays && (absenceByDay.get(isoDate(year, month, day))?.has(type) ?? false);
 
   const SCREEN_WIDTH = Dimensions.get("window").width;
   const CELL_WIDTH = Math.floor((SCREEN_WIDTH - 32) / 7);
@@ -146,7 +175,12 @@ function CalendarView({
               return <View key={`e-${colIdx}`} style={{ width: CELL_WIDTH, height: CELL_HEIGHT }} />;
             }
             const dateStr = isoDate(year, month, cell.day);
-            const dayShifts = byDay.get(dateStr) ?? [];
+            const cellDay = cell.day;
+            // Reguläre Dienste als Punkte; Abwesenheiten als verbundener Balken.
+            const dayShifts = (byDay.get(dateStr) ?? []).filter((s) => !isAbsenceType(s.type));
+            const absenceTypes = (["vacation", "sick"] as const).filter((t) =>
+              hasAbsence(cellDay, t),
+            );
             const isToday = dateStr === today;
             const isSelected = dateStr === selectedDate;
 
@@ -184,6 +218,28 @@ function CalendarView({
                 >
                   {cell.day}
                 </Text>
+                {/* Abwesenheits-Balken — verbindet sich mit Nachbartagen,
+                    runde Enden markieren Anfang/Ende des Zeitraums. */}
+                {absenceTypes.map((t) => {
+                  const sc = SHIFT_COLORS[t];
+                  const isStart = !hasAbsence(cellDay - 1, t);
+                  const isEnd = !hasAbsence(cellDay + 1, t);
+                  return (
+                    <View
+                      key={t}
+                      style={{
+                        height: 6,
+                        width: CELL_WIDTH,
+                        marginTop: 2,
+                        backgroundColor: isSelected ? colors.primaryForeground + "CC" : sc.dot,
+                        borderTopLeftRadius: isStart ? 3 : 0,
+                        borderBottomLeftRadius: isStart ? 3 : 0,
+                        borderTopRightRadius: isEnd ? 3 : 0,
+                        borderBottomRightRadius: isEnd ? 3 : 0,
+                      }}
+                    />
+                  );
+                })}
                 {/* Shift dots — max 3 */}
                 {dayShifts.length > 0 && (
                   <View style={styles.calDots}>
