@@ -1,9 +1,12 @@
-import { listShifts } from "@workspace/api-client-react";
+import { listShifts, getBrandingSettings } from "@workspace/api-client-react";
 import { format, differenceInMinutes } from "date-fns";
 import { de } from "date-fns/locale";
 import logoUrl from "@assets/logo dunkel.png";
+import { logoSrcFromPath } from "@/lib/logo";
 
-const LOGO_ASPECT = 3973 / 848;
+const DEFAULT_LOGO_ASPECT = 3973 / 848;
+
+type LoadedImage = { dataUrl: string; aspect: number };
 
 async function loadImageDataUrl(url: string): Promise<string | null> {
   try {
@@ -19,6 +22,44 @@ async function loadImageDataUrl(url: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+function imageAspectFromDataUrl(dataUrl: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img.naturalHeight > 0 ? img.naturalWidth / img.naturalHeight : null);
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+
+async function loadLogoImage(): Promise<LoadedImage | null> {
+  // Eigenes Firmenlogo (aus den Einstellungen) bevorzugen, sonst Standard-Logo.
+  let customPath: string | null = null;
+  try {
+    const branding = await getBrandingSettings();
+    customPath = logoSrcFromPath((branding as { logoPath?: string | null }).logoPath);
+  } catch {
+    customPath = null;
+  }
+
+  if (customPath) {
+    const dataUrl = await loadImageDataUrl(customPath);
+    if (dataUrl) {
+      const aspect = await imageAspectFromDataUrl(dataUrl);
+      return { dataUrl, aspect: aspect ?? DEFAULT_LOGO_ASPECT };
+    }
+  }
+
+  const fallback = await loadImageDataUrl(logoUrl);
+  if (fallback) return { dataUrl: fallback, aspect: DEFAULT_LOGO_ASPECT };
+  return null;
+}
+
+function logoImageFormat(dataUrl: string): "PNG" | "JPEG" {
+  return dataUrl.startsWith("data:image/jpeg") || dataUrl.startsWith("data:image/jpg")
+    ? "JPEG"
+    : "PNG";
 }
 
 const SHIFT_TYPE_LABELS: Record<string, string> = {
@@ -39,7 +80,7 @@ async function renderStatementPage(
   doc: any,
   autoTable: any,
   pageWidth: number,
-  logoDataUrl: string | null,
+  logo: LoadedImage | null,
   balance: any,
   month: number,
   year: number,
@@ -47,12 +88,12 @@ async function renderStatementPage(
   teamId?: number | null,
 ) {
   // --- Header ---
-  if (logoDataUrl) {
+  if (logo) {
     const logoW = 48;
-    const logoH = logoW / LOGO_ASPECT;
+    const logoH = logoW / logo.aspect;
     const logoX = pageWidth - 14 - logoW;
     const logoY = 12;
-    doc.addImage(logoDataUrl, "PNG", logoX, logoY, logoW, logoH);
+    doc.addImage(logo.dataUrl, logoImageFormat(logo.dataUrl), logoX, logoY, logoW, logoH);
   }
 
   doc.setFontSize(18);
@@ -182,7 +223,7 @@ export async function exportStatementSectionsPdf({
 
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
-  const logoDataUrl = await loadImageDataUrl(logoUrl);
+  const logo = await loadLogoImage();
   let firstPage = true;
 
   for (const section of sections) {
@@ -193,7 +234,7 @@ export async function exportStatementSectionsPdf({
       doc,
       autoTable,
       pageWidth,
-      logoDataUrl,
+      logo,
       section.balance,
       section.month,
       section.year,

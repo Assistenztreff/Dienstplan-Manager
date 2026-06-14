@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   useListShiftModels,
   useCreateShiftModel,
@@ -6,6 +6,11 @@ import {
   useDeleteShiftModel,
   getListShiftModelsQueryKey,
   useUpdateUser,
+  useGetBrandingSettings,
+  useUpdateBrandingSettings,
+  getGetBrandingSettingsQueryKey,
+  requestUploadUrl,
+  type BrandingSettings,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/auth";
@@ -18,9 +23,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, GripVertical } from "lucide-react";
+import { Plus, Pencil, Trash2, GripVertical, Upload, ImageIcon } from "lucide-react";
 import { SHIFT_MODEL_COLORS, colorDotClass } from "@/lib/shift-model-colors";
 import { AllowanceSettingsForm } from "@/components/allowance-settings-form";
+import { logoSrcFromPath, ACCEPTED_LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/logo";
 
 type ShiftModel = {
   id: number;
@@ -262,6 +268,135 @@ function AccountTypeCard() {
   );
 }
 
+function LogoSettingsCard() {
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { data, isLoading } = useGetBrandingSettings();
+  const updateBranding = useUpdateBrandingSettings();
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const branding = data as BrandingSettings | undefined;
+  const logoSrc = logoSrcFromPath(branding?.logoPath);
+
+  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setError(null);
+    if (!ACCEPTED_LOGO_TYPES.includes(file.type)) {
+      setError("Bitte eine PNG- oder JPG-Datei auswählen.");
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      setError("Die Datei ist zu groß (max. 5 MB).");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const { uploadURL, objectPath } = await requestUploadUrl({
+        name: file.name,
+        size: file.size,
+        contentType: file.type,
+      });
+      const putRes = await fetch(uploadURL, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!putRes.ok) throw new Error("Upload fehlgeschlagen");
+      await updateBranding.mutateAsync({ data: { logoPath: objectPath } });
+      await queryClient.invalidateQueries({ queryKey: getGetBrandingSettingsQueryKey() });
+    } catch {
+      setError("Logo konnte nicht hochgeladen werden. Bitte erneut versuchen.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleRemove() {
+    setError(null);
+    setUploading(true);
+    try {
+      await updateBranding.mutateAsync({ data: { logoPath: null } });
+      await queryClient.invalidateQueries({ queryKey: getGetBrandingSettingsQueryKey() });
+    } catch {
+      setError("Logo konnte nicht entfernt werden. Bitte erneut versuchen.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <Card className="border-border/50 shadow-sm">
+      <CardContent className="p-4 space-y-3">
+        <div>
+          <h3 className="font-serif text-lg font-bold text-foreground">Firmenlogo</h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Das Logo erscheint oben rechts auf dem PDF-Stundennachweis. Ohne eigenes Logo wird das
+            Standard-Logo verwendet. PNG oder JPG, max. 5 MB.
+          </p>
+        </div>
+
+        {isLoading ? (
+          <Skeleton className="h-20 w-48 rounded-lg" />
+        ) : (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex h-20 w-48 items-center justify-center rounded-lg border border-border/60 bg-muted/30 p-2">
+              {logoSrc ? (
+                <img
+                  src={logoSrc}
+                  alt="Firmenlogo"
+                  className="max-h-full max-w-full object-contain"
+                />
+              ) : (
+                <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <ImageIcon className="h-4 w-4" />
+                  Kein Logo
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg"
+                className="hidden"
+                onChange={handleFileSelected}
+              />
+              <Button
+                variant="outline"
+                className="gap-2"
+                disabled={uploading}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="h-4 w-4" />
+                {uploading ? "Wird hochgeladen..." : logoSrc ? "Logo ersetzen" : "Logo hochladen"}
+              </Button>
+              {logoSrc && (
+                <Button
+                  variant="ghost"
+                  className="gap-2 text-destructive hover:text-destructive"
+                  disabled={uploading}
+                  onClick={handleRemove}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Entfernen
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {error && <p className="text-xs text-destructive">{error}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Einstellungen() {
   const queryClient = useQueryClient();
   const { data: models, isLoading } = useListShiftModels();
@@ -384,6 +519,8 @@ export default function Einstellungen() {
       </p>
 
       <AccountTypeCard />
+
+      <LogoSettingsCard />
 
       <AllowanceSettingsForm />
 

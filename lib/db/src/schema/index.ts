@@ -5,5 +5,6 @@ export * from "./contracts";
 export * from "./shifts";
 export * from "./shift_models";
 export * from "./allowances";
+export * from "./branding";
 export * from "./time_tracking";
 export * from "./session";

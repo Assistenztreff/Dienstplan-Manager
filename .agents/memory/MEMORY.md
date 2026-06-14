@@ -12,3 +12,4 @@
 - [Curl test ID parsing on shifts](curl-shift-id-parsing.md) — shift JSON embeds a nested user.id; greedy regex/jq mistakes can grab the wrong id and DELETE the wrong row. Parse the top-level id only.
 - [Mobile jest harness](mobile-jest-harness.md) — Expo artifact uses jest-expo + RNTL; pnpm needs a custom transformIgnorePatterns matching pkg names after `.pnpm/`, and native edges are mocked.
 - [Vite dynamic-import reload mid-action](vite-dynamic-import-export-reload.md) — heavy `await import()` deps (jspdf) need optimizeDeps.include or Vite reloads mid-export, aborting the download (E2E hangs).
+- [Object storage template typecheck](object-storage-template-typecheck.md) — copied objectStorage.ts needs `as { signed_url: string }` cast or strict tsc fails TS2339.
