@@ -411,9 +411,12 @@ router.get("/dashboard/hours-balance", requireAdmin, async (req, res): Promise<v
 
       // Urlaub/Krank: gespeicherte gewertete Stunden = volle geplante Tagesstunden,
       // die als erfüllt zählen.
-      const vacationFulfilledHours = shifts
-        .filter(s => s.type === "vacation")
-        .reduce((acc, s) => acc + (s.valuedHours ?? 0), 0);
+      const vacationShifts = shifts.filter(s => s.type === "vacation");
+      const vacationFulfilledHours = vacationShifts.reduce((acc, s) => acc + (s.valuedHours ?? 0), 0);
+      // Genommene Urlaubstage des gewählten Monats = Anzahl der Urlaubs-Schichten
+      // dieses Monats (eine Urlaubs-Schicht = ein Tag), nicht der Jahres-Zähler
+      // aus dem Vertrag.
+      const vacationDaysTaken = vacationShifts.length;
       const sickFulfilledHours = shifts
         .filter(s => s.type === "sick")
         .reduce((acc, s) => acc + (s.valuedHours ?? 0), 0);
@@ -461,7 +464,7 @@ router.get("/dashboard/hours-balance", requireAdmin, async (req, res): Promise<v
         balance: round2(totalFulfilledHours - plannedHours),
         workedHours: round2(trackedHours),
         sickHours: round2(sickHours),
-        vacationDaysTaken: vacationDaysUsed,
+        vacationDaysTaken,
         vacationDaysUsed,
         vacationDaysRemaining: vacationDays - vacationDaysUsed,
         valuedHours: round2(valuedHours),

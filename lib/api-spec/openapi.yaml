@@ -1521,8 +1521,10 @@ components:
           type: number
         vacationDaysTaken:
           type: integer
+          description: Genommene Urlaubstage des gewählten Monats (Anzahl der Urlaubs-Schichten in diesem Monat).
         vacationDaysUsed:
           type: integer
+          description: Im Vertrag gespeicherter Jahres-Zähler der genommenen Urlaubstage.
         vacationDaysRemaining:
           type: integer
         valuedHours:

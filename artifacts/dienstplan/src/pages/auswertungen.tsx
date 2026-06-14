@@ -341,18 +341,18 @@ export default function Auswertungen() {
                             {balance.vacationDaysTaken}
                           </span>
                           <span className="text-sm text-yellow-700 mb-0.5">
-                            genommen
+                            genommen (Monat)
                           </span>
                         </div>
                         <div className="mt-2 text-sm text-yellow-700">
                           <span className="font-medium">{balance.vacationDaysRemaining}</span> von{" "}
-                          {balance.vacationDaysRemaining + balance.vacationDaysTaken} verbleibend
+                          {balance.vacationDaysRemaining + balance.vacationDaysUsed} verbleibend (Jahr)
                         </div>
-                        {balance.vacationDaysRemaining + balance.vacationDaysTaken > 0 && (
+                        {balance.vacationDaysRemaining + balance.vacationDaysUsed > 0 && (
                           <Progress
                             value={Math.round(
-                              (balance.vacationDaysTaken /
-                                (balance.vacationDaysRemaining + balance.vacationDaysTaken)) *
+                              (balance.vacationDaysUsed /
+                                (balance.vacationDaysRemaining + balance.vacationDaysUsed)) *
                                 100
                             )}
                             className="h-1.5 mt-2 bg-yellow-200 [&>div]:bg-yellow-500"

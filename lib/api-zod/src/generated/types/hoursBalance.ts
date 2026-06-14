@@ -14,7 +14,9 @@ export interface HoursBalance {
   balance: number;
   workedHours: number;
   sickHours: number;
+  /** Genommene Urlaubstage des gewählten Monats (Anzahl der Urlaubs-Schichten in diesem Monat). */
   vacationDaysTaken: number;
+  /** Im Vertrag gespeicherter Jahres-Zähler der genommenen Urlaubstage. */
   vacationDaysUsed: number;
   vacationDaysRemaining: number;
   valuedHours: number;
