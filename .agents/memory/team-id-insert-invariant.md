@@ -17,3 +17,16 @@ team, falls back to first membership) in admin create handlers. For
 time-tracking linked to a shift, inherit the shift's team_id instead. When
 adding any new insert into a team-scoped table, thread team_id through — grep for
 all `.insert(<table>Table)` call sites, not just the obvious route handler.
+
+**Second invariant (member-of-team on write):** It is not enough to check that the
+*requester* may write to team_id; the row's `userId` must itself be a member of
+that team (`isUserMemberOfTeam(userId, teamId)`), else an admin can link a foreign
+user into an allowed team and read their PII back via the user-joined list/by-id
+responses (cross-team leak). Enforce on every create that carries a userId:
+shifts, contracts, time_tracking. PATCH bodies (ShiftUpdate/ContractUpdate/
+TimeEntryUpdate) deliberately omit userId, so updates can't re-link.
+**Why legacy breaks:** users created via POST /users *between* the first
+multi-team migration and membership-on-create have domain rows in a team without a
+team_members entry — the new write check would 403 their future rows. The
+migrate-teams script backfills team_members from existing (user_id, team_id) pairs
+in shifts/contracts/time_tracking to heal this; keep that backfill idempotent.

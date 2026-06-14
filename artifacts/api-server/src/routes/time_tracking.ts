@@ -18,6 +18,7 @@ import {
   resolveReadTeamScope,
   getAllowedTeamIds,
   parseTeamIdParam,
+  isUserMemberOfTeam,
 } from "../lib/teams";
 
 const router = Router();
@@ -151,6 +152,12 @@ router.post("/time-tracking", requireAuth, async (req, res): Promise<void> => {
   const allowedTeams = await getAllowedTeamIds(req.session.userId!);
   if (!allowedTeams.includes(teamId)) {
     res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
+    return;
+  }
+  // Der erfasste Nutzer muss Mitglied des Ziel-Teams sein, sonst ließe sich ein
+  // fremder userId ins Team verknüpfen (Cross-Team-PII-Leak).
+  if (!(await isUserMemberOfTeam(userId, teamId))) {
+    res.status(403).json({ error: "Nutzer gehört nicht zu diesem Team" });
     return;
   }
 

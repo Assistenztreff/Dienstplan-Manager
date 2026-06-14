@@ -130,4 +130,38 @@ test.describe("Team-Datentrennung (Backend-Scoping)", () => {
       await adminCtx.delete(`/api/shift-models/${created.id}`);
     }
   });
+
+  test("POST /shifts für einen Nutzer, der nicht Mitglied des Ziel-Teams ist, liefert 403", async () => {
+    test.skip(knownTeamId == null, "Kein erlaubtes Team aus Schichten ableitbar");
+    const teamId = knownTeamId!;
+
+    // Erst: ein Nutzer mit fremdem teamId wird bereits beim Anlegen abgelehnt
+    // (Write-Scoping greift hier zuerst).
+    const unique = Date.now();
+    const createUserRes = await adminCtx.post("/api/users", {
+      data: {
+        name: `E2E Fremd-Schicht ${unique}`,
+        email: `e2e.foreignshift.${unique}@dienstplan.test`,
+        role: "assistant",
+        teamId: FOREIGN_TEAM_ID,
+      },
+    });
+    // teamId fremd -> 403 beim Anlegen (Write-Scoping greift bereits hier).
+    expect(createUserRes.status()).toBe(403);
+
+    // Zweiter Versuch: Nutzer ohne teamId anlegen -> landet im Team des Admins,
+    // ist also Mitglied. Daher prüfen wir die Cross-Team-Verknüpfung über einen
+    // bewusst nicht existierenden userId, der sicher in keinem Team Mitglied ist.
+    const NON_MEMBER_USER_ID = 999999;
+    const shiftRes = await adminCtx.post("/api/shifts", {
+      data: {
+        userId: NON_MEMBER_USER_ID,
+        startTime: "2026-07-01T08:00:00.000Z",
+        endTime: "2026-07-01T16:00:00.000Z",
+        type: "active",
+        teamId,
+      },
+    });
+    expect(shiftRes.status()).toBe(403);
+  });
 });

@@ -113,6 +113,24 @@ async function main() {
         );
     `);
 
+    // Backfill-Invariante (für strikte Datentrennung, #44): jeder Nutzer mit
+    // Domänendaten in einem Team MUSS dort Mitglied sein. Heilt Nutzer, die nach
+    // der Erst-Migration, aber vor der Mitgliedschaft-bei-Anlage angelegt wurden
+    // (sie hätten sonst Schichten/Verträge/Zeiten in einem Team ohne Mitgliedschaft
+    // und könnten keine neuen Datensätze mehr erhalten).
+    for (const table of ["shifts", "contracts", "time_tracking"] as const) {
+      await client.query(`
+        INSERT INTO "team_members" ("team_id", "user_id")
+        SELECT DISTINCT t."team_id", t."user_id"
+        FROM "${table}" t
+        WHERE t."team_id" IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM "team_members" tm
+            WHERE tm."user_id" = t."user_id" AND tm."team_id" = t."team_id"
+          );
+      `);
+    }
+
     // NOT NULL + FK erst setzen, wenn keine NULLs mehr vorhanden sind
     for (const table of DATA_TABLES) {
       await client.query(`

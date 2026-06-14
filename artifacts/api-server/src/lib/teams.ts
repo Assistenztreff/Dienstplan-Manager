@@ -108,6 +108,22 @@ export async function isUserInAllowedTeams(
   return !!row;
 }
 
+/**
+ * Prüft, ob ein Nutzer Mitglied eines bestimmten Teams ist.
+ * Basis für die Validierung von Schreiboperationen: ein Datensatz (Schicht,
+ * Vertrag, Zeiteintrag) darf nur einem Nutzer zugeordnet werden, der tatsächlich
+ * Mitglied des Ziel-Teams ist — sonst ließe sich ein fremder userId in ein
+ * erlaubtes Team verknüpfen und dessen PII über gescopte Listen auslesen.
+ */
+export async function isUserMemberOfTeam(userId: number, teamId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ userId: teamMembersTable.userId })
+    .from(teamMembersTable)
+    .where(and(eq(teamMembersTable.userId, userId), eq(teamMembersTable.teamId, teamId)))
+    .limit(1);
+  return !!row;
+}
+
 /** Liest den optionalen ?teamId Query-Parameter (mit NaN-Schutz). */
 export function parseTeamIdParam(req: Request): number | undefined {
   const raw = req.query["teamId"];

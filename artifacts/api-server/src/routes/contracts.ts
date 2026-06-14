@@ -16,6 +16,7 @@ import {
   resolveWriteTeamId,
   getAllowedTeamIds,
   parseTeamIdParam,
+  isUserMemberOfTeam,
 } from "../lib/teams";
 
 const router = Router();
@@ -93,6 +94,12 @@ router.post("/contracts", requireAdmin, async (req, res): Promise<void> => {
     } else {
       res.status(400).json({ error: "Kein Team zugeordnet" });
     }
+    return;
+  }
+  // Der zugeordnete Nutzer muss Mitglied des Ziel-Teams sein, sonst ließe sich
+  // ein fremder userId ins Team verknüpfen (Cross-Team-PII-Leak).
+  if (!(await isUserMemberOfTeam(body.data.userId, write.teamId))) {
+    res.status(403).json({ error: "Nutzer gehört nicht zu diesem Team" });
     return;
   }
   const [contract] = await db
