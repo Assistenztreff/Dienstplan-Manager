@@ -9,4 +9,8 @@
 export type GetHoursBalanceParams = {
 month?: number;
 year?: number;
+/**
+ * Optionaler Team-Kontext für die Datentrennung.
+ */
+teamId?: number;
 };

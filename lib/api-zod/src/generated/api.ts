@@ -21,7 +21,8 @@ export const HealthCheckResponse = zod.object({
  * @summary Alle Benutzer auflisten
  */
 export const ListUsersQueryParams = zod.object({
-  "role": zod.enum(['admin', 'assistant']).optional()
+  "role": zod.enum(['admin', 'assistant']).optional(),
+  "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext; schränkt auf Mitglieder dieses Teams ein.')
 })
 
 export const ListUsersResponseItem = zod.object({
@@ -148,7 +149,8 @@ export const DeleteUserParams = zod.object({
  * @summary Alle Verträge auflisten
  */
 export const ListContractsQueryParams = zod.object({
-  "userId": zod.coerce.number().optional()
+  "userId": zod.coerce.number().optional(),
+  "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext für die Datentrennung.')
 })
 
 export const ListContractsResponseItem = zod.object({
@@ -193,6 +195,7 @@ export const createContractBodyVacationDaysMin = 0;
 
 export const CreateContractBody = zod.object({
   "userId": zod.number(),
+  "teamId": zod.number().optional().describe('Optionaler Team-Kontext; muss ein erlaubtes Team sein.'),
   "weeklyHours": zod.number().min(createContractBodyWeeklyHoursMin),
   "vacationDays": zod.number().min(createContractBodyVacationDaysMin),
   "startDate": zod.coerce.date(),
@@ -306,7 +309,8 @@ export const ListShiftsQueryParams = zod.object({
   "userId": zod.coerce.number().optional(),
   "month": zod.coerce.number().optional(),
   "year": zod.coerce.number().optional(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work']).optional()
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work']).optional(),
+  "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext für die Datentrennung.')
 })
 
 export const ListShiftsResponseItem = zod.object({
@@ -348,6 +352,7 @@ export const ListShiftsResponse = zod.array(ListShiftsResponseItem)
  */
 export const CreateShiftBody = zod.object({
   "userId": zod.number(),
+  "teamId": zod.number().optional().describe('Optionaler Team-Kontext; muss ein erlaubtes Team sein.'),
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
   "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work']),
@@ -456,7 +461,8 @@ export const DeleteShiftParams = zod.object({
  * @summary Schichtmodelle auflisten
  */
 export const ListShiftModelsQueryParams = zod.object({
-  "activeOnly": zod.coerce.boolean().optional()
+  "activeOnly": zod.coerce.boolean().optional(),
+  "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext für die Datentrennung.')
 })
 
 export const ListShiftModelsResponseItem = zod.object({
@@ -481,6 +487,7 @@ export const createShiftModelBodyValuationPercentMin = 0;
 
 export const CreateShiftModelBody = zod.object({
   "name": zod.string().min(1),
+  "teamId": zod.number().optional().describe('Optionaler Team-Kontext; muss ein erlaubtes Team sein.'),
   "valuationPercent": zod.number().min(createShiftModelBodyValuationPercentMin).optional(),
   "color": zod.string().optional(),
   "sortOrder": zod.number().optional(),
@@ -680,7 +687,8 @@ export const ListTimeEntriesQueryParams = zod.object({
   "userId": zod.coerce.number().optional(),
   "month": zod.coerce.number().optional(),
   "year": zod.coerce.number().optional(),
-  "status": zod.enum(['pending', 'confirmed', 'rejected']).optional()
+  "status": zod.enum(['pending', 'confirmed', 'rejected']).optional(),
+  "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext für die Datentrennung.')
 })
 
 export const ListTimeEntriesResponseItem = zod.object({
@@ -721,6 +729,7 @@ export const ListTimeEntriesResponse = zod.array(ListTimeEntriesResponseItem)
  */
 export const CreateTimeEntryBody = zod.object({
   "userId": zod.number(),
+  "teamId": zod.number().optional().describe('Optionaler Team-Kontext; muss ein erlaubtes Team sein.'),
   "shiftId": zod.number().optional(),
   "actualStart": zod.coerce.date(),
   "actualEnd": zod.coerce.date(),
@@ -903,7 +912,8 @@ export const GetVacationBalanceResponse = zod.object({
  */
 export const GetDashboardSummaryQueryParams = zod.object({
   "month": zod.coerce.number().optional(),
-  "year": zod.coerce.number().optional()
+  "year": zod.coerce.number().optional(),
+  "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext für die Datentrennung.')
 })
 
 export const GetDashboardSummaryResponse = zod.object({
@@ -993,7 +1003,8 @@ export const GetDashboardSummaryResponse = zod.object({
  */
 export const GetHoursBalanceQueryParams = zod.object({
   "month": zod.coerce.number().optional(),
-  "year": zod.coerce.number().optional()
+  "year": zod.coerce.number().optional(),
+  "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext für die Datentrennung.')
 })
 
 export const GetHoursBalanceResponseItem = zod.object({

@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ShiftDialog } from "@/components/shift-dialog";
+import { TeamSwitcher } from "@/components/team-switcher";
+import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
 import { colorBadgeClass, colorDotClass } from "@/lib/shift-model-colors";
 
@@ -409,8 +411,13 @@ export default function Dienstplan() {
   const month = currentDate.getMonth() + 1;
   const year = currentDate.getFullYear();
 
-  const { data: shifts, isLoading: shiftsLoading } = useListShifts({ month, year });
-  const { data: users, isLoading: usersLoading } = useListUsers();
+  const { selectedTeamId } = useTeam();
+  const teamParam = selectedTeamId != null ? { teamId: selectedTeamId } : {};
+
+  const { data: shifts, isLoading: shiftsLoading } = useListShifts({ month, year, ...teamParam });
+  const { data: users, isLoading: usersLoading } = useListUsers(
+    selectedTeamId != null ? { teamId: selectedTeamId } : undefined
+  );
 
   const goToMonth = (newDate: Date) => {
     setCurrentDate(newDate);
@@ -429,7 +436,7 @@ export default function Dienstplan() {
     ? [{ id: currentUser.id, name: currentUser.name }]
     : [];
 
-  const { data: shiftModels } = useListShiftModels();
+  const { data: shiftModels } = useListShiftModels(teamParam);
   const modelMap = new Map<number, ShiftModelInfo>(
     (shiftModels ?? []).map((m) => [m.id, { name: m.name, color: m.color }])
   );
@@ -460,10 +467,13 @@ export default function Dienstplan() {
   }
 
   const Header = () => (
-    <div className="flex items-center justify-between">
-      <div>
-        <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Dienstplan</h2>
-        <p className="text-muted-foreground mt-1 text-sm">Monatsansicht der Schichten</p>
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+        <div>
+          <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Dienstplan</h2>
+          <p className="text-muted-foreground mt-1 text-sm">Monatsansicht der Schichten</p>
+        </div>
+        <TeamSwitcher />
       </div>
       <div className="flex items-center gap-2 md:gap-4">
         <Button variant="outline" size="icon" onClick={prevMonth} data-testid="prev-month">
@@ -671,6 +681,7 @@ export default function Dienstplan() {
           assistants={assistants}
           month={month}
           year={year}
+          teamId={selectedTeamId}
         />
       )}
     </div>

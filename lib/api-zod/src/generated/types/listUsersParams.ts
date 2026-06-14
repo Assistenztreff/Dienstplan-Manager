@@ -9,4 +9,8 @@ import type { ListUsersRole } from './listUsersRole';
 
 export type ListUsersParams = {
 role?: ListUsersRole;
+/**
+ * Optionaler Team-Kontext; schränkt auf Mitglieder dieses Teams ein.
+ */
+teamId?: number;
 };

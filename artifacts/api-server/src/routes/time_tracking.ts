@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { timeTrackingTable, usersTable, shiftsTable } from "@workspace/db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import {
   ListTimeEntriesQueryParams,
   CreateTimeEntryBody,
@@ -13,7 +13,12 @@ import {
   ConfirmTimeEntryBody,
 } from "@workspace/api-zod";
 import { requireAuth, requireAdmin } from "../middleware/auth";
-import { resolveTeamId } from "../lib/teams";
+import {
+  resolveTeamId,
+  resolveReadTeamScope,
+  getAllowedTeamIds,
+  parseTeamIdParam,
+} from "../lib/teams";
 
 const router = Router();
 
@@ -60,7 +65,17 @@ router.get("/time-tracking", requireAuth, async (req, res): Promise<void> => {
   const effectiveUserId =
     req.session.role === "assistant" ? req.session.userId! : query.data.userId;
 
-  const conditions = [];
+  const teamScope = await resolveReadTeamScope(req.session.userId!, parseTeamIdParam(req));
+  if (teamScope === null) {
+    res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
+    return;
+  }
+  if (teamScope.length === 0) {
+    res.json([]);
+    return;
+  }
+
+  const conditions = [inArray(timeTrackingTable.teamId, teamScope)];
   if (effectiveUserId) conditions.push(eq(timeTrackingTable.userId, effectiveUserId));
   if (query.data.status) conditions.push(eq(timeTrackingTable.status, query.data.status as "pending" | "confirmed" | "rejected"));
   if (query.data.month && query.data.year) {
@@ -72,7 +87,7 @@ router.get("/time-tracking", requireAuth, async (req, res): Promise<void> => {
     .select(withUserSelect)
     .from(timeTrackingTable)
     .leftJoin(usersTable, eq(timeTrackingTable.userId, usersTable.id))
-    .where(conditions.length > 0 ? and(...conditions) : undefined);
+    .where(and(...conditions));
   res.json(rows);
 });
 
@@ -125,10 +140,17 @@ router.post("/time-tracking", requireAuth, async (req, res): Promise<void> => {
   }
 
   if (teamId == null) {
-    teamId = await resolveTeamId(userId);
+    teamId = body.data.teamId ?? (await resolveTeamId(userId));
   }
   if (teamId == null) {
     res.status(400).json({ error: "Kein Team zugeordnet" });
+    return;
+  }
+  // Sicherstellen, dass das (ggf. angeforderte oder von der Schicht geerbte)
+  // Team im Berechtigungsumfang des erfassenden Nutzers liegt.
+  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+  if (!allowedTeams.includes(teamId)) {
+    res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
     return;
   }
 
@@ -154,7 +176,7 @@ router.get("/time-tracking/:id", requireAuth, async (req, res): Promise<void> =>
     return;
   }
   const [row] = await db
-    .select(withUserSelect)
+    .select({ ...withUserSelect, teamId: timeTrackingTable.teamId })
     .from(timeTrackingTable)
     .leftJoin(usersTable, eq(timeTrackingTable.userId, usersTable.id))
     .where(eq(timeTrackingTable.id, params.data.id));
@@ -162,11 +184,20 @@ router.get("/time-tracking/:id", requireAuth, async (req, res): Promise<void> =>
     res.status(404).json({ error: "Not found" });
     return;
   }
-  if (req.session.role === "assistant" && row.userId !== req.session.userId!) {
-    res.status(403).json({ error: "Keine Berechtigung" });
-    return;
+  if (req.session.role === "assistant") {
+    if (row.userId !== req.session.userId!) {
+      res.status(403).json({ error: "Keine Berechtigung" });
+      return;
+    }
+  } else {
+    const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+    if (row.teamId == null || !allowedTeams.includes(row.teamId)) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
   }
-  res.json(row);
+  const { teamId: _teamId, ...rowOut } = row;
+  res.json(rowOut);
 });
 
 router.patch("/time-tracking/:id", requireAdmin, async (req, res): Promise<void> => {
@@ -183,10 +214,11 @@ router.patch("/time-tracking/:id", requireAdmin, async (req, res): Promise<void>
       new Date(body.data.actualEnd as unknown as string)
     );
   }
+  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
   const [updated] = await db
     .update(timeTrackingTable)
     .set(updateData)
-    .where(eq(timeTrackingTable.id, params.data.id))
+    .where(and(eq(timeTrackingTable.id, params.data.id), inArray(timeTrackingTable.teamId, allowedTeams)))
     .returning();
   if (!updated) {
     res.status(404).json({ error: "Not found" });
@@ -206,7 +238,15 @@ router.delete("/time-tracking/:id", requireAdmin, async (req, res): Promise<void
     res.status(400).json({ error: "Invalid id" });
     return;
   }
-  await db.delete(timeTrackingTable).where(eq(timeTrackingTable.id, params.data.id));
+  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+  const deleted = await db
+    .delete(timeTrackingTable)
+    .where(and(eq(timeTrackingTable.id, params.data.id), inArray(timeTrackingTable.teamId, allowedTeams)))
+    .returning({ id: timeTrackingTable.id });
+  if (deleted.length === 0) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   res.status(204).send();
 });
 
@@ -217,6 +257,7 @@ router.patch("/time-tracking/:id/confirm", requireAdmin, async (req, res): Promi
     res.status(400).json({ error: "Invalid request" });
     return;
   }
+  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
   const [updated] = await db
     .update(timeTrackingTable)
     .set({
@@ -224,7 +265,7 @@ router.patch("/time-tracking/:id/confirm", requireAdmin, async (req, res): Promi
       confirmedBy: body.data.confirmedBy,
       confirmedAt: new Date(),
     })
-    .where(eq(timeTrackingTable.id, params.data.id))
+    .where(and(eq(timeTrackingTable.id, params.data.id), inArray(timeTrackingTable.teamId, allowedTeams)))
     .returning();
   if (!updated) {
     res.status(404).json({ error: "Not found" });

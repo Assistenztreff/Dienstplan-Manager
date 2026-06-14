@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable, shiftsTable, timeTrackingTable, contractsTable, allowanceSettingsTable } from "@workspace/db";
-import { eq, and, sql, count, or, isNull } from "drizzle-orm";
+import { usersTable, shiftsTable, timeTrackingTable, contractsTable, allowanceSettingsTable, teamMembersTable } from "@workspace/db";
+import { eq, and, sql, count, or, isNull, inArray } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middleware/auth";
+import { resolveReadTeamScope, parseTeamIdParam } from "../lib/teams";
 
 const router = Router();
 
@@ -48,16 +49,37 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
 
   if (isAdmin) {
+    const teamScope = await resolveReadTeamScope(userId, parseTeamIdParam(req));
+    if (teamScope === null) {
+      res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
+      return;
+    }
+    // Liste der Assistenten-IDs innerhalb des Team-Scopes (für Zähler & Warnungen).
+    const teamMemberIds = teamScope.length
+      ? (
+          await db
+            .selectDistinct({ userId: teamMembersTable.userId })
+            .from(teamMembersTable)
+            .where(inArray(teamMembersTable.teamId, teamScope))
+        ).map((r) => r.userId)
+      : [];
+
     const [{ totalAssistants }] = await db
       .select({ totalAssistants: count() })
       .from(usersTable)
-      .where(eq(usersTable.role, "assistant"));
+      .where(
+        and(
+          eq(usersTable.role, "assistant"),
+          teamMemberIds.length ? inArray(usersTable.id, teamMemberIds) : sql`false`,
+        )
+      );
 
     const [{ activeShiftsToday }] = await db
       .select({ activeShiftsToday: count() })
       .from(shiftsTable)
       .where(
         and(
+          inArray(shiftsTable.teamId, teamScope),
           sql`${shiftsTable.startTime} >= ${todayStart}`,
           sql`${shiftsTable.startTime} < ${todayEnd}`,
         )
@@ -66,13 +88,14 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     const [{ pendingTimeEntries }] = await db
       .select({ pendingTimeEntries: count() })
       .from(timeTrackingTable)
-      .where(eq(timeTrackingTable.status, "pending"));
+      .where(and(inArray(timeTrackingTable.teamId, teamScope), eq(timeTrackingTable.status, "pending")));
 
     const monthShifts = await db
       .select({ startTime: shiftsTable.startTime, endTime: shiftsTable.endTime })
       .from(shiftsTable)
       .where(
         and(
+          inArray(shiftsTable.teamId, teamScope),
           sql`EXTRACT(MONTH FROM ${shiftsTable.startTime}) = ${month}`,
           sql`EXTRACT(YEAR FROM ${shiftsTable.startTime}) = ${year}`,
         )
@@ -87,6 +110,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       .from(timeTrackingTable)
       .where(
         and(
+          inArray(timeTrackingTable.teamId, teamScope),
           sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${month}`,
           sql`EXTRACT(YEAR FROM ${timeTrackingTable.actualStart}) = ${year}`,
           eq(timeTrackingTable.status, "confirmed"),
@@ -107,7 +131,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       })
       .from(shiftsTable)
       .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
-      .where(sql`${shiftsTable.startTime} >= ${today}`)
+      .where(and(inArray(shiftsTable.teamId, teamScope), sql`${shiftsTable.startTime} >= ${today}`))
       .limit(5);
 
     const recentTimeEntries = await db
@@ -127,6 +151,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       })
       .from(timeTrackingTable)
       .leftJoin(usersTable, eq(timeTrackingTable.userId, usersTable.id))
+      .where(inArray(timeTrackingTable.teamId, teamScope))
       .limit(5);
 
     // --- Warnhinweise (nur Admin) ---
@@ -138,10 +163,18 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
     };
 
-    const assistants = await db
-      .select({ id: usersTable.id, name: usersTable.name })
-      .from(usersTable)
-      .where(and(eq(usersTable.role, "assistant"), eq(usersTable.isActive, true)));
+    const assistants = teamMemberIds.length
+      ? await db
+          .select({ id: usersTable.id, name: usersTable.name })
+          .from(usersTable)
+          .where(
+            and(
+              eq(usersTable.role, "assistant"),
+              eq(usersTable.isActive, true),
+              inArray(usersTable.id, teamMemberIds),
+            )
+          )
+      : [];
 
     const lowVacationAssistants: { userId: number; userName: string; vacationDaysRemaining: number }[] = [];
     for (const assistant of assistants) {
@@ -163,6 +196,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       .from(shiftsTable)
       .where(
         and(
+          inArray(shiftsTable.teamId, teamScope),
           sql`${shiftsTable.startTime} < ${horizonEnd}`,
           sql`${shiftsTable.endTime} > ${todayStart}`,
         )
@@ -306,10 +340,32 @@ router.get("/dashboard/hours-balance", requireAdmin, async (req, res): Promise<v
   const month = req.query.month ? Number(req.query.month) : new Date().getMonth() + 1;
   const year = req.query.year ? Number(req.query.year) : new Date().getFullYear();
 
-  const assistants = await db
-    .select()
-    .from(usersTable)
-    .where(and(eq(usersTable.role, "assistant"), eq(usersTable.isActive, true)));
+  const teamScope = await resolveReadTeamScope(req.session.userId!, parseTeamIdParam(req));
+  if (teamScope === null) {
+    res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
+    return;
+  }
+  const teamMemberIds = teamScope.length
+    ? (
+        await db
+          .selectDistinct({ userId: teamMembersTable.userId })
+          .from(teamMembersTable)
+          .where(inArray(teamMembersTable.teamId, teamScope))
+      ).map((r) => r.userId)
+    : [];
+
+  const assistants = teamMemberIds.length
+    ? await db
+        .select()
+        .from(usersTable)
+        .where(
+          and(
+            eq(usersTable.role, "assistant"),
+            eq(usersTable.isActive, true),
+            inArray(usersTable.id, teamMemberIds),
+          )
+        )
+    : [];
 
   const referenceDate = new Date(year, month - 1, 1);
 
@@ -332,6 +388,7 @@ router.get("/dashboard/hours-balance", requireAdmin, async (req, res): Promise<v
         .where(
           and(
             eq(shiftsTable.userId, assistant.id),
+            inArray(shiftsTable.teamId, teamScope),
             sql`EXTRACT(MONTH FROM ${shiftsTable.startTime}) = ${month}`,
             sql`EXTRACT(YEAR FROM ${shiftsTable.startTime}) = ${year}`,
           )
@@ -373,6 +430,7 @@ router.get("/dashboard/hours-balance", requireAdmin, async (req, res): Promise<v
         .where(
           and(
             eq(timeTrackingTable.userId, assistant.id),
+            inArray(timeTrackingTable.teamId, teamScope),
             sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${month}`,
             sql`EXTRACT(YEAR FROM ${timeTrackingTable.actualStart}) = ${year}`,
             eq(timeTrackingTable.status, "confirmed"),

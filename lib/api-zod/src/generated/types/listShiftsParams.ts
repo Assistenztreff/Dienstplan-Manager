@@ -12,4 +12,8 @@ userId?: number;
 month?: number;
 year?: number;
 type?: ListShiftsType;
+/**
+ * Optionaler Team-Kontext für die Datentrennung.
+ */
+teamId?: number;
 };

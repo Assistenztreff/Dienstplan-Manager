@@ -5,6 +5,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
 import { AlertTriangle, CalendarX, Clock, CheckCircle2, Plane } from "lucide-react";
+import { TeamSwitcher } from "@/components/team-switcher";
+import { useTeam } from "@/context/team";
 
 function WarningsSection({ warnings }: { warnings: DashboardWarnings }) {
   const { pendingTimeEntries, lowVacationAssistants, uncoveredDays, lowVacationThreshold, horizonDays } = warnings;
@@ -93,15 +95,20 @@ export default function Dashboard() {
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
   
+  const { selectedTeamId } = useTeam();
+
   const { data: summary, isLoading } = useGetDashboardSummary(
-    { month, year }
+    { month, year, ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}) }
   );
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div>
-        <h2 className="text-3xl font-serif font-bold text-foreground">Dashboard</h2>
-        <p className="text-muted-foreground mt-1">Uebersicht fuer {format(now, 'MMMM yyyy', { locale: de })}</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-3xl font-serif font-bold text-foreground">Dashboard</h2>
+          <p className="text-muted-foreground mt-1">Uebersicht fuer {format(now, 'MMMM yyyy', { locale: de })}</p>
+        </div>
+        <TeamSwitcher />
       </div>
 
       {isLoading ? (

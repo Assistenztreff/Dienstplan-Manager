@@ -9,6 +9,8 @@
 export interface ShiftModelInput {
   /** @minLength 1 */
   name: string;
+  /** Optionaler Team-Kontext; muss ein erlaubtes Team sein. */
+  teamId?: number;
   /** @minimum 0 */
   valuationPercent?: number;
   color?: string;

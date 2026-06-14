@@ -8,6 +8,8 @@
 
 export interface ContractInput {
   userId: number;
+  /** Optionaler Team-Kontext; muss ein erlaubtes Team sein. */
+  teamId?: number;
   /** @minimum 0 */
   weeklyHours: number;
   /** @minimum 0 */

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable } from "@workspace/db";
+import { usersTable, teamMembersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import {
   ListUsersQueryParams,
@@ -11,6 +11,7 @@ import {
   GetUserParams,
 } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../middleware/auth";
+import { getAllowedTeamIds, parseTeamIdParam } from "../lib/teams";
 
 const router = Router();
 
@@ -38,7 +39,24 @@ router.get("/users", requireAdmin, async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid query parameters" });
     return;
   }
-  let rows = await db.select(SAFE_USER_SELECT).from(usersTable);
+  // Optionaler teamId-Filter: nur Mitglieder dieses Teams (Dienstleister-Kontext).
+  // Ohne teamId bleibt das Legacy-Verhalten (globaler Nutzer-Pool) erhalten.
+  const teamId = parseTeamIdParam(req);
+  let rows;
+  if (teamId != null) {
+    const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+    if (!allowedTeams.includes(teamId)) {
+      res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
+      return;
+    }
+    rows = await db
+      .select(SAFE_USER_SELECT)
+      .from(usersTable)
+      .innerJoin(teamMembersTable, eq(teamMembersTable.userId, usersTable.id))
+      .where(eq(teamMembersTable.teamId, teamId));
+  } else {
+    rows = await db.select(SAFE_USER_SELECT).from(usersTable);
+  }
   if (query.data.role) {
     rows = rows.filter((u) => u.role === query.data.role);
   }

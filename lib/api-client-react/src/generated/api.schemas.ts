@@ -165,6 +165,8 @@ export interface Contract {
 
 export interface ContractInput {
   userId: number;
+  /** Optionaler Team-Kontext; muss ein erlaubtes Team sein. */
+  teamId?: number;
   /** @minimum 0 */
   weeklyHours: number;
   /** @minimum 0 */
@@ -233,6 +235,8 @@ export const ShiftInputType = {
 
 export interface ShiftInput {
   userId: number;
+  /** Optionaler Team-Kontext; muss ein erlaubtes Team sein. */
+  teamId?: number;
   startTime: string;
   endTime: string;
   type: ShiftInputType;
@@ -277,6 +281,8 @@ export interface ShiftModel {
 export interface ShiftModelInput {
   /** @minLength 1 */
   name: string;
+  /** Optionaler Team-Kontext; muss ein erlaubtes Team sein. */
+  teamId?: number;
   /** @minimum 0 */
   valuationPercent?: number;
   color?: string;
@@ -410,6 +416,8 @@ export interface TimeEntry {
 
 export interface TimeEntryInput {
   userId: number;
+  /** Optionaler Team-Kontext; muss ein erlaubtes Team sein. */
+  teamId?: number;
   shiftId?: number;
   actualStart: string;
   actualEnd: string;
@@ -537,6 +545,10 @@ export interface SetPasswordInput {
 
 export type ListUsersParams = {
 role?: ListUsersRole;
+/**
+ * Optionaler Team-Kontext; schränkt auf Mitglieder dieses Teams ein.
+ */
+teamId?: number;
 };
 
 export type ListUsersRole = typeof ListUsersRole[keyof typeof ListUsersRole];
@@ -549,6 +561,10 @@ export const ListUsersRole = {
 
 export type ListContractsParams = {
 userId?: number;
+/**
+ * Optionaler Team-Kontext für die Datentrennung.
+ */
+teamId?: number;
 };
 
 export type ListShiftsParams = {
@@ -556,6 +572,10 @@ userId?: number;
 month?: number;
 year?: number;
 type?: ListShiftsType;
+/**
+ * Optionaler Team-Kontext für die Datentrennung.
+ */
+teamId?: number;
 };
 
 export type ListShiftsType = typeof ListShiftsType[keyof typeof ListShiftsType];
@@ -573,6 +593,10 @@ export const ListShiftsType = {
 
 export type ListShiftModelsParams = {
 activeOnly?: boolean;
+/**
+ * Optionaler Team-Kontext für die Datentrennung.
+ */
+teamId?: number;
 };
 
 export type ListTimeEntriesParams = {
@@ -580,6 +604,10 @@ userId?: number;
 month?: number;
 year?: number;
 status?: ListTimeEntriesStatus;
+/**
+ * Optionaler Team-Kontext für die Datentrennung.
+ */
+teamId?: number;
 };
 
 export type ListTimeEntriesStatus = typeof ListTimeEntriesStatus[keyof typeof ListTimeEntriesStatus];
@@ -594,10 +622,18 @@ export const ListTimeEntriesStatus = {
 export type GetDashboardSummaryParams = {
 month?: number;
 year?: number;
+/**
+ * Optionaler Team-Kontext für die Datentrennung.
+ */
+teamId?: number;
 };
 
 export type GetHoursBalanceParams = {
 month?: number;
 year?: number;
+/**
+ * Optionaler Team-Kontext für die Datentrennung.
+ */
+teamId?: number;
 };
 

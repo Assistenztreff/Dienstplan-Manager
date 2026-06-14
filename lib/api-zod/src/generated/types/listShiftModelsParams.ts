@@ -8,4 +8,8 @@
 
 export type ListShiftModelsParams = {
 activeOnly?: boolean;
+/**
+ * Optionaler Team-Kontext für die Datentrennung.
+ */
+teamId?: number;
 };

@@ -12,4 +12,8 @@ userId?: number;
 month?: number;
 year?: number;
 status?: ListTimeEntriesStatus;
+/**
+ * Optionaler Team-Kontext für die Datentrennung.
+ */
+teamId?: number;
 };

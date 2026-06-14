@@ -8,6 +8,8 @@ import { format, differenceInMinutes } from "date-fns";
 import { de } from "date-fns/locale";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
+import { TeamSwitcher } from "@/components/team-switcher";
+import { useTeam } from "@/context/team";
 
 const SHIFT_TYPE_LABELS: Record<string, string> = {
   active: "Aktiv",
@@ -27,7 +29,8 @@ async function exportPdf(
   balances: any[],
   month: number,
   year: number,
-  monthLabel: string
+  monthLabel: string,
+  teamId?: number | null
 ) {
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
@@ -97,7 +100,12 @@ async function exportPdf(
     // --- Shift detail table ---
     let shifts: any[] = [];
     try {
-      shifts = await listShifts({ userId: balance.userId, month, year });
+      shifts = await listShifts({
+        userId: balance.userId,
+        month,
+        year,
+        ...(teamId != null ? { teamId } : {}),
+      });
     } catch {
       shifts = [];
     }
@@ -159,7 +167,12 @@ export default function Auswertungen() {
   const month = currentDate.getMonth() + 1;
   const year = currentDate.getFullYear();
 
-  const { data: balances, isLoading } = useGetHoursBalance({ month, year }) as any;
+  const { selectedTeamId } = useTeam();
+  const { data: balances, isLoading } = useGetHoursBalance({
+    month,
+    year,
+    ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
+  }) as any;
 
   const prevMonth = () => setCurrentDate(new Date(year, month - 2, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month, 1));
@@ -170,7 +183,7 @@ export default function Auswertungen() {
     if (!balances || balances.length === 0) return;
     setIsExporting(true);
     try {
-      await exportPdf(balances, month, year, monthLabel);
+      await exportPdf(balances, month, year, monthLabel, selectedTeamId);
     } catch (err) {
       toast.error("PDF-Export fehlgeschlagen.");
       console.error(err);
@@ -182,9 +195,12 @@ export default function Auswertungen() {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Auswertungen</h2>
-          <p className="text-muted-foreground mt-1 text-sm">Soll/Ist-Abgleich der Stunden</p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+          <div>
+            <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Auswertungen</h2>
+            <p className="text-muted-foreground mt-1 text-sm">Soll/Ist-Abgleich der Stunden</p>
+          </div>
+          <TeamSwitcher />
         </div>
 
         <div className="flex items-center gap-2 md:gap-4 flex-wrap">

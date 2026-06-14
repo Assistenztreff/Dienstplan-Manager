@@ -9,6 +9,8 @@ import type { ShiftInputType } from './shiftInputType';
 
 export interface ShiftInput {
   userId: number;
+  /** Optionaler Team-Kontext; muss ein erlaubtes Team sein. */
+  teamId?: number;
   startTime: Date;
   endTime: Date;
   type: ShiftInputType;

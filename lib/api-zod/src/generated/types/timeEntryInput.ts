@@ -8,6 +8,8 @@
 
 export interface TimeEntryInput {
   userId: number;
+  /** Optionaler Team-Kontext; muss ein erlaubtes Team sein. */
+  teamId?: number;
   shiftId?: number;
   actualStart: Date;
   actualEnd: Date;

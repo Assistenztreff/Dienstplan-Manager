@@ -70,6 +70,22 @@ Kernfunktionen (Task 1 — Grundstruktur):
 - **Frontend**: `team-verwaltung.tsx` → `MembersDialog` pro Team (Select zum Hinzufügen aus `useListUsers`, Liste mit Rolle- und Mehrfach-Badge zum Entfernen).
 - **Bewusst NICHT in Stufe 2**: Es gibt noch KEINE Nutzer-Eigentümerschaft (`users` ist ein globaler Pool, `listUsers` zeigt allen Admins alle Nutzer). Jeder Dienstleister kann daher prinzipiell jeden vorhandenen Nutzer zuweisen. Strikte Mandanten-/Datentrennung (Nutzer pro Dienstleister, Sichtbarkeitsgrenzen) ist explizit Stufe 3 (#44) und erfordert ein Schema-Modell für Nutzer-Zugehörigkeit.
 
+### Stufe 3: Team-Wechsler & strikte Datentrennung (#44)
+
+- **Erlaubte Teams** eines Nutzers = Teams, die er **besitzt** (`teams.owner_id`) ∪ Teams, in denen er **Mitglied** ist (`team_members`). Zentral in `lib/teams.ts`:
+  - `getAllowedTeamIds(userId)` — Vereinigungsmenge.
+  - `resolveReadTeamScope(userId, reqTeamId?)` → `number[] | null` (null = 403 forbidden, wenn angefragtes Team nicht erlaubt; sonst Liste der erlaubten bzw. das eine angefragte Team).
+  - `resolveWriteTeamId(userId, reqTeamId?)` → `{ok:true, teamId}` | `{ok:false, reason:"forbidden"|"none"}` (403 / 400).
+  - `parseTeamIdParam(req)` — Query-Param `teamId` mit NaN-Guard.
+- **Echtes Backend-Scoping** (nicht nur UI) auf allen Domänen-Routen:
+  - GET-Listen (shifts, contracts, time_tracking, shift_models): `inArray(table.teamId, teamScope)`; 403 bei fremdem `teamId`, `[]` bei leerem Scope. `shift_models` GET war vorher ungescoped (Leak behoben).
+  - POST: Ziel-Team aus `body.teamId` via `resolveWriteTeamId` (403 forbidden / 400 none); `time_tracking` erbt `teamId` von der verknüpften Schicht.
+  - PATCH/DELETE/GET:id: IDOR-Check — Row-`teamId` muss in `getAllowedTeamIds` liegen, sonst 404.
+  - Dashboard (`summary` + `hours-balance`, Admin-Branch) und `users`-Liste akzeptieren optionalen `teamId`; alle Schicht-/Zeit-/Assistenten-Queries gescoped (Assistenten = Team-Mitglieder via `team_members`-Join). Assistant-Branch bleibt rein userId-personal.
+- **OpenAPI**: `teamId` als Query-Param (listShifts, listContracts, listTimeEntries, listShiftModels, getDashboardSummary, getHoursBalance, listUsers) und als optionales Body-Feld (Shift/Contract/ShiftModel/TimeEntry-Input). Nach Spec-Änderung Codegen ausgeführt.
+- **Frontend Team-Wechsler**: `context/team.tsx` (`TeamProvider`/`useTeam`) lädt Teams nur für Dienstleister, persistiert `selectedTeamId` in localStorage (bereinigt Auswahl, wenn Team verschwindet oder Konto-Typ wechselt). `components/team-switcher.tsx` (Dropdown "Alle Teams" + Teams) nur sichtbar für Dienstleister mit ≥1 Team; eingebunden in Header von Dashboard, Dienstplan, Auswertungen. `teamId` wird an die List-Hooks und in das Shift-Create-Payload (`ShiftDialog`) durchgereicht; PDF-Export filtert per-User-Schichten ebenfalls auf das gewählte Team.
+- **Verifiziert** (curl + temporäres 2. Team): fremdes `teamId` → 403; teamScopes liefern disjunkte Datenmengen (Team A + Team B = Gesamtmenge ohne `teamId`); `users?teamId` → nur Mitglieder dieses Teams.
+
 ## User preferences
 
 - Strikt task-orientiertes Vorgehen: nach jedem Task auf Feedback warten

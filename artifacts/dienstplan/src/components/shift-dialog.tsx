@@ -49,6 +49,7 @@ type ShiftDialogProps = {
   assistants: Assistant[];
   month: number;
   year: number;
+  teamId?: number | null;
 };
 
 const LEGACY_TYPE_LABELS: Record<string, string> = {
@@ -120,6 +121,7 @@ export function ShiftDialog({
   assistants,
   month,
   year,
+  teamId,
 }: ShiftDialogProps) {
   const queryClient = useQueryClient();
   const createShift = useCreateShift();
@@ -284,7 +286,11 @@ export function ShiftDialog({
           notes: form.notes || undefined,
         };
         await createShift.mutateAsync({
-          data: { ...data, ...(force ? { force: true } : {}) } as typeof data,
+          data: {
+            ...data,
+            ...(force ? { force: true } : {}),
+            ...(teamId != null ? { teamId } : {}),
+          } as typeof data,
         });
       }
       await invalidate();

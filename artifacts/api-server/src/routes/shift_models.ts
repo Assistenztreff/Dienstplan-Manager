@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { shiftModelsTable } from "@workspace/db";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, and, inArray } from "drizzle-orm";
 import {
   ListShiftModelsQueryParams,
   CreateShiftModelBody,
@@ -10,7 +10,12 @@ import {
   DeleteShiftModelParams,
 } from "@workspace/api-zod";
 import { requireAuth, requireAdmin } from "../middleware/auth";
-import { resolveTeamId } from "../lib/teams";
+import {
+  resolveReadTeamScope,
+  resolveWriteTeamId,
+  getAllowedTeamIds,
+  parseTeamIdParam,
+} from "../lib/teams";
 
 const router = Router();
 
@@ -23,10 +28,23 @@ router.get("/shift-models", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  const teamScope = await resolveReadTeamScope(req.session.userId!, parseTeamIdParam(req));
+  if (teamScope === null) {
+    res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
+    return;
+  }
+  if (teamScope.length === 0) {
+    res.json([]);
+    return;
+  }
+
+  const conditions = [inArray(shiftModelsTable.teamId, teamScope)];
+  if (query.data.activeOnly) conditions.push(eq(shiftModelsTable.isActive, true));
+
   const rows = await db
     .select()
     .from(shiftModelsTable)
-    .where(query.data.activeOnly ? eq(shiftModelsTable.isActive, true) : undefined)
+    .where(and(...conditions))
     .orderBy(asc(shiftModelsTable.sortOrder), asc(shiftModelsTable.id));
   res.json(rows);
 });
@@ -37,12 +55,16 @@ router.post("/shift-models", requireAdmin, async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid request body" });
     return;
   }
-  const teamId = await resolveTeamId(req.session.userId!);
-  if (teamId == null) {
-    res.status(400).json({ error: "Kein Team zugeordnet" });
+  const write = await resolveWriteTeamId(req.session.userId!, body.data.teamId ?? undefined);
+  if (!write.ok) {
+    if (write.reason === "forbidden") {
+      res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
+    } else {
+      res.status(400).json({ error: "Kein Team zugeordnet" });
+    }
     return;
   }
-  const [model] = await db.insert(shiftModelsTable).values({ ...body.data, teamId }).returning();
+  const [model] = await db.insert(shiftModelsTable).values({ ...body.data, teamId: write.teamId }).returning();
   res.status(201).json(model);
 });
 
@@ -53,10 +75,11 @@ router.patch("/shift-models/:id", requireAdmin, async (req, res): Promise<void> 
     res.status(400).json({ error: "Invalid request" });
     return;
   }
+  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
   const [updated] = await db
     .update(shiftModelsTable)
     .set(body.data)
-    .where(eq(shiftModelsTable.id, params.data.id))
+    .where(and(eq(shiftModelsTable.id, params.data.id), inArray(shiftModelsTable.teamId, allowedTeams)))
     .returning();
   if (!updated) {
     res.status(404).json({ error: "Not found" });
@@ -71,9 +94,10 @@ router.delete("/shift-models/:id", requireAdmin, async (req, res): Promise<void>
     res.status(400).json({ error: "Invalid id" });
     return;
   }
+  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
   const [deleted] = await db
     .delete(shiftModelsTable)
-    .where(eq(shiftModelsTable.id, params.data.id))
+    .where(and(eq(shiftModelsTable.id, params.data.id), inArray(shiftModelsTable.teamId, allowedTeams)))
     .returning();
   if (!deleted) {
     res.status(404).json({ error: "Not found" });

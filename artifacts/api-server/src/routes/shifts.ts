@@ -11,7 +11,7 @@ import {
   type NightWindow,
   type GermanState,
 } from "@workspace/db";
-import { eq, and, sql, or, isNull, ne, notInArray, lt, gt } from "drizzle-orm";
+import { eq, and, sql, or, isNull, ne, notInArray, lt, gt, inArray } from "drizzle-orm";
 import {
   ListShiftsQueryParams,
   CreateShiftBody,
@@ -21,7 +21,12 @@ import {
   DeleteShiftParams,
 } from "@workspace/api-zod";
 import { requireAuth, requireAdmin } from "../middleware/auth";
-import { resolveTeamId } from "../lib/teams";
+import {
+  resolveReadTeamScope,
+  resolveWriteTeamId,
+  getAllowedTeamIds,
+  parseTeamIdParam,
+} from "../lib/teams";
 
 const router = Router();
 
@@ -264,7 +269,17 @@ router.get("/shifts", requireAuth, async (req, res): Promise<void> => {
   const effectiveUserId =
     req.session.role === "assistant" ? req.session.userId! : query.data.userId;
 
-  const conditions = [];
+  const teamScope = await resolveReadTeamScope(req.session.userId!, parseTeamIdParam(req));
+  if (teamScope === null) {
+    res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
+    return;
+  }
+  if (teamScope.length === 0) {
+    res.json([]);
+    return;
+  }
+
+  const conditions = [inArray(shiftsTable.teamId, teamScope)];
   if (effectiveUserId) conditions.push(eq(shiftsTable.userId, effectiveUserId));
   if (query.data.type) conditions.push(eq(shiftsTable.type, query.data.type as "active" | "standby" | "night" | "full_day" | "vacation" | "sick" | "work"));
   if (query.data.month && query.data.year) {
@@ -304,13 +319,17 @@ router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
     }
   }
 
-  const teamId = await resolveTeamId(req.session.userId!);
-  if (teamId == null) {
-    res.status(400).json({ error: "Kein Team zugeordnet" });
+  const write = await resolveWriteTeamId(req.session.userId!, body.data.teamId ?? undefined);
+  if (!write.ok) {
+    if (write.reason === "forbidden") {
+      res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
+    } else {
+      res.status(400).json({ error: "Kein Team zugeordnet" });
+    }
     return;
   }
 
-  const [shift] = await db.insert(shiftsTable).values({ ...body.data, teamId }).returning();
+  const [shift] = await db.insert(shiftsTable).values({ ...body.data, teamId: write.teamId }).returning();
 
   await storeShiftMetrics(shift);
 
@@ -336,7 +355,7 @@ router.get("/shifts/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const [row] = await db
-    .select(SHIFT_SELECT)
+    .select({ ...SHIFT_SELECT, teamId: shiftsTable.teamId })
     .from(shiftsTable)
     .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
     .where(eq(shiftsTable.id, params.data.id));
@@ -344,11 +363,20 @@ router.get("/shifts/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(404).json({ error: "Not found" });
     return;
   }
-  if (req.session.role === "assistant" && row.userId !== req.session.userId!) {
-    res.status(403).json({ error: "Keine Berechtigung" });
-    return;
+  if (req.session.role === "assistant") {
+    if (row.userId !== req.session.userId!) {
+      res.status(403).json({ error: "Keine Berechtigung" });
+      return;
+    }
+  } else {
+    const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+    if (row.teamId == null || !allowedTeams.includes(row.teamId)) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
   }
-  res.json(row);
+  const { teamId: _teamId, ...shiftDto } = row;
+  res.json(shiftDto);
 });
 
 router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
@@ -365,6 +393,12 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
     .where(eq(shiftsTable.id, params.data.id))
     .limit(1);
   if (!oldShift) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+  if (oldShift.teamId == null || !allowedTeams.includes(oldShift.teamId)) {
     res.status(404).json({ error: "Not found" });
     return;
   }
@@ -454,6 +488,12 @@ router.delete("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
     .limit(1);
 
   if (!shift) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+  if (shift.teamId == null || !allowedTeams.includes(shift.teamId)) {
     res.status(404).json({ error: "Not found" });
     return;
   }

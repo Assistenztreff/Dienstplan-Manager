@@ -8,4 +8,8 @@
 
 export type ListContractsParams = {
 userId?: number;
+/**
+ * Optionaler Team-Kontext für die Datentrennung.
+ */
+teamId?: number;
 };

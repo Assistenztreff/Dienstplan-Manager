@@ -3,6 +3,7 @@
 - [Time-tracking shift linkage](time-tracking-shift-link.md) — validate shift ownership (403) before the global shiftId dedupe (409) on POST /api/time-tracking
 - [Restart dev after codegen/db push](dev-restart-after-codegen.md) — running api-server keeps stale Zod/Drizzle schema; new fields silently stripped until workflow restart
 - [Contracts self-scoping](contracts-self-scoping.md) — GET /api/contracts is shared: admin sees all/by-param, assistant forced to own userId; relax admin endpoints over adding new ones.
+- [Team scoping & GET:id IDOR](team-scoping-idor.md) — list scoping isn't enough: every by-id read/PATCH/DELETE must check row.teamId ∈ allowedTeams (404 on mismatch) or admins leak cross-team rows.
 - [team_id insert invariant](team-id-insert-invariant.md) — team_id is NOT NULL on shifts/contracts/shift_models/time_tracking; every insert (incl. hidden absence auto-booking in shifts route) must supply it.
 - [requireDienstleister fresh read](require-dienstleister-fresh-read.md) — team CRUD gating reads account_type from DB per request (not session) so runtime account-type switches take effect immediately.
 - [Idempotent UNIQUE/PK constraint](idempotent-unique-constraint.md) — re-adding UNIQUE/PK raises 42P07 (duplicate_table) not 42710; guard with pg_constraint check + catch both. Post-merge needs ~180s timeout.

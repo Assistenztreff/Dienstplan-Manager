@@ -9,4 +9,8 @@
 export type GetDashboardSummaryParams = {
 month?: number;
 year?: number;
+/**
+ * Optionaler Team-Kontext für die Datentrennung.
+ */
+teamId?: number;
 };

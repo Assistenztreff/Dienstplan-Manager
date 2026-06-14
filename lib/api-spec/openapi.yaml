@@ -50,6 +50,11 @@ paths:
           schema:
             type: string
             enum: [admin, assistant]
+        - name: teamId
+          in: query
+          description: Optionaler Team-Kontext; schränkt auf Mitglieder dieses Teams ein.
+          schema:
+            type: integer
       responses:
         "200":
           description: Liste der Benutzer
@@ -142,6 +147,11 @@ paths:
       parameters:
         - name: userId
           in: query
+          schema:
+            type: integer
+        - name: teamId
+          in: query
+          description: Optionaler Team-Kontext für die Datentrennung.
           schema:
             type: integer
       responses:
@@ -251,6 +261,11 @@ paths:
           schema:
             type: string
             enum: [active, standby, night, full_day, vacation, sick, work]
+        - name: teamId
+          in: query
+          description: Optionaler Team-Kontext für die Datentrennung.
+          schema:
+            type: integer
       responses:
         "200":
           description: Liste der Schichten
@@ -345,6 +360,11 @@ paths:
           in: query
           schema:
             type: boolean
+        - name: teamId
+          in: query
+          description: Optionaler Team-Kontext für die Datentrennung.
+          schema:
+            type: integer
       responses:
         "200":
           description: Liste der Schichtmodelle
@@ -615,6 +635,11 @@ paths:
           schema:
             type: string
             enum: [pending, confirmed, rejected]
+        - name: teamId
+          in: query
+          description: Optionaler Team-Kontext für die Datentrennung.
+          schema:
+            type: integer
       responses:
         "200":
           description: Liste der Zeiteinträge
@@ -780,6 +805,11 @@ paths:
           in: query
           schema:
             type: integer
+        - name: teamId
+          in: query
+          description: Optionaler Team-Kontext für die Datentrennung.
+          schema:
+            type: integer
       responses:
         "200":
           description: Zusammenfassung
@@ -800,6 +830,11 @@ paths:
             type: integer
         - name: year
           in: query
+          schema:
+            type: integer
+        - name: teamId
+          in: query
+          description: Optionaler Team-Kontext für die Datentrennung.
           schema:
             type: integer
       responses:
@@ -1083,6 +1118,9 @@ components:
       properties:
         userId:
           type: integer
+        teamId:
+          type: integer
+          description: Optionaler Team-Kontext; muss ein erlaubtes Team sein.
         weeklyHours:
           type: number
           minimum: 0
@@ -1156,6 +1194,9 @@ components:
       properties:
         userId:
           type: integer
+        teamId:
+          type: integer
+          description: Optionaler Team-Kontext; muss ein erlaubtes Team sein.
         startTime:
           type: string
           format: date-time
@@ -1214,6 +1255,9 @@ components:
         name:
           type: string
           minLength: 1
+        teamId:
+          type: integer
+          description: Optionaler Team-Kontext; muss ein erlaubtes Team sein.
         valuationPercent:
           type: integer
           minimum: 0
@@ -1337,6 +1381,9 @@ components:
       properties:
         userId:
           type: integer
+        teamId:
+          type: integer
+          description: Optionaler Team-Kontext; muss ein erlaubtes Team sein.
         shiftId:
           type: integer
         actualStart:
