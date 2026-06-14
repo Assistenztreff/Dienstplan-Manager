@@ -280,13 +280,26 @@ function AccountTypeCard() {
 function LogoSettingsCard() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { data, isLoading } = useGetBrandingSettings();
+  const { isDienstleister, hasTeams, teams, selectedTeamId } = useTeam();
+  const teamParams = selectedTeamId != null ? { teamId: selectedTeamId } : undefined;
+  const { data, isLoading } = useGetBrandingSettings(teamParams);
   const updateBranding = useUpdateBrandingSettings();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const branding = data as BrandingSettings | undefined;
   const logoSrc = logoSrcFromPath(branding?.logoPath);
+
+  // Für Dienstleister: ein Logo je Team (folgt dem Team-Switcher). Ohne Team-Auswahl
+  // bzw. für Privat-Konten wird das globale Logo bearbeitet.
+  const showsTeamLogo = isDienstleister && hasTeams && selectedTeamId != null;
+  const selectedTeamName = teams.find((t) => t.id === selectedTeamId)?.name;
+  const teamHint =
+    isDienstleister && hasTeams
+      ? showsTeamLogo
+        ? `Logo für Team „${selectedTeamName}". Es erscheint auf den Stundennachweisen dieses Teams.`
+        : 'Globales Logo (Fallback). Wähle oben ein Team aus, um ein eigenes Team-Logo zu hinterlegen.'
+      : null;
 
   async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -316,8 +329,10 @@ function LogoSettingsCard() {
         body: file,
       });
       if (!putRes.ok) throw new Error("Upload fehlgeschlagen");
-      await updateBranding.mutateAsync({ data: { logoPath: objectPath } });
-      await queryClient.invalidateQueries({ queryKey: getGetBrandingSettingsQueryKey() });
+      await updateBranding.mutateAsync({
+        data: { logoPath: objectPath, ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}) },
+      });
+      await queryClient.invalidateQueries({ queryKey: getGetBrandingSettingsQueryKey(teamParams) });
     } catch (err) {
       setError(readableApiError(err, "Logo konnte nicht hochgeladen werden. Bitte erneut versuchen."));
     } finally {
@@ -329,8 +344,10 @@ function LogoSettingsCard() {
     setError(null);
     setUploading(true);
     try {
-      await updateBranding.mutateAsync({ data: { logoPath: null } });
-      await queryClient.invalidateQueries({ queryKey: getGetBrandingSettingsQueryKey() });
+      await updateBranding.mutateAsync({
+        data: { logoPath: null, ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}) },
+      });
+      await queryClient.invalidateQueries({ queryKey: getGetBrandingSettingsQueryKey(teamParams) });
     } catch (err) {
       setError(readableApiError(err, "Logo konnte nicht entfernt werden. Bitte erneut versuchen."));
     } finally {
@@ -347,6 +364,7 @@ function LogoSettingsCard() {
             Das Logo erscheint oben rechts auf dem PDF-Stundennachweis. Ohne eigenes Logo wird das
             Standard-Logo verwendet. PNG oder JPG, max. 5 MB.
           </p>
+          {teamHint && <p className="text-xs text-muted-foreground mt-1">{teamHint}</p>}
         </div>
 
         {isLoading ? (

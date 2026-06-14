@@ -404,6 +404,8 @@ export interface BrandingSettingsInput {
      * @nullable
      */
   logoPath?: string | null;
+  /** Optionaler Team-Kontext; setzt das teamspezifische Logo statt des globalen. */
+  teamId?: number;
 }
 
 export interface UploadUrlRequest {
@@ -647,6 +649,13 @@ export type ListShiftModelsParams = {
 activeOnly?: boolean;
 /**
  * Optionaler Team-Kontext für die Datentrennung.
+ */
+teamId?: number;
+};
+
+export type GetBrandingSettingsParams = {
+/**
+ * Optionaler Team-Kontext; liest das teamspezifische Logo statt des globalen.
  */
 teamId?: number;
 };

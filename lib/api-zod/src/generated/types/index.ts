@@ -20,6 +20,7 @@ export * from './contractUpdate';
 export * from './dashboardSummary';
 export * from './dashboardWarnings';
 export * from './errorEnvelope';
+export * from './getBrandingSettingsParams';
 export * from './getDashboardSummaryParams';
 export * from './getHoursBalanceParams';
 export * from './healthStatus';

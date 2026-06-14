@@ -684,6 +684,10 @@ export const UpdateAllowanceSettingsResponse = zod.object({
 /**
  * @summary Branding-Einstellungen (Firmenlogo) lesen
  */
+export const GetBrandingSettingsQueryParams = zod.object({
+  "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext; liest das teamspezifische Logo statt des globalen.')
+})
+
 export const GetBrandingSettingsResponse = zod.object({
   "id": zod.number(),
   "logoPath": zod.string().nullish().describe('Object-Storage-Pfad des hochgeladenen Logos (z.B. `\/objects\/uploads\/uuid`) oder null.'),
@@ -695,7 +699,8 @@ export const GetBrandingSettingsResponse = zod.object({
  * @summary Branding-Einstellungen (Firmenlogo) aktualisieren
  */
 export const UpdateBrandingSettingsBody = zod.object({
-  "logoPath": zod.string().nullish().describe('Object-Storage-Pfad des hochgeladenen Logos oder null zum Entfernen.')
+  "logoPath": zod.string().nullish().describe('Object-Storage-Pfad des hochgeladenen Logos oder null zum Entfernen.'),
+  "teamId": zod.number().optional().describe('Optionaler Team-Kontext; setzt das teamspezifische Logo statt des globalen.')
 })
 
 export const UpdateBrandingSettingsResponse = zod.object({

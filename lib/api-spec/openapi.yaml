@@ -628,6 +628,12 @@ paths:
       operationId: getBrandingSettings
       tags: [branding-settings]
       summary: Branding-Einstellungen (Firmenlogo) lesen
+      parameters:
+        - name: teamId
+          in: query
+          description: Optionaler Team-Kontext; liest das teamspezifische Logo statt des globalen.
+          schema:
+            type: integer
       responses:
         "200":
           description: Branding-Einstellungen
@@ -635,6 +641,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BrandingSettings"
+        "403":
+          description: Kein Zugriff auf dieses Team
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
     put:
       operationId: updateBrandingSettings
       tags: [branding-settings]
@@ -654,6 +666,12 @@ paths:
                 $ref: "#/components/schemas/BrandingSettings"
         "400":
           description: Ungültige Anfrage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Kein Zugriff auf dieses Team
           content:
             application/json:
               schema:
@@ -1515,6 +1533,9 @@ components:
         logoPath:
           type: ["string", "null"]
           description: Object-Storage-Pfad des hochgeladenen Logos oder null zum Entfernen.
+        teamId:
+          type: integer
+          description: Optionaler Team-Kontext; setzt das teamspezifische Logo statt des globalen.
 
     UploadUrlRequest:
       type: object

@@ -12,4 +12,6 @@ export interface BrandingSettingsInput {
      * @nullable
      */
   logoPath?: string | null;
+  /** Optionaler Team-Kontext; setzt das teamspezifische Logo statt des globalen. */
+  teamId?: number;
 }

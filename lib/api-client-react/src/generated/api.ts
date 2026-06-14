@@ -30,6 +30,7 @@ import type {
   ContractUpdate,
   DashboardSummary,
   ErrorEnvelope,
+  GetBrandingSettingsParams,
   GetDashboardSummaryParams,
   GetHoursBalanceParams,
   HealthStatus,
@@ -2233,20 +2234,27 @@ export const useUpdateAllowanceSettings = <TError = ErrorType<unknown>,
       return useMutation(getUpdateAllowanceSettingsMutationOptions(options));
     }
 
-export const getGetBrandingSettingsUrl = () => {
+export const getGetBrandingSettingsUrl = (params?: GetBrandingSettingsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/branding-settings`
+  return stringifiedParams.length > 0 ? `/api/branding-settings?${stringifiedParams}` : `/api/branding-settings`
 }
 
 /**
  * @summary Branding-Einstellungen (Firmenlogo) lesen
  */
-export const getBrandingSettings = async ( options?: RequestInit): Promise<BrandingSettings> => {
+export const getBrandingSettings = async (params?: GetBrandingSettingsParams, options?: RequestInit): Promise<BrandingSettings> => {
 
-  return customFetch<BrandingSettings>(getGetBrandingSettingsUrl(),
+  return customFetch<BrandingSettings>(getGetBrandingSettingsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -2259,23 +2267,23 @@ export const getBrandingSettings = async ( options?: RequestInit): Promise<Brand
 
 
 
-export const getGetBrandingSettingsQueryKey = () => {
+export const getGetBrandingSettingsQueryKey = (params?: GetBrandingSettingsParams,) => {
     return [
-    `/api/branding-settings`
+    `/api/branding-settings`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetBrandingSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getBrandingSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBrandingSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetBrandingSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getBrandingSettings>>, TError = ErrorType<ErrorEnvelope>>(params?: GetBrandingSettingsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBrandingSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetBrandingSettingsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetBrandingSettingsQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBrandingSettings>>> = ({ signal }) => getBrandingSettings({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBrandingSettings>>> = ({ signal }) => getBrandingSettings(params, { signal, ...requestOptions });
 
 
 
@@ -2285,19 +2293,19 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetBrandingSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getBrandingSettings>>>
-export type GetBrandingSettingsQueryError = ErrorType<unknown>
+export type GetBrandingSettingsQueryError = ErrorType<ErrorEnvelope>
 
 
 /**
  * @summary Branding-Einstellungen (Firmenlogo) lesen
  */
 
-export function useGetBrandingSettings<TData = Awaited<ReturnType<typeof getBrandingSettings>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBrandingSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export function useGetBrandingSettings<TData = Awaited<ReturnType<typeof getBrandingSettings>>, TError = ErrorType<ErrorEnvelope>>(
+ params?: GetBrandingSettingsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBrandingSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetBrandingSettingsQueryOptions(options)
+  const queryOptions = getGetBrandingSettingsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

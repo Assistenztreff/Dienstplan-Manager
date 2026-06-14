@@ -33,16 +33,22 @@ function imageAspectFromDataUrl(dataUrl: string): Promise<number | null> {
   });
 }
 
-async function loadLogoImage(): Promise<LoadedImage | null> {
-  // Eigenes Firmenlogo (aus den Einstellungen) bevorzugen, sonst Standard-Logo.
-  let customPath: string | null = null;
+async function brandingLogoPath(teamId?: number | null): Promise<string | null> {
   try {
-    const branding = await getBrandingSettings();
-    customPath = logoSrcFromPath((branding as { logoPath?: string | null }).logoPath);
+    const branding = await getBrandingSettings(teamId != null ? { teamId } : undefined);
+    return (branding as { logoPath?: string | null }).logoPath ?? null;
   } catch {
-    customPath = null;
+    return null;
   }
+}
 
+async function loadLogoImage(teamId?: number | null): Promise<LoadedImage | null> {
+  // Logo-Fallback-Kette: teamspezifisches Logo → globales Logo → Standard-Logo.
+  let path: string | null = null;
+  if (teamId != null) path = await brandingLogoPath(teamId);
+  if (!path) path = await brandingLogoPath();
+
+  const customPath = logoSrcFromPath(path);
   if (customPath) {
     const dataUrl = await loadImageDataUrl(customPath);
     if (dataUrl) {
@@ -223,7 +229,7 @@ export async function exportStatementSectionsPdf({
 
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
-  const logo = await loadLogoImage();
+  const logo = await loadLogoImage(teamId);
   let firstPage = true;
 
   for (const section of sections) {
