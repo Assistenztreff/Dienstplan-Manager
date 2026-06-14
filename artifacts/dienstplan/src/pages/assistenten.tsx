@@ -214,7 +214,7 @@ function InviteDialog({ open, onClose, userId, userName }: InviteDialogProps) {
 
 function FieldRow({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1.5 text-[#192034] bg-[#eef3f3]">
       <Label className="text-sm font-medium text-foreground">{label}</Label>
       {children}
       {error && <p className="text-xs text-destructive">{error}</p>}
