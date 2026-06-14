@@ -298,6 +298,7 @@ export default function Abwesenheiten() {
                       <div
                         key={u.id}
                         className="flex items-center justify-between text-sm py-2 px-3 rounded-lg bg-muted/30 border border-border/40"
+                        data-testid={`vacation-balance-row-${u.id}`}
                       >
                         <span className="font-medium">{u.name}</span>
                         {entitlement === null ? (
@@ -310,10 +311,14 @@ export default function Abwesenheiten() {
                                   ? "font-semibold text-destructive"
                                   : "font-semibold text-foreground"
                               }
+                              data-testid={`vacation-remaining-${u.id}`}
                             >
                               {remaining}
                             </span>{" "}
-                            von {entitlement} Tagen ({taken} genommen)
+                            von{" "}
+                            <span data-testid={`vacation-entitlement-${u.id}`}>{entitlement}</span>{" "}
+                            Tagen (<span data-testid={`vacation-taken-${u.id}`}>{taken}</span>{" "}
+                            genommen)
                           </span>
                         )}
                       </div>

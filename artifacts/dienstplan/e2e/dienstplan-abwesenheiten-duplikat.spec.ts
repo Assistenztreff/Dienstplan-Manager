@@ -125,12 +125,10 @@ test("Überlappende Urlaubsbuchung überspringt bereits vorhandene Tage und zieh
   await page.goto("/abwesenheiten");
   await expect(page.getByRole("heading", { name: "Abwesenheiten", exact: true })).toBeVisible();
 
-  const resturlaubRow = page
-    .locator("div")
-    .filter({ hasText: assistant.name })
-    .filter({ hasText: "von 30 Tagen" })
-    .last();
-  await expect(resturlaubRow).toContainText("(0 genommen)");
+  // Stabile data-testids je userId statt verschachtelter Textfilter.
+  const remaining = page.getByTestId(`vacation-remaining-${assistant.id}`);
+  const taken = page.getByTestId(`vacation-taken-${assistant.id}`);
+  await expect(taken).toHaveText("0");
 
   // Assistent auswählen (bleibt für beide Buchungen ausgewählt).
   await page.getByTestId("absence-user").click();
@@ -141,8 +139,8 @@ test("Überlappende Urlaubsbuchung überspringt bereits vorhandene Tage und zieh
   await page.getByTestId("absence-to").fill(FIRST_TO);
   await page.getByTestId("absence-save").click();
 
-  await expect(resturlaubRow).toContainText("(2 genommen)");
-  await expect(resturlaubRow).toContainText("28");
+  await expect(taken).toHaveText("2");
+  await expect(remaining).toHaveText("28");
   expect(await vacationDaysUsed(adminCtx, assistant.id, contractId)).toBe(2);
 
   // --- Zweite, überlappende Buchung: 11.-13. ---
@@ -155,8 +153,8 @@ test("Überlappende Urlaubsbuchung überspringt bereits vorhandene Tage und zieh
   await expect(page.getByText(/2 Tage angelegt, 1 bereits vorhanden/)).toBeVisible();
 
   // Resturlaub sinkt nur um die 2 wirklich neuen Tage (auf 26), NICHT um 3.
-  await expect(resturlaubRow).toContainText("(4 genommen)");
-  await expect(resturlaubRow).toContainText("26");
+  await expect(taken).toHaveText("4");
+  await expect(remaining).toHaveText("26");
 
   // Backend: insgesamt 4 eindeutige Urlaubstage (10.-13.), kein Doppelabzug.
   expect(await vacationDaysUsed(adminCtx, assistant.id, contractId)).toBe(4);

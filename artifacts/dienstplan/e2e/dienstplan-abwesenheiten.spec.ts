@@ -113,14 +113,13 @@ test("Urlaubsbuchung am 1. Januar / Vertragsbeginn zieht korrekt vom Resturlaub 
   await page.goto("/abwesenheiten");
   await expect(page.getByRole("heading", { name: "Abwesenheiten", exact: true })).toBeVisible();
 
-  // Vor der Buchung: voller Anspruch sichtbar.
-  const resturlaubRow = page
-    .locator("div")
-    .filter({ hasText: assistant.name })
-    .filter({ hasText: "von 30 Tagen" })
-    .last();
-  await expect(resturlaubRow).toContainText("von 30 Tagen");
-  await expect(resturlaubRow).toContainText("(0 genommen)");
+  // Vor der Buchung: voller Anspruch sichtbar (über stabile data-testids je userId).
+  const remaining = page.getByTestId(`vacation-remaining-${assistant.id}`);
+  const entitlement = page.getByTestId(`vacation-entitlement-${assistant.id}`);
+  const taken = page.getByTestId(`vacation-taken-${assistant.id}`);
+  await expect(entitlement).toHaveText(String(VACATION_DAYS));
+  await expect(taken).toHaveText("0");
+  await expect(remaining).toHaveText(String(VACATION_DAYS));
 
   // Assistent im Erfassungsformular auswählen.
   await page.getByTestId("absence-user").click();
@@ -135,8 +134,8 @@ test("Urlaubsbuchung am 1. Januar / Vertragsbeginn zieht korrekt vom Resturlaub 
   await expect(page.getByTestId("absence-list")).toContainText("Urlaub");
 
   // Resturlaub-Anzeige aktualisiert: 29 von 30 (1 genommen).
-  await expect(resturlaubRow).toContainText("(1 genommen)");
-  await expect(resturlaubRow).toContainText("29");
+  await expect(taken).toHaveText("1");
+  await expect(remaining).toHaveText(String(VACATION_DAYS - 1));
 
   // Backend: vacationDaysUsed des für den 1.1. gültigen Vertrags ist auf 1 gebucht.
   const contractsRes = await adminCtx.get(`/api/contracts?userId=${assistant.id}`);
