@@ -198,9 +198,12 @@ export default function ZeiterfassungScreen() {
       return;
     }
     const actualStart = buildISO(date, startTime);
-    // Nachtschichten/24h-Dienste laufen ueber Mitternacht: liegt die Endzeit
-    // nicht nach der Startzeit, gilt sie als am Folgetag.
-    const endDate = endTime <= startTime ? addOneDay(date) : date;
+    // Nachtschichten/24h-Dienste laufen ueber Mitternacht: nur bei einer
+    // gewaehlten Schicht gilt eine Endzeit <= Startzeit als am Folgetag.
+    // Ohne Schichtbezug (manueller Eintrag) ist eine gleiche/fruehere Endzeit
+    // eine Fehleingabe und wird unten abgewiesen, statt still einen kaputten
+    // 24h-Eintrag auf den Folgetag zu erzeugen.
+    const endDate = selectedShiftId && endTime <= startTime ? addOneDay(date) : date;
     const actualEnd = buildISO(endDate, endTime);
     if (new Date(actualEnd) <= new Date(actualStart)) {
       setError("Endzeit muss nach Startzeit liegen.");

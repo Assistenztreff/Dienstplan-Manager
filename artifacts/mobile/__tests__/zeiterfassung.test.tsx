@@ -18,6 +18,10 @@
  * - 409-Doppelbuchungs-Schutz aus Sicht der Mobile-App: lehnt der Server eine
  *   zweite Buchung derselben shiftId ab (ApiError 409), zeigt der Screen die
  *   passende Fehlermeldung statt eines generischen Fehlers.
+ * - Validierung in handleSubmit (Schutz gegen Fehleingaben): gleiche Start-/
+ *   Endzeit ohne Schichtbezug -> "Endzeit muss nach Startzeit liegen.";
+ *   leeres Pflichtfeld -> "Bitte alle Pflichtfelder ausfullen."; generischer
+ *   Serverfehler -> "Speichern fehlgeschlagen. Bitte erneut versuchen.".
  */
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import React from "react";
@@ -219,6 +223,69 @@ describe("Mobile Zeit-Übernahme", () => {
     // Der Dialog bleibt offen (Titel weiterhin sichtbar), damit der Nutzer
     // die Eingabe korrigieren kann; es wurde kein Eintrag angelegt.
     expect(screen.getByText("Zeiteintrag")).toBeTruthy();
+    expect(mockState.entries).toHaveLength(0);
+  });
+});
+
+describe("Mobile Zeiterfassung – Eingabe-Validierung", () => {
+  beforeEach(() => {
+    resetState();
+  });
+
+  test("gleiche Start-/Endzeit ohne Schichtbezug: zeigt Fehler und speichert nicht", async () => {
+    // Ohne ausgewählte Schicht stehen Start- und Endzeit per Default beide auf
+    // der aktuellen Uhrzeit (nowTimeStr). Da kein Schichtbezug besteht, darf die
+    // Endzeit NICHT still auf den Folgetag rollen – sonst entstünde ein kaputter
+    // 24h-Eintrag. Stattdessen muss die Validierung klar abweisen.
+    render(<ZeiterfassungScreen />);
+    openDialog();
+    fireEvent.press(screen.getByText("Speichern"));
+
+    await waitFor(() =>
+      expect(screen.getByText("Endzeit muss nach Startzeit liegen.")).toBeTruthy(),
+    );
+    // Keine Schreiboperation, kein Eintrag.
+    expect(mockState.mutateAsync).not.toHaveBeenCalled();
+    expect(mockState.entries).toHaveLength(0);
+    // Dialog bleibt offen, damit der Nutzer korrigieren kann.
+    expect(screen.getByText("Zeiteintrag")).toBeTruthy();
+  });
+
+  test("leeres Pflichtfeld (Datum): zeigt Fehler und speichert nicht", async () => {
+    render(<ZeiterfassungScreen />);
+    openDialog();
+    // Das Datumsfeld leeren (TextInput mit Platzhalter JJJJ-MM-TT).
+    fireEvent.changeText(screen.getByPlaceholderText("JJJJ-MM-TT"), "");
+    fireEvent.press(screen.getByText("Speichern"));
+
+    await waitFor(() =>
+      expect(screen.getByText("Bitte alle Pflichtfelder ausfullen.")).toBeTruthy(),
+    );
+    expect(mockState.mutateAsync).not.toHaveBeenCalled();
+    expect(mockState.entries).toHaveLength(0);
+  });
+
+  test("generischer Serverfehler (kein 409): zeigt generische Fehlermeldung", async () => {
+    mockState.shifts = [
+      { id: 404, startTime: `${SHIFT_DATE}T10:00:00`, endTime: `${SHIFT_DATE}T18:00:00`, type: "active" },
+    ];
+    // Server lehnt mit einem unspezifischen Fehler ab (z. B. 500 / Netzwerk).
+    mockState.mutateAsync.mockRejectedValue(new Error("boom"));
+
+    render(<ZeiterfassungScreen />);
+    openDialog();
+    selectShift(/Aktivdienst/);
+    fireEvent.press(screen.getByText("Speichern"));
+
+    // Es wurde tatsächlich versucht zu speichern (Validierung war erfolgreich),
+    // aber der generische Fehler wird klar gemeldet – nicht der 409-Text.
+    await waitFor(() => expect(mockState.mutateAsync).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(
+        screen.getByText("Speichern fehlgeschlagen. Bitte erneut versuchen."),
+      ).toBeTruthy(),
+    );
+    expect(screen.queryByText("Fur diese Schicht wurde bereits eine Zeit erfasst.")).toBeNull();
     expect(mockState.entries).toHaveLength(0);
   });
 });
