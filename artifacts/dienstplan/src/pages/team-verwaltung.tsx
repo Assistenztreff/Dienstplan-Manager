@@ -4,16 +4,29 @@ import {
   useCreateTeam,
   useUpdateTeam,
   useDeleteTeam,
+  useListTeamMembers,
+  useAddTeamMember,
+  useRemoveTeamMember,
+  useListUsers,
   getListTeamsQueryKey,
+  getListTeamMembersQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Plus, Pencil, Trash2, Building2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Plus, Pencil, Trash2, Building2, Users, UserPlus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type Team = {
@@ -22,6 +35,28 @@ type Team = {
   ownerId: number;
   createdAt: string;
 };
+
+type Member = {
+  id: number;
+  teamId: number;
+  userId: number;
+  name: string;
+  email: string;
+  role: "admin" | "assistant";
+  teamCount: number;
+  createdAt: string;
+};
+
+type AppUser = {
+  id: number;
+  name: string;
+  email: string;
+  role: "admin" | "assistant";
+};
+
+function roleLabel(role: "admin" | "assistant"): string {
+  return role === "admin" ? "Assistenznehmer" : "Assistent";
+}
 
 type TeamDialogProps = {
   open: boolean;
@@ -98,6 +133,154 @@ function TeamDialog({ open, onClose, editTeam }: TeamDialogProps) {
   );
 }
 
+type MembersDialogProps = {
+  team: Team;
+  onClose: () => void;
+};
+
+function MembersDialog({ team, onClose }: MembersDialogProps) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { data: membersData, isLoading } = useListTeamMembers(team.id);
+  const { data: usersData } = useListUsers();
+  const addMember = useAddTeamMember();
+  const removeMember = useRemoveTeamMember();
+
+  const [selectedUser, setSelectedUser] = useState<string>("");
+
+  const members = (membersData ?? []) as Member[];
+  const allUsers = (usersData ?? []) as AppUser[];
+  const memberIds = new Set(members.map((m) => m.userId));
+  const available = allUsers.filter((u) => !memberIds.has(u.id));
+
+  async function invalidate() {
+    await queryClient.invalidateQueries({ queryKey: getListTeamMembersQueryKey(team.id) });
+  }
+
+  async function handleAdd() {
+    if (!selectedUser) return;
+    try {
+      await addMember.mutateAsync({ id: team.id, data: { userId: Number(selectedUser) } });
+      setSelectedUser("");
+      await invalidate();
+    } catch {
+      toast({
+        title: "Hinzufügen fehlgeschlagen",
+        description: "Bitte erneut versuchen.",
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleRemove(userId: number) {
+    try {
+      await removeMember.mutateAsync({ id: team.id, userId });
+      await invalidate();
+    } catch {
+      toast({
+        title: "Entfernen fehlgeschlagen",
+        description: "Bitte erneut versuchen.",
+        variant: "destructive",
+      });
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-xl">Mitglieder: {team.name}</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Select value={selectedUser} onValueChange={setSelectedUser}>
+              <SelectTrigger className="flex-1">
+                <SelectValue
+                  placeholder={
+                    available.length === 0 ? "Keine weiteren Personen" : "Person auswählen"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {available.map((u) => (
+                  <SelectItem key={u.id} value={String(u.id)}>
+                    {u.name} ({roleLabel(u.role)})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              onClick={handleAdd}
+              disabled={!selectedUser || addMember.isPending}
+              className="gap-2"
+            >
+              <UserPlus className="h-4 w-4" />
+              Hinzufügen
+            </Button>
+          </div>
+
+          <div className="rounded-lg border border-border/50">
+            {isLoading ? (
+              <div className="space-y-2 p-3">
+                {[1, 2].map((i) => (
+                  <Skeleton key={i} className="h-10 w-full rounded-md" />
+                ))}
+              </div>
+            ) : members.length === 0 ? (
+              <p className="p-6 text-center text-sm text-muted-foreground">
+                Diesem Team sind noch keine Personen zugeordnet.
+              </p>
+            ) : (
+              <ul className="divide-y divide-border/50">
+                {members.map((m) => (
+                  <li key={m.id} className="flex items-center gap-3 px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium truncate">{m.name}</span>
+                        <Badge variant="outline" className="text-xs font-normal">
+                          {roleLabel(m.role)}
+                        </Badge>
+                        {m.teamCount > 1 && (
+                          <Badge variant="secondary" className="text-xs font-normal">
+                            in {m.teamCount} Teams
+                          </Badge>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground truncate">{m.email}</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1.5 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleRemove(m.userId)}
+                      disabled={removeMember.isPending}
+                    >
+                      <X className="h-4 w-4" />
+                      <span className="hidden sm:inline">Entfernen</span>
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Eine Person kann mehreren Teams angehören. Das Entfernen aus diesem Team lässt andere
+            Mitgliedschaften unberührt.
+          </p>
+        </div>
+
+        <DialogFooter className="pt-2">
+          <Button variant="outline" onClick={onClose}>
+            Schließen
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function TeamVerwaltung() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -106,6 +289,7 @@ export default function TeamVerwaltung() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTeam, setEditTeam] = useState<Team | undefined>();
+  const [membersTeam, setMembersTeam] = useState<Team | undefined>();
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
   const teams: Team[] = (data ?? []) as Team[];
@@ -190,6 +374,15 @@ export default function TeamVerwaltung() {
                     variant="outline"
                     size="sm"
                     className="gap-1.5"
+                    onClick={() => setMembersTeam(team)}
+                  >
+                    <Users className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Mitglieder</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
                     onClick={() => openEdit(team)}
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -221,6 +414,10 @@ export default function TeamVerwaltung() {
 
       {dialogOpen && (
         <TeamDialog open={dialogOpen} onClose={closeDialog} editTeam={editTeam} />
+      )}
+
+      {membersTeam && (
+        <MembersDialog team={membersTeam} onClose={() => setMembersTeam(undefined)} />
       )}
     </div>
   );

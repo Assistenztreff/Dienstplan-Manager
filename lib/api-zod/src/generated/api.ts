@@ -581,6 +581,47 @@ export const DeleteTeamParams = zod.object({
 
 
 /**
+ * @summary Team-Mitglieder auflisten
+ */
+export const ListTeamMembersParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListTeamMembersResponseItem = zod.object({
+  "id": zod.number(),
+  "teamId": zod.number(),
+  "userId": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "role": zod.enum(['admin', 'assistant']),
+  "teamCount": zod.number().describe('Anzahl der Teams dieses Dienstleisters, in denen der Nutzer Mitglied ist'),
+  "createdAt": zod.coerce.date()
+})
+export const ListTeamMembersResponse = zod.array(ListTeamMembersResponseItem)
+
+
+/**
+ * @summary Mitglied zum Team hinzufügen
+ */
+export const AddTeamMemberParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AddTeamMemberBody = zod.object({
+  "userId": zod.number()
+})
+
+
+/**
+ * @summary Mitglied aus Team entfernen
+ */
+export const RemoveTeamMemberParams = zod.object({
+  "id": zod.coerce.number(),
+  "userId": zod.coerce.number()
+})
+
+
+/**
  * @summary Zuschlags-Einstellungen lesen
  */
 export const GetAllowanceSettingsResponse = zod.object({

@@ -124,6 +124,30 @@ export interface TeamUpdate {
   name: string;
 }
 
+export type TeamMemberRole = typeof TeamMemberRole[keyof typeof TeamMemberRole];
+
+
+export const TeamMemberRole = {
+  admin: 'admin',
+  assistant: 'assistant',
+} as const;
+
+export interface TeamMember {
+  id: number;
+  teamId: number;
+  userId: number;
+  name: string;
+  email: string;
+  role: TeamMemberRole;
+  /** Anzahl der Teams dieses Dienstleisters, in denen der Nutzer Mitglied ist */
+  teamCount: number;
+  createdAt: string;
+}
+
+export interface TeamMemberInput {
+  userId: number;
+}
+
 export interface Contract {
   id: number;
   userId: number;

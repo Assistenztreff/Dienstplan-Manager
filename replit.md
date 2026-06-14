@@ -59,6 +59,17 @@ Kernfunktionen (Task 1 — Grundstruktur):
 - **teamId-Injektion**: Helper `resolveTeamId(userId)` (bevorzugt eigenes Team, sonst erste Mitgliedschaft) wird in alle Insert-Handler eingehängt; time_tracking erbt team_id von der verknüpften Schicht.
 - **Migration**: `pnpm --filter @workspace/scripts run migrate-teams` (idempotent, läuft in post-merge VOR `db push`). Datentrennung über Teams folgt in Stufe 2/3 (#43 Zuweisung, #44 Wechsler).
 
+### Stufe 2: Personen den Teams zuweisen (#43)
+
+- **Mitgliedschafts-Endpunkte** in `routes/teams.ts`, alle `requireDienstleister` + owner-scoped:
+  - `GET /api/teams/:id/members` — Mitglieder eines Teams als `TeamMember`-DTO inkl. `teamCount`.
+  - `POST /api/teams/:id/members` `{userId}` — 201; 404 wenn Nutzer unbekannt; 409 bei Doppelzuweisung.
+  - `DELETE /api/teams/:id/members/:userId` — 204; 404 wenn keine Mitgliedschaft.
+- **IDOR-Schutz**: Helper `assertTeamOwnership(teamId, ownerId, res)` liefert 404 bei fremdem Team, bevor irgendeine Mitglieds-Operation läuft.
+- **teamCount**: Subquery in `selectMembers` zählt, in wie vielen Teams **dieses Owners** der Nutzer Mitglied ist → Frontend-Badge "in N Teams" zeigt Mehrfachzuweisung; Entfernen aus einem Team lässt andere Mitgliedschaften unberührt.
+- **Frontend**: `team-verwaltung.tsx` → `MembersDialog` pro Team (Select zum Hinzufügen aus `useListUsers`, Liste mit Rolle- und Mehrfach-Badge zum Entfernen).
+- **Bewusst NICHT in Stufe 2**: Es gibt noch KEINE Nutzer-Eigentümerschaft (`users` ist ein globaler Pool, `listUsers` zeigt allen Admins alle Nutzer). Jeder Dienstleister kann daher prinzipiell jeden vorhandenen Nutzer zuweisen. Strikte Mandanten-/Datentrennung (Nutzer pro Dienstleister, Sichtbarkeitsgrenzen) ist explizit Stufe 3 (#44) und erfordert ein Schema-Modell für Nutzer-Zugehörigkeit.
+
 ## User preferences
 
 - Strikt task-orientiertes Vorgehen: nach jedem Task auf Feedback warten

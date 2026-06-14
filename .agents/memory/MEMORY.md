@@ -6,3 +6,4 @@
 - [team_id insert invariant](team-id-insert-invariant.md) — team_id is NOT NULL on shifts/contracts/shift_models/time_tracking; every insert (incl. hidden absence auto-booking in shifts route) must supply it.
 - [requireDienstleister fresh read](require-dienstleister-fresh-read.md) — team CRUD gating reads account_type from DB per request (not session) so runtime account-type switches take effect immediately.
 - [Idempotent UNIQUE/PK constraint](idempotent-unique-constraint.md) — re-adding UNIQUE/PK raises 42P07 (duplicate_table) not 42710; guard with pg_constraint check + catch both. Post-merge needs ~180s timeout.
+- [Team membership shared pool](team-member-shared-pool.md) — member-add scopes the team (404 on foreign) but not the user; users are a global pool, per-dienstleister user isolation is deferred to #44.

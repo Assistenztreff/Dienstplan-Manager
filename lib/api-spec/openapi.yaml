@@ -490,6 +490,78 @@ paths:
         "409":
           description: Team enthält noch Daten oder Mitglieder
 
+  /teams/{id}/members:
+    get:
+      operationId: listTeamMembers
+      tags: [teams]
+      summary: Team-Mitglieder auflisten
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Liste der Mitglieder
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TeamMember"
+        "404":
+          description: Team nicht gefunden
+    post:
+      operationId: addTeamMember
+      tags: [teams]
+      summary: Mitglied zum Team hinzufügen
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamMemberInput"
+      responses:
+        "201":
+          description: Hinzugefügt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamMember"
+        "404":
+          description: Team oder Benutzer nicht gefunden
+        "409":
+          description: Benutzer ist bereits Mitglied
+
+  /teams/{id}/members/{userId}:
+    delete:
+      operationId: removeTeamMember
+      tags: [teams]
+      summary: Mitglied aus Team entfernen
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Entfernt
+        "404":
+          description: Nicht gefunden
+
   /allowance-settings:
     get:
       operationId: getAllowanceSettings
@@ -946,6 +1018,37 @@ components:
         name:
           type: string
           minLength: 1
+
+    TeamMember:
+      type: object
+      required: [id, teamId, userId, name, email, role, teamCount, createdAt]
+      properties:
+        id:
+          type: integer
+        teamId:
+          type: integer
+        userId:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, assistant]
+        teamCount:
+          type: integer
+          description: Anzahl der Teams dieses Dienstleisters, in denen der Nutzer Mitglied ist
+        createdAt:
+          type: string
+          format: date-time
+
+    TeamMemberInput:
+      type: object
+      required: [userId]
+      properties:
+        userId:
+          type: integer
 
     Contract:
       type: object
