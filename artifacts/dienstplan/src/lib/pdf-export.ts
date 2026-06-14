@@ -1,6 +1,25 @@
 import { listShifts } from "@workspace/api-client-react";
 import { format, differenceInMinutes } from "date-fns";
 import { de } from "date-fns/locale";
+import logoUrl from "@assets/logo hell.png";
+
+const LOGO_ASPECT = 2100 / 460;
+
+async function loadImageDataUrl(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise<string | null>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
 
 const SHIFT_TYPE_LABELS: Record<string, string> = {
   active: "Aktiv",
@@ -38,6 +57,7 @@ export async function exportHoursStatementPdf({
 
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
+  const logoDataUrl = await loadImageDataUrl(logoUrl);
   let firstPage = true;
 
   for (const balance of balances) {
@@ -45,9 +65,22 @@ export async function exportHoursStatementPdf({
     firstPage = false;
 
     // --- Header ---
+    if (logoDataUrl) {
+      const logoW = 38;
+      const logoH = logoW / LOGO_ASPECT;
+      const pad = 2.5;
+      const rectW = logoW + pad * 2;
+      const rectH = logoH + pad * 2;
+      const rectX = pageWidth - 14 - rectW;
+      const rectY = 10;
+      doc.setFillColor(37, 63, 96);
+      doc.roundedRect(rectX, rectY, rectW, rectH, 2, 2, "F");
+      doc.addImage(logoDataUrl, "PNG", rectX + pad, rectY + pad, logoW, logoH);
+    }
+
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
-    doc.text("Stundennachweis", pageWidth / 2, 20, { align: "center" });
+    doc.text("Stundennachweis", 14, 20);
 
     doc.setFontSize(12);
     doc.setFont("helvetica", "normal");
@@ -136,24 +169,41 @@ export async function exportHoursStatementPdf({
         headStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
         columnStyles: { 3: { halign: "right" } },
         styles: { fontSize: 9 },
-        margin: { left: 14, right: 14 },
+        margin: { left: 14, right: 14, bottom: 40 },
       });
     } else {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
       doc.text("Keine Schichten in diesem Monat.", 14, tableY + 10);
     }
+  }
 
-    // --- Footer ---
-    const pageHeight = doc.internal.pageSize.getHeight();
-    doc.setFontSize(8);
+  // --- Unterschriftsfeld + Footer auf jeder Seite ---
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const createdLabel = `Erstellt am ${format(new Date(), "dd.MM.yyyy", { locale: de })}`;
+  const pageCount = doc.getNumberOfPages();
+
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+
+    const sigY = pageHeight - 24;
+    doc.setDrawColor(60);
+    doc.setLineWidth(0.3);
+    doc.line(14, sigY, 64, sigY);
+    doc.line(80, sigY, pageWidth - 14, sigY);
+
+    doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
+    doc.setTextColor(60);
+    doc.text("Datum", 14, sigY + 5);
+    doc.text("Unterschrift Arbeitgeber", 80, sigY + 5);
+
+    doc.setFontSize(8);
     doc.setTextColor(120);
-    doc.text(
-      `Erstellt am ${format(new Date(), "dd.MM.yyyy", { locale: de })}`,
-      14,
-      pageHeight - 10
-    );
+    doc.text(createdLabel, 14, pageHeight - 10);
+    doc.text(`Seite ${i} von ${pageCount}`, pageWidth - 14, pageHeight - 10, {
+      align: "right",
+    });
     doc.setTextColor(0);
   }
 
