@@ -302,7 +302,16 @@ export default function Abwesenheiten() {
                       >
                         <span className="font-medium">{u.name}</span>
                         {entitlement === null ? (
-                          <span className="text-muted-foreground text-xs">Kein Vertrag</span>
+                          <span className="text-muted-foreground text-xs">
+                            Kein Vertrag
+                            {taken > 0 && (
+                              <>
+                                {" · "}
+                                <span data-testid={`vacation-taken-${u.id}`}>{taken}</span>{" "}
+                                {taken === 1 ? "Tag" : "Tage"} geplant
+                              </>
+                            )}
+                          </span>
                         ) : (
                           <span className="text-muted-foreground">
                             <span
