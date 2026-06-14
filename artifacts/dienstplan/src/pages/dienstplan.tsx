@@ -103,22 +103,30 @@ function ShiftBadge({
   onClick?: (e: React.MouseEvent) => void;
 }) {
   const classes = shiftBadgeClasses(shift, modelMap);
+  // Abwesenheiten (Urlaub/Krank) haben keine Uhrzeiten → als ganztägiger Block ohne Zeit.
+  const isAbsence = shift.type === "vacation" || shift.type === "sick";
   return (
     <div
       data-testid={`shift-badge-${shift.id}`}
-      className={`text-xs rounded border px-2 py-1 leading-snug cursor-pointer transition-colors ${classes}`}
+      className={`w-full text-xs rounded border px-2 py-1 leading-snug cursor-pointer transition-colors ${classes}`}
       onClick={onClick}
     >
       {showName && shift.user && (
         <div className="font-medium truncate">{shift.user.name}</div>
       )}
-      <div>
-        {format(new Date(shift.startTime), "HH:mm")}–{format(new Date(shift.endTime), "HH:mm")}
-        {!isSameDay(new Date(shift.startTime), new Date(shift.endTime)) && (
-          <span className="opacity-70"> (+1)</span>
-        )}
-      </div>
-      <div className="text-[11px] opacity-70">{shiftLabel(shift, modelMap)}</div>
+      {isAbsence ? (
+        <div className="font-medium">{shiftLabel(shift, modelMap)}</div>
+      ) : (
+        <>
+          <div>
+            {format(new Date(shift.startTime), "HH:mm")}–{format(new Date(shift.endTime), "HH:mm")}
+            {!isSameDay(new Date(shift.startTime), new Date(shift.endTime)) && (
+              <span className="opacity-70"> (+1)</span>
+            )}
+          </div>
+          <div className="text-[11px] opacity-70">{shiftLabel(shift, modelMap)}</div>
+        </>
+      )}
     </div>
   );
 }
