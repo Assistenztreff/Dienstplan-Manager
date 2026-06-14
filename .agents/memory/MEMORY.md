@@ -13,3 +13,4 @@
 - [Mobile jest harness](mobile-jest-harness.md) — Expo artifact uses jest-expo + RNTL; pnpm needs a custom transformIgnorePatterns matching pkg names after `.pnpm/`, and native edges are mocked.
 - [Vite dynamic-import reload mid-action](vite-dynamic-import-export-reload.md) — heavy `await import()` deps (jspdf) need optimizeDeps.include or Vite reloads mid-export, aborting the download (E2E hangs).
 - [Object storage template typecheck](object-storage-template-typecheck.md) — copied objectStorage.ts needs `as { signed_url: string }` cast or strict tsc fails TS2339.
+- [E2E cold-start timeout & capture](e2e-cold-start-timeout.md) — beforeEach login+setup can exceed 30s default (raise via test.setTimeout); detached runs get reaped, use foreground + sync fs.appendFileSync reporter.
