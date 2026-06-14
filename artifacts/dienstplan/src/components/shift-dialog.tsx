@@ -388,6 +388,7 @@ export function ShiftDialog({
             <Label>Datum *</Label>
             <Input
               type="date"
+              data-testid="shift-dialog-date"
               value={form.date}
               onChange={(e) => set("date", e.target.value)}
               className={errors.date ? "border-destructive" : ""}
