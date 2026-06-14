@@ -31,8 +31,47 @@ async function apiFetch(path: string, init?: RequestInit) {
   return res;
 }
 
+// Dev-only Session-Cache. Speichert NUR das nicht-sensible Nutzerprofil
+// (id/name/email/role) zur sofortigen UI-Hydration nach Reload — KEINE
+// Passwörter oder Tokens. Die echte Authentifizierung bleibt die serverseitige
+// httpOnly-Session (Cookie `connect.sid`). `import.meta.env.DEV` wird beim
+// Production-Build statisch entfernt, der Bypass existiert dort also gar nicht.
+const DEV_SESSION_KEY = "assistenz_treff_session";
+
+function readStoredSession(): AuthUser | null {
+  if (!import.meta.env.DEV) return null;
+  try {
+    const raw = localStorage.getItem(DEV_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<AuthUser>;
+    if (
+      parsed &&
+      typeof parsed.id === "number" &&
+      typeof parsed.name === "string" &&
+      typeof parsed.email === "string" &&
+      (parsed.role === "admin" || parsed.role === "assistant") &&
+      (parsed.accountType === "privat" || parsed.accountType === "dienstleister")
+    ) {
+      return parsed as AuthUser;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function storeSession(user: AuthUser | null): void {
+  if (!import.meta.env.DEV) return;
+  try {
+    if (user) localStorage.setItem(DEV_SESSION_KEY, JSON.stringify(user));
+    else localStorage.removeItem(DEV_SESSION_KEY);
+  } catch {
+    // localStorage nicht verfügbar (z. B. privater Modus) — ignorieren
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => readStoredSession());
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -43,7 +82,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const meRes = await apiFetch("/api/auth/me");
         if (meRes.ok) {
           const user = (await meRes.json()) as AuthUser;
-          if (!cancelled) setCurrentUser(user);
+          if (!cancelled) {
+            setCurrentUser(user);
+            storeSession(user);
+          }
           return;
         }
 
@@ -51,14 +93,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const devRes = await apiFetch("/api/auth/dev-login", { method: "POST" });
           if (devRes.ok) {
             const user = (await devRes.json()) as AuthUser;
-            if (!cancelled) setCurrentUser(user);
+            if (!cancelled) {
+              setCurrentUser(user);
+              storeSession(user);
+            }
             return;
           }
         }
 
-        if (!cancelled) setCurrentUser(null);
+        if (!cancelled) {
+          setCurrentUser(null);
+          storeSession(null);
+        }
       } catch {
-        if (!cancelled) setCurrentUser(null);
+        if (!cancelled) {
+          setCurrentUser(null);
+          storeSession(null);
+        }
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -82,18 +133,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const user = (await r.json()) as AuthUser;
     setCurrentUser(user);
+    storeSession(user);
   };
 
   const logout = async () => {
     await apiFetch("/api/auth/logout", { method: "POST" });
     setCurrentUser(null);
+    storeSession(null);
   };
 
   const refreshUser = async () => {
-    const r = await apiFetch("/api/auth/me");
-    if (r.ok) {
-      const user = (await r.json()) as AuthUser;
-      setCurrentUser(user);
+    try {
+      const r = await apiFetch("/api/auth/me");
+      if (r.ok) {
+        const user = (await r.json()) as AuthUser;
+        setCurrentUser(user);
+        storeSession(user);
+        return;
+      }
+      // Session serverseitig ungültig (401/403) -> lokalen Zustand & Cache leeren.
+      setCurrentUser(null);
+      storeSession(null);
+    } catch {
+      // Transienter Netzwerkfehler: bestehenden Zustand bewusst NICHT verwerfen.
     }
   };
 
@@ -109,6 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const user = (await r.json()) as AuthUser;
     setCurrentUser(user);
+    storeSession(user);
     return user;
   };
 

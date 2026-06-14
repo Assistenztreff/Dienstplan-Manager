@@ -16,3 +16,4 @@
 - [E2E cold-start timeout & capture](e2e-cold-start-timeout.md) — beforeEach login+setup can exceed 30s default (raise via test.setTimeout); detached runs get reaped, use foreground + sync fs.appendFileSync reporter.
 - [Dev auto-login breaks form-based E2E](dev-auto-login-e2e.md) — in Vite DEV the app auto-POSTs /api/auth/dev-login when /auth/me is 401, so the login form never renders; form-based loginAsAdmin helpers time out locally (works in prod-build validation).
 - [E2E dev auto-login](e2e-dev-auto-login.md) — dev server auto-logs-in as admin via /api/auth/dev-login; goto target page directly, the #email login form never renders so loginViaUi hangs.
+- [Dev session localStorage cache](dev-session-localstorage-cache.md) — web auth caches only the non-sensitive profile under `assistenz_treff_session`, guarded by `import.meta.env.DEV` (not process.env); cookie stays source of truth.
