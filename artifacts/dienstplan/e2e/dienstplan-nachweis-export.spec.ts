@@ -130,15 +130,23 @@ test("Nachweis-Dialog navigiert den Monat und löst PDF-Download mit erwartetem 
   await expect(dialog.getByText("Stundennachweis exportieren")).toBeVisible();
   await expect(dialog.getByText(assistant.name)).toBeVisible();
 
-  // Monatsanzeige merken, dann einen Monat zurück navigieren.
-  const monthLabel = dialog.locator("span.min-w-40");
-  const initialLabel = (await monthLabel.textContent())?.trim() ?? "";
+  // Von-/Bis-Monat starten auf dem aktuellen Monat; für den Einzel-Nachweis des
+  // Vormonats beide Stepper einen Monat zurück navigieren.
+  const fromLabel = dialog.getByTestId("export-from-label");
+  const toLabel = dialog.getByTestId("export-to-label");
+  const initialLabel = (await fromLabel.textContent())?.trim() ?? "";
   expect(initialLabel.length).toBeGreaterThan(0);
 
-  // "Zurück"-Button = der Icon-Button direkt vor der Monatsanzeige.
-  const prevButton = monthLabel.locator("xpath=preceding-sibling::button[1]");
-  await prevButton.click();
-  await expect(monthLabel).not.toHaveText(initialLabel);
+  // "Zurück"-Button = der erste Icon-Button in der jeweiligen Stepper-Zeile.
+  const fromPrev = fromLabel.locator("xpath=..").locator("button").first();
+  const toPrev = toLabel.locator("xpath=..").locator("button").first();
+  await fromPrev.click();
+  await toPrev.click();
+  await expect(fromLabel).not.toHaveText(initialLabel);
+  await expect(toLabel).not.toHaveText(initialLabel);
+
+  // Genau ein Monat (der Vormonat) wird exportiert.
+  await expect(dialog.getByText("1 Monat werden exportiert.")).toBeVisible();
 
   // Export starten und Download abfangen.
   const downloadPromise = page.waitForEvent("download");
