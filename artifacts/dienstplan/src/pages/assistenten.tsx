@@ -33,7 +33,7 @@ import { Plus, Mail, Phone, MapPin, Calendar, Pencil, UserPlus, Send, Copy, Chec
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { toast } from "sonner";
-import { exportHoursStatementPdf } from "@/lib/pdf-export";
+import { exportStatementSectionsPdf } from "@/lib/pdf-export";
 
 type User = {
   id: number;
@@ -578,39 +578,72 @@ type ExportDialogProps = {
   userName: string;
 };
 
+function monthIndex(date: Date): number {
+  return date.getFullYear() * 12 + date.getMonth();
+}
+
 function ExportDialog({ open, onClose, userId, userName }: ExportDialogProps) {
   const { selectedTeamId } = useTeam();
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [fromDate, setFromDate] = useState(new Date());
+  const [toDate, setToDate] = useState(new Date());
   const [isExporting, setIsExporting] = useState(false);
 
-  const month = currentDate.getMonth() + 1;
-  const year = currentDate.getFullYear();
-  const monthLabel = format(currentDate, "MMMM yyyy", { locale: de });
+  const fromIndex = monthIndex(fromDate);
+  const toIndex = monthIndex(toDate);
+  const rangeInvalid = toIndex < fromIndex;
+  const monthCount = rangeInvalid ? 0 : toIndex - fromIndex + 1;
 
-  const prevMonth = () => setCurrentDate(new Date(year, month - 2, 1));
-  const nextMonth = () => setCurrentDate(new Date(year, month, 1));
+  const fromLabel = format(fromDate, "MMMM yyyy", { locale: de });
+  const toLabel = format(toDate, "MMMM yyyy", { locale: de });
+
+  const stepFrom = (delta: number) =>
+    setFromDate((d) => new Date(d.getFullYear(), d.getMonth() + delta, 1));
+  const stepTo = (delta: number) =>
+    setToDate((d) => new Date(d.getFullYear(), d.getMonth() + delta, 1));
 
   async function handleExport() {
+    if (rangeInvalid) {
+      toast.error("Der Bis-Monat darf nicht vor dem Von-Monat liegen.");
+      return;
+    }
     setIsExporting(true);
     try {
-      const balances = await getHoursBalance({
-        month,
-        year,
-        ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
-      });
-      const balance = (balances as any[]).find((b) => b.userId === userId);
-      if (!balance) {
-        toast.error("Keine Auswertungsdaten fuer diesen Monat gefunden.");
+      const sections: Array<{ balance: any; month: number; year: number; monthLabel: string }> = [];
+
+      for (let i = 0; i < monthCount; i++) {
+        const cursor = new Date(fromDate.getFullYear(), fromDate.getMonth() + i, 1);
+        const month = cursor.getMonth() + 1;
+        const year = cursor.getFullYear();
+        const monthLabel = format(cursor, "MMMM yyyy", { locale: de });
+
+        const balances = await getHoursBalance({
+          month,
+          year,
+          ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
+        });
+        const balance = (balances as any[]).find((b) => b.userId === userId);
+        if (balance) {
+          sections.push({ balance, month, year, monthLabel });
+        }
+      }
+
+      if (sections.length === 0) {
+        toast.error("Keine Auswertungsdaten fuer den gewaehlten Zeitraum gefunden.");
         return;
       }
+
       const safeName = userName.replace(/[^\p{L}\p{N}]+/gu, "_").replace(/^_+|_+$/g, "");
-      await exportHoursStatementPdf({
-        balances: [balance],
-        month,
-        year,
-        monthLabel,
+      const first = sections[0];
+      const last = sections[sections.length - 1];
+      const rangePart =
+        sections.length === 1
+          ? `${first.year}_${String(first.month).padStart(2, "0")}`
+          : `${first.year}_${String(first.month).padStart(2, "0")}-${last.year}_${String(last.month).padStart(2, "0")}`;
+
+      await exportStatementSectionsPdf({
+        sections,
         teamId: selectedTeamId,
-        filename: `Stundennachweis_${safeName}_${year}_${String(month).padStart(2, "0")}.pdf`,
+        filename: `Stundennachweis_${safeName}_${rangePart}.pdf`,
       });
       onClose();
     } catch (err) {
@@ -632,25 +665,57 @@ function ExportDialog({ open, onClose, userId, userName }: ExportDialogProps) {
           <p className="text-sm text-muted-foreground">
             Einzelnachweis fuer{" "}
             <span className="font-medium text-foreground">{userName}</span> als PDF.
-            Waehle den gewuenschten Monat.
+            Waehle den gewuenschten Zeitraum – pro Monat entsteht eine Seite.
           </p>
 
-          <div className="flex items-center justify-center gap-2">
-            <Button variant="outline" size="icon" onClick={prevMonth} disabled={isExporting}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="font-medium text-sm min-w-40 text-center">{monthLabel}</span>
-            <Button variant="outline" size="icon" onClick={nextMonth} disabled={isExporting}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Von-Monat</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Button variant="outline" size="icon" onClick={() => stepFrom(-1)} disabled={isExporting}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="font-medium text-sm flex-1 text-center" data-testid="export-from-label">
+                  {fromLabel}
+                </span>
+                <Button variant="outline" size="icon" onClick={() => stepFrom(1)} disabled={isExporting}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Bis-Monat</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Button variant="outline" size="icon" onClick={() => stepTo(-1)} disabled={isExporting}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="font-medium text-sm flex-1 text-center" data-testid="export-to-label">
+                  {toLabel}
+                </span>
+                <Button variant="outline" size="icon" onClick={() => stepTo(1)} disabled={isExporting}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           </div>
+
+          {rangeInvalid ? (
+            <p className="text-xs text-destructive">
+              Der Bis-Monat darf nicht vor dem Von-Monat liegen.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {monthCount === 1 ? "1 Monat" : `${monthCount} Monate`} werden exportiert.
+            </p>
+          )}
         </div>
 
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={onClose} disabled={isExporting}>
             Abbrechen
           </Button>
-          <Button onClick={handleExport} disabled={isExporting} className="gap-2">
+          <Button onClick={handleExport} disabled={isExporting || rangeInvalid} className="gap-2">
             <Download className="h-4 w-4" />
             {isExporting ? "Exportiere..." : "Als PDF exportieren"}
           </Button>

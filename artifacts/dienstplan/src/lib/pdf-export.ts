@@ -35,23 +35,148 @@ function hoursFromShift(startTime: string, endTime: string): number {
   return Math.round((mins / 60) * 100) / 100;
 }
 
-export type ExportHoursStatementOptions = {
-  balances: any[];
+async function renderStatementPage(
+  doc: any,
+  autoTable: any,
+  pageWidth: number,
+  logoDataUrl: string | null,
+  balance: any,
+  month: number,
+  year: number,
+  monthLabel: string,
+  teamId?: number | null,
+) {
+  // --- Header ---
+  if (logoDataUrl) {
+    const logoW = 48;
+    const logoH = logoW / LOGO_ASPECT;
+    const logoX = pageWidth - 14 - logoW;
+    const logoY = 12;
+    doc.addImage(logoDataUrl, "PNG", logoX, logoY, logoW, logoH);
+  }
+
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text("Stundennachweis", 14, 20);
+
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Assistent: ${balance.userName}`, 14, 32);
+  doc.text(`Monat: ${monthLabel}`, 14, 39);
+
+  // --- Summary box ---
+  const summaryRows = [
+    ["Soll-Stunden", `${balance.plannedHours} h`],
+    ["Geleistete Stunden (gewertet)", `${balance.valuedHours} h`],
+    [
+      "Differenz",
+      `${balance.balance > 0 ? "+" : ""}${balance.balance} h`,
+    ],
+    ["Erfuellt gesamt (inkl. Urlaub/Krank)", `${balance.totalFulfilledHours} h`],
+    ["Urlaubsstunden (erfuellt)", `${balance.vacationFulfilledHours} h`],
+    ["Krankheitsstunden", `${balance.sickHours} h`],
+    [
+      "Urlaubstage (genommen)",
+      `${balance.vacationDaysTaken} Tage`,
+    ],
+    [
+      "Urlaubstage (verbleibend)",
+      `${balance.vacationDaysRemaining} Tage`,
+    ],
+    [
+      `Nachtstunden (Zuschlag ${balance.nightPercent}%)`,
+      `${balance.nightHours} h (+${balance.nightSurchargeHours} h)`,
+    ],
+    [
+      `Sonntagsstunden (Zuschlag ${balance.sundayPercent}%)`,
+      `${balance.sundayHours} h (+${balance.sundaySurchargeHours} h)`,
+    ],
+    [
+      `Feiertagsstunden (Zuschlag ${balance.holidayPercent}%)`,
+      `${balance.holidayHours} h (+${balance.holidaySurchargeHours} h)`,
+    ],
+  ];
+
+  autoTable(doc, {
+    startY: 46,
+    head: [["Kennzahl", "Wert"]],
+    body: summaryRows,
+    theme: "grid",
+    headStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
+    columnStyles: { 0: { fontStyle: "bold" }, 1: { halign: "right" } },
+    styles: { fontSize: 10 },
+    margin: { left: 14, right: 14 },
+  });
+
+  // --- Shift detail table ---
+  let shifts: any[] = [];
+  try {
+    shifts = await listShifts({
+      userId: balance.userId,
+      month,
+      year,
+      ...(teamId != null ? { teamId } : {}),
+    });
+  } catch {
+    shifts = [];
+  }
+
+  const detailRows = shifts.map((s: any) => {
+    const date = format(new Date(s.startTime), "dd.MM.yyyy", { locale: de });
+    const type = SHIFT_TYPE_LABELS[s.type] ?? s.type;
+    const hours = hoursFromShift(s.startTime, s.endTime);
+    const timeRange = `${format(new Date(s.startTime), "HH:mm")} – ${format(new Date(s.endTime), "HH:mm")}`;
+    return [date, type, timeRange, `${hours} h`];
+  });
+
+  const tableY = (doc as any).lastAutoTable?.finalY
+    ? (doc as any).lastAutoTable.finalY + 10
+    : 100;
+
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text("Schichtdetails", 14, tableY);
+
+  if (detailRows.length > 0) {
+    autoTable(doc, {
+      startY: tableY + 5,
+      head: [["Datum", "Typ", "Uhrzeit", "Stunden"]],
+      body: detailRows,
+      theme: "striped",
+      headStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
+      columnStyles: { 3: { halign: "right" } },
+      styles: { fontSize: 9 },
+      margin: { left: 14, right: 14, bottom: 40 },
+    });
+  } else {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text("Keine Schichten in diesem Monat.", 14, tableY + 10);
+  }
+}
+
+export type StatementSection = {
+  balance: any;
   month: number;
   year: number;
   monthLabel: string;
-  teamId?: number | null;
-  filename?: string;
 };
 
-export async function exportHoursStatementPdf({
-  balances,
-  month,
-  year,
-  monthLabel,
+export type ExportStatementSectionsOptions = {
+  sections: StatementSection[];
+  teamId?: number | null;
+  filename: string;
+};
+
+/**
+ * Kern-Export: rendert pro Section eine eigene Seite (Kennzahlen + Schichtdetails).
+ * Wird sowohl vom Einzel-/Monats-Export als auch vom Zeitraum-Export genutzt.
+ */
+export async function exportStatementSectionsPdf({
+  sections,
   teamId,
   filename,
-}: ExportHoursStatementOptions) {
+}: ExportStatementSectionsOptions) {
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
 
@@ -60,117 +185,21 @@ export async function exportHoursStatementPdf({
   const logoDataUrl = await loadImageDataUrl(logoUrl);
   let firstPage = true;
 
-  for (const balance of balances) {
+  for (const section of sections) {
     if (!firstPage) doc.addPage();
     firstPage = false;
 
-    // --- Header ---
-    if (logoDataUrl) {
-      const logoW = 48;
-      const logoH = logoW / LOGO_ASPECT;
-      const logoX = pageWidth - 14 - logoW;
-      const logoY = 12;
-      doc.addImage(logoDataUrl, "PNG", logoX, logoY, logoW, logoH);
-    }
-
-    doc.setFontSize(18);
-    doc.setFont("helvetica", "bold");
-    doc.text("Stundennachweis", 14, 20);
-
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Assistent: ${balance.userName}`, 14, 32);
-    doc.text(`Monat: ${monthLabel}`, 14, 39);
-
-    // --- Summary box ---
-    const summaryRows = [
-      ["Soll-Stunden", `${balance.plannedHours} h`],
-      ["Geleistete Stunden (gewertet)", `${balance.valuedHours} h`],
-      [
-        "Differenz",
-        `${balance.balance > 0 ? "+" : ""}${balance.balance} h`,
-      ],
-      ["Erfuellt gesamt (inkl. Urlaub/Krank)", `${balance.totalFulfilledHours} h`],
-      ["Urlaubsstunden (erfuellt)", `${balance.vacationFulfilledHours} h`],
-      ["Krankheitsstunden", `${balance.sickHours} h`],
-      [
-        "Urlaubstage (genommen)",
-        `${balance.vacationDaysTaken} Tage`,
-      ],
-      [
-        "Urlaubstage (verbleibend)",
-        `${balance.vacationDaysRemaining} Tage`,
-      ],
-      [
-        `Nachtstunden (Zuschlag ${balance.nightPercent}%)`,
-        `${balance.nightHours} h (+${balance.nightSurchargeHours} h)`,
-      ],
-      [
-        `Sonntagsstunden (Zuschlag ${balance.sundayPercent}%)`,
-        `${balance.sundayHours} h (+${balance.sundaySurchargeHours} h)`,
-      ],
-      [
-        `Feiertagsstunden (Zuschlag ${balance.holidayPercent}%)`,
-        `${balance.holidayHours} h (+${balance.holidaySurchargeHours} h)`,
-      ],
-    ];
-
-    autoTable(doc, {
-      startY: 46,
-      head: [["Kennzahl", "Wert"]],
-      body: summaryRows,
-      theme: "grid",
-      headStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
-      columnStyles: { 0: { fontStyle: "bold" }, 1: { halign: "right" } },
-      styles: { fontSize: 10 },
-      margin: { left: 14, right: 14 },
-    });
-
-    // --- Shift detail table ---
-    let shifts: any[] = [];
-    try {
-      shifts = await listShifts({
-        userId: balance.userId,
-        month,
-        year,
-        ...(teamId != null ? { teamId } : {}),
-      });
-    } catch {
-      shifts = [];
-    }
-
-    const detailRows = shifts.map((s: any) => {
-      const date = format(new Date(s.startTime), "dd.MM.yyyy", { locale: de });
-      const type = SHIFT_TYPE_LABELS[s.type] ?? s.type;
-      const hours = hoursFromShift(s.startTime, s.endTime);
-      const timeRange = `${format(new Date(s.startTime), "HH:mm")} – ${format(new Date(s.endTime), "HH:mm")}`;
-      return [date, type, timeRange, `${hours} h`];
-    });
-
-    const tableY = (doc as any).lastAutoTable?.finalY
-      ? (doc as any).lastAutoTable.finalY + 10
-      : 100;
-
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text("Schichtdetails", 14, tableY);
-
-    if (detailRows.length > 0) {
-      autoTable(doc, {
-        startY: tableY + 5,
-        head: [["Datum", "Typ", "Uhrzeit", "Stunden"]],
-        body: detailRows,
-        theme: "striped",
-        headStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
-        columnStyles: { 3: { halign: "right" } },
-        styles: { fontSize: 9 },
-        margin: { left: 14, right: 14, bottom: 40 },
-      });
-    } else {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.text("Keine Schichten in diesem Monat.", 14, tableY + 10);
-    }
+    await renderStatementPage(
+      doc,
+      autoTable,
+      pageWidth,
+      logoDataUrl,
+      section.balance,
+      section.month,
+      section.year,
+      section.monthLabel,
+      teamId,
+    );
   }
 
   // --- Unterschriftsfeld + Footer auf jeder Seite ---
@@ -202,7 +231,34 @@ export async function exportHoursStatementPdf({
     doc.setTextColor(0);
   }
 
-  const outName =
-    filename ?? `Stundennachweis_${year}_${String(month).padStart(2, "0")}.pdf`;
-  doc.save(outName);
+  doc.save(filename);
+}
+
+export type ExportHoursStatementOptions = {
+  balances: any[];
+  month: number;
+  year: number;
+  monthLabel: string;
+  teamId?: number | null;
+  filename?: string;
+};
+
+/**
+ * Einzel-/Monats-Export: alle übergebenen Balances betreffen denselben Monat,
+ * eine Seite pro Balance. Baut auf der gemeinsamen PDF-Logik auf.
+ */
+export async function exportHoursStatementPdf({
+  balances,
+  month,
+  year,
+  monthLabel,
+  teamId,
+  filename,
+}: ExportHoursStatementOptions) {
+  await exportStatementSectionsPdf({
+    sections: balances.map((balance) => ({ balance, month, year, monthLabel })),
+    teamId,
+    filename:
+      filename ?? `Stundennachweis_${year}_${String(month).padStart(2, "0")}.pdf`,
+  });
 }
