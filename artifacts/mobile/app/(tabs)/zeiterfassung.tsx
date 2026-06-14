@@ -381,6 +381,7 @@ export default function ZeiterfassungScreen() {
       )}
 
       <TouchableOpacity
+        testID="add-entry-fab"
         style={[
           styles.fab,
           {

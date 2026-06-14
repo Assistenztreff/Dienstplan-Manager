@@ -135,6 +135,20 @@ function openDialog() {
   fireEvent.press(screen.getByText("Eintrag hinzufugen"));
 }
 
+/**
+ * Öffnet den Dialog über den FAB. Anders als die Empty-State-Schaltfläche ist
+ * der FAB immer sichtbar — auch wenn schon Einträge existieren (dann fehlt der
+ * Empty-State). Nötig für Tests, die mit vorhandenen Zeiteinträgen starten.
+ */
+function openDialogViaFab() {
+  fireEvent.press(screen.getByTestId("add-entry-fab"));
+}
+
+/** Öffnet das Schicht-Dropdown im geöffneten Dialog. */
+function openShiftPicker() {
+  fireEvent.press(screen.getByText("Keine Schicht ausgewahlt"));
+}
+
 /** Öffnet das Schicht-Dropdown und wählt die (einzige) Schicht des Typs aus. */
 function selectShift(typeLabel: RegExp) {
   fireEvent.press(screen.getByText("Keine Schicht ausgewahlt"));
@@ -287,5 +301,83 @@ describe("Mobile Zeiterfassung – Eingabe-Validierung", () => {
     );
     expect(screen.queryByText("Fur diese Schicht wurde bereits eine Zeit erfasst.")).toBeNull();
     expect(mockState.entries).toHaveLength(0);
+  });
+});
+
+/**
+ * Sichert den Schicht-Picker-Filter ab (zeiterfassung.tsx: shifts-Filter).
+ * Dieser Filter verhindert Doppelbuchungen direkt an der UI: bereits gebuchte
+ * Schichten (shiftId hat schon einen Zeiteintrag) und Abwesenheiten
+ * (Urlaub/Krank) werden nicht erneut zur Übernahme angeboten. Normale offene
+ * Schichten bleiben weiterhin auswählbar.
+ */
+describe("Mobile Schicht-Picker Filter", () => {
+  beforeEach(() => {
+    resetState();
+  });
+
+  test("bereits gebuchte Schicht (vorhandener Zeiteintrag) erscheint NICHT im Picker", () => {
+    // 101 ist bereits über einen Zeiteintrag gebucht, 102 ist noch offen.
+    mockState.shifts = [
+      { id: 101, startTime: `${SHIFT_DATE}T08:00:00`, endTime: `${SHIFT_DATE}T16:00:00`, type: "active" },
+      { id: 102, startTime: `${NIGHT_DATE}T22:00:00`, endTime: `${NIGHT_NEXT}T06:00:00`, type: "night" },
+    ];
+    mockState.entries = [
+      {
+        id: 9001,
+        userId: 7,
+        shiftId: 101,
+        actualStart: `${SHIFT_DATE}T08:00:00`,
+        actualEnd: `${SHIFT_DATE}T16:00:00`,
+        status: "pending",
+      },
+    ];
+
+    render(<ZeiterfassungScreen />);
+    // Es gibt schon einen Eintrag -> kein Empty-State, Dialog über den FAB öffnen.
+    openDialogViaFab();
+    openShiftPicker();
+
+    // Die gebuchte Schicht (101, Aktivdienst) wird nicht mehr angeboten,
+    // die noch offene (102, Nachtdienst) schon.
+    expect(screen.queryByText(/Aktivdienst/)).toBeNull();
+    expect(screen.getByText(/Nachtdienst/)).toBeTruthy();
+  });
+
+  test('Schichten vom Typ "vacation"/"sick" erscheinen NICHT im Picker', () => {
+    const VACATION_DATE = "2026-06-10";
+    const SICK_DATE = "2026-06-11";
+    mockState.shifts = [
+      { id: 201, startTime: `${VACATION_DATE}T00:00:00`, endTime: `${VACATION_DATE}T23:59:00`, type: "vacation" },
+      { id: 202, startTime: `${SICK_DATE}T00:00:00`, endTime: `${SICK_DATE}T23:59:00`, type: "sick" },
+      { id: 203, startTime: `${SHIFT_DATE}T08:00:00`, endTime: `${SHIFT_DATE}T16:00:00`, type: "active" },
+    ];
+
+    render(<ZeiterfassungScreen />);
+    openDialog();
+    openShiftPicker();
+
+    // Abwesenheiten tauchen nicht auf (anhand ihrer Datumszeile geprüft),
+    // die normale Schicht bleibt auswählbar.
+    expect(screen.queryByText(new RegExp(VACATION_DATE))).toBeNull();
+    expect(screen.queryByText(new RegExp(SICK_DATE))).toBeNull();
+    expect(screen.getByText(/Aktivdienst/)).toBeTruthy();
+  });
+
+  test("normale offene Schichten erscheinen weiterhin im Picker", () => {
+    mockState.shifts = [
+      { id: 301, startTime: `${SHIFT_DATE}T08:00:00`, endTime: `${SHIFT_DATE}T16:00:00`, type: "active" },
+      { id: 302, startTime: `${NIGHT_DATE}T22:00:00`, endTime: `${NIGHT_NEXT}T06:00:00`, type: "night" },
+    ];
+
+    render(<ZeiterfassungScreen />);
+    openDialog();
+    openShiftPicker();
+
+    // Keine Buchung, keine Abwesenheit -> beide Schichten werden angeboten,
+    // der Leerzustand des Dropdowns erscheint nicht.
+    expect(screen.queryByText("Keine offenen Schichten")).toBeNull();
+    expect(screen.getByText(/Aktivdienst/)).toBeTruthy();
+    expect(screen.getByText(/Nachtdienst/)).toBeTruthy();
   });
 });
