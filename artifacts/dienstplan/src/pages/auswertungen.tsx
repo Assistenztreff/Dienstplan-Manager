@@ -271,13 +271,16 @@ export default function Auswertungen() {
 
         <div className="flex items-center gap-2 md:gap-4 flex-wrap">
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={prevMonth}>
+            <Button variant="outline" size="icon" onClick={prevMonth} data-testid="month-prev">
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="font-medium text-sm md:text-lg min-w-[120px] md:min-w-40 text-center">
+            <span
+              className="font-medium text-sm md:text-lg min-w-[120px] md:min-w-40 text-center"
+              data-testid="month-label"
+            >
               {monthLabel}
             </span>
-            <Button variant="outline" size="icon" onClick={nextMonth}>
+            <Button variant="outline" size="icon" onClick={nextMonth} data-testid="month-next">
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
@@ -287,6 +290,7 @@ export default function Auswertungen() {
             onClick={() => setExportOpen(true)}
             disabled={isLoading || !visibleBalances || visibleBalances.length === 0}
             className="gap-2"
+            data-testid="export-pdf-button"
           >
             <Download className="h-4 w-4" />
             Als PDF exportieren
