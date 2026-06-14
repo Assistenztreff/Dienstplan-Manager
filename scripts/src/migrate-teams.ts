@@ -69,9 +69,13 @@ async function main() {
     `);
     await client.query(`
       DO $$ BEGIN
-        ALTER TABLE "team_members" ADD CONSTRAINT "team_members_team_id_user_id_unique"
-          UNIQUE ("team_id", "user_id");
-      EXCEPTION WHEN duplicate_object THEN null; END $$;
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'team_members_team_id_user_id_unique'
+        ) THEN
+          ALTER TABLE "team_members" ADD CONSTRAINT "team_members_team_id_user_id_unique"
+            UNIQUE ("team_id", "user_id");
+        END IF;
+      EXCEPTION WHEN duplicate_object OR duplicate_table THEN null; END $$;
     `);
 
     // team_id Spalten (zunächst nullable, damit befüllbar)
