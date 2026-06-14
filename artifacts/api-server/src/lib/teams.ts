@@ -1,5 +1,5 @@
 import { db } from "@workspace/db";
-import { teamsTable, teamMembersTable } from "@workspace/db";
+import { teamsTable, teamMembersTable, shiftModelsTable } from "@workspace/db";
 import { eq, asc, and, inArray } from "drizzle-orm";
 import type { Request } from "express";
 
@@ -120,6 +120,25 @@ export async function isUserMemberOfTeam(userId: number, teamId: number): Promis
     .select({ userId: teamMembersTable.userId })
     .from(teamMembersTable)
     .where(and(eq(teamMembersTable.userId, userId), eq(teamMembersTable.teamId, teamId)))
+    .limit(1);
+  return !!row;
+}
+
+/**
+ * Prüft, ob ein Schichtmodell zu einem bestimmten Team gehört.
+ * Basis für die Validierung von Schicht-Schreiboperationen: eine Schicht darf nur
+ * mit einem Schichtmodell desselben Teams verknüpft werden — sonst flössen die
+ * Wertungs-/Zuschlagsparameter eines fremden Teams in die Auswertung ein.
+ * Liefert false, wenn das Modell nicht existiert oder zu einem anderen Team gehört.
+ */
+export async function isShiftModelInTeam(
+  shiftModelId: number,
+  teamId: number,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: shiftModelsTable.id })
+    .from(shiftModelsTable)
+    .where(and(eq(shiftModelsTable.id, shiftModelId), eq(shiftModelsTable.teamId, teamId)))
     .limit(1);
   return !!row;
 }

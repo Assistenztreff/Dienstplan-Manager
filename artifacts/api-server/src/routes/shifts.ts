@@ -27,6 +27,7 @@ import {
   getAllowedTeamIds,
   parseTeamIdParam,
   isUserMemberOfTeam,
+  isShiftModelInTeam,
 } from "../lib/teams";
 
 const router = Router();
@@ -337,6 +338,15 @@ router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
     return;
   }
 
+  // Das verknüpfte Schichtmodell muss zum Ziel-Team gehören, sonst flössen die
+  // Wertungs-/Zuschlagsparameter eines fremden Teams in die Auswertung ein.
+  if (body.data.shiftModelId != null) {
+    if (!(await isShiftModelInTeam(body.data.shiftModelId, write.teamId))) {
+      res.status(403).json({ error: "Schichtmodell gehört nicht zu diesem Team" });
+      return;
+    }
+  }
+
   const [shift] = await db.insert(shiftsTable).values({ ...body.data, teamId: write.teamId }).returning();
 
   await storeShiftMetrics(shift);
@@ -426,6 +436,16 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
     );
     if (conflicts.length > 0) {
       res.status(409).json(overlapResponseBody(conflicts));
+      return;
+    }
+  }
+
+  // Wird das Schichtmodell geändert, muss das neue Modell zum Team der Schicht
+  // gehören (oldShift.teamId, das Team bleibt bei PATCH unverändert), sonst
+  // flössen fremde Wertungs-/Zuschlagsparameter in die Auswertung ein.
+  if (body.data.shiftModelId != null) {
+    if (!(await isShiftModelInTeam(body.data.shiftModelId, oldShift.teamId))) {
+      res.status(403).json({ error: "Schichtmodell gehört nicht zu diesem Team" });
       return;
     }
   }
