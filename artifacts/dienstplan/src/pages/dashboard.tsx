@@ -4,12 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
-import { AlertTriangle, CalendarX, Clock, CheckCircle2, Plane } from "lucide-react";
+import { AlertTriangle, CalendarX, Clock, CheckCircle2, Plane, ChevronRight } from "lucide-react";
+import { useLocation } from "wouter";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
 
 function WarningsSection({ warnings }: { warnings: DashboardWarnings }) {
   const { pendingTimeEntries, lowVacationAssistants, uncoveredDays, lowVacationThreshold, horizonDays } = warnings;
+  const [, navigate] = useLocation();
   const hasWarnings =
     pendingTimeEntries > 0 || lowVacationAssistants.length > 0 || uncoveredDays.length > 0;
 
@@ -39,30 +41,46 @@ function WarningsSection({ warnings }: { warnings: DashboardWarnings }) {
       </CardHeader>
       <CardContent className="space-y-4">
         {pendingTimeEntries > 0 && (
-          <div className="flex items-start gap-3">
+          <button
+            type="button"
+            onClick={() => navigate("/zeiterfassung?status=pending")}
+            data-testid="warning-pending-time-entries"
+            className="group flex w-full items-start gap-3 rounded-lg p-1.5 -m-1.5 text-left transition-colors hover:bg-amber-100/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+          >
             <Clock className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-foreground">
                 {pendingTimeEntries} offene {pendingTimeEntries === 1 ? "Zeiterfassung" : "Zeiterfassungen"}
               </p>
               <p className="text-sm text-muted-foreground">Noch nicht bestaetigt und warten auf Pruefung.</p>
             </div>
-          </div>
+            <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-amber-600/70 transition-transform group-hover:translate-x-0.5" />
+          </button>
         )}
 
         {lowVacationAssistants.length > 0 && (
           <div className="flex items-start gap-3">
             <Plane className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-foreground">
                 {lowVacationAssistants.length}{" "}
                 {lowVacationAssistants.length === 1 ? "Assistent" : "Assistenten"} mit wenig Resturlaub
                 <span className="font-normal text-muted-foreground"> (Schwelle: {lowVacationThreshold} Tage)</span>
               </p>
-              <ul className="mt-1 space-y-0.5 text-sm text-muted-foreground">
+              <ul className="mt-1 space-y-0.5">
                 {lowVacationAssistants.map((a) => (
                   <li key={a.userId}>
-                    {a.userName}: {a.vacationDaysRemaining} {a.vacationDaysRemaining === 1 ? "Tag" : "Tage"} Resturlaub
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/assistenten?highlight=${a.userId}`)}
+                      data-testid={`warning-low-vacation-${a.userId}`}
+                      className="group flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 -mx-2 text-left text-sm text-muted-foreground transition-colors hover:bg-amber-100/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                    >
+                      <span>
+                        {a.userName}: {a.vacationDaysRemaining} {a.vacationDaysRemaining === 1 ? "Tag" : "Tage"} Resturlaub
+                      </span>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-amber-600/70 transition-transform group-hover:translate-x-0.5" />
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -73,15 +91,34 @@ function WarningsSection({ warnings }: { warnings: DashboardWarnings }) {
         {uncoveredDays.length > 0 && (
           <div className="flex items-start gap-3">
             <CalendarX className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-foreground">
                 {uncoveredDays.length} {uncoveredDays.length === 1 ? "Tag" : "Tage"} ohne geplante Schicht
                 <span className="font-normal text-muted-foreground"> (naechste {horizonDays} Tage)</span>
               </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {previewDays.map((d) => format(parseISO(d), "EEE, dd.MM.", { locale: de })).join(" · ")}
-                {restDays > 0 ? ` · +${restDays} weitere` : ""}
-              </p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {previewDays.map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => navigate(`/dienstplan?date=${d}`)}
+                    data-testid={`warning-uncovered-day-${d}`}
+                    className="rounded-full border border-amber-300 bg-amber-100/50 px-2.5 py-0.5 text-xs text-amber-900 transition-colors hover:bg-amber-200/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                  >
+                    {format(parseISO(d), "EEE, dd.MM.", { locale: de })}
+                  </button>
+                ))}
+                {restDays > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/dienstplan?date=${uncoveredDays[previewDays.length]}`)}
+                    data-testid="warning-uncovered-day-more"
+                    className="rounded-full px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                  >
+                    +{restDays} weitere
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "wouter";
 import { useListShifts, useListUsers, useListShiftModels } from "@workspace/api-client-react";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, getDay } from "date-fns";
+import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, getDay, isValid } from "date-fns";
 import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -431,7 +432,18 @@ export default function Dienstplan() {
   const { currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin";
 
-  const [currentDate, setCurrentDate] = useState(new Date());
+  // Optionales Zieldatum (z.B. vom Dashboard-Hinweis "Tage ohne geplante Schicht").
+  const [searchParams] = useSearchParams();
+  const initialDate = (() => {
+    const param = searchParams.get("date");
+    if (param) {
+      const parsed = parseISO(param);
+      if (isValid(parsed)) return parsed;
+    }
+    return new Date();
+  })();
+
+  const [currentDate, setCurrentDate] = useState(initialDate);
   const [dialog, setDialog] = useState<DialogState>({ mode: "closed" });
   const [mobileView, setMobileView] = usePersistentState<"list" | "grid">(
     "dienstplan.mobileView",
@@ -444,7 +456,7 @@ export default function Dienstplan() {
     ["table", "grid"],
   );
   const [selectedAssistant, setSelectedAssistant] = useState<number | "all">("all");
-  const [selectedDay, setSelectedDay] = useState<Date>(() => new Date());
+  const [selectedDay, setSelectedDay] = useState<Date>(() => initialDate);
 
   const month = currentDate.getMonth() + 1;
   const year = currentDate.getFullYear();

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "wouter";
 import {
   useListTimeEntries,
   useListUsers,
@@ -58,6 +59,9 @@ export default function Zeiterfassung() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const statusFilter = searchParams.get("status");
+
   const { data: entries, isLoading: entriesLoading } = useListTimeEntries();
   const { data: users, isLoading: usersLoading } = useListUsers();
   // Eigene geplante Schichten des Assistenten (Server erzwingt die eigene userId).
@@ -86,6 +90,26 @@ export default function Zeiterfassung() {
       .filter((s) => !isAbsenceType(s.type) && !bookedShiftIds.has(s.id))
       .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
   }, [shifts, bookedShiftIds]);
+
+  // Status-Filter (z.B. vom Dashboard-Hinweis "Offene Zeiterfassungen" gesetzt).
+  const filteredEntries = useMemo(() => {
+    if (!statusFilter) return entries ?? [];
+    return (entries ?? []).filter((e) => e.status === statusFilter);
+  }, [entries, statusFilter]);
+
+  function setStatus(status: string | null) {
+    const next = new URLSearchParams(searchParams);
+    if (status) next.set("status", status);
+    else next.delete("status");
+    setSearchParams(next, { replace: true });
+  }
+
+  const STATUS_FILTERS: { value: string | null; label: string }[] = [
+    { value: null, label: "Alle" },
+    { value: "pending", label: "Offen" },
+    { value: "confirmed", label: "Bestätigt" },
+    { value: "rejected", label: "Abgelehnt" },
+  ];
 
   const [dialogShift, setDialogShift] = useState<Shift | null>(null);
   const [startInput, setStartInput] = useState("");
@@ -200,6 +224,28 @@ export default function Zeiterfassung() {
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-1.5" data-testid="status-filter">
+        {STATUS_FILTERS.map((f) => {
+          const active = (statusFilter ?? null) === f.value;
+          return (
+            <button
+              key={f.label}
+              type="button"
+              data-testid={`status-filter-${f.value ?? "all"}`}
+              data-active={active ? "true" : "false"}
+              onClick={() => setStatus(f.value)}
+              className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                active
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-card text-muted-foreground border-border hover:bg-muted/40"
+              }`}
+            >
+              {f.label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Offene geplante Schichten (nur Assistent) */}
       {isAssistant && (
         <Card className="border-border/50 shadow-sm">
@@ -276,7 +322,7 @@ export default function Zeiterfassung() {
                 </tr>
               </thead>
               <tbody>
-                {entries?.map((entry) => (
+                {filteredEntries.map((entry) => (
                   <tr key={entry.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
                     <td className="p-4">
                       <div className="font-medium">
@@ -320,10 +366,12 @@ export default function Zeiterfassung() {
                     )}
                   </tr>
                 ))}
-                {(!entries || entries.length === 0) && (
+                {filteredEntries.length === 0 && (
                   <tr>
                     <td colSpan={isAdmin ? 6 : 4} className="p-8 text-center text-muted-foreground">
-                      Keine Zeiteinträge gefunden.
+                      {statusFilter
+                        ? "Keine Zeiteinträge mit diesem Status."
+                        : "Keine Zeiteinträge gefunden."}
                     </td>
                   </tr>
                 )}

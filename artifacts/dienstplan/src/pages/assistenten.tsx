@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "wouter";
 import {
   useListUsers,
   useListContracts,
@@ -671,6 +672,22 @@ export default function Assistenten() {
 
   const isLoading = usersLoading || contractsLoading;
 
+  // Hervorheben eines Assistenten (z.B. vom Dashboard-Hinweis "wenig Resturlaub").
+  const [searchParams] = useSearchParams();
+  const highlightId = searchParams.get("highlight");
+  const highlightRef = useRef<HTMLDivElement | null>(null);
+  const [highlightActive, setHighlightActive] = useState(false);
+
+  useEffect(() => {
+    if (!highlightId || isLoading) return;
+    const node = highlightRef.current;
+    if (!node) return;
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightActive(true);
+    const timer = setTimeout(() => setHighlightActive(false), 2500);
+    return () => clearTimeout(timer);
+  }, [highlightId, isLoading, users]);
+
   function openCreate() {
     setEditUser(undefined);
     setEditContract(undefined);
@@ -718,11 +735,17 @@ export default function Assistenten() {
             );
 
             const { vorname, nachname } = splitName(user.name);
+            const isHighlighted = highlightId != null && String(user.id) === highlightId;
 
             return (
               <Card
                 key={user.id}
-                className="border-border/50 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow"
+                ref={isHighlighted ? highlightRef : undefined}
+                data-testid={`assistant-card-${user.id}`}
+                data-highlighted={isHighlighted && highlightActive ? "true" : "false"}
+                className={`border-border/50 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow ${
+                  isHighlighted && highlightActive ? "ring-2 ring-primary ring-offset-2" : ""
+                }`}
               >
                 <div className="px-5 py-4 border-b border-border/40 bg-muted/30 flex items-start justify-between gap-3">
                   <div className="min-w-0">
