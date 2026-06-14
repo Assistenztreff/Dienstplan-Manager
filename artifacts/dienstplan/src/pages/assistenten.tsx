@@ -386,16 +386,17 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
             </h3>
             <div className="grid grid-cols-2 gap-4">
               <FieldRow label="Vorname *" error={errors.vorname}>
-                <Input value={form.vorname} onChange={(e) => set("vorname", e.target.value)} placeholder="Max" />
+                <Input className="bg-card" value={form.vorname} onChange={(e) => set("vorname", e.target.value)} placeholder="Max" />
               </FieldRow>
               <FieldRow label="Nachname *" error={errors.nachname}>
-                <Input value={form.nachname} onChange={(e) => set("nachname", e.target.value)} placeholder="Mustermann" />
+                <Input className="bg-card" value={form.nachname} onChange={(e) => set("nachname", e.target.value)} placeholder="Mustermann" />
               </FieldRow>
             </div>
 
             <div className="mt-4 space-y-4">
               <FieldRow label="E-Mail *" error={errors.email}>
                 <Input
+                  className="bg-card"
                   type="email"
                   value={form.email}
                   onChange={(e) => set("email", e.target.value)}
@@ -405,6 +406,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
 
               <FieldRow label="Telefon">
                 <Input
+                  className="bg-card"
                   value={form.phone}
                   onChange={(e) => set("phone", e.target.value)}
                   placeholder="0171-1234567"
@@ -413,6 +415,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
 
               <FieldRow label="Adresse *" error={errors.address}>
                 <Input
+                  className="bg-card"
                   value={form.address}
                   onChange={(e) => set("address", e.target.value)}
                   placeholder="Musterstr. 1, 12345 Musterstadt"
@@ -429,6 +432,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
               <div className="grid grid-cols-2 gap-4">
                 <FieldRow label="Geburtsdatum">
                   <Input
+                    className="bg-card"
                     type="date"
                     value={form.birthDate}
                     onChange={(e) => set("birthDate", e.target.value)}
@@ -439,7 +443,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
                     value={form.taxClass || undefined}
                     onValueChange={(v) => set("taxClass", v)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-card">
                       <SelectValue placeholder="Wählen" />
                     </SelectTrigger>
                     <SelectContent>
@@ -455,6 +459,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
 
               <FieldRow label="Sozialversicherungsnummer">
                 <Input
+                  className="bg-card"
                   value={form.socialSecurityNumber}
                   onChange={(e) => set("socialSecurityNumber", e.target.value)}
                   placeholder="12 123456 A 123"
@@ -463,6 +468,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
 
               <FieldRow label="Steuer-Identifikationsnummer">
                 <Input
+                  className="bg-card"
                   value={form.taxId}
                   onChange={(e) => set("taxId", e.target.value)}
                   placeholder="12 345 678 901"
@@ -471,6 +477,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
 
               <FieldRow label="Krankenkasse">
                 <Input
+                  className="bg-card"
                   value={form.healthInsurance}
                   onChange={(e) => set("healthInsurance", e.target.value)}
                   placeholder="z.B. AOK, TK, Barmer"
@@ -479,6 +486,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
 
               <FieldRow label="IBAN">
                 <Input
+                  className="bg-card"
                   value={form.iban}
                   onChange={(e) => set("iban", e.target.value)}
                   placeholder="DE00 0000 0000 0000 0000 00"
@@ -495,6 +503,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
               <div className="grid grid-cols-2 gap-4">
                 <FieldRow label="Wochenstunden *" error={errors.weeklyHours}>
                   <Input
+                    className="bg-card"
                     type="number"
                     min="1"
                     max="40"
@@ -506,6 +515,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
                 <FieldRow label="Urlaubsanspruch *" error={errors.vacationDays}>
                   <div className="relative">
                     <Input
+                      className="bg-card"
                       type="number"
                       min="0"
                       max="365"
@@ -521,6 +531,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
 
               <FieldRow label="Vertragsbeginn *" error={errors.startDate}>
                 <Input
+                  className="bg-card"
                   type="date"
                   value={form.startDate}
                   onChange={(e) => set("startDate", e.target.value)}
@@ -529,6 +540,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
 
               <FieldRow label="Hinweise">
                 <Input
+                  className="bg-card"
                   value={form.notes}
                   onChange={(e) => set("notes", e.target.value)}
                   placeholder="z.B. Teilzeit Nachmittag"
