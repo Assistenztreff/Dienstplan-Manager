@@ -34,7 +34,7 @@ export default function Login() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="flex flex-col items-center gap-4 text-center">
-          <img src={logoUrl} alt="AssistenzTreff" className="h-12 w-auto" />
+          <img src={logoUrl} alt="AssistenzTreff" className="h-20 w-auto" />
           <p className="text-sm text-muted-foreground">Melden Sie sich mit Ihrer E-Mail an</p>
         </div>
 
