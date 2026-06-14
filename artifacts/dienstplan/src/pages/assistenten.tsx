@@ -125,8 +125,8 @@ function InviteDialog({ open, onClose, userId, userName }: InviteDialogProps) {
     try {
       const data = await inviteUser.mutateAsync({ id: userId });
       setResult(data);
-    } catch {
-      setError("Einladungslink konnte nicht generiert werden.");
+    } catch (err) {
+      setError(readableApiError(err, "Einladungslink konnte nicht generiert werden."));
     } finally {
       setLoading(false);
     }

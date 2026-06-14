@@ -30,6 +30,7 @@ import { Check, X, CalendarClock, ArrowRight } from "lucide-react";
 import { useAuth } from "@/context/auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { readableApiError } from "@/lib/api-error";
 
 const SHIFT_TYPE_LABEL: Record<string, string> = {
   active: "Aktivdienst",
@@ -144,8 +145,12 @@ export default function Zeiterfassung() {
           toast({ title: status === "confirmed" ? "Eintrag bestätigt" : "Eintrag abgelehnt" });
           void queryClient.invalidateQueries({ queryKey: ["/api/time-tracking"] });
         },
-        onError: () => {
-          toast({ title: "Fehler beim Aktualisieren", variant: "destructive" });
+        onError: (err) => {
+          toast({
+            title: "Fehler beim Aktualisieren",
+            description: readableApiError(err, "Bitte erneut versuchen."),
+            variant: "destructive",
+          });
         },
       }
     );
@@ -203,10 +208,8 @@ export default function Zeiterfassung() {
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setFormError("Sitzung abgelaufen. Bitte Seite neu laden und erneut anmelden.");
-      } else if (err instanceof ApiError && err.status === 409) {
-        setFormError("Für diese Schicht wurde bereits eine Zeit erfasst.");
       } else {
-        setFormError("Speichern fehlgeschlagen. Bitte erneut versuchen.");
+        setFormError(readableApiError(err, "Speichern fehlgeschlagen. Bitte erneut versuchen."));
       }
     } finally {
       setSaving(false);
