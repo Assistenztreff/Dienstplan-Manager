@@ -14,3 +14,4 @@
 - [Vite dynamic-import reload mid-action](vite-dynamic-import-export-reload.md) — heavy `await import()` deps (jspdf) need optimizeDeps.include or Vite reloads mid-export, aborting the download (E2E hangs).
 - [Object storage template typecheck](object-storage-template-typecheck.md) — copied objectStorage.ts needs `as { signed_url: string }` cast or strict tsc fails TS2339.
 - [E2E cold-start timeout & capture](e2e-cold-start-timeout.md) — beforeEach login+setup can exceed 30s default (raise via test.setTimeout); detached runs get reaped, use foreground + sync fs.appendFileSync reporter.
+- [Dev auto-login breaks form-based E2E](dev-auto-login-e2e.md) — in Vite DEV the app auto-POSTs /api/auth/dev-login when /auth/me is 401, so the login form never renders; form-based loginAsAdmin helpers time out locally (works in prod-build validation).

@@ -9,14 +9,13 @@ import { test, expect, type Page, type Locator } from "@playwright/test";
  * Zeit-Handling als reguläre Schichten und ist im Browser-E2E sonst nicht
  * abgedeckt.
  *
- * Eine neue 24h-Schicht lässt sich im Anlegen-Dialog nicht direkt wählen (der
- * Typ erscheint nur beim Bearbeiten einer bestehenden full_day-Schicht). Daher:
- * - Eine full_day-Schicht mit absichtlich "falscher" Endzeit (8h, selber Tag)
- *   per API anlegen.
- * - Im Browser über das Tagesdetail-Panel zum Bearbeiten öffnen → der is24h-
- *   Zweig ist aktiv (Endzeit gesperrt, Hinweis "24h nach Startzeit").
- * - Speichern, ohne dass eine Fehlermeldung erscheint → der is24h-Zweig
- *   berechnet die Endzeit neu auf Startzeit + 24h (Folgetag).
+ * Eine neue 24h-Schicht lässt sich seit Task #87 direkt im Anlegen-Dialog
+ * wählen (Typ-Auswahl "24h-Dienst"). Daher der echte Anlegen-Pfad:
+ * - Im Browser den Zieltag auswählen und "Schicht" anlegen öffnen.
+ * - Assistent wählen, Typ "24h-Dienst" auswählen → der is24h-Zweig ist aktiv
+ *   (Endzeit gesperrt, Hinweis "24h nach Startzeit").
+ * - Startzeit setzen und speichern → der is24h-Zweig berechnet endIso =
+ *   startIso + 24h (Folgetag).
  * - Prüfen, dass die Schicht nur am Starttag erscheint und das Zeit-Label den
  *   Folgetag-Hinweis "(+1)" trägt.
  *
@@ -159,44 +158,14 @@ test.describe("24h-Dienst über den Folgetag (Admin, mobile)", () => {
 
     // Tag mit garantiertem Folgetag im selben Monat.
     const day = 10;
-    const mm = String(month).padStart(2, "0");
-    const dd = String(day).padStart(2, "0");
 
-    // --- full_day-Schicht mit absichtlich "falscher" Endzeit anlegen --------
-    // Start 08:00, Ende 16:00 (selber Tag, nur 8h) → nach dem Speichern im
-    // is24h-Zweig muss das Ende auf 08:00 des Folgetags (24h) korrigiert werden.
     const uniqueNotes = `E2E 24h-Dienst ${Date.now()}`;
     const startTime = "08:00";
-    const startIso = new Date(`${year}-${mm}-${dd}T08:00:00`).toISOString();
-    const wrongEndIso = new Date(`${year}-${mm}-${dd}T16:00:00`).toISOString();
 
     // Zieltag (und Folgetag) von Leftover-/Bestandsschichten befreien, damit das
-    // Seeden keine Überschneidungs-Warnung auslöst.
+    // Anlegen keine Überschneidungs-Warnung auslöst.
     await clearDayShifts(page, year, month, day, assistant.id);
     await clearDayShifts(page, year, month, day + 1, assistant.id);
-
-    const createRes = await page.request.post("/api/shifts", {
-      data: {
-        userId: assistant.id,
-        startTime: startIso,
-        endTime: wrongEndIso,
-        type: "full_day",
-        shiftModelId: null,
-        notes: uniqueNotes,
-      },
-    });
-    expect(
-      createRes.ok(),
-      `POST /api/shifts (full_day) fehlgeschlagen: ${createRes.status()} ${await createRes.text()}`,
-    ).toBe(true);
-    const seeded = (await createRes.json()) as ApiShift;
-    const shiftId = seeded.id;
-
-    // Sanity: Das Seed-Ende liegt noch am selben Tag (8h Dauer).
-    expect(
-      new Date(seeded.endTime).getTime() - new Date(seeded.startTime).getTime(),
-      "Seed-Schicht sollte zunächst 8h Dauer haben",
-    ).toBe(8 * HOUR_MS);
 
     // --- Kalender öffnen und zum Zielmonat navigieren ----------------------
     const mobile = await openCalendar(page);
@@ -208,25 +177,32 @@ test.describe("24h-Dienst über den Folgetag (Admin, mobile)", () => {
     expect(shown.year, "Navigierter Monat weicht ab").toBe(year);
     expect(shown.month, "Navigierter Monat weicht ab").toBe(month);
 
-    // --- Im Browser zum Bearbeiten öffnen (is24h-Zweig) ---------------------
+    // --- Zieltag auswählen und Anlegen-Dialog öffnen -----------------------
     const cell = mobile.getByTestId(dayCellId(year, month, day));
     await cell.click();
     await expect(cell).toHaveAttribute("data-selected", "true");
 
-    const badge = mobile.getByTestId(`shift-badge-${shiftId}`);
-    await expect(badge).toBeVisible();
-    await badge.click();
+    await mobile.getByTestId("add-shift").click();
 
     const dialog = page.getByTestId("shift-dialog");
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByText("Schicht bearbeiten")).toBeVisible();
+    await expect(dialog.getByText("Neue Schicht anlegen")).toBeVisible();
 
-    // Der 24h-Typ ist vorausgewählt und der is24h-Zweig aktiv:
-    await expect(dialog.getByTestId("shift-dialog-type")).toContainText("24h-Dienst");
+    // --- Assistent und Typ "24h-Dienst" wählen (echter Anlegen-Pfad) -------
+    await dialog.getByTestId("shift-dialog-user").click();
+    await page.getByRole("option", { name: assistant.name }).first().click();
+
+    await dialog.getByTestId("shift-dialog-type").click();
+    await page.getByRole("option", { name: "24h-Dienst" }).click();
+
+    // Der is24h-Zweig ist nun aktiv: Endzeit gesperrt und = Startzeit.
     const endInput = dialog.getByTestId("shift-dialog-end");
     await expect(endInput).toBeDisabled();
     await expect(endInput).toHaveValue(startTime);
     await expect(dialog.getByText("24h nach Startzeit")).toBeVisible();
+
+    await dialog.getByTestId("shift-dialog-start").fill(startTime);
+    await dialog.getByTestId("shift-dialog-notes").fill(uniqueNotes);
 
     // Speichern → is24h-Zweig berechnet endIso = startIso + 24h.
     await dialog.getByTestId("shift-dialog-save").click();
@@ -234,22 +210,25 @@ test.describe("24h-Dienst über den Folgetag (Admin, mobile)", () => {
     // Speichern erfolgreich → Dialog schließt, keine Fehlermeldung.
     await expect(dialog).toHaveCount(0);
 
-    // --- API-Round-Trip: Dauer exakt 24h, Ende am Folgetag -----------------
-    let updated: ApiShift | undefined;
+    // --- API-Round-Trip: Typ full_day, Dauer exakt 24h, Ende am Folgetag ---
+    let created: ApiShift | undefined;
     await expect
       .poll(async () => {
-        updated = await findShiftByNotes(page, year, month, uniqueNotes);
-        if (!updated) return null;
-        return new Date(updated.endTime).getTime() - new Date(updated.startTime).getTime();
-      }, { message: "24h-Schicht wurde nicht auf 24h-Dauer korrigiert" })
+        created = await findShiftByNotes(page, year, month, uniqueNotes);
+        if (!created) return null;
+        return new Date(created.endTime).getTime() - new Date(created.startTime).getTime();
+      }, { message: "Neue 24h-Schicht wurde nicht mit 24h-Dauer angelegt" })
       .toBe(24 * HOUR_MS);
 
-    const start = new Date(updated!.startTime);
-    const end = new Date(updated!.endTime);
+    const shiftId = created!.id;
+    expect(created!.type, "Typ muss full_day sein").toBe("full_day");
+    const start = new Date(created!.startTime);
+    const end = new Date(created!.endTime);
     expect(end.getTime(), "endTime muss nach startTime liegen").toBeGreaterThan(start.getTime());
     expect(end.getDate(), "endTime muss am Folgetag liegen").toBe(day + 1);
 
     // --- Schicht erscheint nur am Starttag, mit (+1)-Hinweis ---------------
+    const badge = mobile.getByTestId(`shift-badge-${shiftId}`);
     await expect(badge).toBeVisible();
     // 24h-Schicht: Start- und Endzeit identisch (08:00–08:00) + Folgetag-Hinweis.
     await expect(badge).toContainText(`${startTime}–${startTime}`);

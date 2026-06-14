@@ -202,6 +202,11 @@ export function ShiftDialog({
       ? { value: form.selection, label: LEGACY_TYPE_LABELS[editShift.type] ?? editShift.type }
       : undefined;
 
+  // Beim Anlegen einer neuen Schicht kann der 24h-Dienst (full_day) direkt
+  // gewählt werden. Beim Bearbeiten einer bestehenden full_day-Schicht zeigt
+  // bereits legacyEditOption "24h-Dienst" an, daher hier nur im Anlegen-Modus.
+  const show24hCreateOption = !isEditing;
+
   // Beim Bearbeiten kann der Assistent nicht gewechselt werden. Statt eines
   // deaktivierten Selects (das je nach Datenlage nur die userId zeigt) den
   // vollen Namen aus der Assistentenliste auflösen und schreibgeschützt anzeigen.
@@ -398,7 +403,7 @@ export function ShiftDialog({
                 <SelectValue placeholder="Typ auswählen..." />
               </SelectTrigger>
               <SelectContent>
-                {(activeModels.length > 0 || legacyEditOption || inactiveEditModel) && (
+                {(activeModels.length > 0 || legacyEditOption || inactiveEditModel || show24hCreateOption) && (
                   <SelectGroup>
                     <SelectLabel>Dienst</SelectLabel>
                     {legacyEditOption && (
@@ -420,9 +425,14 @@ export function ShiftDialog({
                         </span>
                       </SelectItem>
                     )}
+                    {show24hCreateOption && (
+                      <SelectItem value="legacy:full_day">24h-Dienst</SelectItem>
+                    )}
                   </SelectGroup>
                 )}
-                {(activeModels.length > 0 || legacyEditOption || inactiveEditModel) && <SelectSeparator />}
+                {(activeModels.length > 0 || legacyEditOption || inactiveEditModel || show24hCreateOption) && (
+                  <SelectSeparator />
+                )}
                 <SelectGroup>
                   <SelectLabel>Abwesenheit</SelectLabel>
                   <SelectItem value="vacation">
@@ -440,7 +450,7 @@ export function ShiftDialog({
                 </SelectGroup>
               </SelectContent>
             </Select>
-            {activeModels.length === 0 && !isAbsence && !legacyEditOption && (
+            {activeModels.length === 0 && !isAbsence && !legacyEditOption && !is24h && (
               <p className="text-xs text-muted-foreground">
                 Noch keine Schichtmodelle angelegt. Lege sie unter Einstellungen an.
               </p>
