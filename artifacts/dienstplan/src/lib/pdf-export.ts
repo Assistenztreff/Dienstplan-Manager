@@ -1,9 +1,9 @@
 import { listShifts } from "@workspace/api-client-react";
 import { format, differenceInMinutes } from "date-fns";
 import { de } from "date-fns/locale";
-import logoUrl from "@assets/logo hell.png";
+import logoUrl from "@assets/logo dunkel.png";
 
-const LOGO_ASPECT = 2100 / 460;
+const LOGO_ASPECT = 3973 / 848;
 
 async function loadImageDataUrl(url: string): Promise<string | null> {
   try {
@@ -66,16 +66,11 @@ export async function exportHoursStatementPdf({
 
     // --- Header ---
     if (logoDataUrl) {
-      const logoW = 38;
+      const logoW = 48;
       const logoH = logoW / LOGO_ASPECT;
-      const pad = 2.5;
-      const rectW = logoW + pad * 2;
-      const rectH = logoH + pad * 2;
-      const rectX = pageWidth - 14 - rectW;
-      const rectY = 10;
-      doc.setFillColor(37, 63, 96);
-      doc.roundedRect(rectX, rectY, rectW, rectH, 2, 2, "F");
-      doc.addImage(logoDataUrl, "PNG", rectX + pad, rectY + pad, logoW, logoH);
+      const logoX = pageWidth - 14 - logoW;
+      const logoY = 12;
+      doc.addImage(logoDataUrl, "PNG", logoX, logoY, logoW, logoH);
     }
 
     doc.setFontSize(18);
