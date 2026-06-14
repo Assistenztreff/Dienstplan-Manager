@@ -10,3 +10,4 @@
 - [User-list team scoping](team-member-shared-pool.md) — GET /users is team-membership-scoped (no global pool); every user-create flow must assign membership or the user vanishes from scoped lists/pickers.
 - [Second admin only via seed](second-admin-only-via-seed.md) — role+accountType can't both be set via API; cross-tenant tests needing a foreign admin must seed it (setup-admin script).
 - [Curl test ID parsing on shifts](curl-shift-id-parsing.md) — shift JSON embeds a nested user.id; greedy regex/jq mistakes can grab the wrong id and DELETE the wrong row. Parse the top-level id only.
+- [Mobile jest harness](mobile-jest-harness.md) — Expo artifact uses jest-expo + RNTL; pnpm needs a custom transformIgnorePatterns matching pkg names after `.pnpm/`, and native edges are mocked.
