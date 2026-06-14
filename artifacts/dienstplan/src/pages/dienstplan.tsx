@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useListShifts, useListUsers, useListShiftModels } from "@workspace/api-client-react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, getDay } from "date-fns";
 import { de } from "date-fns/locale";
@@ -62,6 +62,28 @@ function shiftBadgeClasses(shift: Shift, modelMap: Map<number, ShiftModelInfo>):
   return (
     SHIFT_TYPE_CLASSES[shift.type] ?? "bg-primary/10 text-primary border-primary/25 hover:bg-primary/20"
   );
+}
+
+function usePersistentState<T extends string>(key: string, fallback: T, allowed: readonly T[]): [T, (value: T) => void] {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const stored = localStorage.getItem(key);
+      if (stored != null && (allowed as readonly string[]).includes(stored)) return stored as T;
+    } catch {
+      // localStorage nicht verfügbar (z. B. privater Modus) — Fallback nutzen
+    }
+    return fallback;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // Schreiben fehlgeschlagen — Auswahl gilt nur für diese Sitzung
+    }
+  }, [key, value]);
+
+  return [value, setValue];
 }
 
 const WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
@@ -411,8 +433,16 @@ export default function Dienstplan() {
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [dialog, setDialog] = useState<DialogState>({ mode: "closed" });
-  const [mobileView, setMobileView] = useState<"list" | "grid">("grid");
-  const [desktopView, setDesktopView] = useState<"table" | "grid">("table");
+  const [mobileView, setMobileView] = usePersistentState<"list" | "grid">(
+    "dienstplan.mobileView",
+    "grid",
+    ["list", "grid"],
+  );
+  const [desktopView, setDesktopView] = usePersistentState<"table" | "grid">(
+    "dienstplan.desktopView",
+    "table",
+    ["table", "grid"],
+  );
   const [selectedAssistant, setSelectedAssistant] = useState<number | "all">("all");
   const [selectedDay, setSelectedDay] = useState<Date>(() => new Date());
 
