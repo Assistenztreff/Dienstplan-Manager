@@ -54,6 +54,13 @@ export default defineConfig({
     dedupe: ["react", "react-dom"],
   },
   root: path.resolve(import.meta.dirname),
+  // jspdf/jspdf-autotable werden erst beim PDF-Export dynamisch importiert.
+  // Ohne Pre-Bundling optimiert Vite sie im Dev-Server beim ersten Export
+  // on-demand und löst dabei einen Full-Reload aus, der den laufenden Export
+  // (doc.save) abbricht. Vorab einschließen -> Export funktioniert sofort.
+  optimizeDeps: {
+    include: ["jspdf", "jspdf-autotable"],
+  },
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
