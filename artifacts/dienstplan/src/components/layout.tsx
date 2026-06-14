@@ -12,7 +12,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { Button } from "./ui/button";
-import logoUrl from "@assets/Arbeitgebermodell_oder_Assistenzdienst_20260613_225218_0000_1781384051438.svg";
+import logoUrl from "@assets/logo hell.png";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
 import { useAuth } from "@/context/auth";
 import { useToast } from "@/hooks/use-toast";
