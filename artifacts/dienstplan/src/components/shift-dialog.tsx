@@ -202,6 +202,13 @@ export function ShiftDialog({
       ? { value: form.selection, label: LEGACY_TYPE_LABELS[editShift.type] ?? editShift.type }
       : undefined;
 
+  // Beim Bearbeiten kann der Assistent nicht gewechselt werden. Statt eines
+  // deaktivierten Selects (das je nach Datenlage nur die userId zeigt) den
+  // vollen Namen aus der Assistentenliste auflösen und schreibgeschützt anzeigen.
+  const editAssistantName = isEditing
+    ? assistants.find((a) => a.id === editShift?.userId)?.name ?? `Assistent #${editShift?.userId}`
+    : undefined;
+
   function validate(): boolean {
     const errs: Partial<Record<keyof FormState, string>> = {};
     if (!form.userId) errs.userId = "Assistent auswählen";
@@ -347,22 +354,27 @@ export function ShiftDialog({
           {/* Assistent */}
           <div className="space-y-1.5">
             <Label>Assistent *</Label>
-            <Select
-              value={form.userId}
-              onValueChange={(v) => set("userId", v)}
-              disabled={isEditing}
-            >
-              <SelectTrigger data-testid="shift-dialog-user" className={errors.userId ? "border-destructive" : ""}>
-                <SelectValue placeholder="Assistent auswählen..." />
-              </SelectTrigger>
-              <SelectContent>
-                {assistants.map((a) => (
-                  <SelectItem key={a.id} value={String(a.id)}>
-                    {a.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {isEditing ? (
+              <Input
+                data-testid="shift-dialog-user"
+                value={editAssistantName ?? ""}
+                disabled
+                readOnly
+              />
+            ) : (
+              <Select value={form.userId} onValueChange={(v) => set("userId", v)}>
+                <SelectTrigger data-testid="shift-dialog-user" className={errors.userId ? "border-destructive" : ""}>
+                  <SelectValue placeholder="Assistent auswählen..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {assistants.map((a) => (
+                    <SelectItem key={a.id} value={String(a.id)}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             {errors.userId && <p className="text-xs text-destructive">{errors.userId}</p>}
           </div>
 
