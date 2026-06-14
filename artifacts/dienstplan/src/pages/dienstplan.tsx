@@ -87,6 +87,8 @@ function usePersistentState<T extends string>(key: string, fallback: T, allowed:
   return [value, setValue];
 }
 
+const ASSISTANT_FILTER_KEY = "dienstplan.selectedAssistant";
+
 const WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
 const SHIFT_TYPE_DOTS: Record<string, string> = {
@@ -455,8 +457,28 @@ export default function Dienstplan() {
     "table",
     ["table", "grid"],
   );
-  const [selectedAssistant, setSelectedAssistant] = useState<number | "all">("all");
+  const [selectedAssistant, setSelectedAssistant] = useState<number | "all">(() => {
+    try {
+      const stored = localStorage.getItem(ASSISTANT_FILTER_KEY);
+      if (stored === "all") return "all";
+      if (stored != null) {
+        const parsed = Number(stored);
+        if (Number.isInteger(parsed)) return parsed;
+      }
+    } catch {
+      // localStorage nicht verfügbar (z. B. privater Modus) — Fallback nutzen
+    }
+    return "all";
+  });
   const [selectedDay, setSelectedDay] = useState<Date>(() => initialDate);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ASSISTANT_FILTER_KEY, String(selectedAssistant));
+    } catch {
+      // Schreiben fehlgeschlagen — Auswahl gilt nur für diese Sitzung
+    }
+  }, [selectedAssistant]);
 
   const month = currentDate.getMonth() + 1;
   const year = currentDate.getFullYear();
@@ -485,6 +507,15 @@ export default function Dienstplan() {
     : currentUser
     ? [{ id: currentUser.id, name: currentUser.name }]
     : [];
+
+  useEffect(() => {
+    if (selectedAssistant === "all") return;
+    // Erst prüfen, wenn die Assistentenliste geladen ist (sonst fälschlich zurücksetzen)
+    if (isAdmin && usersLoading) return;
+    if (!assistants.some((a) => a.id === selectedAssistant)) {
+      setSelectedAssistant("all");
+    }
+  }, [selectedAssistant, assistants, isAdmin, usersLoading]);
 
   const { data: shiftModels } = useListShiftModels(teamParam);
   const modelMap = new Map<number, ShiftModelInfo>(
