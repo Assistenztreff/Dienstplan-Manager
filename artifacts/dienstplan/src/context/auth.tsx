@@ -36,11 +36,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch("/api/auth/me")
-      .then((r) => (r.ok ? (r.json() as Promise<AuthUser>) : null))
-      .then((user) => setCurrentUser(user))
-      .catch(() => setCurrentUser(null))
-      .finally(() => setIsLoading(false));
+    let cancelled = false;
+
+    async function bootstrap() {
+      try {
+        const meRes = await apiFetch("/api/auth/me");
+        if (meRes.ok) {
+          const user = (await meRes.json()) as AuthUser;
+          if (!cancelled) setCurrentUser(user);
+          return;
+        }
+
+        if (import.meta.env.DEV) {
+          const devRes = await apiFetch("/api/auth/dev-login", { method: "POST" });
+          if (devRes.ok) {
+            const user = (await devRes.json()) as AuthUser;
+            if (!cancelled) setCurrentUser(user);
+            return;
+          }
+        }
+
+        if (!cancelled) setCurrentUser(null);
+      } catch {
+        if (!cancelled) setCurrentUser(null);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+
+    bootstrap();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const login = async (email: string, password: string) => {

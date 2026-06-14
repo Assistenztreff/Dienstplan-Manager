@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable } from "@workspace/db";
+import { usersTable, teamsTable, teamMembersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth-utils";
 
@@ -39,6 +39,46 @@ router.post("/auth/login", async (req, res) => {
 
   return res.json({ id: user.id, name: user.name, email: user.email, role: user.role, accountType: user.accountType });
 });
+
+if (process.env.NODE_ENV !== "production") {
+  const DEV_ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? "admin@dienstplan.local").toLowerCase().trim();
+  const DEV_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "admin1234";
+  const DEV_ADMIN_NAME = process.env.ADMIN_NAME ?? "Administrator";
+
+  router.post("/auth/dev-login", async (req, res) => {
+    let [user] = await db.select().from(usersTable).where(eq(usersTable.email, DEV_ADMIN_EMAIL));
+
+    if (!user) {
+      [user] = await db
+        .insert(usersTable)
+        .values({
+          name: DEV_ADMIN_NAME,
+          email: DEV_ADMIN_EMAIL,
+          role: "admin",
+          passwordHash: hashPassword(DEV_ADMIN_PASSWORD),
+          isActive: true,
+        })
+        .returning();
+
+      const [existingTeam] = await db.select({ id: teamsTable.id }).from(teamsTable).limit(1);
+      if (!existingTeam) {
+        const [team] = await db
+          .insert(teamsTable)
+          .values({ name: "Standard-Team", ownerId: user.id })
+          .returning();
+        await db
+          .insert(teamMembersTable)
+          .values({ teamId: team.id, userId: user.id })
+          .onConflictDoNothing();
+      }
+    }
+
+    req.session.userId = user.id;
+    req.session.role = user.role;
+
+    res.json({ id: user.id, name: user.name, email: user.email, role: user.role, accountType: user.accountType });
+  });
+}
 
 router.post("/auth/logout", (req, res) => {
   req.session.destroy((err) => {
