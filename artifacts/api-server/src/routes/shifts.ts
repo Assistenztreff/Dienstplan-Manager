@@ -492,6 +492,23 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
     }
   }
 
+  // Doppelte Abwesenheit am selben Tag auch beim Bearbeiten verhindern: sonst
+  // entstünde durch eine Datums-/Typ-Änderung ein zweiter Urlaubs-/Krank-Eintrag
+  // und vacationDaysUsed würde erneut belastet. Die eigene Schicht ist via
+  // excludeShiftId ausgenommen.
+  if (isAbsenceType(effectiveType)) {
+    const duplicate = await findDuplicateAbsence(
+      oldShift.userId,
+      effectiveType,
+      effectiveStart,
+      oldShift.id
+    );
+    if (duplicate) {
+      res.status(409).json(duplicateAbsenceResponseBody(duplicate.id, effectiveType));
+      return;
+    }
+  }
+
   // Wird das Schichtmodell geändert, muss das neue Modell zum Team der Schicht
   // gehören (oldShift.teamId, das Team bleibt bei PATCH unverändert), sonst
   // flössen fremde Wertungs-/Zuschlagsparameter in die Auswertung ein.
