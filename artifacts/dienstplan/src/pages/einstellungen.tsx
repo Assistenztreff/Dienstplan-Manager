@@ -27,6 +27,8 @@ import { Plus, Pencil, Trash2, GripVertical, Upload, ImageIcon } from "lucide-re
 import { SHIFT_MODEL_COLORS, colorDotClass } from "@/lib/shift-model-colors";
 import { AllowanceSettingsForm } from "@/components/allowance-settings-form";
 import { logoSrcFromPath, ACCEPTED_LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/logo";
+import { readableApiError } from "@/lib/api-error";
+import { useToast } from "@/hooks/use-toast";
 
 type ShiftModel = {
   id: number;
@@ -112,8 +114,8 @@ function ModelDialog({ open, onClose, editModel, nextSortOrder }: ModelDialogPro
       }
       await queryClient.invalidateQueries({ queryKey: getListShiftModelsQueryKey() });
       onClose();
-    } catch {
-      setErrors({ name: "Speichern fehlgeschlagen. Bitte erneut versuchen." });
+    } catch (err) {
+      setErrors({ name: readableApiError(err, "Speichern fehlgeschlagen. Bitte erneut versuchen.") });
     } finally {
       setSaving(false);
     }
@@ -222,6 +224,7 @@ function ModelDialog({ open, onClose, editModel, nextSortOrder }: ModelDialogPro
 
 function AccountTypeCard() {
   const { currentUser, refreshUser } = useAuth();
+  const { toast } = useToast();
   const updateUser = useUpdateUser();
   const [saving, setSaving] = useState(false);
 
@@ -233,6 +236,12 @@ function AccountTypeCard() {
     try {
       await updateUser.mutateAsync({ id: currentUser.id, data: { accountType: value } });
       await refreshUser();
+    } catch (err) {
+      toast({
+        title: "Konto-Typ konnte nicht geändert werden",
+        description: readableApiError(err, "Bitte erneut versuchen."),
+        variant: "destructive",
+      });
     } finally {
       setSaving(false);
     }
@@ -309,8 +318,8 @@ function LogoSettingsCard() {
       if (!putRes.ok) throw new Error("Upload fehlgeschlagen");
       await updateBranding.mutateAsync({ data: { logoPath: objectPath } });
       await queryClient.invalidateQueries({ queryKey: getGetBrandingSettingsQueryKey() });
-    } catch {
-      setError("Logo konnte nicht hochgeladen werden. Bitte erneut versuchen.");
+    } catch (err) {
+      setError(readableApiError(err, "Logo konnte nicht hochgeladen werden. Bitte erneut versuchen."));
     } finally {
       setUploading(false);
     }
@@ -322,8 +331,8 @@ function LogoSettingsCard() {
     try {
       await updateBranding.mutateAsync({ data: { logoPath: null } });
       await queryClient.invalidateQueries({ queryKey: getGetBrandingSettingsQueryKey() });
-    } catch {
-      setError("Logo konnte nicht entfernt werden. Bitte erneut versuchen.");
+    } catch (err) {
+      setError(readableApiError(err, "Logo konnte nicht entfernt werden. Bitte erneut versuchen."));
     } finally {
       setUploading(false);
     }
@@ -399,6 +408,7 @@ function LogoSettingsCard() {
 
 export default function Einstellungen() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const { data: models, isLoading } = useListShiftModels();
   const deleteModel = useDeleteShiftModel();
 
@@ -433,6 +443,12 @@ export default function Einstellungen() {
     try {
       await deleteModel.mutateAsync({ id });
       await queryClient.invalidateQueries({ queryKey: getListShiftModelsQueryKey() });
+    } catch (err) {
+      toast({
+        title: "Schichtmodell kann nicht gelöscht werden",
+        description: readableApiError(err, "Bitte erneut versuchen."),
+        variant: "destructive",
+      });
     } finally {
       setConfirmDelete(null);
     }

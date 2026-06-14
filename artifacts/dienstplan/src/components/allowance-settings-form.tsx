@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { readableApiError } from "@/lib/api-error";
 
 type FormState = {
   nightPercent: string;
@@ -159,8 +160,8 @@ export function AllowanceSettingsForm() {
       });
       await queryClient.invalidateQueries({ queryKey: getGetAllowanceSettingsQueryKey() });
       setSaved(true);
-    } catch {
-      setErrors({ holidayPercent: "Speichern fehlgeschlagen. Bitte erneut versuchen." });
+    } catch (err) {
+      setErrors({ holidayPercent: readableApiError(err, "Speichern fehlgeschlagen. Bitte erneut versuchen.") });
     } finally {
       setSaving(false);
     }

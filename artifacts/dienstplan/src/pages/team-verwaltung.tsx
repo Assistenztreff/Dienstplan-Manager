@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, Building2, Users, UserPlus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { readableApiError } from "@/lib/api-error";
 
 type Team = {
   id: number;
@@ -88,8 +89,8 @@ function TeamDialog({ open, onClose, editTeam }: TeamDialogProps) {
       }
       await queryClient.invalidateQueries({ queryKey: getListTeamsQueryKey() });
       onClose();
-    } catch {
-      setError("Speichern fehlgeschlagen. Bitte erneut versuchen.");
+    } catch (err) {
+      setError(readableApiError(err, "Speichern fehlgeschlagen. Bitte erneut versuchen."));
     } finally {
       setSaving(false);
     }
@@ -163,10 +164,10 @@ function MembersDialog({ team, onClose }: MembersDialogProps) {
       await addMember.mutateAsync({ id: team.id, data: { userId: Number(selectedUser) } });
       setSelectedUser("");
       await invalidate();
-    } catch {
+    } catch (err) {
       toast({
         title: "Hinzufügen fehlgeschlagen",
-        description: "Bitte erneut versuchen.",
+        description: readableApiError(err, "Bitte erneut versuchen."),
         variant: "destructive",
       });
     }
@@ -176,10 +177,10 @@ function MembersDialog({ team, onClose }: MembersDialogProps) {
     try {
       await removeMember.mutateAsync({ id: team.id, userId });
       await invalidate();
-    } catch {
+    } catch (err) {
       toast({
         title: "Entfernen fehlgeschlagen",
-        description: "Bitte erneut versuchen.",
+        description: readableApiError(err, "Bitte erneut versuchen."),
         variant: "destructive",
       });
     }
@@ -317,10 +318,10 @@ export default function TeamVerwaltung() {
     try {
       await deleteTeam.mutateAsync({ id });
       await queryClient.invalidateQueries({ queryKey: getListTeamsQueryKey() });
-    } catch {
+    } catch (err) {
       toast({
         title: "Team kann nicht gelöscht werden",
-        description: "Es sind noch Daten oder Mitglieder zugeordnet.",
+        description: readableApiError(err, "Es sind noch Daten oder Mitglieder zugeordnet."),
         variant: "destructive",
       });
     } finally {
