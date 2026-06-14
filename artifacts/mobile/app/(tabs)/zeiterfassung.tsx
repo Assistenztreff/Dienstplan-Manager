@@ -16,6 +16,7 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -125,6 +126,7 @@ export default function ZeiterfassungScreen() {
   const [date, setDate] = useState(todayDateStr());
   const [startTime, setStartTime] = useState(nowTimeStr());
   const [endTime, setEndTime] = useState(nowTimeStr());
+  const [endsNextDay, setEndsNextDay] = useState(false);
   const [notes, setNotes] = useState("");
   const [shiftPickerOpen, setShiftPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -175,6 +177,7 @@ export default function ZeiterfassungScreen() {
     setDate(todayDateStr());
     setStartTime(nowTimeStr());
     setEndTime(nowTimeStr());
+    setEndsNextDay(false);
     setNotes("");
     setSelectedShiftId(null);
     setError("");
@@ -198,12 +201,16 @@ export default function ZeiterfassungScreen() {
       return;
     }
     const actualStart = buildISO(date, startTime);
-    // Nachtschichten/24h-Dienste laufen ueber Mitternacht: nur bei einer
-    // gewaehlten Schicht gilt eine Endzeit <= Startzeit als am Folgetag.
-    // Ohne Schichtbezug (manueller Eintrag) ist eine gleiche/fruehere Endzeit
-    // eine Fehleingabe und wird unten abgewiesen, statt still einen kaputten
-    // 24h-Eintrag auf den Folgetag zu erzeugen.
-    const endDate = selectedShiftId && endTime <= startTime ? addOneDay(date) : date;
+    // Nachtschichten/24h-Dienste laufen ueber Mitternacht: eine Endzeit
+    // <= Startzeit gilt als am Folgetag, wenn eine Schicht gewaehlt ist ODER
+    // der Nutzer den "endet am Folgetag"-Schalter aktiviert hat (manueller
+    // Nacht-Eintrag ohne Schichtbezug). Ohne Schicht UND ohne Schalter ist eine
+    // gleiche/fruehere Endzeit eine Fehleingabe und wird unten abgewiesen,
+    // statt still einen kaputten 24h-Eintrag auf den Folgetag zu erzeugen.
+    const endDate =
+      (selectedShiftId || endsNextDay) && endTime <= startTime
+        ? addOneDay(date)
+        : date;
     const actualEnd = buildISO(endDate, endTime);
     if (new Date(actualEnd) <= new Date(actualStart)) {
       setError("Endzeit muss nach Startzeit liegen.");
@@ -570,6 +577,36 @@ export default function ZeiterfassungScreen() {
               />
             </View>
 
+            {!selectedShiftId ? (
+              <View
+                style={[
+                  styles.switchRow,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
+                    borderRadius: colors.radius,
+                  },
+                ]}
+              >
+                <View style={styles.switchTextWrap}>
+                  <Text style={[styles.switchLabel, { color: colors.foreground }]}>
+                    Endet am Folgetag
+                  </Text>
+                  <Text
+                    style={[styles.switchHint, { color: colors.mutedForeground }]}
+                  >
+                    Für Nacht-Einträge über Mitternacht (z. B. 22:00–06:00)
+                  </Text>
+                </View>
+                <Switch
+                  testID="ends-next-day-switch"
+                  value={endsNextDay}
+                  onValueChange={setEndsNextDay}
+                  trackColor={{ true: colors.primary }}
+                />
+              </View>
+            ) : null}
+
             <View style={styles.fieldGroup}>
               <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
                 NOTIZ (OPTIONAL)
@@ -814,5 +851,26 @@ const styles = StyleSheet.create({
   timeRow: {
     flexDirection: "row",
     gap: 12,
+  },
+  switchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    padding: 12,
+    gap: 12,
+  },
+  switchTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  switchLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    fontFamily: "Inter_600SemiBold",
+  },
+  switchHint: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
   },
 });

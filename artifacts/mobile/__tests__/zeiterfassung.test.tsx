@@ -110,12 +110,31 @@ jest.mock("@expo/vector-icons", () => ({
   Feather: () => null,
 }));
 
-// TimePickerField rendert auf echten Geräten native Picker; für den Test genügt
-// ein No-Op. Die Zeiten werden im Flow ohnehin durch die Schicht-Übernahme
-// (handleShiftSelect) gesetzt, nicht durch manuelle Picker-Eingabe.
-jest.mock("@/components/TimePickerField", () => ({
-  TimePickerField: () => null,
-}));
+// TimePickerField rendert auf echten Geräten native Picker; für den Test wird er
+// durch ein einfaches TextInput ersetzt (über die testID adressierbar), sodass
+// Tests gezielt Start-/Endzeiten setzen können (z. B. einen manuellen
+// Nacht-Eintrag 22:00 -> 06:00). Die Übernahme-Tests setzen die Zeiten weiterhin
+// über die Schicht-Auswahl (handleShiftSelect) und ignorieren diese Inputs.
+jest.mock("@/components/TimePickerField", () => {
+  const ReactMock = require("react");
+  const { TextInput } = require("react-native");
+  return {
+    TimePickerField: ({
+      value,
+      onChange,
+      testID,
+    }: {
+      value: string;
+      onChange: (v: string) => void;
+      testID?: string;
+    }) =>
+      ReactMock.createElement(TextInput, {
+        testID,
+        value,
+        onChangeText: onChange,
+      }),
+  };
+});
 
 import ZeiterfassungScreen from "@/app/(tabs)/zeiterfassung";
 
@@ -263,6 +282,59 @@ describe("Mobile Zeiterfassung – Eingabe-Validierung", () => {
     expect(mockState.entries).toHaveLength(0);
     // Dialog bleibt offen, damit der Nutzer korrigieren kann.
     expect(screen.getByText("Zeiteintrag")).toBeTruthy();
+  });
+
+  test("manueller Nacht-Eintrag ohne Schicht: 'endet am Folgetag'-Schalter rollt das Ende auf den Folgetag", async () => {
+    // Legitimer, aber seltener Fall: ein echter Nacht-Eintrag (22:00 -> 06:00)
+    // OHNE zugehörige Schicht. Mit aktiviertem Schalter rollt die Endzeit auf den
+    // Folgetag, statt als Fehleingabe abgewiesen zu werden.
+    render(<ZeiterfassungScreen />);
+    openDialog();
+    fireEvent.changeText(screen.getByPlaceholderText("JJJJ-MM-TT"), NIGHT_DATE);
+    fireEvent.changeText(screen.getByTestId("time-picker-start"), "22:00");
+    fireEvent.changeText(screen.getByTestId("time-picker-end"), "06:00");
+    fireEvent(screen.getByTestId("ends-next-day-switch"), "valueChange", true);
+    fireEvent.press(screen.getByText("Speichern"));
+
+    await waitFor(() => expect(mockState.mutateAsync).toHaveBeenCalledTimes(1));
+    const payload = mockState.mutateAsync.mock.calls[0][0].data;
+    // Kein Schichtbezug, aber das Ende liegt korrekt auf dem Folgetag.
+    expect(payload.shiftId).toBeUndefined();
+    expect(payload.actualStart).toBe(`${NIGHT_DATE}T22:00:00`);
+    expect(payload.actualEnd).toBe(`${NIGHT_NEXT}T06:00:00`);
+    expect(new Date(payload.actualEnd).getTime()).toBeGreaterThan(
+      new Date(payload.actualStart).getTime(),
+    );
+  });
+
+  test("ohne aktivierten Schalter bleibt eine frühere Endzeit ohne Schicht eine Fehleingabe", async () => {
+    // Gleiche Nachtzeiten wie oben, aber der Schalter bleibt aus: die strenge
+    // Validierung muss bestehen bleiben und das Speichern verhindern.
+    render(<ZeiterfassungScreen />);
+    openDialog();
+    fireEvent.changeText(screen.getByPlaceholderText("JJJJ-MM-TT"), NIGHT_DATE);
+    fireEvent.changeText(screen.getByTestId("time-picker-start"), "22:00");
+    fireEvent.changeText(screen.getByTestId("time-picker-end"), "06:00");
+    fireEvent.press(screen.getByText("Speichern"));
+
+    await waitFor(() =>
+      expect(screen.getByText("Endzeit muss nach Startzeit liegen.")).toBeTruthy(),
+    );
+    expect(mockState.mutateAsync).not.toHaveBeenCalled();
+    expect(mockState.entries).toHaveLength(0);
+  });
+
+  test("bei ausgewählter Schicht wird der 'endet am Folgetag'-Schalter ausgeblendet", () => {
+    // Schichten rollen automatisch über Mitternacht (handleSubmit), daher ist der
+    // manuelle Schalter nur ohne Schichtbezug sichtbar.
+    mockState.shifts = [
+      { id: 505, startTime: `${NIGHT_DATE}T22:00:00`, endTime: `${NIGHT_NEXT}T06:00:00`, type: "night" },
+    ];
+    render(<ZeiterfassungScreen />);
+    openDialog();
+    expect(screen.getByTestId("ends-next-day-switch")).toBeTruthy();
+    selectShift(/Nachtdienst/);
+    expect(screen.queryByTestId("ends-next-day-switch")).toBeNull();
   });
 
   test("leeres Pflichtfeld (Datum): zeigt Fehler und speichert nicht", async () => {
