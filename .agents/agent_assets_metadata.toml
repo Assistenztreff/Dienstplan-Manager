@@ -1,8 +1,19 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "Mfp6qKWkrvowl2dbw3o6c"
 uri = "file://artifacts/mobile/assets/images/icon.png"
 type = "image"
 title = "generated_image"
+
+[[outputs]]
+id = "bZkQBRo9xW6n7vciZIkNr"
+uri = "file://attached_assets/screenshots/922735a5-eeff-47b8-b213-a02dee6dfad5-00-3fm42gtaa3b4q_kirk_replit_dev_mockup_preview_menu-nav_Aktuell.png"
+type = "image"
+title = "Menü – Aktuell (flach)"
+
+[[outputs]]
+id = "_ib_V9K-s8YLdQOMB4Tmt"
+uri = "file://attached_assets/screenshots/922735a5-eeff-47b8-b213-a02dee6dfad5-00-3fm42gtaa3b4q_kirk_replit_dev_mockup_preview_menu-nav_Vorschlag.png"
+type = "image"
+title = "Menü – Vorschlag (gruppiert)"
