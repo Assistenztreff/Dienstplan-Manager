@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
 import { teamsTable, teamMembersTable } from "@workspace/db";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, and, inArray } from "drizzle-orm";
 import type { Request } from "express";
 
 /**
@@ -85,6 +85,27 @@ export async function resolveWriteTeamId(
   const def = await resolveTeamId(userId);
   if (def == null) return { ok: false, reason: "none" };
   return { ok: true, teamId: def };
+}
+
+/**
+ * Prüft, ob ein Ziel-Nutzer Mitglied eines der erlaubten Teams des Anfragers ist.
+ * Basis für IDOR-Schutz auf /users/:id (GET/PATCH/DELETE): ein Admin darf fremde
+ * Nutzer nur sehen/ändern/löschen, wenn sie in einem seiner Teams sind.
+ */
+export async function isUserInAllowedTeams(
+  requesterId: number,
+  targetUserId: number,
+): Promise<boolean> {
+  const allowed = await getAllowedTeamIds(requesterId);
+  if (allowed.length === 0) return false;
+  const [row] = await db
+    .select({ userId: teamMembersTable.userId })
+    .from(teamMembersTable)
+    .where(
+      and(eq(teamMembersTable.userId, targetUserId), inArray(teamMembersTable.teamId, allowed)),
+    )
+    .limit(1);
+  return !!row;
 }
 
 /** Liest den optionalen ?teamId Query-Parameter (mit NaN-Schutz). */

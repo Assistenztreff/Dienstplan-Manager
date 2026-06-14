@@ -10,6 +10,7 @@ import {
   getListUsersQueryKey,
   getListContractsQueryKey,
 } from "@workspace/api-client-react";
+import { useTeam } from "@/context/team";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -230,6 +231,7 @@ type AssistentDialogProps = {
 
 function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDialogProps) {
   const queryClient = useQueryClient();
+  const { selectedTeamId } = useTeam();
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
   const createContract = useCreateContract();
@@ -324,6 +326,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
               vacationDays: Number(form.vacationDays),
               startDate: form.startDate,
               notes: form.notes || undefined,
+              ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
             },
           });
         }
@@ -341,6 +344,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
             taxClass: form.taxClass || undefined,
             healthInsurance: form.healthInsurance || undefined,
             iban: form.iban || undefined,
+            ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
           },
         });
 
@@ -351,6 +355,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
             vacationDays: Number(form.vacationDays),
             startDate: form.startDate,
             notes: form.notes || undefined,
+            ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
           },
         });
       }

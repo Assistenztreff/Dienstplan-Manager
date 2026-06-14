@@ -992,6 +992,9 @@ components:
           type: string
         isActive:
           type: boolean
+        teamId:
+          type: integer
+          description: Optionales Ziel-Team; der neue Nutzer wird Mitglied dieses Teams. Ohne Angabe das Standard-Team des Erstellers.
 
     UserUpdate:
       type: object

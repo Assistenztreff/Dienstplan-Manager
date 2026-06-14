@@ -63,7 +63,8 @@ export const CreateUserBody = zod.object({
   "taxClass": zod.string().optional(),
   "healthInsurance": zod.string().optional(),
   "iban": zod.string().optional(),
-  "isActive": zod.boolean().optional()
+  "isActive": zod.boolean().optional(),
+  "teamId": zod.number().optional().describe('Optionales Ziel-Team; der neue Nutzer wird Mitglied dieses Teams. Ohne Angabe das Standard-Team des Erstellers.')
 })
 
 

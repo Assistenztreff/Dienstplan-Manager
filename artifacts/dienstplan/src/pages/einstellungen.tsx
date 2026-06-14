@@ -9,6 +9,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/auth";
+import { useTeam } from "@/context/team";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -51,6 +52,7 @@ type ModelDialogProps = {
 
 function ModelDialog({ open, onClose, editModel, nextSortOrder }: ModelDialogProps) {
   const queryClient = useQueryClient();
+  const { selectedTeamId } = useTeam();
   const createModel = useCreateShiftModel();
   const updateModel = useUpdateShiftModel();
 
@@ -98,7 +100,9 @@ function ModelDialog({ open, onClose, editModel, nextSortOrder }: ModelDialogPro
       if (isEditing && editModel) {
         await updateModel.mutateAsync({ id: editModel.id, data: payload });
       } else {
-        await createModel.mutateAsync({ data: payload });
+        await createModel.mutateAsync({
+          data: { ...payload, ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}) },
+        });
       }
       await queryClient.invalidateQueries({ queryKey: getListShiftModelsQueryKey() });
       onClose();

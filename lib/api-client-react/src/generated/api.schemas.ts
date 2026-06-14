@@ -73,6 +73,8 @@ export interface UserInput {
   healthInsurance?: string;
   iban?: string;
   isActive?: boolean;
+  /** Optionales Ziel-Team; der neue Nutzer wird Mitglied dieses Teams. Ohne Angabe das Standard-Team des Erstellers. */
+  teamId?: number;
 }
 
 export type UserUpdateAccountType = typeof UserUpdateAccountType[keyof typeof UserUpdateAccountType];
