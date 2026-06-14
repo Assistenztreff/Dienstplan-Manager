@@ -127,6 +127,38 @@ function WarningsSection({ warnings }: { warnings: DashboardWarnings }) {
   );
 }
 
+function KpiCard({
+  title,
+  to,
+  testId,
+  children,
+}: {
+  title: string;
+  to: string;
+  testId: string;
+  children: React.ReactNode;
+}) {
+  const [, navigate] = useLocation();
+  return (
+    <button
+      type="button"
+      onClick={() => navigate(to)}
+      data-testid={testId}
+      className="group text-left rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <Card className="h-full border-border/50 shadow-sm transition-colors group-hover:border-border group-hover:bg-muted/30">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center justify-between gap-2 text-sm font-medium text-muted-foreground">
+            {title}
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5" />
+          </CardTitle>
+        </CardHeader>
+        <CardContent>{children}</CardContent>
+      </Card>
+    </button>
+  );
+}
+
 export default function Dashboard() {
   const now = new Date();
   const month = now.getMonth() + 1;
@@ -155,40 +187,36 @@ export default function Dashboard() {
       ) : summary ? (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="border-border/50 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Aktive Assistenten</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">{summary.totalAssistants}</div>
-              </CardContent>
-            </Card>
-            <Card className="border-border/50 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Schichten Heute</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">{summary.activeShiftsToday}</div>
-              </CardContent>
-            </Card>
-            <Card className="border-border/50 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Offene Zeiteintraege</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">{summary.pendingTimeEntries}</div>
-              </CardContent>
-            </Card>
-            <Card className="border-border/50 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Stundenbilanz Monat</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">
-                  {summary.monthlyActualHours} <span className="text-lg text-muted-foreground font-normal">/ {summary.monthlyPlannedHours} h</span>
-                </div>
-              </CardContent>
-            </Card>
+            <KpiCard
+              title="Aktive Assistenten"
+              to="/assistenten"
+              testId="kpi-active-assistants"
+            >
+              <div className="text-3xl font-bold">{summary.totalAssistants}</div>
+            </KpiCard>
+            <KpiCard
+              title="Schichten Heute"
+              to={`/dienstplan?date=${format(now, "yyyy-MM-dd")}`}
+              testId="kpi-shifts-today"
+            >
+              <div className="text-3xl font-bold">{summary.activeShiftsToday}</div>
+            </KpiCard>
+            <KpiCard
+              title="Offene Zeiteintraege"
+              to="/zeiterfassung?status=pending"
+              testId="kpi-pending-time-entries"
+            >
+              <div className="text-3xl font-bold">{summary.pendingTimeEntries}</div>
+            </KpiCard>
+            <KpiCard
+              title="Stundenbilanz Monat"
+              to="/auswertungen"
+              testId="kpi-hours-balance"
+            >
+              <div className="text-3xl font-bold">
+                {summary.monthlyActualHours} <span className="text-lg text-muted-foreground font-normal">/ {summary.monthlyPlannedHours} h</span>
+              </div>
+            </KpiCard>
           </div>
 
           {summary.warnings && <WarningsSection warnings={summary.warnings} />}
