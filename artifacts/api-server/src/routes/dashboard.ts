@@ -4,6 +4,13 @@ import { usersTable, shiftsTable, timeTrackingTable, contractsTable, allowanceSe
 import { eq, and, sql, count, or, isNull, inArray } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middleware/auth";
 import { resolveReadTeamScope, parseTeamIdParam } from "../lib/teams";
+import {
+  LOW_VACATION_THRESHOLD,
+  HORIZON_DAYS,
+  computeUncoveredDays,
+  computeLowVacationAssistants,
+  type VacationCandidate,
+} from "../lib/dashboard-warnings";
 
 const router = Router();
 
@@ -155,14 +162,6 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       .limit(5);
 
     // --- Warnhinweise (nur Admin) ---
-    const LOW_VACATION_THRESHOLD = 5;
-    const HORIZON_DAYS = 14;
-
-    const localDateKey = (d: Date | string): string => {
-      const dt = new Date(d);
-      return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
-    };
-
     const assistants = teamMemberIds.length
       ? await db
           .select({ id: usersTable.id, name: usersTable.name })
@@ -176,16 +175,18 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
           )
       : [];
 
-    const lowVacationAssistants: { userId: number; userName: string; vacationDaysRemaining: number }[] = [];
+    const vacationCandidates: VacationCandidate[] = [];
     for (const assistant of assistants) {
       const contract = await activeContractFor(assistant.id, todayStart);
       if (!contract) continue;
-      const remaining = (contract.vacationDays ?? 0) - (contract.vacationDaysUsed ?? 0);
-      if (remaining <= LOW_VACATION_THRESHOLD) {
-        lowVacationAssistants.push({ userId: assistant.id, userName: assistant.name, vacationDaysRemaining: remaining });
-      }
+      vacationCandidates.push({
+        userId: assistant.id,
+        userName: assistant.name,
+        vacationDays: contract.vacationDays,
+        vacationDaysUsed: contract.vacationDaysUsed,
+      });
     }
-    lowVacationAssistants.sort((a, b) => a.vacationDaysRemaining - b.vacationDaysRemaining);
+    const lowVacationAssistants = computeLowVacationAssistants(vacationCandidates);
 
     const horizonEnd = new Date(todayStart);
     horizonEnd.setDate(horizonEnd.getDate() + HORIZON_DAYS);
@@ -201,23 +202,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
           sql`${shiftsTable.endTime} > ${todayStart}`,
         )
       );
-    const coveredDates = new Set<string>();
-    for (const s of horizonShifts) {
-      const end = new Date(s.endTime);
-      const startDate = new Date(s.startTime);
-      let cur = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-      while (cur < end) {
-        coveredDates.add(localDateKey(cur));
-        cur.setDate(cur.getDate() + 1);
-      }
-    }
-    const uncoveredDays: string[] = [];
-    for (let i = 0; i < HORIZON_DAYS; i++) {
-      const d = new Date(todayStart);
-      d.setDate(d.getDate() + i);
-      const key = localDateKey(d);
-      if (!coveredDates.has(key)) uncoveredDays.push(key);
-    }
+    const uncoveredDays = computeUncoveredDays(horizonShifts, todayStart, HORIZON_DAYS);
 
     res.json({
       totalAssistants: Number(totalAssistants),
