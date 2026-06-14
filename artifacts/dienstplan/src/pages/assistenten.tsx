@@ -7,6 +7,7 @@ import {
   useCreateContract,
   useUpdateContract,
   useInviteUser,
+  getHoursBalance,
   getListUsersQueryKey,
   getListContractsQueryKey,
 } from "@workspace/api-client-react";
@@ -26,8 +27,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Mail, Phone, MapPin, Calendar, Pencil, UserPlus, Send, Copy, Check } from "lucide-react";
+import { Plus, Mail, Phone, MapPin, Calendar, Pencil, UserPlus, Send, Copy, Check, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
+import { de } from "date-fns/locale";
+import { toast } from "sonner";
+import { exportHoursStatementPdf } from "@/lib/pdf-export";
 
 type User = {
   id: number;
@@ -563,6 +567,95 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
   );
 }
 
+type ExportDialogProps = {
+  open: boolean;
+  onClose: () => void;
+  userId: number;
+  userName: string;
+};
+
+function ExportDialog({ open, onClose, userId, userName }: ExportDialogProps) {
+  const { selectedTeamId } = useTeam();
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [isExporting, setIsExporting] = useState(false);
+
+  const month = currentDate.getMonth() + 1;
+  const year = currentDate.getFullYear();
+  const monthLabel = format(currentDate, "MMMM yyyy", { locale: de });
+
+  const prevMonth = () => setCurrentDate(new Date(year, month - 2, 1));
+  const nextMonth = () => setCurrentDate(new Date(year, month, 1));
+
+  async function handleExport() {
+    setIsExporting(true);
+    try {
+      const balances = await getHoursBalance({
+        month,
+        year,
+        ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
+      });
+      const balance = (balances as any[]).find((b) => b.userId === userId);
+      if (!balance) {
+        toast.error("Keine Auswertungsdaten fuer diesen Monat gefunden.");
+        return;
+      }
+      const safeName = userName.replace(/[^\p{L}\p{N}]+/gu, "_").replace(/^_+|_+$/g, "");
+      await exportHoursStatementPdf({
+        balances: [balance],
+        month,
+        year,
+        monthLabel,
+        teamId: selectedTeamId,
+        filename: `Stundennachweis_${safeName}_${year}_${String(month).padStart(2, "0")}.pdf`,
+      });
+      onClose();
+    } catch (err) {
+      toast.error("PDF-Export fehlgeschlagen.");
+      console.error(err);
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-xl">Stundennachweis exportieren</DialogTitle>
+        </DialogHeader>
+
+        <div className="py-2 space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Einzelnachweis fuer{" "}
+            <span className="font-medium text-foreground">{userName}</span> als PDF.
+            Waehle den gewuenschten Monat.
+          </p>
+
+          <div className="flex items-center justify-center gap-2">
+            <Button variant="outline" size="icon" onClick={prevMonth} disabled={isExporting}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="font-medium text-sm min-w-40 text-center">{monthLabel}</span>
+            <Button variant="outline" size="icon" onClick={nextMonth} disabled={isExporting}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose} disabled={isExporting}>
+            Abbrechen
+          </Button>
+          <Button onClick={handleExport} disabled={isExporting} className="gap-2">
+            <Download className="h-4 w-4" />
+            {isExporting ? "Exportiere..." : "Als PDF exportieren"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Assistenten() {
   const { data: users, isLoading: usersLoading } = useListUsers({ role: "assistant" });
   const { data: contracts, isLoading: contractsLoading } = useListContracts();
@@ -571,6 +664,7 @@ export default function Assistenten() {
   const [editUser, setEditUser] = useState<User | undefined>();
   const [editContract, setEditContract] = useState<Contract | undefined>();
   const [inviteUser, setInviteUser] = useState<User | undefined>();
+  const [exportUser, setExportUser] = useState<User | undefined>();
 
   const isLoading = usersLoading || contractsLoading;
 
@@ -688,7 +782,17 @@ export default function Assistenten() {
                     </div>
                   )}
 
-                  <div className="flex justify-end gap-2">
+                  <div className="flex justify-end gap-2 flex-wrap">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1.5 text-muted-foreground hover:text-foreground"
+                      onClick={() => setExportUser(user as User)}
+                      title="Stundennachweis als PDF exportieren"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Nachweis</span>
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -738,6 +842,15 @@ export default function Assistenten() {
           onClose={() => setInviteUser(undefined)}
           userId={inviteUser.id}
           userName={inviteUser.name}
+        />
+      )}
+
+      {exportUser && (
+        <ExportDialog
+          open={!!exportUser}
+          onClose={() => setExportUser(undefined)}
+          userId={exportUser.id}
+          userName={exportUser.name}
         />
       )}
     </div>
