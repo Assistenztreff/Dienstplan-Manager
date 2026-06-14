@@ -296,6 +296,13 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Shift"
+        "409":
+          description: >-
+            Konflikt. Entweder überschneidet sich die Schicht mit einer
+            bestehenden Schicht desselben Assistenten (code "shift_overlap"),
+            oder es existiert bereits eine Abwesenheit desselben Typs am selben
+            Tag (code "absence_duplicate"). Im zweiten Fall wird kein Eintrag
+            angelegt und der Urlaubsanspruch nicht erneut belastet.
 
   /shifts/{id}:
     get:

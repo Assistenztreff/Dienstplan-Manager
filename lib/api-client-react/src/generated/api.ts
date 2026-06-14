@@ -1013,7 +1013,7 @@ export const createShift = async (shiftInput: ShiftInput, options?: RequestInit)
 
 
 
-export const getCreateShiftMutationOptions = <TError = ErrorType<unknown>,
+export const getCreateShiftMutationOptions = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createShift>>, TError,{data: BodyType<ShiftInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createShift>>, TError,{data: BodyType<ShiftInput>}, TContext> => {
 
@@ -1042,12 +1042,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CreateShiftMutationResult = NonNullable<Awaited<ReturnType<typeof createShift>>>
     export type CreateShiftMutationBody = BodyType<ShiftInput>
-    export type CreateShiftMutationError = ErrorType<unknown>
+    export type CreateShiftMutationError = ErrorType<void>
 
     /**
  * @summary Schicht anlegen
  */
-export const useCreateShift = <TError = ErrorType<unknown>,
+export const useCreateShift = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createShift>>, TError,{data: BodyType<ShiftInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof createShift>>,

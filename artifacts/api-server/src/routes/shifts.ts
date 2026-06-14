@@ -145,6 +145,43 @@ async function adjustVacationDaysUsed(userId: number, date: Date, delta: number)
   await applyVacationDelta(contract, delta);
 }
 
+// Prüft, ob für denselben Nutzer, Abwesenheitstyp und Kalendertag bereits eine
+// Schicht existiert. Verhindert doppelte Urlaubs-/Krank-Einträge (und damit
+// doppelte vacationDaysUsed-Abzüge), auch wenn der Frontend-Schutz umgangen wird.
+// Tag-Vergleich über DATE() auf dem gespeicherten Zeitstempel, konsistent zur
+// Frontend-Logik (startTime = Tagesbeginn, per toISOString gespeichert).
+async function findDuplicateAbsence(
+  userId: number,
+  type: string,
+  date: Date,
+  excludeShiftId: number | null
+): Promise<{ id: number } | null> {
+  const dateStr = new Date(date).toISOString().split("T")[0];
+  const conditions = [
+    eq(shiftsTable.userId, userId),
+    eq(shiftsTable.type, type as "vacation" | "sick"),
+    sql`DATE(${shiftsTable.startTime}) = ${dateStr}`,
+  ];
+  if (excludeShiftId !== null) conditions.push(ne(shiftsTable.id, excludeShiftId));
+  const [row] = await db
+    .select({ id: shiftsTable.id })
+    .from(shiftsTable)
+    .where(and(...conditions))
+    .limit(1);
+  return row ?? null;
+}
+
+// Strukturierte 409-Antwort für eine bereits existierende Abwesenheit am selben Tag.
+function duplicateAbsenceResponseBody(existingId: number, type: string) {
+  return {
+    error:
+      "Für diesen Assistenten besteht an diesem Tag bereits eine Abwesenheit dieses Typs.",
+    code: "absence_duplicate" as const,
+    existingShiftId: existingId,
+    type,
+  };
+}
+
 // Zeitwertung in Prozent: aus dem Schichtmodell (type "work"), sonst 100 (Legacy ohne Modell).
 async function valuationPercentFor(type: string, shiftModelId: number | null): Promise<number> {
   if (type === "work" && shiftModelId) {
@@ -317,6 +354,21 @@ router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
     );
     if (conflicts.length > 0) {
       res.status(409).json(overlapResponseBody(conflicts));
+      return;
+    }
+  }
+
+  // Doppelte Abwesenheit am selben Tag serverseitig verhindern: sonst entstünde
+  // ein zweiter Urlaubs-/Krank-Eintrag und vacationDaysUsed würde erneut erhöht.
+  if (isAbsenceType(body.data.type)) {
+    const duplicate = await findDuplicateAbsence(
+      body.data.userId,
+      body.data.type,
+      body.data.startTime,
+      null
+    );
+    if (duplicate) {
+      res.status(409).json(duplicateAbsenceResponseBody(duplicate.id, body.data.type));
       return;
     }
   }
