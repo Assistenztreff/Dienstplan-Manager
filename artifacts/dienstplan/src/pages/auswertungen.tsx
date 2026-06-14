@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useGetHoursBalance } from "@workspace/api-client-react";
+import { useGetHoursBalance, useListUsers } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -10,21 +10,45 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
+import { useAuth } from "@/context/auth";
+import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 import { exportHoursStatementPdf } from "@/lib/pdf-export";
 
 export default function Auswertungen() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isExporting, setIsExporting] = useState(false);
 
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser?.role === "admin";
+
   const month = currentDate.getMonth() + 1;
   const year = currentDate.getFullYear();
 
   const { selectedTeamId } = useTeam();
+  const teamParam = selectedTeamId != null ? { teamId: selectedTeamId } : {};
   const { data: balances, isLoading } = useGetHoursBalance({
     month,
     year,
-    ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
+    ...teamParam,
   }) as any;
+
+  const { data: users, isLoading: usersLoading } = useListUsers(
+    selectedTeamId != null ? { teamId: selectedTeamId } : undefined
+  );
+
+  const assistants: Assistant[] = isAdmin
+    ? (users ?? []).filter((u) => u.role === "assistant").map((u) => ({ id: u.id, name: u.name }))
+    : [];
+  const [selectedAssistant, setSelectedAssistant] = useSelectedAssistant(
+    assistants,
+    !(isAdmin && usersLoading),
+  );
+
+  // Gemerkter Assistenten-Filter (nur Admin): zeigt nur die gewählte Person.
+  const visibleBalances =
+    isAdmin && selectedAssistant !== "all" && Array.isArray(balances)
+      ? balances.filter((b: any) => b.userId === selectedAssistant)
+      : balances;
 
   const prevMonth = () => setCurrentDate(new Date(year, month - 2, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month, 1));
@@ -32,11 +56,11 @@ export default function Auswertungen() {
   const monthLabel = format(currentDate, "MMMM yyyy", { locale: de });
 
   const handleExport = async () => {
-    if (!balances || balances.length === 0) return;
+    if (!visibleBalances || visibleBalances.length === 0) return;
     setIsExporting(true);
     try {
       await exportHoursStatementPdf({
-        balances,
+        balances: visibleBalances,
         month,
         year,
         monthLabel,
@@ -77,7 +101,7 @@ export default function Auswertungen() {
           <Button
             variant="outline"
             onClick={handleExport}
-            disabled={isExporting || isLoading || !balances || balances.length === 0}
+            disabled={isExporting || isLoading || !visibleBalances || visibleBalances.length === 0}
             className="gap-2"
           >
             <Download className="h-4 w-4" />
@@ -86,14 +110,22 @@ export default function Auswertungen() {
         </div>
       </div>
 
+      {isAdmin && assistants.length > 0 && (
+        <AssistantFilter
+          assistants={assistants}
+          selected={selectedAssistant}
+          onSelect={setSelectedAssistant}
+        />
+      )}
+
       <div className="grid grid-cols-1 gap-6">
         {isLoading ? (
           <>
             <Skeleton className="h-48 w-full rounded-xl" />
             <Skeleton className="h-48 w-full rounded-xl" />
           </>
-        ) : balances && Array.isArray(balances) && balances.length > 0 ? (
-          balances.map((balance: any) => {
+        ) : visibleBalances && Array.isArray(visibleBalances) && visibleBalances.length > 0 ? (
+          visibleBalances.map((balance: any) => {
             const percentage =
               balance.plannedHours > 0
                 ? Math.min(100, Math.max(0, (balance.valuedHours / balance.plannedHours) * 100))

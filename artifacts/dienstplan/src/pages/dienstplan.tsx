@@ -13,6 +13,7 @@ import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
 import { colorBadgeClass, colorDotClass } from "@/lib/shift-model-colors";
+import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 
 type Shift = {
   id: number;
@@ -87,8 +88,6 @@ function usePersistentState<T extends string>(key: string, fallback: T, allowed:
   return [value, setValue];
 }
 
-const ASSISTANT_FILTER_KEY = "dienstplan.selectedAssistant";
-
 const WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
 const SHIFT_TYPE_DOTS: Record<string, string> = {
@@ -114,7 +113,6 @@ type DialogState =
   | { mode: "create"; date: Date; userId?: number }
   | { mode: "edit"; shift: Shift };
 
-type Assistant = { id: number; name: string };
 
 function ShiftBadge({
   shift,
@@ -386,50 +384,6 @@ function ViewToggle({
   );
 }
 
-function AssistantFilter({
-  assistants,
-  selected,
-  onSelect,
-}: {
-  assistants: Assistant[];
-  selected: number | "all";
-  onSelect: (val: number | "all") => void;
-}) {
-  return (
-    <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1" data-testid="assistant-filter">
-      <button
-        type="button"
-        data-testid="assistant-chip-all"
-        data-active={selected === "all" ? "true" : "false"}
-        onClick={() => onSelect("all")}
-        className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition-colors ${
-          selected === "all"
-            ? "bg-primary text-primary-foreground border-primary"
-            : "bg-card text-muted-foreground border-border"
-        }`}
-      >
-        Alle
-      </button>
-      {assistants.map((a) => (
-        <button
-          key={a.id}
-          type="button"
-          data-testid={`assistant-chip-${a.id}`}
-          data-active={selected === a.id ? "true" : "false"}
-          onClick={() => onSelect(a.id)}
-          className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition-colors ${
-            selected === a.id
-              ? "bg-primary text-primary-foreground border-primary"
-              : "bg-card text-muted-foreground border-border"
-          }`}
-        >
-          {a.name}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 export default function Dienstplan() {
   const { currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin";
@@ -457,28 +411,7 @@ export default function Dienstplan() {
     "table",
     ["table", "grid"],
   );
-  const [selectedAssistant, setSelectedAssistant] = useState<number | "all">(() => {
-    try {
-      const stored = localStorage.getItem(ASSISTANT_FILTER_KEY);
-      if (stored === "all") return "all";
-      if (stored != null) {
-        const parsed = Number(stored);
-        if (Number.isInteger(parsed)) return parsed;
-      }
-    } catch {
-      // localStorage nicht verfügbar (z. B. privater Modus) — Fallback nutzen
-    }
-    return "all";
-  });
   const [selectedDay, setSelectedDay] = useState<Date>(() => initialDate);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(ASSISTANT_FILTER_KEY, String(selectedAssistant));
-    } catch {
-      // Schreiben fehlgeschlagen — Auswahl gilt nur für diese Sitzung
-    }
-  }, [selectedAssistant]);
 
   const month = currentDate.getMonth() + 1;
   const year = currentDate.getFullYear();
@@ -508,14 +441,11 @@ export default function Dienstplan() {
     ? [{ id: currentUser.id, name: currentUser.name }]
     : [];
 
-  useEffect(() => {
-    if (selectedAssistant === "all") return;
-    // Erst prüfen, wenn die Assistentenliste geladen ist (sonst fälschlich zurücksetzen)
-    if (isAdmin && usersLoading) return;
-    if (!assistants.some((a) => a.id === selectedAssistant)) {
-      setSelectedAssistant("all");
-    }
-  }, [selectedAssistant, assistants, isAdmin, usersLoading]);
+  // Erst prüfen, wenn die Assistentenliste geladen ist (sonst fälschlich zurücksetzen)
+  const [selectedAssistant, setSelectedAssistant] = useSelectedAssistant(
+    assistants,
+    !(isAdmin && usersLoading),
+  );
 
   const { data: shiftModels } = useListShiftModels(teamParam);
   const modelMap = new Map<number, ShiftModelInfo>(

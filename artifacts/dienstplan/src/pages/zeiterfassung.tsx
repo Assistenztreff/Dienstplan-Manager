@@ -31,6 +31,7 @@ import { useAuth } from "@/context/auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { readableApiError } from "@/lib/api-error";
+import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 
 const SHIFT_TYPE_LABEL: Record<string, string> = {
   active: "Aktivdienst",
@@ -92,11 +93,25 @@ export default function Zeiterfassung() {
       .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
   }, [shifts, bookedShiftIds]);
 
-  // Status-Filter (z.B. vom Dashboard-Hinweis "Offene Zeiterfassungen" gesetzt).
+  // Assistenten-Liste (nur Admin) für den seitenübergreifend gemerkten Filter.
+  const assistants: Assistant[] = isAdmin
+    ? (users ?? []).filter((u) => u.role === "assistant").map((u) => ({ id: u.id, name: u.name }))
+    : [];
+  const [selectedAssistant, setSelectedAssistant] = useSelectedAssistant(
+    assistants,
+    !(isAdmin && usersLoading),
+  );
+
+  // Status-Filter (z.B. vom Dashboard-Hinweis "Offene Zeiterfassungen" gesetzt)
+  // plus gemerkter Assistenten-Filter (nur Admin).
   const filteredEntries = useMemo(() => {
-    if (!statusFilter) return entries ?? [];
-    return (entries ?? []).filter((e) => e.status === statusFilter);
-  }, [entries, statusFilter]);
+    let list = entries ?? [];
+    if (statusFilter) list = list.filter((e) => e.status === statusFilter);
+    if (isAdmin && selectedAssistant !== "all") {
+      list = list.filter((e) => e.userId === selectedAssistant);
+    }
+    return list;
+  }, [entries, statusFilter, isAdmin, selectedAssistant]);
 
   function setStatus(status: string | null) {
     const next = new URLSearchParams(searchParams);
@@ -248,6 +263,14 @@ export default function Zeiterfassung() {
           );
         })}
       </div>
+
+      {isAdmin && assistants.length > 0 && (
+        <AssistantFilter
+          assistants={assistants}
+          selected={selectedAssistant}
+          onSelect={setSelectedAssistant}
+        />
+      )}
 
       {/* Offene geplante Schichten (nur Assistent) */}
       {isAssistant && (
