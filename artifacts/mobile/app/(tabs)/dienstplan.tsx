@@ -493,7 +493,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 22,
     fontWeight: "700",
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Poppins_700Bold",
     letterSpacing: -0.4,
   },
   headerSub: {
@@ -524,7 +524,7 @@ const styles = StyleSheet.create({
   monthLabel: {
     fontSize: 16,
     fontWeight: "600",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Poppins_600SemiBold",
   },
 
   // States
@@ -595,7 +595,7 @@ const styles = StyleSheet.create({
   dayDetailTitle: {
     fontSize: 15,
     fontWeight: "600",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Poppins_600SemiBold",
   },
   noShiftsRow: {
     flexDirection: "row",
@@ -613,7 +613,7 @@ const styles = StyleSheet.create({
   dayGroupHeader: {
     fontSize: 12,
     fontWeight: "600",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Poppins_600SemiBold",
     textTransform: "uppercase",
     letterSpacing: 0.5,
     paddingLeft: 4,

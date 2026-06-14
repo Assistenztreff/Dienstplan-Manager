@@ -605,7 +605,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 22,
     fontWeight: "700",
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Poppins_700Bold",
     letterSpacing: -0.4,
   },
   headerSub: {
@@ -623,7 +623,7 @@ const styles = StyleSheet.create({
   monthLabel: {
     fontSize: 16,
     fontWeight: "600",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Poppins_600SemiBold",
   },
   centered: {
     flex: 1,
@@ -704,7 +704,7 @@ const styles = StyleSheet.create({
   entryHours: {
     fontSize: 15,
     fontWeight: "700",
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Poppins_700Bold",
   },
   entryNotes: {
     fontSize: 12,
@@ -739,7 +739,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 16,
     fontWeight: "600",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Poppins_600SemiBold",
   },
   saveBtn: {
     fontSize: 15,

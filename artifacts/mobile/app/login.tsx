@@ -3,6 +3,7 @@ import { Redirect, router } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -79,15 +80,15 @@ export default function LoginScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <View style={[styles.hero, { backgroundColor: colors.primary, paddingTop: topPad + 40 }]}>
-        <View style={[styles.iconCircle, { backgroundColor: colors.accent }]}>
-          <Feather name="calendar" size={32} color={colors.accentForeground} />
-        </View>
-        <Text style={[styles.heroTitle, { color: colors.primaryForeground }]}>
-          Dienstplan PA
-        </Text>
-        <Text style={[styles.heroSub, { color: colors.primaryForeground + "CC" }]}>
-          Bitte anmelden
+      <View style={[styles.hero, { paddingTop: topPad + 48 }]}>
+        <Image
+          source={require("../assets/images/logo-assistenztreff.png")}
+          style={styles.logo}
+          resizeMode="contain"
+          accessibilityLabel="AssistenzTreff"
+        />
+        <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>
+          Melden Sie sich mit Ihrer E-Mail an
         </Text>
       </View>
 
@@ -174,23 +175,13 @@ const styles = StyleSheet.create({
   },
   hero: {
     paddingHorizontal: 24,
-    paddingBottom: 36,
+    paddingBottom: 28,
     alignItems: "center",
-    gap: 10,
+    gap: 12,
   },
-  iconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 4,
-  },
-  heroTitle: {
-    fontSize: 26,
-    fontWeight: "700",
-    fontFamily: "Inter_700Bold",
-    letterSpacing: -0.5,
+  logo: {
+    width: 240,
+    height: 72,
   },
   heroSub: {
     fontSize: 14,

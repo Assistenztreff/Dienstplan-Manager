@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 22,
     fontWeight: "700",
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Poppins_700Bold",
     letterSpacing: -0.4,
   },
   headerSub: {
@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
   monthLabel: {
     fontSize: 16,
     fontWeight: "600",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Poppins_600SemiBold",
   },
   centered: {
     flex: 1,
@@ -326,7 +326,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 11,
     fontWeight: "600",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Poppins_600SemiBold",
     letterSpacing: 0.8,
   },
   statRow: {
@@ -347,7 +347,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 22,
     fontWeight: "700",
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Poppins_700Bold",
   },
   balanceCard: {
     borderWidth: 1,
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
   balanceValue: {
     fontSize: 28,
     fontWeight: "700",
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Poppins_700Bold",
   },
   balanceHint: {
     fontSize: 12,
