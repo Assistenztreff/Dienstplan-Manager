@@ -88,7 +88,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-background flex flex-col md:flex-row font-sans text-foreground">
       {/* Mobile header */}
       <header className="md:hidden flex items-center justify-between p-4 border-b bg-sidebar text-sidebar-foreground">
-        <img src={logoUrl} alt="AssistenzTreff" className="h-11 w-auto" />
+        <img src={logoUrl} alt="AssistenzTreff" className="h-11 w-auto max-w-full object-contain" />
         <Sheet>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon" className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
@@ -96,7 +96,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="w-64 p-4 bg-sidebar text-sidebar-foreground border-sidebar-border flex flex-col">
-            <img src={logoUrl} alt="AssistenzTreff" className="h-12 w-auto mb-6 self-start" />
+            <img src={logoUrl} alt="AssistenzTreff" className="h-12 w-auto max-w-full object-contain mb-6 self-start" />
             <nav className="flex flex-col gap-2 flex-1">
               <NavLinks />
             </nav>
@@ -107,7 +107,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Desktop sidebar */}
       <aside className="hidden md:flex flex-col w-64 border-r border-sidebar-border bg-sidebar p-6">
-        <img src={logoUrl} alt="AssistenzTreff" className="h-14 w-auto mb-8 px-2 self-start" />
+        <img src={logoUrl} alt="AssistenzTreff" className="h-14 w-auto max-w-full object-contain mb-8 px-2 self-start" />
         <nav className="flex flex-col gap-2 flex-1">
           <NavLinks />
         </nav>
