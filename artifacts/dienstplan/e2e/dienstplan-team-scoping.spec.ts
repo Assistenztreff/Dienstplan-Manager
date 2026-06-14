@@ -1,9 +1,5 @@
-import {
-  test,
-  expect,
-  request as playwrightRequest,
-  type APIRequestContext,
-} from "@playwright/test";
+import { test, expect } from "@playwright/test";
+import { TeamTestHarness } from "./helpers/teams";
 
 /**
  * E2E-Test für die strikte, backend-seitige Team-Datentrennung (Multi-Team Stufe 3).
@@ -14,6 +10,9 @@ import {
  * gescopten Domänendaten (Schichten) abgeleitet statt über die Dienstleister-only
  * Route GET /api/teams.
  *
+ * Login-/Context-Boilerplate kommt aus der geteilten Test-Hilfe TeamTestHarness
+ * (#52/#72): h.ctx ist der eingeloggte Admin-Kontext, h.cleanup() gibt ihn frei.
+ *
  * Deckt ab:
  * - GET /api/users mit fremdem teamId -> 403 (kein Zugriff auf fremdes Team).
  * - POST /api/users ordnet einen neuen Nutzer dem Team des Erstellers zu, sodass er
@@ -23,41 +22,33 @@ import {
  *   ist in der gescopten Liste sichtbar.
  */
 
-const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "admin@dienstplan.local";
-const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "admin1234";
-const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
-
 const FOREIGN_TEAM_ID = 999999;
 
 type AppUser = { id: number };
 type ShiftModel = { id: number; teamId?: number };
 
-let adminCtx: APIRequestContext;
+let h: TeamTestHarness;
 /** Eine bekannte, erlaubte Team-ID (aus einem existierenden Schichtmodell abgeleitet). */
 let knownTeamId: number | undefined;
 
 test.beforeAll(async () => {
-  adminCtx = await playwrightRequest.newContext({ baseURL: BASE_URL });
-  const loginRes = await adminCtx.post("/api/auth/login", {
-    data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
-  });
-  expect(loginRes.ok(), "Admin-Login fehlgeschlagen").toBe(true);
+  h = await TeamTestHarness.login();
 
   // teamId ist im ShiftModel-DTO enthalten (anders als im Shift-DTO); daraus
   // leiten wir eine bekannte erlaubte Team-ID ab.
-  const modelsRes = await adminCtx.get("/api/shift-models");
+  const modelsRes = await h.ctx.get("/api/shift-models");
   expect(modelsRes.ok(), "Schichtmodelle konnten nicht geladen werden").toBe(true);
   const models = (await modelsRes.json()) as ShiftModel[];
   knownTeamId = models.find((m) => typeof m.teamId === "number")?.teamId;
 });
 
 test.afterAll(async () => {
-  await adminCtx.dispose();
+  await h.cleanup();
 });
 
 test.describe("Team-Datentrennung (Backend-Scoping)", () => {
   test("GET /users mit fremdem teamId liefert 403", async () => {
-    const res = await adminCtx.get(`/api/users?teamId=${FOREIGN_TEAM_ID}`);
+    const res = await h.ctx.get(`/api/users?teamId=${FOREIGN_TEAM_ID}`);
     expect(res.status()).toBe(403);
   });
 
@@ -65,7 +56,7 @@ test.describe("Team-Datentrennung (Backend-Scoping)", () => {
     // Ohne teamId: der neue Nutzer wird dem Standard-Team des Erstellers zugeordnet,
     // damit er in der gescopten (nicht globalen) Liste sichtbar bleibt.
     const unique = Date.now();
-    const createRes = await adminCtx.post("/api/users", {
+    const createRes = await h.ctx.post("/api/users", {
       data: {
         name: `E2E Teammitglied ${unique}`,
         email: `e2e.member.${unique}@dienstplan.test`,
@@ -76,7 +67,7 @@ test.describe("Team-Datentrennung (Backend-Scoping)", () => {
     const created = (await createRes.json()) as AppUser;
 
     try {
-      const scopedRes = await adminCtx.get("/api/users");
+      const scopedRes = await h.ctx.get("/api/users");
       expect(scopedRes.ok()).toBe(true);
       const scoped = (await scopedRes.json()) as AppUser[];
       const ids = new Set(scoped.map((u) => u.id));
@@ -85,13 +76,13 @@ test.describe("Team-Datentrennung (Backend-Scoping)", () => {
       // Team des Erstellers zugeordnet und MUSS daher sichtbar sein.
       expect(ids.has(created.id), "Neuer Nutzer fehlt in gescopter Liste").toBe(true);
     } finally {
-      await adminCtx.delete(`/api/users/${created.id}`);
+      await h.ctx.delete(`/api/users/${created.id}`);
     }
   });
 
   test("POST /users mit fremdem teamId liefert 403", async () => {
     const unique = Date.now();
-    const res = await adminCtx.post("/api/users", {
+    const res = await h.ctx.post("/api/users", {
       data: {
         name: `E2E Fremd ${unique}`,
         email: `e2e.foreign.${unique}@dienstplan.test`,
@@ -107,7 +98,7 @@ test.describe("Team-Datentrennung (Backend-Scoping)", () => {
     const teamId = knownTeamId!;
     const name = `E2E Modell ${Date.now()}`;
 
-    const createRes = await adminCtx.post("/api/shift-models", {
+    const createRes = await h.ctx.post("/api/shift-models", {
       data: {
         name,
         valuationPercent: 100,
@@ -122,12 +113,12 @@ test.describe("Team-Datentrennung (Backend-Scoping)", () => {
     expect(created.teamId).toBe(teamId);
 
     try {
-      const listRes = await adminCtx.get(`/api/shift-models?teamId=${teamId}`);
+      const listRes = await h.ctx.get(`/api/shift-models?teamId=${teamId}`);
       expect(listRes.ok()).toBe(true);
       const models = (await listRes.json()) as ShiftModel[];
       expect(models.some((m) => m.id === created.id)).toBe(true);
     } finally {
-      await adminCtx.delete(`/api/shift-models/${created.id}`);
+      await h.ctx.delete(`/api/shift-models/${created.id}`);
     }
   });
 
@@ -138,7 +129,7 @@ test.describe("Team-Datentrennung (Backend-Scoping)", () => {
     // Erst: ein Nutzer mit fremdem teamId wird bereits beim Anlegen abgelehnt
     // (Write-Scoping greift hier zuerst).
     const unique = Date.now();
-    const createUserRes = await adminCtx.post("/api/users", {
+    const createUserRes = await h.ctx.post("/api/users", {
       data: {
         name: `E2E Fremd-Schicht ${unique}`,
         email: `e2e.foreignshift.${unique}@dienstplan.test`,
@@ -153,7 +144,7 @@ test.describe("Team-Datentrennung (Backend-Scoping)", () => {
     // ist also Mitglied. Daher prüfen wir die Cross-Team-Verknüpfung über einen
     // bewusst nicht existierenden userId, der sicher in keinem Team Mitglied ist.
     const NON_MEMBER_USER_ID = 999999;
-    const shiftRes = await adminCtx.post("/api/shifts", {
+    const shiftRes = await h.ctx.post("/api/shifts", {
       data: {
         userId: NON_MEMBER_USER_ID,
         startTime: "2026-07-01T08:00:00.000Z",
