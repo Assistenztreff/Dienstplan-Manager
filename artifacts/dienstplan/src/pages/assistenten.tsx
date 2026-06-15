@@ -865,7 +865,7 @@ export default function Assistenten() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Assistenten</h2>
-          <p className="text-muted-foreground mt-1 text-sm">Verwaltung der Mitarbeiter und Vertraege</p>
+          <p className="text-muted-foreground mt-1 text-sm">Verwaltung der Mitarbeiter und Verträge</p>
         </div>
         <Button onClick={openCreate} className="gap-2">
           <UserPlus className="h-4 w-4" />
@@ -873,7 +873,6 @@ export default function Assistenten() {
           <span className="sm:hidden">Neu</span>
         </Button>
       </div>
-
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
@@ -1008,14 +1007,12 @@ export default function Assistenten() {
           )}
         </div>
       )}
-
       <AssistentDialog
         open={dialogOpen}
         onClose={closeDialog}
         editUser={editUser}
         editContract={editContract}
       />
-
       {inviteUser && (
         <InviteDialog
           open={!!inviteUser}
@@ -1024,7 +1021,6 @@ export default function Assistenten() {
           userName={inviteUser.name}
         />
       )}
-
       {exportUser && (
         <ExportDialog
           open={!!exportUser}
