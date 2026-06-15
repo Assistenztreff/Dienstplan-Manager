@@ -5,6 +5,7 @@ import {
   useListContracts,
   useCreateUser,
   useUpdateUser,
+  useDeleteUser,
   useCreateContract,
   useUpdateContract,
   useInviteUser,
@@ -20,6 +21,16 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {
@@ -29,7 +40,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Mail, Phone, MapPin, Calendar, Pencil, UserPlus, Send, Copy, Check, Download, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Mail, Phone, MapPin, Calendar, Pencil, UserPlus, Send, Copy, Check, Download, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { toast } from "sonner";
@@ -240,10 +251,15 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
   const { selectedTeamId } = useTeam();
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
+  const deleteUser = useDeleteUser();
   const createContract = useCreateContract();
   const updateContract = useUpdateContract();
 
   const isEditing = !!editUser;
+
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [form, setForm] = useState<FormState>(() => {
     if (editUser) {
@@ -378,7 +394,27 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
     }
   }
 
+  async function handleDelete() {
+    if (!editUser) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteUser.mutateAsync({ id: editUser.id });
+      await queryClient.invalidateQueries({ queryKey: getListUsersQueryKey({ role: "assistant" }) });
+      await queryClient.invalidateQueries({ queryKey: getListContractsQueryKey() });
+      setConfirmDeleteOpen(false);
+      onClose();
+    } catch (err) {
+      setDeleteError(
+        readableApiError(err, "Loeschen fehlgeschlagen. Bitte erneut versuchen."),
+      );
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
+    <>
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -558,16 +594,69 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
           </section>
         </div>
 
-        <DialogFooter className="gap-2 pt-2">
-          <Button variant="outline" onClick={onClose} disabled={saving}>
-            Abbrechen
-          </Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Speichern..." : isEditing ? "Speichern" : "Anlegen"}
-          </Button>
+        <DialogFooter className="gap-2 pt-2 sm:justify-between">
+          {isEditing ? (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setDeleteError(null);
+                setConfirmDeleteOpen(true);
+              }}
+              disabled={saving || deleting}
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+              Loeschen
+            </Button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose} disabled={saving || deleting}>
+              Abbrechen
+            </Button>
+            <Button onClick={handleSave} disabled={saving || deleting}>
+              {saving ? "Speichern..." : isEditing ? "Speichern" : "Anlegen"}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog
+      open={confirmDeleteOpen}
+      onOpenChange={(v) => {
+        if (!deleting) setConfirmDeleteOpen(v);
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Assistenten loeschen?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {editUser?.name ? `"${editUser.name}"` : "Diese Assistenzkraft"} wird
+            unwiderruflich entfernt – samt Vertrag, geplanten Schichten und
+            erfasster Zeiten. Diese Aktion kann nicht rueckgaengig gemacht werden.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {deleteError && (
+          <p className="text-sm text-destructive">{deleteError}</p>
+        )}
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={deleting}>Abbrechen</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault();
+              handleDelete();
+            }}
+            disabled={deleting}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {deleting ? "Loeschen..." : "Endgueltig loeschen"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 
