@@ -7,7 +7,8 @@ Eine Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgeb
 - `pnpm --filter @workspace/api-server run dev` — API-Server starten (Port 8080, erreichbar über `/api`)
 - `pnpm --filter @workspace/dienstplan run dev` — Frontend starten (Port dynamisch, Pfad `/`)
 - `pnpm run typecheck` — Vollständiger Typecheck über alle Pakete
-- `pnpm --filter @workspace/dienstplan run test:e2e` — Playwright-E2E-Tests (API-Server + Frontend müssen laufen; nutzt Admin-Login admin@dienstplan.local / admin1234)
+- `pnpm --filter @workspace/dienstplan run test:e2e` — Playwright-E2E-Tests. Laufen gegen einen **isolierten Test-Stack** (eigener API-Server Port 8099 + Vite Port 5199) auf einer **separaten Test-Datenbank** `<dbname>_test`; die echte Dev-DB wird NICHT berührt. Die Test-DB wird automatisch provisioniert (`setup-test-db`). Override: `E2E_BASE_URL=...` setzen, um stattdessen gegen einen laufenden Stack (z.B. Proxy localhost:80) zu testen. Admin-Login: admin@dienstplan.local / admin1234
+- `pnpm --filter @workspace/scripts run setup-test-db` — Test-Datenbank anlegen/aktualisieren (Schema-Push + Admin + Team-Migration, idempotent); wird von `test:e2e` automatisch aufgerufen
 - `pnpm run build` — Typecheck + Build aller Pakete
 - `pnpm --filter @workspace/api-spec run codegen` — API-Hooks und Zod-Schemas aus OpenAPI-Spec regenerieren
 - `pnpm --filter @workspace/db run push` — DB-Schema pushen (nur Dev)

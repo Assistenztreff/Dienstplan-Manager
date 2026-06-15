@@ -18,6 +18,11 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
+// Nur für den isolierten E2E-Test-Stack gesetzt: leitet /api an den
+// Test-API-Server (eigene Test-Datenbank) weiter. Im normalen Dev-Betrieb
+// unbenutzt -> der geteilte Replit-Proxy übernimmt das Routing.
+const e2eApiProxyTarget = process.env.E2E_API_PROXY_TARGET;
+
 const basePath = process.env.BASE_PATH;
 
 if (!basePath) {
@@ -73,6 +78,13 @@ export default defineConfig({
     fs: {
       strict: true,
     },
+    ...(e2eApiProxyTarget
+      ? {
+          proxy: {
+            "/api": { target: e2eApiProxyTarget, changeOrigin: true },
+          },
+        }
+      : {}),
   },
   preview: {
     port,
