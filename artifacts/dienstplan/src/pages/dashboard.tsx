@@ -191,7 +191,7 @@ export default function Dashboard() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-3xl font-serif font-bold text-foreground">Dashboard</h2>
-          <p className="text-muted-foreground mt-1">Uebersicht fuer {format(now, 'MMMM yyyy', { locale: de })}</p>
+          <p className="text-muted-foreground mt-1">Übersicht für {format(now, 'MMMM yyyy', { locale: de })}</p>
         </div>
         <TeamSwitcher />
       </div>
