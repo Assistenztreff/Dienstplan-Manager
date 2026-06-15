@@ -45,6 +45,8 @@ let adminCtx: APIRequestContext;
 let assistant: CreatedUser;
 let contractId: number | undefined;
 let shiftId: number | undefined;
+// Eigene Kraft für den Abbruch-Test, damit der Lösch-Test sie nicht entfernt.
+let cancelAssistant: CreatedUser | undefined;
 
 const now = new Date();
 const year = now.getFullYear();
@@ -128,7 +130,51 @@ test.afterAll(async () => {
   if (assistant?.id) {
     await adminCtx.delete(`/api/users/${assistant.id}`).catch(() => {});
   }
+  if (cancelAssistant?.id) {
+    await adminCtx.delete(`/api/users/${cancelAssistant.id}`).catch(() => {});
+  }
   await adminCtx.dispose();
+});
+
+test("Abbrechen der Sicherheitsabfrage erhält die Assistenzkraft", async ({
+  page,
+}) => {
+  // Eigene Kraft anlegen, damit der nachfolgende Lösch-Test unbeeinflusst bleibt.
+  cancelAssistant = await createAssistant(adminCtx, `cancel-${Date.now()}`);
+
+  await gotoAssistentenAsAdmin(page);
+
+  const card = page.getByTestId(`assistant-card-${cancelAssistant.id}`);
+  await expect(card).toBeVisible();
+
+  // Bearbeiten-Dialog öffnen.
+  await card.getByRole("button", { name: "Bearbeiten" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Assistenten bearbeiten" }),
+  ).toBeVisible();
+
+  // Lösch-Knopf anklicken -> Sicherheitsabfrage erscheint.
+  await page.getByRole("button", { name: "Loeschen" }).click();
+  const confirm = page.getByRole("alertdialog");
+  await expect(confirm).toBeVisible();
+  await expect(confirm.getByText("Assistenten loeschen?")).toBeVisible();
+
+  // Abbrechen -> nichts wird gelöscht.
+  await confirm.getByRole("button", { name: "Abbrechen" }).click();
+  await expect(confirm).toHaveCount(0);
+
+  // Die Karte steht weiterhin in der Liste.
+  await expect(card).toBeVisible();
+
+  // Backend: Nutzer existiert weiterhin.
+  const usersRes = await adminCtx.get("/api/users");
+  expect(usersRes.ok()).toBe(true);
+  const users = (await usersRes.json()) as CreatedUser[];
+  expect(users.some((u) => u.id === cancelAssistant!.id)).toBe(true);
+
+  // Aufräumen, damit die Liste sauber bleibt.
+  await adminCtx.delete(`/api/users/${cancelAssistant.id}`).catch(() => {});
+  cancelAssistant = undefined;
 });
 
 test("Assistenzkraft kann samt Daten über den Bearbeiten-Dialog gelöscht werden", async ({
