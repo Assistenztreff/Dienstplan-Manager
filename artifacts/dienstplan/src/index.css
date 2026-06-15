@@ -106,50 +106,50 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  --background: 170 60% 90%; /* AssistenzTreff mint */
-  --foreground: 225 35% 15%; /* Dark navy text */
+  --background: 0 0% 100%; /* AssistenzTreff weiß */
+  --foreground: 210 78% 16%; /* Dunkelblau text */
 
-  --border: 170 25% 78%;
+  --border: 0 0% 90%;
 
-  --card: 0 0% 100%;
-  --card-foreground: 225 35% 15%;
-  --card-border: 170 25% 82%;
+  --card: 0 0% 98%; /* Off-white #f9f9f9 */
+  --card-foreground: 210 78% 16%;
+  --card-border: 0 0% 90%;
 
-  --sidebar: 225 58% 24%; /* Deep navy */
+  --sidebar: 210 78% 16%; /* Dunkelblau #092948 */
   --sidebar-foreground: 0 0% 100%;
-  --sidebar-border: 225 45% 18%;
-  --sidebar-primary: 70 78% 65%; /* Lime for active items */
-  --sidebar-primary-foreground: 70 40% 18%;
-  --sidebar-accent: 225 45% 32%; /* Slightly lighter navy for hover */
+  --sidebar-border: 210 60% 22%;
+  --sidebar-primary: 66 79% 75%; /* Hellgelb #ebf18b for active items */
+  --sidebar-primary-foreground: 210 78% 16%;
+  --sidebar-accent: 210 55% 26%; /* Slightly lighter navy for hover */
   --sidebar-accent-foreground: 0 0% 100%;
-  --sidebar-ring: 70 78% 65%;
+  --sidebar-ring: 66 79% 75%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 225 35% 15%;
-  --popover-border: 170 25% 82%;
+  --popover-foreground: 210 78% 16%;
+  --popover-border: 0 0% 90%;
 
-  --primary: 225 58% 24%; /* AssistenzTreff Dunkelblau */
-  --primary-foreground: 0 0% 100%;
+  --primary: 66 79% 75%; /* AssistenzTreff Hellgelb #ebf18b */
+  --primary-foreground: 210 78% 16%; /* Dunkelblau text */
 
-  --secondary: 170 35% 85%; /* Helles Mint */
-  --secondary-foreground: 225 35% 15%;
+  --secondary: 0 0% 96%; /* Helles Grau */
+  --secondary-foreground: 210 78% 16%;
 
-  --muted: 170 20% 82%;
-  --muted-foreground: 225 20% 42%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 210 15% 40%;
 
-  --accent: 70 78% 65%; /* AssistenzTreff Limettengrün */
-  --accent-foreground: 70 40% 18%;
+  --accent: 66 79% 75%; /* AssistenzTreff Hellgelb #ebf18b */
+  --accent-foreground: 210 78% 16%;
 
   --destructive: 0 60% 50%;
   --destructive-foreground: 0 0% 100%;
 
-  --input: 170 25% 78%;
-  --ring: 225 58% 24%;
+  --input: 0 0% 90%;
+  --ring: 210 78% 16%;
   
-  --chart-1: 225 58% 24%;
+  --chart-1: 210 78% 16%;
   --chart-2: 170 50% 45%;
-  --chart-3: 70 78% 55%;
-  --chart-4: 225 30% 55%;
+  --chart-3: 66 79% 60%;
+  --chart-4: 210 40% 45%;
   --chart-5: 170 30% 65%;
 
   --app-font-sans: 'Inter', sans-serif;
