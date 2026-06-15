@@ -8,6 +8,22 @@ import { AlertTriangle, CalendarX, Clock, CheckCircle2, Plane, ChevronRight } fr
 import { useLocation } from "wouter";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
+import { DienstStatus, type SchichtVorlage } from "@/types/dienstplan";
+
+// Beispielhafte Einbindung der zentralen Planungstypen (siehe @/types/dienstplan):
+// belegt die Importierbarkeit aus der Dashboard-Ansicht, ohne bestehendes
+// Verhalten zu ändern. Diese Konstanten dienen vorerst nur als getypte Referenz.
+export const DIENST_STATUS_LABELS: Record<DienstStatus, string> = {
+  [DienstStatus.ENTWURF]: "Entwurf",
+  [DienstStatus.VORSCHLAG]: "Vorschlag",
+  [DienstStatus.BESTAETIGT]: "Bestätigt",
+  [DienstStatus.ARCHIVIERT]: "Archiviert",
+  [DienstStatus.KRANKHEIT]: "Krankheit",
+  [DienstStatus.ABSAGE_MAB]: "Absage Mitarbeiter",
+  [DienstStatus.ABSAGE_AG]: "Absage Arbeitgeber",
+};
+
+export const STANDARD_SCHICHT_VORLAGEN: SchichtVorlage[] = [];
 
 function WarningsSection({ warnings }: { warnings: DashboardWarnings }) {
   const { pendingTimeEntries, lowVacationAssistants, uncoveredDays, lowVacationThreshold, horizonDays } = warnings;
