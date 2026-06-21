@@ -8,6 +8,7 @@
 - [requireDienstleister fresh read](require-dienstleister-fresh-read.md) — team CRUD gating reads account_type from DB per request (not session) so runtime account-type switches take effect immediately.
 - [Idempotent UNIQUE/PK constraint](idempotent-unique-constraint.md) — re-adding UNIQUE/PK raises 42P07 (duplicate_table) not 42710; guard with pg_constraint check + catch both. Post-merge needs ~180s timeout.
 - [User-list team scoping](team-member-shared-pool.md) — GET /users is team-membership-scoped (no global pool); every user-create flow must assign membership or the user vanishes from scoped lists/pickers.
+- [Cross-site iframe embedding](iframe-embed-cross-site-cookie.md) — embedding the SPA as a 3rd-party iframe needs SameSite=None;Secure session cookie (Lax is silently dropped), platform CSP frame-src, and ?embed=1 chrome mode.
 - [Second admin only via seed](second-admin-only-via-seed.md) — role+accountType can't both be set via API; cross-tenant tests needing a foreign admin must seed it (setup-admin script).
 - [Curl test ID parsing on shifts](curl-shift-id-parsing.md) — shift JSON embeds a nested user.id; greedy regex/jq mistakes can grab the wrong id and DELETE the wrong row. Parse the top-level id only.
 - [Mobile jest harness](mobile-jest-harness.md) — Expo artifact uses jest-expo + RNTL; pnpm needs a custom transformIgnorePatterns matching pkg names after `.pnpm/`, and native edges are mocked.

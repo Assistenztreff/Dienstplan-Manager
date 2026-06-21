@@ -88,6 +88,15 @@ Kernfunktionen (Task 1 — Grundstruktur):
 - **Frontend Team-Wechsler**: `context/team.tsx` (`TeamProvider`/`useTeam`) lädt Teams nur für Dienstleister, persistiert `selectedTeamId` in localStorage (bereinigt Auswahl, wenn Team verschwindet oder Konto-Typ wechselt). `components/team-switcher.tsx` (Dropdown "Alle Teams" + Teams) nur sichtbar für Dienstleister mit ≥1 Team; eingebunden in Header von Dashboard, Dienstplan, Auswertungen. `teamId` wird an die List-Hooks und in das Shift-Create-Payload (`ShiftDialog`) durchgereicht; PDF-Export filtert per-User-Schichten ebenfalls auf das gewählte Team.
 - **Verifiziert** (curl + temporäres 2. Team): fremdes `teamId` → 403; teamScopes liefern disjunkte Datenmengen (Team A + Team B = Gesamtmenge ohne `teamId`); `users?teamId` → nur Mitglieder dieses Teams.
 
+## Einbettung in die Assistenztreff-Plattform (iframe, Weg 1)
+
+Die Dienstplan-App wird als eigenständige React/Express-App in die externe Assistenztreff-Plattform (proprietäres Symfony-Produkt von Lulububu Software GmbH) per `<iframe>` unter dem Menüpunkt **Connect** eingebettet. Eigene Postgres-DB bleibt erhalten.
+
+- **Cross-Site-Cookie**: In Produktion (oder mit `SESSION_COOKIE_CROSS_SITE=1`) setzt der API-Server das Session-Cookie als `SameSite=None; Secure` — sonst wird es im fremden iframe-Origin nicht mitgesendet und der Login schlägt still fehl. Lokal/Dev bleibt es `Lax` (kein HTTPS-Zwang). Siehe `artifacts/api-server/src/app.ts`.
+- **Embed-Modus**: `?embed=1` in der iframe-URL aktiviert den Modus (gemerkt in sessionStorage, `src/lib/embed.ts`). Dann blendet `layout.tsx` das AssistenzTreff-Logo aus, damit nur die Plattform-Hülle (Header/Footer) als Chrome sichtbar ist. Bewusst keine `window.top`-Auto-Erkennung (die Replit-Vorschau ist selbst ein iframe).
+- **Plattformseite (nicht im Repo)**: (1) iframe-Snippet in die Connect-CMS-Seite einsetzen, URL inkl. `?embed=1`; (2) Deploy-Domain der Dienstplan-App in `config/packages/nelmio_security.yaml` unter `frame-src` (Blöcke `enforce` UND `report`) eintragen, sonst blockt die CSP der Plattform den iframe.
+- **Caveat (Chrome 3rd-party cookies)**: `SameSite=None` kann in iframes künftig partitioniert/blockiert werden; ggf. `Partitioned`/CHIPS nachrüsten, falls der Login speziell in Chrome scheitert.
+
 ## User preferences
 
 - Strikt task-orientiertes Vorgehen: nach jedem Task auf Feedback warten
