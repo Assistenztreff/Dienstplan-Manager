@@ -16,6 +16,7 @@ import Einstellungen from "@/pages/einstellungen";
 import TeamVerwaltung from "@/pages/team-verwaltung";
 import Login from "@/pages/login";
 import Einladung from "@/pages/einladung";
+import PasswortVergessen from "@/pages/passwort-vergessen";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 
@@ -28,7 +29,7 @@ const queryClient = new QueryClient({
   },
 });
 
-const PUBLIC_PATHS = ["/login", "/einladung"];
+const PUBLIC_PATHS = ["/login", "/einladung", "/passwort-vergessen"];
 
 function Router() {
   const { currentUser, isLoading } = useAuth();
@@ -57,6 +58,7 @@ function Router() {
       <Switch>
         <Route path="/login" component={Login} />
         <Route path="/einladung" component={Einladung} />
+        <Route path="/passwort-vergessen" component={PasswortVergessen} />
         <Route>{() => null}</Route>
       </Switch>
     );

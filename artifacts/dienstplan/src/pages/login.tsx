@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
-import logoUrl from "@assets/Arbeitgebermodell_oder_Assistenzdienst_20260613_225739_0000_1781384277556.svg";
+import logoUrl from "@assets/20260626_094418_0000_1782459883949.png";
 
 export default function Login() {
   const { login } = useAuth();
@@ -75,6 +75,15 @@ export default function Login() {
                   placeholder="••••••••"
                   disabled={loading}
                 />
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => navigate("/passwort-vergessen")}
+                    className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                  >
+                    Passwort vergessen?
+                  </button>
+                </div>
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? (

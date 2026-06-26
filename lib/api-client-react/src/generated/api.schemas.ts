@@ -597,6 +597,12 @@ export interface SetPasswordInput {
   password: string;
 }
 
+export interface ChangePasswordInput {
+  currentPassword: string;
+  /** @minLength 8 */
+  newPassword: string;
+}
+
 export type ListUsersParams = {
 role?: ListUsersRole;
 /**
@@ -696,5 +702,9 @@ year?: number;
  * Optionaler Team-Kontext für die Datentrennung.
  */
 teamId?: number;
+};
+
+export type ChangePassword200 = {
+  ok: boolean;
 };
 

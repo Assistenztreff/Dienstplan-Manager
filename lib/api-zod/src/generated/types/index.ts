@@ -14,6 +14,8 @@ export * from './authUser';
 export * from './authUserRole';
 export * from './brandingSettings';
 export * from './brandingSettingsInput';
+export * from './changePassword200';
+export * from './changePasswordInput';
 export * from './contract';
 export * from './contractInput';
 export * from './contractUpdate';

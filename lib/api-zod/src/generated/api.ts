@@ -1166,3 +1166,20 @@ export const SetPasswordResponse = zod.object({
 })
 
 
+/**
+ * @summary Eigenes Passwort ändern
+ */
+export const changePasswordBodyNewPasswordMin = 8;
+
+
+
+export const ChangePasswordBody = zod.object({
+  "currentPassword": zod.string(),
+  "newPassword": zod.string().min(changePasswordBodyNewPasswordMin)
+})
+
+export const ChangePasswordResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+

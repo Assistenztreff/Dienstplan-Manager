@@ -9,6 +9,7 @@ import {
   useGetBrandingSettings,
   useUpdateBrandingSettings,
   getGetBrandingSettingsQueryKey,
+  useChangePassword,
   requestUploadUrl,
   type BrandingSettings,
 } from "@workspace/api-client-react";
@@ -23,7 +24,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, GripVertical, Upload, ImageIcon } from "lucide-react";
+import { Plus, Pencil, Trash2, GripVertical, Upload, ImageIcon, KeyRound, Mail, User as UserIcon } from "lucide-react";
 import { SHIFT_MODEL_COLORS, colorDotClass } from "@/lib/shift-model-colors";
 import { AllowanceSettingsForm } from "@/components/allowance-settings-form";
 import { logoSrcFromPath, ACCEPTED_LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/logo";
@@ -219,6 +220,151 @@ function ModelDialog({ open, onClose, editModel, nextSortOrder }: ModelDialogPro
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { toast } = useToast();
+  const changePassword = useChangePassword();
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    setError("");
+    if (newPassword.length < 8) {
+      setError("Das neue Passwort muss mindestens 8 Zeichen lang sein.");
+      return;
+    }
+    if (newPassword !== confirm) {
+      setError("Die neuen Passwörter stimmen nicht überein.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await changePassword.mutateAsync({ data: { currentPassword, newPassword } });
+      toast({ title: "Passwort geändert", description: "Ihr Passwort wurde erfolgreich aktualisiert." });
+      onClose();
+    } catch (err) {
+      setError(readableApiError(err, "Passwort konnte nicht geändert werden. Bitte erneut versuchen."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-xl">Passwort ändern</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {error && (
+            <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <Label htmlFor="current-password">Aktuelles Passwort</Label>
+            <Input
+              id="current-password"
+              type="password"
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="••••••••"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="new-password">Neues Passwort</Label>
+            <Input
+              id="new-password"
+              type="password"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Mindestens 8 Zeichen"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="confirm-password">Neues Passwort bestätigen</Label>
+            <Input
+              id="confirm-password"
+              type="password"
+              autoComplete="new-password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              placeholder="••••••••"
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2 pt-2">
+          <Button variant="outline" onClick={onClose} disabled={saving}>
+            Abbrechen
+          </Button>
+          <Button onClick={() => void handleSave()} disabled={saving}>
+            {saving ? "Speichern..." : "Passwort ändern"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ProfileCard() {
+  const { currentUser } = useAuth();
+  const [pwOpen, setPwOpen] = useState(false);
+
+  return (
+    <Card className="border-border/50 shadow-sm">
+      <CardContent className="p-4 space-y-4">
+        <div>
+          <h3 className="font-serif text-lg font-bold text-foreground">Profilinformationen</h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Ihre persönlichen Kontodaten. Das Passwort können Sie hier ändern.
+          </p>
+        </div>
+
+        <dl className="space-y-3">
+          <div className="flex items-start gap-3">
+            <UserIcon className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <dt className="text-xs text-muted-foreground">Name</dt>
+              <dd className="text-sm font-medium text-foreground break-words">
+                {currentUser?.name ?? "—"}
+              </dd>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <Mail className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <dt className="text-xs text-muted-foreground">E-Mail-Adresse</dt>
+              <dd className="text-sm font-medium text-foreground break-words">
+                {currentUser?.email ?? "—"}
+              </dd>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <KeyRound className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <dt className="text-xs text-muted-foreground">Passwort</dt>
+              <dd className="text-sm font-medium text-foreground">••••••••</dd>
+            </div>
+            <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPwOpen(true)}>
+              <KeyRound className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Passwort ändern</span>
+              <span className="sm:hidden">Ändern</span>
+            </Button>
+          </div>
+        </dl>
+      </CardContent>
+
+      {pwOpen && <ChangePasswordDialog open={pwOpen} onClose={() => setPwOpen(false)} />}
+    </Card>
   );
 }
 
@@ -485,6 +631,8 @@ export default function Einstellungen() {
           <span className="sm:hidden">Neu</span>
         </Button>
       </div>
+
+      <ProfileCard />
 
       <Card className="border-border/50 shadow-sm">
         <CardContent className="p-0">

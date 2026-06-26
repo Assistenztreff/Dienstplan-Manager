@@ -143,4 +143,36 @@ router.post("/auth/set-password", async (req, res) => {
   return res.json({ id: user.id, name: user.name, email: user.email, role: user.role, accountType: user.accountType });
 });
 
+router.post("/auth/change-password", async (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: "Nicht angemeldet" });
+  }
+
+  const { currentPassword, newPassword } = req.body as {
+    currentPassword?: unknown;
+    newPassword?: unknown;
+  };
+  if (typeof currentPassword !== "string" || typeof newPassword !== "string" || !currentPassword || !newPassword) {
+    return res.status(400).json({ error: "Aktuelles und neues Passwort erforderlich" });
+  }
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: "Neues Passwort muss mindestens 8 Zeichen lang sein" });
+  }
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.session.userId));
+  if (!user) {
+    return res.status(401).json({ error: "Benutzer nicht gefunden" });
+  }
+  if (!user.passwordHash || !verifyPassword(currentPassword, user.passwordHash)) {
+    return res.status(401).json({ error: "Aktuelles Passwort falsch" });
+  }
+
+  await db
+    .update(usersTable)
+    .set({ passwordHash: hashPassword(newPassword) })
+    .where(eq(usersTable.id, user.id));
+
+  return res.json({ ok: true });
+});
+
 export default router;

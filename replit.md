@@ -110,6 +110,8 @@ Die Dienstplan-App wird als eigenständige React/Express-App in die externe Assi
 - Rollen: `admin` (Assistenznehmer, Vollzugriff) und `assistant` (nur eigene Daten)
 - Middleware: `requireAuth` (alle eingeloggten), `requireAdmin` (nur Admin)
 - Einladungsflow: Admin generiert Token via `POST /api/users/:id/invite`, Assistent setzt Passwort via `/einladung?token=...`
+- Passwort vergessen: Öffentliche Seite `/passwort-vergessen` (in `PUBLIC_PATHS`), verlinkt aus dem Anmeldefenster. Kein E-Mail-Self-Service — verweist auf den Administrator, der einen neuen Einladungslink schickt.
+- Eigenes Passwort ändern: `POST /api/auth/change-password` (`{currentPassword, newPassword}`, session-scoped, prüft aktuelles Passwort, min. 8 Zeichen, strikte `typeof`-String-Validierung vor dem Hashing). Frontend: Karte "Profilinformationen" unter Einstellungen (Name/E-Mail/Passwort) mit `useChangePassword`-Dialog.
 - Erster Admin-User anlegen: `pnpm --filter @workspace/scripts run setup-admin` (Standard: admin@dienstplan.local / admin1234)
 - Session-Secret via Umgebungsvariable `SESSION_SECRET` (bereits als Secret gesetzt)
 

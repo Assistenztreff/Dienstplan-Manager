@@ -1082,6 +1082,33 @@ paths:
         "400":
           description: Ungültiger oder abgelaufener Token
 
+  /auth/change-password:
+    post:
+      operationId: changePassword
+      tags: [auth]
+      summary: Eigenes Passwort ändern
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordInput"
+      responses:
+        "200":
+          description: Passwort geändert
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+        "400":
+          description: Ungültige Eingabe
+        "401":
+          description: Aktuelles Passwort falsch oder nicht angemeldet
+
 components:
   schemas:
     HealthStatus:
@@ -1826,5 +1853,15 @@ components:
         token:
           type: string
         password:
+          type: string
+          minLength: 8
+
+    ChangePasswordInput:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
           type: string
           minLength: 8
