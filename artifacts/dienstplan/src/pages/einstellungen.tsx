@@ -10,6 +10,7 @@ import {
   useUpdateBrandingSettings,
   getGetBrandingSettingsQueryKey,
   useChangePassword,
+  useUpdateProfile,
   requestUploadUrl,
   type BrandingSettings,
 } from "@workspace/api-client-react";
@@ -315,18 +316,109 @@ function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose: () =>
   );
 }
 
+function EditProfileDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { currentUser, refreshUser } = useAuth();
+  const { toast } = useToast();
+  const updateProfile = useUpdateProfile();
+  const [name, setName] = useState(currentUser?.name ?? "");
+  const [email, setEmail] = useState(currentUser?.email ?? "");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    setError("");
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+    if (!trimmedName) {
+      setError("Bitte einen Namen angeben.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setError("Bitte eine gültige E-Mail-Adresse angeben.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateProfile.mutateAsync({ data: { name: trimmedName, email: trimmedEmail } });
+      await refreshUser();
+      toast({ title: "Profil aktualisiert", description: "Ihre Kontodaten wurden gespeichert." });
+      onClose();
+    } catch (err) {
+      setError(readableApiError(err, "Profil konnte nicht gespeichert werden. Bitte erneut versuchen."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-xl">Profil bearbeiten</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {error && (
+            <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <Label htmlFor="profile-name">Name</Label>
+            <Input
+              id="profile-name"
+              type="text"
+              autoComplete="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Vor- und Nachname"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="profile-email">E-Mail-Adresse</Label>
+            <Input
+              id="profile-email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@beispiel.de"
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2 pt-2">
+          <Button variant="outline" onClick={onClose} disabled={saving}>
+            Abbrechen
+          </Button>
+          <Button onClick={() => void handleSave()} disabled={saving}>
+            {saving ? "Speichern..." : "Speichern"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ProfileCard() {
   const { currentUser } = useAuth();
   const [pwOpen, setPwOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   return (
     <Card className="border-border/50 shadow-sm">
       <CardContent className="p-4 space-y-4">
-        <div>
-          <h3 className="font-serif text-lg font-bold text-foreground">Profilinformationen</h3>
-          <p className="text-xs text-muted-foreground mt-1">
-            Ihre persönlichen Kontodaten. Das Passwort können Sie hier ändern.
-          </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="font-serif text-lg font-bold text-foreground">Profilinformationen</h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Ihre persönlichen Kontodaten. Name, E-Mail und Passwort können Sie hier ändern.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setEditOpen(true)}>
+            <Pencil className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Bearbeiten</span>
+          </Button>
         </div>
 
         <dl className="space-y-3">
@@ -363,6 +455,7 @@ function ProfileCard() {
         </dl>
       </CardContent>
 
+      {editOpen && <EditProfileDialog open={editOpen} onClose={() => setEditOpen(false)} />}
       {pwOpen && <ChangePasswordDialog open={pwOpen} onClose={() => setPwOpen(false)} />}
     </Card>
   );

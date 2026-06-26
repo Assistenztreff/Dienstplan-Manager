@@ -112,6 +112,8 @@ Die Dienstplan-App wird als eigenständige React/Express-App in die externe Assi
 - Einladungsflow: Admin generiert Token via `POST /api/users/:id/invite`, Assistent setzt Passwort via `/einladung?token=...`
 - Passwort vergessen: Öffentliche Seite `/passwort-vergessen` (in `PUBLIC_PATHS`), verlinkt aus dem Anmeldefenster. Kein E-Mail-Self-Service — verweist auf den Administrator, der einen neuen Einladungslink schickt.
 - Eigenes Passwort ändern: `POST /api/auth/change-password` (`{currentPassword, newPassword}`, session-scoped, prüft aktuelles Passwort, min. 8 Zeichen, strikte `typeof`-String-Validierung vor dem Hashing). Frontend: Karte "Profilinformationen" unter Einstellungen (Name/E-Mail/Passwort) mit `useChangePassword`-Dialog.
+- Eigenen Namen/E-Mail ändern: `POST /api/auth/update-profile` (`{name, email}`, session-scoped, validiert nicht-leeren Namen + E-Mail-Format, E-Mail wird normalisiert (lowercase/trim), 409 wenn E-Mail bereits von anderem Nutzer belegt, liefert aktualisierten `AuthUser`). Frontend: `EditProfileDialog` in der Profilinformationen-Karte (`useUpdateProfile` + `refreshUser`).
+- Logo (blauer Schriftzug): Das neue Asset `attached_assets/20260626_094418_0000_1782459883949.png` wird überall verwendet, wo ein Logo mit blauer Schrift auf hellem Hintergrund erscheint (Login, Passwort-vergessen, Einladung, PDF-Stundennachweis-Standardlogo). Das weiße Logo in der dunklen Sidebar (`layout.tsx`, `Arbeitgebermodell oder Assistenzdienst.png`) bleibt bewusst erhalten (Kontrast).
 - Erster Admin-User anlegen: `pnpm --filter @workspace/scripts run setup-admin` (Standard: admin@dienstplan.local / admin1234)
 - Session-Secret via Umgebungsvariable `SESSION_SECRET` (bereits als Secret gesetzt)
 

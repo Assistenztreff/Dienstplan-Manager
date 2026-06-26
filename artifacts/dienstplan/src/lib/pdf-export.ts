@@ -1,7 +1,7 @@
 import { listShifts, getBrandingSettings } from "@workspace/api-client-react";
 import { format, differenceInMinutes } from "date-fns";
 import { de } from "date-fns/locale";
-import logoUrl from "@assets/logo dunkel.png";
+import logoUrl from "@assets/20260626_094418_0000_1782459883949.png";
 import { logoSrcFromPath } from "@/lib/logo";
 
 const DEFAULT_LOGO_ASPECT = 3973 / 848;

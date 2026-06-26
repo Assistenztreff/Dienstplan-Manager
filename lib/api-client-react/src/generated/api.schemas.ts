@@ -603,6 +603,12 @@ export interface ChangePasswordInput {
   newPassword: string;
 }
 
+export interface UpdateProfileInput {
+  /** @minLength 1 */
+  name: string;
+  email: string;
+}
+
 export type ListUsersParams = {
 role?: ListUsersRole;
 /**

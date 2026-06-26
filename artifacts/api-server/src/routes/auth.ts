@@ -175,4 +175,42 @@ router.post("/auth/change-password", async (req, res) => {
   return res.json({ ok: true });
 });
 
+router.post("/auth/update-profile", async (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: "Nicht angemeldet" });
+  }
+
+  const { name, email } = req.body as { name?: unknown; email?: unknown };
+  if (typeof name !== "string" || typeof email !== "string") {
+    return res.status(400).json({ error: "Name und E-Mail erforderlich" });
+  }
+  const trimmedName = name.trim();
+  const normalizedEmail = email.toLowerCase().trim();
+  if (!trimmedName) {
+    return res.status(400).json({ error: "Name darf nicht leer sein" });
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    return res.status(400).json({ error: "Bitte eine gültige E-Mail-Adresse angeben" });
+  }
+
+  const [existing] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.email, normalizedEmail));
+  if (existing && existing.id !== req.session.userId) {
+    return res.status(409).json({ error: "E-Mail-Adresse wird bereits verwendet" });
+  }
+
+  const [updated] = await db
+    .update(usersTable)
+    .set({ name: trimmedName, email: normalizedEmail })
+    .where(eq(usersTable.id, req.session.userId))
+    .returning(USER_SELECT);
+  if (!updated) {
+    return res.status(401).json({ error: "Benutzer nicht gefunden" });
+  }
+
+  return res.json(updated);
+});
+
 export default router;

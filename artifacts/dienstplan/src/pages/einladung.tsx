@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { CheckCircle2, Loader2 } from "lucide-react";
-import logoUrl from "@assets/Arbeitgebermodell_oder_Assistenzdienst_20260613_225739_0000_1781384277556.svg";
+import logoUrl from "@assets/20260626_094418_0000_1782459883949.png";
 
 export default function Einladung() {
   const { setPassword } = useAuth();

@@ -1109,6 +1109,31 @@ paths:
         "401":
           description: Aktuelles Passwort falsch oder nicht angemeldet
 
+  /auth/update-profile:
+    post:
+      operationId: updateProfile
+      tags: [auth]
+      summary: Eigenen Namen und E-Mail ändern
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileInput"
+      responses:
+        "200":
+          description: Profil aktualisiert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "400":
+          description: Ungültige Eingabe
+        "401":
+          description: Nicht angemeldet
+        "409":
+          description: E-Mail bereits vergeben
+
 components:
   schemas:
     HealthStatus:
@@ -1865,3 +1890,14 @@ components:
         newPassword:
           type: string
           minLength: 8
+
+    UpdateProfileInput:
+      type: object
+      required: [name, email]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email

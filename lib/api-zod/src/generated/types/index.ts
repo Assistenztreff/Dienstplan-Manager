@@ -60,6 +60,7 @@ export * from './timeEntryConfirmStatus';
 export * from './timeEntryInput';
 export * from './timeEntryStatus';
 export * from './timeEntryUpdate';
+export * from './updateProfileInput';
 export * from './uploadUrlRequest';
 export * from './uploadUrlResponse';
 export * from './user';

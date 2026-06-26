@@ -1183,3 +1183,22 @@ export const ChangePasswordResponse = zod.object({
 })
 
 
+/**
+ * @summary Eigenen Namen und E-Mail ändern
+ */
+
+
+
+export const UpdateProfileBody = zod.object({
+  "name": zod.string().min(1),
+  "email": zod.string().email()
+})
+
+export const UpdateProfileResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "role": zod.enum(['admin', 'assistant'])
+})
+
+
