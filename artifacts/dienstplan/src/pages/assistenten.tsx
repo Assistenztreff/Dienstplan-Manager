@@ -1008,6 +1008,7 @@ export default function Assistenten() {
         </div>
       )}
       <AssistentDialog
+        key={editUser?.id ?? "new"}
         open={dialogOpen}
         onClose={closeDialog}
         editUser={editUser}
