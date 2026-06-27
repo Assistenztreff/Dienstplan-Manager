@@ -1134,6 +1134,29 @@ paths:
         "409":
           description: E-Mail bereits vergeben
 
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Neues Konto registrieren
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: Konto erstellt und angemeldet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "400":
+          description: Ungültige Eingabe
+        "409":
+          description: E-Mail bereits vergeben
+
 components:
   schemas:
     HealthStatus:
@@ -1849,7 +1872,7 @@ components:
 
     AuthUser:
       type: object
-      required: [id, name, email, role]
+      required: [id, name, email, role, accountType]
       properties:
         id:
           type: integer
@@ -1860,6 +1883,9 @@ components:
         role:
           type: string
           enum: [admin, assistant]
+        accountType:
+          type: string
+          enum: [privat, dienstleister]
 
     LoginInput:
       type: object
@@ -1901,3 +1927,20 @@ components:
         email:
           type: string
           format: email
+
+    RegisterInput:
+      type: object
+      required: [name, email, password, accountType]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        accountType:
+          type: string
+          enum: [privat, dienstleister]

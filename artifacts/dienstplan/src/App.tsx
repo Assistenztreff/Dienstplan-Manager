@@ -15,6 +15,7 @@ import Auswertungen from "@/pages/auswertungen";
 import Einstellungen from "@/pages/einstellungen";
 import TeamVerwaltung from "@/pages/team-verwaltung";
 import Login from "@/pages/login";
+import Registrierung from "@/pages/registrierung";
 import Einladung from "@/pages/einladung";
 import PasswortVergessen from "@/pages/passwort-vergessen";
 import NotFound from "@/pages/not-found";
@@ -29,7 +30,7 @@ const queryClient = new QueryClient({
   },
 });
 
-const PUBLIC_PATHS = ["/login", "/einladung", "/passwort-vergessen"];
+const PUBLIC_PATHS = ["/login", "/registrierung", "/einladung", "/passwort-vergessen"];
 
 function Router() {
   const { currentUser, isLoading } = useAuth();
@@ -57,6 +58,7 @@ function Router() {
     return (
       <Switch>
         <Route path="/login" component={Login} />
+        <Route path="/registrierung" component={Registrierung} />
         <Route path="/einladung" component={Einladung} />
         <Route path="/passwort-vergessen" component={PasswortVergessen} />
         <Route>{() => null}</Route>

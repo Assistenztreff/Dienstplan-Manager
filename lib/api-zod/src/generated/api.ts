@@ -1131,7 +1131,8 @@ export const LoginResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant'])
+  "role": zod.enum(['admin', 'assistant']),
+  "accountType": zod.enum(['privat', 'dienstleister'])
 })
 
 
@@ -1142,7 +1143,8 @@ export const GetMeResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant'])
+  "role": zod.enum(['admin', 'assistant']),
+  "accountType": zod.enum(['privat', 'dienstleister'])
 })
 
 
@@ -1162,7 +1164,8 @@ export const SetPasswordResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant'])
+  "role": zod.enum(['admin', 'assistant']),
+  "accountType": zod.enum(['privat', 'dienstleister'])
 })
 
 
@@ -1198,7 +1201,24 @@ export const UpdateProfileResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant'])
+  "role": zod.enum(['admin', 'assistant']),
+  "accountType": zod.enum(['privat', 'dienstleister'])
+})
+
+
+/**
+ * @summary Neues Konto registrieren
+ */
+
+export const registerBodyPasswordMin = 8;
+
+
+
+export const RegisterBody = zod.object({
+  "name": zod.string().min(1),
+  "email": zod.string().email(),
+  "password": zod.string().min(registerBodyPasswordMin),
+  "accountType": zod.enum(['privat', 'dienstleister'])
 })
 
 

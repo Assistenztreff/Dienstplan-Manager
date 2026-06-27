@@ -12,6 +12,12 @@ type AuthContextType = {
   currentUser: AuthUser | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  register: (input: {
+    name: string;
+    email: string;
+    password: string;
+    accountType: "privat" | "dienstleister";
+  }) => Promise<void>;
   logout: () => Promise<void>;
   setPassword: (token: string, password: string) => Promise<AuthUser>;
   refreshUser: () => Promise<void>;
@@ -21,6 +27,7 @@ const AuthContext = createContext<AuthContextType>({
   currentUser: null,
   isLoading: true,
   login: async () => {},
+  register: async () => {},
   logout: async () => {},
   setPassword: async () => { throw new Error("not initialized"); },
   refreshUser: async () => {},
@@ -136,6 +143,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     storeSession(user);
   };
 
+  const register = async (input: {
+    name: string;
+    email: string;
+    password: string;
+    accountType: "privat" | "dienstleister";
+  }) => {
+    const r = await apiFetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    if (!r.ok) {
+      const data = (await r.json().catch(() => ({}))) as { error?: string };
+      throw new Error(data.error ?? "Registrierung fehlgeschlagen");
+    }
+    const user = (await r.json()) as AuthUser;
+    setCurrentUser(user);
+    storeSession(user);
+  };
+
   const logout = async () => {
     await apiFetch("/api/auth/logout", { method: "POST" });
     setCurrentUser(null);
@@ -176,7 +203,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, isLoading, login, logout, setPassword, refreshUser }}>
+    <AuthContext.Provider value={{ currentUser, isLoading, login, register, logout, setPassword, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

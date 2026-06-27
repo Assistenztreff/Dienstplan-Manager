@@ -40,6 +40,72 @@ router.post("/auth/login", async (req, res) => {
   return res.json({ id: user.id, name: user.name, email: user.email, role: user.role, accountType: user.accountType });
 });
 
+router.post("/auth/register", async (req, res) => {
+  const { name, email, password, accountType } = req.body as {
+    name?: unknown;
+    email?: unknown;
+    password?: unknown;
+    accountType?: unknown;
+  };
+  if (typeof name !== "string" || typeof email !== "string" || typeof password !== "string") {
+    return res.status(400).json({ error: "Name, E-Mail und Passwort erforderlich" });
+  }
+  const trimmedName = name.trim();
+  const normalizedEmail = email.toLowerCase().trim();
+  if (!trimmedName) {
+    return res.status(400).json({ error: "Name darf nicht leer sein" });
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    return res.status(400).json({ error: "Bitte eine gültige E-Mail-Adresse angeben" });
+  }
+  if (password.length < 8) {
+    return res.status(400).json({ error: "Passwort muss mindestens 8 Zeichen lang sein" });
+  }
+  if (accountType !== "privat" && accountType !== "dienstleister") {
+    return res.status(400).json({ error: "Ungültiger Konto-Typ" });
+  }
+
+  const [existing] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.email, normalizedEmail));
+  if (existing) {
+    return res.status(409).json({ error: "E-Mail-Adresse wird bereits verwendet" });
+  }
+
+  const [user] = await db
+    .insert(usersTable)
+    .values({
+      name: trimmedName,
+      email: normalizedEmail,
+      role: "admin",
+      accountType,
+      passwordHash: hashPassword(password),
+      isActive: true,
+    })
+    .returning();
+
+  const [team] = await db
+    .insert(teamsTable)
+    .values({ name: "Standard-Team", ownerId: user.id })
+    .returning();
+  await db
+    .insert(teamMembersTable)
+    .values({ teamId: team.id, userId: user.id })
+    .onConflictDoNothing();
+
+  req.session.userId = user.id;
+  req.session.role = user.role;
+
+  return res.status(201).json({
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    accountType: user.accountType,
+  });
+});
+
 if (process.env.NODE_ENV !== "production") {
   const DEV_ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? "admin@dienstplan.local").toLowerCase().trim();
   const DEV_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "admin1234";

@@ -99,9 +99,18 @@ export default function Login() {
           </CardContent>
         </Card>
 
-        <p className="text-center text-xs text-muted-foreground">
-          Noch kein Passwort? Nutzen Sie den Einladungslink per E-Mail.
-        </p>
+        <div className="space-y-2 text-center">
+          <button
+            type="button"
+            onClick={() => navigate("/registrierung")}
+            className="text-sm text-foreground underline-offset-2 hover:underline"
+          >
+            Neu hier? Konto registrieren
+          </button>
+          <p className="text-xs text-muted-foreground">
+            Noch kein Passwort? Nutzen Sie den Einladungslink per E-Mail.
+          </p>
+        </div>
       </div>
     </div>
   );

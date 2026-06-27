@@ -5,7 +5,6 @@ import {
   useUpdateShiftModel,
   useDeleteShiftModel,
   getListShiftModelsQueryKey,
-  useUpdateUser,
   useGetBrandingSettings,
   useUpdateBrandingSettings,
   getGetBrandingSettingsQueryKey,
@@ -461,61 +460,6 @@ function ProfileCard() {
   );
 }
 
-function AccountTypeCard() {
-  const { currentUser, refreshUser } = useAuth();
-  const { toast } = useToast();
-  const updateUser = useUpdateUser();
-  const [saving, setSaving] = useState(false);
-
-  const accountType = currentUser?.accountType ?? "privat";
-
-  async function setAccountType(value: "privat" | "dienstleister") {
-    if (!currentUser || value === accountType) return;
-    setSaving(true);
-    try {
-      await updateUser.mutateAsync({ id: currentUser.id, data: { accountType: value } });
-      await refreshUser();
-    } catch (err) {
-      toast({
-        title: "Konto-Typ konnte nicht geändert werden",
-        description: readableApiError(err, "Bitte erneut versuchen."),
-        variant: "destructive",
-      });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Card className="border-border/50 shadow-sm">
-      <CardContent className="p-4 space-y-3">
-        <div>
-          <h3 className="font-serif text-lg font-bold text-foreground">Konto-Typ</h3>
-          <p className="text-xs text-muted-foreground mt-1">
-            Privat: einzelner Assistenznehmer. Dienstleister: Verwaltung mehrerer Teams.
-          </p>
-        </div>
-        <div className="max-w-xs space-y-1.5">
-          <Label>Aktueller Konto-Typ</Label>
-          <Select
-            value={accountType}
-            onValueChange={(v) => void setAccountType(v as "privat" | "dienstleister")}
-            disabled={saving}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="privat">Privat (Assistenznehmer)</SelectItem>
-              <SelectItem value="dienstleister">Dienstleister (Assistenzdienst)</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 function LogoSettingsCard() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -795,8 +739,6 @@ export default function Einstellungen() {
         Schichtmodelle stehen beim Anlegen einer Schicht im Dienstplan zur Auswahl. Die Zeitwertung
         bestimmt, wie die geleistete Zeit in der Auswertung auf die Sollstunden angerechnet wird.
       </p>
-
-      <AccountTypeCard />
 
       {isDienstleister && <LogoSettingsCard />}
 

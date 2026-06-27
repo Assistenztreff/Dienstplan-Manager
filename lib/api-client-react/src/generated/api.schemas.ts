@@ -579,11 +579,20 @@ export const AuthUserRole = {
   assistant: 'assistant',
 } as const;
 
+export type AuthUserAccountType = typeof AuthUserAccountType[keyof typeof AuthUserAccountType];
+
+
+export const AuthUserAccountType = {
+  privat: 'privat',
+  dienstleister: 'dienstleister',
+} as const;
+
 export interface AuthUser {
   id: number;
   name: string;
   email: string;
   role: AuthUserRole;
+  accountType: AuthUserAccountType;
 }
 
 export interface LoginInput {
@@ -607,6 +616,23 @@ export interface UpdateProfileInput {
   /** @minLength 1 */
   name: string;
   email: string;
+}
+
+export type RegisterInputAccountType = typeof RegisterInputAccountType[keyof typeof RegisterInputAccountType];
+
+
+export const RegisterInputAccountType = {
+  privat: 'privat',
+  dienstleister: 'dienstleister',
+} as const;
+
+export interface RegisterInput {
+  /** @minLength 1 */
+  name: string;
+  email: string;
+  /** @minLength 8 */
+  password: string;
+  accountType: RegisterInputAccountType;
 }
 
 export type ListUsersParams = {
