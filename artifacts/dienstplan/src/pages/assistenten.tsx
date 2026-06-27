@@ -821,6 +821,7 @@ export default function Assistenten() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editUser, setEditUser] = useState<User | undefined>();
   const [editContract, setEditContract] = useState<Contract | undefined>();
+  const [dialogOpenToken, setDialogOpenToken] = useState(0);
   const [inviteUser, setInviteUser] = useState<User | undefined>();
   const [exportUser, setExportUser] = useState<User | undefined>();
 
@@ -845,12 +846,14 @@ export default function Assistenten() {
   function openCreate() {
     setEditUser(undefined);
     setEditContract(undefined);
+    setDialogOpenToken((t) => t + 1);
     setDialogOpen(true);
   }
 
   function openEdit(user: User, contract?: Contract) {
     setEditUser(user);
     setEditContract(contract);
+    setDialogOpenToken((t) => t + 1);
     setDialogOpen(true);
   }
 
@@ -1008,7 +1011,7 @@ export default function Assistenten() {
         </div>
       )}
       <AssistentDialog
-        key={editUser?.id ?? "new"}
+        key={dialogOpenToken}
         open={dialogOpen}
         onClose={closeDialog}
         editUser={editUser}
