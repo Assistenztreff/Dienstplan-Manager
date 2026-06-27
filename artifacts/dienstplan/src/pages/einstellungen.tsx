@@ -666,8 +666,11 @@ function LogoSettingsCard() {
 export default function Einstellungen() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { currentUser } = useAuth();
   const { data: models, isLoading } = useListShiftModels();
   const deleteModel = useDeleteShiftModel();
+
+  const isDienstleister = currentUser?.accountType === "dienstleister";
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editModel, setEditModel] = useState<ShiftModel | undefined>();
@@ -795,7 +798,7 @@ export default function Einstellungen() {
 
       <AccountTypeCard />
 
-      <LogoSettingsCard />
+      {isDienstleister && <LogoSettingsCard />}
 
       <AllowanceSettingsForm />
 

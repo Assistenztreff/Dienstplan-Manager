@@ -117,6 +117,11 @@ Die Dienstplan-App wird als eigenständige React/Express-App in die externe Assi
 - Erster Admin-User anlegen: `pnpm --filter @workspace/scripts run setup-admin` (Standard: admin@dienstplan.local / admin1234)
 - Session-Secret via Umgebungsvariable `SESSION_SECRET` (bereits als Secret gesetzt)
 
+## Layout & UI-Verhalten
+
+- **Fixierte Desktop-Sidebar** (`components/layout.tsx`): Die linke Sidebar ist ab `md` `position: fixed` über die volle Höhe (`md:fixed md:inset-y-0 md:left-0 md:w-64 md:h-screen`). Der Navigationsbereich scrollt bei Bedarf intern (`flex-1 min-h-0 overflow-y-auto`), der Block mit Nutzername + „Abmelden" bleibt unten fixiert (`shrink-0`). Der Hauptbereich hat `md:ml-64` (kein Überlappen) und scrollt unabhängig (`overflow-y-auto`). Mobil unverändert (Sheet-Drawer, nur `md:`-Klassen betroffen).
+- **Firmenlogo nur für Dienstleister** (`pages/einstellungen.tsx`): Die `LogoSettingsCard` (PDF-Logo-Upload) wird ausschließlich gerendert, wenn `currentUser.accountType === "dienstleister"`. Beim Umschalten Dienstleister→Privat wird die Karte sauber aus dem DOM entfernt (verhindert den früheren Render-Crash). **Bewusste Folge:** Privat-Konten können kein eigenes PDF-Logo mehr setzen — es gilt das Standard-Logo. Falls Privat-Konten wieder ein globales Logo verwalten sollen, Karte für alle Admins rendern und nur die team-spezifischen Hinweise/Parameter per Konto-Typ gaten.
+
 ## Gotchas
 
 - Nach jeder Änderung an `lib/api-spec/openapi.yaml` muss Codegen neu ausgeführt werden: `pnpm --filter @workspace/api-spec run codegen`

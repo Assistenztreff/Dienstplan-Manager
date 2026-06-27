@@ -113,19 +113,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </Sheet>
       </header>
 
-      {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col w-64 border-r border-sidebar-border bg-sidebar p-6">
+      {/* Desktop sidebar - fest fixiert, volle Höhe */}
+      <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:left-0 md:w-64 md:h-screen border-r border-sidebar-border bg-sidebar p-6">
         {!embedded && (
-          <img src={logoUrl} alt="AssistenzTreff" className="h-14 w-auto max-w-full object-contain mb-8 px-2 self-start" />
+          <img src={logoUrl} alt="AssistenzTreff" className="h-14 w-auto max-w-full object-contain mb-8 px-2 self-start shrink-0" />
         )}
-        <nav className="flex flex-col gap-2 flex-1">
+        <nav className="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto">
           <NavLinks />
         </nav>
-        <UserSection />
+        <div className="shrink-0">
+          <UserSection />
+        </div>
       </aside>
 
-      {/* Main content */}
-      <main className="flex-1 p-4 md:p-8 overflow-auto">
+      {/* Main content - unabhängig scrollbar, Platz für fixierte Sidebar */}
+      <main className="flex-1 p-4 md:p-8 md:ml-64 overflow-y-auto">
         <div className="max-w-6xl mx-auto">
           {children}
         </div>
