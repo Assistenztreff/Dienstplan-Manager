@@ -18,3 +18,4 @@
 - [Dev auto-login breaks form-based E2E](e2e-dev-auto-login.md) — in Vite DEV the app auto-POSTs /api/auth/dev-login when /auth/me is 401, so the #email login form never renders; form-based loginAsAdmin/loginViaUi helpers time out locally (works in prod-build validation).
 - [Dev session localStorage cache](dev-session-localstorage-cache.md) — web auth caches only the non-sensitive profile under `assistenz_treff_session`, guarded by `import.meta.env.DEV` (not process.env); cookie stays source of truth.
 - [Isolated E2E test DB](isolated-e2e-test-db.md) — playwright webServer boots its own API+Vite stack on a `<dbname>_test` database (Vite proxies /api); dev DB never touched by destructive specs.
+- [Worklets needs @babel/generator](babel-generator-worklets.md) — mobile prod build fails "Cannot find module '@babel/generator'"; worklets plugin requires it but doesn't declare it. Fix via pnpm packageExtensions, not artifact deps.

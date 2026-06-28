@@ -68,6 +68,15 @@ catalog:
 
 autoInstallPeers: false
 
+packageExtensions:
+  # react-native-worklets' babel plugin requires @babel/generator directly but
+  # only declares @babel/core, so pnpm never symlinks generator beside it and
+  # the Metro/Babel transform fails with "Cannot find module '@babel/generator'"
+  # (surfaces in the mobile production build). Declare it so pnpm exposes it.
+  react-native-worklets:
+    dependencies:
+      '@babel/generator': ^7.25.2
+
 onlyBuiltDependencies:
   - '@swc/core'
   - esbuild
