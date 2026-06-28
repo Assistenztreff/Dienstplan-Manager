@@ -6,9 +6,10 @@ import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, CheckSquare, X, CalendarPlus, Trash2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ShiftDialog } from "@/components/shift-dialog";
+import { BulkDeleteDialog } from "@/components/bulk-delete-dialog";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
@@ -137,7 +138,9 @@ function absenceMapFor(shifts: Shift[]): Map<string, Shift> {
 type DialogState =
   | { mode: "closed" }
   | { mode: "create"; date: Date; userId?: number }
-  | { mode: "edit"; shift: Shift };
+  | { mode: "edit"; shift: Shift }
+  | { mode: "bulk-create"; dates: string[] }
+  | { mode: "bulk-delete"; dates: string[] };
 
 
 function ShiftBadge({
@@ -238,6 +241,9 @@ function AgendaView({
   onDayClick,
   onShiftClick,
   canEdit,
+  selectionMode = false,
+  selectedDates,
+  onToggleDate,
 }: {
   days: Date[];
   shifts: Shift[];
@@ -245,15 +251,28 @@ function AgendaView({
   onDayClick: (day: Date) => void;
   onShiftClick: (shift: Shift) => void;
   canEdit: boolean;
+  // Auswahl-Modus (Massenbearbeitung): Klick auf einen Tag wählt ihn aus.
+  selectionMode?: boolean;
+  selectedDates?: string[];
+  onToggleDate?: (day: Date) => void;
 }) {
+  const selectedDateSet = new Set(selectedDates ?? []);
   return (
     <div className="space-y-1">
       {days.map((day) => {
         const dayShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), day));
         const isCurrentDay = isToday(day);
+        const bulkSelected = selectionMode && selectedDateSet.has(format(day, "yyyy-MM-dd"));
 
         return (
-          <div key={day.toISOString()} className="rounded-lg border border-border/40 overflow-hidden">
+          <div
+            key={day.toISOString()}
+            data-testid={`agenda-day-${format(day, "yyyy-MM-dd")}`}
+            data-selected={bulkSelected ? "true" : "false"}
+            className={`rounded-lg border overflow-hidden ${
+              bulkSelected ? "border-primary ring-2 ring-primary bg-primary/5" : "border-border/40"
+            }`}
+          >
             <button
               type="button"
               className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
@@ -261,7 +280,9 @@ function AgendaView({
                   ? "bg-primary text-primary-foreground hover:bg-primary/90"
                   : "bg-muted/40 text-foreground hover:bg-muted/70"
               } ${!canEdit ? "cursor-default pointer-events-none" : ""}`}
-              onClick={() => canEdit && onDayClick(day)}
+              onClick={() =>
+                canEdit && (selectionMode ? onToggleDate?.(day) : onDayClick(day))
+              }
             >
               <span className="text-sm font-semibold min-w-[24px]">{format(day, "d")}</span>
               <span className="text-sm">{format(day, "EEEE", { locale: de })}</span>
@@ -287,7 +308,7 @@ function AgendaView({
                     shift={shift}
                     showName={canEdit}
                     modelMap={modelMap}
-                    onClick={canEdit ? (e) => { e.stopPropagation(); onShiftClick(shift); } : undefined}
+                    onClick={canEdit && !selectionMode ? (e) => { e.stopPropagation(); onShiftClick(shift); } : undefined}
                   />
                 ))
               ) : (
@@ -313,6 +334,9 @@ function MonthGrid({
   onAddShift,
   onShiftClick,
   canEdit,
+  selectionMode = false,
+  selectedDates,
+  onToggleDate,
 }: {
   days: Date[];
   monthStart: Date;
@@ -323,7 +347,13 @@ function MonthGrid({
   onAddShift: (day: Date) => void;
   onShiftClick: (shift: Shift) => void;
   canEdit: boolean;
+  // Auswahl-Modus (Massenbearbeitung): Klick auf einen Tag wählt ihn aus,
+  // statt den Tag als Detail zu öffnen.
+  selectionMode?: boolean;
+  selectedDates?: string[];
+  onToggleDate?: (day: Date) => void;
 }) {
+  const selectedDateSet = new Set(selectedDates ?? []);
   // Montag als erster Wochentag (date-fns: 0 = Sonntag).
   const offset = (getDay(monthStart) + 6) % 7;
   const blanks = Array.from({ length: offset });
@@ -379,17 +409,22 @@ function MonthGrid({
                   />
                 );
               });
+            // Im Auswahl-Modus zählt die Mehrfach-Auswahl (selectedDates),
+            // sonst der einzelne Detail-Tag (selectedDay).
+            const bulkSelected = selectionMode && selectedDateSet.has(format(day, "yyyy-MM-dd"));
             return (
               <button
                 key={day.toISOString()}
                 type="button"
                 data-testid={`day-cell-${format(day, "yyyy-MM-dd")}`}
-                data-selected={selected ? "true" : "false"}
-                onClick={() => onSelectDay(day)}
+                data-selected={(selectionMode ? bulkSelected : selected) ? "true" : "false"}
+                onClick={() => (selectionMode ? onToggleDate?.(day) : onSelectDay(day))}
                 className={`aspect-square rounded-lg bg-card flex flex-col items-center justify-start pt-1.5 gap-1 border transition-colors ${
-                  selected
-                    ? "border-primary ring-1 ring-primary"
-                    : "border-transparent hover:bg-muted/40"
+                  bulkSelected
+                    ? "border-primary ring-2 ring-primary bg-primary/5"
+                    : selected && !selectionMode
+                      ? "border-primary ring-1 ring-primary"
+                      : "border-transparent hover:bg-muted/40"
                 }`}
               >
                 <span
@@ -433,7 +468,7 @@ function MonthGrid({
                 : `${selectedShifts.length} ${selectedShifts.length === 1 ? "Schicht" : "Schichten"}`}
             </p>
           </div>
-          {canEdit && (
+          {canEdit && !selectionMode && (
             <Button size="sm" variant="outline" className="gap-1" data-testid="add-shift" onClick={() => onAddShift(selectedDay)}>
               <Plus className="h-3.5 w-3.5" />
               Schicht
@@ -448,7 +483,7 @@ function MonthGrid({
                 shift={shift}
                 showName={canEdit}
                 modelMap={modelMap}
-                onClick={canEdit ? (e) => { e.stopPropagation(); onShiftClick(shift); } : undefined}
+                onClick={canEdit && !selectionMode ? (e) => { e.stopPropagation(); onShiftClick(shift); } : undefined}
               />
             ))
           ) : (
@@ -525,6 +560,10 @@ export default function Dienstplan() {
   );
   const [selectedDay, setSelectedDay] = useState<Date>(() => initialDate);
 
+  // Auswahl-Modus (Massenbearbeitung mehrerer Tage). Tage als "yyyy-MM-dd".
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedDates, setSelectedDates] = useState<string[]>([]);
+
   const month = currentDate.getMonth() + 1;
   const year = currentDate.getFullYear();
 
@@ -539,9 +578,18 @@ export default function Dienstplan() {
   const goToMonth = (newDate: Date) => {
     setCurrentDate(newDate);
     setSelectedDay(startOfMonth(newDate));
+    // Auswahl gilt nur für den aktuell sichtbaren Monat — beim Monatswechsel
+    // verwerfen, damit Massenaktionen nie auf unsichtbare Tage wirken.
+    clearSelection();
   };
   const prevMonth = () => goToMonth(new Date(year, month - 2, 1));
   const nextMonth = () => goToMonth(new Date(year, month, 1));
+
+  // Team-Wechsel zeigt andere Daten — bestehende Auswahl verwerfen.
+  useEffect(() => {
+    setSelectedDates([]);
+    setIsSelectionMode(false);
+  }, [selectedTeamId]);
 
   const start = startOfMonth(currentDate);
   const end = endOfMonth(currentDate);
@@ -589,6 +637,26 @@ export default function Dienstplan() {
     setDialog({ mode: "closed" });
   }
 
+  function toggleSelectionMode() {
+    setIsSelectionMode((prev) => {
+      // Beim Verlassen die Auswahl leeren.
+      if (prev) setSelectedDates([]);
+      return !prev;
+    });
+  }
+
+  function toggleDate(day: Date) {
+    const key = format(day, "yyyy-MM-dd");
+    setSelectedDates((prev) =>
+      prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key],
+    );
+  }
+
+  function clearSelection() {
+    setSelectedDates([]);
+    setIsSelectionMode(false);
+  }
+
   const Header = () => (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
@@ -599,6 +667,18 @@ export default function Dienstplan() {
         <TeamSwitcher />
       </div>
       <div className="flex items-center gap-2 md:gap-4">
+        {isAdmin && (
+          <Button
+            variant={isSelectionMode ? "default" : "outline"}
+            size="sm"
+            className="gap-1.5"
+            onClick={toggleSelectionMode}
+            data-testid="toggle-selection-mode"
+          >
+            {isSelectionMode ? <X className="h-4 w-4" /> : <CheckSquare className="h-4 w-4" />}
+            {isSelectionMode ? "Auswahl beenden" : "Mehrere bearbeiten"}
+          </Button>
+        )}
         <Button variant="outline" size="icon" onClick={prevMonth} data-testid="prev-month">
           <ChevronLeft className="h-4 w-4" />
         </Button>
@@ -661,6 +741,9 @@ export default function Dienstplan() {
             onDayClick={(day) => openCreate(day)}
             onShiftClick={openEdit}
             canEdit={isAdmin}
+            selectionMode={isSelectionMode}
+            selectedDates={selectedDates}
+            onToggleDate={toggleDate}
           />
         ) : (
           <MonthGrid
@@ -673,6 +756,9 @@ export default function Dienstplan() {
             onAddShift={(day) => openCreate(day)}
             onShiftClick={openEdit}
             canEdit={isAdmin}
+            selectionMode={isSelectionMode}
+            selectedDates={selectedDates}
+            onToggleDate={toggleDate}
           />
         )}
       </div>
@@ -708,6 +794,9 @@ export default function Dienstplan() {
             onAddShift={(day) => openCreate(day)}
             onShiftClick={openEdit}
             canEdit={isAdmin}
+            selectionMode={isSelectionMode}
+            selectedDates={selectedDates}
+            onToggleDate={toggleDate}
           />
         ) : (
       <Card className="overflow-x-auto border-border/50 shadow-sm">
@@ -717,12 +806,22 @@ export default function Dienstplan() {
               <th className="p-3 text-left font-medium sticky left-0 bg-muted/50 backdrop-blur-sm z-10 w-48">
                 {isAdmin ? "Assistent" : "Schicht"}
               </th>
-              {days.map((day) => (
+              {days.map((day) => {
+                const colSelected =
+                  isSelectionMode && selectedDates.includes(format(day, "yyyy-MM-dd"));
+                return (
                 <th
                   key={day.toISOString()}
+                  data-testid={isSelectionMode ? `col-header-${format(day, "yyyy-MM-dd")}` : undefined}
+                  data-selected={colSelected ? "true" : "false"}
+                  onClick={isSelectionMode && isAdmin ? () => toggleDate(day) : undefined}
                   className={`p-2 font-medium text-center min-w-[56px] ${
-                    isToday(day) ? "bg-primary/10" : ""
-                  }`}
+                    colSelected
+                      ? "bg-primary/10 ring-1 ring-inset ring-primary"
+                      : isToday(day)
+                        ? "bg-primary/10"
+                        : ""
+                  } ${isSelectionMode && isAdmin ? "cursor-pointer hover:bg-primary/5" : ""}`}
                 >
                   <div className="text-xs text-muted-foreground">{format(day, "E", { locale: de })}</div>
                   <div
@@ -735,7 +834,8 @@ export default function Dienstplan() {
                     {format(day, "d")}
                   </div>
                 </th>
-              ))}
+                );
+              })}
             </tr>
           </thead>
           <tbody>
@@ -783,14 +883,37 @@ export default function Dienstplan() {
                       isStart = !prev || prev.type !== absence.type;
                       isEnd = !next || next.type !== absence.type;
                     }
+                    const colSelected =
+                      isSelectionMode && selectedDates.includes(format(day, "yyyy-MM-dd"));
+                    // Im Auswahl-Modus toggelt ein Klick die Spalte; sonst
+                    // legt er eine Schicht für diese Person/diesen Tag an.
+                    const cellClickable = isAdmin;
                     return (
                       <td
                         key={day.toISOString()}
                         className={`p-1 border-l border-border/30 align-top ${
-                          isAdmin ? "cursor-pointer group" : ""
-                        } ${isToday(day) ? "bg-primary/5" : isAdmin ? "hover:bg-muted/30" : ""}`}
-                        onClick={isAdmin ? () => openCreate(day, assistant.id) : undefined}
-                        title={isAdmin ? "Klicken zum Anlegen einer Schicht" : undefined}
+                          cellClickable ? "cursor-pointer group" : ""
+                        } ${
+                          colSelected
+                            ? "bg-primary/5"
+                            : isToday(day)
+                              ? "bg-primary/5"
+                              : isAdmin && !isSelectionMode
+                                ? "hover:bg-muted/30"
+                                : ""
+                        }`}
+                        onClick={
+                          isAdmin
+                            ? isSelectionMode
+                              ? () => toggleDate(day)
+                              : () => openCreate(day, assistant.id)
+                            : undefined
+                        }
+                        title={
+                          isAdmin && !isSelectionMode
+                            ? "Klicken zum Anlegen einer Schicht"
+                            : undefined
+                        }
                       >
                         <div className="space-y-1 min-h-[32px]">
                           {absence && (
@@ -800,7 +923,7 @@ export default function Dienstplan() {
                               isEnd={isEnd}
                               modelMap={modelMap}
                               onClick={
-                                isAdmin
+                                isAdmin && !isSelectionMode
                                   ? (e) => { e.stopPropagation(); openEdit(absence); }
                                   : undefined
                               }
@@ -811,7 +934,7 @@ export default function Dienstplan() {
                               key={s.id}
                               shift={s}
                               modelMap={modelMap}
-                              onClick={isAdmin ? (e) => { e.stopPropagation(); openEdit(s); } : undefined}
+                              onClick={isAdmin && !isSelectionMode ? (e) => { e.stopPropagation(); openEdit(s); } : undefined}
                             />
                           ))}
                           {dayShifts.length === 0 && isAdmin && (
@@ -833,17 +956,79 @@ export default function Dienstplan() {
         )}
       </div>
 
+      {/* Floating Action Bar im Auswahl-Modus mit mindestens einem Tag. */}
+      {isAdmin && isSelectionMode && selectedDates.length > 0 && (
+        <div
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2.5 shadow-lg"
+          data-testid="bulk-action-bar"
+        >
+          <span className="text-sm font-medium" data-testid="bulk-selected-count">
+            {selectedDates.length} {selectedDates.length === 1 ? "Tag" : "Tage"} ausgewählt
+          </span>
+          <Button
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setDialog({ mode: "bulk-create", dates: selectedDates })}
+            data-testid="bulk-create-open"
+          >
+            <CalendarPlus className="h-4 w-4" />
+            Schichten eintragen
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            className="gap-1.5"
+            onClick={() => setDialog({ mode: "bulk-delete", dates: selectedDates })}
+            data-testid="bulk-delete-open"
+          >
+            <Trash2 className="h-4 w-4" />
+            Einträge löschen
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="gap-1.5"
+            onClick={clearSelection}
+            data-testid="bulk-cancel"
+          >
+            <X className="h-4 w-4" />
+            Abbrechen
+          </Button>
+        </div>
+      )}
+
       {isAdmin && (
         <ShiftDialog
-          open={dialog.mode !== "closed"}
+          open={dialog.mode === "create" || dialog.mode === "edit" || dialog.mode === "bulk-create"}
           onClose={closeDialog}
           preselectedDate={dialog.mode === "create" ? dialog.date : undefined}
           preselectedUserId={dialog.mode === "create" ? dialog.userId : undefined}
           editShift={dialog.mode === "edit" ? dialog.shift : undefined}
+          bulkDates={dialog.mode === "bulk-create" ? dialog.dates : undefined}
+          onSaved={() => {
+            clearSelection();
+            closeDialog();
+          }}
           assistants={assistants}
           month={month}
           year={year}
           teamId={selectedTeamId}
+        />
+      )}
+
+      {isAdmin && (
+        <BulkDeleteDialog
+          open={dialog.mode === "bulk-delete"}
+          onClose={closeDialog}
+          dates={dialog.mode === "bulk-delete" ? dialog.dates : []}
+          shifts={allShifts}
+          assistants={assistants}
+          month={month}
+          year={year}
+          onDeleted={() => {
+            clearSelection();
+            closeDialog();
+          }}
         />
       )}
     </div>

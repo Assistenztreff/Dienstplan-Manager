@@ -50,6 +50,14 @@ type ShiftDialogProps = {
   month: number;
   year: number;
   teamId?: number | null;
+  /**
+   * Mehrfach-Anlegen (Auswahl-Modus): Liste lokaler Datumsschlüssel
+   * (yyyy-MM-dd). Ist sie gesetzt (und es wird nicht bearbeitet), legt der
+   * Dialog für jedes Datum dieselbe Schicht an (Schleife) statt einer einzelnen.
+   */
+  bulkDates?: string[];
+  /** Wird nach erfolgreichem Speichern aufgerufen (z. B. Auswahl zurücksetzen). */
+  onSaved?: () => void;
 };
 
 const LEGACY_TYPE_LABELS: Record<string, string> = {
@@ -122,6 +130,8 @@ export function ShiftDialog({
   month,
   year,
   teamId,
+  bulkDates,
+  onSaved,
 }: ShiftDialogProps) {
   const queryClient = useQueryClient();
   const createShift = useCreateShift();
@@ -134,6 +144,9 @@ export function ShiftDialog({
   const firstModelId = activeModels[0]?.id;
 
   const isEditing = !!editShift;
+  // Mehrfach-Anlegen ist nur im Anlege-Modus (nicht beim Bearbeiten) aktiv und
+  // setzt mindestens einen ausgewählten Tag voraus.
+  const isBulk = !isEditing && (bulkDates?.length ?? 0) > 0;
 
   const defaultDate = preselectedDate
     ? format(preselectedDate, "yyyy-MM-dd")
@@ -142,7 +155,9 @@ export function ShiftDialog({
   function buildInitialForm(): FormState {
     return {
       userId: editShift ? String(editShift.userId) : preselectedUserId ? String(preselectedUserId) : "",
-      date: editShift ? toDateString(editShift.startTime) : defaultDate,
+      // Im Mehrfach-Modus ist das einzelne Datumsfeld bedeutungslos (die Tage
+      // stehen über bulkDates fest); wir füllen es nur, damit validate() greift.
+      date: editShift ? toDateString(editShift.startTime) : isBulk ? bulkDates![0] : defaultDate,
       startTime: editShift ? toTimeString(editShift.startTime) : "08:00",
       endTime: editShift ? toTimeString(editShift.endTime) : "16:00",
       selection: initialSelection(editShift, firstModelId),
@@ -155,6 +170,11 @@ export function ShiftDialog({
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [overlapConflicts, setOverlapConflicts] = useState<ConflictInfo[] | null>(null);
+  // Mehrfach-Anlegen: bereits erfolgreich angelegte Tage (damit ein "Trotzdem
+  // anlegen"-Wiederholungslauf sie nicht doppelt erzeugt) und die Tage mit
+  // Überschneidung (für die Warnung + force-Wiederholung).
+  const [bulkCreated, setBulkCreated] = useState<Set<string>>(new Set());
+  const [bulkConflicts, setBulkConflicts] = useState<string[] | null>(null);
 
   // Formular nur beim Öffnen / beim Wechsel des Bearbeitungsziels zurücksetzen,
   // nicht wenn die Schichtmodelle asynchron nachladen (sonst gehen Eingaben verloren).
@@ -163,10 +183,12 @@ export function ShiftDialog({
       setErrors({});
       setConfirmDelete(false);
       setOverlapConflicts(null);
+      setBulkCreated(new Set());
+      setBulkConflicts(null);
       setForm(buildInitialForm());
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, editShift?.id, preselectedUserId, preselectedDate]);
+  }, [open, editShift?.id, preselectedUserId, preselectedDate, bulkDates]);
 
   // Sobald die Modelle geladen sind, im Anlegen-Modus eine Standardauswahl setzen,
   // falls der Nutzer noch nichts gewählt hat.
@@ -183,6 +205,7 @@ export function ShiftDialog({
     // Sobald die Eingaben geändert werden, ist eine frühere Kollisionswarnung
     // hinfällig — beim nächsten Speichern wird neu geprüft (ohne force).
     setOverlapConflicts(null);
+    setBulkConflicts(null);
   }
 
   const isAbsence = form.selection === "vacation" || form.selection === "sick";
@@ -243,30 +266,40 @@ export function ShiftDialog({
     return { type: form.selection as ShiftInputType & ShiftUpdateType, shiftModelId: null };
   }
 
+  // Berechnet Start-/End-Zeitstempel für ein konkretes Datum (yyyy-MM-dd) gemäß
+  // dem aktuellen Formular. Zentral genutzt von Einzel- und Mehrfach-Anlegen,
+  // damit beide Pfade dieselbe Zeitlogik (Abwesenheit / 24h / Tagesübergang)
+  // verwenden.
+  function buildTimes(dateStr: string): { startIso: string; endIso: string } {
+    if (isAbsence) {
+      return {
+        startIso: new Date(`${dateStr}T00:00:00`).toISOString(),
+        endIso: new Date(`${dateStr}T23:59:59`).toISOString(),
+      };
+    }
+    if (is24h) {
+      const startDate = new Date(`${dateStr}T${form.startTime}:00`);
+      return {
+        startIso: buildIso(dateStr, form.startTime),
+        endIso: new Date(startDate.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+      };
+    }
+    // Endzeit <= Startzeit bedeutet Tagesübergang: Endzeitstempel auf den
+    // Folgetag legen, damit eine korrekte positive Dauer gespeichert wird.
+    const endsNextDay = form.endTime <= form.startTime;
+    return {
+      startIso: buildIso(dateStr, form.startTime),
+      endIso: endsNextDay
+        ? buildIso(nextDayString(dateStr), form.endTime)
+        : buildIso(dateStr, form.endTime),
+    };
+  }
+
   async function handleSave(force = false) {
     if (!validate()) return;
     setSaving(true);
     try {
-      let startIso: string;
-      let endIso: string;
-
-      if (isAbsence) {
-        startIso = new Date(`${form.date}T00:00:00`).toISOString();
-        endIso = new Date(`${form.date}T23:59:59`).toISOString();
-      } else if (is24h) {
-        startIso = buildIso(form.date, form.startTime);
-        const startDate = new Date(`${form.date}T${form.startTime}:00`);
-        endIso = new Date(startDate.getTime() + 24 * 60 * 60 * 1000).toISOString();
-      } else {
-        startIso = buildIso(form.date, form.startTime);
-        // Endzeit <= Startzeit bedeutet Tagesübergang: Endzeitstempel auf den
-        // Folgetag legen, damit eine korrekte positive Dauer gespeichert wird.
-        const endsNextDay = form.endTime <= form.startTime;
-        endIso = endsNextDay
-          ? buildIso(nextDayString(form.date), form.endTime)
-          : buildIso(form.date, form.endTime);
-      }
-
+      const { startIso, endIso } = buildTimes(form.date);
       const { type, shiftModelId } = deriveTypeAndModel();
 
       if (isEditing && editShift) {
@@ -322,6 +355,85 @@ export function ShiftDialog({
     }
   }
 
+  // Mehrfach-Anlegen: legt für jeden ausgewählten Tag dieselbe Schicht an.
+  // Bereits erfolgreich erstellte Tage werden bei einem "Trotzdem anlegen"-
+  // Wiederholungslauf übersprungen (kein Doppel-Anlegen). Überschneidungen
+  // werden gesammelt und können per force erneut versucht werden.
+  async function handleBulkSave(force = false) {
+    if (!bulkDates || bulkDates.length === 0) return;
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const { type, shiftModelId } = deriveTypeAndModel();
+      const created = new Set(bulkCreated);
+      const conflicts: string[] = [];
+      let sessionExpired = false;
+      let otherError = false;
+
+      for (const dateStr of bulkDates) {
+        // Schon angelegte Tage nicht erneut erstellen.
+        if (created.has(dateStr)) continue;
+        const { startIso, endIso } = buildTimes(dateStr);
+        const data = {
+          userId: Number(form.userId),
+          startTime: startIso,
+          endTime: endIso,
+          type,
+          shiftModelId,
+          notes: form.notes || undefined,
+        };
+        try {
+          await createShift.mutateAsync({
+            data: {
+              ...data,
+              ...(force ? { force: true } : {}),
+              ...(teamId != null ? { teamId } : {}),
+            } as typeof data,
+          });
+          created.add(dateStr);
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 401) {
+            sessionExpired = true;
+            break;
+          } else if (
+            err instanceof ApiError &&
+            err.status === 409 &&
+            (err.data as { code?: string } | null)?.code === "shift_overlap"
+          ) {
+            conflicts.push(dateStr);
+          } else {
+            otherError = true;
+          }
+        }
+      }
+
+      setBulkCreated(created);
+      await invalidate();
+
+      if (sessionExpired) {
+        setErrors({ notes: "Sitzung abgelaufen. Bitte Seite neu laden und erneut anmelden." });
+        return;
+      }
+      if (otherError) {
+        setErrors({
+          notes: "Einige Schichten konnten nicht angelegt werden. Bitte erneut versuchen.",
+        });
+        return;
+      }
+      if (conflicts.length > 0) {
+        // Nur Überschneidungen offen: Warnung anzeigen, force-Wiederholung anbieten.
+        setBulkConflicts(conflicts);
+        return;
+      }
+
+      // Alles angelegt.
+      onSaved?.();
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleDelete() {
     if (!editShift) return;
     if (!confirmDelete) {
@@ -343,7 +455,11 @@ export function ShiftDialog({
       <DialogContent className="sm:max-w-md" data-testid="shift-dialog">
         <DialogHeader>
           <DialogTitle className="font-serif text-xl">
-            {isEditing ? "Schicht bearbeiten" : "Neue Schicht anlegen"}
+            {isEditing
+              ? "Schicht bearbeiten"
+              : isBulk
+                ? "Schichten eintragen"
+                : "Neue Schicht anlegen"}
           </DialogTitle>
         </DialogHeader>
 
@@ -375,18 +491,39 @@ export function ShiftDialog({
             {errors.userId && <p className="text-xs text-destructive">{errors.userId}</p>}
           </div>
 
-          {/* Datum */}
-          <div className="space-y-1.5">
-            <Label>Datum *</Label>
-            <Input
-              type="date"
-              data-testid="shift-dialog-date"
-              value={form.date}
-              onChange={(e) => set("date", e.target.value)}
-              className={errors.date ? "border-destructive" : ""}
-            />
-            {errors.date && <p className="text-xs text-destructive">{errors.date}</p>}
-          </div>
+          {/* Datum: im Mehrfach-Modus stehen die Tage fest (Auswahl) und werden
+              als Zusammenfassung gezeigt; sonst das einzelne Datumsfeld. */}
+          {isBulk ? (
+            <div className="space-y-1.5">
+              <Label>Tage</Label>
+              <div
+                className="rounded-md bg-muted/50 px-3 py-2 text-sm"
+                data-testid="shift-dialog-bulk-summary"
+              >
+                <p className="font-medium">
+                  {bulkDates!.length} {bulkDates!.length === 1 ? "Tag" : "Tage"} ausgewählt
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {[...bulkDates!]
+                    .sort()
+                    .map((d) => format(new Date(`${d}T00:00:00`), "d. MMM"))
+                    .join(", ")}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <Label>Datum *</Label>
+              <Input
+                type="date"
+                data-testid="shift-dialog-date"
+                value={form.date}
+                onChange={(e) => set("date", e.target.value)}
+                className={errors.date ? "border-destructive" : ""}
+              />
+              {errors.date && <p className="text-xs text-destructive">{errors.date}</p>}
+            </div>
+          )}
 
           {/* Schicht-Typ / Modell */}
           <div className="space-y-1.5">
@@ -505,6 +642,30 @@ export function ShiftDialog({
             </div>
           )}
 
+          {/* Kollisionswarnung im Mehrfach-Modus: betrifft ganze Tage, nicht eine
+              einzelne Zeitspanne. Bereits angelegte Tage bleiben erhalten. */}
+          {bulkConflicts && bulkConflicts.length > 0 && (
+            <div
+              className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2.5 text-sm"
+              data-testid="shift-dialog-bulk-overlap"
+            >
+              <p className="font-medium text-destructive">
+                Überschneidung an {bulkConflicts.length}{" "}
+                {bulkConflicts.length === 1 ? "Tag" : "Tagen"}
+              </p>
+              <p className="mt-1 text-destructive">
+                {[...bulkConflicts]
+                  .sort()
+                  .map((d) => format(new Date(`${d}T00:00:00`), "d. MMM"))
+                  .join(", ")}
+              </p>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Die übrigen Tage wurden bereits angelegt. Du kannst die Tage mit
+                Überschneidung trotzdem anlegen, falls das gewollt ist.
+              </p>
+            </div>
+          )}
+
           {/* Hinweise */}
           <div className="space-y-1.5">
             <Label>Hinweise</Label>
@@ -534,20 +695,35 @@ export function ShiftDialog({
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Abbrechen
           </Button>
-          <Button
-            onClick={() => handleSave(overlapConflicts !== null)}
-            disabled={saving}
-            variant={overlapConflicts ? "destructive" : "default"}
-            data-testid="shift-dialog-save"
-          >
-            {saving
-              ? "Speichern..."
-              : overlapConflicts
-                ? "Trotzdem speichern"
-                : isEditing
-                  ? "Aktualisieren"
-                  : "Anlegen"}
-          </Button>
+          {isBulk ? (
+            <Button
+              onClick={() => handleBulkSave(bulkConflicts !== null)}
+              disabled={saving}
+              variant={bulkConflicts ? "destructive" : "default"}
+              data-testid="shift-dialog-save"
+            >
+              {saving
+                ? "Speichern..."
+                : bulkConflicts
+                  ? "Trotzdem anlegen"
+                  : `Für ${bulkDates!.length} ${bulkDates!.length === 1 ? "Tag" : "Tage"} anlegen`}
+            </Button>
+          ) : (
+            <Button
+              onClick={() => handleSave(overlapConflicts !== null)}
+              disabled={saving}
+              variant={overlapConflicts ? "destructive" : "default"}
+              data-testid="shift-dialog-save"
+            >
+              {saving
+                ? "Speichern..."
+                : overlapConflicts
+                  ? "Trotzdem speichern"
+                  : isEditing
+                    ? "Aktualisieren"
+                    : "Anlegen"}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
