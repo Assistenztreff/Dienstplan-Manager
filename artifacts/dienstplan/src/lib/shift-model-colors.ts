@@ -27,3 +27,25 @@ export function colorBadgeClass(color: string): string {
 export function colorDotClass(color: string): string {
   return (SHIFT_MODEL_COLORS.find((c) => c.value === color) ?? FALLBACK).dot;
 }
+
+// --- Farbzuordnung pro Assistenzkraft -------------------------------------
+// Jede Assistenzkraft (userId) erhält deterministisch eine feste Farbe aus der
+// Palette. Dieselbe Person ist dadurch überall (Badges, Punkte) an derselben
+// Farbe erkennbar — unabhängig von Schichtart oder Schichtmodell. Stabiler
+// Integer-Hash der ID + Modulo über die Palette, damit dieselbe ID immer
+// dieselbe Farbe ergibt und benachbarte IDs unterschiedliche Farben bekommen.
+export function userColor(userId: number): ShiftModelColor {
+  if (!Number.isFinite(userId)) return SHIFT_MODEL_COLORS[0]!;
+  // Multiplikator (Knuth-artig) streut aufeinanderfolgende IDs über die Palette,
+  // statt sie streng der Reihe nach durchzunummerieren.
+  const hash = Math.abs(Math.trunc(userId) * 2654435761);
+  return SHIFT_MODEL_COLORS[hash % SHIFT_MODEL_COLORS.length]!;
+}
+
+export function userBadgeClass(userId: number): string {
+  return userColor(userId).badge;
+}
+
+export function userDotClass(userId: number): string {
+  return userColor(userId).dot;
+}

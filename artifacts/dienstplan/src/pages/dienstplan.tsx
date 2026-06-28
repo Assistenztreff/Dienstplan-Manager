@@ -12,7 +12,7 @@ import { ShiftDialog } from "@/components/shift-dialog";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
-import { colorBadgeClass, colorDotClass } from "@/lib/shift-model-colors";
+import { userBadgeClass, userDotClass } from "@/lib/shift-model-colors";
 import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 
 type Shift = {
@@ -34,7 +34,7 @@ const SHIFT_TYPE_LABELS: Record<string, string> = {
   night: "Nachtdienst",
   full_day: "24h-Dienst",
   vacation: "Urlaub",
-  sick: "Krank",
+  sick: "Krankheit",
 };
 
 const SHIFT_TYPE_CLASSES: Record<string, string> = {
@@ -53,17 +53,18 @@ function shiftLabel(shift: Shift, modelMap: Map<number, ShiftModelInfo>): string
   return SHIFT_TYPE_LABELS[shift.type] ?? shift.type;
 }
 
-function shiftBadgeClasses(shift: Shift, modelMap: Map<number, ShiftModelInfo>): string {
-  // Reguläre Dienste: Modellfarbe, sonst Dunkelblau aus dem Branding (primary).
-  if (shift.type === "work") {
-    const model = shift.shiftModelId ? modelMap.get(shift.shiftModelId) : undefined;
-    if (model) return colorBadgeClass(model.color);
-    return "bg-primary/10 text-primary border-primary/25 hover:bg-primary/20";
+function shiftBadgeClasses(shift: Shift): string {
+  // Abwesenheiten (Urlaub = Gelb, Krankheit = Grau) behalten bewusst ihre
+  // semantische Farbe, damit sie auf einen Blick als Abwesenheit erkennbar
+  // bleiben und nicht mit Arbeitsschichten verwechselt werden.
+  if (isAbsenceShift(shift)) {
+    return (
+      SHIFT_TYPE_CLASSES[shift.type] ?? "bg-primary/10 text-primary border-primary/25 hover:bg-primary/20"
+    );
   }
-  // Urlaub = Gelb, Krank = Grau; Legacy-Dienste behalten ihre Farbe.
-  return (
-    SHIFT_TYPE_CLASSES[shift.type] ?? "bg-primary/10 text-primary border-primary/25 hover:bg-primary/20"
-  );
+  // Alle übrigen Dienste: Farbe ist fest an die Assistenzkraft (userId) gebunden,
+  // nicht an die Schichtart — so erkennt man im Plan sofort, wer arbeitet.
+  return userBadgeClass(shift.userId);
 }
 
 function usePersistentState<T extends string>(key: string, fallback: T, allowed: readonly T[]): [T, (value: T) => void] {
@@ -99,13 +100,13 @@ const SHIFT_TYPE_DOTS: Record<string, string> = {
   sick: "bg-slate-400",
 };
 
-function shiftDotClass(shift: Shift, modelMap: Map<number, ShiftModelInfo>): string {
-  if (shift.type === "work") {
-    const model = shift.shiftModelId ? modelMap.get(shift.shiftModelId) : undefined;
-    if (model) return colorDotClass(model.color);
-    return "bg-primary";
+function shiftDotClass(shift: Shift): string {
+  // Abwesenheiten behalten ihre semantische Punktfarbe (Urlaub/Krankheit).
+  if (isAbsenceShift(shift)) {
+    return SHIFT_TYPE_DOTS[shift.type] ?? "bg-primary";
   }
-  return SHIFT_TYPE_DOTS[shift.type] ?? "bg-primary";
+  // Reguläre Dienste: Punktfarbe pro Assistenzkraft (userId).
+  return userDotClass(shift.userId);
 }
 
 // Abwesenheiten (Urlaub/Krank) werden als ganztägige Tagesblöcke gespeichert —
@@ -150,29 +151,47 @@ function ShiftBadge({
   modelMap: Map<number, ShiftModelInfo>;
   onClick?: (e: React.MouseEvent) => void;
 }) {
-  const classes = shiftBadgeClasses(shift, modelMap);
+  const classes = shiftBadgeClasses(shift);
   // Abwesenheiten (Urlaub/Krank) haben keine Uhrzeiten → als ganztägiger Block ohne Zeit.
   const isAbsence = shift.type === "vacation" || shift.type === "sick";
+  const start = new Date(shift.startTime);
+  const end = new Date(shift.endTime);
+  const startLabel = format(start, "HH:mm");
+  const endLabel = format(end, "HH:mm");
+  // 24-Stunden-Dienst: Start- und Enduhrzeit sind identisch (z. B. 08:00–08:00),
+  // die Schicht läuft aber volle 24 Stunden (Ende am Folgetag, daher
+  // unterschiedliche Zeitpunkte). Der Legacy-Typ "full_day" zählt explizit dazu.
+  const is24h =
+    shift.type === "full_day" || (startLabel === endLabel && start.getTime() !== end.getTime());
+  const label = shiftLabel(shift, modelMap);
   return (
     <div
       data-testid={`shift-badge-${shift.id}`}
       className={`w-full text-xs rounded border px-2 py-1 leading-snug cursor-pointer transition-colors ${classes}`}
       onClick={onClick}
+      title={label}
     >
       {showName && shift.user && (
         <div className="font-medium truncate">{shift.user.name}</div>
       )}
       {isAbsence ? (
-        <div className="font-medium">{shiftLabel(shift, modelMap)}</div>
+        <div className="font-medium truncate">{label}</div>
       ) : (
         <>
-          <div>
-            {format(new Date(shift.startTime), "HH:mm")}–{format(new Date(shift.endTime), "HH:mm")}
-            {!isSameDay(new Date(shift.startTime), new Date(shift.endTime)) && (
-              <span className="opacity-70"> (+1)</span>
-            )}
+          <div className="truncate">
+            {startLabel}–{endLabel}
+            {!isSameDay(start, end) && <span className="opacity-70"> (+1)</span>}
           </div>
-          <div className="text-[11px] opacity-70">{shiftLabel(shift, modelMap)}</div>
+          {/* Gut sichtbarer Hinweis direkt unter der Endzeit, damit ein 24h-Dienst
+              nicht mit einer 0-Stunden- oder normalen Schicht verwechselt wird. */}
+          {is24h && (
+            <div className="mt-0.5 inline-flex items-center rounded bg-foreground/15 px-1 py-px text-[10px] font-semibold uppercase tracking-wide">
+              24h-Dienst
+            </div>
+          )}
+          {/* Schichtname: standardmäßig ausgeschrieben, bei Platzmangel (enge
+              Tabellen-/Gitterspalten) per truncate mit Ellipsis gekürzt. */}
+          <div className="text-[11px] opacity-70 truncate">{label}</div>
         </>
       )}
     </div>
@@ -196,7 +215,7 @@ function AbsenceTableBar({
   modelMap: Map<number, ShiftModelInfo>;
   onClick?: (e: React.MouseEvent) => void;
 }) {
-  const classes = shiftBadgeClasses(shift, modelMap);
+  const classes = shiftBadgeClasses(shift);
   const cap = `${isStart ? "rounded-l" : "border-l-0 -ml-[5px]"} ${
     isEnd ? "rounded-r" : "border-r-0 -mr-1"
   }`;
@@ -389,7 +408,7 @@ function MonthGrid({
                       {dots.map((s) => (
                         <span
                           key={s.id}
-                          className={`h-1.5 w-1.5 rounded-full ${shiftDotClass(s, modelMap)}`}
+                          className={`h-1.5 w-1.5 rounded-full ${shiftDotClass(s)}`}
                         />
                       ))}
                     </span>

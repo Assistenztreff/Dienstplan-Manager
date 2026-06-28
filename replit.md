@@ -50,6 +50,9 @@ Kernfunktionen (Task 1 — Grundstruktur):
 - **Zeiterfassung**: Ist-Zeiten eintragen, Status (offen / bestätigt / abgelehnt)
 - **Auswertungen**: Soll/Ist-Abgleich pro Assistent und Monat
 - **Regionale Feiertage**: In den Einstellungen wählbares Bundesland; die Feiertagsberechnung berücksichtigt dann landesspezifische gesetzliche Feiertage (inkl. beweglicher wie Fronleichnam). Ohne Bundesland gelten nur bundesweite Feiertage. Bundesland-genaue Näherung, keine rückwirkende Neuberechnung bestehender Schichten.
+- **Farbkodierung pro Assistenzkraft**: Schicht-Badges und Monats-Punkte werden im Dienstplan **nach `userId`** eingefärbt (deterministischer Hash → Palette in `lib/shift-model-colors.ts`, `userColor/userBadgeClass/userDotClass`), nicht mehr nach Schichtart/Schichtmodell — so erkennt man auf einen Blick, wer arbeitet. **Abwesenheiten (Urlaub = Gelb, Krankheit = Grau) behalten bewusst ihre semantische Farbe** (sonst nicht mehr als Abwesenheit erkennbar). Schichtmodell-Farben werden weiterhin in den Einstellungen/Dialog-Swatches genutzt.
+- **24h-Dienst-Hinweis**: Stimmen Start- und Enduhrzeit überein (z. B. 08:00–08:00) bei unterschiedlichen Zeitpunkten (Folgetag) — oder Legacy-Typ `full_day` — zeigt `ShiftBadge` unter der Zeit ein Tag „24h-Dienst".
+- **Standard-Dienste-Seeding**: Neue Nutzer bekommen beim Registrieren (und Dev-Login-Team-Anlage) 4 Standard-Schichtmodelle ins Standard-Team: Frühdienst, Spätdienst, 24h Dienst, Bereitschaft (`artifacts/api-server/src/lib/default-shift-models.ts`). Urlaub/Krankheit werden NICHT als Modelle geseedet — sie laufen über das Abwesenheits-System.
 
 ## Multi-Team (Task 42 — Stufe 1: Fundament & Team anlegen)
 

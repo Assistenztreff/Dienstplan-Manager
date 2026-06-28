@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { usersTable, teamsTable, teamMembersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth-utils";
+import { seedDefaultShiftModels } from "../lib/default-shift-models";
 
 const router = Router();
 
@@ -93,6 +94,8 @@ router.post("/auth/register", async (req, res) => {
     .insert(teamMembersTable)
     .values({ teamId: team.id, userId: user.id })
     .onConflictDoNothing();
+  // Standard-Dienste für das frisch angelegte Team vorinstallieren.
+  await seedDefaultShiftModels(team.id);
 
   req.session.userId = user.id;
   req.session.role = user.role;
@@ -136,6 +139,7 @@ if (process.env.NODE_ENV !== "production") {
           .insert(teamMembersTable)
           .values({ teamId: team.id, userId: user.id })
           .onConflictDoNothing();
+        await seedDefaultShiftModels(team.id);
       }
     }
 
