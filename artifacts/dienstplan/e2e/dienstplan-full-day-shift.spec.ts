@@ -1,25 +1,25 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 
 /**
- * E2E-Test für den 24h-Dienst (Schichttyp "full_day").
+ * E2E-Test für den 24h-Dienst.
  *
- * Der 24h-Typ hat im ShiftDialog einen eigenen Code-Pfad (is24h-Zweig): die
- * Endzeit ist gesperrt und wird automatisch auf Startzeit + 24h gesetzt, sodass
- * die Schicht über den Folgetag läuft. Dieser Pfad nutzt ein anderes Datums-/
- * Zeit-Handling als reguläre Schichten und ist im Browser-E2E sonst nicht
- * abgedeckt.
+ * Ein 24h-Dienst entsteht im ShiftDialog, indem ein regulärer Dienst (z. B. das
+ * Standard-Schichtmodell "24h Dienst") gewählt und Start- gleich Endzeit gesetzt
+ * wird (08:00–08:00). handleSave wertet identische Zeiten als Tagesübergang und
+ * legt das Ende auf den Folgetag, sodass eine 24h-Dauer entsteht. Der frühere
+ * separate Legacy-Eintrag "24h-Dienst" im Anlegen-Dialog wurde entfernt (Task
+ * #141), damit es nur noch einen 24h-Dienst gibt.
  *
- * Eine neue 24h-Schicht lässt sich seit Task #87 direkt im Anlegen-Dialog
- * wählen (Typ-Auswahl "24h-Dienst"). Daher der echte Anlegen-Pfad:
+ * Echter Anlegen-Pfad:
  * - Im Browser den Zieltag auswählen und "Schicht" anlegen öffnen.
- * - Assistent wählen, Typ "24h-Dienst" auswählen → der is24h-Zweig ist aktiv
- *   (Endzeit gesperrt, Hinweis "24h nach Startzeit").
- * - Startzeit setzen und speichern → der is24h-Zweig berechnet endIso =
+ * - Assistent wählen, Dienst "24h Dienst" auswählen.
+ * - Start- und Endzeit identisch setzen (08:00–08:00) und speichern → endIso =
  *   startIso + 24h (Folgetag).
  * - Prüfen, dass die Schicht nur am Starttag erscheint und das Zeit-Label den
  *   Folgetag-Hinweis "(+1)" trägt.
  *
- * Zusätzlich ein API-Round-Trip, der eine Dauer von exakt 24 Stunden bestätigt.
+ * Zusätzlich ein API-Round-Trip (Legacy-Typ full_day), der eine Dauer von
+ * exakt 24 Stunden bestätigt.
  *
  * Verwendet eindeutige Testdaten (Zeitstempel im Notizfeld + weit in der Zukunft
  * liegender Monat), um Kollisionen mit Bestandsdaten und Parallel-Tests zu
@@ -93,6 +93,28 @@ async function ensureAssistant(page: Page): Promise<{ id: number; name: string }
   return { id: created.id, name: created.name };
 }
 
+/**
+ * Stellt sicher, dass ein Schichtmodell "24h Dienst" existiert (das beim
+ * Registrieren standardmäßig geseedete Modell). Im isolierten Test-Stack wird
+ * der Admin per Skript angelegt, daher ggf. einmalig erzeugen. Gibt Name und
+ * Id zurück.
+ */
+async function ensure24hModel(page: Page): Promise<{ id: number; name: string }> {
+  const name = "24h Dienst";
+  const listRes = await page.request.get("/api/shift-models");
+  expect(listRes.ok(), "GET /api/shift-models fehlgeschlagen").toBe(true);
+  const models = (await listRes.json()) as { id: number; name: string }[];
+  const existing = models.find((m) => m.name === name);
+  if (existing) return { id: existing.id, name };
+
+  const createRes = await page.request.post("/api/shift-models", {
+    data: { name, color: "purple", valuationPercent: 100 },
+  });
+  expect(createRes.ok(), "Anlegen des 24h-Schichtmodells fehlgeschlagen").toBe(true);
+  const created = (await createRes.json()) as { id: number };
+  return { id: created.id, name };
+}
+
 /** Findet eine Schicht des Monats anhand des eindeutigen Notiztexts. */
 async function findShiftByNotes(
   page: Page,
@@ -145,6 +167,7 @@ test.describe("24h-Dienst über den Folgetag (Admin, mobile)", () => {
   test("speichert 24h-Schicht: Endzeit = Start + 24h, nur am Starttag mit (+1)", async ({ page }) => {
     await loginAsAdmin(page);
     const assistant = await ensureAssistant(page);
+    const model = await ensure24hModel(page);
 
     // Zielmonat = heute + 21 Monate (anderer Offset als die Nachtdienst-Tests),
     // damit Kollisionen mit Bestandsschichten und parallelen Tests vermieden
@@ -188,23 +211,20 @@ test.describe("24h-Dienst über den Folgetag (Admin, mobile)", () => {
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText("Neue Schicht anlegen")).toBeVisible();
 
-    // --- Assistent und Typ "24h-Dienst" wählen (echter Anlegen-Pfad) -------
+    // --- Assistent und Dienst "24h Dienst" wählen (echter Anlegen-Pfad) ----
     await dialog.getByTestId("shift-dialog-user").click();
     await page.getByRole("option", { name: assistant.name }).first().click();
 
     await dialog.getByTestId("shift-dialog-type").click();
-    await page.getByRole("option", { name: "24h-Dienst" }).click();
+    await page.getByRole("option", { name: model.name, exact: true }).click();
 
-    // Der is24h-Zweig ist nun aktiv: Endzeit gesperrt und = Startzeit.
-    const endInput = dialog.getByTestId("shift-dialog-end");
-    await expect(endInput).toBeDisabled();
-    await expect(endInput).toHaveValue(startTime);
-    await expect(dialog.getByText("24h nach Startzeit")).toBeVisible();
-
+    // Gleiche Start- und Endzeit (08:00–08:00) wird als 24h-Dienst gewertet:
+    // handleSave legt das Ende auf den Folgetag, sodass eine 24h-Dauer entsteht.
     await dialog.getByTestId("shift-dialog-start").fill(startTime);
+    await dialog.getByTestId("shift-dialog-end").fill(startTime);
     await dialog.getByTestId("shift-dialog-notes").fill(uniqueNotes);
 
-    // Speichern → is24h-Zweig berechnet endIso = startIso + 24h.
+    // Speichern → endIso = startIso + 24h (Folgetag).
     await dialog.getByTestId("shift-dialog-save").click();
 
     // Speichern erfolgreich → Dialog schließt, keine Fehlermeldung.
@@ -221,7 +241,7 @@ test.describe("24h-Dienst über den Folgetag (Admin, mobile)", () => {
       .toBe(24 * HOUR_MS);
 
     const shiftId = created!.id;
-    expect(created!.type, "Typ muss full_day sein").toBe("full_day");
+    expect(created!.type, "Typ muss work (Schichtmodell) sein").toBe("work");
     const start = new Date(created!.startTime);
     const end = new Date(created!.endTime);
     expect(end.getTime(), "endTime muss nach startTime liegen").toBeGreaterThan(start.getTime());

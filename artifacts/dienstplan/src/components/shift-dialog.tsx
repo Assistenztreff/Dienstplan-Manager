@@ -202,11 +202,6 @@ export function ShiftDialog({
       ? { value: form.selection, label: LEGACY_TYPE_LABELS[editShift.type] ?? editShift.type }
       : undefined;
 
-  // Beim Anlegen einer neuen Schicht kann der 24h-Dienst (full_day) direkt
-  // gewählt werden. Beim Bearbeiten einer bestehenden full_day-Schicht zeigt
-  // bereits legacyEditOption "24h-Dienst" an, daher hier nur im Anlegen-Modus.
-  const show24hCreateOption = !isEditing;
-
   // Beim Bearbeiten kann der Assistent nicht gewechselt werden. Statt eines
   // deaktivierten Selects (das je nach Datenlage nur die userId zeigt) den
   // vollen Namen aus der Assistentenliste auflösen und schreibgeschützt anzeigen.
@@ -221,11 +216,9 @@ export function ShiftDialog({
     if (!isAbsence) {
       if (!form.startTime) errs.startTime = "Startzeit angeben";
       if (!form.endTime) errs.endTime = "Endzeit angeben";
-      // Eine kleinere Endzeit bedeutet künftig "endet am Folgetag" (Nachtdienst
-      // über Mitternacht). Nur identische Start-/Endzeit ist ein echter Fehler.
-      if (form.startTime && form.endTime && form.startTime === form.endTime && !is24h) {
-        errs.endTime = "Start- und Endzeit dürfen nicht identisch sein";
-      }
+      // Identische Start-/Endzeit ist erlaubt und bedeutet ein 24h-Dienst
+      // (Ende am Folgetag); eine kleinere Endzeit bedeutet "endet am Folgetag"
+      // (Nachtdienst über Mitternacht). Beides wird in handleSave aufgelöst.
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -404,7 +397,7 @@ export function ShiftDialog({
                 <SelectValue placeholder="Typ auswählen..." />
               </SelectTrigger>
               <SelectContent>
-                {(activeModels.length > 0 || legacyEditOption || inactiveEditModel || show24hCreateOption) && (
+                {(activeModels.length > 0 || legacyEditOption || inactiveEditModel) && (
                   <SelectGroup>
                     <SelectLabel>Dienst</SelectLabel>
                     {legacyEditOption && (
@@ -426,12 +419,9 @@ export function ShiftDialog({
                         </span>
                       </SelectItem>
                     )}
-                    {show24hCreateOption && (
-                      <SelectItem value="legacy:full_day">24h-Dienst</SelectItem>
-                    )}
                   </SelectGroup>
                 )}
-                {(activeModels.length > 0 || legacyEditOption || inactiveEditModel || show24hCreateOption) && (
+                {(activeModels.length > 0 || legacyEditOption || inactiveEditModel) && (
                   <SelectSeparator />
                 )}
                 <SelectGroup>

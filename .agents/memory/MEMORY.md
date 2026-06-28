@@ -19,3 +19,4 @@
 - [Dev session localStorage cache](dev-session-localstorage-cache.md) — web auth caches only the non-sensitive profile under `assistenz_treff_session`, guarded by `import.meta.env.DEV` (not process.env); cookie stays source of truth.
 - [Isolated E2E test DB](isolated-e2e-test-db.md) — playwright webServer boots its own API+Vite stack on a `<dbname>_test` database (Vite proxies /api); dev DB never touched by destructive specs.
 - [Worklets needs @babel/generator](babel-generator-worklets.md) — mobile prod build fails "Cannot find module '@babel/generator'"; worklets plugin requires it but doesn't declare it. Fix via pnpm packageExtensions, not artifact deps.
+- [Test DB lacks seeded shift models](test-db-no-seeded-models.md) — setup-test-db only runs setup-admin+migrate-teams; default shift models seed only on register/dev-login, so e2e specs needing a model must create it.

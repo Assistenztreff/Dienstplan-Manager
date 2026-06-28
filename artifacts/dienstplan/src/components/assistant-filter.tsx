@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { userBadgeClass, userDotClass } from "@/lib/shift-model-colors";
 
 export type Assistant = { id: number; name: string };
 
@@ -79,12 +80,15 @@ export function AssistantFilter({
           data-testid={`assistant-chip-${a.id}`}
           data-active={selected === a.id ? "true" : "false"}
           onClick={() => onSelect(a.id)}
-          className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition-colors ${
+          className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition-colors inline-flex items-center gap-1.5 ${
             selected === a.id
               ? "bg-primary text-primary-foreground border-primary"
-              : "bg-card text-muted-foreground border-border"
+              : userBadgeClass(a.id)
           }`}
         >
+          {/* Farb-Punkt in der Personenfarbe — dient als Legende zu den
+              gleichfarbigen Dienst-Kacheln im Kalender. */}
+          <span className={`inline-block h-2 w-2 rounded-full ${userDotClass(a.id)}`} />
           {a.name}
         </button>
       ))}

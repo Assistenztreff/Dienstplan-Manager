@@ -755,7 +755,16 @@ export default function Dienstplan() {
                   className="border-b last:border-0 hover:bg-muted/20 transition-colors"
                 >
                   <td className="p-3 font-medium sticky left-0 bg-card hover:bg-muted/20 transition-colors z-10 shadow-[1px_0_0_0_hsl(var(--border))]">
-                    {isAdmin ? assistant.name : "Meine Schichten"}
+                    {isAdmin ? (
+                      <span className="inline-flex items-center gap-2">
+                        {/* Farb-Punkt als Legende: gleiche Personenfarbe wie die
+                            Dienst-Kacheln dieser Zeile. */}
+                        <span className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${userDotClass(assistant.id)}`} />
+                        {assistant.name}
+                      </span>
+                    ) : (
+                      "Meine Schichten"
+                    )}
                   </td>
                   {days.map((day, dayIdx) => {
                     const dayShifts = assistantShifts.filter(
