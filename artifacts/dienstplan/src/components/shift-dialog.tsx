@@ -26,7 +26,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Trash2 } from "lucide-react";
-import { colorDotClass } from "@/lib/shift-model-colors";
 import { readableApiError } from "@/lib/api-error";
 
 type Assistant = { id: number; name: string };
@@ -405,18 +404,12 @@ export function ShiftDialog({
                     )}
                     {activeModels.map((m) => (
                       <SelectItem key={m.id} value={`model:${m.id}`}>
-                        <span className="flex items-center gap-2">
-                          <span className={`inline-block h-2.5 w-2.5 rounded-full ${colorDotClass(m.color)}`} />
-                          {m.name}
-                        </span>
+                        {m.name}
                       </SelectItem>
                     ))}
                     {inactiveEditModel && (
                       <SelectItem value={`model:${inactiveEditModel.id}`}>
-                        <span className="flex items-center gap-2">
-                          <span className={`inline-block h-2.5 w-2.5 rounded-full ${colorDotClass(inactiveEditModel.color)}`} />
-                          {inactiveEditModel.name} (inaktiv)
-                        </span>
+                        {inactiveEditModel.name} (inaktiv)
                       </SelectItem>
                     )}
                   </SelectGroup>

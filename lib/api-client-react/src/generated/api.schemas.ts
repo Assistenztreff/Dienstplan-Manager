@@ -274,7 +274,6 @@ export interface ShiftModel {
   id: number;
   name: string;
   valuationPercent: number;
-  color: string;
   sortOrder: number;
   isActive: boolean;
   createdAt: string;

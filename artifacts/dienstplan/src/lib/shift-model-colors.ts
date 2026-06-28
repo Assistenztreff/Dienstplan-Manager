@@ -18,16 +18,6 @@ export const SHIFT_MODEL_COLORS: ShiftModelColor[] = [
   { value: "slate", label: "Grau", badge: "bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200", dot: "bg-slate-500" },
 ];
 
-const FALLBACK = SHIFT_MODEL_COLORS[SHIFT_MODEL_COLORS.length - 1]!;
-
-export function colorBadgeClass(color: string): string {
-  return (SHIFT_MODEL_COLORS.find((c) => c.value === color) ?? FALLBACK).badge;
-}
-
-export function colorDotClass(color: string): string {
-  return (SHIFT_MODEL_COLORS.find((c) => c.value === color) ?? FALLBACK).dot;
-}
-
 // --- Farbzuordnung pro Assistenzkraft -------------------------------------
 // Jede Assistenzkraft (userId) erhält deterministisch eine feste Farbe aus der
 // Palette. Dieselbe Person ist dadurch überall (Badges, Punkte) an derselben

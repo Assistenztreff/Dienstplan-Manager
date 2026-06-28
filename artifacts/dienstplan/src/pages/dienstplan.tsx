@@ -26,7 +26,7 @@ type Shift = {
   user?: { name: string } | null;
 };
 
-type ShiftModelInfo = { name: string; color: string };
+type ShiftModelInfo = { name: string };
 
 const SHIFT_TYPE_LABELS: Record<string, string> = {
   active: "Aktivdienst",
@@ -561,7 +561,7 @@ export default function Dienstplan() {
 
   const { data: shiftModels } = useListShiftModels(teamParam);
   const modelMap = new Map<number, ShiftModelInfo>(
-    (shiftModels ?? []).map((m) => [m.id, { name: m.name, color: m.color }])
+    (shiftModels ?? []).map((m) => [m.id, { name: m.name }])
   );
 
   const allShifts: Shift[] = shifts ?? [];

@@ -470,7 +470,6 @@ export const ListShiftModelsResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "valuationPercent": zod.number(),
-  "color": zod.string(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date()
@@ -520,7 +519,6 @@ export const UpdateShiftModelResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "valuationPercent": zod.number(),
-  "color": zod.string(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date()

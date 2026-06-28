@@ -25,7 +25,6 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, GripVertical, Upload, ImageIcon, KeyRound, Mail, User as UserIcon } from "lucide-react";
-import { SHIFT_MODEL_COLORS, colorDotClass } from "@/lib/shift-model-colors";
 import { AllowanceSettingsForm } from "@/components/allowance-settings-form";
 import { logoSrcFromPath, ACCEPTED_LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/logo";
 import { readableApiError } from "@/lib/api-error";
@@ -35,7 +34,6 @@ type ShiftModel = {
   id: number;
   name: string;
   valuationPercent: number;
-  color: string;
   sortOrder: number;
   isActive: boolean;
 };
@@ -43,13 +41,12 @@ type ShiftModel = {
 type FormState = {
   name: string;
   valuationPercent: string;
-  color: string;
   sortOrder: string;
   isActive: boolean;
 };
 
 function emptyForm(nextSort: number): FormState {
-  return { name: "", valuationPercent: "100", color: "primary", sortOrder: String(nextSort), isActive: true };
+  return { name: "", valuationPercent: "100", sortOrder: String(nextSort), isActive: true };
 }
 
 type ModelDialogProps = {
@@ -72,7 +69,6 @@ function ModelDialog({ open, onClose, editModel, nextSortOrder }: ModelDialogPro
       ? {
           name: editModel.name,
           valuationPercent: String(editModel.valuationPercent),
-          color: editModel.color,
           sortOrder: String(editModel.sortOrder),
           isActive: editModel.isActive,
         }
@@ -102,7 +98,6 @@ function ModelDialog({ open, onClose, editModel, nextSortOrder }: ModelDialogPro
       const payload = {
         name: form.name.trim(),
         valuationPercent: Number(form.valuationPercent),
-        color: form.color,
         sortOrder: Number(form.sortOrder) || 0,
         isActive: form.isActive,
       };
@@ -164,24 +159,6 @@ function ModelDialog({ open, onClose, editModel, nextSortOrder }: ModelDialogPro
             {errors.valuationPercent && <p className="text-xs text-destructive">{errors.valuationPercent}</p>}
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Farbe im Kalender</Label>
-            <Select value={form.color} onValueChange={(v) => set("color", v)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SHIFT_MODEL_COLORS.map((c) => (
-                  <SelectItem key={c.value} value={c.value}>
-                    <span className="flex items-center gap-2">
-                      <span className={`inline-block h-3 w-3 rounded-full ${c.dot}`} />
-                      {c.label}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -697,7 +674,6 @@ export default function Einstellungen() {
                   className="flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors"
                 >
                   <GripVertical className="h-4 w-4 text-muted-foreground/40 shrink-0" />
-                  <span className={`inline-block h-3 w-3 rounded-full shrink-0 ${colorDotClass(model.color)}`} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium truncate">{model.name}</span>
