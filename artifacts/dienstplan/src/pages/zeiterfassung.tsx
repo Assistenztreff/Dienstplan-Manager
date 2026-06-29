@@ -28,6 +28,8 @@ import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { Check, X, CalendarClock, ArrowRight } from "lucide-react";
 import { useAuth } from "@/context/auth";
+import { useTeam } from "@/context/team";
+import { TeamSwitcher } from "@/components/team-switcher";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { readableApiError } from "@/lib/api-error";
@@ -60,12 +62,17 @@ export default function Zeiterfassung() {
   const isAssistant = currentUser?.role === "assistant";
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { selectedTeamId } = useTeam();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const statusFilter = searchParams.get("status");
 
-  const { data: entries, isLoading: entriesLoading } = useListTimeEntries();
-  const { data: users, isLoading: usersLoading } = useListUsers();
+  const { data: entries, isLoading: entriesLoading } = useListTimeEntries(
+    selectedTeamId != null ? { teamId: selectedTeamId } : undefined,
+  );
+  const { data: users, isLoading: usersLoading } = useListUsers(
+    selectedTeamId != null ? { teamId: selectedTeamId } : undefined,
+  );
   // Eigene geplante Schichten des Assistenten (Server erzwingt die eigene userId).
   const { data: shifts, isLoading: shiftsLoading } = useListShifts(undefined, {
     query: { enabled: isAssistant },
@@ -233,13 +240,14 @@ export default function Zeiterfassung() {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-3xl font-serif font-bold text-foreground">Zeiterfassung</h2>
           <p className="text-muted-foreground mt-1">
             {isAdmin ? "Geleistete Stunden prüfen und genehmigen" : "Meine geleisteten Stunden"}
           </p>
         </div>
+        <TeamSwitcher />
       </div>
 
       <div className="flex flex-wrap gap-1.5" data-testid="status-filter">
