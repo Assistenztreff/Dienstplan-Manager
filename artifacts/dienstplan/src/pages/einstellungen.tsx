@@ -5,6 +5,11 @@ import {
   useUpdateShiftModel,
   useDeleteShiftModel,
   getListShiftModelsQueryKey,
+  useListShiftTemplates,
+  useCreateShiftTemplate,
+  useUpdateShiftTemplate,
+  useDeleteShiftTemplate,
+  getListShiftTemplatesQueryKey,
   useGetBrandingSettings,
   useUpdateBrandingSettings,
   getGetBrandingSettingsQueryKey,
@@ -47,6 +52,323 @@ type FormState = {
 
 function emptyForm(nextSort: number): FormState {
   return { name: "", valuationPercent: "100", sortOrder: String(nextSort), isActive: true };
+}
+
+// Wochentage 1 (Montag) bis 7 (Sonntag) für die Vorlagen-Auswahl.
+const WEEKDAYS: { value: number; label: string }[] = [
+  { value: 1, label: "Mo" },
+  { value: 2, label: "Di" },
+  { value: 3, label: "Mi" },
+  { value: 4, label: "Do" },
+  { value: 5, label: "Fr" },
+  { value: 6, label: "Sa" },
+  { value: 7, label: "So" },
+];
+
+function weekdaysLabel(weekdays: number[]): string {
+  if (!weekdays || weekdays.length === 0) return "Alle Tage";
+  return [...weekdays]
+    .sort((a, b) => a - b)
+    .map((d) => WEEKDAYS.find((w) => w.value === d)?.label ?? d)
+    .join(", ");
+}
+
+type ShiftTemplate = {
+  id: number;
+  name: string;
+  startTime: string;
+  endTime: string;
+  weekdays: number[];
+};
+
+type TemplateFormState = {
+  name: string;
+  startTime: string;
+  endTime: string;
+  weekdays: number[];
+};
+
+type TemplateDialogProps = {
+  open: boolean;
+  onClose: () => void;
+  editTemplate?: ShiftTemplate;
+};
+
+function TemplateDialog({ open, onClose, editTemplate }: TemplateDialogProps) {
+  const queryClient = useQueryClient();
+  const { selectedTeamId } = useTeam();
+  const createTemplate = useCreateShiftTemplate();
+  const updateTemplate = useUpdateShiftTemplate();
+
+  const isEditing = !!editTemplate;
+
+  const [form, setForm] = useState<TemplateFormState>(() =>
+    editTemplate
+      ? {
+          name: editTemplate.name,
+          startTime: editTemplate.startTime,
+          endTime: editTemplate.endTime,
+          weekdays: editTemplate.weekdays ?? [],
+        }
+      : { name: "", startTime: "08:00", endTime: "16:00", weekdays: [] }
+  );
+  const [errors, setErrors] = useState<Partial<Record<keyof TemplateFormState, string>>>({});
+  const [saving, setSaving] = useState(false);
+
+  function set<K extends keyof TemplateFormState>(field: K, value: TemplateFormState[K]) {
+    setForm((f) => ({ ...f, [field]: value }));
+    setErrors((e) => ({ ...e, [field]: undefined }));
+  }
+
+  function toggleWeekday(day: number) {
+    setForm((f) => ({
+      ...f,
+      weekdays: f.weekdays.includes(day)
+        ? f.weekdays.filter((d) => d !== day)
+        : [...f.weekdays, day],
+    }));
+  }
+
+  function validate(): boolean {
+    const errs: Partial<Record<keyof TemplateFormState, string>> = {};
+    if (!form.name.trim()) errs.name = "Pflichtfeld";
+    if (!form.startTime) errs.startTime = "Startzeit angeben";
+    if (!form.endTime) errs.endTime = "Endzeit angeben";
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  }
+
+  async function handleSave() {
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const payload = {
+        name: form.name.trim(),
+        startTime: form.startTime,
+        endTime: form.endTime,
+        weekdays: [...form.weekdays].sort((a, b) => a - b),
+      };
+      if (isEditing && editTemplate) {
+        await updateTemplate.mutateAsync({ id: editTemplate.id, data: payload });
+      } else {
+        await createTemplate.mutateAsync({
+          data: { ...payload, ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}) },
+        });
+      }
+      await queryClient.invalidateQueries({ queryKey: getListShiftTemplatesQueryKey() });
+      onClose();
+    } catch (err) {
+      setErrors({ name: readableApiError(err, "Speichern fehlgeschlagen. Bitte erneut versuchen.") });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-xl">
+            {isEditing ? "Vorlage bearbeiten" : "Neue Vorlage"}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label>Bezeichnung *</Label>
+            <Input
+              value={form.name}
+              onChange={(e) => set("name", e.target.value)}
+              placeholder="z.B. Frühdienst Mo–Fr"
+              className={errors.name ? "border-destructive" : ""}
+            />
+            {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Startzeit *</Label>
+              <Input
+                type="time"
+                value={form.startTime}
+                onChange={(e) => set("startTime", e.target.value)}
+                className={errors.startTime ? "border-destructive" : ""}
+              />
+              {errors.startTime && <p className="text-xs text-destructive">{errors.startTime}</p>}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Endzeit *</Label>
+              <Input
+                type="time"
+                value={form.endTime}
+                onChange={(e) => set("endTime", e.target.value)}
+                className={errors.endTime ? "border-destructive" : ""}
+              />
+              {errors.endTime && <p className="text-xs text-destructive">{errors.endTime}</p>}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Wochentage</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {WEEKDAYS.map((w) => {
+                const active = form.weekdays.includes(w.value);
+                return (
+                  <button
+                    key={w.value}
+                    type="button"
+                    onClick={() => toggleWeekday(w.value)}
+                    className={
+                      "h-9 w-10 rounded-md border text-sm font-medium transition-colors " +
+                      (active
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-background text-foreground hover:bg-muted")
+                    }
+                  >
+                    {w.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Optionale Einschränkung auf bestimmte Wochentage. Ohne Auswahl gilt die Vorlage für
+              alle Tage.
+            </p>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2 pt-2">
+          <Button variant="outline" onClick={onClose} disabled={saving}>
+            Abbrechen
+          </Button>
+          <Button onClick={() => void handleSave()} disabled={saving}>
+            {saving ? "Speichern..." : isEditing ? "Speichern" : "Anlegen"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TemplateSettingsCard() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { data: templates, isLoading } = useListShiftTemplates();
+  const deleteTemplate = useDeleteShiftTemplate();
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editTemplate, setEditTemplate] = useState<ShiftTemplate | undefined>();
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+
+  const list: ShiftTemplate[] = (templates ?? []) as ShiftTemplate[];
+
+  function openCreate() {
+    setEditTemplate(undefined);
+    setDialogOpen(true);
+  }
+
+  function openEdit(template: ShiftTemplate) {
+    setEditTemplate(template);
+    setDialogOpen(true);
+  }
+
+  function closeDialog() {
+    setDialogOpen(false);
+    setEditTemplate(undefined);
+  }
+
+  async function handleDelete(id: number) {
+    if (confirmDelete !== id) {
+      setConfirmDelete(id);
+      return;
+    }
+    try {
+      await deleteTemplate.mutateAsync({ id });
+      await queryClient.invalidateQueries({ queryKey: getListShiftTemplatesQueryKey() });
+    } catch (err) {
+      toast({
+        title: "Vorlage kann nicht gelöscht werden",
+        description: readableApiError(err, "Bitte erneut versuchen."),
+        variant: "destructive",
+      });
+    } finally {
+      setConfirmDelete(null);
+    }
+  }
+
+  return (
+    <Card className="border-border/50 shadow-sm">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="font-serif text-lg font-bold text-foreground">Arbeitszeit-Vorlagen</h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Wiederkehrende Arbeitszeiten (z.B. Frühdienst Mo–Fr). Vorlagen belegen beim Anlegen
+              einer Schicht im Dienstplan die Start- und Endzeit automatisch vor.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={openCreate}>
+            <Plus className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Neue Vorlage</span>
+            <span className="sm:hidden">Neu</span>
+          </Button>
+        </div>
+
+        {isLoading ? (
+          <div className="space-y-2">
+            {[1, 2].map((i) => (
+              <Skeleton key={i} className="h-12 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : list.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border/60 p-6 text-center">
+            <p className="text-sm text-muted-foreground">Noch keine Vorlagen angelegt.</p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-border/50 rounded-lg border border-border/50">
+            {list.map((template) => (
+              <li
+                key={template.id}
+                className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  <span className="font-medium truncate block">{template.name}</span>
+                  <p className="text-xs text-muted-foreground">
+                    {template.startTime}–{template.endTime} · {weekdaysLabel(template.weekdays)}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => openEdit(template)}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Bearbeiten</span>
+                </Button>
+                <Button
+                  variant={confirmDelete === template.id ? "destructive" : "ghost"}
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => handleDelete(template.id)}
+                  onBlur={() => setConfirmDelete(null)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">
+                    {confirmDelete === template.id ? "Wirklich?" : "Löschen"}
+                  </span>
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+
+      {dialogOpen && (
+        <TemplateDialog open={dialogOpen} onClose={closeDialog} editTemplate={editTemplate} />
+      )}
+    </Card>
+  );
 }
 
 type ModelDialogProps = {
@@ -715,6 +1037,8 @@ export default function Einstellungen() {
         Schichtmodelle stehen beim Anlegen einer Schicht im Dienstplan zur Auswahl. Die Zeitwertung
         bestimmt, wie die geleistete Zeit in der Auswertung auf die Sollstunden angerechnet wird.
       </p>
+
+      <TemplateSettingsCard />
 
       {isDienstleister && <LogoSettingsCard />}
 

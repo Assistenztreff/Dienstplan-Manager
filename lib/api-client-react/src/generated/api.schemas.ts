@@ -343,6 +343,40 @@ export interface ShiftModelUpdate {
   isActive?: boolean;
 }
 
+export interface ShiftTemplate {
+  id: number;
+  name: string;
+  /** Startzeit im Format "HH:MM". */
+  startTime: string;
+  /** Endzeit im Format "HH:MM". */
+  endTime: string;
+  /** Gültige Wochentage, 1 (Montag) bis 7 (Sonntag). */
+  weekdays: number[];
+  createdAt: string;
+}
+
+export interface ShiftTemplateInput {
+  /** @minLength 1 */
+  name: string;
+  /** Optionaler Team-Kontext; muss ein erlaubtes Team sein. */
+  teamId?: number;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  startTime: string;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  endTime: string;
+  weekdays?: number[];
+}
+
+export interface ShiftTemplateUpdate {
+  /** @minLength 1 */
+  name?: string;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  startTime?: string;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  endTime?: string;
+  weekdays?: number[];
+}
+
 /**
  * @nullable
  */
@@ -726,6 +760,13 @@ export const ListShiftsType = {
 
 export type ListShiftModelsParams = {
 activeOnly?: boolean;
+/**
+ * Optionaler Team-Kontext für die Datentrennung.
+ */
+teamId?: number;
+};
+
+export type ListShiftTemplatesParams = {
 /**
  * Optionaler Team-Kontext für die Datentrennung.
  */

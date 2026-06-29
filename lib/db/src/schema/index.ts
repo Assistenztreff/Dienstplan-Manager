@@ -4,6 +4,7 @@ export * from "./team_members";
 export * from "./contracts";
 export * from "./shifts";
 export * from "./shift_models";
+export * from "./shift_templates";
 export * from "./allowances";
 export * from "./branding";
 export * from "./time_tracking";

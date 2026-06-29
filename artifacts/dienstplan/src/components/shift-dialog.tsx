@@ -5,6 +5,7 @@ import {
   useUpdateShift,
   useDeleteShift,
   useListShiftModels,
+  useListShiftTemplates,
   getListShiftsQueryKey,
   ApiError,
   type ShiftInputType,
@@ -153,7 +154,9 @@ export function ShiftDialog({
   const updateShift = useUpdateShift();
   const deleteShift = useDeleteShift();
   const { data: models } = useListShiftModels();
+  const { data: templates } = useListShiftTemplates(teamId != null ? { teamId } : undefined);
 
+  const allTemplates = templates ?? [];
   const allModels = models ?? [];
   const activeModels = allModels.filter((m) => m.isActive);
   const firstModelId = activeModels[0]?.id;
@@ -197,6 +200,9 @@ export function ShiftDialog({
   // Überschneidung (für die Warnung + force-Wiederholung).
   const [bulkCreated, setBulkCreated] = useState<Set<string>>(new Set());
   const [bulkConflicts, setBulkConflicts] = useState<string[] | null>(null);
+  // Gewählte Arbeitszeit-Vorlage (nur zur Anzeige im Select); das Anwenden
+  // belegt Start-/Endzeit vor.
+  const [templateId, setTemplateId] = useState<string>("");
 
   // Formular nur beim Öffnen / beim Wechsel des Bearbeitungsziels zurücksetzen,
   // nicht wenn die Schichtmodelle asynchron nachladen (sonst gehen Eingaben verloren).
@@ -207,6 +213,7 @@ export function ShiftDialog({
       setOverlapConflicts(null);
       setBulkCreated(new Set());
       setBulkConflicts(null);
+      setTemplateId("");
       setForm(buildInitialForm());
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -226,6 +233,17 @@ export function ShiftDialog({
     setErrors((e) => ({ ...e, [field]: undefined }));
     // Sobald die Eingaben geändert werden, ist eine frühere Kollisionswarnung
     // hinfällig — beim nächsten Speichern wird neu geprüft (ohne force).
+    setOverlapConflicts(null);
+    setBulkConflicts(null);
+  }
+
+  // Wendet eine Arbeitszeit-Vorlage an: belegt Start-/Endzeit vor.
+  function applyTemplate(value: string) {
+    setTemplateId(value);
+    const tpl = allTemplates.find((t) => String(t.id) === value);
+    if (!tpl) return;
+    setForm((f) => ({ ...f, startTime: tpl.startTime, endTime: tpl.endTime }));
+    setErrors((e) => ({ ...e, startTime: undefined, endTime: undefined }));
     setOverlapConflicts(null);
     setBulkConflicts(null);
   }
@@ -625,6 +643,28 @@ export function ShiftDialog({
               </Select>
               <p className="text-xs text-muted-foreground">
                 {PLANNING_STATUS_OPTIONS.find((o) => o.value === form.planningStatus)?.hint}
+              </p>
+            </div>
+          )}
+
+          {/* Arbeitszeit-Vorlage (Schnellauswahl, belegt Zeiten vor) */}
+          {!isAbsence && allTemplates.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Vorlage</Label>
+              <Select value={templateId} onValueChange={applyTemplate}>
+                <SelectTrigger data-testid="shift-dialog-template">
+                  <SelectValue placeholder="Vorlage wählen (optional)..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {allTemplates.map((t) => (
+                    <SelectItem key={t.id} value={String(t.id)}>
+                      {t.name} ({t.startTime}–{t.endTime})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Belegt Start- und Endzeit automatisch vor. Unter Einstellungen verwaltbar.
               </p>
             </div>
           )}

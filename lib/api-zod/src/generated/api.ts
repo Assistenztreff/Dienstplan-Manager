@@ -539,6 +539,90 @@ export const DeleteShiftModelParams = zod.object({
 
 
 /**
+ * @summary Arbeitszeit-Vorlagen auflisten
+ */
+export const ListShiftTemplatesQueryParams = zod.object({
+  "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext für die Datentrennung.')
+})
+
+export const listShiftTemplatesResponseWeekdaysItemMax = 7;
+
+
+
+export const ListShiftTemplatesResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "startTime": zod.string().describe('Startzeit im Format \"HH:MM\".'),
+  "endTime": zod.string().describe('Endzeit im Format \"HH:MM\".'),
+  "weekdays": zod.array(zod.number().min(1).max(listShiftTemplatesResponseWeekdaysItemMax)).describe('Gültige Wochentage, 1 (Montag) bis 7 (Sonntag).'),
+  "createdAt": zod.coerce.date()
+})
+export const ListShiftTemplatesResponse = zod.array(ListShiftTemplatesResponseItem)
+
+
+/**
+ * @summary Arbeitszeit-Vorlage anlegen
+ */
+
+export const createShiftTemplateBodyStartTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+export const createShiftTemplateBodyEndTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+export const createShiftTemplateBodyWeekdaysItemMax = 7;
+
+
+
+export const CreateShiftTemplateBody = zod.object({
+  "name": zod.string().min(1),
+  "teamId": zod.number().optional().describe('Optionaler Team-Kontext; muss ein erlaubtes Team sein.'),
+  "startTime": zod.string().regex(createShiftTemplateBodyStartTimeRegExp),
+  "endTime": zod.string().regex(createShiftTemplateBodyEndTimeRegExp),
+  "weekdays": zod.array(zod.number().min(1).max(createShiftTemplateBodyWeekdaysItemMax)).optional()
+})
+
+
+/**
+ * @summary Arbeitszeit-Vorlage aktualisieren
+ */
+export const UpdateShiftTemplateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+export const updateShiftTemplateBodyStartTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+export const updateShiftTemplateBodyEndTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+export const updateShiftTemplateBodyWeekdaysItemMax = 7;
+
+
+
+export const UpdateShiftTemplateBody = zod.object({
+  "name": zod.string().min(1).optional(),
+  "startTime": zod.string().regex(updateShiftTemplateBodyStartTimeRegExp).optional(),
+  "endTime": zod.string().regex(updateShiftTemplateBodyEndTimeRegExp).optional(),
+  "weekdays": zod.array(zod.number().min(1).max(updateShiftTemplateBodyWeekdaysItemMax)).optional()
+})
+
+export const updateShiftTemplateResponseWeekdaysItemMax = 7;
+
+
+
+export const UpdateShiftTemplateResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "startTime": zod.string().describe('Startzeit im Format \"HH:MM\".'),
+  "endTime": zod.string().describe('Endzeit im Format \"HH:MM\".'),
+  "weekdays": zod.array(zod.number().min(1).max(updateShiftTemplateResponseWeekdaysItemMax)).describe('Gültige Wochentage, 1 (Montag) bis 7 (Sonntag).'),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Arbeitszeit-Vorlage löschen
+ */
+export const DeleteShiftTemplateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
  * @summary Teams auflisten
  */
 export const ListTeamsResponseItem = zod.object({
