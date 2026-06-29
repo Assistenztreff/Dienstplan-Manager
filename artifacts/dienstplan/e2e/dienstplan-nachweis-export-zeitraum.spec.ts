@@ -5,6 +5,9 @@ import {
   type Page,
   type APIRequestContext,
 } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+import { format } from "date-fns";
+import { de } from "date-fns/locale";
 
 /**
  * E2E-Test für den Zeitraum-Nachweis-Export (Von-/Bis-Monat) auf der
@@ -193,4 +196,27 @@ test("Zeitraum-Nachweis: Mehrmonats-Auswahl, Validierung und PDF-Download", asyn
   const download = await downloadPromise;
 
   expect(download.suggestedFilename()).toBe(expectedFilename);
+
+  // Heruntergeladenes PDF speichern und seinen Inhalt prüfen, damit der Test
+  // nicht nur am Dateinamen hängt, sondern beweist, dass tatsächlich pro Monat
+  // eine Seite erzeugt wird.
+  const pdfPath = await download.path();
+  expect(pdfPath, "Download-Pfad des PDFs fehlt").toBeTruthy();
+  const pdfBytes = await readFile(pdfPath as string);
+  // jsPDF erzeugt unkomprimierte PDFs: Seitenobjekte tragen `/Type /Page`
+  // (der Seitenbaum-Knoten dagegen `/Type /Pages`, hier ausgeschlossen).
+  const pdfText = pdfBytes.toString("latin1");
+  const pageCount = (pdfText.match(/\/Type\s*\/Page(?![s])/g) ?? []).length;
+  expect(pageCount, "PDF muss genau eine Seite pro Monat enthalten").toBe(MONTH_COUNT);
+
+  // Jede Seite trägt ihren Monatsnamen ("Monat: <MMMM yyyy>"). Für den
+  // 3-Monats-Zeitraum müssen alle drei Monatsbezeichnungen im PDF vorkommen.
+  for (let i = 0; i < MONTH_COUNT; i++) {
+    const monthDate = new Date(FROM.getFullYear(), FROM.getMonth() + i, 1);
+    const monthLabel = format(monthDate, "MMMM yyyy", { locale: de });
+    expect(
+      pdfText.includes(`Monat: ${monthLabel}`),
+      `PDF muss den Monat "${monthLabel}" als eigene Seite enthalten`
+    ).toBe(true);
+  }
 });
