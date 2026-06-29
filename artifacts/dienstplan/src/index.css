@@ -57,6 +57,14 @@
   --color-sidebar-accent-border: var(--sidebar-accent-border);
   --color-sidebar-ring: hsl(var(--sidebar-ring));
 
+  /* Brand-Farbtokens fuer die App-Shell (Plattform-Header/-Footer + Sub-Nav).
+     Abgestimmt auf die AssistenzTreff-Palette: Dunkelblau, Hellgelb, Weiss;
+     Cyan im AssistenzTreff-Stil als Akzent der Plattform-Huelle. */
+  --color-brand-cyan: #3fb8cc;
+  --color-brand-dark: #092948;
+  --color-brand-yellow: #ebf18b;
+  --color-brand-white: #ffffff;
+
   --font-sans: var(--app-font-sans);
   --font-serif: var(--app-font-serif);
   --font-mono: var(--app-font-mono);

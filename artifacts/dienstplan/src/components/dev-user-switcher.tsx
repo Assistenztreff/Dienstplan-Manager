@@ -52,16 +52,14 @@ function DevUserSwitcherInner() {
   };
 
   return (
-    <div className="px-3 pt-3 mt-3 border-t border-sidebar-border">
-      <p className="text-[10px] uppercase tracking-wide text-sidebar-foreground/40 mb-1.5">
-        Dev: Nutzer wechseln
-      </p>
+    <div className="hidden items-center gap-1.5 md:flex">
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Dev</span>
       <Select
         value={currentUser ? String(currentUser.id) : undefined}
         onValueChange={(v) => void handleSwitch(v)}
         disabled={switching}
       >
-        <SelectTrigger className="w-full h-8 text-xs" aria-label="Test-Nutzer wechseln">
+        <SelectTrigger className="h-8 w-auto min-w-[10rem] text-xs" aria-label="Test-Nutzer wechseln">
           <SelectValue placeholder="Test-Nutzer wählen" />
         </SelectTrigger>
         <SelectContent>
