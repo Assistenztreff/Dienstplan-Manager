@@ -1,0 +1,32 @@
+Ich integriere meine "Dienstplan-App" als Modul in meine bestehende Plattform "AssistenzTreff". Die App wird über den Menüpunkt "Connect" aufgerufen. Wir müssen das Master-Layout der App an das Plattform-Design anpassen (Horizontaler Ansatz: Fixer Header oben, fixer Footer unten, die App scrollt dazwischen). Das System muss zukünftig verschiedene Benutzerrollen (z. B. Privatpersonen, Dienstleister) unterstützen, achte also auf sauberen Code.
+Aufgabe 1: Corporate Design Farben in Tailwind registrieren Bitte passe die Datei tailwind.config.ts(oder .js) an. Füge unter theme.extend.colors ein neues Objekt brand mit unseren exakten Plattform-Farben hinzu:
+* dark: '#092948' (Primär Dunkelblau)
+* cyan: '#d4f0f0' (Helles Eisblau)
+* green: '#cae677' (Hellgrün)
+* yellow: '#ebf18b' (Helles Gelbgrün)
+* white: '#f9f9f9' (Off-White Hintergrund)
+* peach: '#fed4b1' (Pfirsich)
+* purple: '#26092e' (Dunkelviolett)
+Aufgabe 2: Die <Layout>-Komponente neu aufbauen (layout.tsx) Schreibe die Layout-Komponente komplett um. Nutze ein striktes Flexbox-Layout: flex flex-col h-screen overflow-hidden. Verwende ausschließlich die neu angelegten brand-Farben für das Styling.
+Struktur-Vorgaben für das Layout:
+1. Plattform-Header (Top, fixiert):
+* Hintergrundfarbe: bg-brand-cyan.
+* Obere Zeile: Platzhalter für das Plattform-Logo links. Rechts Text-Links ("Leistungen", "Über uns", "Kontakt", "Login", "Registrieren") in text-brand-dark.
+* Untere Zeile (Pill-Navigation): Zentrierte Reihe von Buttons ("Job Börse", "Map", "Connect", "Aktuelles", "Wissen", "Speaker:in").
+* Der Button "Connect" ist der aktive Bereich der Dienstplan-App und erhält das Styling: bg-brand-dark text-white rounded-full. Die anderen Links erhalten einen weißen Hintergrund mit dunkelblauer Schrift.
+2. App-Sub-Navigation (Direkt unter dem Header):
+* Diese ersetzt die alte Sidebar und verläuft horizontal.
+* Hintergrundfarbe: Ein helles Grau (z. B. bg-slate-100 oder bg-gray-100).
+* Menüpunkte ("Dashboard", "Dienstplan", "Assistenten", "Zeiterfassung" etc.) nebeneinander.
+* Auf mobilen Geräten muss diese Leiste horizontal scrollbar sein (overflow-x-auto whitespace-nowrap).
+* Der aktuell aktive Menüpunkt der App soll hervorgehoben werden: bg-brand-yellow text-brand-dark rounded-full.
+3. Main Content (App-Bereich):
+* Nimmt den restlichen Platz ein und ist der einzige scrollbare Bereich: flex-1 overflow-y-auto p-4 md:p-6.
+* Hintergrundfarbe: bg-brand-white.
+4. Plattform-Footer (Bottom, fixiert am unteren Rand):
+* Hintergrundfarbe: bg-brand-dark.
+* Mehrspaltiges Grid (Desktop 4 Spalten, Mobile 1-2 Spalten).
+* Spalten-Überschriften ("Assistenztreff", "Über uns", "Social Media", "Rechtliches") in text-brand-yellow.
+* Die darunterliegenden Links in klassischem Weiß.
+Bitte generiere den vollständigen, sofort einsatzbereiten Code für die tailwind.config.ts und die layout.tsx. Achte auf ausführliche Kommentare im Code, um die Struktur für künftige Erweiterungen (wie Conditional Rendering für Dienstleister) vorzubereiten.
+Sobald Replit diesen Code generiert hat, prüfe in der Vorschau, ob das Scroll-Verhalten (Header und Footer bleiben stehen, der Dienstplan scrollt) exakt so funktioniert, wie wir es konzipiert haben.
