@@ -14,13 +14,18 @@
       "backgroundColor": "#D4F5F0"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "icon": {
+        "light": "./assets/images/icon.png",
+        "dark": "./assets/images/icon-dark.png",
+        "tinted": "./assets/images/icon-tinted.png"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "monochromeImage": "./assets/images/adaptive-icon-monochrome.png",
-        "backgroundColor": "#D4F5F0"
+        "backgroundColor": "#082948"
       }
     },
     "web": {
