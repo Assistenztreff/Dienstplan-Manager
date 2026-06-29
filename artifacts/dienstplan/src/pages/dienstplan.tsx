@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "wouter";
 import { useListShifts, useListUsers, useListShiftModels } from "@workspace/api-client-react";
-import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, getDay, isValid } from "date-fns";
+import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, getDay, isValid, startOfDay, startOfWeek, addDays, differenceInCalendarDays, isWithinInterval } from "date-fns";
 import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, CheckSquare, X, CalendarPlus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, CheckSquare, X, CalendarPlus, Trash2, ChevronDown, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ShiftDialog } from "@/components/shift-dialog";
 import { BulkDeleteDialog } from "@/components/bulk-delete-dialog";
@@ -133,6 +133,198 @@ function absenceMapFor(shifts: Shift[]): Map<string, Shift> {
     if (isAbsenceShift(s)) m.set(dayKey(new Date(s.startTime)), s);
   }
   return m;
+}
+
+// Zusammenhängende Abwesenheit (durchgehender Block) eines Assistenten. Jeder
+// Tag ist ein eigener Datensatz; hier werden aufeinanderfolgende Tage gleicher
+// Art und Person zu einem Zeitraum zusammengefasst.
+type AbsenceRange = {
+  userId: number;
+  userName: string;
+  type: string;
+  start: Date;
+  end: Date;
+  days: number;
+  shift: Shift;
+};
+
+function buildAbsenceRanges(shifts: Shift[], nameById: Map<number, string>): AbsenceRange[] {
+  // Pro Assistent + Abwesenheitsart gruppieren, dann nach Tag sortieren und
+  // lückenlos aufeinanderfolgende Tage zu einem Zeitraum verschmelzen.
+  const byKey = new Map<string, Shift[]>();
+  for (const s of shifts) {
+    if (!isAbsenceShift(s)) continue;
+    const k = `${s.userId}|${s.type}`;
+    const arr = byKey.get(k);
+    if (arr) arr.push(s);
+    else byKey.set(k, [s]);
+  }
+
+  const ranges: AbsenceRange[] = [];
+  for (const group of byKey.values()) {
+    const sorted = group
+      .map((s) => ({ s, d: startOfDay(new Date(s.startTime)) }))
+      .sort((a, b) => a.d.getTime() - b.d.getTime());
+
+    let runStartIdx = 0;
+    for (let i = 1; i <= sorted.length; i++) {
+      const prev = sorted[i - 1];
+      const cur = i < sorted.length ? sorted[i] : undefined;
+      // <= 1 fasst aufeinanderfolgende Tage zusammen und ignoriert
+      // versehentliche Doppel-Datensätze am selben Tag (Differenz 0).
+      const consecutive = cur != null && differenceInCalendarDays(cur.d, prev.d) <= 1;
+      if (!consecutive) {
+        const first = sorted[runStartIdx];
+        ranges.push({
+          userId: first.s.userId,
+          userName: first.s.user?.name ?? nameById.get(first.s.userId) ?? "Unbekannt",
+          type: first.s.type,
+          start: first.d,
+          end: prev.d,
+          days: differenceInCalendarDays(prev.d, first.d) + 1,
+          shift: first.s,
+        });
+        runStartIdx = i;
+      }
+    }
+  }
+
+  return ranges.sort(
+    (a, b) =>
+      a.start.getTime() - b.start.getTime() ||
+      a.userName.localeCompare(b.userName, "de", { sensitivity: "base" }),
+  );
+}
+
+function absenceRangeLabel(r: AbsenceRange): string {
+  if (isSameDay(r.start, r.end)) return format(r.start, "EEEE, d. MMMM", { locale: de });
+  if (r.start.getMonth() === r.end.getMonth()) {
+    return `${format(r.start, "d.")} – ${format(r.end, "d. MMMM", { locale: de })}`;
+  }
+  return `${format(r.start, "d. MMM", { locale: de })} – ${format(r.end, "d. MMM", { locale: de })}`;
+}
+
+// Kompakte Übersicht „wer ist gerade / demnächst abwesend?" über das ganze
+// (team-gescopte) Team. Datenquelle: alle Schichten des angezeigten Monats,
+// gefiltert auf Abwesenheiten und auf aktuell laufende bzw. anstehende
+// Zeiträume (Ende heute oder später). Gruppiert nach Kalenderwoche.
+function TeamAbsenceOverview({
+  shifts,
+  assistants,
+  onShiftClick,
+  canEdit,
+}: {
+  shifts: Shift[];
+  assistants: Assistant[];
+  onShiftClick: (shift: Shift) => void;
+  canEdit: boolean;
+}) {
+  const [open, setOpen] = useState(true);
+  const today = startOfDay(new Date());
+  const nameById = new Map(assistants.map((a) => [a.id, a.name]));
+  const ranges = buildAbsenceRanges(shifts, nameById).filter(
+    (r) => r.end.getTime() >= today.getTime(),
+  );
+
+  const thisWeekStart = startOfWeek(today, { weekStartsOn: 1 });
+  const weeks = new Map<string, { weekStart: Date; ranges: AbsenceRange[] }>();
+  for (const r of ranges) {
+    const ws = startOfWeek(r.start, { weekStartsOn: 1 });
+    const key = dayKey(ws);
+    const bucket = weeks.get(key);
+    if (bucket) bucket.ranges.push(r);
+    else weeks.set(key, { weekStart: ws, ranges: [r] });
+  }
+  const sortedWeeks = [...weeks.values()].sort(
+    (a, b) => a.weekStart.getTime() - b.weekStart.getTime(),
+  );
+
+  function weekLabel(ws: Date): string {
+    const diff = differenceInCalendarDays(ws, thisWeekStart);
+    if (diff <= 0 && differenceInCalendarDays(addDays(ws, 6), today) >= 0) return "Diese Woche";
+    if (diff === 7) return "Nächste Woche";
+    const we = addDays(ws, 6);
+    if (ws.getMonth() === we.getMonth()) {
+      return `Woche ${format(ws, "d.")} – ${format(we, "d. MMM", { locale: de })}`;
+    }
+    return `Woche ${format(ws, "d. MMM", { locale: de })} – ${format(we, "d. MMM", { locale: de })}`;
+  }
+
+  return (
+    <Card className="border-border/50 shadow-sm" data-testid="team-absence-overview">
+      <button
+        type="button"
+        className="w-full flex items-center gap-2 px-4 py-3 text-left"
+        onClick={() => setOpen((v) => !v)}
+        data-testid="team-absence-toggle"
+      >
+        <Users className="h-4 w-4 text-muted-foreground shrink-0" />
+        <span className="font-semibold text-sm">Team-Abwesenheiten</span>
+        <span className="text-xs text-muted-foreground" data-testid="team-absence-count">
+          {ranges.length === 0
+            ? "keine aktuell"
+            : `${ranges.length} ${ranges.length === 1 ? "Zeitraum" : "Zeiträume"}`}
+        </span>
+        <ChevronDown
+          className={`ml-auto h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div className="border-t border-border/50 px-4 py-3">
+          {ranges.length === 0 ? (
+            <p className="text-sm text-muted-foreground" data-testid="team-absence-empty">
+              Keine laufenden oder anstehenden Abwesenheiten in diesem Monat.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {sortedWeeks.map((week) => (
+                <div key={dayKey(week.weekStart)} className="space-y-1.5">
+                  <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {weekLabel(week.weekStart)}
+                  </div>
+                  <div className="space-y-1">
+                    {week.ranges.map((r) => {
+                      const ongoing = isWithinInterval(today, { start: r.start, end: r.end });
+                      return (
+                        <div
+                          key={`${r.userId}-${r.type}-${dayKey(r.start)}`}
+                          data-testid="team-absence-row"
+                          className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-border/40 bg-muted/20 px-3 py-2 text-sm ${
+                            canEdit ? "cursor-pointer hover:bg-muted/40 transition-colors" : ""
+                          }`}
+                          onClick={canEdit ? () => onShiftClick(r.shift) : undefined}
+                        >
+                          <span
+                            className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${SHIFT_TYPE_DOTS[r.type] ?? "bg-primary"}`}
+                          />
+                          <span className="font-medium">{r.userName}</span>
+                          <span className="text-muted-foreground">
+                            {SHIFT_TYPE_LABELS[r.type] ?? r.type}
+                          </span>
+                          <span className="ml-auto text-muted-foreground">
+                            {absenceRangeLabel(r)}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            ({r.days} {r.days === 1 ? "Tag" : "Tage"})
+                          </span>
+                          {ongoing && (
+                            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                              läuft
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
 }
 
 type DialogState =
@@ -711,6 +903,18 @@ export default function Dienstplan() {
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <Header />
+
+      {/* Team-Abwesenheits-Übersicht (nur Admin): wer ist gerade/demnächst
+          abwesend? Über das ganze team-gescopte Team, unabhängig vom
+          Assistenten-Filter. */}
+      {isAdmin && assistants.length > 0 && (
+        <TeamAbsenceOverview
+          shifts={allShifts}
+          assistants={assistants}
+          onShiftClick={openEdit}
+          canEdit={isAdmin}
+        />
+      )}
 
       {/* Mobile: umschaltbare Ansicht (Liste / Monatsgitter) */}
       <div className="md:hidden space-y-3" data-testid="dienstplan-mobile">
