@@ -246,3 +246,141 @@ test("Mehrtägige Abwesenheiten bilden einen durchgehenden, einmal beschrifteten
     await page.request.delete(`/api/users/${assistant.id}`);
   }
 });
+
+/**
+ * Monatsgitter (MonthGrid): Mehrtägige Abwesenheiten werden auch im Kalender-
+ * Gitter als EIN durchgehender Balken pro Tag/Typ dargestellt — verbunden über
+ * negative Ränder, mit linker Kappe am Starttag und rechter Kappe am Endtag.
+ *
+ * Das Gitter rendert die Abwesenheiten als eigene Spans (kein AbsenceTableBar),
+ * deshalb braucht es einen eigenen Test. Geprüft werden beide Ansichten, in
+ * denen MonthGrid vorkommt: Desktop-Monatsansicht (md:block, umschaltbar) und
+ * mobile Monatsansicht (md:hidden, Standard). Eine Änderung an den Grid-Lücken
+ * oder der absenceTypesByDay-Verknüpfung würde die Balken-Verbindung oder die
+ * Start/End-Rundung still zerstören — dann schlägt dieser Test fehl.
+ */
+async function assertConnectedGridBars(
+  page: Page,
+  container: Locator,
+  data: {
+    year: number;
+    month: number;
+    vacationDays: number[];
+    sickDays: number[];
+  },
+): Promise<void> {
+  const { year, month, vacationDays, sickDays } = data;
+  const bar = (type: "vacation" | "sick", day: number): Locator =>
+    container.getByTestId(`absence-bar-${type}-${dateKey(year, month, day)}`);
+
+  // --- Urlaub: 3-tägiger Balken --------------------------------------------
+  const [vS, vM, vE] = vacationDays;
+  await expect(bar("vacation", vS)).toBeVisible();
+  await expect(bar("vacation", vM)).toBeVisible();
+  await expect(bar("vacation", vE)).toBeVisible();
+
+  // Start-Tag = linke Kappe (rounded-l), keine linke Verbindung.
+  await expect(bar("vacation", vS)).toHaveClass(/rounded-l-full/);
+  await expect(bar("vacation", vS)).not.toHaveClass(/-ml-/);
+  // End-Tag = rechte Kappe (rounded-r), keine rechte Verbindung.
+  await expect(bar("vacation", vE)).toHaveClass(/rounded-r-full/);
+  await expect(bar("vacation", vE)).not.toHaveClass(/-mr-/);
+  // Mittel-Tag = beidseitig verbunden (negative Ränder, keine Rundung).
+  await expect(bar("vacation", vM)).toHaveClass(/-ml-/);
+  await expect(bar("vacation", vM)).toHaveClass(/-mr-/);
+  await expect(bar("vacation", vM)).not.toHaveClass(/rounded-l-full/);
+  await expect(bar("vacation", vM)).not.toHaveClass(/rounded-r-full/);
+
+  // --- Krank: 2-tägiger Balken ---------------------------------------------
+  const [sS, sE] = sickDays;
+  await expect(bar("sick", sS)).toHaveClass(/rounded-l-full/);
+  await expect(bar("sick", sS)).not.toHaveClass(/rounded-r-full/);
+  await expect(bar("sick", sE)).toHaveClass(/rounded-r-full/);
+  await expect(bar("sick", sE)).not.toHaveClass(/rounded-l-full/);
+}
+
+async function seedAbsenceRuns(
+  page: Page,
+  data: {
+    userId: number;
+    year: number;
+    month: number;
+    vacationDays: number[];
+    sickDays: number[];
+  },
+  createdShiftIds: number[],
+): Promise<void> {
+  for (const d of data.vacationDays) {
+    const s = await createAbsenceDay(page, {
+      userId: data.userId,
+      dateStr: dateKey(data.year, data.month, d),
+      type: "vacation",
+    });
+    createdShiftIds.push(s.id);
+  }
+  for (const d of data.sickDays) {
+    const s = await createAbsenceDay(page, {
+      userId: data.userId,
+      dateStr: dateKey(data.year, data.month, d),
+      type: "sick",
+    });
+    createdShiftIds.push(s.id);
+  }
+}
+
+test("Monatsgitter: Mehrtägige Abwesenheiten bilden auch im Desktop- und Mobil-Gitter einen durchgehenden Balken", async ({
+  page,
+}) => {
+  await loginAsAdmin(page);
+  const assistant = await createAssistant(page);
+  const createdShiftIds: number[] = [];
+
+  try {
+    await openDesktopCalendar(page);
+    const { year, month } = parseMonthLabel(
+      await page.getByTestId("month-label").innerText(),
+    );
+
+    const vacationDays = [6, 7, 8]; // 3-tägiger Urlaub
+    const sickDays = [20, 21]; // 2-tägiger Krank-Lauf
+    await seedAbsenceRuns(
+      page,
+      { userId: assistant.id, year, month, vacationDays, sickDays },
+      createdShiftIds,
+    );
+
+    // --- Desktop-Monatsansicht: auf "Monat" umschalten -------------------
+    await page.reload();
+    const desktop = page.getByTestId("dienstplan-desktop");
+    await expect(desktop).toBeVisible();
+    await desktop.getByTestId("view-toggle-grid").click();
+    await expect(desktop.getByTestId("view-toggle-grid")).toHaveAttribute(
+      "data-active",
+      "true",
+    );
+    await expect(desktop.getByTestId("month-grid")).toBeVisible();
+    await assertConnectedGridBars(page, desktop, {
+      year,
+      month,
+      vacationDays,
+      sickDays,
+    });
+
+    // --- Mobile-Monatsansicht: Gitter ist dort der Standard --------------
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mobile = page.getByTestId("dienstplan-mobile");
+    await expect(mobile).toBeVisible();
+    await expect(mobile.getByTestId("month-grid")).toBeVisible();
+    await assertConnectedGridBars(page, mobile, {
+      year,
+      month,
+      vacationDays,
+      sickDays,
+    });
+  } finally {
+    for (const id of createdShiftIds) {
+      await page.request.delete(`/api/shifts/${id}`);
+    }
+    await page.request.delete(`/api/users/${assistant.id}`);
+  }
+});

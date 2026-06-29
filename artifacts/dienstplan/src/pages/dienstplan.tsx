@@ -628,6 +628,7 @@ function MonthGrid({
                 return (
                   <span
                     key={type}
+                    data-testid={`absence-bar-${type}-${format(day, "yyyy-MM-dd")}`}
                     className={`block h-1.5 w-full ${SHIFT_TYPE_DOTS[type]} ${
                       isStart ? "rounded-l-full" : "-ml-0.5"
                     } ${isEnd ? "rounded-r-full" : "-mr-0.5"}`}
