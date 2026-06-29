@@ -20,3 +20,12 @@ optional: wait for `#email` with a short timeout and, if it never appears, assum
 auto-login already authenticated and assert the post-login URL. The committed
 form-based specs are still correct — validation/CI runs against a production build
 where dev-login is disabled and the form works.
+
+**Best workaround for new specs (works in BOTH dev and prod build):** authenticate
+programmatically in the browser context — `await page.request.post('/api/auth/login',
+{ data: { email, password } })` then `page.goto(targetRoute)`. `page.request` shares
+the cookie jar with the page, so the `AuthProvider` bootstrap's `/api/auth/me` returns
+200 and renders the target route with NO dependency on the login form or on dev
+auto-login. This also lets you control the logged-in account's `accountType` (switch
+via API first, e.g. `becomeDienstleister`) so gated routes like `/team-verwaltung`
+render. Used by `dienstplan-server-error-messages.spec.ts`.
