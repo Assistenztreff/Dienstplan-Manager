@@ -49,6 +49,16 @@ if (useManagedStack && !databaseUrl) {
 }
 const testDatabaseUrl = databaseUrl ? deriveTestDbUrl(databaseUrl) : "";
 
+// Damit Specs/Helper, die zur Laufzeit einen zweiten Admin seeden
+// (`seedForeignAdmin` -> setup-admin per execSync), in DIESELBE Datenbank
+// schreiben, gegen die der isolierte Test-API-Server läuft (die `_test`-DB),
+// die abgeleitete Test-DB-URL für die Worker-Prozesse bereitstellen. Ohne das
+// erbt der execSync die Dev-`DATABASE_URL` und der Admin landet in der Dev-DB
+// -> der spätere Login gegen die Test-DB schlägt fehl.
+if (useManagedStack && testDatabaseUrl) {
+  process.env.E2E_TEST_DATABASE_URL = testDatabaseUrl;
+}
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,

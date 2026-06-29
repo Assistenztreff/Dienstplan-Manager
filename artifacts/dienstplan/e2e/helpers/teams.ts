@@ -222,8 +222,22 @@ export class TeamTestHarness {
     const password = opts.password ?? "attacker1234";
     const name = opts.name ?? `E2E Attacker ${this.run}`;
 
+    // Gegen den isolierten Test-Stack muss der Admin in die `_test`-DB geseedet
+    // werden (sonst landet er via Dev-`DATABASE_URL` in der falschen DB und der
+    // Login gegen die Test-DB schlägt fehl). Die Config stellt die Test-DB-URL
+    // als `E2E_TEST_DATABASE_URL` bereit; gegen einen externen Stack (Proxy/Dev)
+    // ist sie nicht gesetzt und die vorhandene `DATABASE_URL` greift.
+    const seedEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      ADMIN_EMAIL: email,
+      ADMIN_PASSWORD: password,
+      ADMIN_NAME: name,
+    };
+    if (process.env.E2E_TEST_DATABASE_URL) {
+      seedEnv.DATABASE_URL = process.env.E2E_TEST_DATABASE_URL;
+    }
     execSync("pnpm --filter @workspace/scripts run setup-admin", {
-      env: { ...process.env, ADMIN_EMAIL: email, ADMIN_PASSWORD: password, ADMIN_NAME: name },
+      env: seedEnv,
       stdio: "pipe",
     });
 
