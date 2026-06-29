@@ -1553,6 +1553,13 @@ components:
     ShiftUpdate:
       type: object
       properties:
+        userId:
+          type: integer
+          description: >-
+            Optionaler Wechsel des zugewiesenen Assistenten. Der neue Nutzer
+            muss Mitglied des Teams der Schicht sein (Member-of-Team-Invariante),
+            sonst 403. Wird genutzt für das Tauschen des Assistenten beim
+            Massen-Ändern bestehender Schichten.
         startTime:
           type: string
           format: date-time

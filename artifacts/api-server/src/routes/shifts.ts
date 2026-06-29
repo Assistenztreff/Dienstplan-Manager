@@ -468,15 +468,29 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
     return;
   }
 
+  // Wechsel des zugewiesenen Assistenten (Massen-Ändern): Der neue Nutzer muss
+  // Mitglied des Teams der Schicht sein — sonst ließe sich eine Schicht einem
+  // teamfremden Nutzer zuordnen und dessen PII über die user-gejointe Antwort
+  // auslesen (identische Member-of-Team-Invariante wie bei POST). Das Team der
+  // Schicht (oldShift.teamId) bleibt bei PATCH unverändert.
+  const effectiveUserId = body.data.userId ?? oldShift.userId;
+  if (body.data.userId != null && body.data.userId !== oldShift.userId) {
+    if (!(await isUserMemberOfTeam(body.data.userId, oldShift.teamId))) {
+      res.status(403).json({ error: "Nutzer gehört nicht zu diesem Team" });
+      return;
+    }
+  }
+
   // Kollisionsprüfung mit den effektiven (ggf. teil-aktualisierten) Werten, die
   // eigene Schicht ausgenommen. force überschreibt bewusst, ohne Schema-Änderung.
+  // Bei Assistenten-Wechsel gegen den NEUEN Nutzer prüfen.
   const force = req.body?.force === true;
   const effectiveType = body.data.type ?? oldShift.type;
   const effectiveStart = body.data.startTime ?? oldShift.startTime;
   const effectiveEnd = body.data.endTime ?? oldShift.endTime;
   if (!isAbsenceType(effectiveType) && !force) {
     const conflicts = await findOverlappingShifts(
-      oldShift.userId,
+      effectiveUserId,
       effectiveStart,
       effectiveEnd,
       oldShift.id
@@ -490,10 +504,10 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
   // Doppelte Abwesenheit am selben Tag auch beim Bearbeiten verhindern: sonst
   // entstünde durch eine Datums-/Typ-Änderung ein zweiter Urlaubs-/Krank-Eintrag
   // und vacationDaysUsed würde erneut belastet. Die eigene Schicht ist via
-  // excludeShiftId ausgenommen.
+  // excludeShiftId ausgenommen. Bei Assistenten-Wechsel gegen den NEUEN Nutzer prüfen.
   if (isAbsenceType(effectiveType)) {
     const duplicate = await findDuplicateAbsence(
-      oldShift.userId,
+      effectiveUserId,
       effectiveType,
       effectiveStart,
       oldShift.id

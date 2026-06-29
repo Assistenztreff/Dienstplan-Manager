@@ -23,8 +23,14 @@ all `.insert(<table>Table)` call sites, not just the obvious route handler.
 that team (`isUserMemberOfTeam(userId, teamId)`), else an admin can link a foreign
 user into an allowed team and read their PII back via the user-joined list/by-id
 responses (cross-team leak). Enforce on every create that carries a userId:
-shifts, contracts, time_tracking. PATCH bodies (ShiftUpdate/ContractUpdate/
-TimeEntryUpdate) deliberately omit userId, so updates can't re-link.
+shifts, contracts, time_tracking. PATCH bodies ContractUpdate/TimeEntryUpdate
+deliberately omit userId, so updates can't re-link. **Exception: ShiftUpdate now
+accepts an optional userId** (assistant swap for bulk-editing existing shifts).
+The shifts PATCH handler must therefore re-apply the SAME member-of-team check
+(`isUserMemberOfTeam(body.userId, oldShift.teamId)` → 403; team stays put) and run
+the overlap + duplicate-absence checks against the NEW effectiveUserId
+(`body.userId ?? oldShift.userId`), not the stored one — otherwise an assistant
+swap is validated against the wrong person.
 **Why legacy breaks:** users created via POST /users *between* the first
 multi-team migration and membership-on-create have domain rows in a team without a
 team_members entry — the new write check would 403 their future rows. The

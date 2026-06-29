@@ -6,10 +6,11 @@ import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, CheckSquare, X, CalendarPlus, Trash2, ChevronDown, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, CheckSquare, X, CalendarPlus, Trash2, Pencil, ChevronDown, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ShiftDialog } from "@/components/shift-dialog";
 import { BulkDeleteDialog } from "@/components/bulk-delete-dialog";
+import { BulkEditDialog } from "@/components/bulk-edit-dialog";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
@@ -354,6 +355,7 @@ type DialogState =
   | { mode: "create"; date: Date; userId?: number }
   | { mode: "edit"; shift: Shift }
   | { mode: "bulk-create"; dates: string[] }
+  | { mode: "bulk-edit"; dates: string[] }
   | { mode: "bulk-delete"; dates: string[] };
 
 
@@ -1214,6 +1216,16 @@ export default function Dienstplan() {
           </Button>
           <Button
             size="sm"
+            variant="secondary"
+            className="gap-1.5"
+            onClick={() => setDialog({ mode: "bulk-edit", dates: selectedDates })}
+            data-testid="bulk-edit-open"
+          >
+            <Pencil className="h-4 w-4" />
+            Einträge ändern
+          </Button>
+          <Button
+            size="sm"
             variant="destructive"
             className="gap-1.5"
             onClick={() => setDialog({ mode: "bulk-delete", dates: selectedDates })}
@@ -1251,6 +1263,22 @@ export default function Dienstplan() {
           month={month}
           year={year}
           teamId={selectedTeamId}
+        />
+      )}
+
+      {isAdmin && (
+        <BulkEditDialog
+          open={dialog.mode === "bulk-edit"}
+          onClose={closeDialog}
+          dates={dialog.mode === "bulk-edit" ? dialog.dates : []}
+          shifts={allShifts}
+          assistants={assistants}
+          month={month}
+          year={year}
+          onSaved={() => {
+            clearSelection();
+            closeDialog();
+          }}
         />
       )}
 

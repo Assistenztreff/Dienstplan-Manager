@@ -9,6 +9,8 @@ import type { ShiftUpdatePlanningStatus } from './shiftUpdatePlanningStatus';
 import type { ShiftUpdateType } from './shiftUpdateType';
 
 export interface ShiftUpdate {
+  /** Optionaler Wechsel des zugewiesenen Assistenten. Der neue Nutzer muss Mitglied des Teams der Schicht sein (Member-of-Team-Invariante), sonst 403. Wird genutzt für das Tauschen des Assistenten beim Massen-Ändern bestehender Schichten. */
+  userId?: number;
   startTime?: Date;
   endTime?: Date;
   type?: ShiftUpdateType;

@@ -301,6 +301,8 @@ export const ShiftUpdatePlanningStatus = {
 } as const;
 
 export interface ShiftUpdate {
+  /** Optionaler Wechsel des zugewiesenen Assistenten. Der neue Nutzer muss Mitglied des Teams der Schicht sein (Member-of-Team-Invariante), sonst 403. Wird genutzt für das Tauschen des Assistenten beim Massen-Ändern bestehender Schichten. */
+  userId?: number;
   startTime?: string;
   endTime?: string;
   type?: ShiftUpdateType;

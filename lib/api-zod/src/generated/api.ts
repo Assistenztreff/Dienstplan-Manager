@@ -413,6 +413,7 @@ export const UpdateShiftParams = zod.object({
 })
 
 export const UpdateShiftBody = zod.object({
+  "userId": zod.number().optional().describe('Optionaler Wechsel des zugewiesenen Assistenten. Der neue Nutzer muss Mitglied des Teams der Schicht sein (Member-of-Team-Invariante), sonst 403. Wird genutzt für das Tauschen des Assistenten beim Massen-Ändern bestehender Schichten.'),
   "startTime": zod.coerce.date().optional(),
   "endTime": zod.coerce.date().optional(),
   "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work']).optional(),
