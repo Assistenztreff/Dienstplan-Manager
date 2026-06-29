@@ -7,7 +7,6 @@ import {
   timeTrackingTable,
   shiftModelsTable,
   allowanceSettingsTable,
-  computeShiftMetrics,
   type NightWindow,
   type GermanState,
 } from "@workspace/db";
@@ -29,6 +28,7 @@ import {
   isUserMemberOfTeam,
   isShiftModelInTeam,
 } from "../lib/teams";
+import { isAbsenceType, resolveShiftMetrics } from "../lib/shift-metrics-resolve";
 
 const router = Router();
 
@@ -75,12 +75,6 @@ async function activeContractFor(userId: number, date: Date) {
     .orderBy(sql`${contractsTable.startDate} DESC`)
     .limit(1);
   return contracts[0] ?? null;
-}
-
-// Urlaub und Krankheit sind Abwesenheiten: sie referenzieren kein Schichtmodell
-// und lösen keine Zuschlagsberechnung aus.
-function isAbsenceType(type: string): boolean {
-  return type === "vacation" || type === "sick";
 }
 
 type AbsenceShift = {
@@ -219,26 +213,26 @@ async function storeShiftMetrics(shift: {
   startTime: Date;
   endTime: Date;
 }): Promise<void> {
-  let metrics;
-  if (isAbsenceType(shift.type)) {
-    // Urlaub/Krankheit: die vollen geplanten Tagesstunden gelten als erfüllt
-    // (gewertete Stunden = Vertrags-Soll des Tages). Keine Zuschläge.
-    const planned = await dailyTargetHours(shift.userId, new Date(shift.startTime));
-    metrics = { valuedHours: planned, nightHours: 0, sundayHours: 0, holidayHours: 0 };
-  } else {
-    const valuationPercent = await valuationPercentFor(shift.type, shift.shiftModelId);
-    const { window, state } = await allowanceContext();
-    metrics = computeShiftMetrics(
-      {
-        startTime: new Date(shift.startTime),
-        endTime: new Date(shift.endTime),
-        isAbsence: false,
-        valuationPercent,
-      },
-      window,
-      state
-    );
-  }
+  const absence = isAbsenceType(shift.type);
+  // Bei Abwesenheit zählen die geplanten Tagesstunden, sonst die Modell-Wertung.
+  const plannedHours = absence
+    ? await dailyTargetHours(shift.userId, new Date(shift.startTime))
+    : 0;
+  const valuationPercent = absence
+    ? 100
+    : await valuationPercentFor(shift.type, shift.shiftModelId);
+  const { window, state } = await allowanceContext();
+  const metrics = resolveShiftMetrics(
+    {
+      type: shift.type,
+      startTime: new Date(shift.startTime),
+      endTime: new Date(shift.endTime),
+      plannedHours,
+      valuationPercent,
+    },
+    window,
+    state
+  );
   await db.update(shiftsTable).set(metrics).where(eq(shiftsTable.id, shift.id));
 }
 
