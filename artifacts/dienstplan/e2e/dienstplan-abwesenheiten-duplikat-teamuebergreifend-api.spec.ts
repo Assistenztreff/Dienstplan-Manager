@@ -12,13 +12,24 @@ import { TeamTestHarness } from "./helpers/teams";
  * wird, wenn er über ein ANDERES Team desselben Dienstleisters angelegt wird —
  * sonst ließe sich der Urlaubsanspruch über mehrere Teams doppelt verbrauchen.
  *
- * Ablauf:
+ * Ablauf (POST-Pfad):
  * - Assistent ist Mitglied in Team A und Team B desselben Dienstleisters.
  * - Vertrag (für vacationDaysUsed-Tracking) im Team A.
  * - Urlaub am Tag X über Team A -> 201, vacationDaysUsed = 1.
  * - Identischer Urlaub am Tag X über Team B (body.teamId = Team B) -> 409
  *   "absence_duplicate" mit existingShiftId der ersten Schicht; KEIN zweiter
  *   Eintrag, vacationDaysUsed unverändert.
+ *
+ * Ablauf (PATCH-Pfad, #186):
+ * - findDuplicateAbsence wird auch im PATCH-Handler aufgerufen. Dieser Test
+ *   sichert ab, dass auch ein Bearbeiten, das eine Schicht auf einen Tag/Typ
+ *   verschiebt, an dem in einem ANDEREN Team desselben Dienstleisters bereits
+ *   Urlaub liegt, mit 409 "absence_duplicate" abgelehnt wird — sonst entstünde
+ *   über den Bearbeiten-Weg ein teamübergreifender Doppelverbrauch.
+ * - Urlaub an Tag X über Team A, Urlaub an Tag Y über Team B.
+ * - PATCH der Team-B-Schicht von Tag Y auf Tag X (Typ vacation) -> 409
+ *   "absence_duplicate" mit existingShiftId der Team-A-Schicht; KEIN
+ *   Doppeleintrag, vacationDaysUsed unverändert.
  */
 
 const YEAR = new Date().getFullYear();
@@ -27,6 +38,12 @@ const CONTRACT_START = `${YEAR}-01-01`;
 const ABSENCE_DAY = `${YEAR}-06-15`;
 const START_ISO = new Date(`${ABSENCE_DAY}T00:00:00`).toISOString();
 const END_ISO = new Date(`${ABSENCE_DAY}T23:59:59`).toISOString();
+
+// Eigene, vom POST-Test getrennte Tage für den PATCH-Pfad (#186).
+const DAY_X = `${YEAR}-09-10`;
+const DAY_Y = `${YEAR}-09-11`;
+const dayStart = (day: string) => new Date(`${day}T00:00:00`).toISOString();
+const dayEnd = (day: string) => new Date(`${day}T23:59:59`).toISOString();
 
 type Contract = { id: number; userId: number; vacationDays: number; vacationDaysUsed: number };
 type Shift = { id: number; userId: number; type: string };
@@ -110,4 +127,50 @@ test("POST /api/shifts lehnt teamübergreifend doppelte Urlaubstage mit 409 ab, 
   expect(await vacationShiftCount(h.ctx)).toBe(1);
   // vacationDaysUsed NICHT erneut erhöht (weiterhin 1) -> kein Doppelverbrauch.
   expect(await vacationDaysUsed(h.ctx)).toBe(1);
+});
+
+test("PATCH /api/shifts lehnt teamübergreifend verschobene Urlaubstage mit 409 ab, ohne Doppelabzug", async () => {
+  // --- Urlaub an Tag X über Team A ---
+  const shiftAX = await h.createShift(teamA, assistant, DAY_X, {
+    type: "vacation",
+    startTime: dayStart(DAY_X),
+    endTime: dayEnd(DAY_X),
+  });
+
+  // --- Urlaub an Tag Y über Team B ---
+  const shiftBY = await h.createShift(teamB, assistant, DAY_Y, {
+    type: "vacation",
+    startTime: dayStart(DAY_Y),
+    endTime: dayEnd(DAY_Y),
+  });
+
+  const shiftsBefore = await vacationShiftCount(h.ctx);
+  const usedBefore = await vacationDaysUsed(h.ctx);
+
+  // --- PATCH der Team-B-Schicht von Tag Y auf Tag X: 409 absence_duplicate ---
+  // Das Verschieben auf Tag X kollidiert mit dem bereits in Team A liegenden
+  // Urlaub desselben Assistenten -> teamübergreifender Doppelverbrauch verhindert.
+  const patchRes = await h.ctx.patch(`/api/shifts/${shiftBY}`, {
+    data: {
+      type: "vacation",
+      startTime: dayStart(DAY_X),
+      endTime: dayEnd(DAY_X),
+    },
+  });
+  expect(patchRes.status(), "Verschieben auf Tag X (Team A) sollte 409 liefern").toBe(409);
+  const patchBody = (await patchRes.json()) as { code?: string; existingShiftId?: number };
+  expect(patchBody.code).toBe("absence_duplicate");
+  // Verweist auf die bereits existierende Schicht aus Team A.
+  expect(patchBody.existingShiftId).toBe(shiftAX);
+
+  // Kein Doppeleintrag: Anzahl der Urlaubsschichten unverändert.
+  expect(await vacationShiftCount(h.ctx)).toBe(shiftsBefore);
+  // vacationDaysUsed durch den fehlgeschlagenen PATCH NICHT verändert.
+  expect(await vacationDaysUsed(h.ctx)).toBe(usedBefore);
+
+  // Die Team-B-Schicht liegt weiterhin auf Tag Y (PATCH wurde nicht angewandt).
+  const checkRes = await h.ctx.get(`/api/shifts/${shiftBY}`);
+  expect(checkRes.ok(), "GET der Team-B-Schicht fehlgeschlagen").toBe(true);
+  const checkShift = (await checkRes.json()) as { startTime: string };
+  expect(checkShift.startTime).toBe(dayStart(DAY_Y));
 });
