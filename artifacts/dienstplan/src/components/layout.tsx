@@ -17,6 +17,7 @@ import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
 import { useAuth } from "@/context/auth";
 import { useToast } from "@/hooks/use-toast";
 import { isEmbedded } from "@/lib/embed";
+import { DevUserSwitcher } from "./dev-user-switcher";
 
 const ALL_NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, adminOnly: false, dienstleisterOnly: false },
@@ -83,6 +84,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <LogOut className="h-4 w-4" />
         <span>Abmelden</span>
       </button>
+      <DevUserSwitcher />
     </div>
   );
 

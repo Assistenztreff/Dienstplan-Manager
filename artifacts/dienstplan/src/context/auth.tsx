@@ -21,6 +21,10 @@ type AuthContextType = {
   logout: () => Promise<void>;
   setPassword: (token: string, password: string) => Promise<AuthUser>;
   refreshUser: () => Promise<void>;
+  /** Dev-only: vorhandene Test-Nutzer zum Umschalten auflisten. Leer in Produktion. */
+  devListUsers: () => Promise<AuthUser[]>;
+  /** Dev-only: als anderer vorhandener Test-Nutzer agieren. No-op in Produktion. */
+  devSwitchUser: (userId: number) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType>({
@@ -31,6 +35,8 @@ const AuthContext = createContext<AuthContextType>({
   logout: async () => {},
   setPassword: async () => { throw new Error("not initialized"); },
   refreshUser: async () => {},
+  devListUsers: async () => [],
+  devSwitchUser: async () => {},
 });
 
 async function apiFetch(path: string, init?: RequestInit) {
@@ -186,6 +192,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const devListUsers = async (): Promise<AuthUser[]> => {
+    if (!import.meta.env.DEV) return [];
+    try {
+      const r = await apiFetch("/api/auth/dev-users");
+      if (!r.ok) return [];
+      return (await r.json()) as AuthUser[];
+    } catch {
+      return [];
+    }
+  };
+
+  const devSwitchUser = async (userId: number): Promise<void> => {
+    if (!import.meta.env.DEV) return;
+    const r = await apiFetch("/api/auth/dev-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    });
+    if (!r.ok) {
+      const data = (await r.json().catch(() => ({}))) as { error?: string };
+      throw new Error(data.error ?? "Nutzerwechsel fehlgeschlagen");
+    }
+    const user = (await r.json()) as AuthUser;
+    setCurrentUser(user);
+    storeSession(user);
+  };
+
   const setPassword = async (token: string, password: string): Promise<AuthUser> => {
     const r = await apiFetch("/api/auth/set-password", {
       method: "POST",
@@ -203,7 +236,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, isLoading, login, register, logout, setPassword, refreshUser }}>
+    <AuthContext.Provider value={{ currentUser, isLoading, login, register, logout, setPassword, refreshUser, devListUsers, devSwitchUser }}>
       {children}
     </AuthContext.Provider>
   );

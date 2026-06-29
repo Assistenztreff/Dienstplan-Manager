@@ -21,3 +21,4 @@
 - [Worklets needs @babel/generator](babel-generator-worklets.md) — mobile prod build fails "Cannot find module '@babel/generator'"; worklets plugin requires it but doesn't declare it. Fix via pnpm packageExtensions, not artifact deps.
 - [Test DB lacks seeded shift models](test-db-no-seeded-models.md) — setup-test-db only runs setup-admin+migrate-teams; default shift models seed only on register/dev-login, so e2e specs needing a model must create it.
 - [Shift planning status defaults](shift-planning-status.md) — planning_status column defaults to FIX (backfill = binding) but the dialog defaults new shifts to VORLAEUFIG (draft); keep the two decoupled.
+- [Bodyless POST req.body undefined](dev-login-bodyless-post.md) — auto-fired bodyless POSTs (dev-login) leave req.body undefined; destructure with `?? {}` or adding optional body params crashes the default path.

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { usersTable, teamsTable, teamMembersTable } from "@workspace/db";
+import type { User } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth-utils";
 import { seedDefaultShiftModels } from "../lib/default-shift-models";
@@ -113,40 +114,150 @@ if (process.env.NODE_ENV !== "production") {
   const DEV_ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? "admin@dienstplan.local").toLowerCase().trim();
   const DEV_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "admin1234";
   const DEV_ADMIN_NAME = process.env.ADMIN_NAME ?? "Administrator";
+  const DEV_TEST_PASSWORD = "test1234";
 
-  router.post("/auth/dev-login", async (req, res) => {
+  // Stellt den Standard-Admin (+ initiales Team) idempotent sicher und liefert ihn zurück.
+  async function ensureDefaultAdmin(): Promise<User> {
     let [user] = await db.select().from(usersTable).where(eq(usersTable.email, DEV_ADMIN_EMAIL));
+    if (user) return user;
 
-    if (!user) {
-      [user] = await db
+    [user] = await db
+      .insert(usersTable)
+      .values({
+        name: DEV_ADMIN_NAME,
+        email: DEV_ADMIN_EMAIL,
+        role: "admin",
+        passwordHash: hashPassword(DEV_ADMIN_PASSWORD),
+        isActive: true,
+      })
+      .returning();
+
+    const [existingTeam] = await db.select({ id: teamsTable.id }).from(teamsTable).limit(1);
+    if (!existingTeam) {
+      const [team] = await db
+        .insert(teamsTable)
+        .values({ name: "Standard-Team", ownerId: user.id })
+        .returning();
+      await db
+        .insert(teamMembersTable)
+        .values({ teamId: team.id, userId: user.id })
+        .onConflictDoNothing();
+      await seedDefaultShiftModels(team.id);
+    }
+    return user;
+  }
+
+  // Legt eine kleine, feste Auswahl an Test-Nutzern idempotent an, damit man im
+  // Dev-Modus zwischen Rollen/Mandanten umschalten kann: ein Assistent (Mitglied
+  // im Standard-Team) und ein zweiter Admin als eigener Dienstleister-Mandant.
+  // Reine Dev-Hilfe — durch den NODE_ENV-Guard in Produktion nicht vorhanden.
+  async function ensureDevTestUsers(): Promise<void> {
+    const admin = await ensureDefaultAdmin();
+
+    // Standard-Team des Admins ermitteln (für die Assistenten-Mitgliedschaft).
+    const [ownTeam] = await db
+      .select({ id: teamsTable.id })
+      .from(teamsTable)
+      .where(eq(teamsTable.ownerId, admin.id))
+      .limit(1);
+
+    // Assistent (Mitglied im Standard-Team des Admins).
+    const assistantEmail = "assistent@dienstplan.local";
+    let [assistant] = await db.select().from(usersTable).where(eq(usersTable.email, assistantEmail));
+    if (!assistant) {
+      [assistant] = await db
         .insert(usersTable)
         .values({
-          name: DEV_ADMIN_NAME,
-          email: DEV_ADMIN_EMAIL,
-          role: "admin",
-          passwordHash: hashPassword(DEV_ADMIN_PASSWORD),
+          name: "Test-Assistent",
+          email: assistantEmail,
+          role: "assistant",
+          accountType: "privat",
+          passwordHash: hashPassword(DEV_TEST_PASSWORD),
           isActive: true,
         })
         .returning();
-
-      const [existingTeam] = await db.select({ id: teamsTable.id }).from(teamsTable).limit(1);
-      if (!existingTeam) {
-        const [team] = await db
-          .insert(teamsTable)
-          .values({ name: "Standard-Team", ownerId: user.id })
-          .returning();
-        await db
-          .insert(teamMembersTable)
-          .values({ teamId: team.id, userId: user.id })
-          .onConflictDoNothing();
-        await seedDefaultShiftModels(team.id);
-      }
+    }
+    if (ownTeam) {
+      await db
+        .insert(teamMembersTable)
+        .values({ teamId: ownTeam.id, userId: assistant.id })
+        .onConflictDoNothing();
     }
 
+    // Zweiter Admin als eigener Dienstleister-Mandant (fremdes Team).
+    const dienstleisterEmail = "dienstleister@dienstplan.local";
+    let [dienstleister] = await db.select().from(usersTable).where(eq(usersTable.email, dienstleisterEmail));
+    if (!dienstleister) {
+      [dienstleister] = await db
+        .insert(usersTable)
+        .values({
+          name: "Test-Dienstleister",
+          email: dienstleisterEmail,
+          role: "admin",
+          accountType: "dienstleister",
+          passwordHash: hashPassword(DEV_TEST_PASSWORD),
+          isActive: true,
+        })
+        .returning();
+    }
+    const [dienstleisterTeam] = await db
+      .select({ id: teamsTable.id })
+      .from(teamsTable)
+      .where(eq(teamsTable.ownerId, dienstleister.id))
+      .limit(1);
+    if (!dienstleisterTeam) {
+      const [team] = await db
+        .insert(teamsTable)
+        .values({ name: "Dienstleister-Team", ownerId: dienstleister.id })
+        .returning();
+      await db
+        .insert(teamMembersTable)
+        .values({ teamId: team.id, userId: dienstleister.id })
+        .onConflictDoNothing();
+      await seedDefaultShiftModels(team.id);
+    }
+  }
+
+  router.post("/auth/dev-login", async (req, res) => {
+    const { userId } = (req.body ?? {}) as { userId?: unknown };
+
+    // Optionaler Nutzer-Wechsel: als ein bestimmter (vorhandener) Test-Nutzer agieren.
+    if (userId !== undefined && userId !== null) {
+      const targetId = typeof userId === "number" ? userId : Number(userId);
+      if (!Number.isFinite(targetId) || targetId <= 0) {
+        res.status(400).json({ error: "Ungültige Nutzer-ID" });
+        return;
+      }
+      const [target] = await db.select().from(usersTable).where(eq(usersTable.id, targetId));
+      if (!target) {
+        res.status(404).json({ error: "Nutzer nicht gefunden" });
+        return;
+      }
+      req.session.userId = target.id;
+      req.session.role = target.role;
+      res.json({
+        id: target.id,
+        name: target.name,
+        email: target.email,
+        role: target.role,
+        accountType: target.accountType,
+      });
+      return;
+    }
+
+    // Default: als Standard-Admin anmelden (bestehendes Verhalten).
+    const user = await ensureDefaultAdmin();
     req.session.userId = user.id;
     req.session.role = user.role;
-
     res.json({ id: user.id, name: user.name, email: user.email, role: user.role, accountType: user.accountType });
+  });
+
+  // Liste verfügbarer Test-Nutzer für den Dev-Umschalter. Seedet die Test-Nutzer
+  // idempotent, damit immer mind. Assistent + zweiter Mandant zum Wechseln da sind.
+  router.get("/auth/dev-users", async (_req, res) => {
+    await ensureDevTestUsers();
+    const users = await db.select(USER_SELECT).from(usersTable).orderBy(usersTable.id);
+    res.json(users);
   });
 }
 
