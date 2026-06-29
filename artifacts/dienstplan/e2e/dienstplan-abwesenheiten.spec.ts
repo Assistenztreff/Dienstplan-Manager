@@ -72,10 +72,20 @@ async function createContract(ctx: APIRequestContext, userId: number): Promise<n
 }
 
 async function loginViaUi(page: Page, email: string, password: string): Promise<void> {
+  // Tolerant gegenüber dem Vite-DEV-Auto-Login: dort meldet die App sich
+  // automatisch als Admin an, sodass kein Login-Formular rendert. Ist das
+  // Formular nicht sichtbar, greift die Auto-Anmeldung bereits. Im Prod-Build
+  // (dev-login deaktiviert) wird das Formular regulär ausgefüllt.
   await page.goto("/login");
-  await page.locator("#email").fill(email);
-  await page.locator("#password").fill(password);
-  await page.getByRole("button", { name: "Anmelden" }).click();
+  const emailField = page.locator("#email");
+  try {
+    await emailField.waitFor({ state: "visible", timeout: 5000 });
+    await emailField.fill(email);
+    await page.locator("#password").fill(password);
+    await page.getByRole("button", { name: "Anmelden" }).click();
+  } catch {
+    // Formular nicht sichtbar -> Dev-Auto-Login greift bereits.
+  }
   await expect(page).toHaveURL(/\/$/);
 }
 

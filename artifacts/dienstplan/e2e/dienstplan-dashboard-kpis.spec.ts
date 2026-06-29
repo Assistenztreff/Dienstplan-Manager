@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { loginViaUi } from "./helpers/auth";
 
 /**
  * E2E-Test für die Dashboard-Kennzahlen-Kacheln.
@@ -25,12 +26,9 @@ function todayLocalIso(): string {
 }
 
 async function loginAsAdmin(page: Page): Promise<void> {
-  await page.goto("/login");
-  await page.locator("#email").fill(ADMIN_EMAIL);
-  await page.locator("#password").fill(ADMIN_PASSWORD);
-  await page.getByRole("button", { name: "Anmelden" }).click();
-  // Nach erfolgreichem Login navigiert die App zur Startseite (Dashboard, "/").
-  await expect(page).toHaveURL(/\/$/);
+  // Delegiert an den gemeinsamen Helper, der den Vite-Dev-Auto-Login
+  // toleriert (kein Login-Formular) und im Prod-Build das Formular ausfüllt.
+  await loginViaUi(page, ADMIN_EMAIL, ADMIN_PASSWORD);
 }
 
 /** Öffnet das Dashboard und wartet, bis die KPI-Kacheln gerendert sind. */

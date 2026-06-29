@@ -13,15 +13,16 @@ POSTs `/api/auth/dev-login` and silently signs in as the seed admin
 even on unmodified specs. It is an environment artifact, NOT a regression in the
 spec under test. Discovered while adding logo-upload E2E.
 
-**How to apply:** to verify a UI flow locally, rely on the dev auto-auth — just
-`page.goto('/dienstplan')` (or the target admin route) and wait for the heading,
-instead of the form login. If you keep a form-login helper, treat the form as
-optional: wait for `#email` with a short timeout and, if it never appears, assume
-auto-login already authenticated and assert the post-login URL. The committed
-form-based specs are still correct — validation/CI runs against a production build
-where dev-login is disabled and the form works.
+**How to apply:** the dienstplan E2E suite centralizes this in the shared
+`loginViaUi(page, email, password)` helper (`e2e/helpers/auth.ts`): it waits for
+`#email` with a short timeout and, if the form never renders (dev auto-login
+already authenticated), skips filling and just asserts the post-login URL. All
+per-spec `loginAsAdmin(page)` wrappers now delegate to it instead of filling the
+form directly — so new specs must NOT reintroduce a raw `goto('/login')` + fill;
+reuse the helper. Validation/CI runs against a production build where dev-login is
+disabled and the form path is exercised.
 
-**Best workaround for new specs (works in BOTH dev and prod build):** authenticate
+**Alternative workaround for new specs (works in BOTH dev and prod build):** authenticate
 programmatically in the browser context — `await page.request.post('/api/auth/login',
 { data: { email, password } })` then `page.goto(targetRoute)`. `page.request` shares
 the cookie jar with the page, so the `AuthProvider` bootstrap's `/api/auth/me` returns

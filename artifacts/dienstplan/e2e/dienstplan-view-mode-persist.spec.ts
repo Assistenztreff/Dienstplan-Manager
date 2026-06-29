@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
+import { loginViaUi } from "./helpers/auth";
 
 /**
  * E2E-Test: die gemerkte Kalender-Ansicht im Dienstplan (Tabelle/Liste vs.
@@ -21,12 +22,9 @@ const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "admin1234";
 const MOBILE_VIEW_KEY = "dienstplan.mobileView";
 
 async function loginAsAdmin(page: Page): Promise<void> {
-  await page.goto("/login");
-  await page.locator("#email").fill(ADMIN_EMAIL);
-  await page.locator("#password").fill(ADMIN_PASSWORD);
-  await page.getByRole("button", { name: "Anmelden" }).click();
-  // Nach erfolgreichem Login navigiert die App zur Startseite ("/").
-  await expect(page).toHaveURL(/\/$/);
+  // Delegiert an den gemeinsamen Helper, der den Vite-Dev-Auto-Login
+  // toleriert (kein Login-Formular) und im Prod-Build das Formular ausfüllt.
+  await loginViaUi(page, ADMIN_EMAIL, ADMIN_PASSWORD);
 }
 
 async function openCalendar(page: Page): Promise<Locator> {

@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
+import { loginViaUi } from "./helpers/auth";
 
 /**
  * E2E-Test für das Anlegen und Bearbeiten einer Schicht über den ShiftDialog.
@@ -48,11 +49,9 @@ function dayCellId(year: number, month: number, dayOfMonth: number): string {
 }
 
 async function loginAsAdmin(page: Page): Promise<void> {
-  await page.goto("/login");
-  await page.locator("#email").fill(ADMIN_EMAIL);
-  await page.locator("#password").fill(ADMIN_PASSWORD);
-  await page.getByRole("button", { name: "Anmelden" }).click();
-  await expect(page).toHaveURL(/\/$/);
+  // Delegiert an den gemeinsamen Helper, der den Vite-Dev-Auto-Login
+  // toleriert (kein Login-Formular) und im Prod-Build das Formular ausfüllt.
+  await loginViaUi(page, ADMIN_EMAIL, ADMIN_PASSWORD);
 }
 
 /**
