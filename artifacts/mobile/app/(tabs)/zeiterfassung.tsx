@@ -93,6 +93,19 @@ function formatHours(start: string, end: string): string {
   return `${h.toFixed(2)} h`;
 }
 
+// Erkennt, ob ein Eintrag ueber Mitternacht reicht (Ende-Kalendertag liegt
+// nach dem Start-Kalendertag). Vergleich rein ueber das lokale Datum, damit
+// z. B. 22:00–06:00 (Folgetag) als ueber Mitternacht gilt.
+function spansMidnight(start: string, end: string): boolean {
+  const s = new Date(start);
+  const e = new Date(end);
+  return (
+    e.getFullYear() !== s.getFullYear() ||
+    e.getMonth() !== s.getMonth() ||
+    e.getDate() !== s.getDate()
+  );
+}
+
 function todayDateStr(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -353,6 +366,29 @@ export default function ZeiterfassungScreen() {
                     <Text style={[styles.entryTime, { color: colors.foreground }]}>
                       {formatDateTime(item.actualEnd)}
                     </Text>
+                    {spansMidnight(item.actualStart, item.actualEnd) ? (
+                      <View
+                        testID="spans-midnight-badge"
+                        style={[
+                          styles.overnightBadge,
+                          { backgroundColor: colors.secondary },
+                        ]}
+                      >
+                        <Feather
+                          name="moon"
+                          size={10}
+                          color={colors.mutedForeground}
+                        />
+                        <Text
+                          style={[
+                            styles.overnightText,
+                            { color: colors.mutedForeground },
+                          ]}
+                        >
+                          +1 Tag
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
                   <View
                     style={[
@@ -724,6 +760,19 @@ const styles = StyleSheet.create({
   entryTimeSep: {
     fontSize: 13,
     fontFamily: "Inter_400Regular",
+  },
+  overnightBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  overnightText: {
+    fontSize: 11,
+    fontWeight: "600",
+    fontFamily: "Inter_500Medium",
   },
   statusBadge: {
     paddingHorizontal: 8,
