@@ -158,7 +158,7 @@ function AppSubNavigation() {
   );
 
   return (
-    <div className="shrink-0 border-b border-slate-200 bg-slate-100">
+    <div className="sticky top-0 z-30 shrink-0 border-b border-slate-200 bg-slate-100">
       <div className="mx-auto max-w-7xl px-2 py-6 md:px-4 md:py-8">
         {/* Mobile: wischbare, einzeilige Navigation (overflow-x-auto, kein
             Umbruch). Ab md: zentriert und natuerlicher Umbruch in zwei Zeilen. */}
