@@ -1,0 +1,24 @@
+Du bist ein Senior-Frontend-Entwickler. Wir arbeiten an einer React-App ("Dienstplan-App"), die als Modul in unsere größere Plattform ("AssistenzTreff") integriert wird. Zukünftig wird die App auf einem eigenen All-Inkl-Server gehostet.
+Aufgabe:
+Erstelle/Überarbeite die zentrale Layout-Komponente (z. B. src/components/layout.tsx), die als "App-Shell" fungiert. Wir benötigen ein striktes Flexbox-Layout, bei dem Header und Footer fixiert sind und nur der Hauptbereich in der Mitte scrollt.
+Technische Vorgaben (Tailwind CSS & wouter):
+Haupt-Container: Nutze flex flex-col h-screen overflow-hidden bg-brand-white als Wrapper für die gesamte Seite.
+Komponente 1: <PlatformHeaderPlaceholder/> (Fixiert)
+Diese Komponente dient als Platzhalter für das spätere HTML/PHP der Hauptwebsite.
+Hintergrund: bg-brand-cyan.
+Füge oben eine Zeile für Logo und externe Links ("Leistungen", "Über uns", etc.) ein. Kommentiere hier, dass später ein Conditional Rendering für Logos von Dienstleistern eingefügt wird.
+Füge unten eine "Pillen"-Navigation ein ("Job Börse", "Map", "Connect", "Aktuelles", "Wissen", "Speaker:in").
+Der Reiter "Connect" muss als aktiv markiert sein (bg-brand-dark text-white).
+Komponente 2: <AppSubNavigation/> (Fixiert)
+Dies ist das interne Menü unserer Dienstplan-App, gerendert unter dem Plattform-Header.
+Hintergrund: bg-slate-100.
+Nutze horizontales Scrolling für Mobile (overflow-x-auto whitespace-nowrap).
+Nutze wouter (Link und useLocation), um die Menüpunkte (Dashboard, Dienstplan, Assistenten, Zeiterfassung, etc.) aufzubauen. Aktive Routen erhalten z. B. bg-brand-yellow text-brand-dark.
+Komponente 3: Main Content (Scrollbar)
+Der Bereich dazwischen rendert die {children}.
+Er muss den restlichen Platz einnehmen und als einziger Bereich scrollen: flex-1 overflow-y-auto p-4 md:p-6 w-full max-w-7xl mx-auto.
+Komponente 4: <PlatformFooterPlaceholder/> (Fixiert)
+Platzhalter für den späteren globalen Footer.
+Hintergrund: bg-brand-dark.
+Setze ein einfaches Grid (z. B. 3 Spalten) für statische Links ein (Überschriften in text-brand-yellow, Links in Weiß).
+Wichtig: Kommentiere den Code professionell aus, sodass klar ist, welche Teile zur Dienstplan-App gehören und welche Teile (Header/Footer) reine Platzhalter für den späteren Server-Umzug sind.
