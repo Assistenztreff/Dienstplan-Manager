@@ -8,23 +8,10 @@ import {
   BarChart3,
   Settings,
   Building2,
-  LogOut,
-  CircleUser,
 } from "lucide-react";
-import { Button } from "./ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
 import logoUrl from "@assets/Arbeitgebermodell oder Assistenzdienst.png";
 import { useAuth } from "@/context/auth";
-import { useToast } from "@/hooks/use-toast";
 import { isEmbedded } from "@/lib/embed";
-import { DevUserSwitcher } from "./dev-user-switcher";
 
 // Interne Navigationspunkte der Dienstplan-App. Rollen-/Konto-Typ-Sichtbarkeit
 // bleibt unveraendert: adminOnly nur fuer Admins, dienstleisterOnly nur fuer
@@ -142,14 +129,12 @@ function PlatformFooterPlaceholder() {
 // ---------------------------------------------------------------------------
 // Internes Menue der Dienstplan-App, direkt unter dem Plattform-Header.
 // Bleibt auch im Embed-Modus sichtbar (gehoert zur App, nicht zur Plattform).
-// Enthaelt zusaetzlich die App-Funktionalitaet (Dev-Switcher, Nutzerinfo,
-// Abmelden) rechts, damit diese im Embed-Modus erreichbar bleibt.
+// Header-Look: hellgrauer, zweizeiliger, zentrierter Pillen-Balken.
 // ---------------------------------------------------------------------------
 
 function AppSubNavigation() {
   const [location] = useLocation();
-  const { currentUser, logout } = useAuth();
-  const { toast } = useToast();
+  const { currentUser } = useAuth();
 
   const navItems = ALL_NAV_ITEMS.filter(
     (item) =>
@@ -157,19 +142,12 @@ function AppSubNavigation() {
       (!item.dienstleisterOnly || currentUser?.accountType === "dienstleister"),
   );
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch {
-      toast({ title: "Fehler beim Abmelden", variant: "destructive" });
-    }
-  };
-
   return (
     <div className="shrink-0 border-b border-slate-200 bg-slate-100">
-      <div className="mx-auto flex max-w-7xl items-center gap-2 px-2 md:px-4">
-        {/* App-Navigation: auf Mobil horizontal scrollbar */}
-        <nav className="flex flex-1 items-center gap-1 overflow-x-auto whitespace-nowrap py-2">
+      <div className="mx-auto max-w-7xl px-2 py-6 md:px-4 md:py-8">
+        {/* App-Navigation: zentrierte Pillen, brechen natuerlich in eine
+            zweite Zeile um (kein horizontales Scrollen mehr). */}
+        <nav className="flex flex-wrap items-center justify-center gap-x-3 gap-y-4">
           {navItems.map((item) => (
             <Link key={item.href} href={item.href}>
               <span
@@ -185,36 +163,6 @@ function AppSubNavigation() {
             </Link>
           ))}
         </nav>
-
-        {/* App-Funktionalitaet rechts: Dev-User-Switcher (nur Dev), Nutzerinfo
-            und Abmelden. Bewusst Teil der App-Sub-Nav (nicht des Plattform-
-            Platzhalters), damit im Embed-Modus weiter erreichbar. */}
-        <div className="flex shrink-0 items-center gap-2 pl-2">
-          <DevUserSwitcher />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="gap-2" aria-label="Nutzermenue">
-                <CircleUser className="h-5 w-5" />
-                <span className="hidden text-sm font-medium sm:inline">{currentUser?.name}</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuLabel>
-                <div className="flex flex-col">
-                  <span className="leading-tight">{currentUser?.name}</span>
-                  <span className="text-xs font-normal text-muted-foreground">
-                    {currentUser?.role === "admin" ? "Administrator" : "Assistent"}
-                  </span>
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => void handleLogout()}>
-                <LogOut className="mr-2 h-4 w-4" />
-                <span>Abmelden</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
       </div>
     </div>
   );
