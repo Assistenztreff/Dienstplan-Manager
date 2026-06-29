@@ -8,6 +8,7 @@ import {
   BarChart3,
   Settings,
   Building2,
+  Menu,
 } from "lucide-react";
 import logoUrl from "@assets/Arbeitgebermodell oder Assistenzdienst.png";
 import { useAuth } from "@/context/auth";
@@ -57,19 +58,32 @@ function PlatformHeaderPlaceholder() {
           statt des AssistenzTreff-Logos). */}
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
         <img src={logoUrl} alt="AssistenzTreff" className="h-9 w-auto object-contain" />
-        <nav className="hidden items-center gap-6 text-sm font-medium sm:flex">
+
+        {/* Desktop: externe Plattform-Text-Links (nur ab md sichtbar). */}
+        <nav className="hidden items-center gap-6 text-sm font-medium md:flex">
           {PLATFORM_LINKS.map((label) => (
             <span key={label} className="cursor-default opacity-90 hover:opacity-100">
               {label}
             </span>
           ))}
         </nav>
+
+        {/* Mobile: Hamburger-Button im Stil der Hauptplattform (nur < md).
+            Platzhalter — oeffnet auf der echten Plattform das mobile Menue. */}
+        <button
+          type="button"
+          className="flex items-center gap-2 rounded-md bg-white/15 px-3 py-1.5 text-sm font-medium text-brand-white md:hidden"
+          aria-label="Menü"
+        >
+          <span>Menü</span>
+          <Menu className="h-5 w-5" />
+        </button>
       </div>
 
       {/* Untere Zeile: Pillen-Navigation der Plattform (Platzhalter).
           "Connect" ist aktiv markiert, da die Dienstplan-App dort eingebettet
-          ist. Auf Mobil horizontal scrollbar. */}
-      <div className="border-t border-white/20">
+          ist. Auf Mobil ausgeblendet (dort uebernimmt der Hamburger-Button). */}
+      <div className="hidden border-t border-white/20 md:block">
         <div className="mx-auto flex max-w-7xl items-center gap-2 overflow-x-auto whitespace-nowrap px-4 py-2">
           {PLATFORM_PILLS.map((pill) => (
             <span
@@ -129,7 +143,8 @@ function PlatformFooterPlaceholder() {
 // ---------------------------------------------------------------------------
 // Internes Menue der Dienstplan-App, direkt unter dem Plattform-Header.
 // Bleibt auch im Embed-Modus sichtbar (gehoert zur App, nicht zur Plattform).
-// Header-Look: hellgrauer, zweizeiliger, zentrierter Pillen-Balken.
+// Responsiv: auf Mobil eine wischbare Zeile (horizontal scrollbar, kein
+// Umbruch); ab md zentrierte Pillen mit natuerlichem Umbruch in zweite Zeile.
 // ---------------------------------------------------------------------------
 
 function AppSubNavigation() {
@@ -145,13 +160,13 @@ function AppSubNavigation() {
   return (
     <div className="shrink-0 border-b border-slate-200 bg-slate-100">
       <div className="mx-auto max-w-7xl px-2 py-6 md:px-4 md:py-8">
-        {/* App-Navigation: zentrierte Pillen, brechen natuerlich in eine
-            zweite Zeile um (kein horizontales Scrollen mehr). */}
-        <nav className="flex flex-wrap items-center justify-center gap-x-3 gap-y-4">
+        {/* Mobile: wischbare, einzeilige Navigation (overflow-x-auto, kein
+            Umbruch). Ab md: zentriert und natuerlicher Umbruch in zwei Zeilen. */}
+        <nav className="flex flex-nowrap items-center gap-2 overflow-x-auto whitespace-nowrap scrollbar-hide md:flex-wrap md:justify-center md:gap-x-3 md:gap-y-4 md:overflow-visible md:whitespace-normal">
           {navItems.map((item) => (
             <Link key={item.href} href={item.href}>
               <span
-                className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors cursor-pointer ${
+                className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors cursor-pointer ${
                   location === item.href
                     ? "bg-brand-yellow text-brand-dark font-medium"
                     : "text-slate-600 hover:bg-slate-200 hover:text-slate-900"
@@ -169,25 +184,25 @@ function AppSubNavigation() {
 }
 
 // ---------------------------------------------------------------------------
-// App-Shell: striktes Flexbox-Layout. Header (Plattform-Platzhalter) und
-// Footer (Plattform-Platzhalter) bleiben fixiert; nur der Hauptbereich in der
-// Mitte scrollt. Im Embed-Modus werden die Plattform-Platzhalter ausgeblendet.
+// App-Layout: natuerlich scrollendes Dokument (kein fixierter Footer mehr).
+// Aeusserer Container waechst mit dem Inhalt (min-h-screen, flex-col); der
+// Hauptbereich nimmt den verbleibenden Platz ein (flex-grow), der Footer
+// erscheint erst am Ende des Inhalts. Im Embed-Modus werden die
+// Plattform-Platzhalter ausgeblendet.
 // ---------------------------------------------------------------------------
 export function Layout({ children }: { children: React.ReactNode }) {
   const embedded = isEmbedded();
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-brand-white font-sans text-foreground">
+    <div className="flex min-h-screen flex-col bg-brand-white font-sans text-foreground">
       {/* Plattform-Header (Platzhalter) — im Embed-Modus ausgeblendet */}
       {!embedded && <PlatformHeaderPlaceholder />}
 
       {/* Dienstplan-App: Sub-Navigation */}
       <AppSubNavigation />
 
-      {/* Hauptbereich: einziger scrollbarer Bereich, zentriert & breitenbegrenzt */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-7xl p-4 md:p-6">{children}</div>
-      </main>
+      {/* Hauptbereich: waechst mit dem Inhalt, zentriert & breitenbegrenzt */}
+      <main className="mx-auto w-full max-w-7xl flex-grow p-4 md:p-6">{children}</main>
 
       {/* Plattform-Footer (Platzhalter) — im Embed-Modus ausgeblendet */}
       {!embedded && <PlatformFooterPlaceholder />}
