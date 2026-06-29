@@ -204,12 +204,26 @@ export const ShiftType = {
   work: 'work',
 } as const;
 
+/**
+ * Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.
+ */
+export type ShiftPlanningStatus = typeof ShiftPlanningStatus[keyof typeof ShiftPlanningStatus];
+
+
+export const ShiftPlanningStatus = {
+  VORLAEUFIG: 'VORLAEUFIG',
+  ANGEBOTEN: 'ANGEBOTEN',
+  FIX: 'FIX',
+} as const;
+
 export interface Shift {
   id: number;
   userId: number;
   startTime: string;
   endTime: string;
   type: ShiftType;
+  /** Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt. */
+  planningStatus?: ShiftPlanningStatus;
   /** @nullable */
   shiftModelId?: number | null;
   /** @nullable */
@@ -235,6 +249,18 @@ export const ShiftInputType = {
   work: 'work',
 } as const;
 
+/**
+ * Optionaler Planungsstatus (Default FIX): VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.
+ */
+export type ShiftInputPlanningStatus = typeof ShiftInputPlanningStatus[keyof typeof ShiftInputPlanningStatus];
+
+
+export const ShiftInputPlanningStatus = {
+  VORLAEUFIG: 'VORLAEUFIG',
+  ANGEBOTEN: 'ANGEBOTEN',
+  FIX: 'FIX',
+} as const;
+
 export interface ShiftInput {
   userId: number;
   /** Optionaler Team-Kontext; muss ein erlaubtes Team sein. */
@@ -242,6 +268,8 @@ export interface ShiftInput {
   startTime: string;
   endTime: string;
   type: ShiftInputType;
+  /** Optionaler Planungsstatus (Default FIX): VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt. */
+  planningStatus?: ShiftInputPlanningStatus;
   /** @nullable */
   shiftModelId?: number | null;
   notes?: string;
@@ -260,10 +288,24 @@ export const ShiftUpdateType = {
   work: 'work',
 } as const;
 
+/**
+ * Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.
+ */
+export type ShiftUpdatePlanningStatus = typeof ShiftUpdatePlanningStatus[keyof typeof ShiftUpdatePlanningStatus];
+
+
+export const ShiftUpdatePlanningStatus = {
+  VORLAEUFIG: 'VORLAEUFIG',
+  ANGEBOTEN: 'ANGEBOTEN',
+  FIX: 'FIX',
+} as const;
+
 export interface ShiftUpdate {
   startTime?: string;
   endTime?: string;
   type?: ShiftUpdateType;
+  /** Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt. */
+  planningStatus?: ShiftUpdatePlanningStatus;
   /** @nullable */
   shiftModelId?: number | null;
   /** @nullable */

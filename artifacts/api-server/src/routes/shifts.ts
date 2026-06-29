@@ -38,6 +38,7 @@ const SHIFT_SELECT = {
   startTime: shiftsTable.startTime,
   endTime: shiftsTable.endTime,
   type: shiftsTable.type,
+  planningStatus: shiftsTable.planningStatus,
   shiftModelId: shiftsTable.shiftModelId,
   notes: shiftsTable.notes,
   valuedHours: shiftsTable.valuedHours,

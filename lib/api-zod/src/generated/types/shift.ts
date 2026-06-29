@@ -5,6 +5,7 @@
  * Dienstplan-App API für Persönliche Assistenz
  * OpenAPI spec version: 0.1.0
  */
+import type { ShiftPlanningStatus } from './shiftPlanningStatus';
 import type { ShiftType } from './shiftType';
 import type { User } from './user';
 
@@ -14,6 +15,8 @@ export interface Shift {
   startTime: Date;
   endTime: Date;
   type: ShiftType;
+  /** Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt. */
+  planningStatus?: ShiftPlanningStatus;
   /** @nullable */
   shiftModelId?: number | null;
   /** @nullable */

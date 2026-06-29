@@ -22,10 +22,32 @@ type Shift = {
   startTime: string;
   endTime: string;
   type: string;
+  planningStatus?: string | null;
   shiftModelId?: number | null;
   notes?: string | null;
   user?: { name: string } | null;
 };
+
+// Planungsstatus: Entwurf (intern) → Vorschlag (angeboten) → Bestätigt (fix).
+// Bestätigte Dienste sind der Normalfall und brauchen kein Extra-Label.
+const PLANNING_STATUS_LABELS: Record<string, string> = {
+  VORLAEUFIG: "Entwurf",
+  ANGEBOTEN: "Vorschlag",
+};
+
+const PLANNING_STATUS_BADGE_CLASSES: Record<string, string> = {
+  VORLAEUFIG: "bg-foreground/10 text-foreground/70",
+  ANGEBOTEN: "bg-sky-200 text-sky-900",
+};
+
+// Nicht-bestätigte Dienste werden mit gestricheltem Rand + reduzierter Deckkraft
+// dargestellt, damit Entwürfe/Vorschläge auf einen Blick von verbindlichen
+// Diensten unterscheidbar sind.
+function planningStatusBadgeOutline(shift: Shift): string {
+  if (shift.planningStatus === "VORLAEUFIG") return "border-dashed opacity-70";
+  if (shift.planningStatus === "ANGEBOTEN") return "border-dashed";
+  return "";
+}
 
 type ShiftModelInfo = { name: string };
 
@@ -359,15 +381,26 @@ function ShiftBadge({
   const is24h =
     shift.type === "full_day" || (startLabel === endLabel && start.getTime() !== end.getTime());
   const label = shiftLabel(shift, modelMap);
+  // Abwesenheiten (Urlaub/Krank) sind sofort verbindlich; ein Planungs-Label
+  // gilt nur für reguläre Dienste mit Entwurf-/Vorschlag-Status.
+  const statusLabel = !isAbsence ? PLANNING_STATUS_LABELS[shift.planningStatus ?? ""] : undefined;
   return (
     <div
       data-testid={`shift-badge-${shift.id}`}
-      className={`w-full text-xs rounded border px-2 py-1 leading-snug cursor-pointer transition-colors ${classes}`}
+      data-planning-status={shift.planningStatus ?? "FIX"}
+      className={`w-full text-xs rounded border px-2 py-1 leading-snug cursor-pointer transition-colors ${classes} ${planningStatusBadgeOutline(shift)}`}
       onClick={onClick}
-      title={label}
+      title={statusLabel ? `${label} · ${statusLabel}` : label}
     >
       {showName && shift.user && (
         <div className="font-medium truncate">{shift.user.name}</div>
+      )}
+      {statusLabel && (
+        <div
+          className={`mb-0.5 inline-flex items-center rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide ${PLANNING_STATUS_BADGE_CLASSES[shift.planningStatus ?? ""] ?? ""}`}
+        >
+          {statusLabel}
+        </div>
       )}
       {isAbsence ? (
         <div className="font-medium truncate">{label}</div>

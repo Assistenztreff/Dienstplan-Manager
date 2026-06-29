@@ -8,6 +8,12 @@ import { relations } from "drizzle-orm";
 
 export const shiftTypeEnum = pgEnum("shift_type", ["active", "standby", "night", "full_day", "vacation", "sick", "work"]);
 
+// Planungsstatus einer Schicht im Lebenszyklus: VORLAEUFIG = Entwurf (interne
+// Planung), ANGEBOTEN = Vorschlag (dem Mitarbeiter angeboten), FIX = verbindlich
+// bestätigt. Default FIX, damit Bestandsschichten beim Migrieren als verbindlich
+// gelten (sie waren vor diesem Feature bereits "echte" Schichten).
+export const shiftPlanningStatusEnum = pgEnum("shift_planning_status", ["VORLAEUFIG", "ANGEBOTEN", "FIX"]);
+
 export const shiftsTable = pgTable("shifts", {
   id: serial("id").primaryKey(),
   teamId: integer("team_id").notNull().references(() => teamsTable.id),
@@ -15,6 +21,7 @@ export const shiftsTable = pgTable("shifts", {
   startTime: timestamp("start_time").notNull(),
   endTime: timestamp("end_time").notNull(),
   type: shiftTypeEnum("type").notNull().default("active"),
+  planningStatus: shiftPlanningStatusEnum("planning_status").notNull().default("FIX"),
   shiftModelId: integer("shift_model_id").references(() => shiftModelsTable.id, { onDelete: "set null" }),
   notes: text("notes"),
   // Berechnete Roh-Kennzahlen (beim Speichern ermittelt, Zuschlags-% erst bei Auswertung).

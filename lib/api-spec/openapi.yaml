@@ -1417,6 +1417,12 @@ components:
         type:
           type: string
           enum: [active, standby, night, full_day, vacation, sick, work]
+        planningStatus:
+          type: string
+          description: >-
+            Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag,
+            FIX = verbindlich bestätigt.
+          enum: [VORLAEUFIG, ANGEBOTEN, FIX]
         shiftModelId:
           type: ["integer", "null"]
         notes:
@@ -1453,6 +1459,12 @@ components:
         type:
           type: string
           enum: [active, standby, night, full_day, vacation, sick, work]
+        planningStatus:
+          type: string
+          description: >-
+            Optionaler Planungsstatus (Default FIX): VORLAEUFIG = Entwurf,
+            ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.
+          enum: [VORLAEUFIG, ANGEBOTEN, FIX]
         shiftModelId:
           type: ["integer", "null"]
         notes:
@@ -1470,6 +1482,12 @@ components:
         type:
           type: string
           enum: [active, standby, night, full_day, vacation, sick, work]
+        planningStatus:
+          type: string
+          description: >-
+            Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag,
+            FIX = verbindlich bestätigt.
+          enum: [VORLAEUFIG, ANGEBOTEN, FIX]
         shiftModelId:
           type: ["integer", "null"]
         notes:

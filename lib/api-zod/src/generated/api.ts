@@ -320,6 +320,7 @@ export const ListShiftsResponseItem = zod.object({
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
   "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work']),
+  "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX']).optional().describe('Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.'),
   "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish(),
   "valuedHours": zod.number().optional(),
@@ -357,6 +358,7 @@ export const CreateShiftBody = zod.object({
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
   "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work']),
+  "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX']).optional().describe('Optionaler Planungsstatus (Default FIX): VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.'),
   "shiftModelId": zod.number().nullish(),
   "notes": zod.string().optional()
 })
@@ -375,6 +377,7 @@ export const GetShiftResponse = zod.object({
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
   "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work']),
+  "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX']).optional().describe('Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.'),
   "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish(),
   "valuedHours": zod.number().optional(),
@@ -413,6 +416,7 @@ export const UpdateShiftBody = zod.object({
   "startTime": zod.coerce.date().optional(),
   "endTime": zod.coerce.date().optional(),
   "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work']).optional(),
+  "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX']).optional().describe('Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.'),
   "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish()
 })
@@ -423,6 +427,7 @@ export const UpdateShiftResponse = zod.object({
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
   "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work']),
+  "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX']).optional().describe('Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.'),
   "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish(),
   "valuedHours": zod.number().optional(),
@@ -1012,6 +1017,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
   "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work']),
+  "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX']).optional().describe('Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.'),
   "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish(),
   "valuedHours": zod.number().optional(),

@@ -36,9 +36,23 @@ type ShiftForEdit = {
   startTime: string;
   endTime: string;
   type: string;
+  planningStatus?: string | null;
   shiftModelId?: number | null;
   notes?: string | null;
 };
+
+// Planungsstatus: Entwurf (intern) → Vorschlag (angeboten) → Bestätigt (fix).
+type PlanningStatus = "VORLAEUFIG" | "ANGEBOTEN" | "FIX";
+
+const PLANNING_STATUS_OPTIONS: { value: PlanningStatus; label: string; hint: string }[] = [
+  { value: "VORLAEUFIG", label: "Entwurf", hint: "Interne Planung, noch nicht verbindlich." },
+  { value: "ANGEBOTEN", label: "Vorschlag", hint: "Dem Assistenten angeboten, wartet auf Bestätigung." },
+  { value: "FIX", label: "Bestätigt", hint: "Verbindlich bestätigter Dienst." },
+];
+
+function isPlanningStatus(value: string | null | undefined): value is PlanningStatus {
+  return value === "VORLAEUFIG" || value === "ANGEBOTEN" || value === "FIX";
+}
 
 type ShiftDialogProps = {
   open: boolean;
@@ -90,6 +104,7 @@ type FormState = {
   startTime: string;
   endTime: string;
   selection: string;
+  planningStatus: PlanningStatus;
   notes: string;
 };
 
@@ -161,6 +176,13 @@ export function ShiftDialog({
       startTime: editShift ? toTimeString(editShift.startTime) : "08:00",
       endTime: editShift ? toTimeString(editShift.endTime) : "16:00",
       selection: initialSelection(editShift, firstModelId),
+      // Beim Bearbeiten den gespeicherten Status übernehmen; neue Schichten
+      // starten bewusst als Entwurf (Beginn des Planungs-Workflows).
+      planningStatus: isPlanningStatus(editShift?.planningStatus)
+        ? editShift!.planningStatus
+        : editShift
+          ? "FIX"
+          : "VORLAEUFIG",
       notes: editShift?.notes ?? "",
     };
   }
@@ -307,6 +329,7 @@ export function ShiftDialog({
           startTime: startIso,
           endTime: endIso,
           type,
+          planningStatus: form.planningStatus,
           shiftModelId,
           notes: form.notes || null,
         };
@@ -320,6 +343,7 @@ export function ShiftDialog({
           startTime: startIso,
           endTime: endIso,
           type,
+          planningStatus: form.planningStatus,
           shiftModelId,
           notes: form.notes || undefined,
         };
@@ -379,6 +403,7 @@ export function ShiftDialog({
           startTime: startIso,
           endTime: endIso,
           type,
+          planningStatus: form.planningStatus,
           shiftModelId,
           notes: form.notes || undefined,
         };
@@ -577,6 +602,32 @@ export function ShiftDialog({
               </p>
             )}
           </div>
+
+          {/* Planungsstatus (nur für reguläre Dienste; Abwesenheiten sind kein
+              Planungs-Entwurf, sondern sofort verbindlich). */}
+          {!isAbsence && (
+            <div className="space-y-1.5">
+              <Label>Status</Label>
+              <Select
+                value={form.planningStatus}
+                onValueChange={(v) => set("planningStatus", v as PlanningStatus)}
+              >
+                <SelectTrigger data-testid="shift-dialog-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PLANNING_STATUS_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {PLANNING_STATUS_OPTIONS.find((o) => o.value === form.planningStatus)?.hint}
+              </p>
+            </div>
+          )}
 
           {/* Zeiten (nur für reguläre Schichten) */}
           {!isAbsence && (
