@@ -2,9 +2,9 @@ import {
   test,
   expect,
   request as playwrightRequest,
-  type Page,
   type APIRequestContext,
 } from "@playwright/test";
+import { loginViaUi } from "./helpers/auth";
 
 /**
  * E2E-Test für den Einzel-Nachweis-Export auf der Assistenten-Detailseite.
@@ -50,14 +50,6 @@ let expectedFilename: string;
 
 function safeName(name: string): string {
   return name.replace(/[^\p{L}\p{N}]+/gu, "_").replace(/^_+|_+$/g, "");
-}
-
-async function loginViaUi(page: Page, email: string, password: string): Promise<void> {
-  await page.goto("/login");
-  await page.locator("#email").fill(email);
-  await page.locator("#password").fill(password);
-  await page.getByRole("button", { name: "Anmelden" }).click();
-  await expect(page).toHaveURL(/\/$/);
 }
 
 test.beforeAll(async () => {

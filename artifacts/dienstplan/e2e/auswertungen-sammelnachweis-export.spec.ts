@@ -2,9 +2,9 @@ import {
   test,
   expect,
   request as playwrightRequest,
-  type Page,
   type APIRequestContext,
 } from "@playwright/test";
+import { loginViaUi } from "./helpers/auth";
 
 /**
  * E2E-Test für den Sammel-Nachweis-Export auf der Auswertungen-Seite.
@@ -50,23 +50,6 @@ let shiftId: number;
 
 // Gesamt-Nachweis: namePart = "Alle", rangePart = "<Jahr>_<Monat>".
 const expectedFilename = `Stundennachweis_Alle_${TARGET_YEAR}_${TARGET_MM}.pdf`;
-
-async function loginViaUi(page: Page, email: string, password: string): Promise<void> {
-  await page.goto("/login");
-  // Im Dev-Modus meldet die App via /api/auth/dev-login automatisch als Admin
-  // an und leitet von /login direkt auf / um – dann erscheint kein Formular.
-  // Ist die Auto-Anmeldung nicht aktiv, das Login-Formular regulär ausfüllen.
-  const emailField = page.locator("#email");
-  try {
-    await emailField.waitFor({ state: "visible", timeout: 5000 });
-    await emailField.fill(email);
-    await page.locator("#password").fill(password);
-    await page.getByRole("button", { name: "Anmelden" }).click();
-  } catch {
-    // Formular nicht sichtbar -> Auto-Anmeldung greift bereits.
-  }
-  await expect(page).toHaveURL(/\/$/);
-}
 
 test.beforeAll(async () => {
   const unique = Date.now();
