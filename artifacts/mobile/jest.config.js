@@ -11,6 +11,12 @@ module.exports = {
   preset: "jest-expo",
   setupFilesAfterEnv: ["<rootDir>/jest.setup.js"],
   testMatch: ["**/__tests__/**/*.test.{ts,tsx}"],
+  // Der volle Render-+Speichern-Flow im jest-expo-Harness ist beim ersten
+  // (kalten) Lauf gelegentlich langsamer als das Standard-Timeout von 5000 ms,
+  // wodurch der erste Test sporadisch mit einem Timeout fehlschlug und beim
+  // erneuten Lauf (warmer Harness) grün durchlief. Ein großzügigeres globales
+  // Timeout adressiert die Ursache, ohne die geprüfte Logik aufzuweichen.
+  testTimeout: 20000,
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/$1",
   },
