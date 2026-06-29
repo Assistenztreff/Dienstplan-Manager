@@ -5,9 +5,35 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
+import { useGetBrandingSettings } from "@workspace/api-client-react";
+import type { BrandingSettings } from "@workspace/api-client-react";
 import { useTeam } from "@/context/team";
+import { logoSrcFromPath } from "@/lib/logo";
 
 const ALL_VALUE = "__all__";
+
+function TeamLogo() {
+  const { selectedTeamId } = useTeam();
+
+  const { data: teamData } = useGetBrandingSettings(
+    selectedTeamId != null ? { teamId: selectedTeamId } : undefined,
+  );
+  const { data: globalData } = useGetBrandingSettings(undefined);
+
+  const teamLogoPath = (teamData as BrandingSettings | undefined)?.logoPath;
+  const globalLogoPath = (globalData as BrandingSettings | undefined)?.logoPath;
+  const logoSrc = logoSrcFromPath(teamLogoPath ?? globalLogoPath);
+
+  if (!logoSrc) return null;
+
+  return (
+    <img
+      src={logoSrc}
+      alt="Team-Logo"
+      className="h-8 w-auto max-w-[120px] shrink-0 rounded object-contain"
+    />
+  );
+}
 
 export function TeamSwitcher() {
   const { isDienstleister, hasTeams, teams, selectedTeamId, setSelectedTeamId } = useTeam();
@@ -15,21 +41,24 @@ export function TeamSwitcher() {
   if (!isDienstleister || !hasTeams) return null;
 
   return (
-    <Select
-      value={selectedTeamId == null ? ALL_VALUE : String(selectedTeamId)}
-      onValueChange={(v) => setSelectedTeamId(v === ALL_VALUE ? null : Number(v))}
-    >
-      <SelectTrigger className="w-full sm:w-56" aria-label="Team auswählen">
-        <SelectValue placeholder="Team auswählen" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={ALL_VALUE}>Alle Teams</SelectItem>
-        {teams.map((t) => (
-          <SelectItem key={t.id} value={String(t.id)}>
-            {t.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className="flex items-center gap-2">
+      <TeamLogo />
+      <Select
+        value={selectedTeamId == null ? ALL_VALUE : String(selectedTeamId)}
+        onValueChange={(v) => setSelectedTeamId(v === ALL_VALUE ? null : Number(v))}
+      >
+        <SelectTrigger className="w-full sm:w-56" aria-label="Team auswählen">
+          <SelectValue placeholder="Team auswählen" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ALL_VALUE}>Alle Teams</SelectItem>
+          {teams.map((t) => (
+            <SelectItem key={t.id} value={String(t.id)}>
+              {t.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
