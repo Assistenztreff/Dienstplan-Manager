@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -26,7 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
-import { Check, X, CalendarClock, ArrowRight } from "lucide-react";
+import { Check, X, CalendarClock, ArrowRight, Plus } from "lucide-react";
 import { useAuth } from "@/context/auth";
 import { useTeam } from "@/context/team";
 import { TeamSwitcher } from "@/components/team-switcher";
@@ -54,6 +55,28 @@ function isAbsenceType(type: string): boolean {
 // datetime-local-Wert (yyyy-MM-ddTHH:mm) aus ISO-Zeitstempel, lokale Zeitzone.
 function toLocalInput(iso: string): string {
   return format(new Date(iso), "yyyy-MM-dd'T'HH:mm");
+}
+
+// Heutiges Datum als yyyy-MM-dd (lokale Zeitzone) für den manuellen Eintrag.
+function todayDateStr(): string {
+  return format(new Date(), "yyyy-MM-dd");
+}
+
+// Aktuelle Uhrzeit als HH:mm (lokale Zeitzone).
+function nowTimeStr(): string {
+  return format(new Date(), "HH:mm");
+}
+
+// Lokaler Zeitstempel aus Datum (yyyy-MM-dd) und Uhrzeit (HH:mm).
+function buildLocal(date: string, time: string): Date {
+  return new Date(`${date}T${time}:00`);
+}
+
+// Datum (yyyy-MM-dd) um einen Tag erhöhen, lokale Zeitzone.
+function addOneDay(date: string): string {
+  const d = new Date(`${date}T00:00:00`);
+  d.setDate(d.getDate() + 1);
+  return format(d, "yyyy-MM-dd");
 }
 
 export default function Zeiterfassung() {
@@ -141,6 +164,16 @@ export default function Zeiterfassung() {
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Manueller Zeiteintrag ohne Schichtbezug (z.B. Nacht-Eintrag über Mitternacht).
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualDate, setManualDate] = useState("");
+  const [manualStart, setManualStart] = useState("");
+  const [manualEnd, setManualEnd] = useState("");
+  const [manualEndsNextDay, setManualEndsNextDay] = useState(false);
+  const [manualNotes, setManualNotes] = useState("");
+  const [manualError, setManualError] = useState<string | null>(null);
+  const [manualSaving, setManualSaving] = useState(false);
+
   const getUserName = (entry: { userId: number; user?: { name: string } | null }) => {
     if (entry.user?.name) return entry.user.name;
     return users?.find((u) => u.id === entry.userId)?.name ?? "Unbekannt";
@@ -189,6 +222,72 @@ export default function Zeiterfassung() {
 
   function closeDialog() {
     setDialogShift(null);
+  }
+
+  function openManual() {
+    setManualDate(todayDateStr());
+    setManualStart(nowTimeStr());
+    setManualEnd(nowTimeStr());
+    setManualEndsNextDay(false);
+    setManualNotes("");
+    setManualError(null);
+    setManualOpen(true);
+  }
+
+  async function handleManualSave() {
+    if (!currentUser) return;
+    setManualError(null);
+    if (!manualDate || !manualStart || !manualEnd) {
+      setManualError("Bitte Datum, Start- und Endzeit angeben.");
+      return;
+    }
+    const start = buildLocal(manualDate, manualStart);
+    if (Number.isNaN(start.getTime())) {
+      setManualError("Ungültige Zeitangabe.");
+      return;
+    }
+    // Ohne Schicht gilt eine Endzeit <= Startzeit nur dann als am Folgetag,
+    // wenn der Nutzer den "Endet am Folgetag"-Schalter aktiviert hat (bewusster
+    // Nacht-Eintrag über Mitternacht). Sonst bleibt die strenge Validierung und
+    // weist die Fehleingabe ab, statt still einen falschen Eintrag zu erzeugen.
+    const endDate =
+      manualEndsNextDay && manualEnd <= manualStart ? addOneDay(manualDate) : manualDate;
+    const end = buildLocal(endDate, manualEnd);
+    if (Number.isNaN(end.getTime())) {
+      setManualError("Ungültige Zeitangabe.");
+      return;
+    }
+    if (end <= start) {
+      setManualError("Die Endzeit muss nach der Startzeit liegen.");
+      return;
+    }
+    setManualSaving(true);
+    try {
+      await createEntry.mutateAsync({
+        data: {
+          userId: currentUser.id,
+          actualStart: start.toISOString(),
+          actualEnd: end.toISOString(),
+          ...(manualNotes.trim() ? { notes: manualNotes.trim() } : {}),
+        },
+      });
+      await queryClient.invalidateQueries({
+        predicate: (q) => {
+          const k = q.queryKey[0];
+          return k === "/api/time-tracking" || k === "/api/shifts";
+        },
+      });
+      toast({ title: "Zeit erfasst", description: "Der Eintrag wartet auf Bestätigung." });
+      setManualOpen(false);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setManualError("Sitzung abgelaufen. Bitte Seite neu laden und erneut anmelden.");
+      } else {
+        setManualError(readableApiError(err, "Speichern fehlgeschlagen. Bitte erneut versuchen."));
+      }
+    } finally {
+      setManualSaving(false);
+    }
   }
 
   async function handleSave() {
@@ -247,7 +346,15 @@ export default function Zeiterfassung() {
             {isAdmin ? "Geleistete Stunden prüfen und genehmigen" : "Meine geleisteten Stunden"}
           </p>
         </div>
-        <TeamSwitcher />
+        <div className="flex items-center gap-2 shrink-0">
+          {isAssistant && (
+            <Button className="gap-1.5 shrink-0" onClick={openManual} data-testid="manual-entry">
+              <Plus className="h-4 w-4" />
+              Zeit erfassen
+            </Button>
+          )}
+          <TeamSwitcher />
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-1.5" data-testid="status-filter">
@@ -466,6 +573,86 @@ export default function Zeiterfassung() {
             </Button>
             <Button onClick={handleSave} disabled={saving} data-testid="adopt-save">
               {saving ? "Speichern..." : "Ist-Zeit speichern"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={manualOpen} onOpenChange={(v) => !v && setManualOpen(false)}>
+        <DialogContent className="sm:max-w-md" data-testid="manual-dialog">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-xl">Zeit manuell erfassen</DialogTitle>
+            <DialogDescription>
+              Ist-Zeit ohne geplante Schicht eintragen.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Datum</Label>
+              <Input
+                type="date"
+                value={manualDate}
+                onChange={(e) => setManualDate(e.target.value)}
+                data-testid="manual-date"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Von</Label>
+                <Input
+                  type="time"
+                  value={manualStart}
+                  onChange={(e) => setManualStart(e.target.value)}
+                  data-testid="manual-start"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Bis</Label>
+                <Input
+                  type="time"
+                  value={manualEnd}
+                  onChange={(e) => setManualEnd(e.target.value)}
+                  data-testid="manual-end"
+                />
+              </div>
+            </div>
+            <div className="flex items-start justify-between gap-3 rounded-lg border border-border/60 p-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="manual-ends-next-day" className="cursor-pointer">
+                  Endet am Folgetag
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Für Nacht-Einträge über Mitternacht (z. B. 22:00–06:00)
+                </p>
+              </div>
+              <Switch
+                id="manual-ends-next-day"
+                checked={manualEndsNextDay}
+                onCheckedChange={setManualEndsNextDay}
+                data-testid="manual-ends-next-day"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Notiz (optional)</Label>
+              <Textarea
+                value={manualNotes}
+                onChange={(e) => setManualNotes(e.target.value)}
+                placeholder="Kurze Anmerkung..."
+                rows={3}
+              />
+            </div>
+            {manualError && (
+              <p className="text-sm text-destructive" data-testid="manual-error">
+                {manualError}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setManualOpen(false)} disabled={manualSaving}>
+              Abbrechen
+            </Button>
+            <Button onClick={handleManualSave} disabled={manualSaving} data-testid="manual-save">
+              {manualSaving ? "Speichern..." : "Ist-Zeit speichern"}
             </Button>
           </DialogFooter>
         </DialogContent>
