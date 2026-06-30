@@ -5,6 +5,7 @@ import type { Request, Response, NextFunction } from "express";
 import {
   hasAccess,
   isWithinLimit,
+  getLimit,
   type Plan,
   type PlanFeature,
   type PlanLimit,
@@ -49,6 +50,15 @@ export async function userWithinLimit(
 ): Promise<boolean> {
   const plan = await getUserPlan(userId);
   return isWithinLimit({ plan }, limit, currentCount);
+}
+
+/** Liefert den Limit-Wert (`number`) oder `null` (= unbegrenzt) fuer den Plan. */
+export async function getUserLimit(
+  userId: number,
+  limit: PlanLimit,
+): Promise<number | null> {
+  const plan = await getUserPlan(userId);
+  return getLimit({ plan }, limit);
 }
 
 /**

@@ -97,7 +97,12 @@ export const PLAN_CONFIG: Record<Plan, PlanConfig> = {
     limits: {
       maxAssistants: 6,
       maxTeams: 1,
-      maxShiftModels: 3,
+      // 4 = die bei der Registrierung vorinstallierten Standard-Dienste
+      // (Fruehdienst, Spaetdienst, 24h Dienst, Bereitschaft, siehe
+      // default-shift-models.ts) + 1 eigener Dienst. Das Limit MUSS ueber der
+      // Seed-Anzahl liegen, sonst startet ein frisch registriertes Free-Konto
+      // bereits am/ueber dem Limit und koennte nie einen eigenen Dienst anlegen.
+      maxShiftModels: 5,
       historyMonths: 1, // nur aktueller und naechster Monat sichtbar
     },
   },

@@ -16,7 +16,7 @@ import {
   getAllowedTeamIds,
   parseTeamIdParam,
 } from "../lib/teams";
-import { userWithinLimit } from "../lib/plan";
+import { userWithinLimit, getUserLimit } from "../lib/plan";
 
 const router = Router();
 
@@ -75,9 +75,9 @@ router.post("/shift-models", requireAdmin, async (req, res): Promise<void> => {
     .from(shiftModelsTable)
     .where(eq(shiftModelsTable.teamId, write.teamId));
   if (!(await userWithinLimit(req.session.userId!, "maxShiftModels", existingCount))) {
+    const max = await getUserLimit(req.session.userId!, "maxShiftModels");
     res.status(403).json({
-      error:
-        "Im Free-Tarif sind maximal 3 Dienste moeglich. Bitte upgrade auf Premium fuer unbegrenzte Dienste.",
+      error: `Im Free-Tarif sind maximal ${max} Dienste moeglich. Bitte upgrade auf Premium fuer unbegrenzte Dienste.`,
       code: "plan_limit_reached",
       limit: "maxShiftModels",
     });

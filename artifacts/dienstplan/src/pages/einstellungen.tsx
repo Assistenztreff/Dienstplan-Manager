@@ -924,9 +924,9 @@ export default function Einstellungen() {
   const nextSortOrder =
     sortedModels.length > 0 ? Math.max(...sortedModels.map((m) => m.sortOrder)) + 10 : 10;
 
-  // Free-Plan begrenzt die Anzahl der Schichtmodelle (Default 3). Ist das Limit
-  // erreicht, wird das Anlegen gesperrt (Durchsetzung zusaetzlich serverseitig
-  // noetig). `null` = unbegrenzt (Premium).
+  // Free-Plan begrenzt die Anzahl der Schichtmodelle (Free = 5: 4 vorinstallierte
+  // Standard-Dienste + 1 eigener). Ist das Limit erreicht, wird das Anlegen
+  // gesperrt (Durchsetzung zusaetzlich serverseitig). `null` = unbegrenzt (Premium).
   const shiftModelLimit = getLimit(currentUser, "maxShiftModels");
   const canAddModel = isWithinLimit(currentUser, "maxShiftModels", sortedModels.length);
 
