@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable, teamMembersTable } from "@workspace/db";
-import { eq, inArray } from "drizzle-orm";
+import { usersTable, teamMembersTable, teamsTable } from "@workspace/db";
+import { eq, and, inArray } from "drizzle-orm";
 import {
   ListUsersQueryParams,
   CreateUserBody,
@@ -17,6 +17,7 @@ import {
   resolveWriteTeamId,
   isUserInAllowedTeams,
 } from "../lib/teams";
+import { userWithinLimit } from "../lib/plan";
 
 const router = Router();
 
@@ -110,6 +111,36 @@ router.post("/users", requireAdmin, async (req, res): Promise<void> => {
     res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
     return;
   }
+
+  // Free-Limit (maxAssistants) autoritativ durchsetzen: nur das Anlegen eines
+  // WEITEREN Assistenten ueber dem Limit sperren (Bestandsschutz — vorhandene
+  // Assistenten bleiben sichtbar/editierbar). Nur fuer neue Assistenten relevant
+  // (Admins zaehlen nicht gegen das Limit). Gezaehlt werden die distinct
+  // Assistenten ueber ALLE Teams des Ziel-Team-Eigentuemers (kontoweites Limit);
+  // der Plan des Eigentuemers (nicht des ggf. anderen Anfragers) ist massgeblich.
+  if (userValues.role === "assistant" && target.ok) {
+    const [team] = await db
+      .select({ ownerId: teamsTable.ownerId })
+      .from(teamsTable)
+      .where(eq(teamsTable.id, target.teamId));
+    const ownerId = team?.ownerId ?? req.session.userId!;
+    const existingAssistants = await db
+      .selectDistinct({ userId: teamMembersTable.userId })
+      .from(teamMembersTable)
+      .innerJoin(usersTable, eq(usersTable.id, teamMembersTable.userId))
+      .innerJoin(teamsTable, eq(teamsTable.id, teamMembersTable.teamId))
+      .where(and(eq(teamsTable.ownerId, ownerId), eq(usersTable.role, "assistant")));
+    if (!(await userWithinLimit(ownerId, "maxAssistants", existingAssistants.length))) {
+      res.status(403).json({
+        error:
+          "Im Free-Tarif sind maximal 6 Assistenten moeglich. Bitte upgrade auf Premium fuer unbegrenzte Assistenten.",
+        code: "plan_limit_reached",
+        limit: "maxAssistants",
+      });
+      return;
+    }
+  }
+
   const [user] = await db
     .insert(usersTable)
     .values(userValues)

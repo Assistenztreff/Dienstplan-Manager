@@ -52,7 +52,11 @@ export async function userWithinLimit(
   return isWithinLimit({ plan }, limit, currentCount);
 }
 
-/** Liefert den Limit-Wert (`number`) oder `null` (= unbegrenzt) fuer den Plan. */
+/**
+ * Liefert den (frisch aus der DB gelesenen) numerischen Limit-Wert des Nutzers
+ * (`null` = unbegrenzt). Fuer Limits, deren Grenze selbst gebraucht wird
+ * (z.B. historyMonths: wie viele Monate Vorausplanung erlaubt sind).
+ */
 export async function getUserLimit(
   userId: number,
   limit: PlanLimit,

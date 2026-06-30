@@ -9,7 +9,7 @@ import {
   shiftModelsTable,
   timeTrackingTable,
 } from "@workspace/db";
-import { eq, and, asc, sql } from "drizzle-orm";
+import { eq, and, asc, sql, count } from "drizzle-orm";
 import type { Response } from "express";
 import {
   CreateTeamBody,
@@ -19,6 +19,7 @@ import {
   AddTeamMemberBody,
 } from "@workspace/api-zod";
 import { requireDienstleister } from "../middleware/auth";
+import { userWithinLimit } from "../lib/plan";
 
 const router = Router();
 
@@ -95,6 +96,26 @@ router.post("/teams", requireDienstleister, async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid request body" });
     return;
   }
+
+  // Free-Limit (maxTeams) autoritativ durchsetzen: nur das Anlegen eines
+  // WEITEREN Teams ueber dem Limit sperren (Bestandsschutz — vorhandene Teams
+  // bleiben unberuehrt). Gezaehlt werden die vom Nutzer besessenen Teams. Hinweis:
+  // Die Registrierung legt bereits ein "Standard-Team" an, ein Free-Dienstleister
+  // startet also am Limit (1) und das zweite Team wird hier geblockt.
+  const [{ value: ownedTeams }] = await db
+    .select({ value: count() })
+    .from(teamsTable)
+    .where(eq(teamsTable.ownerId, req.session.userId!));
+  if (!(await userWithinLimit(req.session.userId!, "maxTeams", ownedTeams))) {
+    res.status(403).json({
+      error:
+        "Im Free-Tarif ist nur ein Team moeglich. Bitte upgrade auf Premium fuer mehrere Teams.",
+      code: "plan_limit_reached",
+      limit: "maxTeams",
+    });
+    return;
+  }
+
   const [team] = await db
     .insert(teamsTable)
     .values({ name: body.data.name, ownerId: req.session.userId! })

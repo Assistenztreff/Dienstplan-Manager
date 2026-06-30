@@ -7,10 +7,12 @@ import {
   timeTrackingTable,
   shiftModelsTable,
   allowanceSettingsTable,
+  teamsTable,
   type NightWindow,
   type GermanState,
 } from "@workspace/db";
 import { eq, and, sql, or, isNull, ne, notInArray, lt, gt, inArray } from "drizzle-orm";
+import type { Response } from "express";
 import {
   ListShiftsQueryParams,
   CreateShiftBody,
@@ -29,7 +31,7 @@ import {
   isShiftModelInTeam,
 } from "../lib/teams";
 import { isAbsenceType, resolveShiftMetrics } from "../lib/shift-metrics-resolve";
-import { userHasFeature } from "../lib/plan";
+import { userHasFeature, getUserLimit } from "../lib/plan";
 
 const router = Router();
 
@@ -330,6 +332,49 @@ router.get("/shifts", requireAuth, async (req, res): Promise<void> => {
   res.json(rows);
 });
 
+// Anzahl Monate, die `target` in der Zukunft VOR `now` liegt (0 = selber Monat,
+// negativ = Vergangenheit). Basis fuer das historyMonths-Vorausplanungs-Limit.
+function monthsAhead(target: Date, now: Date): number {
+  return (
+    (target.getFullYear() - now.getFullYear()) * 12 +
+    (target.getMonth() - now.getMonth())
+  );
+}
+
+// Free-Limit (historyMonths) autoritativ durchsetzen: Die Vorausplanung wird auf
+// `historyMonths` Monate in die Zukunft begrenzt (Free=1 → aktueller + naechster
+// Monat). NUR das Planen in zu weit entfernten ZUKUNFTS-Monaten wird gesperrt
+// (gilt fuer POST UND fuer ein PATCH, das eine Schicht weiter nach vorn schiebt);
+// vergangene und aktuelle Monate bleiben uneingeschraenkt bebuchbar/editierbar
+// (Bestandsschutz). `null` = unbegrenzt (Premium-Vorausschau via 12). Massgeblich
+// ist der Plan des TEAM-EIGENTUEMERS (nicht des ggf. abweichenden Anfragers), damit
+// ein Member-Admin das Limit eines fremden Free-Teams nicht ueber seinen eigenen
+// Plan umgehen kann (analog zu maxAssistants). Liefert true, wenn die Aktion
+// geblockt und bereits mit 403 beantwortet wurde.
+async function forwardPlanningBlocked(
+  teamId: number,
+  requesterId: number,
+  startTime: Date,
+  res: Response,
+): Promise<boolean> {
+  const [team] = await db
+    .select({ ownerId: teamsTable.ownerId })
+    .from(teamsTable)
+    .where(eq(teamsTable.id, teamId));
+  const ownerId = team?.ownerId ?? requesterId;
+  const forwardLimit = await getUserLimit(ownerId, "historyMonths");
+  if (forwardLimit != null && monthsAhead(new Date(startTime), new Date()) > forwardLimit) {
+    res.status(403).json({
+      error:
+        "Im Free-Tarif kann nur fuer den aktuellen und naechsten Monat geplant werden. Bitte upgrade auf Premium fuer eine laengere Vorausplanung.",
+      code: "plan_limit_reached",
+      limit: "historyMonths",
+    });
+    return true;
+  }
+  return false;
+}
+
 router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
   const body = CreateShiftBody.safeParse(req.body);
   if (!body.success) {
@@ -383,6 +428,12 @@ router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
   // ein fremder userId ins Team verknüpfen (Cross-Team-PII-Leak).
   if (!(await isUserMemberOfTeam(body.data.userId, write.teamId))) {
     res.status(403).json({ error: "Nutzer gehört nicht zu diesem Team" });
+    return;
+  }
+
+  // Free-Limit (historyMonths): Vorausplanung in zu weit entfernte Zukunfts-
+  // Monate sperren (Plan des Team-Eigentuemers maßgeblich, Bestandsschutz).
+  if (await forwardPlanningBlocked(write.teamId, req.session.userId!, body.data.startTime, res)) {
     return;
   }
 
@@ -507,6 +558,17 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
   const effectiveType = body.data.type ?? oldShift.type;
   const effectiveStart = body.data.startTime ?? oldShift.startTime;
   const effectiveEnd = body.data.endTime ?? oldShift.endTime;
+
+  // Free-Limit (historyMonths): Verhindert, dass eine erlaubt angelegte Schicht
+  // per PATCH weit in die Zukunft verschoben wird und so das POST-Gate umgeht.
+  // Nur prüfen, wenn der Start tatsächlich geändert wird (sonst bleiben Bestands-
+  // Schichten unverändert editierbar — Bestandsschutz). Plan des Team-Eigentuemers
+  // (oldShift.teamId; Team bleibt bei PATCH unverändert) ist maßgeblich.
+  if (body.data.startTime != null && oldShift.teamId != null) {
+    if (await forwardPlanningBlocked(oldShift.teamId, req.session.userId!, effectiveStart, res)) {
+      return;
+    }
+  }
   if (!isAbsenceType(effectiveType) && !force) {
     const conflicts = await findOverlappingShifts(
       effectiveUserId,

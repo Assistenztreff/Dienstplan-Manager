@@ -33,6 +33,20 @@ NOT need to first create 3 models. If the product ever wants Free users to be ab
 to add a model, either lower the seed count or raise the limit; don't special-case
 the seeded ones.
 
+## A create-time limit must also be enforced on edit (move-forward bypass)
+
+`historyMonths` (Free forward-planning window) is enforced on POST /shifts AND on
+PATCH /shifts/:id — otherwise a Free account creates an allowed shift and PATCHes
+its startTime far into the future, bypassing the create gate. General rule: any
+limit keyed on a mutable field (date, target team, owner) must be re-checked on
+every mutation path that can change that field, not just on create. PATCH only
+re-checks when the gated field is actually in the body (Bestandsschutz: notes/
+type edits on existing rows stay free).
+
+**Whose plan counts:** shift forward-planning + maxAssistants base the limit on
+the TEAM OWNER's plan, not the requester — a member-admin (possibly premium) must
+not be able to exceed a foreign Free team's limit via their own plan.
+
 ## bulkEdit gate is the userId-reassignment on PATCH /shifts
 
 The only server capability unique to Massenbearbeitung is the assistant swap
