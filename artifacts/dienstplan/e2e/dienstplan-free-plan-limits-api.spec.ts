@@ -150,3 +150,61 @@ test("POST /api/shifts: Vorausplanung im Free-Tarif begrenzt (aktuell + nächste
   expect(body.code).toBe("plan_limit_reached");
   expect(body.limit).toBe("historyMonths");
 });
+
+test("PATCH /api/shifts: eine erlaubt angelegte Schicht kann im Free-Tarif nicht per Edit weit in die Zukunft verschoben werden (Move-Forward-Bypass)", async () => {
+  const acc = await freeAccount("privat", "history-months-patch");
+
+  const userRes = await acc.ctx.post("/api/users", {
+    data: {
+      name: "E2E Hist Patch Assistent",
+      email: `e2e.histpatch.${acc.id}@dienstplan.test`,
+      role: "assistant",
+    },
+  });
+  expect(userRes.status(), "Assistent anlegen fehlgeschlagen").toBe(201);
+  const assistantId = ((await userRes.json()) as { id: number }).id;
+
+  // Erlaubt angelegte Schicht im aktuellen Monat (innerhalb des Free-Fensters).
+  const createRes = await acc.ctx.post("/api/shifts", {
+    data: {
+      userId: assistantId,
+      startTime: `${monthDay(0)}T08:00:00.000Z`,
+      endTime: `${monthDay(0)}T16:00:00.000Z`,
+      type: "active",
+    },
+  });
+  expect(createRes.status(), "Schicht im aktuellen Monat sollte 201 liefern").toBe(201);
+  const shiftId = ((await createRes.json()) as { id: number }).id;
+
+  // Bestandsschutz: Verschieben innerhalb des Fensters (nächster Monat) bleibt erlaubt.
+  const withinRes = await acc.ctx.patch(`/api/shifts/${shiftId}`, {
+    data: {
+      startTime: `${monthDay(1)}T08:00:00.000Z`,
+      endTime: `${monthDay(1)}T16:00:00.000Z`,
+    },
+  });
+  expect(withinRes.status(), "Verschieben in den nächsten Monat sollte 200 liefern").toBe(200);
+
+  // Move-Forward-Bypass: Verschieben über das Fenster hinaus (2 Monate voraus)
+  // wird auch per PATCH mit 403 plan_limit_reached abgelehnt.
+  const beyondRes = await acc.ctx.patch(`/api/shifts/${shiftId}`, {
+    data: {
+      startTime: `${monthDay(2)}T08:00:00.000Z`,
+      endTime: `${monthDay(2)}T16:00:00.000Z`,
+    },
+  });
+  expect(beyondRes.status(), "Verschieben 2 Monate voraus sollte 403 liefern").toBe(403);
+  const beyondBody = (await beyondRes.json()) as LimitError;
+  expect(beyondBody.code).toBe("plan_limit_reached");
+  expect(beyondBody.limit).toBe("historyMonths");
+
+  // Bestandsschutz: die Schicht steht weiterhin im erlaubten (nächsten) Monat,
+  // der abgelehnte Verschiebe-Versuch hat nichts verändert.
+  const checkRes = await acc.ctx.get(`/api/shifts/${shiftId}`);
+  expect(checkRes.ok(), "GET der Schicht fehlgeschlagen").toBe(true);
+  const shift = (await checkRes.json()) as { startTime: string };
+  expect(
+    shift.startTime.startsWith(monthDay(1).slice(0, 7)),
+    "Abgelehntes PATCH darf die Schicht nicht verschoben haben",
+  ).toBe(true);
+});

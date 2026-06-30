@@ -35,11 +35,13 @@ All four numeric limits + the `bulkEdit` feature are now enforced authoritativel
   team (and vice versa).
 - `maxTeams` → POST /teams (count teams owned by the user; registration already
   seeds 1 Standard-Team so a Free dienstleister starts at the limit).
-- `historyMonths` → POST /shifts only (forward-planning cap). Compared in whole
-  calendar months UTC: a shift is blocked when `shiftMonthIdx - currentMonthIdx >
-  historyMonths`. Free (1) = current + next month. PAST months are never blocked
-  (backfill / Bestandsschutz); PATCH /shifts is intentionally NOT gated so
-  existing shifts stay editable.
+- `historyMonths` → POST /shifts AND PATCH /shifts/:id (forward-planning cap, see
+  move-forward section below). Compared in whole calendar months: a shift is blocked
+  when its start month is more than `historyMonths` months ahead of the current
+  month. Free (1) = current + next month. PAST months are never blocked (backfill /
+  Bestandsschutz); PATCH only re-checks when `startTime` is in the body, so
+  notes/type edits on existing shifts stay free. Single owner-based helper
+  (`forwardPlanningBlocked`) is the one source for both paths.
 The remaining feature flags (advancedPersonnelFile, payrollExport, etc.) are still
 config-only (frontend UX), not server-enforced.
 
