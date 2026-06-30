@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { UserAccountType } from './userAccountType';
+import type { UserPlan } from './userPlan';
 import type { UserRole } from './userRole';
 
 export interface User {
@@ -14,6 +15,7 @@ export interface User {
   email: string;
   role: UserRole;
   accountType: UserAccountType;
+  plan: UserPlan;
   /** @nullable */
   phone?: string | null;
   /** @nullable */

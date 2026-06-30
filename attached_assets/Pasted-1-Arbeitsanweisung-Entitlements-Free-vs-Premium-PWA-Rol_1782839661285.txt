@@ -1,0 +1,51 @@
+1. Arbeitsanweisung: Entitlements (Free vs. Premium) & PWA
+Rolle & Kontext:
+Du bist mein Senior-Backend/Frontend-Entwickler. Wir definieren nun die zentrale Geschäftslogik (Entitlements) für unser SaaS-Modell (Free vs. Premium) der Dienstplan-App, legen die Auth-Strategie fest und bereiten die App als PWA (Progressive Web App) vor. Zur Erinnerung: Farben im Dienstplan sind ausschließlich an die Assistenzkräfte (User) gebunden, nicht an die Schichten.
+Aufgabe 1: Zentrale Entitlement-Schicht (src/lib/entitlements.ts)
+Erstelle eine neue Datei, die ausschließlich die Rechte und Limits der Pläne definiert. Erstelle Funktionen wie hasAccess(user, feature) und getLimit(user, limitName).
+Setze folgende Konfiguration um:
+Free-Plan:
+maxAssistants: 6
+maxTeams: 1
+maxShiftModels: 3 (Nutzer dürfen diese 3 Modelle bearbeiten/umbenennen, aber keine weiteren anlegen)
+historyMonths: 1 (nur aktueller und nächster Monat sichtbar)
+basicPersonnelFile: true (nur Vorname, Nachname, E-Mail, Adresse)
+basicExport: true (einfacher Stunden-Export als PDF)
+bulkEdit: false (Keine Mehrfachauswahl/Massenbearbeitung im Kalender)
+Premium-Plan (Uneingeschränkt):
+maxAssistants: null (unbegrenzt)
+maxTeams: null (unbegrenzt - für Dienstleister-Verwaltung)
+maxShiftModels: null (unbegrenzt)
+historyMonths: 12 (Rückblick der letzten 12 Monate)
+advancedPersonnelFile: true (inkl. Stundenlohn für Lohnabrechnung)
+payrollExport: true (PDF Lohn-Export)
+advancedAnalytics: true (Soll/Ist-Berechnung, Abwesenheits-Management)
+strictTimeTracking: true (Arbeitszeiterfassung)
+calendarSync: true (Export in eigene Kalender-App)
+caregiverLogin: true (Assistenzkräfte haben Zugang zur Team-Ansicht)
+bulkEdit: true (Massenbearbeitung)
+Aufgabe 2: Vorbereitung PWA (Progressive Web App)
+Wir verzichten auf native iOS/Android Apps und nutzen stattdessen eine PWA. Bitte stelle sicher, dass in der index.html oder den globalen Meta-Tags die nötigen Vorbereitungen für eine WebApp getroffen sind (z. B. <meta name="mobile-web-app-capable" content="yes">, <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">).
+Aufgabe 3: Auth & Billing Architektur-Notizen (Kommentare)
+Füge in einer passenden Datei (z. B. auth.tsx oder entitlements.ts) einen Architektur-Kommentar hinzu: Die Authentifizierung läuft hybrid (Plattform-Nutzer kommen via SSO-Token (JWT), lokale Assistenzkräfte via E-Mail/Passwort oder Einladungslink).
+Vermerke ebenfalls im Code, dass die Rechnungsstellung und Abo-Verwaltung (Billing) vorerst über eine Lexware API (Erstellung von Rechnungsentwürfen) abgewickelt wird und nicht über externe Anbieter wie Stripe.
+Bitte generiere den sauberen Code für die entitlements.ts und baue beispielhaft in der App-Ansicht einen Check ein, der das Anlegen eines 4. Schichtmodells oder den Button für die Massenbearbeitung ("Mehrere bearbeiten") hinter die jeweilige Schranke setzt.
+📋 2. Arbeitsanweisung: Operator-Dashboard (System-Admin & Lexware-Logik)
+Rolle & Kontext:
+Du bist mein Senior-Fullstack-Entwickler. Wir passen die SaaS-Strategie an. Da wir eine Standalone-Version planen, benötigen wir ein internes Betreiber-Dashboard (Operator Panel) für die System-Admins zur Überwachung von Nutzern und Fehlern. Die Rechnungsstellung erfolgt bei Buchung als Entwurf über die Lexware API. Die Aktivierung des Premium-Status erfolgt manuell über das neue Operator-Dashboard, sobald die Zahlung eingegangen ist.
+Aufgabe 1: Erweiterung der Benutzerrollen (Auth & Schema)
+Stelle sicher, dass es neben admin und assistant eine übergeordnete Rolle für uns Betreiber gibt: superadmin (oder system_admin).
+Nur Nutzer mit der Rolle superadmin dürfen Zugriff auf das neue Betreiber-Dashboard haben.
+Aufgabe 2: Das Betreiber-Dashboard erstellen (src/pages/operator-dashboard.tsx)
+Erstelle eine neue, geschützte Admin-Seite. Diese soll folgende drei Kern-Bereiche (Karten/Tabs) als Platzhalter und UI-Struktur enthalten:
+Nutzer- & Team-Überwachung (User Monitoring):
+Eine Tabelle aller registrierten Konten/Teams mit Name, E-Mail, Registrierungsdatum und dem aktuellen Plan (free oder premium).
+Manueller Premium-Schalter: Füge neben jedem free Nutzer einen Button „Premium aktivieren“ hinzu. Beim Klick wird der Status in der Datenbank auf premium gesetzt (wichtig für unser manuelles Lexware-Billing!).
+Lexware Buchungs-Log:
+Eine Übersicht über die letzten Abo-Anfragen, bei denen ein Rechnungsentwurf an Lexware übermittelt wurde, inklusive Status (z. B. „Entwurf erstellt“, „Fehler bei Übermittlung“).
+Fehlerüberwachung (Error Tracking):
+Ein einfacher Bereich, in dem Systemfehler (z. B. fehlgeschlagene API-Aufrufe oder Datenbank-Fehler) mit Zeitstempel und Fehlermeldung aufgelistet werden, damit wir Bugs sofort sehen.
+Aufgabe 3: Einbindung im Routing und Layout (App.tsx & layout.tsx)
+Füge die neue Route /operator-dashboard in der App.tsx hinzu. Sie darf nur geladen werden, wenn currentUser.role === 'superadmin' ist.
+Wichtig: Dieser Menüpunkt darf nicht in der normalen AppSubNavigation für alle sichtbar sein! Platziere den Link zum Operator-Dashboard dezent ganz unten im Plattform-Footer oder als versteckten Link im Header, der ausschließlich für uns Sichtbar ist.
+Bitte generiere den vollständigen Frontend-Code für operator-dashboard.tsx unter Verwendung unserer brand-Farben und kommentiere die Stellen aus, an denen später die echten API-Endpunkte für das Freischalten und die Fehlerprotokolle andocken.

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AuthUserAccountType } from './authUserAccountType';
+import type { AuthUserPlan } from './authUserPlan';
 import type { AuthUserRole } from './authUserRole';
 
 export interface AuthUser {
@@ -14,4 +15,5 @@ export interface AuthUser {
   email: string;
   role: AuthUserRole;
   accountType: AuthUserAccountType;
+  plan: AuthUserPlan;
 }

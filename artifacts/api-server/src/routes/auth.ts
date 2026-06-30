@@ -14,6 +14,7 @@ const USER_SELECT = {
   email: usersTable.email,
   role: usersTable.role,
   accountType: usersTable.accountType,
+  plan: usersTable.plan,
 };
 
 router.post("/auth/login", async (req, res) => {
@@ -39,7 +40,7 @@ router.post("/auth/login", async (req, res) => {
   req.session.userId = user.id;
   req.session.role = user.role;
 
-  return res.json({ id: user.id, name: user.name, email: user.email, role: user.role, accountType: user.accountType });
+  return res.json({ id: user.id, name: user.name, email: user.email, role: user.role, accountType: user.accountType, plan: user.plan });
 });
 
 router.post("/auth/register", async (req, res) => {
@@ -107,6 +108,7 @@ router.post("/auth/register", async (req, res) => {
     email: user.email,
     role: user.role,
     accountType: user.accountType,
+    plan: user.plan,
   });
 });
 
@@ -241,6 +243,7 @@ if (process.env.NODE_ENV !== "production") {
         email: target.email,
         role: target.role,
         accountType: target.accountType,
+        plan: target.plan,
       });
       return;
     }
@@ -249,7 +252,7 @@ if (process.env.NODE_ENV !== "production") {
     const user = await ensureDefaultAdmin();
     req.session.userId = user.id;
     req.session.role = user.role;
-    res.json({ id: user.id, name: user.name, email: user.email, role: user.role, accountType: user.accountType });
+    res.json({ id: user.id, name: user.name, email: user.email, role: user.role, accountType: user.accountType, plan: user.plan });
   });
 
   // Liste verfügbarer Test-Nutzer für den Dev-Umschalter. Seedet die Test-Nutzer
@@ -321,7 +324,7 @@ router.post("/auth/set-password", async (req, res) => {
   req.session.userId = user.id;
   req.session.role = user.role;
 
-  return res.json({ id: user.id, name: user.name, email: user.email, role: user.role, accountType: user.accountType });
+  return res.json({ id: user.id, name: user.name, email: user.email, role: user.role, accountType: user.accountType, plan: user.plan });
 });
 
 router.post("/auth/change-password", async (req, res) => {

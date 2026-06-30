@@ -14,6 +14,7 @@ import Abwesenheiten from "@/pages/abwesenheiten";
 import Auswertungen from "@/pages/auswertungen";
 import Einstellungen from "@/pages/einstellungen";
 import TeamVerwaltung from "@/pages/team-verwaltung";
+import OperatorDashboard from "@/pages/operator-dashboard";
 import Login from "@/pages/login";
 import Registrierung from "@/pages/registrierung";
 import Einladung from "@/pages/einladung";
@@ -86,6 +87,10 @@ function Router() {
         )}
         {currentUser.role === "admin" && currentUser.accountType === "dienstleister" && (
           <Route path="/team-verwaltung" component={TeamVerwaltung} />
+        )}
+        {/* Operator-Dashboard ausschliesslich fuer Superadmins (Betreiber). */}
+        {currentUser.role === "superadmin" && (
+          <Route path="/operator-dashboard" component={OperatorDashboard} />
         )}
         <Route component={NotFound} />
       </Switch>

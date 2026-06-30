@@ -1,0 +1,31 @@
+Rolle & Kontext:
+Du bist mein Senior-Backend/Frontend-Entwickler. Wir definieren nun die zentrale Geschäftslogik (Entitlements) für unser SaaS-Modell (Free vs. Premium) der Dienstplan-App, legen die Auth-Strategie fest und bereiten die App als PWA (Progressive Web App) vor. Zur Erinnerung: Farben im Dienstplan sind ausschließlich an die Assistenzkräfte (User) gebunden, nicht an die Schichten.
+Aufgabe 1: Zentrale Entitlement-Schicht (src/lib/entitlements.ts)
+Erstelle eine neue Datei, die ausschließlich die Rechte und Limits der Pläne definiert. Erstelle Funktionen wie hasAccess(user, feature) und getLimit(user, limitName).
+Setze folgende Konfiguration um:
+Free-Plan:
+maxAssistants: 6
+maxTeams: 1
+maxShiftModels: 3 (Nutzer dürfen diese 3 Modelle bearbeiten/umbenennen, aber keine weiteren anlegen)
+historyMonths: 1 (nur aktueller und nächster Monat sichtbar)
+basicPersonnelFile: true (nur Vorname, Nachname, E-Mail, Adresse)
+basicExport: true (einfacher Stunden-Export als PDF)
+bulkEdit: false (Keine Mehrfachauswahl/Massenbearbeitung im Kalender)
+Premium-Plan (Uneingeschränkt):
+maxAssistants: null (unbegrenzt)
+maxTeams: null (unbegrenzt - für Dienstleister-Verwaltung)
+maxShiftModels: null (unbegrenzt)
+historyMonths: 12 (Rückblick der letzten 12 Monate)
+advancedPersonnelFile: true (inkl. Stundenlohn für Lohnabrechnung)
+payrollExport: true (PDF Lohn-Export)
+advancedAnalytics: true (Soll/Ist-Berechnung, Abwesenheits-Management)
+strictTimeTracking: true (Arbeitszeiterfassung)
+calendarSync: true (Export in eigene Kalender-App)
+caregiverLogin: true (Assistenzkräfte haben Zugang zur Team-Ansicht)
+bulkEdit: true (Massenbearbeitung)
+Aufgabe 2: Vorbereitung PWA (Progressive Web App)
+Wir verzichten auf native iOS/Android Apps und nutzen stattdessen eine PWA. Bitte stelle sicher, dass in der index.html oder den globalen Meta-Tags die nötigen Vorbereitungen für eine WebApp getroffen sind (z. B. <meta name="mobile-web-app-capable" content="yes">, <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">).
+Aufgabe 3: Auth & Billing Architektur-Notizen (Kommentare)
+Füge in einer passenden Datei (z. B. auth.tsx oder entitlements.ts) einen Architektur-Kommentar hinzu: Die Authentifizierung läuft hybrid (Plattform-Nutzer kommen via SSO-Token (JWT), lokale Assistenzkräfte via E-Mail/Passwort oder Einladungslink).
+Vermerke ebenfalls im Code, dass die Rechnungsstellung und Abo-Verwaltung (Billing) vorerst über eine Lexware API (Erstellung von Rechnungsentwürfen) abgewickelt wird und nicht über externe Anbieter wie Stripe.
+Bitte generiere den sauberen Code für die entitlements.ts und baue beispielhaft in der App-Ansicht einen Check ein, der das Anlegen eines 4. Schichtmodells oder den Button für die Massenbearbeitung ("Mehrere bearbeiten") hinter die jeweilige Schranke setzt.

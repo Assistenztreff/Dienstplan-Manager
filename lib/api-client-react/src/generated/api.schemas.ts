@@ -15,6 +15,7 @@ export type UserRole = typeof UserRole[keyof typeof UserRole];
 export const UserRole = {
   admin: 'admin',
   assistant: 'assistant',
+  superadmin: 'superadmin',
 } as const;
 
 export type UserAccountType = typeof UserAccountType[keyof typeof UserAccountType];
@@ -25,12 +26,21 @@ export const UserAccountType = {
   dienstleister: 'dienstleister',
 } as const;
 
+export type UserPlan = typeof UserPlan[keyof typeof UserPlan];
+
+
+export const UserPlan = {
+  free: 'free',
+  premium: 'premium',
+} as const;
+
 export interface User {
   id: number;
   name: string;
   email: string;
   role: UserRole;
   accountType: UserAccountType;
+  plan: UserPlan;
   /** @nullable */
   phone?: string | null;
   /** @nullable */
@@ -654,6 +664,7 @@ export type AuthUserRole = typeof AuthUserRole[keyof typeof AuthUserRole];
 export const AuthUserRole = {
   admin: 'admin',
   assistant: 'assistant',
+  superadmin: 'superadmin',
 } as const;
 
 export type AuthUserAccountType = typeof AuthUserAccountType[keyof typeof AuthUserAccountType];
@@ -664,12 +675,21 @@ export const AuthUserAccountType = {
   dienstleister: 'dienstleister',
 } as const;
 
+export type AuthUserPlan = typeof AuthUserPlan[keyof typeof AuthUserPlan];
+
+
+export const AuthUserPlan = {
+  free: 'free',
+  premium: 'premium',
+} as const;
+
 export interface AuthUser {
   id: number;
   name: string;
   email: string;
   role: AuthUserRole;
   accountType: AuthUserAccountType;
+  plan: AuthUserPlan;
 }
 
 export interface LoginInput {

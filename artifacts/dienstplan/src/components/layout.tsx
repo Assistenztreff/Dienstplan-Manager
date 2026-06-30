@@ -11,6 +11,7 @@ import {
   Building2,
   Menu,
   X,
+  ShieldCheck,
 } from "lucide-react";
 import logoUrl from "@assets/Arbeitgebermodell oder Assistenzdienst.png";
 import { useAuth } from "@/context/auth";
@@ -120,6 +121,7 @@ const FOOTER_COLUMNS: { heading: string; links: string[] }[] = [
 ];
 
 function PlatformFooterPlaceholder() {
+  const { currentUser } = useAuth();
   return (
     <footer className="shrink-0 bg-brand-dark text-brand-white">
       <div className="mx-auto grid max-w-7xl grid-cols-2 gap-6 px-4 py-6 sm:grid-cols-3">
@@ -136,6 +138,21 @@ function PlatformFooterPlaceholder() {
           </div>
         ))}
       </div>
+
+      {/* Dezenter, versteckter Zugang zum Operator-Dashboard — nur fuer
+          Superadmins sichtbar (nicht Teil der regulaeren Navigation). */}
+      {currentUser?.role === "superadmin" && (
+        <div className="border-t border-white/10">
+          <div className="mx-auto max-w-7xl px-4 py-3">
+            <Link href="/operator-dashboard">
+              <span className="inline-flex items-center gap-1.5 text-xs text-brand-white/50 hover:text-brand-white cursor-pointer">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Operator-Dashboard
+              </span>
+            </Link>
+          </div>
+        </div>
+      )}
     </footer>
   );
 }

@@ -6,7 +6,7 @@ import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, CheckSquare, X, CalendarPlus, Trash2, Pencil, ChevronDown, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, CheckSquare, X, CalendarPlus, Trash2, Pencil, ChevronDown, Users, Lock } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ShiftDialog } from "@/components/shift-dialog";
 import { BulkDeleteDialog } from "@/components/bulk-delete-dialog";
@@ -15,6 +15,7 @@ import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
 import { userBadgeClass, userDotClass } from "@/lib/shift-model-colors";
+import { hasAccess } from "@/lib/entitlements";
 import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 
 type Shift = {
@@ -762,6 +763,8 @@ function ViewToggle({
 export default function Dienstplan() {
   const { currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin";
+  // Massenbearbeitung ("Mehrere bearbeiten") nur im Premium-Plan.
+  const canBulkEdit = hasAccess(currentUser, "bulkEdit");
 
   // Optionales Zieldatum (z.B. vom Dashboard-Hinweis "Tage ohne geplante Schicht").
   const [searchParams] = useSearchParams();
@@ -895,18 +898,34 @@ export default function Dienstplan() {
         <TeamSwitcher />
       </div>
       <div className="flex items-center gap-2 md:gap-4">
-        {isAdmin && (
-          <Button
-            variant={isSelectionMode ? "default" : "outline"}
-            size="sm"
-            className="gap-1.5"
-            onClick={toggleSelectionMode}
-            data-testid="toggle-selection-mode"
-          >
-            {isSelectionMode ? <X className="h-4 w-4" /> : <CheckSquare className="h-4 w-4" />}
-            {isSelectionMode ? "Auswahl beenden" : "Mehrere bearbeiten"}
-          </Button>
-        )}
+        {/* Massenbearbeitung ist ein Premium-Feature. Free-Konten sehen den
+            Button deaktiviert mit Upgrade-Hinweis (Durchsetzung zusaetzlich
+            serverseitig erforderlich). */}
+        {isAdmin &&
+          (canBulkEdit ? (
+            <Button
+              variant={isSelectionMode ? "default" : "outline"}
+              size="sm"
+              className="gap-1.5"
+              onClick={toggleSelectionMode}
+              data-testid="toggle-selection-mode"
+            >
+              {isSelectionMode ? <X className="h-4 w-4" /> : <CheckSquare className="h-4 w-4" />}
+              {isSelectionMode ? "Auswahl beenden" : "Mehrere bearbeiten"}
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled
+              title="Massenbearbeitung ist in Premium enthalten."
+              data-testid="toggle-selection-mode-locked"
+            >
+              <Lock className="h-4 w-4" />
+              Mehrere bearbeiten
+            </Button>
+          ))}
         <Button variant="outline" size="icon" onClick={prevMonth} data-testid="prev-month">
           <ChevronLeft className="h-4 w-4" />
         </Button>

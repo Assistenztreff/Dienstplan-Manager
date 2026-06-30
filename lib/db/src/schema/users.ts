@@ -2,8 +2,12 @@ import { pgTable, serial, text, boolean, timestamp, date, pgEnum } from "drizzle
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-export const roleEnum = pgEnum("role", ["admin", "assistant"]);
+export const roleEnum = pgEnum("role", ["admin", "assistant", "superadmin"]);
 export const accountTypeEnum = pgEnum("account_type", ["privat", "dienstleister"]);
+// SaaS-Abo-Stufe pro Konto. "free" = abgespeckte Gratis-Version, "premium" =
+// voller Funktionsumfang. Aktivierung erfolgt vorerst manuell ueber das
+// Operator-Dashboard (manuelles Lexware-Billing), daher Default "free".
+export const planEnum = pgEnum("plan", ["free", "premium"]);
 
 export const usersTable = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -11,6 +15,7 @@ export const usersTable = pgTable("users", {
   email: text("email").notNull().unique(),
   role: roleEnum("role").notNull().default("assistant"),
   accountType: accountTypeEnum("account_type").notNull().default("privat"),
+  plan: planEnum("plan").notNull().default("free"),
   phone: text("phone"),
   address: text("address"),
   birthDate: date("birth_date"),

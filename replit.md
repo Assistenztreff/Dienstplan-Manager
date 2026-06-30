@@ -91,6 +91,23 @@ Kernfunktionen (Task 1 — Grundstruktur):
 - **Frontend Team-Wechsler**: `context/team.tsx` (`TeamProvider`/`useTeam`) lädt Teams nur für Dienstleister, persistiert `selectedTeamId` in localStorage (bereinigt Auswahl, wenn Team verschwindet oder Konto-Typ wechselt). `components/team-switcher.tsx` (Dropdown "Alle Teams" + Teams) nur sichtbar für Dienstleister mit ≥1 Team; eingebunden in Header von Dashboard, Dienstplan, Auswertungen. `teamId` wird an die List-Hooks und in das Shift-Create-Payload (`ShiftDialog`) durchgereicht; PDF-Export filtert per-User-Schichten ebenfalls auf das gewählte Team.
 - **Verifiziert** (curl + temporäres 2. Team): fremdes `teamId` → 403; teamScopes liefern disjunkte Datenmengen (Team A + Team B = Gesamtmenge ohne `teamId`); `users?teamId` → nur Mitglieder dieses Teams.
 
+## SaaS-Plan (Free vs. Premium) & Entitlements
+
+- **`plan`-Spalte** auf `users` (`planEnum` `free` | `premium`, Default `free`). Wird in allen AuthUser-Responses (`/auth/login`, `/auth/me`, `/auth/register`, `/auth/dev-login` inkl. Switch-Branch, `/auth/set-password`) ausgeliefert; in OpenAPI an `AuthUser` UND `User` als **required** ergänzt. Frontend-`AuthUser`-Type (hand-gerollt in `context/auth.tsx`) + `readStoredSession`-Validierung kennen `plan`.
+- **Entitlement-Schicht**: `artifacts/dienstplan/src/lib/entitlements.ts` ist Single Source of Truth. `PLAN_CONFIG` definiert pro Plan Features (boolean) und Limits (number | null = unbegrenzt). Helfer: `hasAccess(user, feature)`, `getLimit(user, limit)`, `isWithinLimit(user, limit, count)`, `resolvePlan` (Default `free`), `isPremium`. Free: maxAssistants 6, maxTeams 1, maxShiftModels 3, historyMonths 1, nur `basicPersonnelFile`/`basicExport`. Premium: Limits null/12, alle Features.
+- **Wichtig — Durchsetzung**: Die Entitlements steuern aktuell NUR die Frontend-UX (Buttons sperren, Hinweise). **Serverseitige Durchsetzung der Limits steht noch aus** und muss vor echtem Go-Live ergänzt werden (Client ist nicht vertrauenswürdig). Beispiel-Gates: 4. Schichtmodell (`einstellungen.tsx`, gesperrt + Hinweisbanner) und Massenbearbeitung „Mehrere bearbeiten" (`dienstplan.tsx`, `hasAccess bulkEdit`).
+- **Architektur-Hinweise** (als Kommentare in `entitlements.ts`): Auth ist hybrid (Plattform-SSO via JWT + lokal E-Mail/Passwort/Einladung). Billing läuft über die **Lexware API** (Rechnungsentwürfe), NICHT Stripe; Premium-Freischaltung erfolgt **manuell** im Operator-Dashboard nach Zahlungseingang.
+
+## Operator-Dashboard & superadmin-Rolle
+
+- **Rolle `superadmin`** als dritter Wert im `roleEnum` (DB + OpenAPI `AuthUser`/`User` + `express-session` `SessionData.role`). Wird NICHT über `UserInput`/Registrierung vergeben — superadmin nur direkt in der DB setzen.
+- **`pages/operator-dashboard.tsx`**: interne Betreiber-Konsole (3 Platzhalter-Bereiche mit auskommentierten API-Andockpunkten): (1) Nutzer-/Team-Monitoring + manuelle Premium-Freischaltung, (2) Lexware-Buchungs-Log, (3) Fehler-Tracking. Reiner Platzhalter, keine API-Calls.
+- **Zugang**: Route `/operator-dashboard` in `App.tsx` nur gerendert wenn `role === "superadmin"`. Dezenter, versteckter Link im `PlatformFooterPlaceholder` (`layout.tsx`) nur für superadmin — NICHT in `ALL_NAV_ITEMS`. **Noch offen**: Bevor das Dashboard echte privilegierte Aktionen ausführt, braucht es serverseitige `requireSuperadmin`-Middleware + geschützte Operator-Endpunkte (Frontend-Guard allein ist keine Autorisierung).
+
+## PWA
+
+- `artifacts/dienstplan/index.html` enthält PWA-Meta-Tags (`mobile-web-app-capable`, `apple-mobile-web-app-capable`, `apple-mobile-web-app-status-bar-style=black-translucent`, `apple-mobile-web-app-title`, `theme-color`) für Homescreen-Installation. Noch KEIN Web-App-Manifest / Service Worker (nur Meta-Tag-Grundlage).
+
 ## Einbettung in die Assistenztreff-Plattform (iframe, Weg 1)
 
 Die Dienstplan-App wird als eigenständige React/Express-App in die externe Assistenztreff-Plattform (proprietäres Symfony-Produkt von Lulububu Software GmbH) per `<iframe>` unter dem Menüpunkt **Connect** eingebettet. Eigene Postgres-DB bleibt erhalten.

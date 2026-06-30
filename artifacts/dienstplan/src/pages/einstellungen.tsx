@@ -29,10 +29,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, GripVertical, Upload, ImageIcon, KeyRound, Mail, User as UserIcon } from "lucide-react";
+import { Plus, Pencil, Trash2, GripVertical, Upload, ImageIcon, KeyRound, Mail, User as UserIcon, Lock } from "lucide-react";
 import { AllowanceSettingsForm } from "@/components/allowance-settings-form";
 import { logoSrcFromPath, ACCEPTED_LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/logo";
 import { readableApiError } from "@/lib/api-error";
+import { isWithinLimit, getLimit } from "@/lib/entitlements";
 import { useToast } from "@/hooks/use-toast";
 
 type ShiftModel = {
@@ -923,6 +924,12 @@ export default function Einstellungen() {
   const nextSortOrder =
     sortedModels.length > 0 ? Math.max(...sortedModels.map((m) => m.sortOrder)) + 10 : 10;
 
+  // Free-Plan begrenzt die Anzahl der Schichtmodelle (Default 3). Ist das Limit
+  // erreicht, wird das Anlegen gesperrt (Durchsetzung zusaetzlich serverseitig
+  // noetig). `null` = unbegrenzt (Premium).
+  const shiftModelLimit = getLimit(currentUser, "maxShiftModels");
+  const canAddModel = isWithinLimit(currentUser, "maxShiftModels", sortedModels.length);
+
   function openCreate() {
     setEditModel(undefined);
     setDialogOpen(true);
@@ -964,12 +971,32 @@ export default function Einstellungen() {
           <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Einstellungen</h2>
           <p className="text-muted-foreground mt-1 text-sm">Schichtmodelle für den Dienstplan verwalten</p>
         </div>
-        <Button onClick={openCreate} className="gap-2">
-          <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">Neues Modell</span>
-          <span className="sm:hidden">Neu</span>
-        </Button>
+        {canAddModel ? (
+          <Button onClick={openCreate} className="gap-2">
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Neues Modell</span>
+            <span className="sm:hidden">Neu</span>
+          </Button>
+        ) : (
+          <Button
+            disabled
+            className="gap-2"
+            title={`Im Free-Plan sind max. ${shiftModelLimit} Schichtmodelle möglich. Upgrade auf Premium für unbegrenzte Modelle.`}
+          >
+            <Lock className="h-4 w-4" />
+            <span className="hidden sm:inline">Neues Modell</span>
+            <span className="sm:hidden">Neu</span>
+          </Button>
+        )}
       </div>
+
+      {/* Limit-Hinweis (Free-Plan). Bei Premium ist shiftModelLimit null. */}
+      {!canAddModel && shiftModelLimit !== null && (
+        <div className="rounded-md border border-brand-yellow/40 bg-brand-yellow/10 px-4 py-3 text-sm text-foreground">
+          Im Free-Plan sind maximal {shiftModelLimit} Schichtmodelle möglich. Für unbegrenzte
+          Schichtmodelle ist ein Upgrade auf Premium nötig.
+        </div>
+      )}
 
       <ProfileCard />
 

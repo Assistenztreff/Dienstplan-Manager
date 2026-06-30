@@ -1249,7 +1249,7 @@ components:
 
     User:
       type: object
-      required: [id, name, email, role, accountType, createdAt]
+      required: [id, name, email, role, accountType, plan, createdAt]
       properties:
         id:
           type: integer
@@ -1259,10 +1259,13 @@ components:
           type: string
         role:
           type: string
-          enum: [admin, assistant]
+          enum: [admin, assistant, superadmin]
         accountType:
           type: string
           enum: [privat, dienstleister]
+        plan:
+          type: string
+          enum: [free, premium]
         phone:
           type: ["string", "null"]
         address:
@@ -2042,7 +2045,7 @@ components:
 
     AuthUser:
       type: object
-      required: [id, name, email, role, accountType]
+      required: [id, name, email, role, accountType, plan]
       properties:
         id:
           type: integer
@@ -2052,10 +2055,13 @@ components:
           type: string
         role:
           type: string
-          enum: [admin, assistant]
+          enum: [admin, assistant, superadmin]
         accountType:
           type: string
           enum: [privat, dienstleister]
+        plan:
+          type: string
+          enum: [free, premium]
 
     LoginInput:
       type: object
