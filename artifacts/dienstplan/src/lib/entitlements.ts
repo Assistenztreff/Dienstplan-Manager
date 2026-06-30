@@ -13,6 +13,27 @@
 // Konfiguration spiegeln (bzw. spaeter in ein gemeinsames lib/-Paket ziehen).
 //
 // ---------------------------------------------------------------------------
+// VERBINDLICHE REGEL: BESTANDSSCHUTZ
+// ---------------------------------------------------------------------------
+// Free-Limits beschraenken AUSSCHLIESSLICH das Anlegen von NEUEM (bzw. das
+// Ausloesen neuer Aktionen). Bereits vorhandene Daten — Teams, Lohndaten,
+// bereits geplante/vergangene Monate, vorhandene Schichtmodelle — duerfen
+// NIEMALS ausgeblendet, gesperrt oder geloescht werden, nur weil ein Konto auf
+// dem Free-Plan ist.
+//
+// Beim Implementieren eines neuen Gates IMMER so vorgehen:
+//  - maxShiftModels: vorhandene Modelle bleiben editierbar/umbenennbar/
+//    loeschbar; nur das Anlegen eines WEITEREN Modells ueber dem Limit sperren.
+//  - maxAssistants / maxTeams: nur das Anlegen ueber dem Limit blockieren,
+//    vorhandene Assistenten/Teams nie verbergen.
+//  - historyMonths: nur die NEUE Planung/Vorwaerts-Navigation begrenzen;
+//    bereits erfasste Monate bleiben vollstaendig sichtbar.
+//  - advancedPersonnelFile / payrollExport: bereits erfasste Lohndaten bleiben
+//    sichtbar; gegated wird hoechstens das Bearbeiten/Exportieren neuer Daten.
+// `isWithinLimit(user, limit, currentCount)` ist genau dafuer da: es prueft, ob
+// ein WEITERER Eintrag erlaubt ist — es ist KEIN Filter fuer die Anzeige.
+//
+// ---------------------------------------------------------------------------
 // ARCHITEKTUR-NOTIZ: Authentifizierung (hybrid)
 // ---------------------------------------------------------------------------
 // Die App authentifiziert hybrid:
