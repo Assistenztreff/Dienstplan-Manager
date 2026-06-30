@@ -14,7 +14,7 @@ import {
   getListContractsQueryKey,
 } from "@workspace/api-client-react";
 import { useTeam } from "@/context/team";
-import { readableApiError } from "@/lib/api-error";
+import { readableApiError, planLimitMessage } from "@/lib/api-error";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -286,11 +286,13 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
   });
 
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
+  const [planError, setPlanError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   function set(field: keyof FormState, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
     setErrors((e) => ({ ...e, [field]: undefined }));
+    setPlanError(null);
   }
 
   function validate(): boolean {
@@ -386,9 +388,14 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
       await queryClient.invalidateQueries({ queryKey: getListContractsQueryKey() });
       onClose();
     } catch (err) {
-      setErrors({
-        email: readableApiError(err, "Speichern fehlgeschlagen. Bitte pruefen und erneut versuchen."),
-      });
+      const planMsg = planLimitMessage(err);
+      if (planMsg) {
+        setPlanError(planMsg);
+      } else {
+        setErrors({
+          email: readableApiError(err, "Speichern fehlgeschlagen. Bitte pruefen und erneut versuchen."),
+        });
+      }
     } finally {
       setSaving(false);
     }
@@ -422,6 +429,10 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
             {isEditing ? "Assistenten bearbeiten" : "Neuen Assistenten anlegen"}
           </DialogTitle>
         </DialogHeader>
+
+        {planError && (
+          <p className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">{planError}</p>
+        )}
 
         <div className="space-y-6 py-2">
           <section>

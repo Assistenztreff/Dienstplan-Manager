@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Trash2 } from "lucide-react";
-import { readableApiError } from "@/lib/api-error";
+import { readableApiError, planLimitMessage } from "@/lib/api-error";
 
 type Assistant = { id: number; name: string };
 
@@ -376,8 +376,11 @@ export function ShiftDialog({
       await invalidate();
       onClose();
     } catch (err) {
+      const planMsg = planLimitMessage(err);
       if (err instanceof ApiError && err.status === 401) {
         setErrors({ notes: "Sitzung abgelaufen. Bitte Seite neu laden und erneut anmelden." });
+      } else if (planMsg) {
+        setErrors({ notes: planMsg });
       } else if (err instanceof ApiError && err.status === 403) {
         setErrors({ notes: "Keine Berechtigung zum Speichern." });
       } else if (
@@ -411,6 +414,7 @@ export function ShiftDialog({
       const conflicts: string[] = [];
       let sessionExpired = false;
       let otherError = false;
+      let planLimitError: string | null = null;
 
       for (const dateStr of bulkDates) {
         // Schon angelegte Tage nicht erneut erstellen.
@@ -435,8 +439,12 @@ export function ShiftDialog({
           });
           created.add(dateStr);
         } catch (err) {
+          const planMsg = planLimitMessage(err);
           if (err instanceof ApiError && err.status === 401) {
             sessionExpired = true;
+            break;
+          } else if (planMsg) {
+            planLimitError = planMsg;
             break;
           } else if (
             err instanceof ApiError &&
@@ -455,6 +463,10 @@ export function ShiftDialog({
 
       if (sessionExpired) {
         setErrors({ notes: "Sitzung abgelaufen. Bitte Seite neu laden und erneut anmelden." });
+        return;
+      }
+      if (planLimitError) {
+        setErrors({ notes: planLimitError });
         return;
       }
       if (otherError) {

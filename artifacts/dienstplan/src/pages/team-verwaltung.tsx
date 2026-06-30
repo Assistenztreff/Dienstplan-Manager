@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, Building2, Users, UserPlus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { readableApiError } from "@/lib/api-error";
+import { readableApiError, planLimitMessage } from "@/lib/api-error";
 
 type Team = {
   id: number;
@@ -90,7 +90,10 @@ function TeamDialog({ open, onClose, editTeam }: TeamDialogProps) {
       await queryClient.invalidateQueries({ queryKey: getListTeamsQueryKey() });
       onClose();
     } catch (err) {
-      setError(readableApiError(err, "Speichern fehlgeschlagen. Bitte erneut versuchen."));
+      setError(
+        planLimitMessage(err) ??
+          readableApiError(err, "Speichern fehlgeschlagen. Bitte erneut versuchen."),
+      );
     } finally {
       setSaving(false);
     }
