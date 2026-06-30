@@ -38,6 +38,52 @@ export type AccountType = "privat" | "dienstleister";
 type Entity = { id: number };
 type LoginResponse = { id: number; accountType: AccountType };
 
+/** Ein frisch über /api/auth/register angelegtes Free-Konto inkl. Session-Kontext. */
+export interface FreeAccount {
+  ctx: APIRequestContext;
+  id: number;
+  email: string;
+}
+
+/**
+ * Registriert über den öffentlichen Self-Service ein FRISCHES Konto und gibt
+ * dessen eingeloggten Request-Kontext zurück.
+ *
+ * Hintergrund: Der Setup-Admin (`admin@dienstplan.local`) wird von
+ * `setup-test-db` bewusst auf `plan = 'premium'` gehoben, damit die übrigen
+ * E2E-Specs nicht an Free-Limits scheitern. Zum Testen der Free-Gates braucht es
+ * daher ein frisch registriertes Konto, das garantiert auf dem Free-Plan startet
+ * (Premium wird nur manuell im Operator-Dashboard freigeschaltet).
+ *
+ * Die Registrierung legt serverseitig direkt ein „Standard-Team" an (owner =
+ * neues Konto, inkl. Mitgliedschaft), sodass `resolveWriteTeamId` ohne explizite
+ * `teamId` greift — POST /users und POST /shifts funktionieren also ohne dass der
+ * Test die Team-ID kennen muss (GET /teams ist für `privat`-Konten ohnehin
+ * gesperrt).
+ */
+export async function registerFreeAccount(
+  accountType: AccountType = "privat",
+  label = "free",
+): Promise<FreeAccount> {
+  const ctx = await playwrightRequest.newContext({ baseURL: BASE_URL });
+  const stamp = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+  const email = `e2e.${label}.${stamp}@dienstplan.test`;
+  const res = await ctx.post("/api/auth/register", {
+    data: {
+      name: `E2E ${label} ${stamp}`,
+      email,
+      password: "free12345",
+      accountType,
+    },
+  });
+  expect(res.status(), `Registrierung fehlgeschlagen (${res.status()})`).toBe(201);
+  const body = (await res.json()) as { id: number; plan: string };
+  // Absicherung: Ein frisch registriertes Konto MUSS auf dem Free-Plan starten,
+  // sonst würden die Free-Gate-Assertions dieses Specs nichts beweisen.
+  expect(body.plan, "Frisch registriertes Konto muss Free sein").toBe("free");
+  return { ctx, id: body.id, email };
+}
+
 /** Ein über das setup-admin-Skript geseedeter, "fremder" Admin (ohne Teams). */
 export interface SeededAdmin {
   ctx: APIRequestContext;
