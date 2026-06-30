@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
@@ -9,6 +10,7 @@ import {
   Settings,
   Building2,
   Menu,
+  X,
 } from "lucide-react";
 import logoUrl from "@assets/Arbeitgebermodell oder Assistenzdienst.png";
 import { useAuth } from "@/context/auth";
@@ -150,6 +152,7 @@ function PlatformFooterPlaceholder() {
 function AppSubNavigation() {
   const [location] = useLocation();
   const { currentUser } = useAuth();
+  const [isAppMenuOpen, setIsAppMenuOpen] = useState(false);
 
   const navItems = ALL_NAV_ITEMS.filter(
     (item) =>
@@ -158,15 +161,53 @@ function AppSubNavigation() {
   );
 
   return (
-    <div className="sticky top-0 z-30 shrink-0 border-b border-slate-200 bg-slate-100">
-      <div className="mx-auto max-w-7xl px-2 py-6 md:px-4 md:py-8">
-        {/* Mobile: wischbare, einzeilige Navigation (overflow-x-auto, kein
-            Umbruch). Ab md: zentriert und natuerlicher Umbruch in zwei Zeilen. */}
-        <nav className="flex flex-nowrap items-center gap-2 overflow-x-auto whitespace-nowrap scrollbar-hide md:flex-wrap md:justify-center md:gap-x-3 md:gap-y-4 md:overflow-visible md:whitespace-normal">
+    <>
+      {/* Mobile: schmale Toggle-Leiste mit "App-Menue"-Button (oeffnet Drawer).
+          Sticky, damit der Zugang zur Navigation beim Scrollen erhalten bleibt. */}
+      <div className="sticky top-0 z-30 border-b border-slate-200 bg-slate-100 px-4 py-3 md:hidden">
+        <button
+          type="button"
+          onClick={() => setIsAppMenuOpen(true)}
+          className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium text-slate-700 hover:bg-slate-200"
+          aria-label="App-Menü öffnen"
+        >
+          <Menu className="h-5 w-5 shrink-0" />
+          <span>App-Menü</span>
+        </button>
+      </div>
+
+      {/* Mobile: Backdrop hinter dem Drawer (Klick schliesst das Menue). */}
+      {isAppMenuOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-brand-dark/50 md:hidden"
+          onClick={() => setIsAppMenuOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Mobile: Off-Canvas Slide-In-Menue (Drawer) von links. */}
+      <div
+        className={`fixed inset-y-0 left-0 z-50 w-64 transform bg-slate-100 shadow-xl transition-transform duration-300 md:hidden ${
+          isAppMenuOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+          <span className="text-sm font-semibold text-slate-700">Menü</span>
+          <button
+            type="button"
+            onClick={() => setIsAppMenuOpen(false)}
+            className="rounded-md p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+            aria-label="Menü schließen"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <nav className="flex flex-col gap-2 p-4">
           {navItems.map((item) => (
             <Link key={item.href} href={item.href}>
               <span
-                className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors cursor-pointer ${
+                onClick={() => setIsAppMenuOpen(false)}
+                className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors cursor-pointer ${
                   location === item.href
                     ? "bg-brand-yellow text-brand-dark font-medium"
                     : "text-slate-600 hover:bg-slate-200 hover:text-slate-900"
@@ -179,7 +220,30 @@ function AppSubNavigation() {
           ))}
         </nav>
       </div>
-    </div>
+
+      {/* Desktop: zweizeiliger, zentrierter Pillen-Balken mit Umbruch.
+          Unveraendert wie zuvor, nur ab md sichtbar. */}
+      <div className="sticky top-0 z-30 hidden shrink-0 border-b border-slate-200 bg-slate-100 md:block">
+        <div className="mx-auto max-w-7xl px-4 py-8">
+          <nav className="flex flex-wrap items-center justify-center gap-x-3 gap-y-4">
+            {navItems.map((item) => (
+              <Link key={item.href} href={item.href}>
+                <span
+                  className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors cursor-pointer ${
+                    location === item.href
+                      ? "bg-brand-yellow text-brand-dark font-medium"
+                      : "text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                  }`}
+                >
+                  <item.icon className="h-4 w-4 shrink-0" />
+                  <span>{item.label}</span>
+                </span>
+              </Link>
+            ))}
+          </nav>
+        </div>
+      </div>
+    </>
   );
 }
 
