@@ -49,6 +49,15 @@ stay editable/deletable (Bestandsschutz); only creating over the limit is blocke
 If the product wants Free users to add more, raise the limit — don't special-case
 the seeded ones.
 
+## Gotcha: registration seeds a Standard-Team but Free maxTeams = 1
+
+Same seeding-vs-limit pattern as shift models: registration creates one initial
+"Standard-Team" (owner = new user), so a fresh Free Dienstleister account already
+sits AT maxTeams = 1. POST /api/teams counts owned teams and blocks the SECOND
+team with 403 plan_limit_reached (limit maxTeams). Bestandsschutz: the seeded team
+(and any pre-existing teams) stay; only creating one MORE over the limit is blocked.
+So testing the maxTeams gate needs no setup — the next POST blocks immediately.
+
 ## A create-time limit must also be enforced on edit (move-forward bypass)
 
 `historyMonths` (Free forward-planning window) is enforced on POST /shifts AND on
