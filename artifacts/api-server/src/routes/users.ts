@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { usersTable, teamMembersTable, teamsTable } from "@workspace/db";
-import { eq, and, inArray, countDistinct } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import {
   ListUsersQueryParams,
   CreateUserBody,
@@ -105,40 +105,6 @@ router.post("/users", requireAdmin, async (req, res): Promise<void> => {
     return;
   }
 
-  // Free-Limit (maxAssistants) autoritativ durchsetzen: nur das Anlegen eines
-  // WEITEREN Assistenten ueber dem Limit sperren (Bestandsschutz — vorhandene
-  // Assistenten bleiben unberuehrt und werden nie verborgen). Gezaehlt werden
-  // die distinct Assistenz-Nutzer in den erlaubten Teams des Anlegers (analog
-  // zur Team-gescopten GET /users-Liste; Free hat genau 1 Team). Greift nur,
-  // wenn tatsaechlich ein Assistent angelegt wird (role "assistant").
-  if (body.data.role === "assistant") {
-    const creatorId = req.session.userId!;
-    const allowedTeams = await getAllowedTeamIds(creatorId);
-    let assistantCount = 0;
-    if (allowedTeams.length > 0) {
-      const [agg] = await db
-        .select({ value: countDistinct(usersTable.id) })
-        .from(usersTable)
-        .innerJoin(teamMembersTable, eq(teamMembersTable.userId, usersTable.id))
-        .where(
-          and(
-            inArray(teamMembersTable.teamId, allowedTeams),
-            eq(usersTable.role, "assistant"),
-          ),
-        );
-      assistantCount = agg?.value ?? 0;
-    }
-    if (!(await userWithinLimit(creatorId, "maxAssistants", assistantCount))) {
-      const max = await getUserLimit(creatorId, "maxAssistants");
-      res.status(403).json({
-        error: `Im Free-Tarif sind maximal ${max} Assistenten moeglich. Bitte upgrade auf Premium fuer unbegrenzte Assistenten.`,
-        code: "plan_limit_reached",
-        limit: "maxAssistants",
-      });
-      return;
-    }
-  }
-
   // teamId steuert nur die Team-Mitgliedschaft, ist keine Spalte auf users.
   const { teamId: requestedTeamId, ...userValues } = body.data;
   const target = await resolveWriteTeamId(req.session.userId!, requestedTeamId ?? undefined);
@@ -166,9 +132,9 @@ router.post("/users", requireAdmin, async (req, res): Promise<void> => {
       .innerJoin(teamsTable, eq(teamsTable.id, teamMembersTable.teamId))
       .where(and(eq(teamsTable.ownerId, ownerId), eq(usersTable.role, "assistant")));
     if (!(await userWithinLimit(ownerId, "maxAssistants", existingAssistants.length))) {
+      const max = await getUserLimit(ownerId, "maxAssistants");
       res.status(403).json({
-        error:
-          "Im Free-Tarif sind maximal 6 Assistenten moeglich. Bitte upgrade auf Premium fuer unbegrenzte Assistenten.",
+        error: `Im Free-Tarif sind maximal ${max} Assistenten moeglich. Bitte upgrade auf Premium fuer unbegrenzte Assistenten.`,
         code: "plan_limit_reached",
         limit: "maxAssistants",
       });

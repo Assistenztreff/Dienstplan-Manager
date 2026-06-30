@@ -27,8 +27,12 @@ sides stay in lockstep.
 All four numeric limits + the `bulkEdit` feature are now enforced authoritatively
 (403 `plan_limit_reached` with a `limit` field, or `plan_feature_required`):
 - `maxShiftModels` → POST /shift-models (count per target team).
-- `maxAssistants` → POST /users when `role === "assistant"` (count distinct
-  assistant users across the creator's allowed teams; Free has 1 team).
+- `maxAssistants` → POST /users when `role === "assistant"`, enforced in ONE
+  block after `resolveWriteTeamId` (once the target team is known): count distinct
+  assistants across ALL teams of the target team's OWNER and check the OWNER's plan
+  (account-wide). An earlier duplicate pre-block that counted against the requester
+  was removed — it could wrongly block a Premium member-admin in a Free owner's
+  team (and vice versa).
 - `maxTeams` → POST /teams (count teams owned by the user; registration already
   seeds 1 Standard-Team so a Free dienstleister starts at the limit).
 - `historyMonths` → POST /shifts only (forward-planning cap). Compared in whole
