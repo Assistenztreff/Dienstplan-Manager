@@ -32,7 +32,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Pencil, Trash2, GripVertical, Upload, ImageIcon, KeyRound, Mail, User as UserIcon, Lock } from "lucide-react";
 import { AllowanceSettingsForm } from "@/components/allowance-settings-form";
 import { logoSrcFromPath, ACCEPTED_LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/logo";
-import { readableApiError } from "@/lib/api-error";
+import { readableApiError, planLimitMessage } from "@/lib/api-error";
 import { isWithinLimit, getLimit } from "@/lib/entitlements";
 import { useToast } from "@/hooks/use-toast";
 
@@ -434,7 +434,11 @@ function ModelDialog({ open, onClose, editModel, nextSortOrder }: ModelDialogPro
       await queryClient.invalidateQueries({ queryKey: getListShiftModelsQueryKey() });
       onClose();
     } catch (err) {
-      setErrors({ name: readableApiError(err, "Speichern fehlgeschlagen. Bitte erneut versuchen.") });
+      setErrors({
+        name:
+          planLimitMessage(err) ??
+          readableApiError(err, "Speichern fehlgeschlagen. Bitte erneut versuchen."),
+      });
     } finally {
       setSaving(false);
     }
