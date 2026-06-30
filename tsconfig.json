@@ -7,6 +7,9 @@
       "path": "./lib/db"
     },
     {
+      "path": "./lib/entitlements"
+    },
+    {
       "path": "./lib/api-client-react"
     },
     {

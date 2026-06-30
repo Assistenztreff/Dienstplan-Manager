@@ -184,6 +184,9 @@ importers:
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
+      '@workspace/entitlements':
+        specifier: workspace:*
+        version: link:../../lib/entitlements
       connect-pg-simple:
         specifier: ^10.0.0
         version: 10.0.0
@@ -375,6 +378,9 @@ importers:
       '@workspace/api-client-react':
         specifier: workspace:*
         version: link:../../lib/api-client-react
+      '@workspace/entitlements':
+        specifier: workspace:*
+        version: link:../../lib/entitlements
       class-variance-authority:
         specifier: 'catalog:'
         version: 0.7.1
@@ -833,6 +839,15 @@ importers:
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@types/node@25.6.2)(jiti@2.7.0)(jsdom@20.0.3)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.8.4)
+
+  lib/entitlements:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
       vitest:
         specifier: ^4.1.8
         version: 4.1.8(@types/node@25.6.2)(jiti@2.7.0)(jsdom@20.0.3)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.8.4)

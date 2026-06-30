@@ -58,6 +58,22 @@ async function main(): Promise<void> {
   run("pnpm --filter @workspace/scripts run setup-admin");
   run("pnpm --filter @workspace/scripts run migrate-teams");
 
+  // Test-Admin auf Premium setzen (NUR Test-Infrastruktur, niemals die echte
+  // Dev-DB). Hintergrund: Die serverseitige Durchsetzung der Free-Limits würde
+  // sonst bestehende E2E-Specs brechen, die als Standard-Admin parallel viele
+  // Schichtmodelle anlegen (maxShiftModels=3 im Free-Tarif) bzw. die
+  // Massenbearbeitung (bulkEdit = Premium) testen. Die dedizierten Plan-Gate-
+  // Specs registrieren sich stattdessen frische Free-Konten und prüfen die
+  // Limits isoliert.
+  const seed = new pg.Client({ connectionString: testUrl });
+  await seed.connect();
+  await seed.query(
+    "UPDATE users SET plan = 'premium' WHERE email = $1",
+    ["admin@dienstplan.local"],
+  );
+  await seed.end();
+  console.log("Test-Admin auf Premium gesetzt.");
+
   console.log("Test-Datenbank ist bereit.");
 }
 

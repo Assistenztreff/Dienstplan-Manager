@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { shiftModelsTable } from "@workspace/db";
-import { eq, asc, and, inArray } from "drizzle-orm";
+import { eq, asc, and, inArray, count } from "drizzle-orm";
 import {
   ListShiftModelsQueryParams,
   CreateShiftModelBody,
@@ -16,6 +16,7 @@ import {
   getAllowedTeamIds,
   parseTeamIdParam,
 } from "../lib/teams";
+import { userWithinLimit } from "../lib/plan";
 
 const router = Router();
 
@@ -64,6 +65,25 @@ router.post("/shift-models", requireAdmin, async (req, res): Promise<void> => {
     }
     return;
   }
+
+  // Free-Limit (maxShiftModels) autoritativ durchsetzen: nur das Anlegen eines
+  // WEITEREN Modells ueber dem Limit sperren (Bestandsschutz — vorhandene
+  // Modelle bleiben unberuehrt und editierbar/loeschbar). Gezaehlt wird pro
+  // Ziel-Team, da Schichtmodelle team-scoped sind.
+  const [{ value: existingCount }] = await db
+    .select({ value: count() })
+    .from(shiftModelsTable)
+    .where(eq(shiftModelsTable.teamId, write.teamId));
+  if (!(await userWithinLimit(req.session.userId!, "maxShiftModels", existingCount))) {
+    res.status(403).json({
+      error:
+        "Im Free-Tarif sind maximal 3 Dienste moeglich. Bitte upgrade auf Premium fuer unbegrenzte Dienste.",
+      code: "plan_limit_reached",
+      limit: "maxShiftModels",
+    });
+    return;
+  }
+
   const [model] = await db.insert(shiftModelsTable).values({ ...body.data, teamId: write.teamId }).returning();
   res.status(201).json(model);
 });

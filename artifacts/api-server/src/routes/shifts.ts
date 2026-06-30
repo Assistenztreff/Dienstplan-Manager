@@ -29,6 +29,7 @@ import {
   isShiftModelInTeam,
 } from "../lib/teams";
 import { isAbsenceType, resolveShiftMetrics } from "../lib/shift-metrics-resolve";
+import { userHasFeature } from "../lib/plan";
 
 const router = Router();
 
@@ -475,6 +476,24 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
   // Schicht (oldShift.teamId) bleibt bei PATCH unverändert.
   const effectiveUserId = body.data.userId ?? oldShift.userId;
   if (body.data.userId != null && body.data.userId !== oldShift.userId) {
+    // Der Assistenten-Wechsel an einer bestehenden Schicht (ShiftUpdate.userId)
+    // existiert AUSSCHLIESSLICH für die Massenbearbeitung ("Mehrere bearbeiten",
+    // Assistent tauschen) — der Einzel-Schicht-Dialog sendet beim Bearbeiten nie
+    // userId. Massenbearbeitung ist ein Premium-Feature; daher wird der Wechsel
+    // serverseitig autoritativ gegen das bulkEdit-Entitlement geprüft (nicht nur
+    // im Frontend, der Client ist nicht vertrauenswürdig). Das wiederholte
+    // Bearbeiten EINZELNER bestehender Schichten (Zeiten/Notiz/Typ ohne
+    // Assistenten-Wechsel) bleibt bewusst frei — Bestandsschutz erlaubt Free-
+    // Konten, ihre vorhandenen Daten zu pflegen.
+    if (!(await userHasFeature(req.session.userId!, "bulkEdit"))) {
+      res.status(403).json({
+        error:
+          "Das Tauschen des Assistenten (Massenbearbeitung) ist im Premium-Tarif enthalten.",
+        code: "plan_feature_required",
+        feature: "bulkEdit",
+      });
+      return;
+    }
     if (!(await isUserMemberOfTeam(body.data.userId, oldShift.teamId))) {
       res.status(403).json({ error: "Nutzer gehört nicht zu diesem Team" });
       return;
