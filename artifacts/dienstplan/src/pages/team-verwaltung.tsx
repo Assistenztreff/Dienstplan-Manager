@@ -26,8 +26,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, Building2, Users, UserPlus, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Building2, Users, UserPlus, X, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/auth";
+import { isWithinLimit, getLimit } from "@/lib/entitlements";
 import { readableApiError, planLimitMessage } from "@/lib/api-error";
 
 type Team = {
@@ -288,6 +290,7 @@ function MembersDialog({ team, onClose }: MembersDialogProps) {
 export default function TeamVerwaltung() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { currentUser } = useAuth();
   const { data, isLoading } = useListTeams();
   const deleteTeam = useDeleteTeam();
 
@@ -297,6 +300,14 @@ export default function TeamVerwaltung() {
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
   const teams: Team[] = (data ?? []) as Team[];
+
+  // Free-Plan begrenzt die Anzahl der Teams (Free = 1). Da die Registrierung
+  // bereits ein Standard-Team anlegt, startet ein Free-Konto direkt am Limit.
+  // Ist es erreicht, wird das Anlegen gesperrt (Durchsetzung zusaetzlich
+  // serverseitig). `null` = unbegrenzt (Premium). Bestandsschutz: vorhandene
+  // Teams bleiben sichtbar/editierbar; nur das Anlegen ueber dem Limit ist gesperrt.
+  const teamLimit = getLimit(currentUser, "maxTeams");
+  const canAddTeam = isWithinLimit(currentUser, "maxTeams", teams.length);
 
   function openCreate() {
     setEditTeam(undefined);
@@ -341,12 +352,32 @@ export default function TeamVerwaltung() {
             Teams für die Organisation von Assistenten und Dienstplänen verwalten
           </p>
         </div>
-        <Button onClick={openCreate} className="gap-2">
-          <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">Neues Team</span>
-          <span className="sm:hidden">Neu</span>
-        </Button>
+        {canAddTeam ? (
+          <Button onClick={openCreate} className="gap-2">
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Neues Team</span>
+            <span className="sm:hidden">Neu</span>
+          </Button>
+        ) : (
+          <Button
+            disabled
+            className="gap-2"
+            title={`Im Free-Plan ist max. ${teamLimit} Team möglich. Upgrade auf Premium für mehrere Teams.`}
+          >
+            <Lock className="h-4 w-4" />
+            <span className="hidden sm:inline">Neues Team</span>
+            <span className="sm:hidden">Neu</span>
+          </Button>
+        )}
       </div>
+
+      {/* Limit-Hinweis (Free-Plan). Bei Premium ist teamLimit null. */}
+      {!canAddTeam && teamLimit !== null && (
+        <div className="rounded-md border border-brand-yellow/40 bg-brand-yellow/10 px-4 py-3 text-sm text-foreground">
+          Im Free-Plan ist maximal {teamLimit} Team möglich. Für mehrere Teams ist ein Upgrade auf
+          Premium nötig.
+        </div>
+      )}
 
       <Card className="border-border/50 shadow-sm">
         <CardContent className="p-0">

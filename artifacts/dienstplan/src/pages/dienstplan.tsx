@@ -15,7 +15,8 @@ import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
 import { userBadgeClass, userDotClass } from "@/lib/shift-model-colors";
-import { hasAccess } from "@/lib/entitlements";
+import { hasAccess, getLimit } from "@/lib/entitlements";
+import { toast } from "sonner";
 import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 
 type Shift = {
@@ -760,11 +761,27 @@ function ViewToggle({
   );
 }
 
+// Anzahl Kalendermonate, die `target` nach `now` liegt (0 = selber Monat,
+// negativ = Vergangenheit). Spiegelt die serverseitige historyMonths-Pruefung
+// (monthsAhead) fuer das Free-Vorausplanungs-Limit.
+function monthsAhead(target: Date, now: Date): number {
+  return (
+    (target.getFullYear() - now.getFullYear()) * 12 +
+    (target.getMonth() - now.getMonth())
+  );
+}
+
 export default function Dienstplan() {
   const { currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin";
   // Massenbearbeitung ("Mehrere bearbeiten") nur im Premium-Plan.
   const canBulkEdit = hasAccess(currentUser, "bulkEdit");
+  // Free-Plan begrenzt die Vorausplanung (historyMonths, Free = 1 → aktueller
+  // und naechster Monat). `null` = unbegrenzt (Premium). Bestandsschutz:
+  // vergangene/aktuelle Monate bleiben uneingeschraenkt; nur das NEUE Planen in
+  // zu weit entfernten Zukunfts-Monaten wird gesperrt (Durchsetzung zusaetzlich
+  // serverseitig).
+  const forwardLimit = getLimit(currentUser, "historyMonths");
 
   // Optionales Zieldatum (z.B. vom Dashboard-Hinweis "Tage ohne geplante Schicht").
   const [searchParams] = useSearchParams();
@@ -856,6 +873,14 @@ export default function Dienstplan() {
 
   function openCreate(date: Date, userId?: number) {
     if (!isAdmin) return;
+    // Free-Plan: Vorausplanung in zu weit entfernte Zukunfts-Monate sperren
+    // (freundlicher Hinweis statt rohem 403 beim Speichern).
+    if (forwardLimit !== null && monthsAhead(date, new Date()) > forwardLimit) {
+      toast.error(
+        "Im Free-Tarif nur bis nächsten Monat planbar. Für eine längere Vorausplanung auf Premium upgraden.",
+      );
+      return;
+    }
     setDialog({ mode: "create", date, userId });
   }
 
@@ -955,9 +980,22 @@ export default function Dienstplan() {
     );
   }
 
+  const forwardPlanningBlocked =
+    isAdmin && forwardLimit !== null && monthsAhead(currentDate, new Date()) > forwardLimit;
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <Header />
+
+      {/* Free-Plan: Hinweis, wenn der angezeigte Monat ausserhalb des erlaubten
+          Vorausplanungs-Fensters liegt. Bestehende Schichten bleiben sichtbar;
+          nur das Anlegen neuer Schichten ist gesperrt. */}
+      {forwardPlanningBlocked && (
+        <div className="rounded-md border border-brand-yellow/40 bg-brand-yellow/10 px-4 py-3 text-sm text-foreground">
+          Im Free-Tarif nur bis nächsten Monat planbar. Für eine längere Vorausplanung ist ein
+          Upgrade auf Premium nötig.
+        </div>
+      )}
 
       {/* Team-Abwesenheits-Übersicht (nur Admin): wer ist gerade/demnächst
           abwesend? Über das ganze team-gescopte Team, unabhängig vom

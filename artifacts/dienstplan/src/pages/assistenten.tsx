@@ -14,6 +14,8 @@ import {
   getListContractsQueryKey,
 } from "@workspace/api-client-react";
 import { useTeam } from "@/context/team";
+import { useAuth } from "@/context/auth";
+import { isWithinLimit, getLimit } from "@/lib/entitlements";
 import { readableApiError, planLimitMessage } from "@/lib/api-error";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,7 +42,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Mail, Phone, MapPin, Calendar, Pencil, UserPlus, Send, Copy, Check, Download, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import { Plus, Mail, Phone, MapPin, Calendar, Pencil, UserPlus, Send, Copy, Check, Download, ChevronLeft, ChevronRight, Trash2, Lock } from "lucide-react";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { toast } from "sonner";
@@ -826,8 +828,17 @@ function ExportDialog({ open, onClose, userId, userName }: ExportDialogProps) {
 }
 
 export default function Assistenten() {
+  const { currentUser } = useAuth();
   const { data: users, isLoading: usersLoading } = useListUsers({ role: "assistant" });
   const { data: contracts, isLoading: contractsLoading } = useListContracts();
+
+  // Free-Plan begrenzt die Anzahl der Assistenten (Free = 6). Ist das Limit
+  // erreicht, wird das Anlegen gesperrt (Durchsetzung zusaetzlich serverseitig).
+  // `null` = unbegrenzt (Premium). Bestandsschutz: vorhandene Assistenten bleiben
+  // sichtbar/editierbar; nur das Anlegen ueber dem Limit ist gesperrt.
+  const assistantCount = (users ?? []).length;
+  const assistantLimit = getLimit(currentUser, "maxAssistants");
+  const canAddAssistant = isWithinLimit(currentUser, "maxAssistants", assistantCount);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editUser, setEditUser] = useState<User | undefined>();
@@ -881,12 +892,32 @@ export default function Assistenten() {
           <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Assistenten</h2>
           <p className="text-muted-foreground mt-1 text-sm">Verwaltung der Mitarbeiter und Verträge</p>
         </div>
-        <Button onClick={openCreate} className="gap-2">
-          <UserPlus className="h-4 w-4" />
-          <span className="hidden sm:inline">Neu anlegen</span>
-          <span className="sm:hidden">Neu</span>
-        </Button>
+        {canAddAssistant ? (
+          <Button onClick={openCreate} className="gap-2">
+            <UserPlus className="h-4 w-4" />
+            <span className="hidden sm:inline">Neu anlegen</span>
+            <span className="sm:hidden">Neu</span>
+          </Button>
+        ) : (
+          <Button
+            disabled
+            className="gap-2"
+            title={`Im Free-Plan sind max. ${assistantLimit} Assistenten möglich. Upgrade auf Premium für unbegrenzte Assistenten.`}
+          >
+            <Lock className="h-4 w-4" />
+            <span className="hidden sm:inline">Neu anlegen</span>
+            <span className="sm:hidden">Neu</span>
+          </Button>
+        )}
       </div>
+
+      {/* Limit-Hinweis (Free-Plan). Bei Premium ist assistantLimit null. */}
+      {!canAddAssistant && assistantLimit !== null && (
+        <div className="rounded-md border border-brand-yellow/40 bg-brand-yellow/10 px-4 py-3 text-sm text-foreground">
+          Im Free-Plan sind maximal {assistantLimit} Assistenten möglich. Für unbegrenzte
+          Assistenten ist ein Upgrade auf Premium nötig.
+        </div>
+      )}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
