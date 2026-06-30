@@ -22,15 +22,31 @@ sides stay in lockstep.
   currentCount)` answers "is one MORE allowed", never an display filter. Never
   hide/lock/delete existing rows because an account is Free.
 
-## Gotcha: registration seeds 4 shift models but Free maxShiftModels = 3
+## Which limits are enforced server-side, and where
+
+All four numeric limits + the `bulkEdit` feature are now enforced authoritatively
+(403 `plan_limit_reached` with a `limit` field, or `plan_feature_required`):
+- `maxShiftModels` → POST /shift-models (count per target team).
+- `maxAssistants` → POST /users when `role === "assistant"` (count distinct
+  assistant users across the creator's allowed teams; Free has 1 team).
+- `maxTeams` → POST /teams (count teams owned by the user; registration already
+  seeds 1 Standard-Team so a Free dienstleister starts at the limit).
+- `historyMonths` → POST /shifts only (forward-planning cap). Compared in whole
+  calendar months UTC: a shift is blocked when `shiftMonthIdx - currentMonthIdx >
+  historyMonths`. Free (1) = current + next month. PAST months are never blocked
+  (backfill / Bestandsschutz); PATCH /shifts is intentionally NOT gated so
+  existing shifts stay editable.
+The remaining feature flags (advancedPersonnelFile, payrollExport, etc.) are still
+config-only (frontend UX), not server-enforced.
+
+## Gotcha: registration seeds 4 shift models, Free maxShiftModels = 5
 
 A freshly registered Free account already has 4 seeded default shift models
-(Frühdienst/Spätdienst/24h/Bereitschaft), i.e. it STARTS over the limit of 3.
-This is intentional Bestandsschutz: the 4 seeded models stay editable/deletable,
-but creating a 5th is blocked (403 plan_limit_reached). So when testing the
-maxShiftModels gate, a free account blocks immediately on the next POST — you do
-NOT need to first create 3 models. If the product ever wants Free users to be able
-to add a model, either lower the seed count or raise the limit; don't special-case
+(Frühdienst/Spätdienst/24h/Bereitschaft). The limit is deliberately 5 (= 4 seeds
++ 1 own model) so a new Free account can still add exactly one own model before
+being blocked on the 6th. The limit MUST stay above the seed count. Seeded models
+stay editable/deletable (Bestandsschutz); only creating over the limit is blocked.
+If the product wants Free users to add more, raise the limit — don't special-case
 the seeded ones.
 
 ## A create-time limit must also be enforced on edit (move-forward bypass)

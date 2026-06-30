@@ -382,6 +382,29 @@ router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
     return;
   }
 
+  // Free-Limit (historyMonths) autoritativ durchsetzen: das VORAUS-Planen ueber
+  // das erlaubte Vorausfenster hinaus sperren. Bestandsschutz: bereits erfasste
+  // und vergangene Monate bleiben vollstaendig sichtbar und editierbar — hier
+  // wird ausschliesslich das NEUE Anlegen weit in der Zukunft begrenzt (nur POST,
+  // nicht PATCH). Gemessen in ganzen Kalendermonaten ab dem aktuellen Monat
+  // (UTC, deterministisch unabhaengig von der Server-Zeitzone): Free (1) erlaubt
+  // den aktuellen + naechsten Monat; vergangene Monate sind nie betroffen.
+  const maxMonthsAhead = await getUserLimit(req.session.userId!, "historyMonths");
+  if (maxMonthsAhead !== null) {
+    const now = new Date();
+    const currentIdx = now.getUTCFullYear() * 12 + now.getUTCMonth();
+    const shiftDate = new Date(body.data.startTime);
+    const shiftIdx = shiftDate.getUTCFullYear() * 12 + shiftDate.getUTCMonth();
+    if (shiftIdx - currentIdx > maxMonthsAhead) {
+      res.status(403).json({
+        error: `Im Free-Tarif kannst du hoechstens ${maxMonthsAhead} Monat im Voraus planen. Bitte upgrade auf Premium fuer langfristige Planung.`,
+        code: "plan_limit_reached",
+        limit: "historyMonths",
+      });
+      return;
+    }
+  }
+
   // Kollisionsprüfung: nur für reguläre Schichten und nur, wenn der Admin nicht
   // bewusst überschreibt (force). force kommt aus dem Roh-Body, nicht aus dem
   // validierten Schema, damit die OpenAPI-Spec unverändert bleibt.

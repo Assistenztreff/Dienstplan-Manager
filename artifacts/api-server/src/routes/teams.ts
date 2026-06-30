@@ -19,7 +19,7 @@ import {
   AddTeamMemberBody,
 } from "@workspace/api-zod";
 import { requireDienstleister } from "../middleware/auth";
-import { userWithinLimit } from "../lib/plan";
+import { userWithinLimit, getUserLimit } from "../lib/plan";
 
 const router = Router();
 
@@ -99,17 +99,18 @@ router.post("/teams", requireDienstleister, async (req, res): Promise<void> => {
 
   // Free-Limit (maxTeams) autoritativ durchsetzen: nur das Anlegen eines
   // WEITEREN Teams ueber dem Limit sperren (Bestandsschutz — vorhandene Teams
-  // bleiben unberuehrt). Gezaehlt werden die vom Nutzer besessenen Teams. Hinweis:
-  // Die Registrierung legt bereits ein "Standard-Team" an, ein Free-Dienstleister
-  // startet also am Limit (1) und das zweite Team wird hier geblockt.
+  // bleiben unberuehrt). Gezaehlt werden die Teams im Besitz des Nutzers; die
+  // Registrierung legt bereits ein Standard-Team an, daher startet ein Free-
+  // Dienstleister bei 1 und kann ohne Premium kein zweites Team eroeffnen.
+  const ownerId = req.session.userId!;
   const [{ value: ownedTeams }] = await db
     .select({ value: count() })
     .from(teamsTable)
-    .where(eq(teamsTable.ownerId, req.session.userId!));
-  if (!(await userWithinLimit(req.session.userId!, "maxTeams", ownedTeams))) {
+    .where(eq(teamsTable.ownerId, ownerId));
+  if (!(await userWithinLimit(ownerId, "maxTeams", ownedTeams))) {
+    const max = await getUserLimit(ownerId, "maxTeams");
     res.status(403).json({
-      error:
-        "Im Free-Tarif ist nur ein Team moeglich. Bitte upgrade auf Premium fuer mehrere Teams.",
+      error: `Im Free-Tarif ist maximal ${max} Team moeglich. Bitte upgrade auf Premium fuer mehrere Teams.`,
       code: "plan_limit_reached",
       limit: "maxTeams",
     });
@@ -118,7 +119,7 @@ router.post("/teams", requireDienstleister, async (req, res): Promise<void> => {
 
   const [team] = await db
     .insert(teamsTable)
-    .values({ name: body.data.name, ownerId: req.session.userId! })
+    .values({ name: body.data.name, ownerId })
     .returning(TEAM_SELECT);
   res.status(201).json(team);
 });
