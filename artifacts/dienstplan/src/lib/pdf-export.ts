@@ -168,13 +168,17 @@ async function renderStatementPage(
     shifts = [];
   }
 
-  const detailRows = shifts.map((s: any) => {
-    const date = format(new Date(s.startTime), "dd.MM.yyyy", { locale: de });
-    const type = SHIFT_TYPE_LABELS[s.type] ?? s.type;
-    const hours = hoursFromShift(s.startTime, s.endTime);
-    const timeRange = `${format(new Date(s.startTime), "HH:mm")} – ${format(new Date(s.endTime), "HH:mm")}`;
-    return [date, type, timeRange, `${hours} h`];
-  });
+  const detailRows = shifts
+    // Nur verbindlich bestätigte (FIX) Schichten gehören in den offiziellen
+    // Stundennachweis; Entwürfe/Vorschläge bleiben unverbindlich.
+    .filter((s: any) => s.planningStatus === "FIX")
+    .map((s: any) => {
+      const date = format(new Date(s.startTime), "dd.MM.yyyy", { locale: de });
+      const type = SHIFT_TYPE_LABELS[s.type] ?? s.type;
+      const hours = hoursFromShift(s.startTime, s.endTime);
+      const timeRange = `${format(new Date(s.startTime), "HH:mm")} – ${format(new Date(s.endTime), "HH:mm")}`;
+      return [date, type, timeRange, `${hours} h`];
+    });
 
   const tableY = (doc as any).lastAutoTable?.finalY
     ? (doc as any).lastAutoTable.finalY + 10

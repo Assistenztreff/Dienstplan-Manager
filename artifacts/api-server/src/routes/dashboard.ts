@@ -110,6 +110,9 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       .where(
         and(
           inArray(shiftsTable.teamId, teamScope),
+          // Geplante Soll-Stunden zählen nur verbindlich bestätigte (FIX)
+          // Schichten; Entwürfe/Vorschläge verfälschen die Zahl nicht.
+          eq(shiftsTable.planningStatus, "FIX"),
           sql`EXTRACT(MONTH FROM ${shiftsTable.startTime}) = ${month}`,
           sql`EXTRACT(YEAR FROM ${shiftsTable.startTime}) = ${year}`,
         )
@@ -258,6 +261,9 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     .where(
       and(
         eq(shiftsTable.userId, userId),
+        // Geplante Soll-Stunden zählen nur verbindlich bestätigte (FIX)
+        // Schichten; Entwürfe/Vorschläge verfälschen die Zahl nicht.
+        eq(shiftsTable.planningStatus, "FIX"),
         sql`EXTRACT(MONTH FROM ${shiftsTable.startTime}) = ${month}`,
         sql`EXTRACT(YEAR FROM ${shiftsTable.startTime}) = ${year}`,
       )
@@ -389,6 +395,9 @@ router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advance
           and(
             eq(shiftsTable.userId, assistant.id),
             inArray(shiftsTable.teamId, teamScope),
+            // Nur verbindlich bestätigte Schichten fließen in den offiziellen
+            // Soll/Ist-Nachweis ein; Entwürfe/Vorschläge bleiben unverbindlich.
+            eq(shiftsTable.planningStatus, "FIX"),
             sql`EXTRACT(MONTH FROM ${shiftsTable.startTime}) = ${month}`,
             sql`EXTRACT(YEAR FROM ${shiftsTable.startTime}) = ${year}`,
           )
