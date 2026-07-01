@@ -24,3 +24,4 @@
 - [Shift planning status defaults](shift-planning-status.md) — planning_status column defaults to FIX (backfill = binding) but the dialog defaults new shifts to VORLAEUFIG (draft); keep the two decoupled.
 - [Bodyless POST req.body undefined](dev-login-bodyless-post.md) — auto-fired bodyless POSTs (dev-login) leave req.body undefined; destructure with `?? {}` or adding optional body params crashes the default path.
 - [Plan entitlements enforcement](plan-entitlements-enforcement.md) — Free/Premium config is a shared lib enforced server-side (plan read fresh from DB); registration seeds 4 models so Free starts over the 3-model limit; bulkEdit = the PATCH /shifts userId swap.
+- [Running a single e2e spec](e2e-single-spec-filter.md) — `test:e2e -- <file>` runs ALL specs (the npm script's extra `--` kills Playwright's filter); use `pnpm exec playwright test <name>` from the artifact dir.

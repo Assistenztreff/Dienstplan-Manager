@@ -1,0 +1,179 @@
+import { test, expect } from "@playwright/test";
+import { registerFreeAccount, setAccountPlan, type FreeAccount } from "./helpers/teams";
+
+/**
+ * API-Test: Eine manuelle Premium-Freischaltung hebt auch die beiden NICHT-
+ * numerischen Free-Sperren sofort auf (Task #234):
+ *   - `maxShiftModels` (Free = 5): das Anlegen eines weiteren Dienstes über dem
+ *     Limit,
+ *   - das Premium-Feature `bulkEdit`: der Assistenten-Wechsel an einer
+ *     bestehenden Schicht via PATCH /api/shifts (Body mit `userId`).
+ *
+ * Hintergrund: Task #225 sicherte bereits ab, dass ein Upgrade die drei
+ * numerischen Caps (maxAssistants/maxTeams/historyMonths) sofort aufhebt. Diese
+ * beiden bezahlten Fähigkeiten waren dagegen NICHT durch einen Upgrade-Test
+ * gedeckt. Da `getUserPlan`/`userHasFeature` den Plan bei JEDER Anfrage frisch
+ * aus der DB liest (kein Caching), soll die manuelle Freischaltung
+ * (`users.plan = 'premium'`, Operator-Dashboard) ohne Re-Login/Neustart greifen.
+ * Eine Caching-/Enforcement-Regression könnte zahlende Kunden weiter blockieren
+ * — dieser Test sichert genau das ab:
+ *
+ * 1. Frisches Free-Dienstleister-Konto registrieren (startet garantiert Free,
+ *    inkl. 4 geseedeter Standard-Dienste).
+ * 2. Free-Phase: 5. Dienst anlegen (= Free-Limit maxShiftModels), 6. → 403;
+ *    Schicht für Assistent A anlegen, per PATCH auf Assistent B tauschen → 403
+ *    plan_feature_required (bulkEdit).
+ * 3. Konto direkt in der Test-DB auf `premium` heben (manuelle Freischaltung).
+ * 4. OHNE Re-Login dieselben Aktionen erneut: 6. Dienst → 201, PATCH-Wechsel →
+ *    200 — beide Sperren sind sofort aufgehoben.
+ *
+ * Läuft rein über die API gegen den isolierten Test-Stack.
+ */
+
+type LimitError = { code?: string; limit?: string; feature?: string };
+
+/** Liefert den 15. des aktuellen Monats (robust gegen Monatslängen/Zeitzonen). */
+function currentMonthDay(): string {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  return `${yyyy}-${mm}-15`;
+}
+
+let acc: FreeAccount;
+const createdUserIds: number[] = [];
+let assistantA = 0;
+let assistantB = 0;
+let shiftId = 0;
+
+test.beforeAll(async () => {
+  // Dienstleister genügt; für dieses Spec ist der Konto-Typ nicht entscheidend,
+  // wir bleiben aber konsistent mit dem numerischen Upgrade-Spec (#225).
+  acc = await registerFreeAccount("dienstleister", "upgrade-features");
+});
+
+test.afterAll(async () => {
+  const tryDelete = async (path: string) => {
+    try {
+      await acc.ctx.delete(path);
+    } catch {
+      /* ignore */
+    }
+  };
+  // FK-sicher: erst Schichten, dann Dienste, dann Nutzer, dann Teams.
+  try {
+    const shiftsRes = await acc.ctx.get("/api/shifts");
+    if (shiftsRes.ok()) {
+      const shifts = (await shiftsRes.json()) as { id: number }[];
+      for (const s of shifts) await tryDelete(`/api/shifts/${s.id}`);
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    const modelsRes = await acc.ctx.get("/api/shift-models");
+    if (modelsRes.ok()) {
+      const models = (await modelsRes.json()) as { id: number }[];
+      for (const m of models) await tryDelete(`/api/shift-models/${m.id}`);
+    }
+  } catch {
+    /* ignore */
+  }
+  for (const id of createdUserIds) await tryDelete(`/api/users/${id}`);
+  try {
+    const teamsRes = await acc.ctx.get("/api/teams");
+    if (teamsRes.ok()) {
+      const teams = (await teamsRes.json()) as { id: number }[];
+      for (const t of teams) await tryDelete(`/api/teams/${t.id}`);
+    }
+  } catch {
+    /* ignore */
+  }
+  if (acc?.id) await tryDelete(`/api/users/${acc.id}`);
+  await acc.ctx.dispose();
+});
+
+test("Premium-Freischaltung hebt maxShiftModels und bulkEdit sofort auf", async () => {
+  const unique = Date.now();
+
+  // --- Free-Phase: an die Sperren fahren --------------------------------
+
+  // Registrierung seedet 4 Standard-Dienste; der 5. (1. eigener) ist erlaubt.
+  const seededRes = await acc.ctx.get("/api/shift-models");
+  expect(seededRes.ok(), "GET /api/shift-models fehlgeschlagen").toBe(true);
+  const seeded = (await seededRes.json()) as { id: number }[];
+  expect(seeded.length, "Neues Free-Konto sollte mit 4 Standard-Diensten starten").toBe(4);
+
+  const fifthModel = await acc.ctx.post("/api/shift-models", {
+    data: { name: "Mein eigener Dienst", valuationPercent: 100 },
+  });
+  expect(fifthModel.status(), "5. Dienst (1. eigener) sollte 201 liefern").toBe(201);
+
+  // 6. Dienst: am Free-Limit (maxShiftModels = 5) blockiert.
+  const sixthFree = await acc.ctx.post("/api/shift-models", {
+    data: { name: "Ein Dienst zu viel", valuationPercent: 100 },
+  });
+  expect(sixthFree.status(), "6. Dienst sollte im Free-Tarif 403 liefern").toBe(403);
+  const sixthFreeBody = (await sixthFree.json()) as LimitError;
+  expect(sixthFreeBody.code).toBe("plan_limit_reached");
+  expect(sixthFreeBody.limit).toBe("maxShiftModels");
+
+  // Zwei Assistenten anlegen (beide Mitglied im Standard-Team via POST /users),
+  // damit der bulkEdit-Assistenten-Wechsel getestet werden kann.
+  const createAssistant = async (i: number): Promise<number> => {
+    const res = await acc.ctx.post("/api/users", {
+      data: {
+        name: `E2E Assistent ${i}`,
+        email: `e2e.upgf.${unique}.${i}@dienstplan.test`,
+        role: "assistant",
+      },
+    });
+    expect(res.status(), `Assistent ${i} sollte 201 liefern`).toBe(201);
+    const id = ((await res.json()) as { id: number }).id;
+    createdUserIds.push(id);
+    return id;
+  };
+  assistantA = await createAssistant(0);
+  assistantB = await createAssistant(1);
+
+  // Schicht für Assistent A im aktuellen Monat anlegen (kein historyMonths-Gate).
+  const day = currentMonthDay();
+  const shiftRes = await acc.ctx.post("/api/shifts", {
+    data: {
+      userId: assistantA,
+      startTime: `${day}T08:00:00.000Z`,
+      endTime: `${day}T16:00:00.000Z`,
+      type: "active",
+    },
+  });
+  expect(shiftRes.status(), "Schicht für Assistent A sollte 201 liefern").toBe(201);
+  shiftId = ((await shiftRes.json()) as { id: number }).id;
+
+  // Assistenten-Wechsel (bulkEdit) per PATCH: im Free-Tarif blockiert.
+  const swapFree = await acc.ctx.patch(`/api/shifts/${shiftId}`, {
+    data: { userId: assistantB },
+  });
+  expect(swapFree.status(), "Assistenten-Wechsel sollte im Free-Tarif 403 liefern").toBe(403);
+  const swapFreeBody = (await swapFree.json()) as LimitError;
+  expect(swapFreeBody.code).toBe("plan_feature_required");
+  expect(swapFreeBody.feature).toBe("bulkEdit");
+
+  // --- Upgrade: manuelle Premium-Freischaltung direkt in der Test-DB -----
+  setAccountPlan(acc.email, "premium");
+
+  // --- Premium-Phase: dieselbe Session, dieselben Aktionen -> jetzt erlaubt -
+
+  // 6. Dienst: jetzt erlaubt (Limit aufgehoben).
+  const sixthPremium = await acc.ctx.post("/api/shift-models", {
+    data: { name: "Sechster Dienst premium", valuationPercent: 100 },
+  });
+  expect(sixthPremium.status(), "6. Dienst sollte nach Upgrade 201 liefern").toBe(201);
+
+  // Assistenten-Wechsel: jetzt erlaubt (bulkEdit freigeschaltet).
+  const swapPremium = await acc.ctx.patch(`/api/shifts/${shiftId}`, {
+    data: { userId: assistantB },
+  });
+  expect(swapPremium.status(), "Assistenten-Wechsel sollte nach Upgrade 200 liefern").toBe(200);
+  const swapped = (await swapPremium.json()) as { userId: number };
+  expect(swapped.userId, "Schicht sollte nun Assistent B zugeordnet sein").toBe(assistantB);
+});
