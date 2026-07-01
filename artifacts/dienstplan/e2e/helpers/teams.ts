@@ -84,6 +84,30 @@ export async function registerFreeAccount(
   return { ctx, id: body.id, email };
 }
 
+/**
+ * Hebt ein bestehendes Konto direkt in der (Test-)DB auf einen Plan
+ * (`premium` | `free`) — der einzige Weg, eine manuelle Premium-Freischaltung
+ * im Test nachzustellen (in Produktion erfolgt sie im Operator-Dashboard, kein
+ * Stripe). Nutzt dasselbe execSync-/DB-Targeting wie `seedForeignAdmin`: gegen
+ * den isolierten Test-Stack muss in die `_test`-DB geschrieben werden
+ * (`E2E_TEST_DATABASE_URL`), sonst landet das Update via Dev-`DATABASE_URL` in
+ * der falschen DB.
+ */
+export function setAccountPlan(email: string, plan: "premium" | "free"): void {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    SET_PLAN_EMAIL: email,
+    SET_PLAN_VALUE: plan,
+  };
+  if (process.env.E2E_TEST_DATABASE_URL) {
+    env.DATABASE_URL = process.env.E2E_TEST_DATABASE_URL;
+  }
+  execSync("pnpm --filter @workspace/scripts run set-plan", {
+    env,
+    stdio: "pipe",
+  });
+}
+
 /** Ein über das setup-admin-Skript geseedeter, "fremder" Admin (ohne Teams). */
 export interface SeededAdmin {
   ctx: APIRequestContext;
