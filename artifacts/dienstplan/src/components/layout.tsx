@@ -12,9 +12,11 @@ import {
   Menu,
   X,
   ShieldCheck,
+  LogOut,
 } from "lucide-react";
 import logoUrl from "@assets/Arbeitgebermodell oder Assistenzdienst.png";
 import { useAuth } from "@/context/auth";
+import { useToast } from "@/hooks/use-toast";
 import { isEmbedded } from "@/lib/embed";
 
 // Interne Navigationspunkte der Dienstplan-App. Rollen-/Konto-Typ-Sichtbarkeit
@@ -168,14 +170,31 @@ function PlatformFooterPlaceholder() {
 
 function AppSubNavigation() {
   const [location] = useLocation();
-  const { currentUser } = useAuth();
+  const { currentUser, logout } = useAuth();
+  const { toast } = useToast();
   const [isAppMenuOpen, setIsAppMenuOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const navItems = ALL_NAV_ITEMS.filter(
     (item) =>
       (!item.adminOnly || currentUser?.role === "admin") &&
       (!item.dienstleisterOnly || currentUser?.accountType === "dienstleister"),
   );
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    try {
+      await logout();
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Fehler beim Abmelden",
+        description: "Bitte versuchen Sie es erneut.",
+      });
+    } finally {
+      setLoggingOut(false);
+    }
+  }
 
   return (
     <>
@@ -204,7 +223,7 @@ function AppSubNavigation() {
 
       {/* Mobile: Off-Canvas Slide-In-Menue (Drawer) von links. */}
       <div
-        className={`fixed inset-y-0 left-0 z-50 w-64 transform bg-slate-100 shadow-xl transition-transform duration-300 md:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 transform flex-col bg-slate-100 shadow-xl transition-transform duration-300 md:hidden ${
           isAppMenuOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -236,6 +255,27 @@ function AppSubNavigation() {
             </Link>
           ))}
         </nav>
+
+        {/* Mobile: Nutzerinfo + Abmelden am unteren Rand des Drawers. */}
+        <div className="mt-auto border-t border-slate-200 p-4">
+          {currentUser && (
+            <p className="mb-2 truncate px-1 text-xs text-slate-500" title={currentUser.name}>
+              {currentUser.name}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setIsAppMenuOpen(false);
+              void handleLogout();
+            }}
+            disabled={loggingOut}
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 disabled:opacity-60"
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            <span>{loggingOut ? "Wird abgemeldet..." : "Abmelden"}</span>
+          </button>
+        </div>
       </div>
 
       {/* Desktop: zweizeiliger, zentrierter Pillen-Balken mit Umbruch.
@@ -257,6 +297,16 @@ function AppSubNavigation() {
                 </span>
               </Link>
             ))}
+            <button
+              type="button"
+              onClick={() => void handleLogout()}
+              disabled={loggingOut}
+              className="flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-sm text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 disabled:opacity-60"
+              title={currentUser ? `Angemeldet als ${currentUser.name}` : "Abmelden"}
+            >
+              <LogOut className="h-4 w-4 shrink-0" />
+              <span>{loggingOut ? "Wird abgemeldet..." : "Abmelden"}</span>
+            </button>
           </nav>
         </div>
       </div>
