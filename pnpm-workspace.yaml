@@ -55,9 +55,8 @@ catalog:
   drizzle-orm: ^0.45.2
   framer-motion: ^12.23.24
   lucide-react: ^0.545.0
-  # Must be this exact version because expo requires it
+  # Pin React and React DOM in lockstep across the workspace
   react: 19.1.0
-  # Must be this exact version because expo requires it
   react-dom: 19.1.0
   tailwind-merge: ^3.3.1
   tailwindcss: ^4.1.14
@@ -67,15 +66,6 @@ catalog:
   zod: ^3.25.76
 
 autoInstallPeers: false
-
-packageExtensions:
-  # react-native-worklets' babel plugin requires @babel/generator directly but
-  # only declares @babel/core, so pnpm never symlinks generator beside it and
-  # the Metro/Babel transform fails with "Cannot find module '@babel/generator'"
-  # (surfaces in the mobile production build). Declare it so pnpm exposes it.
-  react-native-worklets:
-    dependencies:
-      '@babel/generator': ^7.25.2
 
 onlyBuiltDependencies:
   - '@swc/core'
@@ -154,16 +144,6 @@ overrides:
   "rollup>@rollup/rollup-win32-ia32-msvc": "-"
   "rollup>@rollup/rollup-win32-x64-gnu": "-"
   "rollup>@rollup/rollup-win32-x64-msvc": "-"
-  "@expo/ngrok-bin>@expo/ngrok-bin-darwin-arm64": "-"
-  "@expo/ngrok-bin>@expo/ngrok-bin-darwin-x64": "-"
-  "@expo/ngrok-bin>@expo/ngrok-bin-freebsd-ia32": "-"
-  "@expo/ngrok-bin>@expo/ngrok-bin-freebsd-x64": "-"
-  "@expo/ngrok-bin>@expo/ngrok-bin-linux-arm64": "-"
-  "@expo/ngrok-bin>@expo/ngrok-bin-linux-arm": "-"
-  "@expo/ngrok-bin>@expo/ngrok-bin-linux-ia32": "-"
-  "@expo/ngrok-bin>@expo/ngrok-bin-sunos-x64": "-"
-  "@expo/ngrok-bin>@expo/ngrok-bin-win32-ia32": "-"
-  "@expo/ngrok-bin>@expo/ngrok-bin-win32-x64": "-"
   # drizzle-kit uses esbuild internally on an older version that's vulnerable, this overrides it
   "@esbuild-kit/esm-loader": "npm:tsx@^4.21.0"
   esbuild: "^0.28.1"

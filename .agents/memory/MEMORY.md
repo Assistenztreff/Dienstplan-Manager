@@ -11,7 +11,6 @@
 - [Cross-site iframe embedding](iframe-embed-cross-site-cookie.md) — embedding the SPA as a 3rd-party iframe needs SameSite=None;Secure session cookie (Lax is silently dropped), platform CSP frame-src, and ?embed=1 chrome mode.
 - [Second admin only via seed](second-admin-only-via-seed.md) — role+accountType can't both be set via API; cross-tenant tests needing a foreign admin must seed it (setup-admin script).
 - [Curl test ID parsing on shifts](curl-shift-id-parsing.md) — shift JSON embeds a nested user.id; greedy regex/jq mistakes can grab the wrong id and DELETE the wrong row. Parse the top-level id only.
-- [Mobile jest harness](mobile-jest-harness.md) — Expo artifact uses jest-expo + RNTL; pnpm needs a custom transformIgnorePatterns matching pkg names after `.pnpm/`, and native edges are mocked.
 - [Vite dynamic-import reload mid-action](vite-dynamic-import-export-reload.md) — heavy `await import()` deps (jspdf) need optimizeDeps.include or Vite reloads mid-export, aborting the download (E2E hangs).
 - [Object storage template typecheck](object-storage-template-typecheck.md) — copied objectStorage.ts needs `as { signed_url: string }` cast or strict tsc fails TS2339.
 - [E2E cold-start timeout & capture](e2e-cold-start-timeout.md) — beforeEach login+setup can exceed 30s default (raise via test.setTimeout); detached runs get reaped, use foreground + sync fs.appendFileSync reporter.
@@ -19,7 +18,6 @@
 - [Dev session localStorage cache](dev-session-localstorage-cache.md) — web auth caches only the non-sensitive profile under `assistenz_treff_session`, guarded by `import.meta.env.DEV` (not process.env); cookie stays source of truth.
 - [Isolated E2E test DB](isolated-e2e-test-db.md) — playwright webServer boots its own API+Vite stack on a `<dbname>_test` database (Vite proxies /api); dev DB never touched by destructive specs.
 - [AuthUser serialization fan-out](authuser-serialization-fanout.md) — new required AuthUser fields must be added to every inline auth.ts response (incl. dev-login switch branch, not typecheck-caught); role enum widening also needs the express-session SessionData augmentation.
-- [Worklets needs @babel/generator](babel-generator-worklets.md) — mobile prod build fails "Cannot find module '@babel/generator'"; worklets plugin requires it but doesn't declare it. Fix via pnpm packageExtensions, not artifact deps.
 - [Test DB lacks seeded shift models](test-db-no-seeded-models.md) — setup-test-db only runs setup-admin+migrate-teams; default shift models seed only on register/dev-login, so e2e specs needing a model must create it.
 - [Shift planning status defaults](shift-planning-status.md) — planning_status column defaults to FIX (backfill = binding) but the dialog defaults new shifts to VORLAEUFIG (draft); keep the two decoupled.
 - [Bodyless POST req.body undefined](dev-login-bodyless-post.md) — auto-fired bodyless POSTs (dev-login) leave req.body undefined; destructure with `?? {}` or adding optional body params crashes the default path.

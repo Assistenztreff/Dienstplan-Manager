@@ -39,7 +39,7 @@ Eine Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgeb
 - Drizzle ORM mit PostgreSQL — kein Raw-SQL in Routen
 - Express-Routen nutzen generierte Zod-Schemas zur Validierung (aus `@workspace/api-zod`)
 - Frontend nutzt ausschließlich generierte React-Query-Hooks (aus `@workspace/api-client-react`)
-- Shared Express-Backend für alle Frontends (auch zukünftige Expo-App möglich)
+- Shared Express-Backend für das Web-Frontend. **Architektur: Single Responsive Web App (PWA)** — bewusst KEINE separate native App / getrennte Mobile-Codebasis. Endgeräte-Anpassung erfolgt ausschließlich über Tailwind-Breakpoints (`md:`, `lg:` …) innerhalb derselben React-Komponenten. Alle Formulare (Schichten, Assistenten, Zeiterfassung) werden einmal gebaut und passen sich responsiv an.
 
 ## Product
 
@@ -161,7 +161,6 @@ Die Dienstplan-App wird als eigenständige React/Express-App in die externe Assi
 - `useListUsers` für Nicht-Admins gibt 401 zurück (Query-Error, kein UI-Crash) — Daten nur unter `isAdmin`-Bedingung nutzen
 - Route-Handler-Pattern: `async (req, res): Promise<void> =>` mit `res.json(); return;` (kein `return res.json()`) — sonst TS7030
 - `session`-Tabelle (connect-pg-simple) ist als Drizzle-Schema in `lib/db/src/schema/session.ts` abgebildet, damit `db push` (auch im Post-Merge non-interaktiv) sie NICHT als Datenverlust löschen will. Struktur nicht ändern.
-- Mobile: generierte Query-Hooks erwarten `queryKey` im vollen `UseQueryOptions`. Für `enabled` Cast nutzen: Optionen `as Parameters<typeof useXyz>[1]` UND Ergebnis casten (`(rawData ?? []) as Xyz[]`), da der Optionen-Cast die TData-Inferenz auf `{}` reduziert.
 - `@workspace/scripts` braucht `pg` als eigene Dependency (Workspace-Pakete teilen Deps nicht implizit)
 
 ## Pointers
