@@ -23,6 +23,8 @@ import { Pencil } from "lucide-react";
 
 type Assistant = { id: number; name: string };
 
+type ShiftModelOption = { id: number; name: string; isActive: boolean };
+
 type Shift = {
   id: number;
   userId: number;
@@ -38,11 +40,36 @@ type BulkEditDialogProps = {
   /** Alle aktuell geladenen Schichten des Monats (zur Ziel-Ermittlung). */
   shifts: Shift[];
   assistants: Assistant[];
+  /** Verfügbare Schichtmodelle (Dienste) des gewählten Teams. */
+  shiftModels: ShiftModelOption[];
   month: number;
   year: number;
   /** Wird nach erfolgreichem Ändern aufgerufen (Auswahl leeren + Modus beenden). */
   onSaved: () => void;
 };
+
+// Legacy-Schichttypen (ohne eigenes Modell), analog zum Einzel-Dialog.
+const LEGACY_TYPE_LABELS: Record<string, string> = {
+  active: "Aktivdienst",
+  standby: "Bereitschaftsdienst",
+  night: "Nachtdienst",
+  full_day: "24h-Dienst",
+};
+
+// Löst die Auswahl (model:<id> | legacy:<type>) in type/shiftModelId auf —
+// dieselbe Logik wie deriveTypeAndModel im Einzel-Schicht-Dialog.
+function deriveTypeAndModel(selection: string): {
+  type: string;
+  shiftModelId: number | null;
+} {
+  if (selection.startsWith("model:")) {
+    return { type: "work", shiftModelId: Number(selection.slice("model:".length)) };
+  }
+  if (selection.startsWith("legacy:")) {
+    return { type: selection.slice("legacy:".length), shiftModelId: null };
+  }
+  return { type: selection, shiftModelId: null };
+}
 
 /** Lokaler Datumsschlüssel (yyyy-MM-dd) aus einem ISO-Zeitstempel. */
 function localDayKey(isoString: string): string {
@@ -74,6 +101,7 @@ export function BulkEditDialog({
   dates,
   shifts,
   assistants,
+  shiftModels,
   month,
   year,
   onSaved,
@@ -92,6 +120,8 @@ export function BulkEditDialog({
   const [endTime, setEndTime] = useState("16:00");
   const [changeNotes, setChangeNotes] = useState(false);
   const [notes, setNotes] = useState("");
+  const [changeShiftModel, setChangeShiftModel] = useState(false);
+  const [selection, setSelection] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,6 +141,8 @@ export function BulkEditDialog({
       setEndTime("16:00");
       setChangeNotes(false);
       setNotes("");
+      setChangeShiftModel(false);
+      setSelection("");
       setError(null);
       setUpdatedIds(new Set());
       setConflictIds(null);
@@ -136,7 +168,15 @@ export function BulkEditDialog({
     );
   }, [dates, shifts, filterUserId]);
 
-  const hasAnyChange = changeAssistant || changeTimes || changeNotes;
+  const hasAnyChange = changeAssistant || changeTimes || changeNotes || changeShiftModel;
+
+  // Auswählbare Dienste: aktive Schichtmodelle + Legacy-Typen (analog Einzel-
+  // Dialog). Abwesenheiten (Urlaub/Krank) sind bewusst NICHT wählbar — die
+  // Massen-Aktion ändert nur den Dienst regulärer Schichten.
+  const activeModels = useMemo(
+    () => shiftModels.filter((m) => m.isActive),
+    [shiftModels],
+  );
 
   function validate(): boolean {
     if (!hasAnyChange) {
@@ -149,6 +189,10 @@ export function BulkEditDialog({
     }
     if (changeTimes && (!startTime || !endTime)) {
       setError("Bitte Start- und Endzeit angeben.");
+      return false;
+    }
+    if (changeShiftModel && selection === "") {
+      setError("Bitte einen Dienst auswählen.");
       return false;
     }
     return true;
@@ -168,6 +212,11 @@ export function BulkEditDialog({
         : buildIso(dayKey, endTime);
     }
     if (changeNotes) data["notes"] = notes || null;
+    if (changeShiftModel && selection !== "") {
+      const { type, shiftModelId } = deriveTypeAndModel(selection);
+      data["type"] = type;
+      data["shiftModelId"] = shiftModelId;
+    }
     return data;
   }
 
@@ -380,6 +429,48 @@ export function BulkEditDialog({
                   }}
                   placeholder="Leer lassen, um die Notiz zu entfernen"
                 />
+              )}
+            </div>
+
+            {/* Dienst (Schichttyp / Modell) ändern */}
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={changeShiftModel}
+                  onCheckedChange={(v) => {
+                    setChangeShiftModel(v === true);
+                    resetConflicts();
+                    setError(null);
+                  }}
+                  data-testid="bulk-edit-toggle-shift-model"
+                />
+                Dienst ändern
+              </label>
+              {changeShiftModel && (
+                <Select
+                  value={selection}
+                  onValueChange={(v) => {
+                    setSelection(v);
+                    resetConflicts();
+                    setError(null);
+                  }}
+                >
+                  <SelectTrigger data-testid="bulk-edit-shift-model">
+                    <SelectValue placeholder="Dienst wählen..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeModels.map((m) => (
+                      <SelectItem key={m.id} value={`model:${m.id}`}>
+                        {m.name}
+                      </SelectItem>
+                    ))}
+                    {Object.entries(LEGACY_TYPE_LABELS).map(([type, label]) => (
+                      <SelectItem key={type} value={`legacy:${type}`}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
             </div>
           </div>

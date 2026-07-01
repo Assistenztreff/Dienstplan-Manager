@@ -1330,6 +1330,7 @@ export default function Dienstplan() {
           dates={dialog.mode === "bulk-edit" ? dialog.dates : []}
           shifts={allShifts}
           assistants={assistants}
+          shiftModels={shiftModels ?? []}
           month={month}
           year={year}
           onSaved={() => {
