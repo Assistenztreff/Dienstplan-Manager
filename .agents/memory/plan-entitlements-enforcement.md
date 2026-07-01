@@ -78,6 +78,31 @@ type edits on existing rows stay free).
 the TEAM OWNER's plan, not the requester — a member-admin (possibly premium) must
 not be able to exceed a foreign Free team's limit via their own plan.
 
+## Not every feature flag maps to an enforceable endpoint
+
+The entitlement config lists more feature flags than the app has endpoints for.
+Only gate a flag where a real server action/endpoint exists; gating a flag that
+has no endpoint either does nothing or breaks a core flow:
+- `advancedPersonnelFile` = WRITING the wage/SV fields on `users` (birthDate,
+  socialSecurityNumber, taxId, taxClass, healthInsurance, iban) on POST/PATCH
+  /users. Reading those fields is never blocked (Bestandsschutz); PATCH compares
+  the new value against the stored value and only blocks a real change, so a form
+  that re-sends unchanged existing values still saves.
+- `advancedAnalytics` = GET /dashboard/hours-balance (the Soll/Ist computation).
+  It's also the data source for the client-side payroll/Stundennachweis PDF, so
+  gating it transitively enforces `payrollExport` — there is NO separate export
+  endpoint. The raw shifts/time-entries/contracts stay visible via their own list
+  endpoints, and GET /dashboard/summary (basic KPIs) stays free.
+- `strictTimeTracking`, `calendarSync`, `caregiverLogin` have NO implemented
+  endpoints. Do not invent gates for them: gating login would lock out assistants
+  of Free teams and gating time-tracking would break the core Zeiterfassung — both
+  violate Bestandsschutz. They stay configuration-only until real endpoints exist.
+
+**Read vs write under Bestandsschutz:** for "data" features (personnel file), gate
+WRITES and keep reads open. For derived/computed premium views (analytics), gating
+the whole read is OK because no stored data is hidden — the raw inputs remain
+reachable elsewhere.
+
 ## bulkEdit gate is the userId-reassignment on PATCH /shifts
 
 The only server capability unique to Massenbearbeitung is the assistant swap

@@ -17,9 +17,29 @@ import {
   resolveWriteTeamId,
   isUserInAllowedTeams,
 } from "../lib/teams";
-import { userWithinLimit, getUserLimit } from "../lib/plan";
+import { userWithinLimit, getUserLimit, userHasFeature } from "../lib/plan";
 
 const router = Router();
+
+// Felder der ERWEITERTEN Personalakte (Lohn-/Sozialversicherungsdaten). Das
+// Setzen/Ändern dieser Felder ist das Premium-Feature "advancedPersonnelFile";
+// die einfache Personalakte (Name, E-Mail, Telefon, Adresse) bleibt für Free
+// frei. Bestandsschutz: bereits erfasste Werte bleiben sichtbar (Lesen ist nie
+// gesperrt) und unverändert speicherbar — gesperrt wird nur das tatsächliche
+// Ändern auf einen neuen Wert.
+const ADVANCED_PERSONNEL_FIELDS = [
+  "birthDate",
+  "socialSecurityNumber",
+  "taxId",
+  "taxClass",
+  "healthInsurance",
+  "iban",
+] as const;
+
+/** Vergleichsnormalisierung: null/undefined/"" gelten als "kein Wert". */
+function normalizePersonnelValue(v: unknown): string {
+  return v === null || v === undefined ? "" : String(v);
+}
 
 const SAFE_USER_SELECT = {
   id: usersTable.id,
@@ -107,6 +127,23 @@ router.post("/users", requireAdmin, async (req, res): Promise<void> => {
 
   // teamId steuert nur die Team-Mitgliedschaft, ist keine Spalte auf users.
   const { teamId: requestedTeamId, ...userValues } = body.data;
+
+  // Premium-Gate "advancedPersonnelFile": ein Free-Konto darf beim Anlegen keine
+  // Lohn-/SV-Daten (erweiterte Personalakte) setzen.
+  const values = userValues as Record<string, unknown>;
+  if (
+    ADVANCED_PERSONNEL_FIELDS.some((f) => normalizePersonnelValue(values[f]) !== "") &&
+    !(await userHasFeature(req.session.userId!, "advancedPersonnelFile"))
+  ) {
+    res.status(403).json({
+      error:
+        "Die erweiterte Personalakte (Lohn-/Sozialversicherungsdaten) ist im Premium-Tarif enthalten.",
+      code: "plan_feature_required",
+      feature: "advancedPersonnelFile",
+    });
+    return;
+  }
+
   const target = await resolveWriteTeamId(req.session.userId!, requestedTeamId ?? undefined);
   if (!target.ok && target.reason === "forbidden") {
     res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
@@ -204,6 +241,40 @@ router.patch("/users/:id", requireAdmin, async (req, res): Promise<void> => {
       return;
     }
   }
+
+  // Premium-Gate "advancedPersonnelFile": ein Free-Konto darf Lohn-/SV-Daten nicht
+  // auf einen NEUEN Wert ändern. Bestandsschutz: bereits gespeicherte Werte dürfen
+  // unverändert mitgesendet werden (z.B. wenn das Formular alle Felder zurückschickt)
+  // — verglichen wird gegen den aktuellen DB-Stand, nur echte Änderungen blocken.
+  const updateBody = body.data as Record<string, unknown>;
+  const touchedAdvanced = ADVANCED_PERSONNEL_FIELDS.filter((f) => f in updateBody);
+  if (touchedAdvanced.length > 0 && !(await userHasFeature(req.session.userId!, "advancedPersonnelFile"))) {
+    const [existing] = await db
+      .select({
+        birthDate: usersTable.birthDate,
+        socialSecurityNumber: usersTable.socialSecurityNumber,
+        taxId: usersTable.taxId,
+        taxClass: usersTable.taxClass,
+        healthInsurance: usersTable.healthInsurance,
+        iban: usersTable.iban,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.id, params.data.id));
+    const existingValues = (existing ?? {}) as Record<string, unknown>;
+    const changed = touchedAdvanced.some(
+      (f) => normalizePersonnelValue(updateBody[f]) !== normalizePersonnelValue(existingValues[f]),
+    );
+    if (changed) {
+      res.status(403).json({
+        error:
+          "Die erweiterte Personalakte (Lohn-/Sozialversicherungsdaten) ist im Premium-Tarif enthalten.",
+        code: "plan_feature_required",
+        feature: "advancedPersonnelFile",
+      });
+      return;
+    }
+  }
+
   const [user] = await db
     .update(usersTable)
     .set(body.data)

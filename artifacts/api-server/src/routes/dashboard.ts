@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { usersTable, shiftsTable, timeTrackingTable, contractsTable, allowanceSettingsTable, teamMembersTable } from "@workspace/db";
 import { eq, and, sql, count, or, isNull, inArray } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middleware/auth";
+import { requirePlanFeature } from "../lib/plan";
 import { resolveReadTeamScope, parseTeamIdParam } from "../lib/teams";
 import {
   LOW_VACATION_THRESHOLD,
@@ -327,7 +328,14 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   });
 });
 
-router.get("/dashboard/hours-balance", requireAdmin, async (req, res): Promise<void> => {
+// Soll/Ist-Berechnung inkl. Zuschlags-Aufschlüsselung (Nacht/Sonntag/Feiertag).
+// Das ist das Premium-Feature "advancedAnalytics" — und zugleich die Datenquelle
+// für den (clientseitig erzeugten) Lohn-/Stundennachweis-PDF-Export
+// ("payrollExport"). Free-Konten erhalten 403 plan_feature_required. Bestandsschutz
+// bleibt gewahrt: die ROHDATEN (Schichten, Zeiterfassung, Verträge) bleiben über
+// ihre regulären Listen-Endpunkte sichtbar — gesperrt wird nur diese abgeleitete
+// Premium-Auswertung.
+router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advancedAnalytics"), async (req, res): Promise<void> => {
   const month = req.query.month ? Number(req.query.month) : new Date().getMonth() + 1;
   const year = req.query.year ? Number(req.query.year) : new Date().getFullYear();
 
