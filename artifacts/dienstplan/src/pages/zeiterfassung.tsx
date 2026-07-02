@@ -5,6 +5,7 @@ import {
   useListUsers,
   useListShifts,
   useConfirmTimeEntry,
+  useConfirmTimeEntriesBatch,
   useCreateTimeEntry,
   ApiError,
   type Shift,
@@ -27,7 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
-import { Check, X, CalendarClock, ArrowRight, Plus } from "lucide-react";
+import { Check, CheckCheck, X, CalendarClock, ArrowRight, Plus } from "lucide-react";
 import { useAuth } from "@/context/auth";
 import { useTeam } from "@/context/team";
 import { TeamSwitcher } from "@/components/team-switcher";
@@ -107,6 +108,7 @@ export default function Zeiterfassung() {
   } as Parameters<typeof useListShifts>[1]);
 
   const { mutate: confirmEntry, isPending: isConfirming } = useConfirmTimeEntry();
+  const confirmBatch = useConfirmTimeEntriesBatch();
   const createEntry = useCreateTimeEntry();
 
   const isLoading =
@@ -147,6 +149,18 @@ export default function Zeiterfassung() {
     }
     return list;
   }, [entries, statusFilter, isAdmin, selectedAssistant]);
+
+  // Offene Einträge im aktuellen Filter (Status- + Assistenten-Filter):
+  // Grundlage der Sammelbestätigung nach einem Premium-Upgrade.
+  const pendingFiltered = useMemo(
+    () => filteredEntries.filter((e) => e.status === "pending"),
+    [filteredEntries],
+  );
+  const pendingHoursSum = useMemo(
+    () =>
+      Math.round(pendingFiltered.reduce((sum, e) => sum + (e.actualHours ?? 0), 0) * 100) / 100,
+    [pendingFiltered],
+  );
 
   function setStatus(status: string | null) {
     const next = new URLSearchParams(searchParams);
@@ -196,6 +210,47 @@ export default function Zeiterfassung() {
         return <Badge variant="outline">{status}</Badge>;
     }
   };
+
+  // Sammelbestätigung: bestätigt alle aktuell gefilterten offenen Einträge in
+  // einem Schritt (Vorschau + Bestätigungsdialog davor). Serverseitig gleich
+  // abgesichert wie die Einzelbestätigung (Premium + Team-Scope, nur pending).
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [batchSaving, setBatchSaving] = useState(false);
+
+  async function handleBatchConfirm() {
+    if (!currentUser || pendingFiltered.length === 0) return;
+    setBatchSaving(true);
+    try {
+      const result = await confirmBatch.mutateAsync({
+        data: {
+          ids: pendingFiltered.map((e) => e.id),
+          confirmedBy: currentUser.id,
+        },
+      });
+      await queryClient.invalidateQueries({
+        predicate: (q) => {
+          const k = q.queryKey[0];
+          return k === "/api/time-tracking" || k === "/api/dashboard/summary";
+        },
+      });
+      toast({
+        title: "Einträge bestätigt",
+        description:
+          result.confirmedCount === 1
+            ? "1 offener Eintrag wurde bestätigt."
+            : `${result.confirmedCount} offene Einträge wurden bestätigt.`,
+      });
+      setBatchOpen(false);
+    } catch (err) {
+      toast({
+        title: "Sammelbestätigung fehlgeschlagen",
+        description: planFeatureMessage(err) ?? readableApiError(err, "Bitte erneut versuchen."),
+        variant: "destructive",
+      });
+    } finally {
+      setBatchSaving(false);
+    }
+  }
 
   const handleConfirm = (id: number, status: "confirmed" | "rejected") => {
     confirmEntry(
@@ -357,6 +412,19 @@ export default function Zeiterfassung() {
             <Button className="gap-1.5 shrink-0" onClick={openManual} data-testid="manual-entry">
               <Plus className="h-4 w-4" />
               Zeit erfassen
+            </Button>
+          )}
+          {isAdmin && pendingFiltered.length > 0 && (
+            <Button
+              variant="outline"
+              className="gap-1.5 shrink-0"
+              disabled={!canConfirm}
+              title={canConfirm ? undefined : PLAN_FEATURE_MESSAGES.strictTimeTracking}
+              onClick={() => setBatchOpen(true)}
+              data-testid="batch-confirm-open"
+            >
+              <CheckCheck className="h-4 w-4" />
+              Alle offenen bestätigen
             </Button>
           )}
           <TeamSwitcher />
@@ -593,6 +661,53 @@ export default function Zeiterfassung() {
             </Button>
             <Button onClick={handleSave} disabled={saving} data-testid="adopt-save">
               {saving ? "Speichern..." : "Ist-Zeit speichern"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={batchOpen} onOpenChange={(v) => !v && !batchSaving && setBatchOpen(false)}>
+        <DialogContent className="sm:max-w-md" data-testid="batch-confirm-dialog">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-xl">Alle offenen Einträge bestätigen</DialogTitle>
+            <DialogDescription>
+              Bestätigt alle offenen Zeiteinträge im aktuellen Filter in einem Schritt.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="rounded-lg border border-border/60 bg-muted/20 p-4" data-testid="batch-confirm-summary">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Offene Einträge</span>
+                <span className="font-semibold" data-testid="batch-confirm-count">
+                  {pendingFiltered.length}
+                </span>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Stunden gesamt</span>
+                <span className="font-semibold" data-testid="batch-confirm-hours">
+                  {pendingHoursSum} h
+                </span>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Die bestätigten Stunden fließen anschließend in Dashboard und Auswertungen ein.
+              Diese Aktion kann nicht gesammelt rückgängig gemacht werden.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBatchOpen(false)} disabled={batchSaving}>
+              Abbrechen
+            </Button>
+            <Button
+              onClick={handleBatchConfirm}
+              disabled={batchSaving || pendingFiltered.length === 0}
+              data-testid="batch-confirm-save"
+            >
+              {batchSaving
+                ? "Bestätigen..."
+                : pendingFiltered.length === 1
+                  ? "1 Eintrag bestätigen"
+                  : `${pendingFiltered.length} Einträge bestätigen`}
             </Button>
           </DialogFooter>
         </DialogContent>

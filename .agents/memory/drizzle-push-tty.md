@@ -14,3 +14,9 @@ VALUE`, `ADD COLUMN ... NULL`, new FK), apply the DDL directly with the executeS
 tool, then keep the Drizzle schema files in sync so codegen/types match. Reserve
 drizzle push for local interactive use only. Always update the `lib/db/src/schema/`
 files regardless, since the rest of the stack derives types from them.
+
+This also hits `setup-test-db` when the `_test` DB is stale: its internal
+`db push` aborts on the interactive UNIQUE-constraint prompt (e.g.
+`users_calendar_token_unique`). Fix: pre-apply the same guarded DDL that
+`scripts/post-merge.sh` runs (ADD COLUMN IF NOT EXISTS + pg_constraint-guarded
+ADD CONSTRAINT) against the `_test` DB first — then push sees "no changes".

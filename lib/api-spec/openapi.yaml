@@ -998,6 +998,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/TimeEntry"
 
+  /time-tracking/confirm-batch:
+    post:
+      operationId: confirmTimeEntriesBatch
+      tags: [time-tracking]
+      summary: Offene Zeiteinträge gesammelt bestätigen (Premium strictTimeTracking)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimeEntryConfirmBatch"
+      responses:
+        "200":
+          description: Ergebnis der Sammelbestätigung
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeEntryConfirmBatchResult"
+        "403":
+          description: Premium-Feature erforderlich
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
   /users/{id}/invite:
     post:
       operationId: inviteUser
@@ -1977,6 +2002,28 @@ components:
           type: integer
         notes:
           type: string
+
+    TimeEntryConfirmBatch:
+      type: object
+      required: [ids, confirmedBy]
+      properties:
+        ids:
+          type: array
+          description: IDs der zu bestätigenden offenen Zeiteinträge.
+          items:
+            type: integer
+          minItems: 1
+          maxItems: 500
+        confirmedBy:
+          type: integer
+
+    TimeEntryConfirmBatchResult:
+      type: object
+      required: [confirmedCount]
+      properties:
+        confirmedCount:
+          type: integer
+          description: Anzahl der tatsächlich bestätigten (zuvor offenen) Einträge.
 
     CalendarToken:
       type: object

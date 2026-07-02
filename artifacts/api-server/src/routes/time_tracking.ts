@@ -11,6 +11,7 @@ import {
   DeleteTimeEntryParams,
   ConfirmTimeEntryParams,
   ConfirmTimeEntryBody,
+  ConfirmTimeEntriesBatchBody,
 } from "@workspace/api-zod";
 import { requireAuth, requireAdmin } from "../middleware/auth";
 import { requirePlanFeature } from "../lib/plan";
@@ -291,6 +292,42 @@ router.patch("/time-tracking/:id/confirm", requireAdmin, requirePlanFeature("str
     .leftJoin(usersTable, eq(timeTrackingTable.userId, usersTable.id))
     .where(eq(timeTrackingTable.id, params.data.id));
   res.json(withUser);
+});
+
+// Sammelbestätigung nach einem Premium-Upgrade: bestätigt mehrere OFFENE
+// Einträge in einem Schritt. Gleiche Absicherung wie die Einzelbestätigung
+// (requireAdmin + strictTimeTracking + Team-Scope); zusätzlich werden nur
+// Einträge mit Status "pending" angefasst — bereits bestätigte/abgelehnte
+// bleiben unverändert. IDs außerhalb des erlaubten Team-Scopes werden still
+// übersprungen (kein Leak, welcher fremde Eintrag existiert); der Client
+// erfährt über confirmedCount, wie viele tatsächlich bestätigt wurden.
+router.post("/time-tracking/confirm-batch", requireAdmin, requirePlanFeature("strictTimeTracking"), async (req, res): Promise<void> => {
+  const body = ConfirmTimeEntriesBatchBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Invalid request body" });
+    return;
+  }
+  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+  if (allowedTeams.length === 0) {
+    res.json({ confirmedCount: 0 });
+    return;
+  }
+  const updated = await db
+    .update(timeTrackingTable)
+    .set({
+      status: "confirmed",
+      confirmedBy: body.data.confirmedBy,
+      confirmedAt: new Date(),
+    })
+    .where(
+      and(
+        inArray(timeTrackingTable.id, body.data.ids),
+        inArray(timeTrackingTable.teamId, allowedTeams),
+        eq(timeTrackingTable.status, "pending"),
+      ),
+    )
+    .returning({ id: timeTrackingTable.id });
+  res.json({ confirmedCount: updated.length });
 });
 
 export default router;

@@ -69,6 +69,8 @@ export * from './teamMemberRole';
 export * from './teamUpdate';
 export * from './timeEntry';
 export * from './timeEntryConfirm';
+export * from './timeEntryConfirmBatch';
+export * from './timeEntryConfirmBatchResult';
 export * from './timeEntryConfirmStatus';
 export * from './timeEntryInput';
 export * from './timeEntryStatus';

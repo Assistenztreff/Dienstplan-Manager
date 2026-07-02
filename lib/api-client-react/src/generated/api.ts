@@ -65,6 +65,8 @@ import type {
   TeamUpdate,
   TimeEntry,
   TimeEntryConfirm,
+  TimeEntryConfirmBatch,
+  TimeEntryConfirmBatchResult,
   TimeEntryInput,
   TimeEntryUpdate,
   UpdateProfileInput,
@@ -3374,6 +3376,77 @@ export const useConfirmTimeEntry = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getConfirmTimeEntryMutationOptions(options));
+    }
+
+export const getConfirmTimeEntriesBatchUrl = () => {
+
+
+
+
+  return `/api/time-tracking/confirm-batch`
+}
+
+/**
+ * @summary Offene Zeiteinträge gesammelt bestätigen (Premium strictTimeTracking)
+ */
+export const confirmTimeEntriesBatch = async (timeEntryConfirmBatch: TimeEntryConfirmBatch, options?: RequestInit): Promise<TimeEntryConfirmBatchResult> => {
+
+  return customFetch<TimeEntryConfirmBatchResult>(getConfirmTimeEntriesBatchUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      timeEntryConfirmBatch,)
+  }
+);}
+
+
+
+
+export const getConfirmTimeEntriesBatchMutationOptions = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmTimeEntriesBatch>>, TError,{data: BodyType<TimeEntryConfirmBatch>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmTimeEntriesBatch>>, TError,{data: BodyType<TimeEntryConfirmBatch>}, TContext> => {
+
+const mutationKey = ['confirmTimeEntriesBatch'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmTimeEntriesBatch>>, {data: BodyType<TimeEntryConfirmBatch>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  confirmTimeEntriesBatch(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmTimeEntriesBatchMutationResult = NonNullable<Awaited<ReturnType<typeof confirmTimeEntriesBatch>>>
+    export type ConfirmTimeEntriesBatchMutationBody = BodyType<TimeEntryConfirmBatch>
+    export type ConfirmTimeEntriesBatchMutationError = ErrorType<ErrorEnvelope>
+
+    /**
+ * @summary Offene Zeiteinträge gesammelt bestätigen (Premium strictTimeTracking)
+ */
+export const useConfirmTimeEntriesBatch = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmTimeEntriesBatch>>, TError,{data: BodyType<TimeEntryConfirmBatch>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmTimeEntriesBatch>>,
+        TError,
+        {data: BodyType<TimeEntryConfirmBatch>},
+        TContext
+      > => {
+      return useMutation(getConfirmTimeEntriesBatchMutationOptions(options));
     }
 
 export const getInviteUserUrl = (id: number,) => {

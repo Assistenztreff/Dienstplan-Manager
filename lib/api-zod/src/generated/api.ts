@@ -1061,6 +1061,23 @@ export const ConfirmTimeEntryResponse = zod.object({
 
 
 /**
+ * @summary Offene Zeiteinträge gesammelt bestätigen (Premium strictTimeTracking)
+ */
+export const confirmTimeEntriesBatchBodyIdsMax = 500;
+
+
+
+export const ConfirmTimeEntriesBatchBody = zod.object({
+  "ids": zod.array(zod.number()).min(1).max(confirmTimeEntriesBatchBodyIdsMax).describe('IDs der zu bestätigenden offenen Zeiteinträge.'),
+  "confirmedBy": zod.number()
+})
+
+export const ConfirmTimeEntriesBatchResponse = zod.object({
+  "confirmedCount": zod.number().describe('Anzahl der tatsächlich bestätigten (zuvor offenen) Einträge.')
+})
+
+
+/**
  * @summary Einladungslink für Assistenten generieren
  */
 export const InviteUserParams = zod.object({

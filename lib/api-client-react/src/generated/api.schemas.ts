@@ -584,6 +584,21 @@ export interface TimeEntryConfirm {
   notes?: string;
 }
 
+export interface TimeEntryConfirmBatch {
+  /**
+     * IDs der zu bestätigenden offenen Zeiteinträge.
+     * @minItems 1
+     * @maxItems 500
+     */
+  ids: number[];
+  confirmedBy: number;
+}
+
+export interface TimeEntryConfirmBatchResult {
+  /** Anzahl der tatsächlich bestätigten (zuvor offenen) Einträge. */
+  confirmedCount: number;
+}
+
 export interface CalendarToken {
   /** Geheimer Abo-Token (null = kein Abo eingerichtet) */
   token: string | null;
