@@ -10,6 +10,8 @@ import type { LowVacationAssistant } from './lowVacationAssistant';
 export interface DashboardWarnings {
   /** Anzahl noch nicht bestätigter Zeiterfassungen */
   pendingTimeEntries: number;
+  /** Ob im aktuellen Team-Scope überhaupt ein Freigabe-Workflow existiert (mindestens ein Team mit strictTimeTracking, d. h. Premium-Eigentümer). Bei false ist "offen" der Normalzustand (Free) — das Frontend zeigt offene Zeiterfassungen dann nicht als To-do-Warnung an. */
+  timeTrackingConfirmable: boolean;
   lowVacationAssistants: LowVacationAssistant[];
   /** Kommende Tage ohne geplante Schicht (ISO-Datum) */
   uncoveredDays: Date[];

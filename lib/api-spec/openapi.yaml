@@ -2037,11 +2037,18 @@ components:
 
     DashboardWarnings:
       type: object
-      required: [pendingTimeEntries, lowVacationAssistants, uncoveredDays, lowVacationThreshold, horizonDays]
+      required: [pendingTimeEntries, timeTrackingConfirmable, lowVacationAssistants, uncoveredDays, lowVacationThreshold, horizonDays]
       properties:
         pendingTimeEntries:
           type: integer
           description: Anzahl noch nicht bestätigter Zeiterfassungen
+        timeTrackingConfirmable:
+          type: boolean
+          description: >-
+            Ob im aktuellen Team-Scope überhaupt ein Freigabe-Workflow existiert
+            (mindestens ein Team mit strictTimeTracking, d. h. Premium-Eigentümer).
+            Bei false ist "offen" der Normalzustand (Free) — das Frontend zeigt
+            offene Zeiterfassungen dann nicht als To-do-Warnung an.
         lowVacationAssistants:
           type: array
           items:

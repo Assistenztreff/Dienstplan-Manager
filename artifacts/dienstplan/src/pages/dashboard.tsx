@@ -26,10 +26,16 @@ export const DIENST_STATUS_LABELS: Record<DienstStatus, string> = {
 export const STANDARD_SCHICHT_VORLAGEN: SchichtVorlage[] = [];
 
 function WarningsSection({ warnings }: { warnings: DashboardWarnings }) {
-  const { pendingTimeEntries, lowVacationAssistants, uncoveredDays, lowVacationThreshold, horizonDays } = warnings;
+  const { pendingTimeEntries, timeTrackingConfirmable, lowVacationAssistants, uncoveredDays, lowVacationThreshold, horizonDays } = warnings;
   const [, navigate] = useLocation();
+  // Produktentscheidung: Für Free-Konten (kein Freigabe-Workflow im Team-Scope,
+  // timeTrackingConfirmable=false) ist "offen" der dauerhafte Normalzustand —
+  // die Einträge zählen bereits als Ist-Stunden. Die Warnung wäre ein To-do,
+  // das Free gar nicht erledigen kann (Bestätigen ist Premium), daher wird sie
+  // ausgeblendet. Premium-Verhalten unverändert.
+  const showPendingWarning = timeTrackingConfirmable && pendingTimeEntries > 0;
   const hasWarnings =
-    pendingTimeEntries > 0 || lowVacationAssistants.length > 0 || uncoveredDays.length > 0;
+    showPendingWarning || lowVacationAssistants.length > 0 || uncoveredDays.length > 0;
 
   if (!hasWarnings) {
     return (
@@ -56,7 +62,7 @@ function WarningsSection({ warnings }: { warnings: DashboardWarnings }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {pendingTimeEntries > 0 && (
+        {showPendingWarning && (
           <button
             type="button"
             onClick={() => navigate("/zeiterfassung?status=pending")}

@@ -239,6 +239,12 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       recentTimeEntries,
       warnings: {
         pendingTimeEntries: Number(pendingTimeEntries),
+        // "Offen" ist nur dann ein To-do, wenn im Scope mindestens ein Team
+        // mit Freigabe-Workflow (strictTimeTracking, Premium-Eigentümer)
+        // existiert. Sind ALLE Teams lenient (Free), ist "offen" der
+        // Normalzustand — das Frontend blendet die Warnung dann aus.
+        timeTrackingConfirmable:
+          teamScope.length === 0 || lenientTeamIds.length < teamScope.length,
         lowVacationAssistants,
         uncoveredDays,
         lowVacationThreshold: LOW_VACATION_THRESHOLD,

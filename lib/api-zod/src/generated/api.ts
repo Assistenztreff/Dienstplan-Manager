@@ -1209,6 +1209,7 @@ export const GetDashboardSummaryResponse = zod.object({
 })).optional(),
   "warnings": zod.object({
   "pendingTimeEntries": zod.number().describe('Anzahl noch nicht bestätigter Zeiterfassungen'),
+  "timeTrackingConfirmable": zod.boolean().describe('Ob im aktuellen Team-Scope überhaupt ein Freigabe-Workflow existiert (mindestens ein Team mit strictTimeTracking, d. h. Premium-Eigentümer). Bei false ist \"offen\" der Normalzustand (Free) — das Frontend zeigt offene Zeiterfassungen dann nicht als To-do-Warnung an.'),
   "lowVacationAssistants": zod.array(zod.object({
   "userId": zod.number(),
   "userName": zod.string(),
