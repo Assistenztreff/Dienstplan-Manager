@@ -3,7 +3,7 @@ import { useGetHoursBalance, useListUsers, getHoursBalance } from "@workspace/ap
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Lock } from "lucide-react";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { Progress } from "@/components/ui/progress";
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
+import { hasAccess } from "@/lib/entitlements";
 import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 import { exportStatementSectionsPdf } from "@/lib/pdf-export";
 
@@ -224,16 +225,25 @@ export default function Auswertungen() {
   const { currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin";
 
+  // Soll/Ist-Auswertung ist das Premium-Feature "advancedAnalytics" (Server
+  // antwortet fuer Free-Konten mit 403 plan_feature_required). Statt eine
+  // Anfrage zu feuern, die scheitert, zeigen wir Free-Konten direkt einen
+  // Upgrade-Hinweis (Frontend-Gate ist reine UX, Durchsetzung bleibt serverseitig).
+  const analyticsLocked = !hasAccess(currentUser, "advancedAnalytics");
+
   const month = currentDate.getMonth() + 1;
   const year = currentDate.getFullYear();
 
   const { selectedTeamId } = useTeam();
   const teamParam = selectedTeamId != null ? { teamId: selectedTeamId } : {};
-  const { data: balances, isLoading } = useGetHoursBalance({
-    month,
-    year,
-    ...teamParam,
-  }) as any;
+  const { data: balances, isLoading } = useGetHoursBalance(
+    {
+      month,
+      year,
+      ...teamParam,
+    },
+    { query: { enabled: !analyticsLocked } } as any,
+  ) as any;
 
   const { data: users, isLoading: usersLoading } = useListUsers(
     selectedTeamId != null ? { teamId: selectedTeamId } : undefined
@@ -285,16 +295,31 @@ export default function Auswertungen() {
             </Button>
           </div>
 
-          <Button
-            variant="outline"
-            onClick={() => setExportOpen(true)}
-            disabled={isLoading || !visibleBalances || visibleBalances.length === 0}
-            className="gap-2"
-            data-testid="export-pdf-button"
-          >
-            <Download className="h-4 w-4" />
-            Als PDF exportieren
-          </Button>
+          {/* PDF-Stundennachweis (payrollExport) speist sich aus der
+              advancedAnalytics-Datenquelle — fuer Free-Konten gesperrt. */}
+          {analyticsLocked ? (
+            <Button
+              variant="outline"
+              disabled
+              title="Der PDF-Stundennachweis ist in Premium enthalten."
+              className="gap-2"
+              data-testid="export-pdf-button-locked"
+            >
+              <Lock className="h-4 w-4" />
+              Als PDF exportieren
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              onClick={() => setExportOpen(true)}
+              disabled={isLoading || !visibleBalances || visibleBalances.length === 0}
+              className="gap-2"
+              data-testid="export-pdf-button"
+            >
+              <Download className="h-4 w-4" />
+              Als PDF exportieren
+            </Button>
+          )}
         </div>
       </div>
 
@@ -319,7 +344,24 @@ export default function Auswertungen() {
       )}
 
       <div className="grid grid-cols-1 gap-6">
-        {isLoading ? (
+        {analyticsLocked ? (
+          <div
+            className="p-12 text-center border rounded-xl bg-card space-y-3"
+            data-testid="analytics-premium-upsell"
+          >
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+              <Lock className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-semibold text-foreground">
+              Soll/Ist-Auswertung ist in Premium enthalten
+            </h3>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              Der Soll/Ist-Abgleich mit Zuschlägen, Urlaubskonto und PDF-Stundennachweis
+              ist Teil des Premium-Tarifs. Für den Zugriff auf die Auswertungen auf
+              Premium upgraden.
+            </p>
+          </div>
+        ) : isLoading ? (
           <>
             <Skeleton className="h-48 w-full rounded-xl" />
             <Skeleton className="h-48 w-full rounded-xl" />

@@ -15,7 +15,7 @@ import {
 } from "@workspace/api-client-react";
 import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
-import { isWithinLimit, getLimit } from "@/lib/entitlements";
+import { isWithinLimit, getLimit, hasAccess } from "@/lib/entitlements";
 import { readableApiError, planLimitMessage } from "@/lib/api-error";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -251,6 +251,14 @@ type AssistentDialogProps = {
 function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDialogProps) {
   const queryClient = useQueryClient();
   const { selectedTeamId } = useTeam();
+  const { currentUser } = useAuth();
+
+  // Lohn-/SV-Daten sind das Premium-Feature "advancedPersonnelFile" (Server
+  // lehnt echte Aenderungen fuer Free-Konten mit 403 plan_feature_required ab).
+  // Free-Konten sehen die Felder deaktiviert mit Premium-Hinweis; bereits
+  // erfasste Werte bleiben sichtbar (Bestandsschutz), werden aber nicht mehr
+  // mitgesendet. Frontend-Gate ist reine UX, Durchsetzung bleibt serverseitig.
+  const canEditWageData = hasAccess(currentUser, "advancedPersonnelFile");
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();
@@ -326,12 +334,19 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
             email: form.email,
             phone: form.phone || null,
             address: form.address,
-            birthDate: form.birthDate || null,
-            socialSecurityNumber: form.socialSecurityNumber || null,
-            taxId: form.taxId || null,
-            taxClass: form.taxClass || null,
-            healthInsurance: form.healthInsurance || null,
-            iban: form.iban || null,
+            // Lohn-/SV-Felder nur senden, wenn Premium — Free-Konten aendern
+            // sie nicht (Felder deaktiviert), Weglassen laesst den DB-Stand
+            // unangetastet (Bestandsschutz).
+            ...(canEditWageData
+              ? {
+                  birthDate: form.birthDate || null,
+                  socialSecurityNumber: form.socialSecurityNumber || null,
+                  taxId: form.taxId || null,
+                  taxClass: form.taxClass || null,
+                  healthInsurance: form.healthInsurance || null,
+                  iban: form.iban || null,
+                }
+              : {}),
           },
         });
 
@@ -364,12 +379,16 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
             role: "assistant",
             phone: form.phone || undefined,
             address: form.address,
-            birthDate: form.birthDate || undefined,
-            socialSecurityNumber: form.socialSecurityNumber || undefined,
-            taxId: form.taxId || undefined,
-            taxClass: form.taxClass || undefined,
-            healthInsurance: form.healthInsurance || undefined,
-            iban: form.iban || undefined,
+            ...(canEditWageData
+              ? {
+                  birthDate: form.birthDate || undefined,
+                  socialSecurityNumber: form.socialSecurityNumber || undefined,
+                  taxId: form.taxId || undefined,
+                  taxClass: form.taxClass || undefined,
+                  healthInsurance: form.healthInsurance || undefined,
+                  iban: form.iban || undefined,
+                }
+              : {}),
             ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
           },
         });
@@ -482,9 +501,26 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
           </section>
 
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-2">
               Lohndaten / Sozialversicherung
+              {!canEditWageData && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium normal-case tracking-normal text-muted-foreground">
+                  <Lock className="h-3 w-3" />
+                  Premium
+                </span>
+              )}
             </h3>
+            {/* Free-Konten: Felder deaktiviert mit kurzem Premium-Hinweis.
+                Bereits erfasste Werte bleiben sichtbar (Bestandsschutz). */}
+            {!canEditWageData && (
+              <p
+                className="text-xs text-muted-foreground mb-3 border-l-2 border-border pl-3"
+                data-testid="wage-data-premium-hint"
+              >
+                Lohn- und Sozialversicherungsdaten lassen sich mit Premium erfassen
+                und bearbeiten. Bereits gespeicherte Daten bleiben erhalten.
+              </p>
+            )}
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <FieldRow label="Geburtsdatum">
@@ -493,12 +529,14 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
                     type="date"
                     value={form.birthDate}
                     onChange={(e) => set("birthDate", e.target.value)}
+                    disabled={!canEditWageData}
                   />
                 </FieldRow>
                 <FieldRow label="Steuerklasse">
                   <Select
                     value={form.taxClass || undefined}
                     onValueChange={(v) => set("taxClass", v)}
+                    disabled={!canEditWageData}
                   >
                     <SelectTrigger className="bg-card">
                       <SelectValue placeholder="Wählen" />
@@ -520,6 +558,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
                   value={form.socialSecurityNumber}
                   onChange={(e) => set("socialSecurityNumber", e.target.value)}
                   placeholder="12 123456 A 123"
+                  disabled={!canEditWageData}
                 />
               </FieldRow>
 
@@ -529,6 +568,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
                   value={form.taxId}
                   onChange={(e) => set("taxId", e.target.value)}
                   placeholder="12 345 678 901"
+                  disabled={!canEditWageData}
                 />
               </FieldRow>
 
@@ -538,6 +578,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
                   value={form.healthInsurance}
                   onChange={(e) => set("healthInsurance", e.target.value)}
                   placeholder="z.B. AOK, TK, Barmer"
+                  disabled={!canEditWageData}
                 />
               </FieldRow>
 
@@ -547,6 +588,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
                   value={form.iban}
                   onChange={(e) => set("iban", e.target.value)}
                   placeholder="DE00 0000 0000 0000 0000 00"
+                  disabled={!canEditWageData}
                 />
               </FieldRow>
             </div>
@@ -840,6 +882,12 @@ export default function Assistenten() {
   const assistantLimit = getLimit(currentUser, "maxAssistants");
   const canAddAssistant = isWithinLimit(currentUser, "maxAssistants", assistantCount);
 
+  // Der PDF-Stundennachweis laedt seine Daten aus GET /dashboard/hours-balance —
+  // das ist serverseitig als Premium-Feature "advancedAnalytics" gesperrt.
+  // Free-Konten sehen den Button deaktiviert mit Upgrade-Hinweis statt eines
+  // fehlschlagenden Exports.
+  const canExportPayroll = hasAccess(currentUser, "advancedAnalytics");
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editUser, setEditUser] = useState<User | undefined>();
   const [editContract, setEditContract] = useState<Contract | undefined>();
@@ -1007,16 +1055,30 @@ export default function Assistenten() {
                   )}
 
                   <div className="flex justify-end gap-2 flex-wrap">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1.5 text-muted-foreground hover:text-foreground"
-                      onClick={() => setExportUser(user as User)}
-                      title="Stundennachweis als PDF exportieren"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Nachweis</span>
-                    </Button>
+                    {canExportPayroll ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1.5 text-muted-foreground hover:text-foreground"
+                        onClick={() => setExportUser(user as User)}
+                        title="Stundennachweis als PDF exportieren"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Nachweis</span>
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1.5 text-muted-foreground"
+                        disabled
+                        title="Der PDF-Stundennachweis ist in Premium enthalten."
+                        data-testid="export-statement-locked"
+                      >
+                        <Lock className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Nachweis</span>
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
