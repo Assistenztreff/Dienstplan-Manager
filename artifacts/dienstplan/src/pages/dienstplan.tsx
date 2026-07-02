@@ -1,12 +1,19 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useLocation } from "wouter";
-import { useListShifts, useListUsers, useListShiftModels } from "@workspace/api-client-react";
+import {
+  useListShifts,
+  useListUsers,
+  useListShiftModels,
+  useUpdateShift,
+  getListShiftsQueryKey,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, getDay, isValid, startOfDay, startOfWeek, addDays, differenceInCalendarDays, isWithinInterval } from "date-fns";
 import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, CheckSquare, X, CalendarPlus, Trash2, Pencil, ChevronDown, Users, Lock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, Check, CheckSquare, X, CalendarPlus, Trash2, Pencil, ChevronDown, Users, Lock } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ShiftDialog } from "@/components/shift-dialog";
 import { BulkDeleteDialog } from "@/components/bulk-delete-dialog";
@@ -47,6 +54,13 @@ const PLANNING_STATUS_BADGE_CLASSES: Record<string, string> = {
 // Nicht-bestätigte Dienste werden mit gestricheltem Rand + reduzierter Deckkraft
 // dargestellt, damit Entwürfe/Vorschläge auf einen Blick von verbindlichen
 // Diensten unterscheidbar sind.
+// Entwürfe (VORLAEUFIG) und Vorschläge (ANGEBOTEN) lassen sich mit einem Klick
+// auf FIX (verbindlich) setzen; verbindliche Dienste und Abwesenheiten nicht.
+function isConfirmableShift(shift: Shift): boolean {
+  if (shift.type === "vacation" || shift.type === "sick") return false;
+  return shift.planningStatus === "VORLAEUFIG" || shift.planningStatus === "ANGEBOTEN";
+}
+
 function planningStatusBadgeOutline(shift: Shift): string {
   if (shift.planningStatus === "VORLAEUFIG") return "border-dashed opacity-70";
   if (shift.planningStatus === "ANGEBOTEN") return "border-dashed";
@@ -377,11 +391,14 @@ function ShiftBadge({
   showName,
   modelMap,
   onClick,
+  onConfirm,
 }: {
   shift: Shift;
   showName?: boolean;
   modelMap: Map<number, ShiftModelInfo>;
   onClick?: (e: React.MouseEvent) => void;
+  // Ein-Klick-Bestätigung (Entwurf/Vorschlag → verbindlich), nur für Admins.
+  onConfirm?: (shift: Shift) => void;
 }) {
   const classes = shiftBadgeClasses(shift);
   // Abwesenheiten (Urlaub/Krank) haben keine Uhrzeiten → als ganztägiger Block ohne Zeit.
@@ -437,6 +454,23 @@ function ShiftBadge({
           <div className="text-[11px] opacity-70 truncate">{label}</div>
         </>
       )}
+      {/* Ein-Klick-Bestätigung direkt am Badge: Entwurf/Vorschlag → verbindlich,
+          ohne den Dialog öffnen und den Status manuell umstellen zu müssen. */}
+      {onConfirm && isConfirmableShift(shift) && (
+        <button
+          type="button"
+          data-testid={`shift-confirm-${shift.id}`}
+          title="Als verbindlich bestätigen"
+          onClick={(e) => {
+            e.stopPropagation();
+            onConfirm(shift);
+          }}
+          className="mt-1 inline-flex w-full items-center justify-center gap-1 rounded border border-current/30 bg-card/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide hover:bg-card transition-colors"
+        >
+          <Check className="h-3 w-3" />
+          Bestätigen
+        </button>
+      )}
     </div>
   );
 }
@@ -480,6 +514,7 @@ function AgendaView({
   modelMap,
   onDayClick,
   onShiftClick,
+  onConfirmShift,
   canEdit,
   selectionMode = false,
   selectedDates,
@@ -490,6 +525,7 @@ function AgendaView({
   modelMap: Map<number, ShiftModelInfo>;
   onDayClick: (day: Date) => void;
   onShiftClick: (shift: Shift) => void;
+  onConfirmShift?: (shift: Shift) => void;
   canEdit: boolean;
   // Auswahl-Modus (Massenbearbeitung): Klick auf einen Tag wählt ihn aus.
   selectionMode?: boolean;
@@ -549,6 +585,7 @@ function AgendaView({
                     showName={canEdit}
                     modelMap={modelMap}
                     onClick={canEdit && !selectionMode ? (e) => { e.stopPropagation(); onShiftClick(shift); } : undefined}
+                    onConfirm={canEdit && !selectionMode ? onConfirmShift : undefined}
                   />
                 ))
               ) : (
@@ -573,6 +610,7 @@ function MonthGrid({
   onSelectDay,
   onAddShift,
   onShiftClick,
+  onConfirmShift,
   canEdit,
   selectionMode = false,
   selectedDates,
@@ -586,6 +624,7 @@ function MonthGrid({
   onSelectDay: (day: Date) => void;
   onAddShift: (day: Date) => void;
   onShiftClick: (shift: Shift) => void;
+  onConfirmShift?: (shift: Shift) => void;
   canEdit: boolean;
   // Auswahl-Modus (Massenbearbeitung): Klick auf einen Tag wählt ihn aus,
   // statt den Tag als Detail zu öffnen.
@@ -725,6 +764,7 @@ function MonthGrid({
                 showName={canEdit}
                 modelMap={modelMap}
                 onClick={canEdit && !selectionMode ? (e) => { e.stopPropagation(); onShiftClick(shift); } : undefined}
+                onConfirm={canEdit && !selectionMode ? onConfirmShift : undefined}
               />
             ))
           ) : (
@@ -831,6 +871,10 @@ export default function Dienstplan() {
   const teamParam = selectedTeamId != null ? { teamId: selectedTeamId } : {};
 
   const { data: shifts, isLoading: shiftsLoading } = useListShifts({ month, year, ...teamParam });
+  const queryClient = useQueryClient();
+  const updateShift = useUpdateShift();
+  // Verhindert Doppelklicks während eine Bestätigung läuft.
+  const [confirmingShiftId, setConfirmingShiftId] = useState<number | null>(null);
   const { data: users, isLoading: usersLoading } = useListUsers(
     selectedTeamId != null ? { teamId: selectedTeamId } : undefined
   );
@@ -903,6 +947,27 @@ export default function Dienstplan() {
   function openEdit(shift: Shift) {
     if (!isAdmin) return;
     setDialog({ mode: "edit", shift });
+  }
+
+  // Ein-Klick-Bestätigung aus dem Kalender: setzt einen Entwurf/Vorschlag per
+  // PATCH auf FIX (verbindlich), ohne den Dialog zu öffnen. `force: true`, weil
+  // sich Zeiten/Zuordnung nicht ändern — eine ggf. bewusst angelegte
+  // Überschneidung darf die reine Status-Bestätigung nicht blockieren.
+  async function confirmShift(shift: Shift) {
+    if (!isAdmin || confirmingShiftId !== null) return;
+    setConfirmingShiftId(shift.id);
+    try {
+      await updateShift.mutateAsync({
+        id: shift.id,
+        data: { planningStatus: "FIX", force: true } as { planningStatus: "FIX" },
+      });
+      await queryClient.invalidateQueries({ queryKey: getListShiftsQueryKey({ month, year }) });
+      toast.success("Dienst bestätigt — zählt jetzt in Auswertungen und Stundennachweis.");
+    } catch {
+      toast.error("Bestätigen fehlgeschlagen. Bitte erneut versuchen.");
+    } finally {
+      setConfirmingShiftId(null);
+    }
   }
 
   function closeDialog() {
@@ -1053,6 +1118,7 @@ export default function Dienstplan() {
             modelMap={modelMap}
             onDayClick={(day) => openCreate(day)}
             onShiftClick={openEdit}
+            onConfirmShift={confirmShift}
             canEdit={isAdmin}
             selectionMode={isSelectionMode}
             selectedDates={selectedDates}
@@ -1068,6 +1134,7 @@ export default function Dienstplan() {
             onSelectDay={setSelectedDay}
             onAddShift={(day) => openCreate(day)}
             onShiftClick={openEdit}
+            onConfirmShift={confirmShift}
             canEdit={isAdmin}
             selectionMode={isSelectionMode}
             selectedDates={selectedDates}
@@ -1106,6 +1173,7 @@ export default function Dienstplan() {
             onSelectDay={setSelectedDay}
             onAddShift={(day) => openCreate(day)}
             onShiftClick={openEdit}
+            onConfirmShift={confirmShift}
             canEdit={isAdmin}
             selectionMode={isSelectionMode}
             selectedDates={selectedDates}
@@ -1248,6 +1316,7 @@ export default function Dienstplan() {
                               shift={s}
                               modelMap={modelMap}
                               onClick={isAdmin && !isSelectionMode ? (e) => { e.stopPropagation(); openEdit(s); } : undefined}
+                              onConfirm={isAdmin && !isSelectionMode ? confirmShift : undefined}
                             />
                           ))}
                           {dayShifts.length === 0 && isAdmin && (

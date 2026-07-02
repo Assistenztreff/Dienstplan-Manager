@@ -33,3 +33,4 @@
 - [Prod-mode e2e stack](prod-mode-e2e-stack.md) — spec-owned NODE_ENV=production API + vite preview harness; preview proxy must fake X-Forwarded-Proto https or the Secure session cookie is never set.
 - [E2E account SQL cleanup](e2e-account-sql-cleanup.md) — registered test accounts are FK-blocked from API delete (team tables lack cascade); specs must use the SQL deleteFreeAccount helper.
 - [Seed e2e data before goto](e2e-seed-before-goto.md) — React Query caches lists at page load; API-seeded rows created after goto never show in dialogs. Also: orphan 8099/5199 servers after killed runs.
+- [One-off Playwright chromium](playwright-oneoff-chromium.md) — downloaded browsers fail (libglib missing on NixOS); ad-hoc scripts must launch with REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE.

@@ -26,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Trash2 } from "lucide-react";
+import { Check, Trash2 } from "lucide-react";
 import { readableApiError, planUpgradeMessage } from "@/lib/api-error";
 
 type Assistant = { id: number; name: string };
@@ -544,6 +544,34 @@ export function ShiftDialog({
     }
   }
 
+  // Ein-Klick-Bestätigung: setzt einen Entwurf/Vorschlag direkt auf FIX
+  // (verbindlich), ohne die übrigen Formularfelder anzufassen. Sendet bewusst
+  // NUR planningStatus (+ force, da sich Zeiten/Zuordnung nicht ändern und eine
+  // ggf. bewusst angelegte Überschneidung die Bestätigung nicht blockieren soll).
+  const showQuickConfirm =
+    isEditing &&
+    !isAbsence &&
+    (editShift?.planningStatus === "VORLAEUFIG" || editShift?.planningStatus === "ANGEBOTEN");
+
+  async function handleQuickConfirm() {
+    if (!editShift) return;
+    setSaving(true);
+    try {
+      await updateShift.mutateAsync({
+        id: editShift.id,
+        data: { planningStatus: "FIX", force: true } as { planningStatus: "FIX" },
+      });
+      await invalidate();
+      onClose();
+    } catch (err) {
+      setErrors({
+        notes: readableApiError(err, "Bestätigen fehlgeschlagen. Bitte erneut versuchen."),
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleDelete() {
     if (!editShift) return;
     if (!confirmDelete) {
@@ -574,6 +602,32 @@ export function ShiftDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          {/* Ein-Klick-Bestätigung für Entwürfe/Vorschläge: prominent oben,
+              damit der häufigste Planungs-Schritt (→ verbindlich) keinen
+              manuellen Status-Wechsel im Formular braucht. */}
+          {showQuickConfirm && (
+            <div
+              className="flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2.5"
+              data-testid="shift-dialog-quick-confirm"
+            >
+              <p className="flex-1 min-w-[12rem] text-sm">
+                {editShift?.planningStatus === "VORLAEUFIG"
+                  ? "Dieser Dienst ist ein Entwurf und zählt noch nicht in Auswertungen."
+                  : "Dieser Dienst ist ein Vorschlag und zählt noch nicht in Auswertungen."}
+              </p>
+              <Button
+                size="sm"
+                className="gap-1.5"
+                onClick={handleQuickConfirm}
+                disabled={saving}
+                data-testid="shift-dialog-confirm-fix"
+              >
+                <Check className="h-3.5 w-3.5" />
+                Bestätigen
+              </Button>
+            </div>
+          )}
+
           {/* Assistent */}
           <div className="space-y-1.5">
             <Label>Assistent *</Label>
