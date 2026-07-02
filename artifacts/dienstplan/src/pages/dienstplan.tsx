@@ -26,6 +26,16 @@ import { hasAccess, getLimit } from "@/lib/entitlements";
 import { toast } from "sonner";
 import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 import { PlanLimitBanner } from "@/components/plan-limit-banner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type Shift = {
   id: number;
@@ -383,7 +393,8 @@ type DialogState =
   | { mode: "edit"; shift: Shift }
   | { mode: "bulk-create"; dates: string[] }
   | { mode: "bulk-edit"; dates: string[] }
-  | { mode: "bulk-delete"; dates: string[] };
+  | { mode: "bulk-delete"; dates: string[] }
+  | { mode: "confirm-all" };
 
 
 function ShiftBadge({
@@ -875,6 +886,8 @@ export default function Dienstplan() {
   const updateShift = useUpdateShift();
   // Verhindert Doppelklicks während eine Bestätigung läuft.
   const [confirmingShiftId, setConfirmingShiftId] = useState<number | null>(null);
+  // Läuft gerade die Sammelbestätigung aller Entwürfe/Vorschläge des Monats?
+  const [isBulkConfirming, setIsBulkConfirming] = useState(false);
   const { data: users, isLoading: usersLoading } = useListUsers(
     selectedTeamId != null ? { teamId: selectedTeamId } : undefined
   );
@@ -970,6 +983,57 @@ export default function Dienstplan() {
     }
   }
 
+  // Alle offenen Entwürfe (VORLAEUFIG) und Vorschläge (ANGEBOTEN) des sichtbaren
+  // Monats im aktuellen Team-Scope — Abwesenheiten sind nie betroffen
+  // (isConfirmableShift filtert sie aus). Bewusst allShifts statt visibleShifts:
+  // Die Sammelaktion gilt für den ganzen Monat, unabhängig vom Assistenten-Filter.
+  const confirmableShifts = allShifts.filter(isConfirmableShift);
+
+  // Sammelbestätigung: setzt alle Entwürfe/Vorschläge des Monats nacheinander
+  // per PATCH auf FIX. Wie bei der Einzel-Bestätigung mit `force: true`, weil
+  // sich Zeiten/Zuordnung nicht ändern. Teilfehler werden gezählt und gemeldet.
+  async function confirmAllDrafts() {
+    if (!isAdmin || isBulkConfirming) return;
+    const targets = allShifts.filter(isConfirmableShift);
+    if (targets.length === 0) {
+      closeDialog();
+      return;
+    }
+    setIsBulkConfirming(true);
+    let confirmed = 0;
+    let failed = 0;
+    try {
+      for (const shift of targets) {
+        try {
+          await updateShift.mutateAsync({
+            id: shift.id,
+            data: { planningStatus: "FIX", force: true } as { planningStatus: "FIX" },
+          });
+          confirmed++;
+        } catch {
+          failed++;
+        }
+      }
+    } finally {
+      await queryClient.invalidateQueries({ queryKey: getListShiftsQueryKey({ month, year }) });
+      setIsBulkConfirming(false);
+      closeDialog();
+    }
+    if (failed === 0) {
+      toast.success(
+        confirmed === 1
+          ? "1 Dienst bestätigt — zählt jetzt in Auswertungen und Stundennachweis."
+          : `${confirmed} Dienste bestätigt — zählen jetzt in Auswertungen und Stundennachweis.`,
+      );
+    } else if (confirmed === 0) {
+      toast.error("Bestätigen fehlgeschlagen. Bitte erneut versuchen.");
+    } else {
+      toast.error(
+        `${confirmed} ${confirmed === 1 ? "Dienst" : "Dienste"} bestätigt, ${failed} fehlgeschlagen. Bitte erneut versuchen.`,
+      );
+    }
+  }
+
   function closeDialog() {
     setDialog({ mode: "closed" });
   }
@@ -1003,7 +1067,27 @@ export default function Dienstplan() {
         </div>
         <TeamSwitcher />
       </div>
-      <div className="flex items-center gap-2 md:gap-4">
+      <div className="flex items-center gap-2 md:gap-4 flex-wrap">
+        {/* Sammelaktion: alle Entwürfe/Vorschläge des sichtbaren Monats mit
+            einem Klick verbindlich machen. Nur sichtbar, solange es etwas zu
+            bestätigen gibt — sonst wäre der Button ein totes Element. */}
+        {isAdmin && confirmableShifts.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setDialog({ mode: "confirm-all" })}
+            disabled={isBulkConfirming}
+            data-testid="confirm-all-drafts"
+          >
+            <Check className="h-4 w-4" />
+            <span className="hidden sm:inline">Alle Entwürfe bestätigen</span>
+            <span className="sm:hidden">Alle bestätigen</span>
+            <span className="rounded-full bg-primary/10 px-1.5 text-xs font-semibold text-primary">
+              {confirmableShifts.length}
+            </span>
+          </Button>
+        )}
         {/* Massenbearbeitung ist ein Premium-Feature. Free-Konten sehen den
             Button deaktiviert mit Upgrade-Hinweis (Durchsetzung zusaetzlich
             serverseitig erforderlich). */}
@@ -1423,6 +1507,46 @@ export default function Dienstplan() {
             closeDialog();
           }}
         />
+      )}
+
+      {/* Bestätigungsdialog der Sammelaktion: zeigt die Anzahl der betroffenen
+          Entwürfe/Vorschläge, bevor sie verbindlich werden. */}
+      {isAdmin && (
+        <AlertDialog
+          open={dialog.mode === "confirm-all"}
+          onOpenChange={(open) => {
+            if (!open && !isBulkConfirming) closeDialog();
+          }}
+        >
+          <AlertDialogContent data-testid="confirm-all-dialog">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Alle Entwürfe dieses Monats bestätigen?</AlertDialogTitle>
+              <AlertDialogDescription data-testid="confirm-all-description">
+                {confirmableShifts.length === 1
+                  ? `1 Entwurf bzw. Vorschlag in ${format(currentDate, "MMMM yyyy", { locale: de })} wird verbindlich (FIX) und zählt danach in Auswertungen und Stundennachweis.`
+                  : `${confirmableShifts.length} Entwürfe bzw. Vorschläge in ${format(currentDate, "MMMM yyyy", { locale: de })} werden verbindlich (FIX) und zählen danach in Auswertungen und Stundennachweis.`}{" "}
+                Abwesenheiten sind nicht betroffen.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isBulkConfirming} data-testid="confirm-all-cancel">
+                Abbrechen
+              </AlertDialogCancel>
+              <AlertDialogAction
+                disabled={isBulkConfirming}
+                onClick={(e) => {
+                  // Dialog offen halten, bis alle PATCH-Aufrufe durch sind —
+                  // confirmAllDrafts schließt ihn selbst am Ende.
+                  e.preventDefault();
+                  void confirmAllDrafts();
+                }}
+                data-testid="confirm-all-submit"
+              >
+                {isBulkConfirming ? "Wird bestätigt …" : "Jetzt bestätigen"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
 
       {isAdmin && (
