@@ -32,3 +32,4 @@
 - [E2E assistant login via invite](e2e-assistant-login-via-invite.md) — get an assistant session by briefly upgrading the owner to invite, downgrading, then set-password (logs in; Bestandsschutz keeps it valid).
 - [Prod-mode e2e stack](prod-mode-e2e-stack.md) — spec-owned NODE_ENV=production API + vite preview harness; preview proxy must fake X-Forwarded-Proto https or the Secure session cookie is never set.
 - [E2E account SQL cleanup](e2e-account-sql-cleanup.md) — registered test accounts are FK-blocked from API delete (team tables lack cascade); specs must use the SQL deleteFreeAccount helper.
+- [Seed e2e data before goto](e2e-seed-before-goto.md) — React Query caches lists at page load; API-seeded rows created after goto never show in dialogs. Also: orphan 8099/5199 servers after killed runs.

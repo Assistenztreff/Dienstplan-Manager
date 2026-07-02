@@ -141,6 +141,31 @@ function nextDayString(date: string): string {
   return format(d, "yyyy-MM-dd");
 }
 
+// Wochentag eines lokalen Datums (yyyy-MM-dd) im ISO-Schema: 1 (Montag) bis
+// 7 (Sonntag). JS getDay() liefert 0=Sonntag, daher die Verschiebung.
+function isoWeekday(dateStr: string): number {
+  return ((new Date(`${dateStr}T00:00:00`).getDay() + 6) % 7) + 1;
+}
+
+const WEEKDAY_SHORT = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+
+function weekdaysLabel(weekdays: number[]): string {
+  return [...weekdays]
+    .sort((a, b) => a - b)
+    .map((d) => WEEKDAY_SHORT[d - 1] ?? String(d))
+    .join(", ");
+}
+
+type TemplateWeekdays = { weekdays: number[] };
+
+// Prüft, ob eine Vorlage laut ihren Wochentagen zu einem Datum passt.
+// Eine leere Wochentagsliste bedeutet "gilt an allen Tagen".
+function templateMatchesDate(tpl: TemplateWeekdays, dateStr: string): boolean {
+  if (!tpl.weekdays || tpl.weekdays.length === 0) return true;
+  if (!dateStr) return true;
+  return tpl.weekdays.includes(isoWeekday(dateStr));
+}
+
 function initialSelection(editShift: ShiftForEdit | undefined, firstModelId: number | undefined): string {
   if (!editShift) return firstModelId ? `model:${firstModelId}` : "";
   if (editShift.type === "vacation" || editShift.type === "sick") return editShift.type;
@@ -262,6 +287,24 @@ export function ShiftDialog({
 
   const isAbsence = form.selection === "vacation" || form.selection === "sick";
   const is24h = form.selection === "legacy:full_day";
+
+  // Wochentags-Abgleich der Vorlagen mit dem gewählten Datum bzw. den
+  // ausgewählten Tagen (Mehrfach-Modus). Reine Hinweis-/Sortierlogik —
+  // das Anwenden einer "unpassenden" Vorlage bleibt bewusst erlaubt.
+  const relevantDates = isBulk ? bulkDates ?? [] : form.date ? [form.date] : [];
+  const templateFitsAllDates = (tpl: TemplateWeekdays) =>
+    relevantDates.every((d) => templateMatchesDate(tpl, d));
+
+  // Passende Vorlagen zuerst listen (stabile Reihenfolge innerhalb der Gruppen).
+  const matchingTemplates = allTemplates.filter((t) => templateFitsAllDates(t));
+  const otherTemplates = allTemplates.filter((t) => !templateFitsAllDates(t));
+
+  // Hinweis, wenn die aktuell angewendete Vorlage nicht zu den Tagen passt.
+  // Reagiert auch auf nachträgliche Datumsänderungen, da rein abgeleitet.
+  const selectedTemplate = allTemplates.find((t) => String(t.id) === templateId);
+  const templateMismatchDates = selectedTemplate
+    ? relevantDates.filter((d) => !templateMatchesDate(selectedTemplate, d))
+    : [];
 
   // Wenn das bearbeitete Modell inaktiv ist, trotzdem als Option anzeigen.
   const editModelId =
@@ -680,16 +723,68 @@ export function ShiftDialog({
                   <SelectValue placeholder="Vorlage wählen (optional)..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {allTemplates.map((t) => (
-                    <SelectItem key={t.id} value={String(t.id)}>
-                      {t.name} ({t.startTime}–{t.endTime})
-                    </SelectItem>
-                  ))}
+                  {otherTemplates.length === 0 ? (
+                    // Alle Vorlagen passen (oder haben keine Wochentags-
+                    // Einschränkung): flache Liste ohne Gruppierung.
+                    allTemplates.map((t) => (
+                      <SelectItem key={t.id} value={String(t.id)}>
+                        {t.name} ({t.startTime}–{t.endTime})
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <>
+                      {matchingTemplates.length > 0 && (
+                        <SelectGroup>
+                          <SelectLabel>
+                            {isBulk ? "Passend zu den Tagen" : "Passend zum Datum"}
+                          </SelectLabel>
+                          {matchingTemplates.map((t) => (
+                            <SelectItem key={t.id} value={String(t.id)}>
+                              {t.name} ({t.startTime}–{t.endTime})
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      )}
+                      {matchingTemplates.length > 0 && <SelectSeparator />}
+                      <SelectGroup>
+                        <SelectLabel>Andere Wochentage</SelectLabel>
+                        {otherTemplates.map((t) => (
+                          <SelectItem key={t.id} value={String(t.id)}>
+                            {t.name} ({t.startTime}–{t.endTime}) · {weekdaysLabel(t.weekdays)}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </>
+                  )}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                Belegt Start- und Endzeit automatisch vor. Unter Einstellungen verwaltbar.
-              </p>
+              {selectedTemplate && templateMismatchDates.length > 0 ? (
+                <p
+                  className="text-xs text-amber-700 dark:text-amber-500"
+                  data-testid="shift-dialog-template-mismatch"
+                >
+                  {isBulk
+                    ? `Die Vorlage „${selectedTemplate.name}" gilt nur ${weekdaysLabel(
+                        selectedTemplate.weekdays,
+                      )} — ${templateMismatchDates.length} ${
+                        templateMismatchDates.length === 1
+                          ? "ausgewählter Tag passt"
+                          : "der ausgewählten Tage passen"
+                      } nicht dazu (${[...templateMismatchDates]
+                        .sort()
+                        .map((d) => format(new Date(`${d}T00:00:00`), "d. MMM"))
+                        .join(", ")}). Die Zeiten wurden trotzdem übernommen.`
+                    : `Die Vorlage „${selectedTemplate.name}" gilt nur ${weekdaysLabel(
+                        selectedTemplate.weekdays,
+                      )} — das gewählte Datum ist ein ${
+                        WEEKDAY_SHORT[isoWeekday(form.date) - 1]
+                      }. Die Zeiten wurden trotzdem übernommen.`}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Belegt Start- und Endzeit automatisch vor. Unter Einstellungen verwaltbar.
+                </p>
+              )}
             </div>
           )}
 
