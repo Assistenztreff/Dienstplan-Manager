@@ -6,6 +6,7 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "setup-admin": "tsx ./src/setup-admin.ts",
+    "setup-superadmin": "tsx ./src/setup-superadmin.ts",
     "set-plan": "tsx ./src/set-plan.ts",
     "delete-account": "tsx ./src/delete-account.ts",
     "cleanup-test-accounts": "tsx ./src/cleanup-test-accounts.ts",
