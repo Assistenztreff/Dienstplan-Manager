@@ -26,3 +26,4 @@
 - [Full e2e suite red locally](full-e2e-suite-red-locally.md) — ~33 pre-existing failures (dev auto-login forms, Free-plan 403s in old specs, Radix announcer dupes); baseline-diff before blaming your change.
 - [Sonner toasts need mounted Toaster](sonner-toaster-mount.md) — pages using `toast` from "sonner" render nothing unless the sonner `<Toaster>` is mounted in App root alongside the shadcn one.
 - [E2E mobile-viewport selectors](e2e-mobile-viewport-selectors.md) — 400px viewport hides `hidden sm:inline` button labels; getByRole-by-name fails, select via data-testid or title attribute.
+- [drizzle push --force still prompts](drizzle-push-force-prompt.md) — non-TTY `drizzle-kit push --force` still dies on "suggestion" prompts (e.g. adding UNIQUE to populated table); repair via manual idempotent SQL, then push is clean.
