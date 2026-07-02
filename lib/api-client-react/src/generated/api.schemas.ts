@@ -61,6 +61,47 @@ export interface User {
   createdAt: string;
 }
 
+export type OperatorAccountAccountType = typeof OperatorAccountAccountType[keyof typeof OperatorAccountAccountType];
+
+
+export const OperatorAccountAccountType = {
+  privat: 'privat',
+  dienstleister: 'dienstleister',
+} as const;
+
+export type OperatorAccountPlan = typeof OperatorAccountPlan[keyof typeof OperatorAccountPlan];
+
+
+export const OperatorAccountPlan = {
+  free: 'free',
+  premium: 'premium',
+} as const;
+
+export interface OperatorAccount {
+  id: number;
+  name: string;
+  email: string;
+  accountType: OperatorAccountAccountType;
+  plan: OperatorAccountPlan;
+  /** Anzahl der Teams im Besitz dieses Kontos */
+  teams: number;
+  /** Anzahl unterschiedlicher Assistenten in den Teams dieses Kontos */
+  assistants: number;
+  createdAt: string;
+}
+
+export type OperatorPlanUpdatePlan = typeof OperatorPlanUpdatePlan[keyof typeof OperatorPlanUpdatePlan];
+
+
+export const OperatorPlanUpdatePlan = {
+  free: 'free',
+  premium: 'premium',
+} as const;
+
+export interface OperatorPlanUpdate {
+  plan: OperatorPlanUpdatePlan;
+}
+
 export type UserInputRole = typeof UserInputRole[keyof typeof UserInputRole];
 
 

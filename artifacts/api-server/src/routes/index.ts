@@ -13,6 +13,7 @@ import dashboardRouter from "./dashboard";
 import invitationsRouter from "./invitations";
 import calendarRouter from "./calendar";
 import teamsRouter from "./teams";
+import operatorRouter from "./operator";
 import authRouter from "./auth";
 
 const router: IRouter = Router();
@@ -32,5 +33,6 @@ router.use(dashboardRouter);
 router.use(invitationsRouter);
 router.use(calendarRouter);
 router.use(teamsRouter);
+router.use(operatorRouter);
 
 export default router;

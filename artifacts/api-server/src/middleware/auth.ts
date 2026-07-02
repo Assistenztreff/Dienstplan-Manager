@@ -31,6 +31,32 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
 }
 
 /**
+ * Nur Betreiber (Rolle "superadmin"). Die Rolle wird frisch aus der DB
+ * gelesen, damit eine Änderung sofort wirkt (nicht aus der Session) — analog
+ * requireDienstleister. Frontend-Guards sind KEINE Autorisierung; jede
+ * privilegierte Operator-Aktion MUSS über diese Middleware laufen.
+ */
+export async function requireSuperadmin(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  if (!req.session.userId) {
+    res.status(401).json({ error: "Nicht angemeldet" });
+    return;
+  }
+  const [user] = await db
+    .select({ role: usersTable.role })
+    .from(usersTable)
+    .where(eq(usersTable.id, req.session.userId));
+  if (!user || user.role !== "superadmin") {
+    res.status(403).json({ error: "Keine Berechtigung" });
+    return;
+  }
+  next();
+}
+
+/**
  * Nur Admins mit Konto-Typ "dienstleister". Der Konto-Typ wird frisch aus der
  * DB gelesen, damit eine Änderung sofort wirkt (nicht aus der Session).
  */

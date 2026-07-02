@@ -1384,3 +1384,46 @@ export const RegisterBody = zod.object({
 })
 
 
+/**
+ * Liefert alle Admin-Konten (Assistenznehmer/Dienstleister) mit Aggregaten (Team- und Assistenten-Anzahl) für das Operator-Dashboard.
+
+ * @summary Alle Konten plattformweit auflisten (nur superadmin)
+ */
+export const ListOperatorAccountsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "accountType": zod.enum(['privat', 'dienstleister']),
+  "plan": zod.enum(['free', 'premium']),
+  "teams": zod.number().describe('Anzahl der Teams im Besitz dieses Kontos'),
+  "assistants": zod.number().describe('Anzahl unterschiedlicher Assistenten in den Teams dieses Kontos'),
+  "createdAt": zod.coerce.date()
+})
+export const ListOperatorAccountsResponse = zod.array(ListOperatorAccountsResponseItem)
+
+
+/**
+ * Manuelle Premium-Freischaltung bzw. Rückstufung nach bestätigtem Zahlungseingang. Wirkung ist sofort, da die Plan-Durchsetzung den Plan pro Request frisch aus der Datenbank liest.
+
+ * @summary Plan eines Kontos manuell umschalten (nur superadmin)
+ */
+export const UpdateOperatorAccountPlanParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateOperatorAccountPlanBody = zod.object({
+  "plan": zod.enum(['free', 'premium'])
+})
+
+export const UpdateOperatorAccountPlanResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "accountType": zod.enum(['privat', 'dienstleister']),
+  "plan": zod.enum(['free', 'premium']),
+  "teams": zod.number().describe('Anzahl der Teams im Besitz dieses Kontos'),
+  "assistants": zod.number().describe('Anzahl unterschiedlicher Assistenten in den Teams dieses Kontos'),
+  "createdAt": zod.coerce.date()
+})
+
+

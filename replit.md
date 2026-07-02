@@ -103,8 +103,10 @@ Eine Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgeb
 
 ## Operator-Dashboard & superadmin
 
-- `pages/operator-dashboard.tsx`: interne Betreiber-Konsole (Platzhalter: Nutzer/Team-Monitoring + manuelle Premium-Freischaltung, Lexware-Buchungs-Log, Fehler-Tracking) — noch keine API-Calls.
-- Zugang: Route `/operator-dashboard` nur bei `role === "superadmin"`; versteckter Link im Footer-Platzhalter. **Offen**: echte privilegierte Aktionen brauchen serverseitige `requireSuperadmin`-Middleware (Frontend-Guard ist keine Autorisierung).
+- `pages/operator-dashboard.tsx`: interne Betreiber-Konsole. Bereich 1 (Nutzer-Monitoring + manuelle Premium-Freischaltung) ist LIVE angebunden; Lexware-Buchungs-Log und Fehler-Tracking bleiben Platzhalter.
+- **Serverseitige Autorisierung**: `requireSuperadmin`-Middleware (`middleware/auth.ts`, Rolle frisch aus DB — analog `requireDienstleister`) schützt alle `/api/operator/*`-Endpunkte. Admin/Assistant → 403, unauthentifiziert → 401. Frontend-Guard (`role === "superadmin"` in App.tsx) ist reine UX.
+- **Operator-Endpunkte** (`routes/operator.ts`): `GET /operator/accounts` (alle Admin-Konten plattformweit mit Team-/Assistenten-Aggregaten), `PATCH /operator/accounts/:id/plan` (`{plan: free|premium}`). Plan-Flip wirkt sofort, da `getUserPlan` frisch liest. Ziel muss Rolle `admin` haben (sonst 404) — nur Admin-Konten sind zahlende Konten.
+- Zugang: Route `/operator-dashboard` nur bei `role === "superadmin"`; versteckter Link im Footer-Platzhalter. `superadmin` wird weiterhin NUR direkt in der DB vergeben.
 
 ## PWA & Plattform-Einbettung (iframe)
 

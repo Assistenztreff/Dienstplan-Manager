@@ -28,6 +28,8 @@ tags:
     description: Firmenlogo und Branding
   - name: Storage
     description: Object storage upload and serving endpoints.
+  - name: operator
+    description: Betreiber-Konsole (nur superadmin)
 paths:
   /healthz:
     get:
@@ -1342,6 +1344,59 @@ paths:
         "409":
           description: E-Mail bereits vergeben
 
+  /operator/accounts:
+    get:
+      operationId: listOperatorAccounts
+      tags: [operator]
+      summary: Alle Konten plattformweit auflisten (nur superadmin)
+      description: >
+        Liefert alle Admin-Konten (Assistenznehmer/Dienstleister) mit
+        Aggregaten (Team- und Assistenten-Anzahl) für das Operator-Dashboard.
+      responses:
+        "200":
+          description: Liste der Konten
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OperatorAccount"
+        "403":
+          description: Keine Berechtigung (kein superadmin)
+
+  /operator/accounts/{id}/plan:
+    patch:
+      operationId: updateOperatorAccountPlan
+      tags: [operator]
+      summary: Plan eines Kontos manuell umschalten (nur superadmin)
+      description: >
+        Manuelle Premium-Freischaltung bzw. Rückstufung nach bestätigtem
+        Zahlungseingang. Wirkung ist sofort, da die Plan-Durchsetzung den Plan
+        pro Request frisch aus der Datenbank liest.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OperatorPlanUpdate"
+      responses:
+        "200":
+          description: Aktualisiertes Konto
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorAccount"
+        "403":
+          description: Keine Berechtigung (kein superadmin)
+        "404":
+          description: Konto nicht gefunden
+
 components:
   schemas:
     HealthStatus:
@@ -1392,6 +1447,40 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    OperatorAccount:
+      type: object
+      required: [id, name, email, accountType, plan, teams, assistants, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        accountType:
+          type: string
+          enum: [privat, dienstleister]
+        plan:
+          type: string
+          enum: [free, premium]
+        teams:
+          type: integer
+          description: Anzahl der Teams im Besitz dieses Kontos
+        assistants:
+          type: integer
+          description: Anzahl unterschiedlicher Assistenten in den Teams dieses Kontos
+        createdAt:
+          type: string
+          format: date-time
+
+    OperatorPlanUpdate:
+      type: object
+      required: [plan]
+      properties:
+        plan:
+          type: string
+          enum: [free, premium]
 
     UserInput:
       type: object

@@ -4,11 +4,17 @@
 // Interne Betreiber-Konsole zur Verwaltung der SaaS-Plattform. NICHT fuer
 // Endkunden (Assistenznehmer/Dienstleister) gedacht — der Zugang ist auf die
 // Rolle "superadmin" beschraenkt (Routing-Guard in App.tsx, versteckter Link
-// im Footer nur fuer superadmin).
+// im Footer nur fuer superadmin). Der Frontend-Guard ist reine UX: die
+// Autorisierung erzwingt der Server per requireSuperadmin auf allen
+// /api/operator/*-Endpunkten (Nicht-Superadmins erhalten 403).
 //
-// Dieses Dashboard ist bewusst als PLATZHALTER mit klaren API-Andockpunkten
-// angelegt. Die drei Kernbereiche:
-//   1. Nutzer- & Team-Monitoring inkl. manueller Premium-Freischaltung
+// Bereich 1 (Nutzer-Monitoring + Premium-Freischaltung) ist LIVE angebunden:
+//   GET  /api/operator/accounts            — alle Konten mit Aggregaten
+//   PATCH /api/operator/accounts/:id/plan  — manueller Plan-Flip free/premium
+// Die Wirkung ist sofort, da die Plan-Durchsetzung (lib/plan.ts) users.plan
+// pro Request frisch aus der DB liest.
+//
+// Bereiche 2+3 bleiben Platzhalter mit API-Andockpunkten:
 //   2. Lexware-Buchungs-Log (Rechnungsentwuerfe / Zahlungseingaenge)
 //   3. Fehler-Tracking (Plattform-Health)
 //
@@ -17,31 +23,23 @@
 // Zahlung bestaetigt ist (kein Stripe / keine automatische Verlaengerung).
 // ---------------------------------------------------------------------------
 
+import { useState } from "react";
+import {
+  useListOperatorAccounts,
+  useUpdateOperatorAccountPlan,
+  getListOperatorAccountsQueryKey,
+  type OperatorAccount,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Receipt, AlertTriangle, ShieldCheck } from "lucide-react";
+import { readableApiError } from "@/lib/api-error";
+import { useToast } from "@/hooks/use-toast";
 
-// --- Platzhalter-Daten -----------------------------------------------------
-// Diese Demo-Datensaetze ersetzen spaeter echte API-Aufrufe (siehe
-// Andock-Hinweise pro Bereich). Sie zeigen Struktur & Layout, ohne reale
-// Daten zu kontaktieren.
-
-type OperatorAccount = {
-  id: number;
-  name: string;
-  email: string;
-  accountType: "privat" | "dienstleister";
-  plan: "free" | "premium";
-  teams: number;
-  assistants: number;
-};
-
-const PLACEHOLDER_ACCOUNTS: OperatorAccount[] = [
-  { id: 1, name: "Maria Beispiel", email: "maria@example.com", accountType: "privat", plan: "free", teams: 1, assistants: 4 },
-  { id: 2, name: "Pflegedienst Nord GmbH", email: "kontakt@nord.example", accountType: "dienstleister", plan: "premium", teams: 6, assistants: 38 },
-  { id: 3, name: "Thomas Muster", email: "thomas@example.com", accountType: "privat", plan: "free", teams: 1, assistants: 6 },
-];
+// --- Platzhalter-Daten (nur Bereiche 2+3) ----------------------------------
 
 type LexwareBooking = {
   id: string;
@@ -79,17 +77,37 @@ function planBadge(plan: "free" | "premium") {
 }
 
 export default function OperatorDashboard() {
-  // ---- API-ANDOCKPUNKT (Premium-Freischaltung) --------------------------
-  // Spaeter: Mutation gegen einen geschuetzten superadmin-Endpunkt, z. B.
-  //   PATCH /api/operator/accounts/:id/plan { plan: "premium" | "free" }
-  // der serverseitig requireSuperadmin erzwingt und users.plan setzt.
-  // Aktuell nur Platzhalter (kein Netzwerkaufruf).
-  function handleTogglePremium(account: OperatorAccount) {
-    // eslint-disable-next-line no-console
-    console.log(
-      `[Operator] Premium-Umschaltung fuer Konto #${account.id} (${account.email}) — API noch nicht angebunden.`,
-    );
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [pendingId, setPendingId] = useState<number | null>(null);
+
+  const accountsQuery = useListOperatorAccounts();
+  const updatePlan = useUpdateOperatorAccountPlan();
+
+  // Manuelle Premium-Freischaltung bzw. Rueckstufung. Serverseitig durch
+  // requireSuperadmin geschuetzt; getUserPlan liest frisch → wirkt sofort.
+  async function handleTogglePlan(account: OperatorAccount) {
+    const nextPlan = account.plan === "premium" ? "free" : "premium";
+    setPendingId(account.id);
+    try {
+      await updatePlan.mutateAsync({ id: account.id, data: { plan: nextPlan } });
+      await queryClient.invalidateQueries({ queryKey: getListOperatorAccountsQueryKey() });
+      toast({
+        title: nextPlan === "premium" ? "Premium aktiviert" : "Auf Free zurückgesetzt",
+        description: `${account.name} (${account.email}) ist jetzt auf dem ${nextPlan === "premium" ? "Premium" : "Free"}-Plan. Die Umstellung wirkt sofort.`,
+      });
+    } catch (err) {
+      toast({
+        title: "Plan-Umschaltung fehlgeschlagen",
+        description: readableApiError(err, "Bitte erneut versuchen."),
+        variant: "destructive",
+      });
+    } finally {
+      setPendingId(null);
+    }
   }
+
+  const accounts = accountsQuery.data ?? [];
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -100,7 +118,7 @@ export default function OperatorDashboard() {
         <div>
           <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Operator-Dashboard</h2>
           <p className="text-muted-foreground mt-1 text-sm">
-            Interne Betreiber-Konsole — nur für Superadmins. Platzhalter mit Andockpunkten.
+            Interne Betreiber-Konsole — nur für Superadmins.
           </p>
         </div>
       </div>
@@ -108,10 +126,6 @@ export default function OperatorDashboard() {
       {/* ----------------------------------------------------------------- */}
       {/* Bereich 1: Nutzer- & Team-Monitoring + manuelle Premium-Schaltung */}
       {/* ----------------------------------------------------------------- */}
-      {/* API-ANDOCKPUNKT: Liste aller Konten plattformweit (NICHT team-      */}
-      {/* gescoped) ueber einen superadmin-Endpunkt, z. B.                   */}
-      {/*   GET /api/operator/accounts                                       */}
-      {/* mit Aggregaten (Team-/Assistenten-Anzahl, Plan).                   */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -120,43 +134,64 @@ export default function OperatorDashboard() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="border-b border-border/50 bg-slate-50 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Konto</th>
-                  <th className="px-4 py-3 font-medium">Typ</th>
-                  <th className="px-4 py-3 font-medium">Teams</th>
-                  <th className="px-4 py-3 font-medium">Assistenten</th>
-                  <th className="px-4 py-3 font-medium">Plan</th>
-                  <th className="px-4 py-3 font-medium text-right">Aktion</th>
-                </tr>
-              </thead>
-              <tbody>
-                {PLACEHOLDER_ACCOUNTS.map((acc) => (
-                  <tr key={acc.id} className="border-b border-border/30 last:border-0">
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-foreground">{acc.name}</div>
-                      <div className="text-xs text-muted-foreground">{acc.email}</div>
-                    </td>
-                    <td className="px-4 py-3 capitalize text-muted-foreground">{acc.accountType}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{acc.teams}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{acc.assistants}</td>
-                    <td className="px-4 py-3">{planBadge(acc.plan)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <Button
-                        size="sm"
-                        variant={acc.plan === "premium" ? "outline" : "default"}
-                        onClick={() => handleTogglePremium(acc)}
-                      >
-                        {acc.plan === "premium" ? "Auf Free zurücksetzen" : "Premium aktivieren"}
-                      </Button>
-                    </td>
+          {accountsQuery.isLoading ? (
+            <div className="space-y-2 p-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : accountsQuery.isError ? (
+            <p className="p-4 text-sm text-destructive" data-testid="text-operator-accounts-error">
+              Konten konnten nicht geladen werden:{" "}
+              {readableApiError(accountsQuery.error, "Unbekannter Fehler.")}
+            </p>
+          ) : accounts.length === 0 ? (
+            <p className="p-4 text-sm text-muted-foreground">Noch keine Konten vorhanden.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-border/50 bg-slate-50 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Konto</th>
+                    <th className="px-4 py-3 font-medium">Typ</th>
+                    <th className="px-4 py-3 font-medium">Teams</th>
+                    <th className="px-4 py-3 font-medium">Assistenten</th>
+                    <th className="px-4 py-3 font-medium">Plan</th>
+                    <th className="px-4 py-3 font-medium text-right">Aktion</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {accounts.map((acc) => (
+                    <tr key={acc.id} className="border-b border-border/30 last:border-0" data-testid={`row-operator-account-${acc.id}`}>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-foreground">{acc.name}</div>
+                        <div className="text-xs text-muted-foreground">{acc.email}</div>
+                      </td>
+                      <td className="px-4 py-3 capitalize text-muted-foreground">{acc.accountType}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{acc.teams}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{acc.assistants}</td>
+                      <td className="px-4 py-3" data-testid={`badge-operator-plan-${acc.id}`}>{planBadge(acc.plan)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <Button
+                          size="sm"
+                          variant={acc.plan === "premium" ? "outline" : "default"}
+                          disabled={pendingId !== null}
+                          onClick={() => handleTogglePlan(acc)}
+                          data-testid={`button-toggle-plan-${acc.id}`}
+                        >
+                          {pendingId === acc.id
+                            ? "Wird umgestellt…"
+                            : acc.plan === "premium"
+                              ? "Auf Free zurücksetzen"
+                              : "Premium aktivieren"}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -47,6 +47,8 @@ import type {
   ListTimeEntriesParams,
   ListUsersParams,
   LoginInput,
+  OperatorAccount,
+  OperatorPlanUpdate,
   RegisterInput,
   SetPasswordInput,
   Shift,
@@ -4642,5 +4644,158 @@ export const useRegister = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getRegisterMutationOptions(options));
+    }
+
+export const getListOperatorAccountsUrl = () => {
+
+
+
+
+  return `/api/operator/accounts`
+}
+
+/**
+ * Liefert alle Admin-Konten (Assistenznehmer/Dienstleister) mit Aggregaten (Team- und Assistenten-Anzahl) für das Operator-Dashboard.
+
+ * @summary Alle Konten plattformweit auflisten (nur superadmin)
+ */
+export const listOperatorAccounts = async ( options?: RequestInit): Promise<OperatorAccount[]> => {
+
+  return customFetch<OperatorAccount[]>(getListOperatorAccountsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListOperatorAccountsQueryKey = () => {
+    return [
+    `/api/operator/accounts`
+    ] as const;
+    }
+
+
+export const getListOperatorAccountsQueryOptions = <TData = Awaited<ReturnType<typeof listOperatorAccounts>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOperatorAccounts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListOperatorAccountsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOperatorAccounts>>> = ({ signal }) => listOperatorAccounts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listOperatorAccounts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListOperatorAccountsQueryResult = NonNullable<Awaited<ReturnType<typeof listOperatorAccounts>>>
+export type ListOperatorAccountsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Alle Konten plattformweit auflisten (nur superadmin)
+ */
+
+export function useListOperatorAccounts<TData = Awaited<ReturnType<typeof listOperatorAccounts>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOperatorAccounts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListOperatorAccountsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateOperatorAccountPlanUrl = (id: number,) => {
+
+
+
+
+  return `/api/operator/accounts/${id}/plan`
+}
+
+/**
+ * Manuelle Premium-Freischaltung bzw. Rückstufung nach bestätigtem Zahlungseingang. Wirkung ist sofort, da die Plan-Durchsetzung den Plan pro Request frisch aus der Datenbank liest.
+
+ * @summary Plan eines Kontos manuell umschalten (nur superadmin)
+ */
+export const updateOperatorAccountPlan = async (id: number,
+    operatorPlanUpdate: OperatorPlanUpdate, options?: RequestInit): Promise<OperatorAccount> => {
+
+  return customFetch<OperatorAccount>(getUpdateOperatorAccountPlanUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      operatorPlanUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateOperatorAccountPlanMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOperatorAccountPlan>>, TError,{id: number;data: BodyType<OperatorPlanUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateOperatorAccountPlan>>, TError,{id: number;data: BodyType<OperatorPlanUpdate>}, TContext> => {
+
+const mutationKey = ['updateOperatorAccountPlan'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateOperatorAccountPlan>>, {id: number;data: BodyType<OperatorPlanUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateOperatorAccountPlan(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateOperatorAccountPlanMutationResult = NonNullable<Awaited<ReturnType<typeof updateOperatorAccountPlan>>>
+    export type UpdateOperatorAccountPlanMutationBody = BodyType<OperatorPlanUpdate>
+    export type UpdateOperatorAccountPlanMutationError = ErrorType<void>
+
+    /**
+ * @summary Plan eines Kontos manuell umschalten (nur superadmin)
+ */
+export const useUpdateOperatorAccountPlan = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOperatorAccountPlan>>, TError,{id: number;data: BodyType<OperatorPlanUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateOperatorAccountPlan>>,
+        TError,
+        {id: number;data: BodyType<OperatorPlanUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateOperatorAccountPlanMutationOptions(options));
     }
 
