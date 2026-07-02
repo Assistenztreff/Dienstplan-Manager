@@ -17,6 +17,28 @@ DO $$ BEGIN
   END IF;
 END $$;
 SQL
+# Team-Overrides für Zuschlags-Einstellungen: allowance_settings.team_id
+# idempotent VOR db push anlegen und den alten UNIQUE(owner_id)-Constraint
+# durch einen partiellen Index (nur Konto-Zeilen, team_id IS NULL) ersetzen —
+# drizzle-kit push würde dafür interaktiv nachfragen (kein TTY => Abbruch).
+psql "$DATABASE_URL" <<'SQL'
+ALTER TABLE allowance_settings ADD COLUMN IF NOT EXISTS team_id integer;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'allowance_settings_team_id_teams_id_fk') THEN
+    ALTER TABLE allowance_settings
+      ADD CONSTRAINT allowance_settings_team_id_teams_id_fk
+      FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE;
+  END IF;
+END $$;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'allowance_settings_team_id_unique') THEN
+    ALTER TABLE allowance_settings ADD CONSTRAINT allowance_settings_team_id_unique UNIQUE (team_id);
+  END IF;
+END $$;
+ALTER TABLE allowance_settings DROP CONSTRAINT IF EXISTS allowance_settings_owner_id_unique;
+CREATE UNIQUE INDEX IF NOT EXISTS allowance_settings_owner_account_unique
+  ON allowance_settings (owner_id) WHERE team_id IS NULL;
+SQL
 # drizzle-kit push beendet sich auch bei "Interactive prompts require a TTY"
 # mit Exit-Code 0 (!) — der Exit-Code allein reicht also nicht. Die Dev-DB ist
 # NICHT wegwerfbar (kein Drop+Recreate wie bei der Test-DB), deshalb wird die

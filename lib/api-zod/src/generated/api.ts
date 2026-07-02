@@ -729,8 +729,14 @@ export const RemoveTeamMemberParams = zod.object({
 /**
  * @summary Zuschlags-Einstellungen lesen
  */
+export const GetAllowanceSettingsQueryParams = zod.object({
+  "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext; liefert den Team-Override, sonst (isOverride=false) die Konto-Einstellungen des Eigentümers. Nur eigene Teams erlaubt.')
+})
+
 export const GetAllowanceSettingsResponse = zod.object({
   "id": zod.number(),
+  "teamId": zod.number().nullish().describe('Team-ID des Overrides oder null bei Konto-Einstellungen.'),
+  "isOverride": zod.boolean().optional().describe('true, wenn für das angefragte Team ein eigener Override existiert.'),
   "nightPercent": zod.number(),
   "nightStart": zod.string(),
   "nightEnd": zod.string(),
@@ -744,6 +750,10 @@ export const GetAllowanceSettingsResponse = zod.object({
 /**
  * @summary Zuschlags-Einstellungen aktualisieren
  */
+export const UpdateAllowanceSettingsQueryParams = zod.object({
+  "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext; legt einen Team-Override an bzw. aktualisiert ihn. Nur eigene Teams erlaubt.')
+})
+
 export const updateAllowanceSettingsBodyNightPercentMin = 0;
 export const updateAllowanceSettingsBodyNightPercentMax = 100;
 
@@ -768,6 +778,8 @@ export const UpdateAllowanceSettingsBody = zod.object({
 
 export const UpdateAllowanceSettingsResponse = zod.object({
   "id": zod.number(),
+  "teamId": zod.number().nullish().describe('Team-ID des Overrides oder null bei Konto-Einstellungen.'),
+  "isOverride": zod.boolean().optional().describe('true, wenn für das angefragte Team ein eigener Override existiert.'),
   "nightPercent": zod.number(),
   "nightStart": zod.string(),
   "nightEnd": zod.string(),
@@ -775,6 +787,14 @@ export const UpdateAllowanceSettingsResponse = zod.object({
   "holidayPercent": zod.number(),
   "state": zod.union([zod.literal('BW'),zod.literal('BY'),zod.literal('BE'),zod.literal('BB'),zod.literal('HB'),zod.literal('HH'),zod.literal('HE'),zod.literal('MV'),zod.literal('NI'),zod.literal('NW'),zod.literal('RP'),zod.literal('SL'),zod.literal('SN'),zod.literal('ST'),zod.literal('SH'),zod.literal('TH'),zod.literal(null)]).nullish(),
   "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Team-Override der Zuschlags-Einstellungen entfernen (zurück auf Konto-Einstellungen)
+ */
+export const DeleteAllowanceSettingsOverrideQueryParams = zod.object({
+  "teamId": zod.coerce.number()
 })
 
 

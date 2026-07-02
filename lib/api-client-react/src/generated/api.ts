@@ -32,8 +32,10 @@ import type {
   ContractInput,
   ContractUpdate,
   DashboardSummary,
+  DeleteAllowanceSettingsOverrideParams,
   ErrorEnvelope,
   ExportCalendarParams,
+  GetAllowanceSettingsParams,
   GetBrandingSettingsParams,
   GetDashboardSummaryParams,
   GetHoursBalanceParams,
@@ -73,6 +75,7 @@ import type {
   TimeEntryConfirmBatchResult,
   TimeEntryInput,
   TimeEntryUpdate,
+  UpdateAllowanceSettingsParams,
   UpdateProfileInput,
   UploadUrlRequest,
   UploadUrlResponse,
@@ -2399,20 +2402,27 @@ export const useRemoveTeamMember = <TError = ErrorType<void>,
       return useMutation(getRemoveTeamMemberMutationOptions(options));
     }
 
-export const getGetAllowanceSettingsUrl = () => {
+export const getGetAllowanceSettingsUrl = (params?: GetAllowanceSettingsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/allowance-settings`
+  return stringifiedParams.length > 0 ? `/api/allowance-settings?${stringifiedParams}` : `/api/allowance-settings`
 }
 
 /**
  * @summary Zuschlags-Einstellungen lesen
  */
-export const getAllowanceSettings = async ( options?: RequestInit): Promise<AllowanceSettings> => {
+export const getAllowanceSettings = async (params?: GetAllowanceSettingsParams, options?: RequestInit): Promise<AllowanceSettings> => {
 
-  return customFetch<AllowanceSettings>(getGetAllowanceSettingsUrl(),
+  return customFetch<AllowanceSettings>(getGetAllowanceSettingsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -2425,23 +2435,23 @@ export const getAllowanceSettings = async ( options?: RequestInit): Promise<Allo
 
 
 
-export const getGetAllowanceSettingsQueryKey = () => {
+export const getGetAllowanceSettingsQueryKey = (params?: GetAllowanceSettingsParams,) => {
     return [
-    `/api/allowance-settings`
+    `/api/allowance-settings`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetAllowanceSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getAllowanceSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAllowanceSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetAllowanceSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getAllowanceSettings>>, TError = ErrorType<void>>(params?: GetAllowanceSettingsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAllowanceSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetAllowanceSettingsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetAllowanceSettingsQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAllowanceSettings>>> = ({ signal }) => getAllowanceSettings({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAllowanceSettings>>> = ({ signal }) => getAllowanceSettings(params, { signal, ...requestOptions });
 
 
 
@@ -2451,19 +2461,19 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetAllowanceSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getAllowanceSettings>>>
-export type GetAllowanceSettingsQueryError = ErrorType<unknown>
+export type GetAllowanceSettingsQueryError = ErrorType<void>
 
 
 /**
  * @summary Zuschlags-Einstellungen lesen
  */
 
-export function useGetAllowanceSettings<TData = Awaited<ReturnType<typeof getAllowanceSettings>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAllowanceSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export function useGetAllowanceSettings<TData = Awaited<ReturnType<typeof getAllowanceSettings>>, TError = ErrorType<void>>(
+ params?: GetAllowanceSettingsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAllowanceSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetAllowanceSettingsQueryOptions(options)
+  const queryOptions = getGetAllowanceSettingsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -2476,20 +2486,28 @@ export function useGetAllowanceSettings<TData = Awaited<ReturnType<typeof getAll
 
 
 
-export const getUpdateAllowanceSettingsUrl = () => {
+export const getUpdateAllowanceSettingsUrl = (params?: UpdateAllowanceSettingsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/allowance-settings`
+  return stringifiedParams.length > 0 ? `/api/allowance-settings?${stringifiedParams}` : `/api/allowance-settings`
 }
 
 /**
  * @summary Zuschlags-Einstellungen aktualisieren
  */
-export const updateAllowanceSettings = async (allowanceSettingsInput: AllowanceSettingsInput, options?: RequestInit): Promise<AllowanceSettings> => {
+export const updateAllowanceSettings = async (allowanceSettingsInput: AllowanceSettingsInput,
+    params?: UpdateAllowanceSettingsParams, options?: RequestInit): Promise<AllowanceSettings> => {
 
-  return customFetch<AllowanceSettings>(getUpdateAllowanceSettingsUrl(),
+  return customFetch<AllowanceSettings>(getUpdateAllowanceSettingsUrl(params),
   {
     ...options,
     method: 'PUT',
@@ -2502,9 +2520,9 @@ export const updateAllowanceSettings = async (allowanceSettingsInput: AllowanceS
 
 
 
-export const getUpdateAllowanceSettingsMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAllowanceSettings>>, TError,{data: BodyType<AllowanceSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof updateAllowanceSettings>>, TError,{data: BodyType<AllowanceSettingsInput>}, TContext> => {
+export const getUpdateAllowanceSettingsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAllowanceSettings>>, TError,{data: BodyType<AllowanceSettingsInput>;params?: UpdateAllowanceSettingsParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAllowanceSettings>>, TError,{data: BodyType<AllowanceSettingsInput>;params?: UpdateAllowanceSettingsParams}, TContext> => {
 
 const mutationKey = ['updateAllowanceSettings'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -2516,10 +2534,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAllowanceSettings>>, {data: BodyType<AllowanceSettingsInput>}> = (props) => {
-          const {data} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAllowanceSettings>>, {data: BodyType<AllowanceSettingsInput>;params?: UpdateAllowanceSettingsParams}> = (props) => {
+          const {data,params} = props ?? {};
 
-          return  updateAllowanceSettings(data,requestOptions)
+          return  updateAllowanceSettings(data,params,requestOptions)
         }
 
 
@@ -2531,20 +2549,97 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type UpdateAllowanceSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateAllowanceSettings>>>
     export type UpdateAllowanceSettingsMutationBody = BodyType<AllowanceSettingsInput>
-    export type UpdateAllowanceSettingsMutationError = ErrorType<unknown>
+    export type UpdateAllowanceSettingsMutationError = ErrorType<void>
 
     /**
  * @summary Zuschlags-Einstellungen aktualisieren
  */
-export const useUpdateAllowanceSettings = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAllowanceSettings>>, TError,{data: BodyType<AllowanceSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useUpdateAllowanceSettings = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAllowanceSettings>>, TError,{data: BodyType<AllowanceSettingsInput>;params?: UpdateAllowanceSettingsParams}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof updateAllowanceSettings>>,
         TError,
-        {data: BodyType<AllowanceSettingsInput>},
+        {data: BodyType<AllowanceSettingsInput>;params?: UpdateAllowanceSettingsParams},
         TContext
       > => {
       return useMutation(getUpdateAllowanceSettingsMutationOptions(options));
+    }
+
+export const getDeleteAllowanceSettingsOverrideUrl = (params: DeleteAllowanceSettingsOverrideParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/allowance-settings?${stringifiedParams}` : `/api/allowance-settings`
+}
+
+/**
+ * @summary Team-Override der Zuschlags-Einstellungen entfernen (zurück auf Konto-Einstellungen)
+ */
+export const deleteAllowanceSettingsOverride = async (params: DeleteAllowanceSettingsOverrideParams, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteAllowanceSettingsOverrideUrl(params),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteAllowanceSettingsOverrideMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAllowanceSettingsOverride>>, TError,{params: DeleteAllowanceSettingsOverrideParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAllowanceSettingsOverride>>, TError,{params: DeleteAllowanceSettingsOverrideParams}, TContext> => {
+
+const mutationKey = ['deleteAllowanceSettingsOverride'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAllowanceSettingsOverride>>, {params: DeleteAllowanceSettingsOverrideParams}> = (props) => {
+          const {params} = props ?? {};
+
+          return  deleteAllowanceSettingsOverride(params,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteAllowanceSettingsOverrideMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAllowanceSettingsOverride>>>
+
+    export type DeleteAllowanceSettingsOverrideMutationError = ErrorType<void>
+
+    /**
+ * @summary Team-Override der Zuschlags-Einstellungen entfernen (zurück auf Konto-Einstellungen)
+ */
+export const useDeleteAllowanceSettingsOverride = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAllowanceSettingsOverride>>, TError,{params: DeleteAllowanceSettingsOverrideParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteAllowanceSettingsOverride>>,
+        TError,
+        {params: DeleteAllowanceSettingsOverrideParams},
+        TContext
+      > => {
+      return useMutation(getDeleteAllowanceSettingsOverrideMutationOptions(options));
     }
 
 export const getGetBrandingSettingsUrl = (params?: GetBrandingSettingsParams,) => {

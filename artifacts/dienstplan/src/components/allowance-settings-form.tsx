@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import {
   useGetAllowanceSettings,
   useUpdateAllowanceSettings,
+  useDeleteAllowanceSettingsOverride,
   getGetAllowanceSettingsQueryKey,
   type AllowanceSettingsInputState,
 } from "@workspace/api-client-react";
@@ -13,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { readableApiError } from "@/lib/api-error";
+import { useTeam } from "@/context/team";
 
 type FormState = {
   nightPercent: string;
@@ -27,6 +29,9 @@ const TIME_PATTERN = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
 
 // "" steht für "kein Bundesland" (nur bundesweite Feiertage).
 const NO_STATE = "none";
+
+// Sonderwert des Bereichs-Wählers: Konto-weite Einstellungen (kein Team-Override).
+const ACCOUNT_SCOPE = "account";
 
 const GERMAN_STATE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "BW", label: "Baden-Württemberg" },
@@ -87,8 +92,17 @@ function PercentField({
 
 export function AllowanceSettingsForm() {
   const queryClient = useQueryClient();
-  const { data: settings, isLoading } = useGetAllowanceSettings();
+  const { teams, isDienstleister } = useTeam();
+
+  // Bereich: Konto-Standard oder ein bestimmtes Team (nur Dienstleister mit Teams).
+  const [scope, setScope] = useState<string>(ACCOUNT_SCOPE);
+  const showTeamPicker = isDienstleister && teams.length > 0;
+  const scopeTeamId = scope === ACCOUNT_SCOPE ? undefined : Number(scope);
+
+  const queryParams = scopeTeamId !== undefined ? { teamId: scopeTeamId } : undefined;
+  const { data: settings, isLoading } = useGetAllowanceSettings(queryParams);
   const updateSettings = useUpdateAllowanceSettings();
+  const deleteOverride = useDeleteAllowanceSettingsOverride();
 
   const [form, setForm] = useState<FormState>({
     nightPercent: "25",
@@ -101,13 +115,14 @@ export function AllowanceSettingsForm() {
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const hydratedRef = useRef(false);
+  // Pro Bereich nur einmal mit den geladenen Werten befüllen, damit ein Refetch
+  // (z.B. bei Fensterfokus) keine ungespeicherten Eingaben überschreibt. Ein
+  // Bereichswechsel lädt bewusst neu.
+  const hydratedScopeRef = useRef<string | null>(null);
 
-  // Nur einmal mit den geladenen Werten befüllen, damit ein Refetch
-  // (z.B. bei Fensterfokus) keine ungespeicherten Eingaben überschreibt.
   useEffect(() => {
-    if (settings && !hydratedRef.current) {
-      hydratedRef.current = true;
+    if (settings && hydratedScopeRef.current !== scope) {
+      hydratedScopeRef.current = scope;
       setForm({
         nightPercent: String(settings.nightPercent),
         nightStart: settings.nightStart,
@@ -116,8 +131,15 @@ export function AllowanceSettingsForm() {
         holidayPercent: String(settings.holidayPercent),
         state: settings.state ?? NO_STATE,
       });
+      setErrors({});
+      setSaved(false);
     }
-  }, [settings]);
+  }, [settings, scope]);
+
+  function changeScope(next: string) {
+    setScope(next);
+    hydratedScopeRef.current = null;
+  }
 
   function set<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -144,6 +166,11 @@ export function AllowanceSettingsForm() {
     return Object.keys(cleaned).length === 0;
   }
 
+  async function invalidateAll() {
+    // Prefix-Match: trifft die Konto-Abfrage UND alle Team-Abfragen.
+    await queryClient.invalidateQueries({ queryKey: getGetAllowanceSettingsQueryKey() });
+  }
+
   async function handleSave() {
     if (!validate()) return;
     setSaving(true);
@@ -157,8 +184,9 @@ export function AllowanceSettingsForm() {
           holidayPercent: Number(form.holidayPercent),
           state: (form.state === NO_STATE ? null : form.state) as AllowanceSettingsInputState,
         },
+        params: queryParams,
       });
-      await queryClient.invalidateQueries({ queryKey: getGetAllowanceSettingsQueryKey() });
+      await invalidateAll();
       setSaved(true);
     } catch (err) {
       setErrors({ holidayPercent: readableApiError(err, "Speichern fehlgeschlagen. Bitte erneut versuchen.") });
@@ -167,105 +195,161 @@ export function AllowanceSettingsForm() {
     }
   }
 
+  async function handleRemoveOverride() {
+    if (scopeTeamId === undefined) return;
+    setSaving(true);
+    try {
+      await deleteOverride.mutateAsync({ params: { teamId: scopeTeamId } });
+      hydratedScopeRef.current = null;
+      await invalidateAll();
+      setSaved(false);
+    } catch (err) {
+      setErrors({ holidayPercent: readableApiError(err, "Entfernen fehlgeschlagen. Bitte erneut versuchen.") });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const isTeamScope = scopeTeamId !== undefined;
+  const hasOverride = isTeamScope && settings?.isOverride === true;
+
   return (
     <Card className="border-border/50 shadow-sm">
       <CardHeader>
         <CardTitle className="font-serif text-xl">Zuschläge</CardTitle>
       </CardHeader>
       <CardContent>
-        {isLoading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-14 w-full rounded-lg" />
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-5">
-            <div>
-              <h3 className="text-sm font-semibold mb-3">Nachtzuschlag</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <PercentField
-                  id="nightPercent"
-                  label="Zuschlag"
-                  value={form.nightPercent}
-                  error={errors.nightPercent}
-                  onChange={(v) => set("nightPercent", v)}
-                />
-                <div className="space-y-1.5">
-                  <Label htmlFor="nightStart">Von</Label>
-                  <Input
-                    id="nightStart"
-                    type="time"
-                    value={form.nightStart}
-                    onChange={(e) => set("nightStart", e.target.value)}
-                    className={errors.nightStart ? "border-destructive" : ""}
-                  />
-                  {errors.nightStart && <p className="text-xs text-destructive">{errors.nightStart}</p>}
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="nightEnd">Bis</Label>
-                  <Input
-                    id="nightEnd"
-                    type="time"
-                    value={form.nightEnd}
-                    onChange={(e) => set("nightEnd", e.target.value)}
-                    className={errors.nightEnd ? "border-destructive" : ""}
-                  />
-                  {errors.nightEnd && <p className="text-xs text-destructive">{errors.nightEnd}</p>}
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Zeitfenster, in dem der Nachtzuschlag gilt (über Mitternacht hinweg möglich).
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <PercentField
-                id="sundayPercent"
-                label="Sonntagszuschlag"
-                value={form.sundayPercent}
-                error={errors.sundayPercent}
-                onChange={(v) => set("sundayPercent", v)}
-              />
-              <PercentField
-                id="holidayPercent"
-                label="Feiertagszuschlag"
-                value={form.holidayPercent}
-                error={errors.holidayPercent}
-                onChange={(v) => set("holidayPercent", v)}
-              />
-            </div>
-
+        <div className="space-y-5">
+          {showTeamPicker && (
             <div className="space-y-1.5">
-              <Label htmlFor="state">Bundesland</Label>
-              <Select value={form.state} onValueChange={(v) => set("state", v)}>
-                <SelectTrigger id="state">
+              <Label htmlFor="allowance-scope">Gilt für</Label>
+              <Select value={scope} onValueChange={changeScope}>
+                <SelectTrigger id="allowance-scope" data-testid="allowance-scope-select">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NO_STATE}>Kein Bundesland (nur bundesweit)</SelectItem>
-                  {GERMAN_STATE_OPTIONS.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>
-                      {s.label}
+                  <SelectItem value={ACCOUNT_SCOPE}>Konto-Standard (alle Teams)</SelectItem>
+                  {teams.map((t) => (
+                    <SelectItem key={t.id} value={String(t.id)}>
+                      Team: {t.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                Bestimmt, welche regionalen gesetzlichen Feiertage (z.B. Fronleichnam) für den
-                Feiertagszuschlag berücksichtigt werden. Ohne Auswahl gelten nur die bundesweiten
-                Feiertage. Die Änderung wirkt sich auf neu gespeicherte Schichten aus.
-              </p>
+              {isTeamScope && (
+                <p className="text-xs text-muted-foreground" data-testid="allowance-scope-hint">
+                  {hasOverride
+                    ? "Für dieses Team gilt eine eigene Regelung. Sie überschreibt den Konto-Standard."
+                    : "Dieses Team nutzt aktuell den Konto-Standard. Speichern legt eine eigene Regelung für dieses Team an."}
+                </p>
+              )}
             </div>
+          )}
 
-            <div className="flex items-center gap-3 pt-1">
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? "Speichern..." : "Speichern"}
-              </Button>
-              {saved && <span className="text-xs text-muted-foreground">Gespeichert.</span>}
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-14 w-full rounded-lg" />
+              ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <>
+              <div>
+                <h3 className="text-sm font-semibold mb-3">Nachtzuschlag</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <PercentField
+                    id="nightPercent"
+                    label="Zuschlag"
+                    value={form.nightPercent}
+                    error={errors.nightPercent}
+                    onChange={(v) => set("nightPercent", v)}
+                  />
+                  <div className="space-y-1.5">
+                    <Label htmlFor="nightStart">Von</Label>
+                    <Input
+                      id="nightStart"
+                      type="time"
+                      value={form.nightStart}
+                      onChange={(e) => set("nightStart", e.target.value)}
+                      className={errors.nightStart ? "border-destructive" : ""}
+                    />
+                    {errors.nightStart && <p className="text-xs text-destructive">{errors.nightStart}</p>}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="nightEnd">Bis</Label>
+                    <Input
+                      id="nightEnd"
+                      type="time"
+                      value={form.nightEnd}
+                      onChange={(e) => set("nightEnd", e.target.value)}
+                      className={errors.nightEnd ? "border-destructive" : ""}
+                    />
+                    {errors.nightEnd && <p className="text-xs text-destructive">{errors.nightEnd}</p>}
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Zeitfenster, in dem der Nachtzuschlag gilt (über Mitternacht hinweg möglich).
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <PercentField
+                  id="sundayPercent"
+                  label="Sonntagszuschlag"
+                  value={form.sundayPercent}
+                  error={errors.sundayPercent}
+                  onChange={(v) => set("sundayPercent", v)}
+                />
+                <PercentField
+                  id="holidayPercent"
+                  label="Feiertagszuschlag"
+                  value={form.holidayPercent}
+                  error={errors.holidayPercent}
+                  onChange={(v) => set("holidayPercent", v)}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="state">Bundesland</Label>
+                <Select value={form.state} onValueChange={(v) => set("state", v)}>
+                  <SelectTrigger id="state">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_STATE}>Kein Bundesland (nur bundesweit)</SelectItem>
+                    {GERMAN_STATE_OPTIONS.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Bestimmt, welche regionalen gesetzlichen Feiertage (z.B. Fronleichnam) für den
+                  Feiertagszuschlag berücksichtigt werden. Ohne Auswahl gelten nur die bundesweiten
+                  Feiertage. Die Änderung wirkt sich auf neu gespeicherte Schichten aus.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <Button onClick={handleSave} disabled={saving} data-testid="allowance-save-button">
+                  {saving ? "Speichern..." : "Speichern"}
+                </Button>
+                {hasOverride && (
+                  <Button
+                    variant="outline"
+                    onClick={handleRemoveOverride}
+                    disabled={saving}
+                    data-testid="allowance-remove-override-button"
+                  >
+                    Team-Regelung entfernen
+                  </Button>
+                )}
+                {saved && <span className="text-xs text-muted-foreground">Gespeichert.</span>}
+              </div>
+            </>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

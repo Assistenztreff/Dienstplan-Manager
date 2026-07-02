@@ -680,6 +680,12 @@ paths:
       operationId: getAllowanceSettings
       tags: [allowance-settings]
       summary: Zuschlags-Einstellungen lesen
+      parameters:
+        - name: teamId
+          in: query
+          description: Optionaler Team-Kontext; liefert den Team-Override, sonst (isOverride=false) die Konto-Einstellungen des Eigentümers. Nur eigene Teams erlaubt.
+          schema:
+            type: integer
       responses:
         "200":
           description: Zuschlags-Einstellungen
@@ -687,10 +693,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AllowanceSettings"
+        "403":
+          description: Fremdes Team
     put:
       operationId: updateAllowanceSettings
       tags: [allowance-settings]
       summary: Zuschlags-Einstellungen aktualisieren
+      parameters:
+        - name: teamId
+          in: query
+          description: Optionaler Team-Kontext; legt einen Team-Override an bzw. aktualisiert ihn. Nur eigene Teams erlaubt.
+          schema:
+            type: integer
       requestBody:
         required: true
         content:
@@ -704,6 +718,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AllowanceSettings"
+        "403":
+          description: Fremdes Team
+    delete:
+      operationId: deleteAllowanceSettingsOverride
+      tags: [allowance-settings]
+      summary: Team-Override der Zuschlags-Einstellungen entfernen (zurück auf Konto-Einstellungen)
+      parameters:
+        - name: teamId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Entfernt (oder war nicht vorhanden)
+        "403":
+          description: Fremdes Team
 
   /branding-settings:
     get:
@@ -1970,6 +2001,12 @@ components:
       properties:
         id:
           type: integer
+        teamId:
+          type: ["integer", "null"]
+          description: Team-ID des Overrides oder null bei Konto-Einstellungen.
+        isOverride:
+          type: boolean
+          description: true, wenn für das angefragte Team ein eigener Override existiert.
         nightPercent:
           type: integer
         nightStart:

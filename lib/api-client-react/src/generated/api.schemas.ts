@@ -486,6 +486,13 @@ export const AllowanceSettingsState = {
 
 export interface AllowanceSettings {
   id: number;
+  /**
+     * Team-ID des Overrides oder null bei Konto-Einstellungen.
+     * @nullable
+     */
+  teamId?: number | null;
+  /** true, wenn für das angefragte Team ein eigener Override existiert. */
+  isOverride?: boolean;
   nightPercent: number;
   nightStart: string;
   nightEnd: string;
@@ -891,6 +898,24 @@ export type ListShiftTemplatesParams = {
  * Optionaler Team-Kontext für die Datentrennung.
  */
 teamId?: number;
+};
+
+export type GetAllowanceSettingsParams = {
+/**
+ * Optionaler Team-Kontext; liefert den Team-Override, sonst (isOverride=false) die Konto-Einstellungen des Eigentümers. Nur eigene Teams erlaubt.
+ */
+teamId?: number;
+};
+
+export type UpdateAllowanceSettingsParams = {
+/**
+ * Optionaler Team-Kontext; legt einen Team-Override an bzw. aktualisiert ihn. Nur eigene Teams erlaubt.
+ */
+teamId?: number;
+};
+
+export type DeleteAllowanceSettingsOverrideParams = {
+teamId: number;
 };
 
 export type GetBrandingSettingsParams = {

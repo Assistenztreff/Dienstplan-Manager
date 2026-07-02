@@ -1,9 +1,11 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { allowanceSettingsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { allowanceSettingsTable, teamsTable } from "@workspace/db";
+import { eq, and, isNull } from "drizzle-orm";
 import { UpdateAllowanceSettingsBody } from "@workspace/api-zod";
 import { requireAdmin } from "../middleware/auth";
+import { parseTeamIdParam } from "../lib/teams";
+import type { Request, Response } from "express";
 
 const router = Router();
 
@@ -15,11 +17,13 @@ const DEFAULTS = {
   holidayPercent: 100,
 };
 
-// Zuschlags-Einstellungen sind PRO KONTO gespeichert (owner_id = Admin-Konto).
-// Jeder Admin liest/ändert ausschließlich die eigene Zeile — die Einstellungen
-// anderer Konten sind unerreichbar (Multi-Tenant-Trennung). Zeile wird beim
-// ersten Zugriff lazy mit Defaults angelegt (neue Konten brauchen kein Seeding).
-async function ensureSettings(ownerId: number) {
+// Zuschlags-Einstellungen sind PRO KONTO gespeichert (owner_id = Admin-Konto,
+// team_id NULL). Jeder Admin liest/ändert ausschließlich die eigene Zeile —
+// die Einstellungen anderer Konten sind unerreichbar (Multi-Tenant-Trennung).
+// Zeile wird beim ersten Zugriff lazy mit Defaults angelegt.
+// Zusätzlich kann PRO TEAM ein Override existieren (team_id gesetzt);
+// Fallback-Kette beim Lesen: Team-Override → Konto-Zeile → Defaults.
+async function ensureAccountSettings(ownerId: number) {
   await db
     .insert(allowanceSettingsTable)
     .values({ ownerId, ...DEFAULTS })
@@ -27,13 +31,47 @@ async function ensureSettings(ownerId: number) {
   const [row] = await db
     .select()
     .from(allowanceSettingsTable)
-    .where(eq(allowanceSettingsTable.ownerId, ownerId));
+    .where(
+      and(eq(allowanceSettingsTable.ownerId, ownerId), isNull(allowanceSettingsTable.teamId))
+    );
   return row;
 }
 
+// Team-Overrides darf nur der EIGENTÜMER des Teams verwalten — Mitgliedschaft
+// reicht nicht, sonst könnte ein fremder Admin die Lohn-Parameter eines
+// anderen Kontos ändern. Gibt das Team zurück oder antwortet selbst mit 403.
+async function assertOwnTeam(req: Request, res: Response, teamId: number) {
+  const [team] = await db
+    .select({ id: teamsTable.id, ownerId: teamsTable.ownerId })
+    .from(teamsTable)
+    .where(eq(teamsTable.id, teamId));
+  if (!team || team.ownerId !== req.session.userId) {
+    res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
+    return null;
+  }
+  return team;
+}
+
 router.get("/allowance-settings", requireAdmin, async (req, res): Promise<void> => {
-  const settings = await ensureSettings(req.session.userId!);
-  res.json(settings);
+  const teamId = parseTeamIdParam(req);
+  const userId = req.session.userId!;
+  if (teamId !== undefined) {
+    const team = await assertOwnTeam(req, res, teamId);
+    if (!team) return;
+    const [override] = await db
+      .select()
+      .from(allowanceSettingsTable)
+      .where(eq(allowanceSettingsTable.teamId, teamId));
+    if (override) {
+      res.json({ ...override, isOverride: true });
+      return;
+    }
+    const account = await ensureAccountSettings(userId);
+    res.json({ ...account, teamId: null, isOverride: false });
+    return;
+  }
+  const settings = await ensureAccountSettings(userId);
+  res.json({ ...settings, isOverride: false });
 });
 
 router.put("/allowance-settings", requireAdmin, async (req, res): Promise<void> => {
@@ -43,13 +81,43 @@ router.put("/allowance-settings", requireAdmin, async (req, res): Promise<void> 
     return;
   }
   const ownerId = req.session.userId!;
-  await ensureSettings(ownerId);
+  const teamId = parseTeamIdParam(req);
+  if (teamId !== undefined) {
+    const team = await assertOwnTeam(req, res, teamId);
+    if (!team) return;
+    // Upsert des Team-Overrides (UNIQUE team_id).
+    const [saved] = await db
+      .insert(allowanceSettingsTable)
+      .values({ ownerId, teamId, ...body.data })
+      .onConflictDoUpdate({
+        target: allowanceSettingsTable.teamId,
+        set: { ...body.data, updatedAt: new Date() },
+      })
+      .returning();
+    res.json({ ...saved, isOverride: true });
+    return;
+  }
+  await ensureAccountSettings(ownerId);
   const [updated] = await db
     .update(allowanceSettingsTable)
     .set({ ...body.data, updatedAt: new Date() })
-    .where(eq(allowanceSettingsTable.ownerId, ownerId))
+    .where(
+      and(eq(allowanceSettingsTable.ownerId, ownerId), isNull(allowanceSettingsTable.teamId))
+    )
     .returning();
-  res.json(updated);
+  res.json({ ...updated, isOverride: false });
+});
+
+router.delete("/allowance-settings", requireAdmin, async (req, res): Promise<void> => {
+  const teamId = parseTeamIdParam(req);
+  if (teamId === undefined) {
+    res.status(400).json({ error: "teamId ist erforderlich" });
+    return;
+  }
+  const team = await assertOwnTeam(req, res, teamId);
+  if (!team) return;
+  await db.delete(allowanceSettingsTable).where(eq(allowanceSettingsTable.teamId, teamId));
+  res.status(204).end();
 });
 
 export default router;

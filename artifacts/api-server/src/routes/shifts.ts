@@ -193,23 +193,41 @@ async function valuationPercentFor(type: string, shiftModelId: number | null): P
 }
 
 // Aktuelles Nachtfenster und gewähltes Bundesland aus den Zuschlags-Einstellungen
-// des TEAM-EIGENTÜMERS der Schicht (pro Konto gespeichert, kein globales
-// Singleton mehr). Fallback 23:00–06:00; ohne Bundesland nur bundesweite Feiertage.
+// des Teams der Schicht: zuerst der TEAM-OVERRIDE (team_id gesetzt), sonst die
+// Konto-Zeile des TEAM-EIGENTÜMERS (team_id NULL). Fallback 23:00–06:00; ohne
+// Bundesland nur bundesweite Feiertage.
 async function allowanceContext(
   teamId: number | null
 ): Promise<{ window: NightWindow; state: GermanState | null }> {
   let settings: { nightStart: string; nightEnd: string; state: string | null } | undefined;
   if (teamId != null) {
-    const [row] = await db
+    const [override] = await db
       .select({
         nightStart: allowanceSettingsTable.nightStart,
         nightEnd: allowanceSettingsTable.nightEnd,
         state: allowanceSettingsTable.state,
       })
-      .from(teamsTable)
-      .innerJoin(allowanceSettingsTable, eq(allowanceSettingsTable.ownerId, teamsTable.ownerId))
-      .where(eq(teamsTable.id, teamId));
-    settings = row;
+      .from(allowanceSettingsTable)
+      .where(eq(allowanceSettingsTable.teamId, teamId));
+    settings = override;
+    if (!settings) {
+      const [row] = await db
+        .select({
+          nightStart: allowanceSettingsTable.nightStart,
+          nightEnd: allowanceSettingsTable.nightEnd,
+          state: allowanceSettingsTable.state,
+        })
+        .from(teamsTable)
+        .innerJoin(
+          allowanceSettingsTable,
+          and(
+            eq(allowanceSettingsTable.ownerId, teamsTable.ownerId),
+            isNull(allowanceSettingsTable.teamId)
+          )
+        )
+        .where(eq(teamsTable.id, teamId));
+      settings = row;
+    }
   }
   return {
     window: {

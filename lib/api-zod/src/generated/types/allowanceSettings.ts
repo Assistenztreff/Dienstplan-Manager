@@ -9,6 +9,13 @@ import type { AllowanceSettingsState } from './allowanceSettingsState';
 
 export interface AllowanceSettings {
   id: number;
+  /**
+     * Team-ID des Overrides oder null bei Konto-Einstellungen.
+     * @nullable
+     */
+  teamId?: number | null;
+  /** true, wenn für das angefragte Team ein eigener Override existiert. */
+  isOverride?: boolean;
   nightPercent: number;
   nightStart: string;
   nightEnd: string;
