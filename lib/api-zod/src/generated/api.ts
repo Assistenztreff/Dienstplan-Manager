@@ -1086,6 +1086,32 @@ export const ExportCalendarQueryParams = zod.object({
 
 
 /**
+ * @summary Aktuellen Kalender-Abo-Token abrufen (Premium calendarSync)
+ */
+export const GetCalendarTokenResponse = zod.object({
+  "token": zod.string().nullable().describe('Geheimer Abo-Token (null = kein Abo eingerichtet)'),
+  "feedPath": zod.string().nullable().describe('Relativer Pfad der Feed-URL (null = kein Abo eingerichtet)')
+})
+
+
+/**
+ * @summary Kalender-Abo-Token erzeugen/erneuern (Premium calendarSync)
+ */
+export const RotateCalendarTokenResponse = zod.object({
+  "token": zod.string().nullable().describe('Geheimer Abo-Token (null = kein Abo eingerichtet)'),
+  "feedPath": zod.string().nullable().describe('Relativer Pfad der Feed-URL (null = kein Abo eingerichtet)')
+})
+
+
+/**
+ * @summary Öffentlicher iCalendar-Feed (Abo via Geheim-Token, ohne Session)
+ */
+export const GetCalendarFeedParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+
+/**
  * @summary Urlaubskontigent abrufen
  */
 export const GetVacationBalanceParams = zod.object({

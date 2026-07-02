@@ -21,3 +21,10 @@ migrate-teams script: post-merge runs the migration on an already-migrated DB,
 so every constraint re-add must truly be idempotent. Also note the post-merge
 script (`pnpm install` + migrate + `db push`) needs a generous timeout (~180s);
 the monorepo install alone is ~20s.
+
+**Related:** `drizzle-kit push` prompts interactively when it wants to ADD a
+UNIQUE constraint to an existing table (even with `--force`, the truncate
+question still requires a TTY). Non-interactive runs (agent shell, post-merge)
+die with "Interactive prompts require a TTY". Fix: pre-apply the column +
+constraint with guarded raw SQL (psql heredoc in post-merge.sh) BEFORE
+`db push`; push then reports "no changes".

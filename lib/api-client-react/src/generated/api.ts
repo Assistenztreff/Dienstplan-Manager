@@ -25,6 +25,7 @@ import type {
   AuthUser,
   BrandingSettings,
   BrandingSettingsInput,
+  CalendarToken,
   ChangePassword200,
   ChangePasswordInput,
   Contract,
@@ -3517,6 +3518,300 @@ export function useExportCalendar<TData = Awaited<ReturnType<typeof exportCalend
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getExportCalendarQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetCalendarTokenUrl = () => {
+
+
+
+
+  return `/api/calendar-token`
+}
+
+/**
+ * @summary Aktuellen Kalender-Abo-Token abrufen (Premium calendarSync)
+ */
+export const getCalendarToken = async ( options?: RequestInit): Promise<CalendarToken> => {
+
+  return customFetch<CalendarToken>(getGetCalendarTokenUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCalendarTokenQueryKey = () => {
+    return [
+    `/api/calendar-token`
+    ] as const;
+    }
+
+
+export const getGetCalendarTokenQueryOptions = <TData = Awaited<ReturnType<typeof getCalendarToken>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCalendarToken>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCalendarTokenQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCalendarToken>>> = ({ signal }) => getCalendarToken({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCalendarToken>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCalendarTokenQueryResult = NonNullable<Awaited<ReturnType<typeof getCalendarToken>>>
+export type GetCalendarTokenQueryError = ErrorType<void>
+
+
+/**
+ * @summary Aktuellen Kalender-Abo-Token abrufen (Premium calendarSync)
+ */
+
+export function useGetCalendarToken<TData = Awaited<ReturnType<typeof getCalendarToken>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCalendarToken>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCalendarTokenQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getRotateCalendarTokenUrl = () => {
+
+
+
+
+  return `/api/calendar-token`
+}
+
+/**
+ * @summary Kalender-Abo-Token erzeugen/erneuern (Premium calendarSync)
+ */
+export const rotateCalendarToken = async ( options?: RequestInit): Promise<CalendarToken> => {
+
+  return customFetch<CalendarToken>(getRotateCalendarTokenUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getRotateCalendarTokenMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rotateCalendarToken>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rotateCalendarToken>>, TError,void, TContext> => {
+
+const mutationKey = ['rotateCalendarToken'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rotateCalendarToken>>, void> = () => {
+
+
+          return  rotateCalendarToken(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RotateCalendarTokenMutationResult = NonNullable<Awaited<ReturnType<typeof rotateCalendarToken>>>
+
+    export type RotateCalendarTokenMutationError = ErrorType<void>
+
+    /**
+ * @summary Kalender-Abo-Token erzeugen/erneuern (Premium calendarSync)
+ */
+export const useRotateCalendarToken = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rotateCalendarToken>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof rotateCalendarToken>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getRotateCalendarTokenMutationOptions(options));
+    }
+
+export const getRevokeCalendarTokenUrl = () => {
+
+
+
+
+  return `/api/calendar-token`
+}
+
+/**
+ * @summary Kalender-Abo-Token widerrufen (Feed-URL wird ungültig)
+ */
+export const revokeCalendarToken = async ( options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getRevokeCalendarTokenUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getRevokeCalendarTokenMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeCalendarToken>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokeCalendarToken>>, TError,void, TContext> => {
+
+const mutationKey = ['revokeCalendarToken'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeCalendarToken>>, void> = () => {
+
+
+          return  revokeCalendarToken(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokeCalendarTokenMutationResult = NonNullable<Awaited<ReturnType<typeof revokeCalendarToken>>>
+
+    export type RevokeCalendarTokenMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Kalender-Abo-Token widerrufen (Feed-URL wird ungültig)
+ */
+export const useRevokeCalendarToken = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeCalendarToken>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof revokeCalendarToken>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getRevokeCalendarTokenMutationOptions(options));
+    }
+
+export const getGetCalendarFeedUrl = (token: string,) => {
+
+
+
+
+  return `/api/calendar-feed/${token}`
+}
+
+/**
+ * @summary Öffentlicher iCalendar-Feed (Abo via Geheim-Token, ohne Session)
+ */
+export const getCalendarFeed = async (token: string, options?: RequestInit): Promise<string> => {
+
+  return customFetch<string>(getGetCalendarFeedUrl(token),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCalendarFeedQueryKey = (token: string,) => {
+    return [
+    `/api/calendar-feed/${token}`
+    ] as const;
+    }
+
+
+export const getGetCalendarFeedQueryOptions = <TData = Awaited<ReturnType<typeof getCalendarFeed>>, TError = ErrorType<void>>(token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCalendarFeed>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCalendarFeedQueryKey(token);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCalendarFeed>>> = ({ signal }) => getCalendarFeed(token, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(token), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCalendarFeed>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCalendarFeedQueryResult = NonNullable<Awaited<ReturnType<typeof getCalendarFeed>>>
+export type GetCalendarFeedQueryError = ErrorType<void>
+
+
+/**
+ * @summary Öffentlicher iCalendar-Feed (Abo via Geheim-Token, ohne Session)
+ */
+
+export function useGetCalendarFeed<TData = Awaited<ReturnType<typeof getCalendarFeed>>, TError = ErrorType<void>>(
+ token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCalendarFeed>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCalendarFeedQueryOptions(token,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

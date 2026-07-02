@@ -584,6 +584,13 @@ export interface TimeEntryConfirm {
   notes?: string;
 }
 
+export interface CalendarToken {
+  /** Geheimer Abo-Token (null = kein Abo eingerichtet) */
+  token: string | null;
+  /** Relativer Pfad der Feed-URL (null = kein Abo eingerichtet) */
+  feedPath: string | null;
+}
+
 export interface InviteResult {
   userId: number;
   userName: string;

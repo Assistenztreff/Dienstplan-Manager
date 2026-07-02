@@ -16,6 +16,7 @@ export * from './authUserPlan';
 export * from './authUserRole';
 export * from './brandingSettings';
 export * from './brandingSettingsInput';
+export * from './calendarToken';
 export * from './changePassword200';
 export * from './changePasswordInput';
 export * from './contract';

@@ -1040,6 +1040,65 @@ paths:
         "403":
           description: Premium-Tarif erforderlich (plan_feature_required)
 
+  /calendar-token:
+    get:
+      operationId: getCalendarToken
+      tags: [dashboard]
+      summary: Aktuellen Kalender-Abo-Token abrufen (Premium calendarSync)
+      responses:
+        "200":
+          description: Aktueller Abo-Token (token = null, wenn keiner existiert)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarToken"
+        "403":
+          description: Premium-Tarif erforderlich (plan_feature_required)
+    post:
+      operationId: rotateCalendarToken
+      tags: [dashboard]
+      summary: Kalender-Abo-Token erzeugen/erneuern (Premium calendarSync)
+      responses:
+        "200":
+          description: Neuer Abo-Token (alter Token wird sofort ungültig)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarToken"
+        "403":
+          description: Premium-Tarif erforderlich (plan_feature_required)
+    delete:
+      operationId: revokeCalendarToken
+      tags: [dashboard]
+      summary: Kalender-Abo-Token widerrufen (Feed-URL wird ungültig)
+      responses:
+        "204":
+          description: Token widerrufen
+
+  /calendar-feed/{token}:
+    get:
+      operationId: getCalendarFeed
+      tags: [dashboard]
+      summary: Öffentlicher iCalendar-Feed (Abo via Geheim-Token, ohne Session)
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: iCalendar-Feed mit den verbindlichen (FIX) Schichten
+          content:
+            text/calendar:
+              schema:
+                type: string
+        "403":
+          description: Premium-Tarif des Token-Eigentümers erforderlich
+        "404":
+          description: Unbekannter oder widerrufener Token
+
   /contracts/{id}/vacation-balance:
     get:
       operationId: getVacationBalance
@@ -1918,6 +1977,19 @@ components:
           type: integer
         notes:
           type: string
+
+    CalendarToken:
+      type: object
+      required: [token, feedPath]
+      properties:
+        token:
+          type: string
+          nullable: true
+          description: Geheimer Abo-Token (null = kein Abo eingerichtet)
+        feedPath:
+          type: string
+          nullable: true
+          description: Relativer Pfad der Feed-URL (null = kein Abo eingerichtet)
 
     InviteResult:
       type: object

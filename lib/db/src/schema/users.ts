@@ -28,6 +28,10 @@ export const usersTable = pgTable("users", {
   passwordHash: text("password_hash"),
   inviteToken: text("invite_token"),
   inviteTokenExpiry: timestamp("invite_token_expiry"),
+  // Geheimer Abo-Token fuer den oeffentlichen Kalender-Feed (ICS-Abo in
+  // Google/Apple/Outlook). Kalender-Clients koennen keine Session-Cookies
+  // senden, daher authentifiziert der Token die Feed-URL. NULL = kein Abo.
+  calendarToken: text("calendar_token").unique(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -37,6 +41,7 @@ export const insertUserSchema = createInsertSchema(usersTable).omit({
   passwordHash: true,
   inviteToken: true,
   inviteTokenExpiry: true,
+  calendarToken: true,
 });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof usersTable.$inferSelect;

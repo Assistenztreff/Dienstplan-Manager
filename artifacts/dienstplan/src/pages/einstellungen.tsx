@@ -17,6 +17,11 @@ import {
   useUpdateProfile,
   requestUploadUrl,
   exportCalendar,
+  useGetCalendarToken,
+  useRotateCalendarToken,
+  useRevokeCalendarToken,
+  getGetCalendarTokenQueryKey,
+  type CalendarToken,
   type BrandingSettings,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -30,7 +35,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, GripVertical, Upload, ImageIcon, KeyRound, Mail, User as UserIcon, Lock, CalendarDays } from "lucide-react";
+import { Plus, Pencil, Trash2, GripVertical, Upload, ImageIcon, KeyRound, Mail, User as UserIcon, Lock, CalendarDays, Copy, RefreshCw } from "lucide-react";
 import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { AllowanceSettingsForm } from "@/components/allowance-settings-form";
 import { logoSrcFromPath, ACCEPTED_LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/logo";
@@ -915,6 +920,7 @@ function LogoSettingsCard() {
 
 function CalendarExportCard() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { currentUser } = useAuth();
   const { selectedTeamId } = useTeam();
   const [isExporting, setIsExporting] = useState(false);
@@ -923,6 +929,70 @@ function CalendarExportCard() {
   // iCalendar-Datei (.ics) für die eigene Kalender-App. UX-Gate — autoritativ
   // setzt der Server durch (403 plan_feature_required).
   const canSync = hasAccess(currentUser, "calendarSync");
+
+  // Abo-Feed: geheimer Token für eine ICS-URL, die Kalender-Apps abonnieren
+  // können (automatische Aktualisierung, kein erneuter Download nötig).
+  const { data: tokenData } = useGetCalendarToken({
+    query: { enabled: canSync },
+  } as Parameters<typeof useGetCalendarToken>[0]) as { data?: CalendarToken };
+  const rotateToken = useRotateCalendarToken();
+  const revokeToken = useRevokeCalendarToken();
+
+  const feedUrl =
+    tokenData?.feedPath != null
+      ? `${window.location.origin}${tokenData.feedPath}`
+      : null;
+
+  async function handleRotate() {
+    try {
+      await rotateToken.mutateAsync();
+      await queryClient.invalidateQueries({ queryKey: getGetCalendarTokenQueryKey() });
+      toast({
+        title: feedUrl ? "Abo-Link erneuert" : "Abo-Link erstellt",
+        description: feedUrl
+          ? "Der alte Link ist ab sofort ungültig. Bitte in der Kalender-App neu hinterlegen."
+          : "Den Link in der Kalender-App als Abonnement hinzufügen.",
+      });
+    } catch (err) {
+      toast({
+        title: "Abo-Link konnte nicht erstellt werden",
+        description:
+          planFeatureMessage(err) ?? readableApiError(err, "Bitte erneut versuchen."),
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleRevoke() {
+    try {
+      await revokeToken.mutateAsync();
+      await queryClient.invalidateQueries({ queryKey: getGetCalendarTokenQueryKey() });
+      toast({
+        title: "Abo-Link widerrufen",
+        description: "Abonnierte Kalender erhalten keine Aktualisierungen mehr.",
+      });
+    } catch (err) {
+      toast({
+        title: "Widerrufen fehlgeschlagen",
+        description: readableApiError(err, "Bitte erneut versuchen."),
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleCopy() {
+    if (!feedUrl) return;
+    try {
+      await navigator.clipboard.writeText(feedUrl);
+      toast({ title: "Abo-URL kopiert" });
+    } catch {
+      toast({
+        title: "Kopieren nicht möglich",
+        description: "Bitte die URL manuell markieren und kopieren.",
+        variant: "destructive",
+      });
+    }
+  }
 
   async function handleDownload() {
     setIsExporting(true);
@@ -964,16 +1034,90 @@ function CalendarExportCard() {
           Outlook).
         </p>
         {canSync ? (
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={handleDownload}
-            disabled={isExporting}
-            data-testid="calendar-export-button"
-          >
-            <CalendarDays className="h-4 w-4" />
-            {isExporting ? "Exportiere..." : "Als .ics herunterladen"}
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={handleDownload}
+              disabled={isExporting}
+              data-testid="calendar-export-button"
+            >
+              <CalendarDays className="h-4 w-4" />
+              {isExporting ? "Exportiere..." : "Als .ics herunterladen"}
+            </Button>
+
+            <div className="pt-3 border-t border-border/50 space-y-2">
+              <h4 className="text-sm font-medium text-foreground">
+                Kalender-Abo (automatische Aktualisierung)
+              </h4>
+              <p className="text-sm text-muted-foreground">
+                Die Abo-URL in der Kalender-App als Kalender-Abonnement hinzufügen —
+                neue oder verschobene verbindliche Dienste erscheinen dann automatisch,
+                ohne erneuten Download. Die URL enthält einen geheimen Zugriffs-Token:
+                nicht weitergeben.
+              </p>
+              {feedUrl ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      readOnly
+                      value={feedUrl}
+                      className="text-xs font-mono"
+                      onFocus={(e) => e.currentTarget.select()}
+                      data-testid="calendar-feed-url"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="shrink-0"
+                      onClick={handleCopy}
+                      title="Abo-URL kopieren"
+                      data-testid="calendar-feed-copy"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      onClick={handleRotate}
+                      disabled={rotateToken.isPending}
+                      data-testid="calendar-feed-rotate"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      {rotateToken.isPending ? "Erneuere..." : "Link erneuern"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="gap-2 text-destructive hover:text-destructive"
+                      onClick={handleRevoke}
+                      disabled={revokeToken.isPending}
+                      data-testid="calendar-feed-revoke"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      {revokeToken.isPending ? "Widerrufe..." : "Widerrufen"}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    „Link erneuern" macht die bisherige URL ungültig (z. B. wenn sie
+                    versehentlich geteilt wurde).
+                  </p>
+                </>
+              ) : (
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  onClick={handleRotate}
+                  disabled={rotateToken.isPending}
+                  data-testid="calendar-feed-create"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  {rotateToken.isPending ? "Erstelle..." : "Abo-Link erstellen"}
+                </Button>
+              )}
+            </div>
+          </>
         ) : (
           <>
             <Button
