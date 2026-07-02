@@ -23,3 +23,5 @@
 - [Bodyless POST req.body undefined](dev-login-bodyless-post.md) — auto-fired bodyless POSTs (dev-login) leave req.body undefined; destructure with `?? {}` or adding optional body params crashes the default path.
 - [Plan entitlements enforcement](plan-entitlements-enforcement.md) — Free/Premium config is a shared lib enforced server-side (plan read fresh from DB); all 4 limits (maxShiftModels=5 w/ 4 seeded, maxAssistants, maxTeams, historyMonths on POST+PATCH) + bulkEdit (PATCH /shifts userId swap) gated.
 - [Running a single e2e spec](e2e-single-spec-filter.md) — `test:e2e -- <file>` runs ALL specs (the npm script's extra `--` kills Playwright's filter); use `pnpm exec playwright test <name>` from the artifact dir.
+- [Full e2e suite red locally](full-e2e-suite-red-locally.md) — ~33 pre-existing failures (dev auto-login forms, Free-plan 403s in old specs, Radix announcer dupes); baseline-diff before blaming your change.
+- [Sonner toasts need mounted Toaster](sonner-toaster-mount.md) — pages using `toast` from "sonner" render nothing unless the sonner `<Toaster>` is mounted in App root alongside the shadcn one.
