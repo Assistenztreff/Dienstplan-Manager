@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable, shiftsTable, timeTrackingTable, contractsTable, allowanceSettingsTable, teamMembersTable } from "@workspace/db";
+import { usersTable, shiftsTable, timeTrackingTable, contractsTable, allowanceSettingsTable, teamMembersTable, teamsTable } from "@workspace/db";
 import { eq, and, sql, count, or, isNull, inArray } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middleware/auth";
 import { requirePlanFeature, getLenientTimeTrackingTeamIds } from "../lib/plan";
@@ -461,15 +461,45 @@ router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advance
   const referenceDate = new Date(year, month - 1, 1);
 
   // Aktuelle Zuschlags-Prozentsätze: werden erst hier (nicht beim Speichern der
-  // Schicht) angewandt, damit Änderungen rückwirkend greifen.
-  const [allowance] = await db
+  // Schicht) angewandt, damit Änderungen rückwirkend greifen. Die Prozente sind
+  // PRO KONTO (Team-Eigentümer) gespeichert — je Team im Scope gelten die
+  // Einstellungen seines Eigentümers, nie die eines fremden Kontos.
+  const teamAllowanceRows = teamScope.length
+    ? await db
+        .select({
+          teamId: teamsTable.id,
+          nightPercent: allowanceSettingsTable.nightPercent,
+          sundayPercent: allowanceSettingsTable.sundayPercent,
+          holidayPercent: allowanceSettingsTable.holidayPercent,
+        })
+        .from(teamsTable)
+        // LEFT JOIN: Hat der Team-Eigentümer noch keine Settings-Zeile (lazy
+        // angelegt), gelten für sein Team die Defaults — NIEMALS die Prozente
+        // des anfragenden Admins (sonst Fremdeinfluss über Konto-Grenzen).
+        .leftJoin(allowanceSettingsTable, eq(allowanceSettingsTable.ownerId, teamsTable.ownerId))
+        .where(inArray(teamsTable.id, teamScope))
+    : [];
+  const allowanceByTeam = new Map(
+    teamAllowanceRows.map((r) => [
+      r.teamId,
+      {
+        nightPercent: r.nightPercent ?? DEFAULT_NIGHT_PERCENT,
+        sundayPercent: r.sundayPercent ?? DEFAULT_SUNDAY_PERCENT,
+        holidayPercent: r.holidayPercent ?? DEFAULT_HOLIDAY_PERCENT,
+      },
+    ])
+  );
+  // Fallback/Anzeige-Prozente der Zeile: eigene Einstellungen des anfragenden
+  // Admins (identisch mit dem Team-Eigentümer im Normalfall, dass ein Admin
+  // seine eigenen Teams auswertet); ohne eigene Zeile die Defaults.
+  const [ownAllowance] = await db
     .select()
     .from(allowanceSettingsTable)
-    .where(eq(allowanceSettingsTable.id, 1));
+    .where(eq(allowanceSettingsTable.ownerId, req.session.userId!));
   const allowancePercents = {
-    nightPercent: allowance?.nightPercent ?? DEFAULT_NIGHT_PERCENT,
-    sundayPercent: allowance?.sundayPercent ?? DEFAULT_SUNDAY_PERCENT,
-    holidayPercent: allowance?.holidayPercent ?? DEFAULT_HOLIDAY_PERCENT,
+    nightPercent: ownAllowance?.nightPercent ?? DEFAULT_NIGHT_PERCENT,
+    sundayPercent: ownAllowance?.sundayPercent ?? DEFAULT_SUNDAY_PERCENT,
+    holidayPercent: ownAllowance?.holidayPercent ?? DEFAULT_HOLIDAY_PERCENT,
   };
 
   const result = await Promise.all(
@@ -514,6 +544,7 @@ router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advance
         shifts,
         timeEntries: timeEntriesWithShift,
         allowance: allowancePercents,
+        allowanceByTeam,
         contract,
       });
     })

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { TeamTestHarness } from "./helpers/teams";
+import { TeamTestHarness, registerFreeAccount, type FreeAccount } from "./helpers/teams";
 
 /**
  * API-E2E-Beweis: Der Admin-Zweig von GET /api/dashboard/hours-balance lädt die
@@ -14,8 +14,9 @@ import { TeamTestHarness } from "./helpers/teams";
  * Aufbau (fester Monat Oktober 2026, keine "aktueller Monat"-Flakes):
  * - Eigene Zuschlags-Prozente werden VOR dem Anlegen der Schichten gesetzt
  *   (Nacht 30 %, Sonntag 60 %, Feiertag 90 %, Nachtfenster 22:00-06:00) und im
- *   Cleanup wiederhergestellt (globale Singleton-Settings; Suite läuft mit
- *   workers=1, daher kein Parallel-Konflikt).
+ *   Cleanup wiederhergestellt. Die Einstellungen sind PRO KONTO gespeichert
+ *   (owner_id = Admin-Konto) — die Mutation betrifft also nur den Test-Admin,
+ *   das Restore ist reine Hygiene für nachfolgende Specs desselben Admins.
  * - Team A mit Assistent A bekommt drei FIX-Schichten, die jeweils genau einen
  *   Zuschlags-Topf treffen:
  *   - Nachtdienst  Mi 07.10. 20:00 -> Do 08.10. 06:00 (10h, Nachtstunden > 0)
@@ -81,6 +82,7 @@ let sundayShiftId: number;
 let holidayShiftId: number;
 let foreignShiftId: number;
 let originalAllowance: Record<string, unknown> | null = null;
+let foreignAccount: FreeAccount | null = null;
 
 async function fetchStoredMetrics(shiftId: number): Promise<StoredShiftMetrics> {
   const res = await h.ctx.get(`/api/shifts/${shiftId}`);
@@ -166,7 +168,11 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  // Globale Zuschlags-Einstellungen zurücksetzen, bevor die Fixture-Daten fallen.
+  if (foreignAccount) {
+    await foreignAccount.ctx.dispose();
+  }
+  // Zuschlags-Einstellungen des Test-Admins zurücksetzen (pro Konto gespeichert;
+  // Hygiene für nachfolgende Specs), bevor die Fixture-Daten fallen.
   if (originalAllowance) {
     try {
       await h.ctx.put("/api/allowance-settings", {
@@ -274,5 +280,133 @@ test.describe("hours-balance: Aggregation der Roh-Kennzahlen zu Zuschlägen", ()
     expect(row.nightHours).toBeCloseTo(0, 2);
     expect(row.holidayHours).toBeCloseTo(0, 2);
     expect(row.plannedHours).toBeCloseTo(8, 2);
+  });
+
+  test("Mandanten-Isolation: fremdes Konto sieht Default-Prozente, nicht die mutierten Werte", async () => {
+    // Der Test-Admin hat oben 30/60/90 gesetzt. Ein FRISCH registriertes,
+    // fremdes Admin-Konto muss trotzdem die Defaults (25/50/100) sehen — vor
+    // Task #288 waren die Settings eine globale Singleton-Zeile, die JEDER
+    // Admin für ALLE Konten überschreiben konnte.
+    foreignAccount = await registerFreeAccount("privat", "allowance-isolation");
+
+    const res = await foreignAccount.ctx.get("/api/allowance-settings");
+    expect(res.ok(), `GET allowance-settings (Fremdkonto) fehlgeschlagen (${res.status()})`).toBe(
+      true,
+    );
+    const settings = (await res.json()) as {
+      nightPercent: number;
+      sundayPercent: number;
+      holidayPercent: number;
+      nightStart: string;
+      nightEnd: string;
+    };
+    expect(settings.nightPercent).toBe(25);
+    expect(settings.sundayPercent).toBe(50);
+    expect(settings.holidayPercent).toBe(100);
+    expect(settings.nightStart).toBe("23:00");
+    expect(settings.nightEnd).toBe("06:00");
+
+    // Gegenrichtung: Mutation durch das Fremdkonto darf den Test-Admin nicht treffen.
+    const putRes = await foreignAccount.ctx.put("/api/allowance-settings", {
+      data: {
+        nightPercent: 11,
+        nightStart: "21:00",
+        nightEnd: "05:00",
+        sundayPercent: 22,
+        holidayPercent: 33,
+        state: null,
+      },
+    });
+    expect(putRes.ok(), `PUT allowance-settings (Fremdkonto) fehlgeschlagen (${putRes.status()})`).toBe(
+      true,
+    );
+
+    const ownRes = await h.ctx.get("/api/allowance-settings");
+    expect(ownRes.ok()).toBe(true);
+    const own = (await ownRes.json()) as { nightPercent: number; sundayPercent: number };
+    expect(own.nightPercent).toBe(NIGHT_PERCENT);
+    expect(own.sundayPercent).toBe(SUNDAY_PERCENT);
+  });
+
+  test("Fremdes Team ohne Settings-Zeile: Defaults gelten, nie die Prozente des Anfragers", async () => {
+    // Kanten-Fall aus dem Review: Der Eigentümer eines fremden Teams hat noch
+    // KEINE allowance_settings-Zeile (wird erst lazy bei GET angelegt). Wertet
+    // der Test-Admin (Mitglied, eigene Prozente 30/60/90) dieses Team aus,
+    // müssen die DEFAULTS (Sonntag 50 %) gelten — niemals seine eigenen Sätze.
+    const owner = await registerFreeAccount("dienstleister", "allowance-norow");
+    try {
+      // WICHTIG: kein GET /allowance-settings über owner.ctx — sonst würde die
+      // Zeile lazy angelegt und der Kanten-Fall wäre weg.
+      const teamsRes = await owner.ctx.get("/api/teams");
+      expect(teamsRes.ok(), `GET /teams (Eigentümer) fehlgeschlagen (${teamsRes.status()})`).toBe(
+        true,
+      );
+      const ownerTeams = (await teamsRes.json()) as Array<{ id: number }>;
+      expect(ownerTeams.length).toBeGreaterThan(0);
+      const foreignTeam = ownerTeams[0].id;
+
+      // Test-Admin als Mitglied aufnehmen, damit er das Team auswerten darf.
+      const addRes = await owner.ctx.post(`/api/teams/${foreignTeam}/members`, {
+        data: { userId: h.adminId },
+      });
+      expect(addRes.ok(), `Mitglied aufnehmen fehlgeschlagen (${addRes.status()})`).toBe(true);
+
+      // Assistent + FIX-Sonntagsschicht (So 03.05.2026, 8h) im fremden Team —
+      // vergangener Monat, damit das Free-historyMonths-Limit nicht greift.
+      const assistantRes = await owner.ctx.post("/api/users", {
+        data: {
+          name: "E2E NoRow Assistent",
+          email: `e2e.norow.${Date.now()}@dienstplan.test`,
+          role: "assistant",
+          teamId: foreignTeam,
+        },
+      });
+      expect(assistantRes.ok(), `Assistent anlegen fehlgeschlagen (${assistantRes.status()})`).toBe(
+        true,
+      );
+      const assistantId = ((await assistantRes.json()) as { id: number }).id;
+
+      const shiftRes = await owner.ctx.post("/api/shifts", {
+        data: {
+          userId: assistantId,
+          teamId: foreignTeam,
+          startTime: "2026-05-03T08:00:00.000Z",
+          endTime: "2026-05-03T16:00:00.000Z",
+          type: "active",
+        },
+      });
+      expect(shiftRes.ok(), `Schicht anlegen fehlgeschlagen (${shiftRes.status()})`).toBe(true);
+
+      // Auswertung durch den Test-Admin (Mitglied): Sonntagszuschlag muss mit
+      // dem DEFAULT (50 %) berechnet sein, nicht mit seinen eigenen 60 %.
+      const res = await h.ctx.get(
+        `/api/dashboard/hours-balance?teamId=${foreignTeam}&month=5&year=2026`,
+      );
+      expect(res.ok(), `hours-balance (fremdes Team) fehlgeschlagen (${res.status()})`).toBe(true);
+      const rows = (await res.json()) as BalanceRow[];
+      const row = rows.find((r) => r.userId === assistantId);
+      expect(row, "Zeile des fremden Assistenten fehlt").toBeTruthy();
+      expect(row!.sundayHours).toBeGreaterThan(0);
+      expect(row!.sundaySurchargeHours).toBeCloseTo(
+        round2((row!.sundayHours * 50) / 100),
+        2,
+      );
+      // Gegenprobe: mit den Anfrager-Prozenten (60 %) wäre der Wert ein anderer.
+      expect(row!.sundaySurchargeHours).not.toBeCloseTo(
+        round2((row!.sundayHours * SUNDAY_PERCENT) / 100),
+        2,
+      );
+    } finally {
+      // Mitgliedschaft des Test-Admins wieder entfernen, damit nachfolgende
+      // Specs keinen erweiterten Team-Scope sehen; Konto-Daten bleiben (Test-DB).
+      const teamsRes = await owner.ctx.get("/api/teams");
+      if (teamsRes.ok()) {
+        const ownerTeams = (await teamsRes.json()) as Array<{ id: number }>;
+        for (const t of ownerTeams) {
+          await owner.ctx.delete(`/api/teams/${t.id}/members/${h.adminId}`);
+        }
+      }
+      await owner.ctx.dispose();
+    }
   });
 });

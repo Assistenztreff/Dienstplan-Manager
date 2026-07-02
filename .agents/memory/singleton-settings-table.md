@@ -1,28 +1,34 @@
 ---
 name: Singleton settings table pattern
-description: How global single-row config tables (e.g. allowance_settings) are kept to exactly one row in this repo
+description: Patterns for single-row-per-scope config tables; allowance_settings is now per-account (owner_id), no longer a global singleton
 ---
 
-# Singleton settings tables (global config)
+# Per-scope settings tables (was: global singleton)
 
-For app-wide config that is a single row (e.g. `allowance_settings`, id fixed at 1):
+`allowance_settings` is NO LONGER a global singleton (id=1 + CHECK). It is
+per-account: `owner_id` NOT NULL UNIQUE FK→users.id (team-owner admin), one row
+per admin account. The global row was a multi-tenant leak (any admin overwrote
+percentages for everyone).
 
-- **Enforce one row at DB level**: `id integer primary key default 1` PLUS a check
-  constraint `CHECK (id = 1)`. In Drizzle: `(t) => [check("..._singleton", sql`${t.id} = 1`)]`.
-  Without the constraint, the default-1 primary key still allows other ids → silent drift.
-- **Race-safe ensure/read**: do an upsert, not read-then-insert.
-  `INSERT ... VALUES({id:1, ...defaults}) ON CONFLICT DO NOTHING`, then `SELECT` the row.
-  Drizzle: `.insert(table).values({...}).onConflictDoNothing()` then select by id=1.
-  Read-then-insert races two concurrent first requests into a unique-violation 500.
+**Why:** surcharge percentages are tenant config; readers (hours-balance,
+shift-metric storage) must resolve settings via the row's team → team owner →
+owner's settings, not a global row.
 
-**Why:** architect review flagged that a default-1 PK alone is not a true singleton,
-and read-then-insert has a first-hit race. These two fixes make the pattern correct.
-
-**How to apply:** reuse for any future global settings table. Constraint must be added
-via raw SQL DDL too (drizzle-kit push needs a TTY in this env — see drizzle-push-tty.md).
+**How to apply:**
+- **Enforce one row per scope at DB level**: UNIQUE on the scope column
+  (`owner_id`), not a fixed-id CHECK.
+- **Race-safe ensure/read**: upsert, not read-then-insert.
+  `.insert(table).values({ownerId, ...defaults}).onConflictDoNothing()` then
+  select by ownerId. Read-then-insert races two concurrent first requests into
+  a unique-violation 500.
+- **Readers pick the owner's row**: joins go teams → allowance_settings on
+  `teams.owner_id = allowance_settings.owner_id`, with hardcoded defaults as
+  fallback when no row exists yet.
+- Migration seeded one row per existing admin from the legacy global values
+  (idempotent script, runs in post-merge before db push and in setup-test-db).
 
 # Form hydration from a settings query (frontend)
 
 When a form is seeded from a React Query result, hydrate **once** (guard with a
-`useRef` flag), not on every `settings` change. React Query refetches (focus/reconnect/
-invalidate) would otherwise clobber the admin's unsaved edits.
+`useRef` flag), not on every `settings` change. React Query refetches (focus/
+reconnect/invalidate) would otherwise clobber the admin's unsaved edits.

@@ -2,6 +2,10 @@
 set -e
 pnpm install --frozen-lockfile
 pnpm --filter @workspace/scripts run migrate-teams
+# Zuschlags-Einstellungen von der globalen Singleton-Zeile auf Pro-Konto-Zeilen
+# migrieren (idempotent, VOR db push — sonst fragt push interaktiv nach
+# NOT NULL/UNIQUE auf der befüllten Tabelle und bricht ohne TTY ab).
+pnpm --filter @workspace/scripts run migrate-allowance-settings
 # calendar_token (Kalender-Abo-Feed) idempotent VOR db push anlegen: drizzle-kit
 # push fragt bei neuen UNIQUE-Constraints interaktiv nach (kein TTY im
 # Post-Merge => Abbruch). Vorab angelegt erkennt push "no changes".

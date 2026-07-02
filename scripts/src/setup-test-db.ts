@@ -112,6 +112,7 @@ async function main(): Promise<void> {
   }
   run("pnpm --filter @workspace/scripts run setup-admin");
   run("pnpm --filter @workspace/scripts run migrate-teams");
+  run("pnpm --filter @workspace/scripts run migrate-allowance-settings");
 
   // Test-Admin auf Premium setzen (NUR Test-Infrastruktur, niemals die echte
   // Dev-DB). Hintergrund: Die serverseitige Durchsetzung der Free-Limits würde

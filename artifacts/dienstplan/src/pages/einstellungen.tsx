@@ -1307,8 +1307,8 @@ export default function Einstellungen() {
       <AllowanceSettingsForm />
 
       <p className="text-xs text-muted-foreground">
-        Zuschläge werden zentral gespeichert und bei der Auswertung angewandt. Änderungen wirken sich
-        rückwirkend auf alle Auswertungen aus, ohne dass Schichten neu gespeichert werden müssen.
+        Zuschläge gelten nur für Ihr Konto und werden bei der Auswertung angewandt. Änderungen wirken
+        sich rückwirkend auf Ihre Auswertungen aus, ohne dass Schichten neu gespeichert werden müssen.
       </p>
 
       {dialogOpen && (

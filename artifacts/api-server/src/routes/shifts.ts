@@ -193,12 +193,24 @@ async function valuationPercentFor(type: string, shiftModelId: number | null): P
 }
 
 // Aktuelles Nachtfenster und gewähltes Bundesland aus den Zuschlags-Einstellungen
-// (Fallback 23:00–06:00; ohne Bundesland nur bundesweite Feiertage).
-async function allowanceContext(): Promise<{ window: NightWindow; state: GermanState | null }> {
-  const [settings] = await db
-    .select()
-    .from(allowanceSettingsTable)
-    .where(eq(allowanceSettingsTable.id, 1));
+// des TEAM-EIGENTÜMERS der Schicht (pro Konto gespeichert, kein globales
+// Singleton mehr). Fallback 23:00–06:00; ohne Bundesland nur bundesweite Feiertage.
+async function allowanceContext(
+  teamId: number | null
+): Promise<{ window: NightWindow; state: GermanState | null }> {
+  let settings: { nightStart: string; nightEnd: string; state: string | null } | undefined;
+  if (teamId != null) {
+    const [row] = await db
+      .select({
+        nightStart: allowanceSettingsTable.nightStart,
+        nightEnd: allowanceSettingsTable.nightEnd,
+        state: allowanceSettingsTable.state,
+      })
+      .from(teamsTable)
+      .innerJoin(allowanceSettingsTable, eq(allowanceSettingsTable.ownerId, teamsTable.ownerId))
+      .where(eq(teamsTable.id, teamId));
+    settings = row;
+  }
   return {
     window: {
       nightStart: settings?.nightStart ?? "23:00",
@@ -212,6 +224,7 @@ async function allowanceContext(): Promise<{ window: NightWindow; state: GermanS
 async function storeShiftMetrics(shift: {
   id: number;
   userId: number;
+  teamId: number | null;
   type: string;
   shiftModelId: number | null;
   startTime: Date;
@@ -225,7 +238,7 @@ async function storeShiftMetrics(shift: {
   const valuationPercent = absence
     ? 100
     : await valuationPercentFor(shift.type, shift.shiftModelId);
-  const { window, state } = await allowanceContext();
+  const { window, state } = await allowanceContext(shift.teamId);
   const metrics = resolveShiftMetrics(
     {
       type: shift.type,

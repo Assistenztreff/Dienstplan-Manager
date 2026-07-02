@@ -21,6 +21,8 @@ export interface BalanceShift {
   nightHours?: number | null;
   sundayHours?: number | null;
   holidayHours?: number | null;
+  /** Team der Schicht — bestimmt, wessen Zuschlags-Prozente gelten (Team-Eigentümer). */
+  teamId?: number | null;
 }
 
 /** Bestätigter Zeiterfassungs-Eintrag inkl. Typ der verknüpften Schicht. */
@@ -92,10 +94,20 @@ export function computeHoursBalanceRow(params: {
   shifts: BalanceShift[];
   timeEntries: BalanceTimeEntry[];
   allowance: AllowancePercents;
+  /**
+   * Optionale Prozentsätze je Team (Schlüssel = teamId). Zuschläge sind pro
+   * Konto (Team-Eigentümer) konfiguriert; enthält der Scope Teams
+   * unterschiedlicher Eigentümer, gelten je Schicht die Prozente ihres Teams.
+   * Ohne Eintrag (oder ohne teamId an der Schicht) gilt `allowance` als Fallback.
+   */
+  allowanceByTeam?: Map<number, AllowancePercents>;
   contract: AssistantContractInfo | null;
 }): HoursBalanceRow {
-  const { userId, userName, shifts, timeEntries, allowance, contract } = params;
+  const { userId, userName, shifts, timeEntries, allowance, allowanceByTeam, contract } = params;
   const { nightPercent, sundayPercent, holidayPercent } = allowance;
+
+  const percentsFor = (s: BalanceShift): AllowancePercents =>
+    (s.teamId != null ? allowanceByTeam?.get(s.teamId) : undefined) ?? allowance;
 
   const workShifts = shifts.filter(isWorkShift);
 
@@ -105,9 +117,18 @@ export function computeHoursBalanceRow(params: {
   const nightHours = workShifts.reduce((acc, s) => acc + (s.nightHours ?? 0), 0);
   const sundayHours = workShifts.reduce((acc, s) => acc + (s.sundayHours ?? 0), 0);
   const holidayHours = workShifts.reduce((acc, s) => acc + (s.holidayHours ?? 0), 0);
-  const nightSurchargeHours = (nightHours * nightPercent) / 100;
-  const sundaySurchargeHours = (sundayHours * sundayPercent) / 100;
-  const holidaySurchargeHours = (holidayHours * holidayPercent) / 100;
+  const nightSurchargeHours = workShifts.reduce(
+    (acc, s) => acc + ((s.nightHours ?? 0) * percentsFor(s).nightPercent) / 100,
+    0
+  );
+  const sundaySurchargeHours = workShifts.reduce(
+    (acc, s) => acc + ((s.sundayHours ?? 0) * percentsFor(s).sundayPercent) / 100,
+    0
+  );
+  const holidaySurchargeHours = workShifts.reduce(
+    (acc, s) => acc + ((s.holidayHours ?? 0) * percentsFor(s).holidayPercent) / 100,
+    0
+  );
 
   const vacationShifts = shifts.filter((s) => s.type === "vacation");
   const vacationFulfilledHours = vacationShifts.reduce((acc, s) => acc + (s.valuedHours ?? 0), 0);
