@@ -66,20 +66,13 @@ function safeName(name: string): string {
 }
 
 async function loginViaUi(page: Page, email: string, password: string): Promise<void> {
-  // Tolerant gegenüber dem Vite-DEV-Auto-Login: dort meldet die App sich
-  // automatisch als Admin an, sodass kein Login-Formular rendert. Ist das
-  // Formular nicht sichtbar, greift die Auto-Anmeldung bereits. Im Prod-Build
-  // (dev-login deaktiviert) wird das Formular regulär ausgefüllt.
-  await page.goto("/login");
-  const emailField = page.locator("#email");
-  try {
-    await emailField.waitFor({ state: "visible", timeout: 5000 });
-    await emailField.fill(email);
-    await page.locator("#password").fill(password);
-    await page.getByRole("button", { name: "Anmelden" }).click();
-  } catch {
-    // Formular nicht sichtbar -> Dev-Auto-Login greift bereits.
-  }
+  // Programmatische Anmeldung über die API: page.request teilt den Cookie-Jar
+  // mit dem Browser, dadurch ist /api/auth/me beim ersten Laden sofort 200 und
+  // der Vite-Dev-Auto-Login (der sonst als Seed-Admin anmeldet) greift nie —
+  // der Test agiert garantiert als der gewünschte Nutzer (dev- UND prod-tauglich).
+  const res = await page.request.post("/api/auth/login", { data: { email, password } });
+  expect(res.ok(), `Login als ${email} fehlgeschlagen (${res.status()})`).toBe(true);
+  await page.goto("/");
   await expect(page).toHaveURL(/\/$/);
 }
 

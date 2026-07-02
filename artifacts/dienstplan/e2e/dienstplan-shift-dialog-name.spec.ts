@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
+import { clearUserShiftsAroundDay } from "./helpers/shifts";
 
 /**
  * E2E-Test: Das Bearbeiten-Fenster (ShiftDialog im Edit-Modus) zeigt im
@@ -114,12 +115,13 @@ test.describe("ShiftDialog: Bearbeiten zeigt Assistenten-Namen (Admin, mobile)",
     const mobile = await openCalendar(page);
 
     // In einen weit in der Zukunft liegenden Monat navigieren (Kollisionsschutz).
-    for (let i = 0; i < 17; i++) {
+    for (let i = 0; i < 7; i++) {
       await page.getByTestId("next-month").click();
     }
     const { year, month } = parseMonthLabel(
       await page.getByTestId("month-label").innerText(),
     );
+    await clearUserShiftsAroundDay(page, year, month, 14, assistant.id);
 
     const day = 14;
     const cell = mobile.getByTestId(dayCellId(year, month, day));

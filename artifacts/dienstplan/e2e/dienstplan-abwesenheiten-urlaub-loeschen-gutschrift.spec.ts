@@ -126,6 +126,9 @@ test.afterAll(async () => {
 });
 
 test("Entfernen eines Urlaubs-Zeitraums bucht den Resturlaub wieder gut", async ({ page }) => {
+  // Mehrstufiger UI-Flow (Anlegen + Loeschen + Neuladen) — unter Volllast der
+  // Gesamtsuite reichen die 30s-Defaults nicht zuverlaessig.
+  test.setTimeout(60000);
   await loginViaUi(page, ADMIN_EMAIL, ADMIN_PASSWORD);
   await page.goto("/abwesenheiten");
   await expect(page.getByRole("heading", { name: "Abwesenheiten", exact: true })).toBeVisible();

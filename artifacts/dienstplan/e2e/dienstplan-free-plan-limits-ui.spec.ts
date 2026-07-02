@@ -84,24 +84,17 @@ test.describe("Free-Limit Assistenten (UI)", () => {
     await page.goto("/assistenten");
     await expect(page.getByRole("heading", { name: "Assistenten" })).toBeVisible();
 
-    // Anlege-Dialog oeffnen (Header-Button; mobiles Viewport zeigt "Neu").
-    await page.getByRole("button", { name: "Neu", exact: true }).click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog.getByText("Neuen Assistenten anlegen")).toBeVisible();
+    // Aktuelle UX am Limit: Der "Neu"-Button ist proaktiv DEAKTIVIERT und
+    // traegt den Upgrade-Hinweis als title (kein Dialog + 403 mehr noetig).
+    const newButton = page.getByRole("button", { name: "Neu", exact: true });
+    await expect(newButton).toBeVisible();
+    await expect(newButton, "Am Limit muss der Anlegen-Button gesperrt sein").toBeDisabled();
+    await expect(newButton).toHaveAttribute("title", /max\. 6 Assistenten/i);
+    await expect(newButton).toHaveAttribute("title", /Premium/i);
 
-    // Pflichtfelder ausfuellen (Vertragsfelder haben bereits Defaults).
-    await dialog.getByPlaceholder("Max", { exact: true }).fill("Sieben");
-    await dialog.getByPlaceholder("Mustermann").fill("Zuviel");
-    await dialog.getByPlaceholder("max@example.de").fill(`e2e.over.${Date.now()}@dienstplan.test`);
-    await dialog
-      .getByPlaceholder("Musterstr. 1, 12345 Musterstadt")
-      .fill("Teststr. 1, 12345 Teststadt");
-
-    await dialog.getByRole("button", { name: "Anlegen" }).click();
-
-    // Klarer Upgrade-Hinweis statt stillem Fehlschlag.
-    await expect(dialog.getByText(/max\. 6 Assistenten/i)).toBeVisible();
-    await expect(dialog.getByText(/Premium/i)).toBeVisible();
+    // Zusaetzlich zeigt die Seite einen sichtbaren Limit-Hinweis (Banner).
+    await expect(page.getByTestId("plan-limit-banner")).toBeVisible();
+    await expect(page.getByTestId("plan-limit-banner")).toContainText(/maximal 6 Assistenten/i);
   });
 });
 
@@ -160,16 +153,16 @@ test.describe("Free-Limit Teams (UI)", () => {
     await page.goto("/team-verwaltung");
     await expect(page.getByRole("heading", { name: "Team-Verwaltung" })).toBeVisible();
 
-    // Anlege-Dialog oeffnen (Header-Button; mobiles Viewport zeigt "Neu").
-    await page.getByRole("button", { name: "Neu", exact: true }).click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog.getByText("Neues Team")).toBeVisible();
+    // Aktuelle UX am Limit: Der "Neu"-Button ist proaktiv DEAKTIVIERT und
+    // traegt den Upgrade-Hinweis als title (kein Dialog + 403 mehr noetig).
+    const newButton = page.getByRole("button", { name: "Neu", exact: true });
+    await expect(newButton).toBeVisible();
+    await expect(newButton, "Am Limit muss der Anlegen-Button gesperrt sein").toBeDisabled();
+    await expect(newButton).toHaveAttribute("title", /max\. 1 Team/i);
+    await expect(newButton).toHaveAttribute("title", /Premium/i);
 
-    await dialog.getByPlaceholder("z.B. Team Nord").fill("Zweites Team");
-    await dialog.getByRole("button", { name: "Anlegen" }).click();
-
-    // Klarer Upgrade-Hinweis statt stillem Fehlschlag.
-    await expect(dialog.getByText(/max\. 1 Team/i)).toBeVisible();
-    await expect(dialog.getByText(/Premium/i)).toBeVisible();
+    // Zusaetzlich zeigt die Seite einen sichtbaren Limit-Hinweis (Banner).
+    await expect(page.getByTestId("plan-limit-banner")).toBeVisible();
+    await expect(page.getByTestId("plan-limit-banner")).toContainText(/maximal 1 Team/i);
   });
 });

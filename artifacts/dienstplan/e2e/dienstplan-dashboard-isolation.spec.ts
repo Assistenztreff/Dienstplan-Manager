@@ -5,6 +5,7 @@ import {
   request as playwrightRequest,
   type APIRequestContext,
 } from "@playwright/test";
+import { setAccountPlan } from "./helpers/teams";
 
 /**
  * E2E-/API-Test für die strikte, backend-seitige Team-Datentrennung der
@@ -46,10 +47,18 @@ const NONEXISTENT_TEAM_ID = 999999;
 // Dedizierter Monat weit in der Zukunft: macht die pro Team gescopten Aggregate
 // deterministisch (keine Kollision mit Bestandsdaten) und sorgt dafür, dass die
 // Schichten als "anstehend" (startTime >= heute) in upcomingShifts erscheinen.
-const YEAR = 2031;
-const MONTH = 6; // Juni 2031
-const DAY_SHIFT = `${YEAR}-0${MONTH}-10`;
-const DAY_TIME = `${YEAR}-0${MONTH}-11`;
+// Dynamischer Zielmonat = nächster Monat: liegt für jeden Plan (auch Free,
+// historyMonths=1) im erlaubten Vorausplanungs-Fenster und ist sicher zukünftig
+// (upcomingShifts). Kollisionsschutz braucht es nicht: alle Aggregate sind auf
+// frisch angelegte Teams/Nutzer gescoped.
+const TARGET = new Date();
+TARGET.setDate(1);
+TARGET.setMonth(TARGET.getMonth() + 1);
+const YEAR = TARGET.getFullYear();
+const MONTH = TARGET.getMonth() + 1;
+const MM = String(MONTH).padStart(2, "0");
+const DAY_SHIFT = `${YEAR}-${MM}-10`;
+const DAY_TIME = `${YEAR}-${MM}-11`;
 const SHIFT_HOURS = 8;
 
 // Eindeutiger Suffix, damit parallele/wiederholte Läufe nicht kollidieren.
@@ -154,15 +163,28 @@ test.beforeAll(async () => {
   timeB = await createTimeEntry(teamB, bobId, DAY_TIME);
 
   // --- Admin B (fremder Admin ohne Teams) seeden ---
+  // WICHTIG: Gegen die isolierte Test-DB seeden (E2E_TEST_DATABASE_URL aus der
+  // playwright.config), sonst landet der Angreifer in der Dev-DB und der
+  // Login gegen den Test-Stack schlägt fehl (gleiches Muster wie
+  // harness.seedForeignAdmin in helpers/teams.ts).
+  const seedEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    ADMIN_EMAIL: ATTACKER_EMAIL,
+    ADMIN_PASSWORD: ATTACKER_PASSWORD,
+    ADMIN_NAME: `E2E Dash Attacker ${RUN}`,
+  };
+  if (process.env.E2E_TEST_DATABASE_URL) {
+    seedEnv.DATABASE_URL = process.env.E2E_TEST_DATABASE_URL;
+  }
   execSync("pnpm --filter @workspace/scripts run setup-admin", {
-    env: {
-      ...process.env,
-      ADMIN_EMAIL: ATTACKER_EMAIL,
-      ADMIN_PASSWORD: ATTACKER_PASSWORD,
-      ADMIN_NAME: `E2E Dash Attacker ${RUN}`,
-    },
+    env: seedEnv,
     stdio: "pipe",
   });
+
+  // hours-balance ist Premium-gegated (advancedAnalytics); der Angreifer muss
+  // Premium sein, damit die Leerer-Scope-Tests 200 statt 403 (plan-Gate)
+  // prüfen — sonst testet der 403 nicht die Datentrennung.
+  setAccountPlan(ATTACKER_EMAIL, "premium");
 
   attackerCtx = await playwrightRequest.newContext({ baseURL: BASE_URL });
   const attackerLogin = await attackerCtx.post("/api/auth/login", {
@@ -275,9 +297,12 @@ test.describe("Dashboard summary: Team-Datentrennung", () => {
     expect(body.monthlyPlannedHours).toBe(SHIFT_HOURS * 2);
     expect(body.totalAssistants).toBeGreaterThanOrEqual(2);
     expect(body.pendingTimeEntries).toBeGreaterThanOrEqual(2);
-    // Falls beide Schichten ins Limit passen, müssen beide enthalten sein.
-    if (body.upcomingShifts.length >= 2) {
-      // mindestens eine der Test-Schichten sollte sichtbar sein
+    // upcomingShifts ist auf die 5 zeitlich nächsten Schichten limitiert —
+    // andere Specs derselben Suite können mit näher liegenden Schichten die
+    // Liste füllen und unsere Test-Schichten verdrängen. Nur wenn die Liste
+    // NICHT voll ist, müssen unsere Schichten enthalten sein; die Aggregate
+    // (monthlyPlannedHours oben) beweisen die Vereinigung bereits robust.
+    if (body.upcomingShifts.length < 5) {
       expect(shiftIds.some((id) => id === shiftA || id === shiftB)).toBe(true);
     }
   });

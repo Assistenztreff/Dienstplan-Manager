@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
+import { clearUserShiftsAroundDay } from "./helpers/shifts";
 
 /**
  * E2E-Test: Beim Bearbeiten einer bestehenden Schicht werden geänderte Werte
@@ -121,12 +122,13 @@ test.describe("ShiftDialog: Bearbeiten speichert geändertes Datum/Zeit korrekt 
     const mobile = await openCalendar(page);
 
     // In einen weit in der Zukunft liegenden Monat navigieren (Kollisionsschutz).
-    for (let i = 0; i < 23; i++) {
+    for (let i = 0; i < 5; i++) {
       await page.getByTestId("next-month").click();
     }
     const { year, month } = parseMonthLabel(
       await page.getByTestId("month-label").innerText(),
     );
+    await clearUserShiftsAroundDay(page, year, month, 10, assistant.id);
 
     const createDay = 10;
     const cell = mobile.getByTestId(dayCellId(year, month, createDay));

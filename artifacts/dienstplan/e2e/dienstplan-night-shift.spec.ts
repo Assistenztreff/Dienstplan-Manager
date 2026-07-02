@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
+import { clearUserShiftsAroundDay } from "./helpers/shifts";
 
 /**
  * E2E-Test für Nachtdienste über Mitternacht (z. B. 16:00–08:00).
@@ -127,14 +128,15 @@ test.describe("Nachtdienst über Mitternacht (Admin, mobile)", () => {
 
     const mobile = await openCalendar(page);
 
-    // Auf einen weit in der Zukunft liegenden Monat navigieren, um Kollisionen
-    // mit Bestandsschichten zu vermeiden.
-    for (let i = 0; i < 17; i++) {
+    // Auf einen eigenen Zielmonat (+10, innerhalb des Premium-Vorausplanungs-
+    // Fensters von 12 Monaten) navigieren; Leftovers werden vorab abgeräumt.
+    for (let i = 0; i < 10; i++) {
       await page.getByTestId("next-month").click();
     }
     const { year, month } = parseMonthLabel(
       await page.getByTestId("month-label").innerText(),
     );
+    await clearUserShiftsAroundDay(page, year, month, 12, assistant.id);
 
     // Einen Tag mit garantiertem Folgetag im selben Monat auswählen.
     const day = 12;
@@ -206,11 +208,19 @@ test.describe("Nachtdienst über Mitternacht (Admin, mobile)", () => {
     const assistant = await ensureAssistant(page);
     await ensureShiftModel(page);
 
-    // Weit in der Zukunft, eindeutiger Tag → keine Kollision.
-    const baseYear = new Date().getFullYear() + 3;
-    const startTime = `${baseYear}-03-14T16:00:00.000Z`;
-    const endTime = `${baseYear}-03-15T08:00:00.000Z`;
+    // Eigener Zielmonat (+9, innerhalb des Premium-Vorausplanungs-Fensters von
+    // 12 Monaten) und eindeutiger Tag; Leftovers werden vorab abgeräumt.
+    const target = new Date();
+    target.setDate(1);
+    target.setMonth(target.getMonth() + 9);
+    const tYear = target.getFullYear();
+    const tMonth = target.getMonth() + 1;
+    const ym = `${tYear}-${String(tMonth).padStart(2, "0")}`;
+    const startTime = `${ym}-14T16:00:00.000Z`;
+    const endTime = `${ym}-15T08:00:00.000Z`;
     const uniqueNotes = `E2E API Nachtschicht ${Date.now()}`;
+
+    await clearUserShiftsAroundDay(page, tYear, tMonth, 14, assistant.id);
 
     const createRes = await page.request.post("/api/shifts", {
       data: {

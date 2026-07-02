@@ -71,22 +71,14 @@ function localIso(dateStr: string, time: string): string {
 }
 
 async function loginAsAdmin(page: Page): Promise<void> {
-  await page.goto("/login");
-  // In Vite-DEV loggt die App automatisch als Dev-Admin ein (POST
-  // /api/auth/dev-login bei 401) und leitet sofort auf "/" um — das
-  // Anmeldeformular rendert dann nie. Im Prod-Build (Validierung) gibt es kein
-  // Auto-Login, also erscheint das Formular. Beide Wege führen zum selben Admin
-  // (admin@dienstplan.local).
-  const emailField = page.locator("#email");
-  const formVisible = await emailField
-    .waitFor({ state: "visible", timeout: 5000 })
-    .then(() => true)
-    .catch(() => false);
-  if (formVisible) {
-    await emailField.fill(ADMIN_EMAIL);
-    await page.locator("#password").fill(ADMIN_PASSWORD);
-    await page.getByRole("button", { name: "Anmelden" }).click();
-  }
+  // Programmatische Anmeldung über die API: page.request teilt den Cookie-Jar
+  // mit dem Browser, dadurch ist /api/auth/me beim ersten Laden sofort 200 und
+  // der Vite-Dev-Auto-Login greift nie (dev- UND prod-tauglich).
+  const res = await page.request.post("/api/auth/login", {
+    data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
+  });
+  expect(res.ok(), `Admin-Login fehlgeschlagen (${res.status()})`).toBe(true);
+  await page.goto("/");
   await expect(page).toHaveURL(/\/$/);
 }
 

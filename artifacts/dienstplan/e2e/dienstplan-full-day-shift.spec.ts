@@ -168,11 +168,11 @@ test.describe("24h-Dienst über den Folgetag (Admin, mobile)", () => {
     const assistant = await ensureAssistant(page);
     const model = await ensure24hModel(page);
 
-    // Zielmonat = heute + 21 Monate (anderer Offset als die Nachtdienst-Tests),
-    // damit Kollisionen mit Bestandsschichten und parallelen Tests vermieden
-    // werden. Vorab berechnet, damit die Schicht VOR dem Laden des Kalenders
-    // existiert (sonst kennt der erste Fetch sie nicht und das Badge fehlt).
-    const monthsAhead = 21;
+    // Zielmonat = heute + 11 Monate (anderer Offset als die Nachtdienst-Tests,
+    // aber innerhalb des Premium-Vorausplanungs-Fensters von 12 Monaten).
+    // Kollisionen werden über clearDayShifts abgeräumt. Vorab berechnet, damit
+    // die Schicht VOR dem Laden des Kalenders existiert.
+    const monthsAhead = 11;
     const base = new Date();
     const target = new Date(base.getFullYear(), base.getMonth() + monthsAhead, 1);
     const year = target.getFullYear();
@@ -268,11 +268,20 @@ test.describe("24h-Dienst über den Folgetag (Admin, mobile)", () => {
     await loginAsAdmin(page);
     const assistant = await ensureAssistant(page);
 
-    // Weit in der Zukunft, eindeutiger Tag → keine Kollision.
-    const baseYear = new Date().getFullYear() + 4;
-    const startTime = `${baseYear}-05-20T08:00:00.000Z`;
-    const endTime = `${baseYear}-05-21T08:00:00.000Z`;
+    // Eigener Zielmonat (+10, innerhalb des Premium-Vorausplanungs-Fensters
+    // von 12 Monaten) und eindeutiger Tag; Leftovers werden vorab abgeräumt.
+    const target = new Date();
+    target.setDate(1);
+    target.setMonth(target.getMonth() + 10);
+    const tYear = target.getFullYear();
+    const tMonth = target.getMonth() + 1;
+    const ym = `${tYear}-${String(tMonth).padStart(2, "0")}`;
+    const startTime = `${ym}-20T08:00:00.000Z`;
+    const endTime = `${ym}-21T08:00:00.000Z`;
     const uniqueNotes = `E2E API 24h-Dienst ${Date.now()}`;
+
+    await clearDayShifts(page, tYear, tMonth, 20, assistant.id);
+    await clearDayShifts(page, tYear, tMonth, 21, assistant.id);
 
     const createRes = await page.request.post("/api/shifts", {
       data: {

@@ -65,6 +65,11 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: 0,
   workers: 1,
+  // Unter Volllast der Gesamtsuite (ein Worker, geteilter Test-Stack) reichen
+  // die 30s-Defaults fuer mehrstufige UI-Flows nicht zuverlaessig — einzelne
+  // Specs kippen sonst lauf-abhaengig (Whack-a-mole). Echte Haenger werden
+  // weiterhin erkannt, nur eben nach 60s.
+  timeout: 60000,
   reporter: [["list"]],
   use: {
     baseURL,

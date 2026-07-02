@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
+import { clearUserShiftsAroundDay } from "./helpers/shifts";
 
 /**
  * E2E-Test: Im Bearbeiten-Modus des ShiftDialogs ist das Assistenten-Feld
@@ -127,12 +128,13 @@ test.describe("ShiftDialog: Assistent im Bearbeiten-Modus gesperrt (Admin, mobil
     const mobile = await openCalendar(page);
 
     // In einen weit in der Zukunft liegenden Monat navigieren (Kollisionsschutz).
-    for (let i = 0; i < 19; i++) {
+    for (let i = 0; i < 6; i++) {
       await page.getByTestId("next-month").click();
     }
     const { year, month } = parseMonthLabel(
       await page.getByTestId("month-label").innerText(),
     );
+    await clearUserShiftsAroundDay(page, year, month, 15, assistant.id);
 
     const day = 15;
     const cell = mobile.getByTestId(dayCellId(year, month, day));

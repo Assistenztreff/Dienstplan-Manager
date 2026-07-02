@@ -430,6 +430,13 @@ test.describe("Premium-Feature-Gates: Sperr-Hinweise im Frontend (UI)", () => {
     );
     await expect(gatedButtons.first()).toBeVisible();
     await expect(gatedButtons.first(), "Bestätigen muss im Free-Tarif gesperrt sein").toBeDisabled();
-    await expect(gatedButtons).toHaveCount(2);
+    // 3 gesperrte Buttons: Bestätigen + Ablehnen in der Zeile plus der
+    // Header-Button "Alle offenen bestätigen" (Sammelbestätigung, ebenfalls
+    // Premium-gegated).
+    await expect(gatedButtons).toHaveCount(3);
+    await expect(
+      page.getByTestId("batch-confirm-open"),
+      "Sammelbestätigung muss im Free-Tarif gesperrt sein",
+    ).toBeDisabled();
   });
 });

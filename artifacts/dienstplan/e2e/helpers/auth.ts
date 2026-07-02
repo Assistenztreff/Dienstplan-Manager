@@ -1,24 +1,20 @@
 import { expect, type Page } from "@playwright/test";
 
 /**
- * Tolerante UI-Anmeldung für die E2E-Tests.
+ * Programmatische Anmeldung für die E2E-Tests (dev- UND prod-tauglich).
  *
- * Im Dev-Modus meldet die App via /api/auth/dev-login automatisch als Admin an
- * und leitet von /login direkt auf / um – dann erscheint kein Login-Formular
- * (siehe `src/context/auth.tsx`). Ist die Auto-Anmeldung nicht aktiv (z.B. im
- * Prod-Build oder gegen einen isolierten Test-Stack), wird das Formular regulär
- * ausgefüllt. So bleibt derselbe Helper in beiden Umgebungen grün.
+ * Statt das Login-Formular auszufüllen, wird die Session direkt über die API
+ * aufgebaut: `page.request` teilt den Cookie-Jar mit dem Browser, dadurch ist
+ * `/api/auth/me` beim ersten Laden sofort 200 — der Vite-Dev-Auto-Login (der
+ * sonst bei 401 automatisch als Seed-Admin anmeldet und von /login wegleitet)
+ * greift damit nie. So agiert der Test garantiert als der GEWÜNSCHTE Nutzer
+ * (wichtig für Assistenten-Logins), im Dev-Stack wie im Prod-Build.
  */
 export async function loginViaUi(page: Page, email: string, password: string): Promise<void> {
-  await page.goto("/login");
-  const emailField = page.locator("#email");
-  try {
-    await emailField.waitFor({ state: "visible", timeout: 5000 });
-    await emailField.fill(email);
-    await page.locator("#password").fill(password);
-    await page.getByRole("button", { name: "Anmelden" }).click();
-  } catch {
-    // Formular nicht sichtbar -> Auto-Anmeldung greift bereits.
-  }
+  const res = await page.request.post("/api/auth/login", {
+    data: { email, password },
+  });
+  expect(res.ok(), `Login als ${email} fehlgeschlagen (${res.status()})`).toBe(true);
+  await page.goto("/");
   await expect(page).toHaveURL(/\/$/);
 }

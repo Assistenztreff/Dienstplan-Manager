@@ -76,20 +76,13 @@ async function createContract(ctx: APIRequestContext, userId: number): Promise<n
 }
 
 async function loginViaUi(page: Page, email: string, password: string): Promise<void> {
-  // Tolerant gegenüber dem Vite-DEV-Auto-Login: dort meldet die App sich
-  // automatisch als Admin an, sodass kein Login-Formular rendert. Ist das
-  // Formular nicht sichtbar, greift die Auto-Anmeldung bereits. Im Prod-Build
-  // (dev-login deaktiviert) wird das Formular regulär ausgefüllt.
-  await page.goto("/login");
-  const emailField = page.locator("#email");
-  try {
-    await emailField.waitFor({ state: "visible", timeout: 5000 });
-    await emailField.fill(email);
-    await page.locator("#password").fill(password);
-    await page.getByRole("button", { name: "Anmelden" }).click();
-  } catch {
-    // Formular nicht sichtbar -> Dev-Auto-Login greift bereits.
-  }
+  // Programmatische Anmeldung über die API: page.request teilt den Cookie-Jar
+  // mit dem Browser, dadurch ist /api/auth/me beim ersten Laden sofort 200 und
+  // der Vite-Dev-Auto-Login (der sonst als Seed-Admin anmeldet) greift nie —
+  // der Test agiert garantiert als der gewünschte Nutzer (dev- UND prod-tauglich).
+  const res = await page.request.post("/api/auth/login", { data: { email, password } });
+  expect(res.ok(), `Login als ${email} fehlgeschlagen (${res.status()})`).toBe(true);
+  await page.goto("/");
   await expect(page).toHaveURL(/\/$/);
 }
 
@@ -131,6 +124,9 @@ test.afterAll(async () => {
 test("Überlappende Urlaubsbuchung überspringt bereits vorhandene Tage und zieht Resturlaub nicht doppelt ab", async ({
   page,
 }) => {
+  // Mehrstufiger UI-Flow (zwei Urlaubsbuchungen + Saldo-Pruefung) — unter
+  // Volllast der Gesamtsuite reichen die 30s-Defaults nicht zuverlaessig.
+  test.setTimeout(60000);
   await loginViaUi(page, ADMIN_EMAIL, ADMIN_PASSWORD);
   await page.goto("/abwesenheiten");
   await expect(page.getByRole("heading", { name: "Abwesenheiten", exact: true })).toBeVisible();
@@ -159,8 +155,9 @@ test("Überlappende Urlaubsbuchung überspringt bereits vorhandene Tage und zieh
   await page.getByTestId("absence-to").fill(SECOND_TO);
   await page.getByTestId("absence-save").click();
 
-  // Toast bestätigt: 2 neue Tage angelegt, 1 bereits vorhanden.
-  await expect(page.getByText(/2 Tage angelegt, 1 bereits vorhanden/)).toBeVisible();
+  // Toast bestätigt: 2 neue Tage angelegt, 1 bereits vorhanden. (.first():
+  // der Text erscheint doppelt — Toast + Screenreader-Announcer.)
+  await expect(page.getByText(/2 Tage angelegt, 1 bereits vorhanden/).first()).toBeVisible();
 
   // Resturlaub sinkt nur um die 2 wirklich neuen Tage (auf 26), NICHT um 3.
   await expect(taken).toHaveText("4");

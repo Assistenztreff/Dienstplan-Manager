@@ -1,10 +1,5 @@
-import {
-  test,
-  expect,
-  request as playwrightRequest,
-  type Page,
-  type APIRequestContext,
-} from "@playwright/test";
+import { test, expect, type Page, type APIRequestContext } from "@playwright/test";
+import { registerFreeAccount } from "./helpers/teams";
 
 /**
  * E2E-Test für den Firmenlogo-Upload (Einstellungen) und dessen Verwendung.
@@ -22,9 +17,11 @@ import {
  * merkt sich den ursprünglichen Zustand und stellt ihn im Cleanup wieder her.
  */
 
-const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "admin@dienstplan.local";
-const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "admin1234";
-const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
+// Die Logo-Karte rendert NUR für Dienstleister-Konten (Privat-Konten nutzen
+// das Standard-Logo; der Seed-Admin ist "privat"). Daher registriert der Test
+// ein eigenes Dienstleister-Konto (Passwort fix aus registerFreeAccount).
+const ACCOUNT_PASSWORD = "free12345";
+let accountEmail: string;
 
 // Desktop-Viewport: Logo-Vorschau und Buttons sind im Settings-Layout stabil.
 test.use({ viewport: { width: 1280, height: 800 } });
@@ -49,18 +46,17 @@ let originalLogoPath: string | null = null;
  * ausgefüllt.
  */
 async function gotoSettingsAsAdmin(page: Page): Promise<void> {
+  // Programmatische Anmeldung über die API: page.request teilt den Cookie-Jar
+  // mit dem Browser, dadurch ist /api/auth/me beim ersten Laden sofort 200 und
+  // der Vite-Dev-Auto-Login greift nie (dev- UND prod-tauglich).
+  const loginRes = await page.request.post("/api/auth/login", {
+    data: { email: accountEmail, password: ACCOUNT_PASSWORD },
+  });
+  expect(loginRes.ok(), `Admin-Login fehlgeschlagen (${loginRes.status()})`).toBe(true);
   await page.goto("/einstellungen");
-  const heading = page.getByRole("heading", { name: "Einstellungen", exact: true });
-  const emailField = page.locator("#email");
-  await expect(heading.or(emailField).first()).toBeVisible({ timeout: 30000 });
-
-  if (await emailField.isVisible().catch(() => false)) {
-    await emailField.fill(ADMIN_EMAIL);
-    await page.locator("#password").fill(ADMIN_PASSWORD);
-    await page.getByRole("button", { name: "Anmelden" }).click();
-    await page.goto("/einstellungen");
-  }
-  await expect(heading).toBeVisible({ timeout: 30000 });
+  await expect(
+    page.getByRole("heading", { name: "Einstellungen", exact: true }),
+  ).toBeVisible({ timeout: 30000 });
 }
 
 async function getBranding(): Promise<BrandingSettings> {
@@ -70,11 +66,9 @@ async function getBranding(): Promise<BrandingSettings> {
 }
 
 test.beforeAll(async () => {
-  adminCtx = await playwrightRequest.newContext({ baseURL: BASE_URL });
-  const loginRes = await adminCtx.post("/api/auth/login", {
-    data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
-  });
-  expect(loginRes.ok(), "Admin-Login für Setup fehlgeschlagen").toBe(true);
+  const account = await registerFreeAccount("dienstleister", "logo.upload");
+  adminCtx = account.ctx;
+  accountEmail = account.email;
 
   // Ursprünglichen Zustand merken und auf "kein Logo" zurücksetzen, damit der
   // Test mit einem definierten Ausgangszustand startet.

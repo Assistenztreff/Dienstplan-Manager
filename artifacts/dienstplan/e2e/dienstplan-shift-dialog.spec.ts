@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
+import { clearUserShiftsAroundDay } from "./helpers/shifts";
 
 /**
  * E2E-Test für das Anlegen und Bearbeiten einer Schicht über den ShiftDialog.
@@ -124,12 +125,13 @@ test.describe("ShiftDialog: Schicht anlegen und bearbeiten (Admin, mobile)", () 
 
     // Auf einen weit in der Zukunft liegenden Monat navigieren, um Kollisionen
     // mit Bestandsschichten zu vermeiden.
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 8; i++) {
       await page.getByTestId("next-month").click();
     }
     const { year, month } = parseMonthLabel(
       await page.getByTestId("month-label").innerText(),
     );
+    await clearUserShiftsAroundDay(page, year, month, 16, assistant.id);
 
     // Einen festen Tag im Monat auswählen.
     const day = 16;

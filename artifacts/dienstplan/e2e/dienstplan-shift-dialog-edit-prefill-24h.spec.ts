@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
+import { clearUserShiftsAroundDay } from "./helpers/shifts";
 
 /**
  * E2E-Test: Beim Öffnen eines 24h-DIENSTES (identische Start-/Endzeit, z. B.
@@ -61,10 +62,14 @@ function dayCellId(year: number, month: number, dayOfMonth: number): string {
 }
 
 async function loginAsAdmin(page: Page): Promise<void> {
-  await page.goto("/login");
-  await page.locator("#email").fill(ADMIN_EMAIL);
-  await page.locator("#password").fill(ADMIN_PASSWORD);
-  await page.getByRole("button", { name: "Anmelden" }).click();
+  // Programmatische Anmeldung über die API: page.request teilt den Cookie-Jar
+  // mit dem Browser, dadurch ist /api/auth/me beim ersten Laden sofort 200 und
+  // der Vite-Dev-Auto-Login greift nie (dev- UND prod-tauglich).
+  const res = await page.request.post("/api/auth/login", {
+    data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
+  });
+  expect(res.ok(), `Admin-Login fehlgeschlagen (${res.status()})`).toBe(true);
+  await page.goto("/");
   await expect(page).toHaveURL(/\/$/);
 }
 
@@ -109,11 +114,13 @@ test.describe("ShiftDialog: Bearbeiten belegt 24h-Dienst korrekt vor (Admin, mob
 
     const mobile = await openCalendar(page);
 
-    // In einen weit in der Zukunft liegenden Monat navigieren (Kollisionsschutz).
-    const { year, month } = await navigateForwardMonths(page, 23);
+    // Eigener Zielmonat (+2, innerhalb des Premium-Vorausplanungs-Fensters von
+    // 12 Monaten); Leftovers werden vorab abgeräumt.
+    const { year, month } = await navigateForwardMonths(page, 2);
 
     // Tag 16 ist in jedem Monat vorhanden; der Folgetag (Ende) existiert sicher.
     const day = 16;
+    await clearUserShiftsAroundDay(page, year, month, day, assistant.id);
     const expectedDate = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     const startTime = "08:00";
 
@@ -151,6 +158,12 @@ test.describe("ShiftDialog: Bearbeiten belegt 24h-Dienst korrekt vor (Admin, mob
     await page.getByTestId("prev-month").click();
     await page.getByTestId("next-month").click();
     expect(parseMonthLabel(await page.getByTestId("month-label").innerText())).toEqual({ year, month });
+
+    // In der Mobile-Ansicht erscheinen Schicht-Badges erst, wenn der Tag
+    // ausgewählt ist (Tagesliste unter dem Kalender) — Tag 16 anklicken.
+    const cell = mobile.getByTestId(dayCellId(year, month, day));
+    await cell.click();
+    await expect(cell).toHaveAttribute("data-selected", "true");
 
     // --- Schicht im Bearbeiten-Modus öffnen --------------------------------
     const badge = mobile.getByTestId(`shift-badge-${shiftId}`);

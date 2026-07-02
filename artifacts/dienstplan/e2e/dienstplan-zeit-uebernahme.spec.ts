@@ -114,10 +114,13 @@ async function createShift(userId: number, start: Date, end: Date): Promise<numb
 }
 
 async function loginViaUi(page: Page, email: string, password: string): Promise<void> {
-  await page.goto("/login");
-  await page.locator("#email").fill(email);
-  await page.locator("#password").fill(password);
-  await page.getByRole("button", { name: "Anmelden" }).click();
+  // Programmatische Anmeldung über die API: page.request teilt den Cookie-Jar
+  // mit dem Browser, dadurch ist /api/auth/me beim ersten Laden sofort 200 und
+  // der Vite-Dev-Auto-Login (der sonst als Seed-Admin anmeldet) greift nie —
+  // der Test agiert garantiert als der gewünschte Nutzer (dev- UND prod-tauglich).
+  const res = await page.request.post("/api/auth/login", { data: { email, password } });
+  expect(res.ok(), `Login als ${email} fehlgeschlagen (${res.status()})`).toBe(true);
+  await page.goto("/");
   await expect(page).toHaveURL(/\/$/);
 }
 
@@ -211,7 +214,9 @@ test.describe("Zeit-Übernahme: Web-Flow als Assistent", () => {
     // Dialog schließt, ein neuer pending-Eintrag erscheint in der Tabelle.
     await expect(page.getByTestId("adopt-dialog")).toBeHidden();
     await expect(page.getByText("08:00 - 16:00")).toBeVisible();
-    await expect(page.getByText("Offen")).toBeVisible();
+    // Status-Badge in der Eintrags-Tabelle (nicht der "Offen"-Filter-Button
+    // oberhalb der Tabelle → auf die Tabelle scopen).
+    await expect(page.locator("table").getByText("Offen").first()).toBeVisible();
 
     // Die übernommene Schicht verschwindet aus der Liste der offenen Schichten.
     await expect(

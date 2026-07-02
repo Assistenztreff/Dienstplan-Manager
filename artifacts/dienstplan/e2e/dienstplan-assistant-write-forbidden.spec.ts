@@ -31,9 +31,14 @@ const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "admin@dienstplan.local";
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "admin1234";
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
 
-const YEAR = 2032;
-const MONTH = 6;
-const DAY_SHIFT = `${YEAR}-0${MONTH}-10`;
+// Dynamischer Zielmonat = nächster Monat: liegt für jeden Plan (auch Free,
+// historyMonths=1) innerhalb des erlaubten Vorausplanungs-Fensters.
+const TARGET = new Date();
+TARGET.setDate(1);
+TARGET.setMonth(TARGET.getMonth() + 1);
+const YEAR = TARGET.getFullYear();
+const MONTH = TARGET.getMonth() + 1;
+const DAY_SHIFT = `${YEAR}-${String(MONTH).padStart(2, "0")}-10`;
 
 const RUN = Date.now();
 const MY_PASSWORD = `Pw${RUN}!secure`;

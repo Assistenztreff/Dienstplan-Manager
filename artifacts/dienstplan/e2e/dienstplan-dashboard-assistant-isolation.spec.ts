@@ -46,10 +46,18 @@ const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
 // deterministisch (keine Kollision mit Bestandsdaten) und sorgt dafür, dass die
 // eigene Schicht als "anstehend" (startTime >= heute) in upcomingShifts
 // erscheint.
-const YEAR = 2031;
-const MONTH = 6; // Juni 2031
-const DAY_SHIFT = `${YEAR}-0${MONTH}-10`;
-const DAY_TIME = `${YEAR}-0${MONTH}-11`;
+// Dynamischer Zielmonat = nächster Monat: liegt für jeden Plan (auch Free,
+// historyMonths=1) im erlaubten Vorausplanungs-Fenster und ist sicher zukünftig
+// (upcomingShifts). Kollisionsschutz braucht es nicht: alle Aggregate sind auf
+// frisch angelegte Teams/Nutzer gescoped.
+const TARGET = new Date();
+TARGET.setDate(1);
+TARGET.setMonth(TARGET.getMonth() + 1);
+const YEAR = TARGET.getFullYear();
+const MONTH = TARGET.getMonth() + 1;
+const MM = String(MONTH).padStart(2, "0");
+const DAY_SHIFT = `${YEAR}-${MM}-10`;
+const DAY_TIME = `${YEAR}-${MM}-11`;
 const SHIFT_HOURS = 8;
 
 // Eindeutiger Suffix, damit parallele/wiederholte Läufe nicht kollidieren.

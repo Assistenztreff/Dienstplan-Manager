@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
+import { clearUserShiftsAroundDay } from "./helpers/shifts";
 
 /**
  * E2E-Test: Beim Öffnen einer Nachtschicht ÜBER MITTERNACHT (z. B. 22:00–06:00)
@@ -126,12 +127,13 @@ test.describe("ShiftDialog: Bearbeiten belegt Nachtschicht über Mitternacht kor
     const mobile = await openCalendar(page);
 
     // In einen weit in der Zukunft liegenden Monat navigieren (Kollisionsschutz).
-    for (let i = 0; i < 22; i++) {
+    for (let i = 0; i < 3; i++) {
       await page.getByTestId("next-month").click();
     }
     const { year, month } = parseMonthLabel(
       await page.getByTestId("month-label").innerText(),
     );
+    await clearUserShiftsAroundDay(page, year, month, 16, assistant.id);
 
     // Bewusst ein Tag früh genug im Monat, damit der Folgetag (Ende) sicher
     // existiert; Tag 16 ist ungefährlich für jeden Monat.

@@ -89,18 +89,17 @@ async function createAssistant(
  * automatisch; sonst wird das Login-Formular ausgefüllt.
  */
 async function gotoAssistentenAsAdmin(page: Page): Promise<void> {
+  // Programmatische Anmeldung über die API: page.request teilt den Cookie-Jar
+  // mit dem Browser, dadurch ist /api/auth/me beim ersten Laden sofort 200 und
+  // der Vite-Dev-Auto-Login greift nie (dev- UND prod-tauglich).
+  const loginRes = await page.request.post("/api/auth/login", {
+    data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
+  });
+  expect(loginRes.ok(), `Admin-Login fehlgeschlagen (${loginRes.status()})`).toBe(true);
   await page.goto("/assistenten");
-  const heading = page.getByRole("heading", { name: "Assistenten", exact: true });
-  const emailField = page.locator("#email");
-  await expect(heading.or(emailField).first()).toBeVisible({ timeout: 30000 });
-
-  if (await emailField.isVisible().catch(() => false)) {
-    await emailField.fill(ADMIN_EMAIL);
-    await page.locator("#password").fill(ADMIN_PASSWORD);
-    await page.getByRole("button", { name: "Anmelden" }).click();
-    await page.goto("/assistenten");
-  }
-  await expect(heading).toBeVisible({ timeout: 30000 });
+  await expect(
+    page.getByRole("heading", { name: "Assistenten", exact: true }),
+  ).toBeVisible({ timeout: 30000 });
 }
 
 /** Öffnet den Bearbeiten-Dialog der Karte mit der gegebenen userId. */
