@@ -136,6 +136,16 @@ function shiftDotClass(shift: Shift): string {
   return userDotClass(shift.userId);
 }
 
+// Unverbindliche Dienste (Entwurf/Vorschlag) erscheinen im Monatsgitter als
+// abgeschwächte Punkte — analog zur reduzierten Deckkraft der Badges. So ist
+// auch in der kompaktesten Ansicht erkennbar, dass diese Dienste (noch) nicht
+// in Auswertungen und Stundennachweis zählen.
+function shiftDotStatusClass(shift: Shift): string {
+  if (isAbsenceShift(shift)) return "";
+  const status = shift.planningStatus ?? "FIX";
+  return status === "FIX" ? "" : "opacity-40";
+}
+
 // Abwesenheiten (Urlaub/Krank) werden als ganztägige Tagesblöcke gespeichert —
 // ein Datensatz pro Tag. Mehrtägige Abwesenheiten bestehen aus mehreren
 // aufeinanderfolgenden Datensätzen desselben Typs.
@@ -674,7 +684,7 @@ function MonthGrid({
                       {dots.map((s) => (
                         <span
                           key={s.id}
-                          className={`h-1.5 w-1.5 rounded-full ${shiftDotClass(s)}`}
+                          className={`h-1.5 w-1.5 rounded-full ${shiftDotClass(s)} ${shiftDotStatusClass(s)}`}
                         />
                       ))}
                     </span>

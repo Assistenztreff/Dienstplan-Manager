@@ -161,6 +161,12 @@ function ExportRangeDialog({
             )}{" "}
             Waehle den gewuenschten Zeitraum – pro Assistent und Monat entsteht eine Seite.
           </p>
+          {/* Gleicher Transparenz-Hinweis wie auf der Auswertungen-Seite: der
+              PDF-Nachweis basiert auf hours-balance und enthält nur FIX-Dienste. */}
+          <p className="text-xs text-muted-foreground" data-testid="export-fix-only-hint">
+            Der Stundennachweis enthält nur bestätigte Dienste. Entwürfe und Vorschläge werden
+            nicht mitgezählt.
+          </p>
 
           <div className="space-y-3">
             <div className="space-y-1.5">
@@ -277,6 +283,11 @@ export default function Auswertungen() {
           <div>
             <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Auswertungen</h2>
             <p className="text-muted-foreground mt-1 text-sm">Soll/Ist-Abgleich der Stunden</p>
+            {/* Transparenz: Entwürfe/Vorschläge bleiben im Dienstplan sichtbar,
+                zählen aber bewusst nicht in Auswertungen und Stundennachweis. */}
+            <p className="text-xs text-muted-foreground mt-1" data-testid="fix-only-hint">
+              Es zählen nur bestätigte Dienste — Entwürfe und Vorschläge fließen nicht ein.
+            </p>
           </div>
           <TeamSwitcher />
         </div>

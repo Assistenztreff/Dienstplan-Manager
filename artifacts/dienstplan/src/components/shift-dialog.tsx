@@ -46,9 +46,21 @@ type ShiftForEdit = {
 type PlanningStatus = "VORLAEUFIG" | "ANGEBOTEN" | "FIX";
 
 const PLANNING_STATUS_OPTIONS: { value: PlanningStatus; label: string; hint: string }[] = [
-  { value: "VORLAEUFIG", label: "Entwurf", hint: "Interne Planung, noch nicht verbindlich." },
-  { value: "ANGEBOTEN", label: "Vorschlag", hint: "Dem Assistenten angeboten, wartet auf Bestätigung." },
-  { value: "FIX", label: "Bestätigt", hint: "Verbindlich bestätigter Dienst." },
+  {
+    value: "VORLAEUFIG",
+    label: "Entwurf",
+    hint: "Interne Planung, noch nicht verbindlich — zählt nicht in Auswertungen und Stundennachweis.",
+  },
+  {
+    value: "ANGEBOTEN",
+    label: "Vorschlag",
+    hint: "Dem Assistenten angeboten, wartet auf Bestätigung — zählt noch nicht in Auswertungen und Stundennachweis.",
+  },
+  {
+    value: "FIX",
+    label: "Bestätigt",
+    hint: "Verbindlich bestätigter Dienst — zählt in Auswertungen und Stundennachweis.",
+  },
 ];
 
 function isPlanningStatus(value: string | null | undefined): value is PlanningStatus {
