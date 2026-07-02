@@ -7,11 +7,13 @@
 // ---------------------------------------------------------------------------
 
 import { Router } from "express";
-import { db, usersTable } from "@workspace/db";
-import { eq, sql, asc } from "drizzle-orm";
+import { db, usersTable, planChangesTable } from "@workspace/db";
+import { eq, sql, asc, desc } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import {
   UpdateOperatorAccountPlanParams,
   UpdateOperatorAccountPlanBody,
+  ListOperatorPlanChangesQueryParams,
 } from "@workspace/api-zod";
 import { requireSuperadmin } from "../middleware/auth";
 
@@ -75,7 +77,7 @@ router.patch(
     // Nur Admin-Konten haben einen Plan; Assistenten/Superadmins sind keine
     // zahlenden Konten.
     const [target] = await db
-      .select({ id: usersTable.id, role: usersTable.role })
+      .select({ id: usersTable.id, role: usersTable.role, plan: usersTable.plan })
       .from(usersTable)
       .where(eq(usersTable.id, id));
     if (!target || target.role !== "admin") {
@@ -85,12 +87,60 @@ router.patch(
 
     await db.update(usersTable).set({ plan }).where(eq(usersTable.id, id));
 
+    // Audit-Eintrag: JEDER Plan-Flip wird protokolliert (auch No-Op-Flips,
+    // z. B. premium→premium — auch die belegen, dass der Betreiber die
+    // Freischaltung zu dem Zeitpunkt ausgeführt hat). Append-only.
+    await db.insert(planChangesTable).values({
+      accountId: id,
+      oldPlan: target.plan,
+      newPlan: plan,
+      changedBy: req.session.userId!,
+    });
+
     const [account] = await db
       .select(ACCOUNT_SELECT)
       .from(usersTable)
       .where(eq(usersTable.id, id));
     req.log.info({ accountId: id, plan }, "Operator hat Plan umgeschaltet");
     res.json(account);
+    return;
+  },
+);
+
+// GET /operator/plan-changes — Audit-Log der Plan-Umschaltungen (neueste
+// zuerst). Join auf users zweimal: betroffenes Konto + ausführender
+// superadmin.
+const changedByUser = alias(usersTable, "changed_by_user");
+
+router.get(
+  "/operator/plan-changes",
+  requireSuperadmin,
+  async (req, res): Promise<void> => {
+    const queryResult = ListOperatorPlanChangesQueryParams.safeParse(req.query);
+    if (!queryResult.success) {
+      res.status(400).json({ error: "Ungültige Parameter" });
+      return;
+    }
+    const limit = queryResult.data.limit ?? 50;
+
+    const changes = await db
+      .select({
+        id: planChangesTable.id,
+        accountId: planChangesTable.accountId,
+        accountName: usersTable.name,
+        accountEmail: usersTable.email,
+        oldPlan: planChangesTable.oldPlan,
+        newPlan: planChangesTable.newPlan,
+        changedByName: changedByUser.name,
+        createdAt: planChangesTable.createdAt,
+      })
+      .from(planChangesTable)
+      .innerJoin(usersTable, eq(planChangesTable.accountId, usersTable.id))
+      .innerJoin(changedByUser, eq(planChangesTable.changedBy, changedByUser.id))
+      .orderBy(desc(planChangesTable.createdAt), desc(planChangesTable.id))
+      .limit(limit);
+
+    res.json(changes);
     return;
   },
 );

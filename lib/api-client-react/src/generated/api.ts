@@ -41,6 +41,7 @@ import type {
   HoursBalance,
   InviteResult,
   ListContractsParams,
+  ListOperatorPlanChangesParams,
   ListShiftModelsParams,
   ListShiftTemplatesParams,
   ListShiftsParams,
@@ -48,6 +49,7 @@ import type {
   ListUsersParams,
   LoginInput,
   OperatorAccount,
+  OperatorPlanChange,
   OperatorPlanUpdate,
   RegisterInput,
   SetPasswordInput,
@@ -4798,4 +4800,90 @@ export const useUpdateOperatorAccountPlan = <TError = ErrorType<void>,
       > => {
       return useMutation(getUpdateOperatorAccountPlanMutationOptions(options));
     }
+
+export const getListOperatorPlanChangesUrl = (params?: ListOperatorPlanChangesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/operator/plan-changes?${stringifiedParams}` : `/api/operator/plan-changes`
+}
+
+/**
+ * Liefert die letzten manuellen Plan-Änderungen (Premium-Freischaltungen und Rückstufungen) mit betroffenem Konto, altem/neuem Plan, ausführendem Superadmin und Zeitstempel — neueste zuerst.
+
+ * @summary Audit-Log der Plan-Umschaltungen (nur superadmin)
+ */
+export const listOperatorPlanChanges = async (params?: ListOperatorPlanChangesParams, options?: RequestInit): Promise<OperatorPlanChange[]> => {
+
+  return customFetch<OperatorPlanChange[]>(getListOperatorPlanChangesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListOperatorPlanChangesQueryKey = (params?: ListOperatorPlanChangesParams,) => {
+    return [
+    `/api/operator/plan-changes`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListOperatorPlanChangesQueryOptions = <TData = Awaited<ReturnType<typeof listOperatorPlanChanges>>, TError = ErrorType<void>>(params?: ListOperatorPlanChangesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOperatorPlanChanges>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListOperatorPlanChangesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOperatorPlanChanges>>> = ({ signal }) => listOperatorPlanChanges(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listOperatorPlanChanges>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListOperatorPlanChangesQueryResult = NonNullable<Awaited<ReturnType<typeof listOperatorPlanChanges>>>
+export type ListOperatorPlanChangesQueryError = ErrorType<void>
+
+
+/**
+ * @summary Audit-Log der Plan-Umschaltungen (nur superadmin)
+ */
+
+export function useListOperatorPlanChanges<TData = Awaited<ReturnType<typeof listOperatorPlanChanges>>, TError = ErrorType<void>>(
+ params?: ListOperatorPlanChangesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOperatorPlanChanges>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListOperatorPlanChangesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 

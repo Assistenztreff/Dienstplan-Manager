@@ -27,7 +27,9 @@ import { useState } from "react";
 import {
   useListOperatorAccounts,
   useUpdateOperatorAccountPlan,
+  useListOperatorPlanChanges,
   getListOperatorAccountsQueryKey,
+  getListOperatorPlanChangesQueryKey,
   type OperatorAccount,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -35,7 +37,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, Receipt, AlertTriangle, ShieldCheck } from "lucide-react";
+import { Users, Receipt, AlertTriangle, ShieldCheck, History } from "lucide-react";
 import { readableApiError } from "@/lib/api-error";
 import { useToast } from "@/hooks/use-toast";
 
@@ -82,6 +84,7 @@ export default function OperatorDashboard() {
   const [pendingId, setPendingId] = useState<number | null>(null);
 
   const accountsQuery = useListOperatorAccounts();
+  const planChangesQuery = useListOperatorPlanChanges();
   const updatePlan = useUpdateOperatorAccountPlan();
 
   // Manuelle Premium-Freischaltung bzw. Rueckstufung. Serverseitig durch
@@ -91,7 +94,10 @@ export default function OperatorDashboard() {
     setPendingId(account.id);
     try {
       await updatePlan.mutateAsync({ id: account.id, data: { plan: nextPlan } });
-      await queryClient.invalidateQueries({ queryKey: getListOperatorAccountsQueryKey() });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getListOperatorAccountsQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getListOperatorPlanChangesQueryKey() }),
+      ]);
       toast({
         title: nextPlan === "premium" ? "Premium aktiviert" : "Auf Free zurückgesetzt",
         description: `${account.name} (${account.email}) ist jetzt auf dem ${nextPlan === "premium" ? "Premium" : "Free"}-Plan. Die Umstellung wirkt sofort.`,
@@ -186,6 +192,82 @@ export default function OperatorDashboard() {
                               : "Premium aktivieren"}
                         </Button>
                       </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ----------------------------------------------------------------- */}
+      {/* Plan-Änderungsprotokoll (Audit-Log der Premium-Freischaltungen)    */}
+      {/* ----------------------------------------------------------------- */}
+      {/* Jeder manuelle Plan-Flip schreibt einen Audit-Eintrag — hier sind   */}
+      {/* die letzten Änderungen belegbar (wer, wann, welches Konto).         */}
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <History className="h-5 w-5 text-brand-cyan" />
+            Plan-Änderungsprotokoll
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {planChangesQuery.isLoading ? (
+            <div className="space-y-2 p-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : planChangesQuery.isError ? (
+            <p className="p-4 text-sm text-destructive" data-testid="text-operator-plan-changes-error">
+              Protokoll konnte nicht geladen werden:{" "}
+              {readableApiError(planChangesQuery.error, "Unbekannter Fehler.")}
+            </p>
+          ) : (planChangesQuery.data ?? []).length === 0 ? (
+            <p className="p-4 text-sm text-muted-foreground" data-testid="text-operator-plan-changes-empty">
+              Noch keine Plan-Änderungen protokolliert.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-border/50 bg-slate-50 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Zeitpunkt</th>
+                    <th className="px-4 py-3 font-medium">Konto</th>
+                    <th className="px-4 py-3 font-medium">Änderung</th>
+                    <th className="px-4 py-3 font-medium">Ausgeführt von</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(planChangesQuery.data ?? []).map((change) => (
+                    <tr
+                      key={change.id}
+                      className="border-b border-border/30 last:border-0"
+                      data-testid={`row-plan-change-${change.id}`}
+                    >
+                      <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
+                        {new Date(change.createdAt).toLocaleString("de-DE", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}{" "}
+                        Uhr
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-foreground">{change.accountName}</div>
+                        <div className="text-xs text-muted-foreground">{change.accountEmail}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1.5">
+                          {planBadge(change.oldPlan)}
+                          <span className="text-muted-foreground">→</span>
+                          {planBadge(change.newPlan)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{change.changedByName}</td>
                     </tr>
                   ))}
                 </tbody>

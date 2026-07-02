@@ -1427,3 +1427,30 @@ export const UpdateOperatorAccountPlanResponse = zod.object({
 })
 
 
+/**
+ * Liefert die letzten manuellen Plan-Änderungen (Premium-Freischaltungen und Rückstufungen) mit betroffenem Konto, altem/neuem Plan, ausführendem Superadmin und Zeitstempel — neueste zuerst.
+
+ * @summary Audit-Log der Plan-Umschaltungen (nur superadmin)
+ */
+export const listOperatorPlanChangesQueryLimitDefault = 50;
+export const listOperatorPlanChangesQueryLimitMax = 200;
+
+
+
+export const ListOperatorPlanChangesQueryParams = zod.object({
+  "limit": zod.coerce.number().min(1).max(listOperatorPlanChangesQueryLimitMax).default(listOperatorPlanChangesQueryLimitDefault)
+})
+
+export const ListOperatorPlanChangesResponseItem = zod.object({
+  "id": zod.number(),
+  "accountId": zod.number(),
+  "accountName": zod.string().describe('Name des betroffenen Kontos'),
+  "accountEmail": zod.string(),
+  "oldPlan": zod.enum(['free', 'premium']),
+  "newPlan": zod.enum(['free', 'premium']),
+  "changedByName": zod.string().describe('Name des ausführenden Superadmins'),
+  "createdAt": zod.coerce.date()
+})
+export const ListOperatorPlanChangesResponse = zod.array(ListOperatorPlanChangesResponseItem)
+
+

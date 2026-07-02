@@ -102,6 +102,35 @@ export interface OperatorPlanUpdate {
   plan: OperatorPlanUpdatePlan;
 }
 
+export type OperatorPlanChangeOldPlan = typeof OperatorPlanChangeOldPlan[keyof typeof OperatorPlanChangeOldPlan];
+
+
+export const OperatorPlanChangeOldPlan = {
+  free: 'free',
+  premium: 'premium',
+} as const;
+
+export type OperatorPlanChangeNewPlan = typeof OperatorPlanChangeNewPlan[keyof typeof OperatorPlanChangeNewPlan];
+
+
+export const OperatorPlanChangeNewPlan = {
+  free: 'free',
+  premium: 'premium',
+} as const;
+
+export interface OperatorPlanChange {
+  id: number;
+  accountId: number;
+  /** Name des betroffenen Kontos */
+  accountName: string;
+  accountEmail: string;
+  oldPlan: OperatorPlanChangeOldPlan;
+  newPlan: OperatorPlanChangeNewPlan;
+  /** Name des ausführenden Superadmins */
+  changedByName: string;
+  createdAt: string;
+}
+
 export type UserInputRole = typeof UserInputRole[keyof typeof UserInputRole];
 
 
@@ -915,5 +944,13 @@ teamId?: number;
 
 export type ChangePassword200 = {
   ok: boolean;
+};
+
+export type ListOperatorPlanChangesParams = {
+/**
+ * @minimum 1
+ * @maximum 200
+ */
+limit?: number;
 };
 

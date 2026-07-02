@@ -1397,6 +1397,36 @@ paths:
         "404":
           description: Konto nicht gefunden
 
+  /operator/plan-changes:
+    get:
+      operationId: listOperatorPlanChanges
+      tags: [operator]
+      summary: Audit-Log der Plan-Umschaltungen (nur superadmin)
+      description: >
+        Liefert die letzten manuellen Plan-Änderungen (Premium-Freischaltungen
+        und Rückstufungen) mit betroffenem Konto, altem/neuem Plan,
+        ausführendem Superadmin und Zeitstempel — neueste zuerst.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: Liste der Plan-Änderungen (neueste zuerst)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OperatorPlanChange"
+        "403":
+          description: Keine Berechtigung (kein superadmin)
+
 components:
   schemas:
     HealthStatus:
@@ -1481,6 +1511,33 @@ components:
         plan:
           type: string
           enum: [free, premium]
+
+    OperatorPlanChange:
+      type: object
+      required:
+        [id, accountId, accountName, accountEmail, oldPlan, newPlan, changedByName, createdAt]
+      properties:
+        id:
+          type: integer
+        accountId:
+          type: integer
+        accountName:
+          type: string
+          description: Name des betroffenen Kontos
+        accountEmail:
+          type: string
+        oldPlan:
+          type: string
+          enum: [free, premium]
+        newPlan:
+          type: string
+          enum: [free, premium]
+        changedByName:
+          type: string
+          description: Name des ausführenden Superadmins
+        createdAt:
+          type: string
+          format: date-time
 
     UserInput:
       type: object
