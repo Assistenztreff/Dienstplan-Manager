@@ -30,3 +30,9 @@ the cookie jar with the page, so the `AuthProvider` bootstrap's `/api/auth/me` r
 auto-login. This also lets you control the logged-in account's `accountType` (switch
 via API first, e.g. `becomeDienstleister`) so gated routes like `/team-verwaltung`
 render. Used by `dienstplan-server-error-messages.spec.ts`.
+
+**Variant for fresh registered accounts:** when a spec already holds an authenticated
+`APIRequestContext` (e.g. from `registerFreeAccount`), reuse its session in the browser
+via `browser.newContext({ storageState: await ctx.storageState() })` — same effect
+(`/api/auth/me` returns 200, no dev auto-login), and the browser acts as exactly that
+account instead of the seed admin. Used by `dienstplan-uncounted-pending-notice.spec.ts`.
