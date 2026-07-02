@@ -385,6 +385,18 @@ export default function Zeiterfassung() {
         })}
       </div>
 
+      {/* Ziel des geführten Nachbestätigungs-Flows nach einem Premium-Upgrade:
+          erklärt, warum offene Einträge (noch) nicht in den Ist-Stunden stecken. */}
+      {isAdmin && canConfirm && statusFilter === "pending" && (
+        <p
+          className="rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-3 text-sm text-blue-900"
+          data-testid="pending-count-hint"
+        >
+          Offene Einträge fließen erst nach der Bestätigung in die Ist-Stunden ein. Bestätigen Sie
+          korrekte Einträge, damit die geleisteten Stunden in Dashboard und Auswertungen erscheinen.
+        </p>
+      )}
+
       {isAdmin && assistants.length > 0 && (
         <AssistantFilter
           assistants={assistants}

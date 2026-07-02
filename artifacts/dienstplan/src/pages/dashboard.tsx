@@ -4,10 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
-import { AlertTriangle, CalendarX, Clock, CheckCircle2, Plane, ChevronRight } from "lucide-react";
+import { AlertTriangle, CalendarX, Clock, CheckCircle2, Plane, ChevronRight, Info } from "lucide-react";
 import { useLocation } from "wouter";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
+import { useAuth } from "@/context/auth";
 import { DienstStatus, type SchichtVorlage } from "@/types/dienstplan";
 
 // Beispielhafte Einbindung der zentralen Planungstypen (siehe @/types/dienstplan):
@@ -181,12 +182,62 @@ function KpiCard({
   );
 }
 
+// Hinweis nach einem Premium-Upgrade: Offene (pending) Einträge zählen im
+// strikten Modus nicht mehr in die Ist-Stunden. Damit zuvor sichtbare Stunden
+// nicht kommentarlos "verschwinden", wird die nicht gezählte Summe erklärt und
+// (für Admins) ein geführter Weg zum Nachbestätigen angeboten.
+function UncountedPendingNotice({
+  hours,
+  count,
+  isAdmin,
+}: {
+  hours: number;
+  count: number;
+  isAdmin: boolean;
+}) {
+  const [, navigate] = useLocation();
+  return (
+    <Card className="border-blue-200 bg-blue-50/50 shadow-sm" data-testid="uncounted-pending-notice">
+      <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <Info className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground">
+              {hours} Stunden aus {count} offenen {count === 1 ? "Zeiteintrag" : "Zeiteinträgen"} sind
+              noch nicht in den Ist-Stunden enthalten.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Im Premium-Tarif zählen nur bestätigte Einträge.{" "}
+              {isAdmin
+                ? "Bestätigen Sie die offenen Einträge, damit die Stunden wieder erscheinen."
+                : "Die Stunden erscheinen, sobald die Einträge bestätigt wurden."}
+            </p>
+          </div>
+        </div>
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={() => navigate("/zeiterfassung?status=pending")}
+            data-testid="uncounted-pending-review"
+            className="inline-flex shrink-0 items-center gap-1 self-start rounded-md border border-blue-300 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:self-auto"
+          >
+            Jetzt prüfen
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Dashboard() {
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
   
   const { selectedTeamId } = useTeam();
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser?.role === "admin";
 
   const { data: summary, isLoading } = useGetDashboardSummary(
     { month, year, ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}) }
@@ -240,6 +291,14 @@ export default function Dashboard() {
               </div>
             </KpiCard>
           </div>
+
+          {(summary.uncountedPendingHours ?? 0) > 0 && (
+            <UncountedPendingNotice
+              hours={summary.uncountedPendingHours ?? 0}
+              count={summary.uncountedPendingEntries ?? 0}
+              isAdmin={isAdmin}
+            />
+          )}
 
           {summary.warnings && <WarningsSection warnings={summary.warnings} />}
         </>

@@ -1143,6 +1143,8 @@ export const GetDashboardSummaryResponse = zod.object({
   "monthlyPlannedHours": zod.number(),
   "monthlyActualHours": zod.number(),
   "hoursBalance": zod.number().optional(),
+  "uncountedPendingHours": zod.number().optional().describe('Summe der Ist-Stunden offener (pending) Einträge im Monat, die wegen strikter Zählung (Premium-Team-Eigentümer) NICHT in monthlyActualHours einfließen. In Free-Teams zählen offene Einträge mit, dort ist der Wert 0. Nach einem Upgrade macht dieser Wert sichtbar, welche zuvor gezählten Stunden erst nach Bestätigung wieder erscheinen.'),
+  "uncountedPendingEntries": zod.number().optional().describe('Anzahl der offenen Einträge hinter uncountedPendingHours.'),
   "upcomingShifts": zod.array(zod.object({
   "id": zod.number(),
   "userId": zod.number(),

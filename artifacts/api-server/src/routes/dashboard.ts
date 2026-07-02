@@ -149,6 +149,30 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       );
     const monthlyActualHours = monthTimeEntries.reduce((acc, e) => acc + (e.actualHours ?? 0), 0);
 
+    // Offene Einträge in STRIKTEN Teams (Premium-Eigentümer) fließen nicht in
+    // monthlyActualHours ein. Nach einem Upgrade Free→Premium würden zuvor
+    // gezählte "offene" Stunden sonst kommentarlos verschwinden — deshalb wird
+    // die nicht gezählte Summe explizit ausgewiesen, damit das Frontend einen
+    // Hinweis mit geführtem Weg zum Nachbestätigen zeigen kann.
+    const strictTeamIds = teamScope.filter((id) => !lenientTeamIds.includes(id));
+    let uncountedPendingHours = 0;
+    let uncountedPendingEntries = 0;
+    if (strictTeamIds.length) {
+      const uncounted = await db
+        .select({ actualHours: timeTrackingTable.actualHours })
+        .from(timeTrackingTable)
+        .where(
+          and(
+            inArray(timeTrackingTable.teamId, strictTeamIds),
+            eq(timeTrackingTable.status, "pending"),
+            sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${month}`,
+            sql`EXTRACT(YEAR FROM ${timeTrackingTable.actualStart}) = ${year}`,
+          )
+        );
+      uncountedPendingEntries = uncounted.length;
+      uncountedPendingHours = uncounted.reduce((acc, e) => acc + (e.actualHours ?? 0), 0);
+    }
+
     const upcomingShifts = await db
       .select({
         id: shiftsTable.id,
@@ -235,6 +259,8 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       monthlyPlannedHours: Math.round(monthlyPlannedHours * 100) / 100,
       monthlyActualHours: Math.round(monthlyActualHours * 100) / 100,
       hoursBalance: Math.round((monthlyActualHours - monthlyPlannedHours) * 100) / 100,
+      uncountedPendingHours: Math.round(uncountedPendingHours * 100) / 100,
+      uncountedPendingEntries,
       upcomingShifts,
       recentTimeEntries,
       warnings: {
@@ -321,6 +347,29 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     );
   const monthlyActualHours = monthTimeEntries.reduce((acc, e) => acc + (e.actualHours ?? 0), 0);
 
+  // Analog zum Admin-Branch: offene Einträge des Assistenten in strikten
+  // (Premium-)Teams zählen nicht — die Summe wird ausgewiesen, damit der
+  // Stundenstand nach einem Upgrade nicht kommentarlos schrumpft.
+  const strictTeamIds = assistantTeamIds.filter((id) => !lenientTeamIds.includes(id));
+  let uncountedPendingHours = 0;
+  let uncountedPendingEntries = 0;
+  if (strictTeamIds.length) {
+    const uncounted = await db
+      .select({ actualHours: timeTrackingTable.actualHours })
+      .from(timeTrackingTable)
+      .where(
+        and(
+          eq(timeTrackingTable.userId, userId),
+          inArray(timeTrackingTable.teamId, strictTeamIds),
+          eq(timeTrackingTable.status, "pending"),
+          sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${month}`,
+          sql`EXTRACT(YEAR FROM ${timeTrackingTable.actualStart}) = ${year}`,
+        )
+      );
+    uncountedPendingEntries = uncounted.length;
+    uncountedPendingHours = uncounted.reduce((acc, e) => acc + (e.actualHours ?? 0), 0);
+  }
+
   const upcomingShifts = await db
     .select({
       id: shiftsTable.id,
@@ -364,6 +413,8 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     monthlyPlannedHours: Math.round(monthlyPlannedHours * 100) / 100,
     monthlyActualHours: Math.round(monthlyActualHours * 100) / 100,
     hoursBalance: Math.round((monthlyActualHours - monthlyPlannedHours) * 100) / 100,
+    uncountedPendingHours: Math.round(uncountedPendingHours * 100) / 100,
+    uncountedPendingEntries,
     upcomingShifts,
     recentTimeEntries,
   });
