@@ -4,6 +4,7 @@ import {
   request as playwrightRequest,
   type APIRequestContext,
 } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import { loginViaUi } from "./helpers/auth";
 
 /**
@@ -44,9 +45,12 @@ type CreatedUser = { id: number; name: string; email: string };
 type Contract = { id: number };
 
 let adminCtx: APIRequestContext;
+// Zwei Assistenten, damit der Sammel-Nachweis nachweislich MEHRERE Seiten
+// (eine pro Person) erzeugt und nicht nur den Ein-Personen-Fall abdeckt.
 let assistant: CreatedUser;
-let contractId: number;
-let shiftId: number;
+let assistantB: CreatedUser;
+const contractIds: number[] = [];
+const shiftIds: number[] = [];
 
 // Gesamt-Nachweis: namePart = "Alle", rangePart = "<Jahr>_<Monat>".
 const expectedFilename = `Stundennachweis_Alle_${TARGET_YEAR}_${TARGET_MM}.pdf`;
@@ -60,46 +64,57 @@ test.beforeAll(async () => {
   });
   expect(loginRes.ok(), "Admin-Login für Setup fehlgeschlagen").toBe(true);
 
-  const userRes = await adminCtx.post("/api/users", {
-    data: {
-      name: `E2E Sammel ${unique}`,
-      email: `e2e.sammel.${unique}@dienstplan.test`,
-      role: "assistant",
-    },
-  });
-  expect(userRes.ok(), `Anlegen des Assistenten fehlgeschlagen (${userRes.status()})`).toBe(true);
-  assistant = (await userRes.json()) as CreatedUser;
+  // Zwei Assistenten mit Vertrag + Schicht im Zielmonat anlegen, damit der
+  // Sammel-Nachweis garantiert mehrere Personen (= mehrere Seiten) umfasst.
+  const created: CreatedUser[] = [];
+  for (const suffix of ["A", "B"]) {
+    const userRes = await adminCtx.post("/api/users", {
+      data: {
+        name: `E2E Sammel ${suffix} ${unique}`,
+        email: `e2e.sammel.${suffix.toLowerCase()}.${unique}@dienstplan.test`,
+        role: "assistant",
+      },
+    });
+    expect(userRes.ok(), `Anlegen des Assistenten fehlgeschlagen (${userRes.status()})`).toBe(
+      true
+    );
+    const user = (await userRes.json()) as CreatedUser;
+    created.push(user);
 
-  const contractRes = await adminCtx.post("/api/contracts", {
-    data: {
-      userId: assistant.id,
-      startDate: `${TARGET_YEAR}-01-01`,
-      weeklyHours: 40,
-      vacationDays: 30,
-    },
-  });
-  expect(contractRes.ok(), `Anlegen des Vertrags fehlgeschlagen (${contractRes.status()})`).toBe(
-    true
-  );
-  contractId = ((await contractRes.json()) as Contract).id;
+    const contractRes = await adminCtx.post("/api/contracts", {
+      data: {
+        userId: user.id,
+        startDate: `${TARGET_YEAR}-01-01`,
+        weeklyHours: 40,
+        vacationDays: 30,
+      },
+    });
+    expect(contractRes.ok(), `Anlegen des Vertrags fehlgeschlagen (${contractRes.status()})`).toBe(
+      true
+    );
+    contractIds.push(((await contractRes.json()) as Contract).id);
 
-  // Eine Schicht im Zielmonat, damit der Sammel-Nachweis nicht leer ist.
-  const shiftRes = await adminCtx.post("/api/shifts", {
-    data: {
-      userId: assistant.id,
-      startTime: `${SHIFT_DAY}T08:00:00.000Z`,
-      endTime: `${SHIFT_DAY}T16:00:00.000Z`,
-      type: "active",
-    },
-  });
-  expect(shiftRes.ok(), `Anlegen der Schicht fehlgeschlagen (${shiftRes.status()})`).toBe(true);
-  shiftId = ((await shiftRes.json()) as { id: number }).id;
+    // Eine Schicht im Zielmonat, damit der Sammel-Nachweis nicht leer ist.
+    const shiftRes = await adminCtx.post("/api/shifts", {
+      data: {
+        userId: user.id,
+        startTime: `${SHIFT_DAY}T08:00:00.000Z`,
+        endTime: `${SHIFT_DAY}T16:00:00.000Z`,
+        type: "active",
+      },
+    });
+    expect(shiftRes.ok(), `Anlegen der Schicht fehlgeschlagen (${shiftRes.status()})`).toBe(true);
+    shiftIds.push(((await shiftRes.json()) as { id: number }).id);
+  }
+  [assistant, assistantB] = created;
 });
 
 test.afterAll(async () => {
-  if (shiftId) await adminCtx.delete(`/api/shifts/${shiftId}`);
-  if (contractId) await adminCtx.delete(`/api/contracts/${contractId}`);
-  if (assistant?.id) await adminCtx.delete(`/api/users/${assistant.id}`);
+  for (const id of shiftIds) await adminCtx.delete(`/api/shifts/${id}`);
+  for (const id of contractIds) await adminCtx.delete(`/api/contracts/${id}`);
+  for (const user of [assistant, assistantB]) {
+    if (user?.id) await adminCtx.delete(`/api/users/${user.id}`);
+  }
   await adminCtx.dispose();
 });
 
@@ -153,4 +168,52 @@ test("Auswertungen-Header exportiert den Sammel-Nachweis aller Assistenten mit e
   const download = await downloadPromise;
 
   expect(download.suggestedFilename()).toBe(expectedFilename);
+
+  // Erwartete Assistenten des Sammel-Nachweises über dieselbe Datenquelle
+  // ermitteln, die auch der Export nutzt (hours-balance des Zielmonats). Die
+  // Test-DB kann Assistenten aus Nachbar-Specs enthalten — der Export umfasst
+  // ALLE mit Auswertungsdaten, nicht nur den hier angelegten (workers: 1,
+  // daher kein Drift zwischen Export und dieser Kontroll-Abfrage).
+  const balanceRes = await adminCtx.get(
+    `/api/dashboard/hours-balance?month=${TARGET_MONTH}&year=${TARGET_YEAR}`
+  );
+  expect(balanceRes.ok(), `hours-balance-Abfrage fehlgeschlagen (${balanceRes.status()})`).toBe(
+    true
+  );
+  const balances = (await balanceRes.json()) as Array<{ userId: number; userName: string }>;
+  const expectedNames = [...new Map(balances.map((b) => [b.userId, b.userName])).values()];
+  expect(
+    expectedNames.length,
+    "Zielmonat muss mindestens die beiden angelegten Assistenten enthalten"
+  ).toBeGreaterThanOrEqual(2);
+  for (const own of [assistant, assistantB]) {
+    expect(
+      expectedNames,
+      `Der angelegte Assistent "${own.name}" muss Teil des Sammel-Nachweises sein`
+    ).toContain(own.name);
+  }
+
+  // Heruntergeladenes PDF speichern und inhaltlich prüfen, damit der Test
+  // nicht nur am Dateinamen hängt: genau eine Seite pro exportiertem
+  // Assistenten (1 Monat gewählt → Seitenzahl = Assistentenzahl).
+  const pdfPath = await download.path();
+  expect(pdfPath, "Download-Pfad des PDFs fehlt").toBeTruthy();
+  const pdfBytes = await readFile(pdfPath as string);
+  // jsPDF erzeugt unkomprimierte PDFs: Seitenobjekte tragen `/Type /Page`
+  // (der Seitenbaum-Knoten dagegen `/Type /Pages`, hier ausgeschlossen).
+  const pdfText = pdfBytes.toString("latin1");
+  const pageCount = (pdfText.match(/\/Type\s*\/Page(?![s])/g) ?? []).length;
+  expect(
+    pageCount,
+    "PDF muss genau eine Seite pro exportiertem Assistenten enthalten"
+  ).toBe(expectedNames.length);
+
+  // Jede Seite trägt ihren Assistentennamen ("Assistent: <Name>"). Alle im
+  // Zielmonat auswertbaren Assistenten müssen im PDF vorkommen.
+  for (const name of expectedNames) {
+    expect(
+      pdfText.includes(`Assistent: ${name}`),
+      `PDF muss den Assistenten "${name}" als eigene Seite enthalten`
+    ).toBe(true);
+  }
 });
