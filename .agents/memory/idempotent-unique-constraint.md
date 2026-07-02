@@ -27,7 +27,15 @@ UNIQUE constraint to an existing table (even with `--force`, the truncate
 question still requires a TTY). Non-interactive runs (agent shell, post-merge)
 die with "Interactive prompts require a TTY". Fix: pre-apply the column +
 constraint with guarded raw SQL (psql heredoc in post-merge.sh) BEFORE
-`db push`; push then reports "no changes". The same bites the STALE e2e test DB
-(`<dbname>_test`): `setup-test-db` runs `db push` non-interactively, so a schema
-change that adds a UNIQUE column (e.g. users.calendar_token) blocks it until the
-column+constraint are pre-applied to the `_test` DB with the same guarded SQL.
+`db push`; push then reports "no changes".
+
+**Gotcha:** drizzle-kit push EXITS WITH CODE 0 even when it aborts with the TTY
+error — exit-code checks alone miss the failure and downstream steps run against
+the stale schema. Detect failure by capturing stdout+stderr and matching the
+error text ("Interactive prompts require a TTY" / `^Error:`).
+
+The e2e test DB (`<dbname>_test`) is self-healing: `setup-test-db` captures the
+push output, and on any push failure drops the disposable test DB
+(`DROP DATABASE ... WITH (FORCE)`), recreates it, and pushes again — no manual
+SQL pre-apply needed there (only post-merge.sh needs guarded SQL, since the dev
+DB is not disposable).

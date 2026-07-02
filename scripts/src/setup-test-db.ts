@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import pg from "pg";
 
 /**
@@ -13,6 +13,12 @@ import pg from "pg";
  * 2. Schema pushen (Drizzle), Admin anlegen, Team-Migration ausführen.
  *
  * Idempotent: mehrfaches Ausführen ist gefahrlos.
+ *
+ * Selbstheilung: `drizzle-kit push` fragt bei manchen Schema-Änderungen
+ * (z. B. neue UNIQUE-Spalte an bestehender Tabelle) interaktiv nach und
+ * bricht ohne TTY ab. Da die Test-DB wegwerfbar ist, wird sie in dem Fall
+ * automatisch verworfen und frisch neu aufgebaut (Drop + Recreate + Push) —
+ * kein manueller SQL-Eingriff mehr nötig.
  */
 
 function deriveTestDbUrl(base: string): { url: string; name: string } {
@@ -50,11 +56,60 @@ async function main(): Promise<void> {
   // Schema + Seed gegen die Test-DB. DATABASE_URL für die Kind-Prozesse
   // überschreiben, damit Drizzle/Setup-Skripte die Test-DB treffen.
   const childEnv = { ...process.env, DATABASE_URL: testUrl };
+  // stdin wird bewusst NICHT durchgereicht ("ignore"): drizzle-kit push soll
+  // bei interaktiven Rückfragen sofort mit "Interactive prompts require a TTY"
+  // fehlschlagen statt zu hängen — der Fehler löst dann den Neuaufbau aus.
   const run = (cmd: string): void => {
-    execSync(cmd, { stdio: "inherit", env: childEnv });
+    execSync(cmd, {
+      stdio: ["ignore", "inherit", "inherit"],
+      env: childEnv,
+      timeout: 180_000,
+    });
   };
 
-  run("pnpm --filter @workspace/db run push");
+  // drizzle-kit push beendet sich auch bei "Interactive prompts require a TTY"
+  // mit Exit-Code 0 (!), daher reicht der Exit-Code nicht: Ausgabe mitschneiden
+  // und den bekannten Fehlertext explizit als Fehlschlag werten.
+  const pushSchema = (): void => {
+    const result = spawnSync(
+      "pnpm",
+      ["--filter", "@workspace/db", "run", "push"],
+      {
+        stdio: ["ignore", "pipe", "pipe"],
+        env: childEnv,
+        encoding: "utf8",
+        timeout: 180_000,
+      },
+    );
+    const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
+    process.stdout.write(output);
+    if (
+      result.status !== 0 ||
+      result.error != null ||
+      /Interactive prompts require a TTY/i.test(output) ||
+      /^\s*Error:/m.test(output)
+    ) {
+      throw new Error("drizzle-kit push fehlgeschlagen (siehe Ausgabe oben).");
+    }
+  };
+
+  try {
+    pushSchema();
+  } catch {
+    // Push gescheitert (typisch: veraltete Test-DB + Schema-Änderung, die eine
+    // interaktive Bestätigung bräuchte). Die Test-DB ist wegwerfbar: komplett
+    // neu aufbauen und erneut pushen. WITH (FORCE) trennt offene Verbindungen.
+    console.log(
+      `Schema-Push fehlgeschlagen — Test-Datenbank "${testDbName}" wird neu aufgebaut (Drop + Recreate).`,
+    );
+    const rebuild = new pg.Client({ connectionString: base });
+    await rebuild.connect();
+    await rebuild.query(`DROP DATABASE IF EXISTS "${testDbName}" WITH (FORCE)`);
+    await rebuild.query(`CREATE DATABASE "${testDbName}"`);
+    await rebuild.end();
+    console.log(`Test-Datenbank "${testDbName}" frisch angelegt.`);
+    pushSchema();
+  }
   run("pnpm --filter @workspace/scripts run setup-admin");
   run("pnpm --filter @workspace/scripts run migrate-teams");
 
