@@ -97,9 +97,15 @@ has no endpoint either does nothing or breaks a core flow:
   login itself — gating login would lock out already-invited assistants of Free
   teams (Bestandsschutz). Existing logins keep working on Free.
 - `strictTimeTracking` = the confirm/reject workflow (PATCH /time-tracking/:id/
-  confirm). Recording time entries stays free (core flow). Product consequence:
-  Free entries stay "offen" forever, and dashboard summary counts only CONFIRMED
-  hours as Ist-Stunden — Free Ist-Stunden never grow (open follow-up decision).
+  confirm). Recording time entries stays free (core flow). Because Free entries
+  stay "offen" forever, dashboard/summary counts Ist-Stunden PLAN-AWARE: confirmed
+  always; pending additionally in teams whose OWNER lacks strictTimeTracking
+  (helper `getLenientTimeTrackingTeamIds` in api-server lib/plan.ts, applied in
+  both the admin and assistant branch); rejected never. Premium-owned teams stay
+  strict (confirmed only). Read-time rule only — no entry statuses are mutated,
+  so an upgrade/downgrade flips the counting instantly. General lesson: when a
+  premium gate blocks a WORKFLOW step, downstream aggregations must not silently
+  assume that step happens — count the pre-step state for plans without the gate.
 - `calendarSync` = a purpose-built GET /calendar-export endpoint (ICS of FIX
   shifts; assistants own, admins team-scoped). When no endpoint exists for a
   flag, build a minimal real one rather than gating an unrelated core route.

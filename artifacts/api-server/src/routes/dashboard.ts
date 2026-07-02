@@ -3,8 +3,8 @@ import { db } from "@workspace/db";
 import { usersTable, shiftsTable, timeTrackingTable, contractsTable, allowanceSettingsTable, teamMembersTable } from "@workspace/db";
 import { eq, and, sql, count, or, isNull, inArray } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middleware/auth";
-import { requirePlanFeature } from "../lib/plan";
-import { resolveReadTeamScope, parseTeamIdParam } from "../lib/teams";
+import { requirePlanFeature, getLenientTimeTrackingTeamIds } from "../lib/plan";
+import { resolveReadTeamScope, parseTeamIdParam, getAllowedTeamIds } from "../lib/teams";
 import {
   LOW_VACATION_THRESHOLD,
   HORIZON_DAYS,
@@ -122,6 +122,20 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       0
     );
 
+    // Ist-Stunden: bestätigte Einträge zählen immer. In Teams von
+    // Free-Eigentümern (kein strictTimeTracking → kein Freigabe-Workflow)
+    // zählen auch "offene" Einträge — sonst blieben erfasste Stunden für
+    // Free-Konten dauerhaft unsichtbar. Abgelehnte zählen nie.
+    const lenientTeamIds = await getLenientTimeTrackingTeamIds(teamScope);
+    const statusCondition = lenientTeamIds.length
+      ? or(
+          eq(timeTrackingTable.status, "confirmed"),
+          and(
+            eq(timeTrackingTable.status, "pending"),
+            inArray(timeTrackingTable.teamId, lenientTeamIds),
+          ),
+        )
+      : eq(timeTrackingTable.status, "confirmed");
     const monthTimeEntries = await db
       .select({ actualHours: timeTrackingTable.actualHours })
       .from(timeTrackingTable)
@@ -130,7 +144,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
           inArray(timeTrackingTable.teamId, teamScope),
           sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${month}`,
           sql`EXTRACT(YEAR FROM ${timeTrackingTable.actualStart}) = ${year}`,
-          eq(timeTrackingTable.status, "confirmed"),
+          statusCondition,
         )
       );
     const monthlyActualHours = monthTimeEntries.reduce((acc, e) => acc + (e.actualHours ?? 0), 0);
@@ -273,6 +287,21 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     0
   );
 
+  // Ist-Stunden des Assistenten: bestätigte Einträge zählen immer. In Teams
+  // von Free-Eigentümern (kein Freigabe-Workflow) zählen auch "offene"
+  // Einträge, damit erfasste Stunden nicht dauerhaft bei 0 stehen. Maßgeblich
+  // ist der Plan des jeweiligen Team-Eigentümers, nicht des Assistenten.
+  const assistantTeamIds = await getAllowedTeamIds(userId);
+  const lenientTeamIds = await getLenientTimeTrackingTeamIds(assistantTeamIds);
+  const statusCondition = lenientTeamIds.length
+    ? or(
+        eq(timeTrackingTable.status, "confirmed"),
+        and(
+          eq(timeTrackingTable.status, "pending"),
+          inArray(timeTrackingTable.teamId, lenientTeamIds),
+        ),
+      )
+    : eq(timeTrackingTable.status, "confirmed");
   const monthTimeEntries = await db
     .select({ actualHours: timeTrackingTable.actualHours })
     .from(timeTrackingTable)
@@ -281,7 +310,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
         eq(timeTrackingTable.userId, userId),
         sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${month}`,
         sql`EXTRACT(YEAR FROM ${timeTrackingTable.actualStart}) = ${year}`,
-        eq(timeTrackingTable.status, "confirmed"),
+        statusCondition,
       )
     );
   const monthlyActualHours = monthTimeEntries.reduce((acc, e) => acc + (e.actualHours ?? 0), 0);

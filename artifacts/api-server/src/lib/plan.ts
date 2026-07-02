@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
-import { usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { usersTable, teamsTable } from "@workspace/db";
+import { eq, inArray } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
 import {
   hasAccess,
@@ -63,6 +63,33 @@ export async function getUserLimit(
 ): Promise<number | null> {
   const plan = await getUserPlan(userId);
   return getLimit({ plan }, limit);
+}
+
+/**
+ * Liefert die Teilmenge der uebergebenen Teams, deren EIGENTUEMER das
+ * Premium-Feature "strictTimeTracking" NICHT hat (Free-Plan). In diesen Teams
+ * gibt es keinen Freigabe-Workflow — Ist-Zeiten bleiben dauerhaft "offen".
+ * Auswertungen (dashboard/summary) zaehlen dort deshalb auch offene Eintraege
+ * als Ist-Stunden, sonst waeren erfasste Stunden fuer Free-Konten unsichtbar.
+ * Massgeblich ist der Plan des Team-Eigentuemers (frisch aus der DB), analog
+ * zu den uebrigen Limits. Premium-Teams bleiben strikt: nur bestaetigte
+ * Stunden zaehlen.
+ */
+export async function getLenientTimeTrackingTeamIds(
+  teamIds: number[],
+): Promise<number[]> {
+  if (teamIds.length === 0) return [];
+  const rows = await db
+    .select({ teamId: teamsTable.id, ownerPlan: usersTable.plan })
+    .from(teamsTable)
+    .leftJoin(usersTable, eq(teamsTable.ownerId, usersTable.id))
+    .where(inArray(teamsTable.id, teamIds));
+  return rows
+    .filter((r) => {
+      const plan: Plan = r.ownerPlan === "premium" ? "premium" : "free";
+      return !hasAccess({ plan }, "strictTimeTracking");
+    })
+    .map((r) => r.teamId);
 }
 
 /**
