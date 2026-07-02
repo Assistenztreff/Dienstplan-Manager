@@ -26,6 +26,7 @@ import { Plus, Trash2, Plane, Stethoscope } from "lucide-react";
 import { eachDayOfInterval, format } from "date-fns";
 import { de } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
+import { planLimitMessage } from "@/lib/api-error";
 import {
   buildRanges,
   dayKey,
@@ -166,8 +167,13 @@ export default function Abwesenheiten() {
       setFrom("");
       setTo("");
     } catch (err) {
+      const planMsg = planLimitMessage(err);
       if (err instanceof ApiError && err.status === 401) {
         setError("Sitzung abgelaufen. Bitte Seite neu laden und erneut anmelden.");
+      } else if (planMsg) {
+        // Free-Limit (z. B. Vorausplanung nur bis nächsten Monat): klare
+        // Upgrade-Meldung statt "Keine Berechtigung".
+        setError(planMsg);
       } else if (err instanceof ApiError && err.status === 403) {
         setError("Keine Berechtigung zum Eintragen von Abwesenheiten.");
       } else {

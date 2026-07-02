@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Pencil } from "lucide-react";
+import { planLimitMessage } from "@/lib/api-error";
 
 type Assistant = { id: number; name: string };
 
@@ -232,6 +233,10 @@ export function BulkEditDialog({
       const updated = new Set(updatedIds);
       const conflicts: number[] = [];
       let otherError = false;
+      // Free-Limit-403 (plan_limit_reached, z. B. historyMonths beim Verschieben
+      // in zu ferne Zukunfts-Monate): freundliche Upgrade-Meldung statt der
+      // generischen Sammel-Fehlermeldung; weitere Versuche abbrechen.
+      let planLimitError: string | null = null;
 
       for (const shift of targets) {
         if (updated.has(shift.id)) continue;
@@ -243,7 +248,11 @@ export function BulkEditDialog({
           });
           updated.add(shift.id);
         } catch (err) {
-          if (
+          const planMsg = planLimitMessage(err);
+          if (planMsg) {
+            planLimitError = planMsg;
+            break;
+          } else if (
             err instanceof ApiError &&
             err.status === 409 &&
             (err.data as { code?: string } | null)?.code === "shift_overlap"
@@ -258,6 +267,10 @@ export function BulkEditDialog({
       setUpdatedIds(updated);
       await queryClient.invalidateQueries({ queryKey: getListShiftsQueryKey({ month, year }) });
 
+      if (planLimitError) {
+        setError(planLimitError);
+        return;
+      }
       if (otherError) {
         setError("Einige Schichten konnten nicht geändert werden. Bitte erneut versuchen.");
         return;

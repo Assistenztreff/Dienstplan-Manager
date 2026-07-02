@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "@workspace/api-client-react";
-import { readableApiError } from "./api-error";
+import { planLimitMessage, readableApiError } from "./api-error";
 
 /**
  * Unit-Tests für `readableApiError` — die geteilte Helferfunktion, die ALLE
@@ -89,5 +89,41 @@ describe("readableApiError", () => {
     expect(
       readableApiError(makeApiError(409, { error: duplicateMsg }), "Bitte erneut versuchen."),
     ).toBe(duplicateMsg);
+  });
+});
+
+/**
+ * `planLimitMessage` mappt die strukturierten 403-Antworten der serverseitigen
+ * Free-Limits (`code: "plan_limit_reached"`) auf freundliche Upgrade-Hinweise.
+ * Genutzt von Schicht-Dialog (Einzel + Mehrfach), Massenbearbeitung,
+ * Abwesenheiten, Assistenten, Team-Verwaltung und Einstellungen.
+ */
+describe("planLimitMessage", () => {
+  it("liefert die Vorausplanungs-Meldung für limit=historyMonths", () => {
+    const err = makeApiError(403, {
+      error: "Im Free-Tarif kann nur fuer den aktuellen und naechsten Monat geplant werden.",
+      code: "plan_limit_reached",
+      limit: "historyMonths",
+    });
+    const msg = planLimitMessage(err);
+    expect(msg).toContain("aktuellen und nächsten Monat");
+    expect(msg).toContain("Premium");
+  });
+
+  it("fällt bei unbekanntem limit auf die Server-Meldung bzw. den generischen Hinweis zurück", () => {
+    expect(
+      planLimitMessage(
+        makeApiError(403, { error: "Server-Text", code: "plan_limit_reached", limit: "neu" }),
+      ),
+    ).toBe("Server-Text");
+    expect(
+      planLimitMessage(makeApiError(403, { code: "plan_limit_reached" })),
+    ).toContain("Premium");
+  });
+
+  it("gibt null für Nicht-Plan-Limit-Fehler zurück", () => {
+    expect(planLimitMessage(makeApiError(403, { error: "Keine Berechtigung" }))).toBeNull();
+    expect(planLimitMessage(makeApiError(409, { code: "plan_limit_reached" }))).toBeNull();
+    expect(planLimitMessage(new Error("network"))).toBeNull();
   });
 });
