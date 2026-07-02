@@ -28,3 +28,4 @@
 - [E2E mobile-viewport selectors](e2e-mobile-viewport-selectors.md) — 400px viewport hides `hidden sm:inline` button labels; getByRole-by-name fails, select via data-testid or title attribute.
 - [drizzle push --force still prompts](drizzle-push-force-prompt.md) — non-TTY `drizzle-kit push --force` still dies on "suggestion" prompts (e.g. adding UNIQUE to populated table); repair via manual idempotent SQL, then push is clean.
 - [Drizzle raw-SQL correlated subqueries](drizzle-sql-correlated-subquery.md) — `${table.col}` inside sql`` subqueries in a select projection renders unqualified "id" and 500s; write `users.id` explicitly.
+- [Stale e2e test DB repair](test-db-stale-schema-repair.md) — `_test` DB drifts after schema changes; db push dies on interactive truncate prompts, repair with guarded SQL then re-run setup-test-db.
