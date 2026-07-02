@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { usersTable, teamMembersTable, teamsTable } from "@workspace/db";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import {
   ListUsersQueryParams,
   CreateUserBody,
@@ -275,11 +275,42 @@ router.patch("/users/:id", requireAdmin, async (req, res): Promise<void> => {
     }
   }
 
-  const [user] = await db
-    .update(usersTable)
-    .set(body.data)
-    .where(eq(usersTable.id, params.data.id))
-    .returning(SAFE_USER_SELECT);
+  // E-Mail-Kollision explizit als 409 mit lesbarer Meldung melden — sonst
+  // knallt der UNIQUE-Constraint (23505) als unbehandelter 500 und der Dialog
+  // zeigt nur eine generische Fehlermeldung (analog /auth/update-profile).
+  if (typeof updateBody["email"] === "string") {
+    const requestedEmail = (updateBody["email"] as string).trim();
+    const [existing] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(sql`lower(${usersTable.email}) = lower(${requestedEmail})`);
+    if (existing && existing.id !== params.data.id) {
+      res.status(409).json({
+        error: "Diese E-Mail-Adresse wird bereits von einem anderen Konto verwendet.",
+      });
+      return;
+    }
+  }
+
+  let user;
+  try {
+    [user] = await db
+      .update(usersTable)
+      .set(body.data)
+      .where(eq(usersTable.id, params.data.id))
+      .returning(SAFE_USER_SELECT);
+  } catch (err) {
+    // Sicherheitsnetz gegen Race: UNIQUE-Verletzung (23505) sauber als 409.
+    const pgCode = (err as { cause?: { code?: string }; code?: string })?.cause?.code ??
+      (err as { code?: string })?.code;
+    if (pgCode === "23505") {
+      res.status(409).json({
+        error: "Diese E-Mail-Adresse wird bereits von einem anderen Konto verwendet.",
+      });
+      return;
+    }
+    throw err;
+  }
   if (!user) {
     res.status(404).json({ error: "Not found" });
     return;
