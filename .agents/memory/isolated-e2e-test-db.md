@@ -21,3 +21,5 @@ E2E specs create AND delete real records (assistant-delete, abwesenheiten, shift
 **Override:** set `E2E_BASE_URL` externally → no managed stack is started, tests run against that URL (e.g. shared proxy localhost:80). Only for deliberate manual runs.
 
 **Why:** destructive tests on the shared dev DB churn real data (created/deleted temp users left ID gaps) and risk corrupting real records on an interrupted run.
+
+**Stale-schema gotcha:** `drizzle-kit push` inside setup-test-db is non-interactive; if the diff needs a confirmation prompt (e.g. adding a UNIQUE constraint on a column over existing rows) it throws "Interactive prompts require a TTY" and ABORTS — the test DB silently stays on the old schema and specs fail with 500s on register/insert (missing columns). Repair: apply the missing columns/constraints manually via guarded SQL against `<dbname>_test` (ADD COLUMN IF NOT EXISTS + pg_constraint check), then re-run setup-test-db to confirm it completes.
