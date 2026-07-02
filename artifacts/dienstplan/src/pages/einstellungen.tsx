@@ -928,13 +928,25 @@ function CalendarExportCard() {
   // Premium-Feature calendarSync: Export der verbindlichen (FIX) Schichten als
   // iCalendar-Datei (.ics) für die eigene Kalender-App. UX-Gate — autoritativ
   // setzt der Server durch (403 plan_feature_required).
-  const canSync = hasAccess(currentUser, "calendarSync");
+  // Für ASSISTENTEN hängt das Feature serverseitig am Plan des ARBEITGEBERS
+  // (Team-Eigentümers), nicht am eigenen (Assistenten-Konten sind praktisch
+  // immer Free). Der eigene Plan reicht dem Frontend also nicht als Signal —
+  // stattdessen dient die ohnehin Premium-gegatete Token-Abfrage als Probe:
+  // liefert sie 403, bleibt die Card gesperrt; liefert sie 200, ist der
+  // Arbeitgeber Premium und die Card wird freigeschaltet.
+  const ownPlanSync = hasAccess(currentUser, "calendarSync");
+  const isAssistant = currentUser?.role === "assistant";
 
   // Abo-Feed: geheimer Token für eine ICS-URL, die Kalender-Apps abonnieren
   // können (automatische Aktualisierung, kein erneuter Download nötig).
-  const { data: tokenData } = useGetCalendarToken({
-    query: { enabled: canSync },
-  } as Parameters<typeof useGetCalendarToken>[0]) as { data?: CalendarToken };
+  const { data: tokenData, isSuccess: tokenQuerySucceeded } = useGetCalendarToken({
+    query: { enabled: ownPlanSync || isAssistant, retry: false },
+  } as Parameters<typeof useGetCalendarToken>[0]) as {
+    data?: CalendarToken;
+    isSuccess: boolean;
+  };
+
+  const canSync = ownPlanSync || (isAssistant && tokenQuerySucceeded);
   const rotateToken = useRotateCalendarToken();
   const revokeToken = useRevokeCalendarToken();
 

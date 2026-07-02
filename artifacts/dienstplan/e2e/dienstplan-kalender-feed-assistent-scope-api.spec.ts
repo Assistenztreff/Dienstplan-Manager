@@ -139,10 +139,9 @@ test("Assistenten-Feed enthält nur eigene FIX-Schichten, Admin-Feed alle im Tea
   expect(meBody.id).toBe(assistantAId);
   expect(meBody.role, "Session muss die Assistenten-Rolle tragen").toBe("assistant");
 
-  // Kalender-Token ist Premium-gegated auf den ANFRAGER — der Assistent selbst
-  // wird (wie eine manuelle Freischaltung) auf Premium gehoben. Der Feed-Gate
-  // prüft ebenfalls den Token-EIGENTÜMER, also bleibt A Premium.
-  setAccountPlan(assistantEmail, "premium");
+  // Kalender-Token für Assistenten hängt am Plan des ARBEITGEBERS (Team-
+  // Eigentümers), NICHT am eigenen Plan — Assistent A bleibt bewusst "free"
+  // (der Admin ist Premium). Kein manuelles setAccountPlan für A nötig.
 
   // --- Assistenten-Feed: NUR die eigene Schicht -----------------------------
   const tokenRes = await assistantCtx.post("/api/calendar-token");
@@ -182,4 +181,43 @@ test("Assistenten-Feed enthält nur eigene FIX-Schichten, Admin-Feed alle im Tea
   expect(adminIcs, "Admin-Feed muss Schicht B enthalten").toContain(
     `UID:shift-${shiftB.id}@dienstplan-app`,
   );
+
+  // --- Downgrade des Arbeitgebers sperrt Assistenten-Feed UND -Token --------
+  // Der Assistent selbst bleibt "free"; das calendarSync-Gate hängt am Plan
+  // des Team-Eigentümers. Nach dessen Downgrade: reines Free-Umfeld → 403
+  // plan_feature_required sowohl auf dem öffentlichen Feed (Token-Eigentümer-
+  // Gate) als auch beim Erzeugen eines neuen Tokens (Session-Gate).
+  setAccountPlan(admin.email, "free");
+
+  const feedAfterDowngrade = await publicCtx.get(assistantToken.feedPath);
+  expect(
+    feedAfterDowngrade.status(),
+    "Nach Arbeitgeber-Downgrade muss der Assistenten-Feed 403 liefern",
+  ).toBe(403);
+  const feedErr = (await feedAfterDowngrade.json()) as { code?: string };
+  expect(feedErr.code, "Feed-403 muss plan_feature_required tragen").toBe(
+    "plan_feature_required",
+  );
+
+  const tokenAfterDowngrade = await assistantCtx.post("/api/calendar-token");
+  expect(
+    tokenAfterDowngrade.status(),
+    "Im reinen Free-Umfeld darf der Assistent KEINEN Token erzeugen (403)",
+  ).toBe(403);
+  const tokenErr = (await tokenAfterDowngrade.json()) as { code?: string };
+  expect(tokenErr.code, "Token-403 muss plan_feature_required tragen").toBe(
+    "plan_feature_required",
+  );
+
+  // Widerruf bleibt bewusst OHNE Plan-Gate möglich (Zugriff entziehen muss
+  // auch nach Downgrade gehen).
+  const revokeRes = await assistantCtx.delete("/api/calendar-token");
+  expect(
+    revokeRes.status(),
+    "Widerruf muss auch im Free-Umfeld möglich sein (204)",
+  ).toBe(204);
+
+  // Premium wiederherstellen, damit spätere Assertions/Aufräumarbeiten in
+  // Geschwister-Specs nicht von diesem Downgrade beeinflusst werden.
+  setAccountPlan(admin.email, "premium");
 });

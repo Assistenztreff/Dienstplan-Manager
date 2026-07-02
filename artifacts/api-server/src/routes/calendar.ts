@@ -4,7 +4,10 @@ import { db } from "@workspace/db";
 import { shiftsTable, usersTable, shiftModelsTable } from "@workspace/db";
 import { eq, and, inArray } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
-import { requirePlanFeature, userHasFeature } from "../lib/plan";
+import {
+  requirePlanFeatureViaTeamOwner,
+  userHasFeatureViaTeamOwner,
+} from "../lib/plan";
 import { resolveReadTeamScope, parseTeamIdParam } from "../lib/teams";
 
 const router = Router();
@@ -12,7 +15,10 @@ const router = Router();
 // ---------------------------------------------------------------------------
 // Premium-Feature "calendarSync": Export des Dienstplans in die eigene
 // Kalender-App als iCalendar-Datei (.ics). Serverseitig autoritativ gegated —
-// Free-Konten erhalten 403 plan_feature_required. Es werden ausschließlich
+// Free-Konten erhalten 403 plan_feature_required. Für ASSISTENTEN hängt das
+// Feature am Plan des TEAM-EIGENTÜMERS (Arbeitgebers), nicht am eigenen —
+// Assistenten-Konten sind praktisch immer "free" (nur Admin-Konten sind
+// zahlende Konten), analog zu strictTimeTracking. Es werden ausschließlich
 // verbindliche (FIX) Schichten exportiert (Entwürfe/Vorschläge sind keine
 // offiziellen Termine). Assistenten erhalten nur die EIGENEN Schichten,
 // Admins alle Schichten im erlaubten Team-Scope.
@@ -116,7 +122,7 @@ function feedPathFor(token: string): string {
 router.get(
   "/calendar-export",
   requireAuth,
-  requirePlanFeature("calendarSync"),
+  requirePlanFeatureViaTeamOwner("calendarSync"),
   async (req, res): Promise<void> => {
     const teamScope = await resolveReadTeamScope(
       req.session.userId!,
@@ -145,7 +151,7 @@ router.get(
 router.get(
   "/calendar-token",
   requireAuth,
-  requirePlanFeature("calendarSync"),
+  requirePlanFeatureViaTeamOwner("calendarSync"),
   async (req, res): Promise<void> => {
     const [row] = await db
       .select({ calendarToken: usersTable.calendarToken })
@@ -160,7 +166,7 @@ router.get(
 router.post(
   "/calendar-token",
   requireAuth,
-  requirePlanFeature("calendarSync"),
+  requirePlanFeatureViaTeamOwner("calendarSync"),
   async (req, res): Promise<void> => {
     // Erzeugen UND Erneuern: ein bestehender Token wird ersetzt, die alte
     // Feed-URL ist damit sofort ungültig (Widerruf durch Rotation).
@@ -213,7 +219,9 @@ router.get(
 
     // Premium-Gate über den Token-EIGENTÜMER (es gibt keine Session): nach
     // einem Downgrade auf Free liefert der Feed 403 statt weiter Daten.
-    if (!(await userHasFeature(owner.id, "calendarSync"))) {
+    // Für Assistenten-Token zählt der Plan des ARBEITGEBERS (Team-Eigentümer):
+    // ein Downgrade des Arbeitgebers sperrt auch den Assistenten-Feed.
+    if (!(await userHasFeatureViaTeamOwner(owner.id, "calendarSync"))) {
       res.status(403).json({
         error: "Diese Funktion ist im Premium-Tarif enthalten.",
         code: "plan_feature_required",
