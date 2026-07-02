@@ -72,7 +72,9 @@ router.patch(
       return;
     }
     const { id } = paramsResult.data;
-    const { plan } = bodyResult.data;
+    const { plan, note } = bodyResult.data;
+    // Leere/Whitespace-Notizen als NULL speichern (kein Pflichtfeld).
+    const trimmedNote = note?.trim() ? note.trim() : null;
 
     // Nur Admin-Konten haben einen Plan; Assistenten/Superadmins sind keine
     // zahlenden Konten.
@@ -94,6 +96,8 @@ router.patch(
       accountId: id,
       oldPlan: target.plan,
       newPlan: plan,
+      // Optionale Rechnungs-/Zahlungsreferenz (z. B. Lexware-Belegnummer)
+      note: trimmedNote,
       changedBy: req.session.userId!,
     });
 
@@ -131,6 +135,7 @@ router.get(
         accountEmail: usersTable.email,
         oldPlan: planChangesTable.oldPlan,
         newPlan: planChangesTable.newPlan,
+        note: planChangesTable.note,
         changedByName: changedByUser.name,
         createdAt: planChangesTable.createdAt,
       })

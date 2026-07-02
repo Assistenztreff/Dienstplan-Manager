@@ -1542,11 +1542,15 @@ components:
         plan:
           type: string
           enum: [free, premium]
+        note:
+          type: string
+          maxLength: 500
+          description: Optionale Rechnungs-/Zahlungsreferenz (z. B. Lexware-Belegnummer) oder Notiz zum Grund der Umstellung
 
     OperatorPlanChange:
       type: object
       required:
-        [id, accountId, accountName, accountEmail, oldPlan, newPlan, changedByName, createdAt]
+        [id, accountId, accountName, accountEmail, oldPlan, newPlan, note, changedByName, createdAt]
       properties:
         id:
           type: integer
@@ -1563,6 +1567,9 @@ components:
         newPlan:
           type: string
           enum: [free, premium]
+        note:
+          type: ["string", "null"]
+          description: Rechnungs-/Zahlungsreferenz oder Notiz zur Umstellung (falls angegeben)
         changedByName:
           type: string
           description: Name des ausführenden Superadmins

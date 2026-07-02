@@ -1431,8 +1431,13 @@ export const UpdateOperatorAccountPlanParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const updateOperatorAccountPlanBodyNoteMax = 500;
+
+
+
 export const UpdateOperatorAccountPlanBody = zod.object({
-  "plan": zod.enum(['free', 'premium'])
+  "plan": zod.enum(['free', 'premium']),
+  "note": zod.string().max(updateOperatorAccountPlanBodyNoteMax).optional().describe('Optionale Rechnungs-\/Zahlungsreferenz (z. B. Lexware-Belegnummer) oder Notiz zum Grund der Umstellung')
 })
 
 export const UpdateOperatorAccountPlanResponse = zod.object({
@@ -1468,6 +1473,7 @@ export const ListOperatorPlanChangesResponseItem = zod.object({
   "accountEmail": zod.string(),
   "oldPlan": zod.enum(['free', 'premium']),
   "newPlan": zod.enum(['free', 'premium']),
+  "note": zod.string().nullable().describe('Rechnungs-\/Zahlungsreferenz oder Notiz zur Umstellung (falls angegeben)'),
   "changedByName": zod.string().describe('Name des ausführenden Superadmins'),
   "createdAt": zod.coerce.date()
 })

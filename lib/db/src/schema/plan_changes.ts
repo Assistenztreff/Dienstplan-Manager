@@ -8,7 +8,7 @@
 // geloescht (Append-only-Historie).
 // ---------------------------------------------------------------------------
 
-import { pgTable, serial, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, timestamp, text } from "drizzle-orm/pg-core";
 import { usersTable, planEnum } from "./users";
 
 export const planChangesTable = pgTable("plan_changes", {
@@ -19,6 +19,9 @@ export const planChangesTable = pgTable("plan_changes", {
     .references(() => usersTable.id),
   oldPlan: planEnum("old_plan").notNull(),
   newPlan: planEnum("new_plan").notNull(),
+  // Optionale Rechnungs-/Zahlungsreferenz (z. B. Lexware-Belegnummer) oder
+  // Notiz zum Grund des Flips — dokumentiert Zahlungs-Streitfaelle vollstaendig.
+  note: text("note"),
   // Ausfuehrender superadmin
   changedBy: integer("changed_by")
     .notNull()

@@ -100,6 +100,11 @@ export const OperatorPlanUpdatePlan = {
 
 export interface OperatorPlanUpdate {
   plan: OperatorPlanUpdatePlan;
+  /**
+     * Optionale Rechnungs-/Zahlungsreferenz (z. B. Lexware-Belegnummer) oder Notiz zum Grund der Umstellung
+     * @maxLength 500
+     */
+  note?: string;
 }
 
 export type OperatorPlanChangeOldPlan = typeof OperatorPlanChangeOldPlan[keyof typeof OperatorPlanChangeOldPlan];
@@ -126,6 +131,11 @@ export interface OperatorPlanChange {
   accountEmail: string;
   oldPlan: OperatorPlanChangeOldPlan;
   newPlan: OperatorPlanChangeNewPlan;
+  /**
+     * Rechnungs-/Zahlungsreferenz oder Notiz zur Umstellung (falls angegeben)
+     * @nullable
+     */
+  note: string | null;
   /** Name des ausführenden Superadmins */
   changedByName: string;
   createdAt: string;

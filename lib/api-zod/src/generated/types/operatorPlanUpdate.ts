@@ -9,4 +9,9 @@ import type { OperatorPlanUpdatePlan } from './operatorPlanUpdatePlan';
 
 export interface OperatorPlanUpdate {
   plan: OperatorPlanUpdatePlan;
+  /**
+     * Optionale Rechnungs-/Zahlungsreferenz (z. B. Lexware-Belegnummer) oder Notiz zum Grund der Umstellung
+     * @maxLength 500
+     */
+  note?: string;
 }

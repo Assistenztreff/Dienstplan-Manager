@@ -95,10 +95,11 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
 
 ## Operator-Dashboard & superadmin
 
-- `pages/operator-dashboard.tsx`: Betreiber-Konsole. Live: Nutzer-Monitoring, manuelle Premium-Freischaltung, Plan-Änderungsprotokoll. Platzhalter: Lexware-Buchungs-Log, Fehler-Tracking.
-- `requireSuperadmin` (`middleware/auth.ts`, Rolle frisch aus DB) schützt alle `/api/operator/*`-Endpunkte (403/401); Frontend-Guard in App.tsx ist reine UX.
-- `routes/operator.ts`: `GET /operator/accounts` (Admin-Konten mit Aggregaten), `PATCH /operator/accounts/:id/plan` (Ziel muss Rolle `admin` haben, sonst 404; Flip wirkt sofort), `GET /operator/plan-changes?limit=` (Default 50, max 200). Jeder Plan-Flip schreibt append-only in `plan_changes` (auch No-Op-Flips).
-- Route `/operator-dashboard` nur bei `role === "superadmin"`; versteckter Link im Footer-Platzhalter.
+- `pages/operator-dashboard.tsx`: interne Betreiber-Konsole. Bereich 1 (Nutzer-Monitoring + manuelle Premium-Freischaltung) ist LIVE angebunden; Lexware-Buchungs-Log und Fehler-Tracking bleiben Platzhalter.
+- **Serverseitige Autorisierung**: `requireSuperadmin`-Middleware (`middleware/auth.ts`, Rolle frisch aus DB — analog `requireDienstleister`) schützt alle `/api/operator/*`-Endpunkte. Admin/Assistant → 403, unauthentifiziert → 401. Frontend-Guard (`role === "superadmin"` in App.tsx) ist reine UX.
+- **Operator-Endpunkte** (`routes/operator.ts`): `GET /operator/accounts` (alle Admin-Konten plattformweit mit Team-/Assistenten-Aggregaten), `PATCH /operator/accounts/:id/plan` (`{plan: free|premium}`). Plan-Flip wirkt sofort, da `getUserPlan` frisch liest. Ziel muss Rolle `admin` haben (sonst 404) — nur Admin-Konten sind zahlende Konten.
+- **Plan-Audit-Log**: Jeder Plan-Flip schreibt append-only in `plan_changes` (`lib/db/src/schema/plan_changes.ts`: Konto, alter/neuer Plan, ausführender superadmin aus `req.session.userId`, Zeitstempel, optionale `note`; auch No-Op-Flips werden protokolliert). `note` = Rechnungs-/Zahlungsreferenz (z. B. Lexware-Belegnummer), optional in `OperatorPlanUpdate` (max. 500 Zeichen, Whitespace-only → NULL); erfasst im Bestätigungs-Dialog vor dem Plan-Flip im Operator-Dashboard, angezeigt als Spalte „Referenz / Notiz" im Protokoll. `GET /operator/plan-changes?limit=` (Default 50, max 200, neueste zuerst, Doppel-Join auf users via Drizzle-`alias`). Anzeige als Karte „Plan-Änderungsprotokoll" im Operator-Dashboard; der Plan-Toggle invalidiert beide Queries.
+- Zugang: Route `/operator-dashboard` nur bei `role === "superadmin"`; versteckter Link im Footer-Platzhalter. `superadmin` wird weiterhin NUR direkt in der DB vergeben.
 
 ## PWA & Plattform-Einbettung (iframe)
 

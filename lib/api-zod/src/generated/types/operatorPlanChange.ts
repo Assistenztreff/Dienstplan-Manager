@@ -16,6 +16,11 @@ export interface OperatorPlanChange {
   accountEmail: string;
   oldPlan: OperatorPlanChangeOldPlan;
   newPlan: OperatorPlanChangeNewPlan;
+  /**
+     * Rechnungs-/Zahlungsreferenz oder Notiz zur Umstellung (falls angegeben)
+     * @nullable
+     */
+  note: string | null;
   /** Name des ausführenden Superadmins */
   changedByName: string;
   createdAt: Date;

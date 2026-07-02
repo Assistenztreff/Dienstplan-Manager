@@ -37,6 +37,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Users, Receipt, AlertTriangle, ShieldCheck, History } from "lucide-react";
 import { readableApiError } from "@/lib/api-error";
 import { useToast } from "@/hooks/use-toast";
@@ -82,22 +92,37 @@ export default function OperatorDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [pendingId, setPendingId] = useState<number | null>(null);
+  // Bestätigungs-Dialog vor dem Plan-Flip: hier kann optional eine
+  // Rechnungs-/Zahlungsreferenz (z. B. Lexware-Belegnummer) erfasst werden,
+  // die im Audit-Log (plan_changes.note) landet.
+  const [confirmAccount, setConfirmAccount] = useState<OperatorAccount | null>(null);
+  const [note, setNote] = useState("");
 
   const accountsQuery = useListOperatorAccounts();
   const planChangesQuery = useListOperatorPlanChanges();
   const updatePlan = useUpdateOperatorAccountPlan();
 
+  function openConfirmDialog(account: OperatorAccount) {
+    setNote("");
+    setConfirmAccount(account);
+  }
+
   // Manuelle Premium-Freischaltung bzw. Rueckstufung. Serverseitig durch
   // requireSuperadmin geschuetzt; getUserPlan liest frisch → wirkt sofort.
-  async function handleTogglePlan(account: OperatorAccount) {
+  async function handleTogglePlan(account: OperatorAccount, noteValue: string) {
     const nextPlan = account.plan === "premium" ? "free" : "premium";
     setPendingId(account.id);
     try {
-      await updatePlan.mutateAsync({ id: account.id, data: { plan: nextPlan } });
+      const trimmed = noteValue.trim();
+      await updatePlan.mutateAsync({
+        id: account.id,
+        data: { plan: nextPlan, ...(trimmed ? { note: trimmed } : {}) },
+      });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getListOperatorAccountsQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getListOperatorPlanChangesQueryKey() }),
       ]);
+      setConfirmAccount(null);
       toast({
         title: nextPlan === "premium" ? "Premium aktiviert" : "Auf Free zurückgesetzt",
         description: `${account.name} (${account.email}) ist jetzt auf dem ${nextPlan === "premium" ? "Premium" : "Free"}-Plan. Die Umstellung wirkt sofort.`,
@@ -182,7 +207,7 @@ export default function OperatorDashboard() {
                           size="sm"
                           variant={acc.plan === "premium" ? "outline" : "default"}
                           disabled={pendingId !== null}
-                          onClick={() => handleTogglePlan(acc)}
+                          onClick={() => openConfirmDialog(acc)}
                           data-testid={`button-toggle-plan-${acc.id}`}
                         >
                           {pendingId === acc.id
@@ -200,6 +225,68 @@ export default function OperatorDashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Bestätigungs-Dialog vor dem Plan-Flip: optionale Rechnungs-/       */}
+      {/* Zahlungsreferenz (z. B. Lexware-Belegnummer) für das Audit-Log.     */}
+      <Dialog
+        open={confirmAccount !== null}
+        onOpenChange={(open) => {
+          if (!open && pendingId === null) setConfirmAccount(null);
+        }}
+      >
+        <DialogContent data-testid="dialog-plan-confirm">
+          <DialogHeader>
+            <DialogTitle>
+              {confirmAccount?.plan === "premium"
+                ? "Auf Free zurücksetzen?"
+                : "Premium aktivieren?"}
+            </DialogTitle>
+            <DialogDescription>
+              {confirmAccount
+                ? `${confirmAccount.name} (${confirmAccount.email}) wird auf den ${confirmAccount.plan === "premium" ? "Free" : "Premium"}-Plan umgestellt. Die Umstellung wirkt sofort und wird im Plan-Änderungsprotokoll festgehalten.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="plan-change-note">
+              Rechnungs-/Zahlungsreferenz (optional)
+            </Label>
+            <Input
+              id="plan-change-note"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              maxLength={500}
+              placeholder="z. B. Lexware-Beleg LX-2026-0042, Zahlungseingang 28.06."
+              data-testid="input-plan-change-note"
+            />
+            <p className="text-xs text-muted-foreground">
+              Wird im Plan-Änderungsprotokoll gespeichert und dokumentiert den
+              Grund der Umstellung (z. B. bei Zahlungs-Streitfällen).
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={pendingId !== null}
+              onClick={() => setConfirmAccount(null)}
+              data-testid="button-plan-confirm-cancel"
+            >
+              Abbrechen
+            </Button>
+            <Button
+              disabled={pendingId !== null}
+              onClick={() => confirmAccount && handleTogglePlan(confirmAccount, note)}
+              data-testid="button-plan-confirm-submit"
+            >
+              {pendingId !== null
+                ? "Wird umgestellt…"
+                : confirmAccount?.plan === "premium"
+                  ? "Auf Free zurücksetzen"
+                  : "Premium aktivieren"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ----------------------------------------------------------------- */}
       {/* Plan-Änderungsprotokoll (Audit-Log der Premium-Freischaltungen)    */}
@@ -236,6 +323,7 @@ export default function OperatorDashboard() {
                     <th className="px-4 py-3 font-medium">Zeitpunkt</th>
                     <th className="px-4 py-3 font-medium">Konto</th>
                     <th className="px-4 py-3 font-medium">Änderung</th>
+                    <th className="px-4 py-3 font-medium">Referenz / Notiz</th>
                     <th className="px-4 py-3 font-medium">Ausgeführt von</th>
                   </tr>
                 </thead>
@@ -266,6 +354,16 @@ export default function OperatorDashboard() {
                           <span className="text-muted-foreground">→</span>
                           {planBadge(change.newPlan)}
                         </span>
+                      </td>
+                      <td
+                        className="px-4 py-3 max-w-[16rem] text-muted-foreground"
+                        data-testid={`text-plan-change-note-${change.id}`}
+                      >
+                        {change.note ? (
+                          <span className="break-words">{change.note}</span>
+                        ) : (
+                          <span className="text-muted-foreground/60">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{change.changedByName}</td>
                     </tr>
