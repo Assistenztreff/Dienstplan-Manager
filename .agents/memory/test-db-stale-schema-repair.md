@@ -17,3 +17,8 @@ its output. If push blocks on a prompt, repair the test DB manually with guarded
 pg_constraint-guarded `ADD CONSTRAINT`), then re-run `setup-test-db` — once the diff is
 empty, push passes and setup is idempotent again. Derive the test DB URL from
 `DATABASE_URL` + `_test` suffix.
+
+Note: running a single spec via `pnpm exec playwright test <name>` bypasses the
+`test:e2e` npm script and therefore SKIPS setup-test-db — after any schema change,
+run `pnpm --filter @workspace/scripts run setup-test-db` once first. Purely additive
+drift (new nullable/defaulted columns) pushes cleanly without prompts.
