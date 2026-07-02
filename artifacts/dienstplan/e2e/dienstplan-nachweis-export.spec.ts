@@ -4,6 +4,9 @@ import {
   request as playwrightRequest,
   type APIRequestContext,
 } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+import { format } from "date-fns";
+import { de } from "date-fns/locale";
 import { loginViaUi } from "./helpers/auth";
 
 /**
@@ -19,6 +22,9 @@ import { loginViaUi } from "./helpers/auth";
  * - Monatsnavigation (einen Monat zurück) verändert die Monatsanzeige
  * - Der PDF-Export löst einen Download mit dem erwarteten Dateinamen aus:
  *   Stundennachweis_<Name>_<Jahr>_<Monat>.pdf
+ * - Die heruntergeladene PDF enthält genau EINE Seite und den erwarteten
+ *   Monatsnamen ("Monat: <MMMM yyyy>") — schützt vor stillen Regressen
+ *   (leere/zusätzliche Seite, falscher Monat).
  */
 
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "admin@dienstplan.local";
@@ -146,4 +152,22 @@ test("Nachweis-Dialog navigiert den Monat und löst PDF-Download mit erwartetem 
   const download = await downloadPromise;
 
   expect(download.suggestedFilename()).toBe(expectedFilename);
+
+  // Heruntergeladenes PDF speichern und inhaltlich prüfen: Der Einzel-Export
+  // darf genau EINE Seite erzeugen und muss den Zielmonat benennen.
+  const pdfPath = await download.path();
+  expect(pdfPath, "Download-Pfad des PDFs fehlt").toBeTruthy();
+  const pdfBytes = await readFile(pdfPath as string);
+  // jsPDF erzeugt unkomprimierte PDFs: Seitenobjekte tragen `/Type /Page`
+  // (der Seitenbaum-Knoten dagegen `/Type /Pages`, hier ausgeschlossen).
+  const pdfText = pdfBytes.toString("latin1");
+  const pageCount = (pdfText.match(/\/Type\s*\/Page(?![s])/g) ?? []).length;
+  expect(pageCount, "Einzel-Monats-Nachweis muss genau eine PDF-Seite enthalten").toBe(1);
+
+  // Die Seite trägt den Monatsnamen des exportierten Vormonats.
+  const monthLabel = format(TARGET, "MMMM yyyy", { locale: de });
+  expect(
+    pdfText.includes(`Monat: ${monthLabel}`),
+    `PDF muss den Monat "${monthLabel}" ausweisen`
+  ).toBe(true);
 });
