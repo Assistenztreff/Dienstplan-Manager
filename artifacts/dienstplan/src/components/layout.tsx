@@ -18,6 +18,7 @@ import logoUrl from "@assets/Arbeitgebermodell oder Assistenzdienst.png";
 import { useAuth } from "@/context/auth";
 import { useToast } from "@/hooks/use-toast";
 import { isEmbedded } from "@/lib/embed";
+import { DevUserSwitcher } from "./dev-user-switcher";
 
 // Interne Navigationspunkte der Dienstplan-App. Rollen-/Konto-Typ-Sichtbarkeit
 // bleibt unveraendert: adminOnly nur fuer Admins, dienstleisterOnly nur fuer
@@ -307,6 +308,10 @@ function AppSubNavigation() {
               <LogOut className="h-4 w-4 shrink-0" />
               <span>{loggingOut ? "Wird abgemeldet..." : "Abmelden"}</span>
             </button>
+
+            {/* Dev-only: Test-Nutzer-Wechsler (rendert in Produktion nichts,
+                Guard via import.meta.env.DEV in der Komponente selbst). */}
+            <DevUserSwitcher />
           </nav>
         </div>
       </div>
