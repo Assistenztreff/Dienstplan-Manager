@@ -17,4 +17,22 @@ DO $$ BEGIN
   END IF;
 END $$;
 SQL
-pnpm --filter db push
+# drizzle-kit push beendet sich auch bei "Interactive prompts require a TTY"
+# mit Exit-Code 0 (!) — der Exit-Code allein reicht also nicht. Die Dev-DB ist
+# NICHT wegwerfbar (kein Drop+Recreate wie bei der Test-DB), deshalb wird die
+# Ausgabe mitgeschnitten und auf die bekannten Fehlermuster geprüft; bei
+# Treffern bricht post-merge hart ab, statt die Dev-DB still veralten zu lassen
+# (sonst strippt der API-Server neue Felder still).
+# stdin auf /dev/null: bei interaktiven Rückfragen soll push sofort mit
+# "Interactive prompts require a TTY" abbrechen statt zu hängen.
+push_status=0
+push_output="$(pnpm --filter db push < /dev/null 2>&1)" || push_status=$?
+printf '%s\n' "$push_output"
+if [ "$push_status" -ne 0 ] \
+  || printf '%s' "$push_output" | grep -qi 'Interactive prompts require a TTY' \
+  || printf '%s' "$push_output" | grep -Eq '^[[:space:]]*Error:'; then
+  echo "FEHLER: db push ist fehlgeschlagen (siehe Ausgabe oben)." >&2
+  echo "Die Dev-DB ist jetzt moeglicherweise veraltet. Schema-Aenderung braucht" >&2
+  echo "vermutlich einen idempotenten SQL-Vorab-Schritt (siehe calendar_token oben)." >&2
+  exit 1
+fi

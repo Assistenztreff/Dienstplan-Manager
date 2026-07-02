@@ -32,7 +32,10 @@ constraint with guarded raw SQL (psql heredoc in post-merge.sh) BEFORE
 **Gotcha:** drizzle-kit push EXITS WITH CODE 0 even when it aborts with the TTY
 error — exit-code checks alone miss the failure and downstream steps run against
 the stale schema. Detect failure by capturing stdout+stderr and matching the
-error text ("Interactive prompts require a TTY" / `^Error:`).
+error text ("Interactive prompts require a TTY" / `^Error:`). Both
+`setup-test-db` AND `post-merge.sh` now do this output-scan; post-merge exits
+non-zero on match (dev DB is not disposable, so the failure must be loud — the
+fix is a guarded raw-SQL pre-apply before push, like calendar_token).
 
 The e2e test DB (`<dbname>_test`) is self-healing: `setup-test-db` captures the
 push output, and on any push failure drops the disposable test DB
