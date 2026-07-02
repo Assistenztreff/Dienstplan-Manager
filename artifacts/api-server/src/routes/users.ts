@@ -301,7 +301,37 @@ router.delete("/users/:id", requireAdmin, async (req, res): Promise<void> => {
       return;
     }
   }
-  await db.delete(usersTable).where(eq(usersTable.id, params.data.id));
+  // Konten, die noch Teams besitzen, dürfen nicht gelöscht werden: die
+  // Team-Kaskade würde an team-gebundenen Daten (Schichten, Verträge, ...)
+  // scheitern und als unbehandelter 500 enden. Analog zum Team-DELETE → 409.
+  const [ownedTeam] = await db
+    .select({ id: teamsTable.id })
+    .from(teamsTable)
+    .where(eq(teamsTable.ownerId, params.data.id))
+    .limit(1);
+  if (ownedTeam) {
+    res.status(409).json({
+      error:
+        "Konto kann nicht gelöscht werden, solange es noch Teams besitzt. Bitte zuerst alle Teams des Kontos löschen.",
+    });
+    return;
+  }
+  try {
+    await db.delete(usersTable).where(eq(usersTable.id, params.data.id));
+  } catch (err) {
+    // Sicherheitsnetz: verbleibende FK-Abhängigkeiten (23503) sauber als 409
+    // melden statt als unbehandelter Serverfehler.
+    const pgCode = (err as { cause?: { code?: string }; code?: string })?.cause?.code ??
+      (err as { code?: string })?.code;
+    if (pgCode === "23503") {
+      res.status(409).json({
+        error:
+          "Konto kann nicht gelöscht werden, solange noch abhängige Daten bestehen.",
+      });
+      return;
+    }
+    throw err;
+  }
   res.status(204).send();
 });
 
