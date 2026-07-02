@@ -1,5 +1,10 @@
 import { test, expect } from "@playwright/test";
-import { registerFreeAccount, setAccountPlan, type FreeAccount } from "./helpers/teams";
+import {
+  deleteFreeAccount,
+  registerFreeAccount,
+  setAccountPlan,
+  type FreeAccount,
+} from "./helpers/teams";
 
 /**
  * Absicherung des Upgrade-Transparenz-Flows (Task #265): Nach einer manuellen
@@ -96,24 +101,9 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  const tryDelete = async (path: string) => {
-    try {
-      await acc.ctx.delete(path);
-    } catch {
-      /* ignore */
-    }
-  };
-  // FK-sicher: erst Ist-Zeiten, dann Nutzer, dann eigenes Konto. Den Plan
-  // zurücksetzen, damit kein Premium-Konto in der Test-DB zurückbleibt.
-  if (entryId) await tryDelete(`/api/time-tracking/${entryId}`);
-  if (assistantId) await tryDelete(`/api/users/${assistantId}`);
-  try {
-    setAccountPlan(acc.email, "free");
-  } catch {
-    /* ignore */
-  }
-  if (acc?.id) await tryDelete(`/api/users/${acc.id}`);
-  await acc.ctx.dispose();
+  // Konto + Standard-Team + Ist-Zeiten + verwaister Assistent werden per
+  // SQL-Bereinigung entfernt (DELETE /api/users scheitert am Team-FK-Baum).
+  await deleteFreeAccount(acc);
 });
 
 test("Free-Phase: pending zählt in den Ist-Stunden, kein Hinweis nötig", async () => {

@@ -7,6 +7,7 @@
     "hello": "tsx ./src/hello.ts",
     "setup-admin": "tsx ./src/setup-admin.ts",
     "set-plan": "tsx ./src/set-plan.ts",
+    "delete-account": "tsx ./src/delete-account.ts",
     "migrate-teams": "tsx ./src/migrate-teams.ts",
     "migrate-allowance-settings": "tsx ./src/migrate-allowance-settings.ts",
     "setup-test-db": "tsx ./src/setup-test-db.ts",

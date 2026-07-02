@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { registerFreeAccount, type FreeAccount } from "./helpers/teams";
+import { deleteFreeAccount, registerFreeAccount, type FreeAccount } from "./helpers/teams";
 
 /**
  * UI-Test: Ein Free-Konto, das am Assistenten- bzw. Team-Limit ist, bekommt im
@@ -63,16 +63,9 @@ test.describe("Free-Limit Assistenten (UI)", () => {
   });
 
   test.afterAll(async () => {
-    const tryDelete = async (path: string) => {
-      try {
-        await free.ctx.delete(path);
-      } catch {
-        /* ignore */
-      }
-    };
-    for (const id of createdUserIds) await tryDelete(`/api/users/${id}`);
-    if (free?.id) await tryDelete(`/api/users/${free.id}`);
-    await free.ctx.dispose();
+    // Konto + Standard-Team inkl. Assistenten werden per SQL-Bereinigung
+    // entfernt (DELETE /api/users scheitert am Team-FK-Baum).
+    await deleteFreeAccount(free);
   });
 
   test("zeigt am Assistenten-Limit einen Upgrade-Hinweis statt stillem Fehlschlag", async ({
@@ -108,42 +101,9 @@ test.describe("Free-Limit Teams (UI)", () => {
   });
 
   test.afterAll(async () => {
-    const tryDelete = async (path: string) => {
-      try {
-        await free.ctx.delete(path);
-      } catch {
-        /* ignore */
-      }
-    };
-    // FK-sicheres Best-effort-Cleanup: erst Dienste, dann Mitglieder, dann Teams,
-    // zuletzt das Konto.
-    try {
-      const modelsRes = await free.ctx.get("/api/shift-models");
-      if (modelsRes.ok()) {
-        const models = (await modelsRes.json()) as { id: number }[];
-        for (const m of models) await tryDelete(`/api/shift-models/${m.id}`);
-      }
-    } catch {
-      /* ignore */
-    }
-    try {
-      const teamsRes = await free.ctx.get("/api/teams");
-      if (teamsRes.ok()) {
-        const teams = (await teamsRes.json()) as { id: number }[];
-        for (const t of teams) {
-          const membersRes = await free.ctx.get(`/api/teams/${t.id}/members`);
-          if (membersRes.ok()) {
-            const members = (await membersRes.json()) as { userId: number }[];
-            for (const m of members) await tryDelete(`/api/teams/${t.id}/members/${m.userId}`);
-          }
-          await tryDelete(`/api/teams/${t.id}`);
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-    if (free?.id) await tryDelete(`/api/users/${free.id}`);
-    await free.ctx.dispose();
+    // Konto + alle besessenen Teams inkl. Dienste/Mitglieder werden per
+    // SQL-Bereinigung entfernt (DELETE /api/users scheitert am Team-FK-Baum).
+    await deleteFreeAccount(free);
   });
 
   test("zeigt am Team-Limit einen Upgrade-Hinweis statt stillem Fehlschlag", async ({ page }) => {

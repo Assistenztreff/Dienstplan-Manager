@@ -1,5 +1,10 @@
 import { test, expect, request as playwrightRequest, type Page } from "@playwright/test";
-import { registerFreeAccount, setAccountPlan, type FreeAccount } from "./helpers/teams";
+import {
+  deleteFreeAccount,
+  registerFreeAccount,
+  setAccountPlan,
+  type FreeAccount,
+} from "./helpers/teams";
 
 /**
  * E2E-Absicherung: Premium-Sperren greifen nach einem Plan-Wechsel SOFORT und
@@ -124,19 +129,9 @@ test.describe("Premium-Feature-Gates: Plan-Flip (API)", () => {
   });
 
   test.afterAll(async () => {
-    const tryDelete = async (path: string) => {
-      try {
-        await acc.ctx.delete(path);
-      } catch {
-        /* ignore */
-      }
-    };
-    // FK-sicher: erst Ist-Zeiten, dann Schichten, dann Nutzer, dann das Konto.
-    if (timeEntryId) await tryDelete(`/api/time-tracking/${timeEntryId}`);
-    if (shiftId) await tryDelete(`/api/shifts/${shiftId}`);
-    for (const id of createdUserIds) await tryDelete(`/api/users/${id}`);
-    if (acc?.id) await tryDelete(`/api/users/${acc.id}`);
-    await acc.ctx.dispose();
+    // Konto + Standard-Team inkl. Ist-Zeiten/Schichten/Assistenten werden per
+    // SQL-Bereinigung entfernt (DELETE /api/users scheitert am Team-FK-Baum).
+    await deleteFreeAccount(acc);
   });
 
   test("Free blockt alle fünf Gates, Premium-Flip schaltet sofort frei, Downgrade wahrt Bestandsschutz", async () => {

@@ -1,5 +1,5 @@
 import { test, expect, type Page, type APIRequestContext } from "@playwright/test";
-import { registerFreeAccount } from "./helpers/teams";
+import { deleteAccountByEmail, registerFreeAccount } from "./helpers/teams";
 
 /**
  * E2E-Test für den Firmenlogo-Upload (Einstellungen) und dessen Verwendung.
@@ -80,10 +80,13 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  // Globalen Singleton-Zustand wiederherstellen.
-  await adminCtx.put("/api/branding-settings", {
-    data: { logoPath: originalLogoPath },
-  });
+  // Registriertes Konto samt Standard-Team per SQL-Bereinigung entfernen
+  // (DELETE /api/users scheitert am Team-FK-Baum; Branding kaskadiert mit).
+  try {
+    deleteAccountByEmail(accountEmail);
+  } catch {
+    /* Best effort — Cleanup darf den Lauf nicht blockieren. */
+  }
   await adminCtx.dispose();
 });
 

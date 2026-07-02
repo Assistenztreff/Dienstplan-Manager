@@ -1,5 +1,11 @@
 import { test, expect, request as playwrightRequest, type APIRequestContext } from "@playwright/test";
-import { registerFreeAccount, setAccountPlan, BASE_URL, type FreeAccount } from "./helpers/teams";
+import {
+  BASE_URL,
+  deleteFreeAccount,
+  registerFreeAccount,
+  setAccountPlan,
+  type FreeAccount,
+} from "./helpers/teams";
 
 /**
  * Upgrade-Transparenz aus ASSISTENTEN-Sicht (Task #267): Der Assistant-Branch
@@ -124,25 +130,10 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  const tryDelete = async (path: string) => {
-    try {
-      await owner.ctx.delete(path);
-    } catch {
-      /* ignore */
-    }
-  };
-  // FK-sicher: erst Ist-Zeiten, dann Nutzer, dann eigenes Konto. Den Plan
-  // zurücksetzen, damit kein Premium-Konto in der Test-DB zurückbleibt.
-  if (entryId) await tryDelete(`/api/time-tracking/${entryId}`);
-  if (assistantId) await tryDelete(`/api/users/${assistantId}`);
-  try {
-    setAccountPlan(owner.email, "free");
-  } catch {
-    /* ignore */
-  }
-  if (owner?.id) await tryDelete(`/api/users/${owner.id}`);
+  // Konto + Standard-Team inkl. Ist-Zeiten/Assistent werden per
+  // SQL-Bereinigung entfernt (DELETE /api/users scheitert am Team-FK-Baum).
   await assistantCtx?.dispose();
-  await owner.ctx.dispose();
+  await deleteFreeAccount(owner);
 });
 
 test("Free-Phase: Assistent sieht seine offenen Stunden gezählt, nichts ungezählt", async () => {

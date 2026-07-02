@@ -1,5 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
-import { registerFreeAccount, setAccountPlan, type FreeAccount } from "./helpers/teams";
+import {
+  deleteFreeAccount,
+  registerFreeAccount,
+  setAccountPlan,
+  type FreeAccount,
+} from "./helpers/teams";
 
 /**
  * E2E: Sammelbestätigung offener Zeiteinträge (Task #264).
@@ -98,19 +103,9 @@ test.describe("Sammelbestätigung: API (confirm-batch)", () => {
   });
 
   test.afterAll(async () => {
-    const tryDelete = async (path: string) => {
-      try {
-        await acc.ctx.delete(path);
-      } catch {
-        /* ignore */
-      }
-    };
-    for (const id of [...pendingIds, rejectedId].filter(Boolean)) {
-      await tryDelete(`/api/time-tracking/${id}`);
-    }
-    if (assistantId) await tryDelete(`/api/users/${assistantId}`);
-    if (acc?.id) await tryDelete(`/api/users/${acc.id}`);
-    await acc.ctx.dispose();
+    // Konto + Standard-Team inkl. Ist-Zeiten/Assistent werden per
+    // SQL-Bereinigung entfernt (DELETE /api/users scheitert am Team-FK-Baum).
+    await deleteFreeAccount(acc);
   });
 
   test("Free-Konto: Sammelbestätigung liefert 403 plan_feature_required", async () => {
@@ -188,17 +183,9 @@ test.describe("Sammelbestätigung: UI (Zeiterfassung)", () => {
   });
 
   test.afterAll(async () => {
-    const tryDelete = async (path: string) => {
-      try {
-        await acc.ctx.delete(path);
-      } catch {
-        /* ignore */
-      }
-    };
-    for (const id of entryIds) await tryDelete(`/api/time-tracking/${id}`);
-    if (assistantId) await tryDelete(`/api/users/${assistantId}`);
-    if (acc?.id) await tryDelete(`/api/users/${acc.id}`);
-    await acc.ctx.dispose();
+    // Konto + Standard-Team inkl. Ist-Zeiten/Assistent werden per
+    // SQL-Bereinigung entfernt (DELETE /api/users scheitert am Team-FK-Baum).
+    await deleteFreeAccount(acc);
   });
 
   test("Free: Button sichtbar, aber gesperrt mit Premium-Hinweis", async ({ page }) => {

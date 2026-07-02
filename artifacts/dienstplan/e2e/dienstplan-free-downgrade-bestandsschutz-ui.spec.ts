@@ -1,6 +1,11 @@
 import { test, expect, type Page } from "@playwright/test";
 import { addMonths, format } from "date-fns";
-import { registerFreeAccount, setAccountPlan, type FreeAccount } from "./helpers/teams";
+import {
+  deleteFreeAccount,
+  registerFreeAccount,
+  setAccountPlan,
+  type FreeAccount,
+} from "./helpers/teams";
 
 /**
  * UI-Test (#248): Nach einem Downgrade Premium -> Free zeigt das WEB-FRONTEND
@@ -152,45 +157,9 @@ test.describe("Downgrade auf Free: Bestandsdaten bleiben im UI sichtbar", () => 
   });
 
   test.afterAll(async () => {
-    const tryDelete = async (path: string) => {
-      try {
-        await acc.ctx.delete(path);
-      } catch {
-        /* ignore */
-      }
-    };
-    // FK-sicher: erst Schichten, dann Dienste, dann Nutzer, dann Teams, dann Konto.
-    if (farShiftId) await tryDelete(`/api/shifts/${farShiftId}`);
-    for (const id of extraModelIds) await tryDelete(`/api/shift-models/${id}`);
-    try {
-      // Auch die 4 geseedeten Dienste entfernen, damit das Team loeschbar wird.
-      const modelsRes = await acc.ctx.get("/api/shift-models");
-      if (modelsRes.ok()) {
-        const models = (await modelsRes.json()) as { id: number }[];
-        for (const m of models) await tryDelete(`/api/shift-models/${m.id}`);
-      }
-    } catch {
-      /* ignore */
-    }
-    for (const id of assistantIds) await tryDelete(`/api/users/${id}`);
-    try {
-      const teamsRes = await acc.ctx.get("/api/teams");
-      if (teamsRes.ok()) {
-        const teams = (await teamsRes.json()) as { id: number }[];
-        for (const t of teams) {
-          const membersRes = await acc.ctx.get(`/api/teams/${t.id}/members`);
-          if (membersRes.ok()) {
-            const members = (await membersRes.json()) as { userId: number }[];
-            for (const m of members) await tryDelete(`/api/teams/${t.id}/members/${m.userId}`);
-          }
-          await tryDelete(`/api/teams/${t.id}`);
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-    if (acc?.id) await tryDelete(`/api/users/${acc.id}`);
-    await acc.ctx.dispose();
+    // Konto + alle besessenen Teams inkl. Schichten/Dienste/Assistenten werden
+    // per SQL-Bereinigung entfernt (DELETE /api/users scheitert am Team-FK-Baum).
+    await deleteFreeAccount(acc);
   });
 
   test("Einstellungen: alle 6 Dienste bleiben sichtbar und bearbeitbar, nur Neu-Anlegen ist gesperrt", async ({

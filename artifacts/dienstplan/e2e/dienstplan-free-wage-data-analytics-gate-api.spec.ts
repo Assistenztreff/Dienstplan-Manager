@@ -1,5 +1,10 @@
 import { test, expect } from "@playwright/test";
-import { registerFreeAccount, setAccountPlan, type FreeAccount } from "./helpers/teams";
+import {
+  deleteFreeAccount,
+  registerFreeAccount,
+  setAccountPlan,
+  type FreeAccount,
+} from "./helpers/teams";
 
 /**
  * API-Test für die serverseitigen Premium-Gates rund um Lohndaten und
@@ -32,12 +37,10 @@ async function freeAccount(label: string): Promise<FreeAccount> {
 }
 
 test.afterEach(async () => {
+  // Registrierte Konten samt Standard-Team + Daten per SQL-Bereinigung
+  // entfernen (DELETE /api/users scheitert am Team-FK-Baum) und Kontext freigeben.
   for (const acc of accounts) {
-    try {
-      await acc.ctx.dispose();
-    } catch {
-      /* ignore */
-    }
+    await deleteFreeAccount(acc);
   }
   accounts = [];
 });

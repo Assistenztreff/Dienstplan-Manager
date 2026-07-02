@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
-import { registerFreeAccount, type FreeAccount } from "./helpers/teams";
+import { deleteFreeAccount, registerFreeAccount, type FreeAccount } from "./helpers/teams";
 
 /**
  * API-Test für die SERVERSEITIG durchgesetzten Free-Limits (Task #205/#214).
@@ -44,12 +44,10 @@ async function freeAccount(accountType: "privat" | "dienstleister", label: strin
 }
 
 test.afterEach(async () => {
+  // Registrierte Konten samt Standard-Team + Daten per SQL-Bereinigung
+  // entfernen (DELETE /api/users scheitert am Team-FK-Baum) und Kontext freigeben.
   for (const acc of accounts) {
-    try {
-      await acc.ctx.dispose();
-    } catch {
-      /* ignore */
-    }
+    await deleteFreeAccount(acc);
   }
   accounts = [];
 });

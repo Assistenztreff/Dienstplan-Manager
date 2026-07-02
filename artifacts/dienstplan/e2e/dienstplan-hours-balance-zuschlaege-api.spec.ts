@@ -1,5 +1,10 @@
 import { test, expect } from "@playwright/test";
-import { TeamTestHarness, registerFreeAccount, type FreeAccount } from "./helpers/teams";
+import {
+  TeamTestHarness,
+  deleteFreeAccount,
+  registerFreeAccount,
+  type FreeAccount,
+} from "./helpers/teams";
 
 /**
  * API-E2E-Beweis: Der Admin-Zweig von GET /api/dashboard/hours-balance lädt die
@@ -168,9 +173,9 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  if (foreignAccount) {
-    await foreignAccount.ctx.dispose();
-  }
+  // Registriertes Fremdkonto samt Standard-Team per SQL-Bereinigung entfernen
+  // (DELETE /api/users scheitert am Team-FK-Baum).
+  await deleteFreeAccount(foreignAccount);
   // Zuschlags-Einstellungen des Test-Admins zurücksetzen (pro Konto gespeichert;
   // Hygiene für nachfolgende Specs), bevor die Fixture-Daten fallen.
   if (originalAllowance) {
@@ -398,15 +403,21 @@ test.describe("hours-balance: Aggregation der Roh-Kennzahlen zu Zuschlägen", ()
       );
     } finally {
       // Mitgliedschaft des Test-Admins wieder entfernen, damit nachfolgende
-      // Specs keinen erweiterten Team-Scope sehen; Konto-Daten bleiben (Test-DB).
-      const teamsRes = await owner.ctx.get("/api/teams");
-      if (teamsRes.ok()) {
-        const ownerTeams = (await teamsRes.json()) as Array<{ id: number }>;
-        for (const t of ownerTeams) {
-          await owner.ctx.delete(`/api/teams/${t.id}/members/${h.adminId}`);
+      // Specs keinen erweiterten Team-Scope sehen; danach Konto + Team +
+      // Daten per SQL-Bereinigung entfernen (DELETE /api/users scheitert am
+      // Team-FK-Baum).
+      try {
+        const teamsRes = await owner.ctx.get("/api/teams");
+        if (teamsRes.ok()) {
+          const ownerTeams = (await teamsRes.json()) as Array<{ id: number }>;
+          for (const t of ownerTeams) {
+            await owner.ctx.delete(`/api/teams/${t.id}/members/${h.adminId}`);
+          }
         }
+      } catch {
+        /* ignore */
       }
-      await owner.ctx.dispose();
+      await deleteFreeAccount(owner);
     }
   });
 });

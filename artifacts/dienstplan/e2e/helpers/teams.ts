@@ -108,6 +108,50 @@ export function setAccountPlan(email: string, plan: "premium" | "free"): void {
   });
 }
 
+/**
+ * Löscht ein (Test-)Konto samt Standard-Team + team-gebundener Daten direkt in
+ * der (Test-)DB — der einzige zuverlässige Weg für selbst-registrierte Konten:
+ * `DELETE /api/users/:id` scheitert dort am FK-Baum des bei der Registrierung
+ * angelegten „Standard-Teams" (teams.owner_id kaskadiert zwar, aber
+ * shift_models/shifts/contracts/time_tracking referenzieren teams.id OHNE
+ * Cascade — allein die 4 geseedeten Schichtmodelle blockieren jedes Konto).
+ * Nutzt dasselbe execSync-/DB-Targeting wie `setAccountPlan`. Idempotent.
+ */
+export function deleteAccountByEmail(email: string): void {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    DELETE_ACCOUNT_EMAIL: email,
+  };
+  if (process.env.E2E_TEST_DATABASE_URL) {
+    env.DATABASE_URL = process.env.E2E_TEST_DATABASE_URL;
+  }
+  execSync("pnpm --filter @workspace/scripts run delete-account", {
+    env,
+    stdio: "pipe",
+  });
+}
+
+/**
+ * Best-effort-Cleanup für ein via `registerFreeAccount` angelegtes Konto:
+ * entfernt Konto + Standard-Team + team-gebundene Daten + verwaiste
+ * Assistenten aus der Test-DB und gibt den Request-Kontext frei. Für
+ * `afterAll` gedacht — Fehler werden geschluckt, damit das Cleanup andere
+ * Schritte nie blockiert.
+ */
+export async function deleteFreeAccount(acc: FreeAccount | undefined): Promise<void> {
+  if (!acc) return;
+  try {
+    deleteAccountByEmail(acc.email);
+  } catch {
+    /* Best effort — Testlauf nicht am Cleanup scheitern lassen. */
+  }
+  try {
+    await acc.ctx.dispose();
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Ein über das setup-admin-Skript geseedeter, "fremder" Admin (ohne Teams). */
 export interface SeededAdmin {
   ctx: APIRequestContext;

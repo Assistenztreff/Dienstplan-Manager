@@ -1,5 +1,10 @@
 import { test, expect } from "@playwright/test";
-import { registerFreeAccount, setAccountPlan, type FreeAccount } from "./helpers/teams";
+import {
+  deleteFreeAccount,
+  registerFreeAccount,
+  setAccountPlan,
+  type FreeAccount,
+} from "./helpers/teams";
 
 /**
  * API-Test: Ein Rückstufen von Premium auf Free (z.B. nach ausgebliebener
@@ -116,44 +121,9 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  const tryDelete = async (path: string) => {
-    try {
-      await acc.ctx.delete(path);
-    } catch {
-      /* ignore */
-    }
-  };
-
-  // FK-sicher: erst Schichten, dann Nutzer, dann Modelle, dann Teams, dann das
-  // Konto. Löschen ist auch im Free-Tarif erlaubt (Bestandsschutz sperrt nur
-  // Neu-Anlage), daher genügt der Free-Kontext.
-  try {
-    const shiftsRes = await acc.ctx.get("/api/shifts");
-    if (shiftsRes.ok()) {
-      for (const s of (await shiftsRes.json()) as Entity[]) await tryDelete(`/api/shifts/${s.id}`);
-    }
-  } catch {
-    /* ignore */
-  }
-  for (const id of assistantIds) await tryDelete(`/api/users/${id}`);
-  try {
-    const modelsRes = await acc.ctx.get("/api/shift-models");
-    if (modelsRes.ok()) {
-      for (const m of (await modelsRes.json()) as Entity[]) await tryDelete(`/api/shift-models/${m.id}`);
-    }
-  } catch {
-    /* ignore */
-  }
-  try {
-    const teamsRes = await acc.ctx.get("/api/teams");
-    if (teamsRes.ok()) {
-      for (const t of (await teamsRes.json()) as Entity[]) await tryDelete(`/api/teams/${t.id}`);
-    }
-  } catch {
-    /* ignore */
-  }
-  if (acc?.id) await tryDelete(`/api/users/${acc.id}`);
-  await acc.ctx.dispose();
+  // Konto + alle besessenen Teams inkl. Schichten/Dienste/Assistenten werden
+  // per SQL-Bereinigung entfernt (DELETE /api/users scheitert am Team-FK-Baum).
+  await deleteFreeAccount(acc);
 });
 
 test("Bestandsschutz: alle über den Free-Caps angelegten Zeilen bleiben nach dem Downgrade sichtbar", async () => {

@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { addMonths, format } from "date-fns";
-import { registerFreeAccount, type FreeAccount } from "./helpers/teams";
+import { deleteFreeAccount, registerFreeAccount, type FreeAccount } from "./helpers/teams";
 
 /**
  * UI-Test (#239): Die beiden verbleibenden serverseitig durchgesetzten
@@ -45,16 +45,9 @@ test.describe("Free-Limit Schichtmodelle (UI)", () => {
   });
 
   test.afterAll(async () => {
-    const tryDelete = async (path: string) => {
-      try {
-        await free.ctx.delete(path);
-      } catch {
-        /* ignore */
-      }
-    };
-    for (const id of createdModelIds) await tryDelete(`/api/shift-models/${id}`);
-    if (free?.id) await tryDelete(`/api/users/${free.id}`);
-    await free.ctx.dispose();
+    // Konto + Standard-Team inkl. Dienste werden per SQL-Bereinigung
+    // entfernt (DELETE /api/users scheitert am Team-FK-Baum).
+    await deleteFreeAccount(free);
   });
 
   /** Legt per API so lange Dienste an, bis das Konto `target` Modelle hat. */
@@ -151,16 +144,9 @@ test.describe("Free-Limit Vorausplanung (UI)", () => {
   });
 
   test.afterAll(async () => {
-    const tryDelete = async (path: string) => {
-      try {
-        await free.ctx.delete(path);
-      } catch {
-        /* ignore */
-      }
-    };
-    if (assistantId) await tryDelete(`/api/users/${assistantId}`);
-    if (free?.id) await tryDelete(`/api/users/${free.id}`);
-    await free.ctx.dispose();
+    // Konto + Standard-Team inkl. Assistent werden per SQL-Bereinigung
+    // entfernt (DELETE /api/users scheitert am Team-FK-Baum).
+    await deleteFreeAccount(free);
   });
 
   /** Oeffnet den Dienstplan in der mobilen Listenansicht (agenda-day-Testids). */

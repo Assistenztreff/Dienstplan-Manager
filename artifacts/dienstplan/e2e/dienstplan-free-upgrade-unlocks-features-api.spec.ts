@@ -1,5 +1,10 @@
 import { test, expect } from "@playwright/test";
-import { registerFreeAccount, setAccountPlan, type FreeAccount } from "./helpers/teams";
+import {
+  deleteFreeAccount,
+  registerFreeAccount,
+  setAccountPlan,
+  type FreeAccount,
+} from "./helpers/teams";
 
 /**
  * API-Test: Eine manuelle Premium-Freischaltung hebt auch die beiden NICHT-
@@ -53,44 +58,9 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  const tryDelete = async (path: string) => {
-    try {
-      await acc.ctx.delete(path);
-    } catch {
-      /* ignore */
-    }
-  };
-  // FK-sicher: erst Schichten, dann Dienste, dann Nutzer, dann Teams.
-  try {
-    const shiftsRes = await acc.ctx.get("/api/shifts");
-    if (shiftsRes.ok()) {
-      const shifts = (await shiftsRes.json()) as { id: number }[];
-      for (const s of shifts) await tryDelete(`/api/shifts/${s.id}`);
-    }
-  } catch {
-    /* ignore */
-  }
-  try {
-    const modelsRes = await acc.ctx.get("/api/shift-models");
-    if (modelsRes.ok()) {
-      const models = (await modelsRes.json()) as { id: number }[];
-      for (const m of models) await tryDelete(`/api/shift-models/${m.id}`);
-    }
-  } catch {
-    /* ignore */
-  }
-  for (const id of createdUserIds) await tryDelete(`/api/users/${id}`);
-  try {
-    const teamsRes = await acc.ctx.get("/api/teams");
-    if (teamsRes.ok()) {
-      const teams = (await teamsRes.json()) as { id: number }[];
-      for (const t of teams) await tryDelete(`/api/teams/${t.id}`);
-    }
-  } catch {
-    /* ignore */
-  }
-  if (acc?.id) await tryDelete(`/api/users/${acc.id}`);
-  await acc.ctx.dispose();
+  // Konto + alle besessenen Teams inkl. Schichten/Dienste/Assistenten werden
+  // per SQL-Bereinigung entfernt (DELETE /api/users scheitert am Team-FK-Baum).
+  await deleteFreeAccount(acc);
 });
 
 test("Premium-Freischaltung hebt maxShiftModels und bulkEdit sofort auf", async () => {
