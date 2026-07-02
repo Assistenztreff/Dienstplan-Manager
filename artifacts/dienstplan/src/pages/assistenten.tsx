@@ -16,7 +16,7 @@ import {
 import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
 import { isWithinLimit, getLimit, hasAccess } from "@/lib/entitlements";
-import { readableApiError, planLimitMessage, planFeatureMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
+import { readableApiError, planUpgradeMessage, planFeatureMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -413,7 +413,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
       await queryClient.invalidateQueries({ queryKey: getListContractsQueryKey() });
       onClose();
     } catch (err) {
-      const planMsg = planLimitMessage(err);
+      const planMsg = planUpgradeMessage(err);
       if (planMsg) {
         setPlanError(planMsg);
       } else {

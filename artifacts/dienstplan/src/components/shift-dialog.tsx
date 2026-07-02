@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Trash2 } from "lucide-react";
-import { readableApiError, planLimitMessage } from "@/lib/api-error";
+import { readableApiError, planUpgradeMessage } from "@/lib/api-error";
 
 type Assistant = { id: number; name: string };
 
@@ -376,7 +376,7 @@ export function ShiftDialog({
       await invalidate();
       onClose();
     } catch (err) {
-      const planMsg = planLimitMessage(err);
+      const planMsg = planUpgradeMessage(err);
       if (err instanceof ApiError && err.status === 401) {
         setErrors({ notes: "Sitzung abgelaufen. Bitte Seite neu laden und erneut anmelden." });
       } else if (planMsg) {
@@ -439,7 +439,7 @@ export function ShiftDialog({
           });
           created.add(dateStr);
         } catch (err) {
-          const planMsg = planLimitMessage(err);
+          const planMsg = planUpgradeMessage(err);
           if (err instanceof ApiError && err.status === 401) {
             sessionExpired = true;
             break;

@@ -117,3 +117,18 @@ export function planFeatureMessage(err: unknown): string | null {
     "Diese Funktion ist im Premium-Tarif enthalten. Bitte auf Premium upgraden."
   );
 }
+
+/**
+ * Kombinierter Helfer: erkennt BEIDE strukturierten Plan-403s des Servers
+ * (`plan_feature_required` UND `plan_limit_reached`) und liefert die passende
+ * freundliche Upgrade-Meldung. Gibt `null` zurück, wenn es kein Plan-Fehler
+ * ist (dann normal mit `readableApiError` weiterbehandeln).
+ *
+ * In Fehler-Handlern bevorzugt diesen Helfer verwenden — so bekommt der
+ * Nutzer auch dann einen klaren Premium-Hinweis, wenn ein gegatetes Feature
+ * doch einmal durchrutscht (z. B. veralteter Tab oder Downgrade mitten in
+ * der Sitzung).
+ */
+export function planUpgradeMessage(err: unknown): string | null {
+  return planFeatureMessage(err) ?? planLimitMessage(err);
+}

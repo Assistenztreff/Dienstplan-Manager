@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "@workspace/api-client-react";
-import { planLimitMessage, readableApiError } from "./api-error";
+import {
+  planFeatureMessage,
+  planLimitMessage,
+  planUpgradeMessage,
+  readableApiError,
+} from "./api-error";
 
 /**
  * Unit-Tests für `readableApiError` — die geteilte Helferfunktion, die ALLE
@@ -125,5 +130,69 @@ describe("planLimitMessage", () => {
     expect(planLimitMessage(makeApiError(403, { error: "Keine Berechtigung" }))).toBeNull();
     expect(planLimitMessage(makeApiError(409, { code: "plan_limit_reached" }))).toBeNull();
     expect(planLimitMessage(new Error("network"))).toBeNull();
+  });
+});
+
+/**
+ * `planFeatureMessage` mappt die strukturierten 403-Antworten der serverseitig
+ * durchgesetzten Premium-Features (`code: "plan_feature_required"`) auf
+ * freundliche Upgrade-Hinweise.
+ */
+describe("planFeatureMessage", () => {
+  it("liefert die passende Meldung für bekannte Features", () => {
+    for (const feature of ["bulkEdit", "advancedPersonnelFile", "advancedAnalytics"]) {
+      const msg = planFeatureMessage(
+        makeApiError(403, { error: "Premium erforderlich", code: "plan_feature_required", feature }),
+      );
+      expect(msg).toContain("Premium");
+    }
+  });
+
+  it("fällt bei unbekanntem feature auf die Server-Meldung bzw. den generischen Hinweis zurück", () => {
+    expect(
+      planFeatureMessage(
+        makeApiError(403, { error: "Server-Text", code: "plan_feature_required", feature: "neu" }),
+      ),
+    ).toBe("Server-Text");
+    expect(
+      planFeatureMessage(makeApiError(403, { code: "plan_feature_required" })),
+    ).toContain("Premium");
+  });
+
+  it("gibt null für Nicht-Feature-Fehler zurück", () => {
+    expect(planFeatureMessage(makeApiError(403, { error: "Keine Berechtigung" }))).toBeNull();
+    expect(planFeatureMessage(makeApiError(409, { code: "plan_feature_required" }))).toBeNull();
+    expect(planFeatureMessage(makeApiError(403, { code: "plan_limit_reached" }))).toBeNull();
+    expect(planFeatureMessage(new Error("network"))).toBeNull();
+  });
+});
+
+/**
+ * `planUpgradeMessage` kombiniert beide Plan-403-Codes — die Fehler-Handler
+ * der Dialoge nutzen diesen Helfer, damit auch ein durchgerutschtes
+ * Premium-Feature (z. B. veralteter Tab, Downgrade mitten in der Sitzung)
+ * eine klare Upgrade-Meldung statt eines rohen Fehlers zeigt.
+ */
+describe("planUpgradeMessage", () => {
+  it("erkennt plan_feature_required", () => {
+    const msg = planUpgradeMessage(
+      makeApiError(403, { code: "plan_feature_required", feature: "bulkEdit" }),
+    );
+    expect(msg).toContain("Massenbearbeitung");
+    expect(msg).toContain("Premium");
+  });
+
+  it("erkennt plan_limit_reached", () => {
+    const msg = planUpgradeMessage(
+      makeApiError(403, { code: "plan_limit_reached", limit: "maxTeams" }),
+    );
+    expect(msg).toContain("Team");
+    expect(msg).toContain("Premium");
+  });
+
+  it("gibt null für alle anderen Fehler zurück", () => {
+    expect(planUpgradeMessage(makeApiError(403, { error: "Keine Berechtigung" }))).toBeNull();
+    expect(planUpgradeMessage(makeApiError(401, {}))).toBeNull();
+    expect(planUpgradeMessage(new Error("network"))).toBeNull();
   });
 });

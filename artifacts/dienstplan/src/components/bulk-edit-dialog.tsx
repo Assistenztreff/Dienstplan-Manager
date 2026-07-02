@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Pencil } from "lucide-react";
-import { planLimitMessage } from "@/lib/api-error";
+import { planUpgradeMessage } from "@/lib/api-error";
 
 type Assistant = { id: number; name: string };
 
@@ -248,7 +248,7 @@ export function BulkEditDialog({
           });
           updated.add(shift.id);
         } catch (err) {
-          const planMsg = planLimitMessage(err);
+          const planMsg = planUpgradeMessage(err);
           if (planMsg) {
             planLimitError = planMsg;
             break;

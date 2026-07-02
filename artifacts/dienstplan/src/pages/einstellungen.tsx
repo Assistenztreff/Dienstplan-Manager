@@ -39,7 +39,7 @@ import { Plus, Pencil, Trash2, GripVertical, Upload, ImageIcon, KeyRound, Mail, 
 import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { AllowanceSettingsForm } from "@/components/allowance-settings-form";
 import { logoSrcFromPath, ACCEPTED_LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/logo";
-import { readableApiError, planLimitMessage, planFeatureMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
+import { readableApiError, planUpgradeMessage, planFeatureMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
 import { isWithinLimit, getLimit, hasAccess } from "@/lib/entitlements";
 import { useToast } from "@/hooks/use-toast";
 
@@ -443,7 +443,7 @@ function ModelDialog({ open, onClose, editModel, nextSortOrder }: ModelDialogPro
     } catch (err) {
       setErrors({
         name:
-          planLimitMessage(err) ??
+          planUpgradeMessage(err) ??
           readableApiError(err, "Speichern fehlgeschlagen. Bitte erneut versuchen."),
       });
     } finally {

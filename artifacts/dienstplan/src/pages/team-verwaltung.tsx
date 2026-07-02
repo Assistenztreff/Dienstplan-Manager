@@ -31,7 +31,7 @@ import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/auth";
 import { isWithinLimit, getLimit } from "@/lib/entitlements";
-import { readableApiError, planLimitMessage } from "@/lib/api-error";
+import { readableApiError, planUpgradeMessage } from "@/lib/api-error";
 
 type Team = {
   id: number;
@@ -94,7 +94,7 @@ function TeamDialog({ open, onClose, editTeam }: TeamDialogProps) {
       onClose();
     } catch (err) {
       setError(
-        planLimitMessage(err) ??
+        planUpgradeMessage(err) ??
           readableApiError(err, "Speichern fehlgeschlagen. Bitte erneut versuchen."),
       );
     } finally {
