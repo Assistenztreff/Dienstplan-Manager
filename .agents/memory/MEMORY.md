@@ -30,3 +30,4 @@
 - [Drizzle raw-SQL correlated subqueries](drizzle-sql-correlated-subquery.md) — `${table.col}` inside sql`` subqueries in a select projection renders unqualified "id" and 500s; write `users.id` explicitly.
 - [Stale e2e test DB repair](test-db-stale-schema-repair.md) — `_test` DB drifts after schema changes; db push dies on interactive truncate prompts, repair with guarded SQL then re-run setup-test-db.
 - [E2E assistant login via invite](e2e-assistant-login-via-invite.md) — get an assistant session by briefly upgrading the owner to invite, downgrading, then set-password (logs in; Bestandsschutz keeps it valid).
+- [Prod-mode e2e stack](prod-mode-e2e-stack.md) — spec-owned NODE_ENV=production API + vite preview harness; preview proxy must fake X-Forwarded-Proto https or the Secure session cookie is never set.

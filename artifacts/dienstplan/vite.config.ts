@@ -90,5 +90,22 @@ export default defineConfig({
     port,
     host: "0.0.0.0",
     allowedHosts: true,
+    // Gleiche /api-Weiterleitung wie im Dev-Server, aber für den Prod-Build
+    // (`vite preview`). Genutzt vom E2E-Spec, das den Produktions-Modus prüft
+    // (dienstplan-prod-dev-switcher-hidden.spec.ts). Der Header täuscht dem
+    // API-Server (trust proxy) HTTPS vor, damit das in Produktion `Secure`
+    // gesetzte Session-Cookie auch über den lokalen HTTP-Preview-Proxy gesetzt
+    // wird (Chromium akzeptiert Secure-Cookies auf localhost).
+    ...(e2eApiProxyTarget
+      ? {
+          proxy: {
+            "/api": {
+              target: e2eApiProxyTarget,
+              changeOrigin: true,
+              headers: { "X-Forwarded-Proto": "https" },
+            },
+          },
+        }
+      : {}),
   },
 });
