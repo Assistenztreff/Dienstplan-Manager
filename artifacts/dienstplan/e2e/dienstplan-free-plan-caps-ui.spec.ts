@@ -225,4 +225,36 @@ test.describe("Free-Limit Vorausplanung (UI)", () => {
     await expect(dialog.getByText(/aktuellen und nächsten Monat/i)).toBeVisible();
     await expect(dialog.getByText(/Premium/i)).toBeVisible();
   });
+
+  test("Auch Abwesenheiten im zu fernen Monat zeigen den Upgrade-Hinweis", async ({
+    page,
+  }) => {
+    test.setTimeout(60000);
+    await adoptSession(page, free);
+    await openDienstplanList(page);
+
+    // Abwesenheiten laufen ueber denselben POST /shifts (type vacation/sick)
+    // und unterliegen serverseitig demselben historyMonths-Gate. Der Dialog
+    // wird fuer HEUTE geoeffnet (Client-Gate greift nicht) und dann Typ
+    // "Urlaub" + zu fernes Datum gewaehlt -> Server-403 muss als freundliche
+    // Upgrade-Meldung erscheinen, nicht als "Keine Berechtigung".
+    await page.getByTestId(`agenda-day-${todayKey}`).locator("button").first().click();
+    const dialog = page.getByTestId("shift-dialog");
+    await expect(dialog.getByText("Neue Schicht anlegen")).toBeVisible();
+
+    await dialog.getByTestId("shift-dialog-user").click();
+    await page.getByRole("option", { name: assistantName }).click();
+
+    // Typ auf Abwesenheit "Urlaub" umstellen (Zeiten-Felder verschwinden).
+    await dialog.getByTestId("shift-dialog-type").click();
+    await page.getByRole("option", { name: "Urlaub" }).click();
+
+    await dialog.getByTestId("shift-dialog-date").fill(farDateKey);
+    await dialog.getByTestId("shift-dialog-save").click();
+
+    // Die gemappte historyMonths-Meldung, NICHT der generische 403-Text.
+    await expect(dialog.getByText(/aktuellen und nächsten Monat/i)).toBeVisible();
+    await expect(dialog.getByText(/Premium/i)).toBeVisible();
+    await expect(dialog.getByText("Keine Berechtigung zum Speichern.")).not.toBeVisible();
+  });
 });

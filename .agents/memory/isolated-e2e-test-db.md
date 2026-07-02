@@ -16,6 +16,8 @@ E2E specs create AND delete real records (assistant-delete, abwesenheiten, shift
 
 **Provisioning:** `scripts/src/setup-test-db.ts` (`pnpm --filter @workspace/scripts run setup-test-db`) creates `<dbname>_test` if missing (CREATE DATABASE issued from a connection to the *dev* DB — can't create the DB you're connected to), then runs db push + setup-admin + migrate-teams against it with `DATABASE_URL` overridden. Idempotent. `test:e2e` runs it before `playwright test`.
 
+**Stale-schema gotcha:** `setup-test-db` runs `db push` non-interactively; when the dev schema gained a UNIQUE column since the last run (e.g. a token column), drizzle-kit push raises an interactive truncate prompt and dies without TTY → test DB keeps the old schema and specs fail with 500s on register/insert. Fix: pre-apply the column + named unique constraint directly on the `_test` DB (guarded via pg_constraint check), then push runs clean. Symptom to recognize: `column … does not exist` from the test API while dev works.
+
 **Override:** set `E2E_BASE_URL` externally → no managed stack is started, tests run against that URL (e.g. shared proxy localhost:80). Only for deliberate manual runs.
 
 **Why:** destructive tests on the shared dev DB churn real data (created/deleted temp users left ID gaps) and risk corrupting real records on an interrupted run.
