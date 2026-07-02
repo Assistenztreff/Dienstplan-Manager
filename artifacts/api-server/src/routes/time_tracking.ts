@@ -13,6 +13,7 @@ import {
   ConfirmTimeEntryBody,
 } from "@workspace/api-zod";
 import { requireAuth, requireAdmin } from "../middleware/auth";
+import { requirePlanFeature } from "../lib/plan";
 import {
   resolveTeamId,
   resolveReadTeamScope,
@@ -257,7 +258,13 @@ router.delete("/time-tracking/:id", requireAdmin, async (req, res): Promise<void
   res.status(204).send();
 });
 
-router.patch("/time-tracking/:id/confirm", requireAdmin, async (req, res): Promise<void> => {
+// Premium-Feature "strictTimeTracking": der strikte Freigabe-Workflow
+// (Bestätigen/Ablehnen erfasster Ist-Zeiten) ist Premium. Das ERFASSEN von
+// Ist-Zeiten (POST) bleibt im Free-Tarif uneingeschränkt möglich; Einträge
+// behalten dort den Status "offen". Bestandsschutz: bereits bestätigte/
+// abgelehnte Einträge bleiben unverändert sichtbar — gegated wird nur die
+// NEUE Freigabe-Aktion.
+router.patch("/time-tracking/:id/confirm", requireAdmin, requirePlanFeature("strictTimeTracking"), async (req, res): Promise<void> => {
   const params = ConfirmTimeEntryParams.safeParse({ id: Number(req.params["id"]) });
   const body = ConfirmTimeEntryBody.safeParse(req.body);
   if (!params.success || !body.success) {

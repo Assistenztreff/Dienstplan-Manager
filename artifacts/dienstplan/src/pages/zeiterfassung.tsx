@@ -33,7 +33,8 @@ import { useTeam } from "@/context/team";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { readableApiError } from "@/lib/api-error";
+import { readableApiError, planFeatureMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
+import { hasAccess } from "@/lib/entitlements";
 import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 
 const SHIFT_TYPE_LABEL: Record<string, string> = {
@@ -83,6 +84,10 @@ export default function Zeiterfassung() {
   const { currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin";
   const isAssistant = currentUser?.role === "assistant";
+  // Premium-Feature strictTimeTracking: Bestätigen/Ablehnen von Ist-Zeiten.
+  // UX-Gate — die autoritative Durchsetzung liegt beim Server (403).
+  // Bestandsschutz: bereits bestätigte/abgelehnte Einträge bleiben sichtbar.
+  const canConfirm = hasAccess(currentUser, "strictTimeTracking");
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { selectedTeamId } = useTeam();
@@ -203,7 +208,8 @@ export default function Zeiterfassung() {
         onError: (err) => {
           toast({
             title: "Fehler beim Aktualisieren",
-            description: readableApiError(err, "Bitte erneut versuchen."),
+            description:
+              planFeatureMessage(err) ?? readableApiError(err, "Bitte erneut versuchen."),
             variant: "destructive",
           });
         },
@@ -487,7 +493,8 @@ export default function Zeiterfassung() {
                               variant="outline"
                               size="sm"
                               className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200"
-                              disabled={isConfirming}
+                              disabled={isConfirming || !canConfirm}
+                              title={canConfirm ? "Bestätigen" : PLAN_FEATURE_MESSAGES.strictTimeTracking}
                               onClick={() => handleConfirm(entry.id, "confirmed")}
                             >
                               <Check className="h-4 w-4" />
@@ -496,7 +503,8 @@ export default function Zeiterfassung() {
                               variant="outline"
                               size="sm"
                               className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-                              disabled={isConfirming}
+                              disabled={isConfirming || !canConfirm}
+                              title={canConfirm ? "Ablehnen" : PLAN_FEATURE_MESSAGES.strictTimeTracking}
                               onClick={() => handleConfirm(entry.id, "rejected")}
                             >
                               <X className="h-4 w-4" />

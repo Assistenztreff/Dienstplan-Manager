@@ -822,6 +822,10 @@ export const ListTimeEntriesStatus = {
   rejected: 'rejected',
 } as const;
 
+export type ExportCalendarParams = {
+teamId?: number;
+};
+
 export type GetDashboardSummaryParams = {
 month?: number;
 year?: number;

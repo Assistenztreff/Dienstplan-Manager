@@ -16,6 +16,7 @@ import {
   useChangePassword,
   useUpdateProfile,
   requestUploadUrl,
+  exportCalendar,
   type BrandingSettings,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -29,12 +30,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, GripVertical, Upload, ImageIcon, KeyRound, Mail, User as UserIcon, Lock } from "lucide-react";
+import { Plus, Pencil, Trash2, GripVertical, Upload, ImageIcon, KeyRound, Mail, User as UserIcon, Lock, CalendarDays } from "lucide-react";
 import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { AllowanceSettingsForm } from "@/components/allowance-settings-form";
 import { logoSrcFromPath, ACCEPTED_LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/logo";
-import { readableApiError, planLimitMessage } from "@/lib/api-error";
-import { isWithinLimit, getLimit } from "@/lib/entitlements";
+import { readableApiError, planLimitMessage, planFeatureMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
+import { isWithinLimit, getLimit, hasAccess } from "@/lib/entitlements";
 import { useToast } from "@/hooks/use-toast";
 
 type ShiftModel = {
@@ -912,6 +913,89 @@ function LogoSettingsCard() {
   );
 }
 
+function CalendarExportCard() {
+  const { toast } = useToast();
+  const { currentUser } = useAuth();
+  const { selectedTeamId } = useTeam();
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Premium-Feature calendarSync: Export der verbindlichen (FIX) Schichten als
+  // iCalendar-Datei (.ics) für die eigene Kalender-App. UX-Gate — autoritativ
+  // setzt der Server durch (403 plan_feature_required).
+  const canSync = hasAccess(currentUser, "calendarSync");
+
+  async function handleDownload() {
+    setIsExporting(true);
+    try {
+      const ics = await exportCalendar(
+        selectedTeamId != null ? { teamId: selectedTeamId } : undefined,
+      );
+      const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "dienstplan.ics";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast({
+        title: "Kalender-Export fehlgeschlagen",
+        description:
+          planFeatureMessage(err) ?? readableApiError(err, "Bitte erneut versuchen."),
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
+  return (
+    <Card className="border-border/50 shadow-sm">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <CalendarDays className="h-4 w-4 text-muted-foreground" />
+          <h3 className="font-medium text-foreground">Kalender-Export</h3>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Exportiert die verbindlichen (FIX) Dienste als iCalendar-Datei (.ics) zum
+          Import in die eigene Kalender-App (z. B. Google Kalender, Apple Kalender,
+          Outlook).
+        </p>
+        {canSync ? (
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={handleDownload}
+            disabled={isExporting}
+            data-testid="calendar-export-button"
+          >
+            <CalendarDays className="h-4 w-4" />
+            {isExporting ? "Exportiere..." : "Als .ics herunterladen"}
+          </Button>
+        ) : (
+          <>
+            <Button
+              variant="outline"
+              className="gap-2"
+              disabled
+              title={PLAN_FEATURE_MESSAGES.calendarSync}
+              data-testid="calendar-export-button"
+            >
+              <Lock className="h-4 w-4" />
+              Als .ics herunterladen
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              {PLAN_FEATURE_MESSAGES.calendarSync}
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Einstellungen() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -1004,6 +1088,8 @@ export default function Einstellungen() {
       )}
 
       <ProfileCard />
+
+      <CalendarExportCard />
 
       <Card className="border-border/50 shadow-sm">
         <CardContent className="p-0">

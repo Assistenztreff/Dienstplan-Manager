@@ -16,6 +16,7 @@ import { useAuth } from "@/context/auth";
 import { hasAccess } from "@/lib/entitlements";
 import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 import { exportStatementSectionsPdf } from "@/lib/pdf-export";
+import { PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
 
 function monthIndex(date: Date): number {
   return date.getFullYear() * 12 + date.getMonth();
@@ -224,6 +225,7 @@ export default function Auswertungen() {
 
   const { currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin";
+  const canPayrollExport = hasAccess(currentUser, "payrollExport");
 
   // Soll/Ist-Auswertung ist das Premium-Feature "advancedAnalytics" (Server
   // antwortet fuer Free-Konten mit 403 plan_feature_required). Statt eine
@@ -295,31 +297,19 @@ export default function Auswertungen() {
             </Button>
           </div>
 
-          {/* PDF-Stundennachweis (payrollExport) speist sich aus der
-              advancedAnalytics-Datenquelle — fuer Free-Konten gesperrt. */}
-          {analyticsLocked ? (
-            <Button
-              variant="outline"
-              disabled
-              title="Der PDF-Stundennachweis ist in Premium enthalten."
-              className="gap-2"
-              data-testid="export-pdf-button-locked"
-            >
-              <Lock className="h-4 w-4" />
-              Als PDF exportieren
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              onClick={() => setExportOpen(true)}
-              disabled={isLoading || !visibleBalances || visibleBalances.length === 0}
-              className="gap-2"
-              data-testid="export-pdf-button"
-            >
-              <Download className="h-4 w-4" />
-              Als PDF exportieren
-            </Button>
-          )}
+          {/* Premium-Gate payrollExport (UX; autoritativ setzt der Server via
+              hours-balance durch — die einzige Datenquelle des PDF-Nachweises). */}
+          <Button
+            variant="outline"
+            onClick={() => setExportOpen(true)}
+            disabled={!canPayrollExport || isLoading || !visibleBalances || visibleBalances.length === 0}
+            title={canPayrollExport ? undefined : PLAN_FEATURE_MESSAGES.payrollExport}
+            className="gap-2"
+            data-testid="export-pdf-button"
+          >
+            <Download className="h-4 w-4" />
+            Als PDF exportieren
+          </Button>
         </div>
       </div>
 

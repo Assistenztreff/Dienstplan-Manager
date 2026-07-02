@@ -73,3 +73,47 @@ export function planLimitMessage(err: unknown): string | null {
     "Free-Tarif-Limit erreicht. Bitte auf Premium upgraden."
   );
 }
+
+/**
+ * Freundliche Upgrade-Hinweise für die serverseitig durchgesetzten
+ * Premium-Features. Der Server liefert ein strukturiertes 403 mit
+ * `code: "plan_feature_required"` und einem `feature`-Feld.
+ */
+export const PLAN_FEATURE_MESSAGES: Record<string, string> = {
+  bulkEdit:
+    "Massenbearbeitung ist ein Premium-Feature. Für den Assistenten-Wechsel auf Premium upgraden.",
+  advancedPersonnelFile:
+    "Lohn- und Sozialversicherungsdaten sind ein Premium-Feature. Für die erweiterte Personalakte auf Premium upgraden.",
+  advancedAnalytics:
+    "Soll/Ist-Auswertungen sind ein Premium-Feature. Für Auswertungen auf Premium upgraden.",
+  payrollExport:
+    "Der PDF-Stundennachweis ist ein Premium-Feature. Für den Lohn-Export auf Premium upgraden.",
+  strictTimeTracking:
+    "Das Bestätigen/Ablehnen von Ist-Zeiten ist ein Premium-Feature. Für die strikte Arbeitszeiterfassung auf Premium upgraden.",
+  calendarSync:
+    "Der Kalender-Export (.ics) ist ein Premium-Feature. Für den Export in die eigene Kalender-App auf Premium upgraden.",
+  caregiverLogin:
+    "Einladungslinks für Assistenten sind ein Premium-Feature. Damit Assistenzkräfte einen eigenen Zugang erhalten, auf Premium upgraden.",
+};
+
+/**
+ * Erkennt das strukturierte 403 `plan_feature_required` und liefert eine
+ * freundliche Upgrade-Meldung. Gibt `null` zurück, wenn es kein
+ * Premium-Feature-Fehler ist.
+ */
+export function planFeatureMessage(err: unknown): string | null {
+  if (!(err instanceof ApiError) || err.status !== 403) return null;
+  const data = err.data;
+  if (!data || typeof data !== "object") return null;
+  if ((data as Record<string, unknown>).code !== "plan_feature_required") return null;
+
+  const feature = (data as Record<string, unknown>).feature;
+  if (typeof feature === "string" && PLAN_FEATURE_MESSAGES[feature]) {
+    return PLAN_FEATURE_MESSAGES[feature];
+  }
+
+  return (
+    pickString(data, "error") ??
+    "Diese Funktion ist im Premium-Tarif enthalten. Bitte auf Premium upgraden."
+  );
+}

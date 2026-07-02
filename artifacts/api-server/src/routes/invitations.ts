@@ -4,10 +4,15 @@ import { usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { generateInviteToken } from "../lib/auth-utils";
 import { requireAdmin } from "../middleware/auth";
+import { requirePlanFeature } from "../lib/plan";
 
 const router = Router();
 
-router.post("/users/:id/invite", requireAdmin, async (req, res): Promise<void> => {
+// Premium-Feature "caregiverLogin": Assistenzkräfte erhalten eigenen Zugang.
+// Gegated wird NUR das Erzeugen NEUER Einladungslinks (Bestandsschutz:
+// bereits eingeladene Assistenten mit gesetztem Passwort können sich weiterhin
+// anmelden — bestehende Logins werden nie gesperrt).
+router.post("/users/:id/invite", requireAdmin, requirePlanFeature("caregiverLogin"), async (req, res): Promise<void> => {
   const id = parseInt(req.params["id"] as string, 10);
   if (!Number.isFinite(id) || id <= 0) {
     res.status(400).json({ error: "Ungültige ID" });

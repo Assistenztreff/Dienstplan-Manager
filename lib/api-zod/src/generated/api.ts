@@ -1078,6 +1078,14 @@ export const InviteUserResponse = zod.object({
 
 
 /**
+ * @summary Dienstplan als iCalendar (.ics) exportieren (Premium calendarSync)
+ */
+export const ExportCalendarQueryParams = zod.object({
+  "teamId": zod.coerce.number().optional()
+})
+
+
+/**
  * @summary Urlaubskontigent abrufen
  */
 export const GetVacationBalanceParams = zod.object({

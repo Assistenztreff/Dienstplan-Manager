@@ -42,8 +42,8 @@ All four numeric limits + the `bulkEdit` feature are now enforced authoritativel
   Bestandsschutz); PATCH only re-checks when `startTime` is in the body, so
   notes/type edits on existing shifts stay free. Single owner-based helper
   (`forwardPlanningBlocked`) is the one source for both paths.
-The remaining feature flags (advancedPersonnelFile, payrollExport, etc.) are still
-config-only (frontend UX), not server-enforced.
+ALL feature flags now have authoritative server enforcement (see below) —
+`payrollExport` only transitively via hours-balance, plus frontend UX gates.
 
 ## Gotcha: registration seeds 4 shift models, Free maxShiftModels = 5
 
@@ -93,10 +93,16 @@ has no endpoint either does nothing or breaks a core flow:
   gating it transitively enforces `payrollExport` — there is NO separate export
   endpoint. The raw shifts/time-entries/contracts stay visible via their own list
   endpoints, and GET /dashboard/summary (basic KPIs) stays free.
-- `strictTimeTracking`, `calendarSync`, `caregiverLogin` have NO implemented
-  endpoints. Do not invent gates for them: gating login would lock out assistants
-  of Free teams and gating time-tracking would break the core Zeiterfassung — both
-  violate Bestandsschutz. They stay configuration-only until real endpoints exist.
+- `caregiverLogin` = generating NEW invite tokens (POST /users/:id/invite), NOT
+  login itself — gating login would lock out already-invited assistants of Free
+  teams (Bestandsschutz). Existing logins keep working on Free.
+- `strictTimeTracking` = the confirm/reject workflow (PATCH /time-tracking/:id/
+  confirm). Recording time entries stays free (core flow). Product consequence:
+  Free entries stay "offen" forever, and dashboard summary counts only CONFIRMED
+  hours as Ist-Stunden — Free Ist-Stunden never grow (open follow-up decision).
+- `calendarSync` = a purpose-built GET /calendar-export endpoint (ICS of FIX
+  shifts; assistants own, admins team-scoped). When no endpoint exists for a
+  flag, build a minimal real one rather than gating an unrelated core route.
 
 **Read vs write under Bestandsschutz:** for "data" features (personnel file), gate
 WRITES and keep reads open. For derived/computed premium views (analytics), gating

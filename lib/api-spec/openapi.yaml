@@ -1019,6 +1019,27 @@ paths:
         "404":
           description: Nicht gefunden
 
+  /calendar-export:
+    get:
+      operationId: exportCalendar
+      tags: [dashboard]
+      summary: Dienstplan als iCalendar (.ics) exportieren (Premium calendarSync)
+      parameters:
+        - name: teamId
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: iCalendar-Datei mit den verbindlichen (FIX) Schichten
+          content:
+            text/calendar:
+              schema:
+                type: string
+        "403":
+          description: Premium-Tarif erforderlich (plan_feature_required)
+
   /contracts/{id}/vacation-balance:
     get:
       operationId: getVacationBalance

@@ -32,6 +32,7 @@ import type {
   ContractUpdate,
   DashboardSummary,
   ErrorEnvelope,
+  ExportCalendarParams,
   GetBrandingSettingsParams,
   GetDashboardSummaryParams,
   GetHoursBalanceParams,
@@ -3443,6 +3444,90 @@ export const useInviteUser = <TError = ErrorType<void>,
       > => {
       return useMutation(getInviteUserMutationOptions(options));
     }
+
+export const getExportCalendarUrl = (params?: ExportCalendarParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/calendar-export?${stringifiedParams}` : `/api/calendar-export`
+}
+
+/**
+ * @summary Dienstplan als iCalendar (.ics) exportieren (Premium calendarSync)
+ */
+export const exportCalendar = async (params?: ExportCalendarParams, options?: RequestInit): Promise<string> => {
+
+  return customFetch<string>(getExportCalendarUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExportCalendarQueryKey = (params?: ExportCalendarParams,) => {
+    return [
+    `/api/calendar-export`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getExportCalendarQueryOptions = <TData = Awaited<ReturnType<typeof exportCalendar>>, TError = ErrorType<void>>(params?: ExportCalendarParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportCalendar>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExportCalendarQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportCalendar>>> = ({ signal }) => exportCalendar(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportCalendar>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExportCalendarQueryResult = NonNullable<Awaited<ReturnType<typeof exportCalendar>>>
+export type ExportCalendarQueryError = ErrorType<void>
+
+
+/**
+ * @summary Dienstplan als iCalendar (.ics) exportieren (Premium calendarSync)
+ */
+
+export function useExportCalendar<TData = Awaited<ReturnType<typeof exportCalendar>>, TError = ErrorType<void>>(
+ params?: ExportCalendarParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportCalendar>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExportCalendarQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getGetVacationBalanceUrl = (id: number,) => {
 

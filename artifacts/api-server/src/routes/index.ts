@@ -11,6 +11,7 @@ import storageRouter from "./storage";
 import timeTrackingRouter from "./time_tracking";
 import dashboardRouter from "./dashboard";
 import invitationsRouter from "./invitations";
+import calendarRouter from "./calendar";
 import teamsRouter from "./teams";
 import authRouter from "./auth";
 
@@ -29,6 +30,7 @@ router.use(storageRouter);
 router.use(timeTrackingRouter);
 router.use(dashboardRouter);
 router.use(invitationsRouter);
+router.use(calendarRouter);
 router.use(teamsRouter);
 
 export default router;
