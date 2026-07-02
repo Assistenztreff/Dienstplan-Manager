@@ -17,3 +17,11 @@ buttons carry the Premium hint in `title` when locked, e.g.
 
 **Why:** a spec that passes conceptually can fail purely from the viewport
 hiding the label; this cost a debug round in the premium-gates spec.
+
+Two more strict-mode pitfalls from the downgrade-bestandsschutz spec:
+- Dienstplan shift badges (`shift-badge-<id>`) render in BOTH the mobile
+  agenda list AND the CSS-hidden desktop grid — `getByTestId` alone hits a
+  strict-mode violation. Scope through the visible container first
+  (e.g. `getByTestId("agenda-day-…").getByTestId("shift-badge-…")`).
+- `locator.getByDisplayValue` does not exist in the pinned Playwright
+  version; assert input contents with `getByPlaceholder(...).toHaveValue()`.
