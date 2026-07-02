@@ -61,6 +61,10 @@ if (useManagedStack && testDatabaseUrl) {
 
 export default defineConfig({
   testDir: "./e2e",
+  // Nach jedem Lauf uebrig gebliebene `e2e.*@dienstplan.test`-Konten aus der
+  // Test-DB entfernen (Specs, deren afterAll-Cleanup fehlte/fehlschlug).
+  // Harte Abbrueche heilt zusaetzlich setup-test-db VOR dem naechsten Lauf.
+  globalTeardown: "./e2e/global-teardown.ts",
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: 0,

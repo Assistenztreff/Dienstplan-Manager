@@ -28,6 +28,7 @@ Eine Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgeb
 - `pnpm --filter @workspace/scripts run setup-admin` — Ersten Admin anlegen (admin@dienstplan.local / admin1234)
 - `pnpm --filter @workspace/scripts run setup-test-db` — Test-DB anlegen/aktualisieren (idempotent, wird von `test:e2e` automatisch aufgerufen)
 - `pnpm --filter @workspace/dienstplan run test:e2e` — Playwright-E2E gegen **isolierten Test-Stack** (eigener API-Port 8099 + Vite 5199) auf separater Test-DB `<dbname>_test`; Dev-DB wird NICHT berührt. Override via `E2E_BASE_URL=...`.
+- Test-Konto-Leichen (`e2e.*@dienstplan.test`) werden automatisch entfernt: `scripts run cleanup-test-accounts` läuft im Playwright-globalTeardown NACH jedem Lauf und in `setup-test-db` VOR jedem Lauf (heilt abgebrochene Läufe). Test-E-Mails MÜSSEN das Muster `e2e.*@dienstplan.test` behalten.
 - Required env: `DATABASE_URL`, `SESSION_SECRET`
 
 ## Where things live

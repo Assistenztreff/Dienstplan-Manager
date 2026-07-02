@@ -114,6 +114,11 @@ async function main(): Promise<void> {
   run("pnpm --filter @workspace/scripts run migrate-teams");
   run("pnpm --filter @workspace/scripts run migrate-allowance-settings");
 
+  // Selbstheilung: Konten-Leichen abgebrochener E2E-Laeufe (Timeout, Ctrl-C,
+  // Crash — afterAll-Hooks liefen dann nie) VOR dem Lauf entfernen. Loescht
+  // ausschliesslich `e2e.*@dienstplan.test`-Konten, nie den Seed-Admin.
+  run("pnpm --filter @workspace/scripts run cleanup-test-accounts");
+
   // Test-Admin auf Premium setzen (NUR Test-Infrastruktur, niemals die echte
   // Dev-DB). Hintergrund: Die serverseitige Durchsetzung der Free-Limits würde
   // sonst bestehende E2E-Specs brechen, die als Standard-Admin parallel viele
