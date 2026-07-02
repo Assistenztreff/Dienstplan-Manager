@@ -43,6 +43,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Mail, Phone, MapPin, Calendar, Pencil, UserPlus, Send, Copy, Check, Download, ChevronLeft, ChevronRight, Trash2, Lock } from "lucide-react";
+import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { toast } from "sonner";
@@ -961,10 +962,10 @@ export default function Assistenten() {
 
       {/* Limit-Hinweis (Free-Plan). Bei Premium ist assistantLimit null. */}
       {!canAddAssistant && assistantLimit !== null && (
-        <div className="rounded-md border border-brand-yellow/40 bg-brand-yellow/10 px-4 py-3 text-sm text-foreground">
+        <PlanLimitBanner>
           Im Free-Plan sind maximal {assistantLimit} Assistenten möglich. Für unbegrenzte
           Assistenten ist ein Upgrade auf Premium nötig.
-        </div>
+        </PlanLimitBanner>
       )}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, Building2, Users, UserPlus, X, Lock } from "lucide-react";
+import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/auth";
 import { isWithinLimit, getLimit } from "@/lib/entitlements";
@@ -373,10 +374,10 @@ export default function TeamVerwaltung() {
 
       {/* Limit-Hinweis (Free-Plan). Bei Premium ist teamLimit null. */}
       {!canAddTeam && teamLimit !== null && (
-        <div className="rounded-md border border-brand-yellow/40 bg-brand-yellow/10 px-4 py-3 text-sm text-foreground">
+        <PlanLimitBanner>
           Im Free-Plan ist maximal {teamLimit} Team möglich. Für mehrere Teams ist ein Upgrade auf
           Premium nötig.
-        </div>
+        </PlanLimitBanner>
       )}
 
       <Card className="border-border/50 shadow-sm">

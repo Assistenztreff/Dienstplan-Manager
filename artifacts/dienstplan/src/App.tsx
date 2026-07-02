@@ -14,6 +14,7 @@ import Abwesenheiten from "@/pages/abwesenheiten";
 import Auswertungen from "@/pages/auswertungen";
 import Einstellungen from "@/pages/einstellungen";
 import TeamVerwaltung from "@/pages/team-verwaltung";
+import Preise from "@/pages/preise";
 import OperatorDashboard from "@/pages/operator-dashboard";
 import Login from "@/pages/login";
 import Registrierung from "@/pages/registrierung";
@@ -85,6 +86,8 @@ function Router() {
         {currentUser.role === "admin" && (
           <Route path="/einstellungen" component={Einstellungen} />
         )}
+        {/* Preise & Premium: Ziel der Free-Limit-Hinweise (Upgrade-Anfrage). */}
+        {currentUser.role === "admin" && <Route path="/preise" component={Preise} />}
         {currentUser.role === "admin" && currentUser.accountType === "dienstleister" && (
           <Route path="/team-verwaltung" component={TeamVerwaltung} />
         )}

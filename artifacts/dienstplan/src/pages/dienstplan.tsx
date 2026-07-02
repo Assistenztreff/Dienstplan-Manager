@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "wouter";
+import { useSearchParams, useLocation } from "wouter";
 import { useListShifts, useListUsers, useListShiftModels } from "@workspace/api-client-react";
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, getDay, isValid, startOfDay, startOfWeek, addDays, differenceInCalendarDays, isWithinInterval } from "date-fns";
 import { de } from "date-fns/locale";
@@ -18,6 +18,7 @@ import { userBadgeClass, userDotClass } from "@/lib/shift-model-colors";
 import { hasAccess, getLimit } from "@/lib/entitlements";
 import { toast } from "sonner";
 import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
+import { PlanLimitBanner } from "@/components/plan-limit-banner";
 
 type Shift = {
   id: number;
@@ -785,6 +786,7 @@ export default function Dienstplan() {
 
   // Optionales Zieldatum (z.B. vom Dashboard-Hinweis "Tage ohne geplante Schicht").
   const [searchParams] = useSearchParams();
+  const [, navigate] = useLocation();
   const initialDate = (() => {
     const param = searchParams.get("date");
     if (param) {
@@ -878,6 +880,10 @@ export default function Dienstplan() {
     if (forwardLimit !== null && monthsAhead(date, new Date()) > forwardLimit) {
       toast.error(
         "Im Free-Tarif nur bis nächsten Monat planbar. Für eine längere Vorausplanung auf Premium upgraden.",
+        {
+          // Kein Dead-End: direkt zur Preise-/Upgrade-Seite fuehren.
+          action: { label: "Zu Premium", onClick: () => navigate("/preise") },
+        },
       );
       return;
     }
@@ -991,10 +997,10 @@ export default function Dienstplan() {
           Vorausplanungs-Fensters liegt. Bestehende Schichten bleiben sichtbar;
           nur das Anlegen neuer Schichten ist gesperrt. */}
       {forwardPlanningBlocked && (
-        <div className="rounded-md border border-brand-yellow/40 bg-brand-yellow/10 px-4 py-3 text-sm text-foreground">
+        <PlanLimitBanner>
           Im Free-Tarif nur bis nächsten Monat planbar. Für eine längere Vorausplanung ist ein
           Upgrade auf Premium nötig.
-        </div>
+        </PlanLimitBanner>
       )}
 
       {/* Team-Abwesenheits-Übersicht (nur Admin): wer ist gerade/demnächst

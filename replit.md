@@ -82,6 +82,7 @@ Eine Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgeb
 - **Noch reine Konfiguration** (keine serverseitige Wirkung, da keine echten Endpunkte): `strictTimeTracking`, `calendarSync`, `caregiverLogin`, eigenständiger `payrollExport`.
 - **VERBINDLICHE REGEL — Bestandsschutz**: Free-Limits beschränken AUSSCHLIESSLICH das Anlegen von NEUEM / neue Aktionen. Bereits vorhandene Daten (Teams, Lohndaten, geplante/vergangene Monate, Schichtmodelle) dürfen NIEMALS ausgeblendet, gesperrt oder gelöscht werden, nur weil ein Konto Free ist. `isWithinLimit` prüft, ob ein WEITERER Eintrag erlaubt ist — es ist KEIN Anzeige-Filter.
 - **Billing/Architektur** (Kommentare in `entitlements.ts`): Auth ist hybrid (Plattform-SSO via JWT + lokal E-Mail/Passwort/Einladung). Abrechnung über **Lexware API** (Rechnungsentwürfe), NICHT Stripe; Premium-Freischaltung erfolgt **manuell** im Operator-Dashboard nach Zahlungseingang.
+- **Upgrade-Weg im Frontend**: `/preise` (`pages/preise.tsx`, Route nur `admin`) zeigt den Free/Premium-Vergleich DIREKT aus `PLAN_CONFIG` + CTA „Upgrade per E-Mail anfragen" (mailto an `UPGRADE_CONTACT_EMAIL` in `preise.tsx`, vorausgefüllt mit Kontodaten — kein Self-Service-Checkout, passend zur manuellen Freischaltung). Alle Free-Limit-Hinweise nutzen `components/plan-limit-banner.tsx` (gelber Kasten + Link „Preise & Premium ansehen"); der Vorausplanungs-Toast im Dienstplan hat eine „Zu Premium"-Action.
 
 ## Auth
 

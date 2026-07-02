@@ -30,6 +30,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, GripVertical, Upload, ImageIcon, KeyRound, Mail, User as UserIcon, Lock } from "lucide-react";
+import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { AllowanceSettingsForm } from "@/components/allowance-settings-form";
 import { logoSrcFromPath, ACCEPTED_LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/logo";
 import { readableApiError, planLimitMessage } from "@/lib/api-error";
@@ -996,10 +997,10 @@ export default function Einstellungen() {
 
       {/* Limit-Hinweis (Free-Plan). Bei Premium ist shiftModelLimit null. */}
       {!canAddModel && shiftModelLimit !== null && (
-        <div className="rounded-md border border-brand-yellow/40 bg-brand-yellow/10 px-4 py-3 text-sm text-foreground">
+        <PlanLimitBanner>
           Im Free-Plan sind maximal {shiftModelLimit} Schichtmodelle möglich. Für unbegrenzte
           Schichtmodelle ist ein Upgrade auf Premium nötig.
-        </div>
+        </PlanLimitBanner>
       )}
 
       <ProfileCard />
