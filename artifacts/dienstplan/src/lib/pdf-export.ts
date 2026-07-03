@@ -253,7 +253,14 @@ export async function exportStatementSectionsPdf({
     );
   }
 
-  // --- Unterschriftsfeld + Footer auf jeder Seite ---
+  addSignatureFooter(doc, pageWidth);
+
+  doc.save(filename);
+}
+
+// Unterschriftsfeld + Footer auf jeder Seite — geteilt zwischen dem
+// Premium-Stundennachweis und dem einfachen Monats-Export.
+function addSignatureFooter(doc: any, pageWidth: number) {
   const pageHeight = doc.internal.pageSize.getHeight();
   const createdLabel = `Erstellt am ${format(new Date(), "dd.MM.yyyy", { locale: de })}`;
   const pageCount = doc.getNumberOfPages();
@@ -281,8 +288,198 @@ export async function exportStatementSectionsPdf({
     });
     doc.setTextColor(0);
   }
+}
 
-  doc.save(filename);
+// ---------------------------------------------------------------------------
+// Einfacher Monats-Export (Free-Feature "basicExport")
+// ---------------------------------------------------------------------------
+// Basiert AUSSCHLIESSLICH auf der Schichtliste (GET /shifts) — KEINE
+// Zeiterfassung, kein Soll/Ist, keine Zuschlaege (das bleibt Premium via
+// hours-balance). Enthaelt bestaetigte (FIX) Dienste UND Abwesenheiten
+// (Urlaub/Krank), damit auch Free-Konten und Assistenzkraefte einen
+// vollstaendigen Monatsueberblick als PDF bekommen.
+
+const ABSENCE_TYPES = new Set(["vacation", "sick"]);
+
+export type SimpleMonthShift = {
+  userId: number;
+  startTime: string;
+  endTime: string;
+  type: string;
+  planningStatus?: string | null;
+  user?: { name?: string } | null;
+};
+
+export type ExportSimpleMonthOptions = {
+  shifts: SimpleMonthShift[];
+  users: Array<{ id: number; name: string }>;
+  month: number;
+  year: number;
+  monthLabel: string;
+  teamId?: number | null;
+  filename?: string;
+};
+
+function renderSimpleMonthPage(
+  doc: any,
+  autoTable: any,
+  pageWidth: number,
+  logo: LoadedImage | null,
+  userName: string,
+  shifts: SimpleMonthShift[],
+  monthLabel: string,
+) {
+  // --- Header ---
+  if (logo) {
+    const logoW = 48;
+    const logoH = logoW / logo.aspect;
+    doc.addImage(logo.dataUrl, logoImageFormat(logo.dataUrl), pageWidth - 14 - logoW, 12, logoW, logoH);
+  }
+
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text("Monatsübersicht", 14, 20);
+
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Assistent: ${userName}`, 14, 32);
+  doc.text(`Monat: ${monthLabel}`, 14, 39);
+
+  doc.setFontSize(9);
+  doc.setTextColor(100);
+  doc.text(
+    "Einfacher Monats-Export: geplante, bestätigte Dienste und Abwesenheiten — ohne Zeiterfassung.",
+    14,
+    45,
+  );
+  doc.setTextColor(0);
+
+  const workShifts = shifts.filter((s) => !ABSENCE_TYPES.has(s.type));
+  const vacationDays = shifts.filter((s) => s.type === "vacation").length;
+  const sickDays = shifts.filter((s) => s.type === "sick").length;
+  const plannedHours =
+    Math.round(
+      workShifts.reduce((sum, s) => sum + hoursFromShift(s.startTime, s.endTime), 0) * 100,
+    ) / 100;
+
+  const summaryRows = [
+    ["Geplante Stunden (bestätigte Dienste)", `${plannedHours} h`],
+    ["Anzahl Dienste", `${workShifts.length}`],
+    ["Urlaubstage", `${vacationDays} ${vacationDays === 1 ? "Tag" : "Tage"}`],
+    ["Krankheitstage", `${sickDays} ${sickDays === 1 ? "Tag" : "Tage"}`],
+  ];
+
+  autoTable(doc, {
+    startY: 50,
+    head: [["Kennzahl", "Wert"]],
+    body: summaryRows,
+    theme: "grid",
+    headStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
+    columnStyles: { 0: { fontStyle: "bold" }, 1: { halign: "right" } },
+    styles: { fontSize: 10 },
+    margin: { left: 14, right: 14 },
+  });
+
+  // --- Detail table (chronologisch, Abwesenheiten ganztaegig ohne Uhrzeit) ---
+  const detailRows = [...shifts]
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+    .map((s) => {
+      const date = format(new Date(s.startTime), "dd.MM.yyyy", { locale: de });
+      const type = SHIFT_TYPE_LABELS[s.type] ?? s.type;
+      if (ABSENCE_TYPES.has(s.type)) {
+        return [date, type, "ganztägig", "1 Tag"];
+      }
+      const timeRange = `${format(new Date(s.startTime), "HH:mm")} – ${format(new Date(s.endTime), "HH:mm")}`;
+      return [date, type, timeRange, `${hoursFromShift(s.startTime, s.endTime)} h`];
+    });
+
+  const tableY = (doc as any).lastAutoTable?.finalY
+    ? (doc as any).lastAutoTable.finalY + 10
+    : 100;
+
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text("Dienste und Abwesenheiten", 14, tableY);
+
+  if (detailRows.length > 0) {
+    autoTable(doc, {
+      startY: tableY + 5,
+      head: [["Datum", "Typ", "Uhrzeit", "Umfang"]],
+      body: detailRows,
+      theme: "striped",
+      headStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
+      columnStyles: { 3: { halign: "right" } },
+      styles: { fontSize: 9 },
+      margin: { left: 14, right: 14, bottom: 40 },
+    });
+  } else {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text("Keine bestätigten Dienste oder Abwesenheiten in diesem Monat.", 14, tableY + 10);
+  }
+}
+
+/**
+ * Einfacher Monats-Export (Free): eine Seite pro Assistent mit bestätigten
+ * (FIX) Diensten und Abwesenheiten (Urlaub/Krank) — ohne Zeiterfassungsdaten.
+ * Fuer Team-Admins (alle bzw. gefilterte Assistenten) und Assistenzkraefte
+ * (nur die eigenen Dienste, serverseitig gescoped).
+ */
+export async function exportSimpleMonthPdf({
+  shifts,
+  users,
+  month,
+  year,
+  monthLabel,
+  teamId,
+  filename,
+}: ExportSimpleMonthOptions): Promise<boolean> {
+  // Nur verbindlich bestaetigte (FIX) Eintraege — Entwuerfe/Vorschlaege bleiben
+  // unverbindlich (gleiche Regel wie beim Premium-Stundennachweis).
+  const fixShifts = shifts.filter((s) => (s.planningStatus ?? "FIX") === "FIX");
+
+  const byUser = new Map<number, SimpleMonthShift[]>();
+  for (const s of fixShifts) {
+    if (!byUser.has(s.userId)) byUser.set(s.userId, []);
+    byUser.get(s.userId)!.push(s);
+  }
+
+  // Nur Assistenten mit mindestens einem Eintrag — sonst entstehen beim
+  // "Alle"-Export viele leere Seiten.
+  const sections = users
+    .map((u) => ({ user: u, rows: byUser.get(u.id) ?? [] }))
+    .filter((s) => s.rows.length > 0);
+
+  if (sections.length === 0) return false;
+
+  const { jsPDF } = await import("jspdf");
+  const autoTable = (await import("jspdf-autotable")).default;
+
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const logo = await loadLogoImage(teamId);
+  let firstPage = true;
+
+  for (const section of sections) {
+    if (!firstPage) doc.addPage();
+    firstPage = false;
+    renderSimpleMonthPage(
+      doc,
+      autoTable,
+      pageWidth,
+      logo,
+      section.user.name,
+      section.rows,
+      monthLabel,
+    );
+  }
+
+  addSignatureFooter(doc, pageWidth);
+
+  doc.save(
+    filename ?? `Monatsuebersicht_${year}_${String(month).padStart(2, "0")}.pdf`,
+  );
+  return true;
 }
 
 export type ExportHoursStatementOptions = {

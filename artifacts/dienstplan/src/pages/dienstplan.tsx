@@ -13,7 +13,7 @@ import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, Check, CheckSquare, X, CalendarPlus, Trash2, Pencil, ChevronDown, Users, Lock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, Check, CheckSquare, X, CalendarPlus, Trash2, Pencil, ChevronDown, Users, Lock, Download } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ShiftDialog } from "@/components/shift-dialog";
 import { BulkDeleteDialog } from "@/components/bulk-delete-dialog";
@@ -26,6 +26,7 @@ import { hasAccess, getLimit } from "@/lib/entitlements";
 import { toast } from "sonner";
 import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 import { PlanLimitBanner } from "@/components/plan-limit-banner";
+import { exportSimpleMonthPdf } from "@/lib/pdf-export";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1058,6 +1059,46 @@ export default function Dienstplan() {
     setIsSelectionMode(false);
   }
 
+  // Einfacher Monats-Export (Free-Feature "basicExport"): PDF direkt aus der
+  // Schichtliste des sichtbaren Monats — bestätigte Dienste UND Abwesenheiten
+  // (Urlaub/Krank), ohne Zeiterfassung/Soll-Ist (das bleibt der Premium-
+  // Stundennachweis). Für Admins (gefiltert bzw. alle Assistenten) und für
+  // Assistenzkräfte (eigene Dienste, serverseitig gescoped).
+  const canBasicExport = hasAccess(currentUser, "basicExport");
+  const [isExporting, setIsExporting] = useState(false);
+
+  async function handleSimpleExport() {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const exportUsers =
+        selectedAssistant === "all"
+          ? assistants
+          : assistants.filter((a) => a.id === selectedAssistant);
+      const namePart =
+        exportUsers.length === 1
+          ? exportUsers[0].name.replace(/[^\p{L}\p{N}]+/gu, "_").replace(/^_+|_+$/g, "")
+          : "Alle";
+      const exported = await exportSimpleMonthPdf({
+        shifts: visibleShifts,
+        users: exportUsers,
+        month,
+        year,
+        monthLabel: format(currentDate, "MMMM yyyy", { locale: de }),
+        teamId: selectedTeamId,
+        filename: `Monatsuebersicht_${namePart}_${year}_${String(month).padStart(2, "0")}.pdf`,
+      });
+      if (!exported) {
+        toast.error("Keine bestätigten Dienste oder Abwesenheiten in diesem Monat.");
+      }
+    } catch (err) {
+      toast.error("PDF-Export fehlgeschlagen.");
+      console.error(err);
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   const Header = () => (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
@@ -1086,6 +1127,27 @@ export default function Dienstplan() {
             <span className="rounded-full bg-primary/10 px-1.5 text-xs font-semibold text-primary">
               {confirmableShifts.length}
             </span>
+          </Button>
+        )}
+        {/* Einfacher Monats-Export (basicExport, auch im Free-Plan): PDF des
+            sichtbaren Monats mit bestätigten Diensten und Abwesenheiten
+            (Urlaub/Krank), ohne Zeiterfassung. Sichtbar für Admins UND
+            Assistenzkräfte (eigene Dienste). */}
+        {canBasicExport && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={handleSimpleExport}
+            disabled={isExporting}
+            title="Monatsübersicht als PDF: bestätigte Dienste und Abwesenheiten, ohne Zeiterfassung."
+            data-testid="simple-month-export"
+          >
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">
+              {isExporting ? "Exportiere..." : "Monats-PDF"}
+            </span>
+            <span className="sm:hidden">PDF</span>
           </Button>
         )}
         {/* Massenbearbeitung ist ein Premium-Feature. Free-Konten sehen den

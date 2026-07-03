@@ -40,7 +40,7 @@ const LIMIT_ROWS: { key: PlanLimit; label: string }[] = [
 // Anzeige-Reihenfolge + deutsche Labels fuer die Features aus PLAN_CONFIG.
 const FEATURE_ROWS: { key: PlanFeature; label: string }[] = [
   { key: "basicPersonnelFile", label: "Personalakte (Basisdaten & Kontakt)" },
-  { key: "basicExport", label: "Stundennachweis als PDF" },
+  { key: "basicExport", label: "Einfacher Monats-Export als PDF (inkl. Urlaub/Krank)" },
   { key: "bulkEdit", label: "Massenbearbeitung im Dienstplan" },
   { key: "advancedPersonnelFile", label: "Erweiterte Personalakte (Lohn- & SV-Daten)" },
   { key: "payrollExport", label: "Lohn-Export als PDF" },
