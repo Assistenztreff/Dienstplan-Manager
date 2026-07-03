@@ -11,6 +11,7 @@ import {
   DeleteContractParams,
 } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../middleware/auth";
+import { requirePlanFeature } from "../lib/plan";
 import {
   resolveReadTeamScope,
   resolveWriteTeamId,
@@ -183,29 +184,40 @@ router.delete("/contracts/:id", requireAdmin, async (req, res): Promise<void> =>
   res.status(204).send();
 });
 
-router.get("/contracts/:id/vacation-balance", requireAdmin, async (req, res): Promise<void> => {
-  const id = Number(req.params["id"]);
-  if (!id || isNaN(id)) {
-    res.status(400).json({ error: "Invalid id" });
-    return;
-  }
-  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
-  const [contract] = await db
-    .select()
-    .from(contractsTable)
-    .where(and(eq(contractsTable.id, id), inArray(contractsTable.teamId, allowedTeams)))
-    .limit(1);
-  if (!contract) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
-  res.json({
-    contractId: contract.id,
-    userId: contract.userId,
-    vacationDays: contract.vacationDays,
-    vacationDaysUsed: contract.vacationDaysUsed,
-    vacationDaysRemaining: contract.vacationDays - contract.vacationDaysUsed,
-  });
-});
+// Resturlaub-Bilanz ist Teil des Premium-Features "absenceTracking":
+// Das Frontend-Gate in abwesenheiten.tsx ist reine UX — hier wird das Feature
+// serverseitig autoritativ durchgesetzt (403 plan_feature_required fuer Free).
+// Die Rohdaten (contracts.vacationDays/vacationDaysUsed) bleiben ueber
+// GET /contracts fuer alle Plaene zugaenglich (Buchhaltung laeuft plan-
+// unabhaengig weiter, Bestandsschutz).
+router.get(
+  "/contracts/:id/vacation-balance",
+  requireAdmin,
+  requirePlanFeature("absenceTracking"),
+  async (req, res): Promise<void> => {
+    const id = Number(req.params["id"]);
+    if (!id || isNaN(id)) {
+      res.status(400).json({ error: "Invalid id" });
+      return;
+    }
+    const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+    const [contract] = await db
+      .select()
+      .from(contractsTable)
+      .where(and(eq(contractsTable.id, id), inArray(contractsTable.teamId, allowedTeams)))
+      .limit(1);
+    if (!contract) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    res.json({
+      contractId: contract.id,
+      userId: contract.userId,
+      vacationDays: contract.vacationDays,
+      vacationDaysUsed: contract.vacationDaysUsed,
+      vacationDaysRemaining: contract.vacationDays - contract.vacationDaysUsed,
+    });
+  },
+);
 
 export default router;

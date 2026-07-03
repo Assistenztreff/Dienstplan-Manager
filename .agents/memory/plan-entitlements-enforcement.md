@@ -45,12 +45,16 @@ All four numeric limits + the `bulkEdit` feature are now enforced authoritativel
 ALL feature flags now have authoritative server enforcement (see below) —
 `payrollExport` only transitively via hours-balance, plus frontend UX gates.
 
-**Frontend-only gates are acceptable when no API exists:** `absenceTracking`
-(Resturlaub balance) is gated purely in the UI because the balance is computed
-client-side from legitimately free-accessible data (contracts + vacation
-shifts) — there is no server endpoint to protect. Creating absences
-(vacation/sick) stays FREE on all plans; only the tracked balance is premium.
-If a dedicated balance endpoint ever appears, it must get a server gate.
+**"No API exists" claims must be grepped, not trusted:** `absenceTracking`
+(Resturlaub balance) was long documented as frontend-only "because no balance
+endpoint exists" — but a spec-generated `GET /contracts/:id/vacation-balance`
+endpoint DID exist (unused by the frontend, which computes the balance
+client-side) and sat ungated until it got `requirePlanFeature`. Lesson: before
+declaring a feature frontend-only, grep openapi.yaml/routes for forgotten
+endpoints — contract-first codegen can produce reachable API surface no client
+uses. Creating absences (vacation/sick) stays FREE on all plans; only the
+tracked balance is premium, and the raw inputs (contracts, vacation shifts)
+remain free-accessible (Bestandsschutz).
 
 ## Gotcha: registration seeds 4 shift models, Free maxShiftModels = 4 (AT limit)
 

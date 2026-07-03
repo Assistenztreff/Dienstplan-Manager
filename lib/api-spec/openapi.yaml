@@ -1175,6 +1175,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VacationBalance"
+        "403":
+          description: Premium-Tarif erforderlich (Feature absenceTracking)
         "404":
           description: Nicht gefunden
 
