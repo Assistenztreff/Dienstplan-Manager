@@ -1,4 +1,5 @@
 import { isAdminRole } from "@/lib/roles";
+import { planFeatureMessage } from "@/lib/api-error";
 import {
   useGetDashboardSummary,
   useListContracts,
@@ -238,8 +239,12 @@ function UncountedPendingNotice({
 // Resturlaub-Karte für ASSISTENTEN: zeigt die eigene Bilanz (Anspruch /
 // genommen / verbleibend) aus dem Premium-Endpunkt vacation-balance. Das
 // Server-Gate läuft über den Plan des ARBEITGEBERS (Team-Eigentümers) —
-// liefert der Endpunkt 403 (Free-Arbeitgeber), wird die Karte schlicht nicht
-// gerendert (kein Upsell an Assistenten, die selbst nichts upgraden können).
+// liefert der Endpunkt 403 plan_feature_required (Free-Arbeitgeber), zeigt
+// die Karte einen dezenten Info-Hinweis statt der Bilanz (Produktentscheidung
+// Task-Auswahl: Assistenten sollen wissen, dass das Feature existiert und wen
+// sie ansprechen können — bewusst OHNE Upgrade-Aufforderung, da Assistenten
+// selbst nichts upgraden können). Ohne Vertrag oder bei anderen Fehlern bleibt
+// die Karte weiterhin still ausgeblendet.
 function AssistantVacationCard() {
   const [, navigate] = useLocation();
 
@@ -251,12 +256,32 @@ function AssistantVacationCard() {
   );
   const contractId = activeContract?.id ?? 0;
 
-  const { data: balance, isSuccess } = useGetVacationBalance(contractId, {
+  const { data: balance, isSuccess, error } = useGetVacationBalance(contractId, {
     query: { enabled: contractId > 0, retry: false },
   } as Parameters<typeof useGetVacationBalance>[1]) as {
     data?: VacationBalance;
     isSuccess: boolean;
+    error: unknown;
   };
+
+  // Free-Arbeitgeber: dezenter Hinweis ohne Werbedruck.
+  if (planFeatureMessage(error) !== null) {
+    return (
+      <Card
+        className="border-border/50 shadow-sm"
+        data-testid="assistant-vacation-locked-notice"
+      >
+        <CardContent className="flex items-start gap-3 py-5">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            Die Resturlaub-Anzeige ist hier verfügbar, sobald dein Arbeitgeber
+            sie freischaltet. Sprich ihn bei Interesse gern darauf an — deine
+            Urlaubstage werden unabhängig davon weiter erfasst.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (!isSuccess || !balance) return null;
 
