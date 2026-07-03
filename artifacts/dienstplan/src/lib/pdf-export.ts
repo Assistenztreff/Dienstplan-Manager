@@ -43,7 +43,8 @@ async function brandingLogoPath(teamId?: number | null): Promise<string | null> 
 }
 
 async function loadLogoImage(teamId?: number | null): Promise<LoadedImage | null> {
-  // Logo-Fallback-Kette: teamspezifisches Logo → globales Logo → Standard-Logo.
+  // Logo-Fallback-Kette: teamspezifisches Logo → Konto-Logo des Team-Eigentümers
+  // (server-seitig aufgelöst, siehe GET /branding-settings) → Standard-Logo.
   let path: string | null = null;
   if (teamId != null) path = await brandingLogoPath(teamId);
   if (!path) path = await brandingLogoPath();

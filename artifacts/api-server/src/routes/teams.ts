@@ -203,10 +203,17 @@ router.post("/teams/:id/members", requireDienstleister, async (req, res): Promis
   const ownerId = req.session.userId!;
   if (!(await assertTeamOwnership(teamId, ownerId, res))) return;
 
+  // Nur Nutzer annehmen, die bereits Mitglied EINES Teams DIESES Eigentümers
+  // sind (Mehrfachzuweisung innerhalb des eigenen Kontos). Ohne diese Prüfung
+  // ließe sich jeder existierende Nutzer-ID auf der Plattform (auch aus
+  // fremden Mandanten) per Enumeration in das eigene Team annektieren und
+  // dessen Daten über die Team-Scoping-Helfer auslesen/ändern.
   const [user] = await db
     .select({ id: usersTable.id })
     .from(usersTable)
-    .where(eq(usersTable.id, body.data.userId));
+    .innerJoin(teamMembersTable, eq(teamMembersTable.userId, usersTable.id))
+    .innerJoin(teamsTable, eq(teamsTable.id, teamMembersTable.teamId))
+    .where(and(eq(usersTable.id, body.data.userId), eq(teamsTable.ownerId, ownerId)));
   if (!user) {
     res.status(404).json({ error: "Benutzer nicht gefunden" });
     return;

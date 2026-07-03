@@ -94,7 +94,17 @@ router.get("/users", requireAdmin, async (req, res): Promise<void> => {
       .from(usersTable)
       .where(eq(usersTable.id, req.session.userId!));
     if (requester?.accountType === "privat" && requester.role === "admin") {
-      let rows = await db.select(SAFE_USER_SELECT).from(usersTable);
+      // Bootstrap-Ausnahme NUR für den Anfrager selbst — NIEMALS die gesamte
+      // usersTable. Ein Konto ohne Team (Erst-Einrichtung ODER nachträglich
+      // durch Konto-Typ-Wechsel + Team-Löschung) darf sich sonst plattformweit
+      // alle Nutzer inkl. Lohn-/SV-Daten anderer Mandanten anzeigen lassen.
+      // Diese Zeile reicht aus, damit der Admin sich selbst sieht; das Anlegen
+      // neuer Nutzer läuft unabhängig über POST /users.
+      const [self] = await db
+        .select(SAFE_USER_SELECT)
+        .from(usersTable)
+        .where(eq(usersTable.id, req.session.userId!));
+      let rows = self ? [self] : [];
       if (query.data.role) {
         rows = rows.filter((u) => u.role === query.data.role);
       }
@@ -245,11 +255,31 @@ router.patch("/users/:id", requireAdmin, async (req, res): Promise<void> => {
     }
   }
 
+  const updateBody = body.data as Record<string, unknown>;
+
+  // Konto-Typ ist laut Produktregel bei Registrierung fixiert und danach nicht
+  // änderbar (bislang nur im UI durchgesetzt). Ein API-seitig erlaubter Wechsel
+  // war der Einstieg in eine Eskalationskette (dienstleister-Rechte annehmen,
+  // Standard-Team + Modelle löschen, zurück auf privat -> globaler Nutzer-Dump
+  // über die Bootstrap-Ausnahme in GET /users). Bestehende Werte dürfen
+  // unverändert mitgesendet werden, nur ein ECHTER Wechsel wird geblockt.
+  if ("accountType" in updateBody) {
+    const [current] = await db
+      .select({ accountType: usersTable.accountType })
+      .from(usersTable)
+      .where(eq(usersTable.id, params.data.id));
+    if (current && updateBody["accountType"] !== current.accountType) {
+      res.status(403).json({
+        error: "Der Konto-Typ kann nach der Registrierung nicht mehr geändert werden.",
+      });
+      return;
+    }
+  }
+
   // Premium-Gate "advancedPersonnelFile": ein Free-Konto darf Lohn-/SV-Daten nicht
   // auf einen NEUEN Wert ändern. Bestandsschutz: bereits gespeicherte Werte dürfen
   // unverändert mitgesendet werden (z.B. wenn das Formular alle Felder zurückschickt)
   // — verglichen wird gegen den aktuellen DB-Stand, nur echte Änderungen blocken.
-  const updateBody = body.data as Record<string, unknown>;
   const touchedAdvanced = ADVANCED_PERSONNEL_FIELDS.filter((f) => f in updateBody);
   if (touchedAdvanced.length > 0 && !(await userHasFeature(req.session.userId!, "advancedPersonnelFile"))) {
     const [existing] = await db

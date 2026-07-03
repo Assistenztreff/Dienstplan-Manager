@@ -785,14 +785,15 @@ function LogoSettingsCard() {
   const logoSrc = logoSrcFromPath(branding?.logoPath);
 
   // Für Dienstleister: ein Logo je Team (folgt dem Team-Switcher). Ohne Team-Auswahl
-  // bzw. für Privat-Konten wird das globale Logo bearbeitet.
+  // bzw. für Privat-Konten wird das eigene Konto-Logo bearbeitet (server-seitig
+  // strikt an den eigenen Account gebunden, siehe /api/branding-settings).
   const showsTeamLogo = isDienstleister && hasTeams && selectedTeamId != null;
   const selectedTeamName = teams.find((t) => t.id === selectedTeamId)?.name;
   const teamHint =
     isDienstleister && hasTeams
       ? showsTeamLogo
         ? `Logo für Team „${selectedTeamName}". Es erscheint auf den Stundennachweisen dieses Teams.`
-        : 'Globales Logo (Fallback). Wähle oben ein Team aus, um ein eigenes Team-Logo zu hinterlegen.'
+        : 'Konto-Logo (Fallback für Teams ohne eigenes Logo). Wähle oben ein Team aus, um ein eigenes Team-Logo zu hinterlegen.'
       : null;
 
   async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {

@@ -18,11 +18,13 @@ function TeamLogo() {
   const { data: teamData } = useGetBrandingSettings(
     selectedTeamId != null ? { teamId: selectedTeamId } : undefined,
   );
-  const { data: globalData } = useGetBrandingSettings(undefined);
+  // Ohne teamId liefert der Server das eigene Konto-Logo des Aufrufers (nie das
+  // eines anderen Kontos) — dient hier nur als Fallback, wenn kein Team gewählt ist.
+  const { data: accountData } = useGetBrandingSettings(undefined);
 
   const teamLogoPath = (teamData as BrandingSettings | undefined)?.logoPath;
-  const globalLogoPath = (globalData as BrandingSettings | undefined)?.logoPath;
-  const logoSrc = logoSrcFromPath(teamLogoPath ?? globalLogoPath);
+  const accountLogoPath = (accountData as BrandingSettings | undefined)?.logoPath;
+  const logoSrc = logoSrcFromPath(teamLogoPath ?? accountLogoPath);
 
   if (!logoSrc) return null;
 

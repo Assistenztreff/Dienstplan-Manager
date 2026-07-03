@@ -13,7 +13,8 @@ import { deleteAccountByEmail, registerFreeAccount } from "./helpers/teams";
  * - "Entfernen" setzt zurück -> Vorschau zeigt wieder "Kein Logo"
  * - Negativfall: ohne eigenes Logo bleibt das Standard-Logo der Fallback
  *
- * Wichtig: Die Branding-Einstellung ist ein globaler Singleton (id=1). Der Test
+ * Wichtig: Ohne teamId liest/schreibt der Endpunkt die Konto-Zeile des
+ * jeweils angemeldeten Kontos (nicht mehr einen globalen Singleton). Der Test
  * merkt sich den ursprünglichen Zustand und stellt ihn im Cleanup wieder her.
  */
 
