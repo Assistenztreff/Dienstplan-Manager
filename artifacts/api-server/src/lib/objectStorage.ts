@@ -189,6 +189,14 @@ export class ObjectStorageService {
     return normalizedPath;
   }
 
+  /**
+   * Returns the object's ACL policy metadata, or null if none has ever been
+   * set on it (e.g. legacy objects uploaded before per-object ACLs existed).
+   */
+  async getObjectAclPolicySafe(objectFile: File): Promise<ObjectAclPolicy | null> {
+    return getObjectAclPolicy(objectFile);
+  }
+
   async canAccessObjectEntity({
     userId,
     objectFile,

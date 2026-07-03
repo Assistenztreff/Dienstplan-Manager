@@ -6,6 +6,7 @@ import {
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { ObjectPermission } from "../lib/objectAcl";
+import { requireAuth } from "../middleware/auth";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
@@ -16,8 +17,11 @@ const objectStorageService = new ObjectStorageService();
  * Request a presigned URL for file upload.
  * The client sends JSON metadata (name, size, contentType) — NOT the file.
  * Then uploads the file directly to the returned presigned URL.
+ *
+ * requireAuth: without it, any caller who can reach the deployment could mint
+ * signed PUT URLs into the private bucket, turning it into an open file host.
  */
-router.post("/storage/uploads/request-url", async (req: Request, res: Response) => {
+router.post("/storage/uploads/request-url", requireAuth, async (req: Request, res: Response) => {
   const parsed = RequestUploadUrlBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Missing or invalid required fields" });
@@ -81,30 +85,38 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
  * GET /storage/objects/*
  *
  * Serve object entities from PRIVATE_OBJECT_DIR.
- * These are served from a separate path from /public-objects and can optionally
- * be protected with authentication or ACL checks based on the use case.
+ *
+ * requireAuth: this dir is explicitly documented as private storage. Without a
+ * session check, any object path that ever leaked (logs, browser history,
+ * shared screenshots) would be publicly downloadable forever. There is
+ * currently no flow that assigns a per-object ACL policy at upload time (the
+ * object doesn't exist yet when the signed upload URL is minted), so we can't
+ * enforce per-owner/per-tenant `canAccessObjectEntity` checks without adding a
+ * new "finalize upload" flow. Requiring a valid session closes the actual
+ * reported vulnerability (unauthenticated deployment-wide access) while
+ * keeping current behavior (e.g. branding logos visible to any logged-in
+ * team member) working. If a stricter per-object ACL is set on the file in the
+ * future (via setObjectAclPolicy), it is still honored below.
  */
-router.get("/storage/objects/*path", async (req: Request, res: Response) => {
+router.get("/storage/objects/*path", requireAuth, async (req: Request, res: Response) => {
   try {
     const raw = req.params.path;
     const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
     const objectPath = `/objects/${wildcardPath}`;
     const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
 
-    // --- Protected route example (uncomment when using replit-auth) ---
-    // if (!req.isAuthenticated()) {
-    //   res.status(401).json({ error: "Unauthorized" });
-    //   return;
-    // }
-    // const canAccess = await objectStorageService.canAccessObjectEntity({
-    //   userId: req.user.id,
-    //   objectFile,
-    //   requestedPermission: ObjectPermission.READ,
-    // });
-    // if (!canAccess) {
-    //   res.status(403).json({ error: "Forbidden" });
-    //   return;
-    // }
+    const aclPolicy = await objectStorageService.getObjectAclPolicySafe(objectFile);
+    if (aclPolicy) {
+      const canAccess = await objectStorageService.canAccessObjectEntity({
+        userId: String(req.session.userId),
+        objectFile,
+        requestedPermission: ObjectPermission.READ,
+      });
+      if (!canAccess) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+    }
 
     const response = await objectStorageService.downloadObject(objectFile);
 
