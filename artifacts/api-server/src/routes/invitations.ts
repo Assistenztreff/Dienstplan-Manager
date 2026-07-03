@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { generateInviteToken } from "../lib/auth-utils";
 import { requireAdmin } from "../middleware/auth";
 import { requirePlanFeature } from "../lib/plan";
+import { isUserInAllowedTeams } from "../lib/teams";
 
 const router = Router();
 
@@ -19,6 +20,17 @@ router.post("/users/:id/invite", requireAdmin, requirePlanFeature("caregiverLogi
     return;
   }
 
+  // Team-Zugehörigkeit MUSS vor jeder weiteren Auskunft geprüft werden — sonst
+  // ließe sich über die 404/400/200-Antwortcodes erraten, ob eine fremde ID
+  // existiert und ob sie ein Assistent ist (Cross-Tenant-Enumeration). Ein
+  // Nicht-Mitglied wird daher immer als "nicht gefunden" behandelt.
+  const requesterId = req.session.userId as number;
+  const isMember = await isUserInAllowedTeams(requesterId, id);
+  if (!isMember) {
+    res.status(404).json({ error: "Benutzer nicht gefunden" });
+    return;
+  }
+
   const [user] = await db
     .select()
     .from(usersTable)
@@ -30,6 +42,10 @@ router.post("/users/:id/invite", requireAdmin, requirePlanFeature("caregiverLogi
   }
   if (user.role !== "assistant") {
     res.status(400).json({ error: "Einladungen nur für Assistenten möglich" });
+    return;
+  }
+  if (!user.isActive) {
+    res.status(400).json({ error: "Konto ist deaktiviert" });
     return;
   }
 

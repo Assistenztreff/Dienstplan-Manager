@@ -10,9 +10,24 @@ declare module "express-session" {
   }
 }
 
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+/**
+ * Prüft Session-Vorhandensein UND lädt den Nutzer frisch aus der DB, damit
+ * eine Deaktivierung (`isActive=false`) SOFORT wirkt statt erst nach Ablauf
+ * der bis zu 7 Tage gültigen Session-Cookie. Ohne diesen Reload würde jede
+ * bereits bestehende Session nach einer Deaktivierung weiter funktionieren.
+ */
+export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   if (!req.session.userId) {
     res.status(401).json({ error: "Nicht angemeldet" });
+    return;
+  }
+  const [user] = await db
+    .select({ isActive: usersTable.isActive })
+    .from(usersTable)
+    .where(eq(usersTable.id, req.session.userId));
+  if (!user || !user.isActive) {
+    req.session.destroy(() => {});
+    res.status(401).json({ error: "Konto deaktiviert oder nicht gefunden" });
     return;
   }
   next();
@@ -29,13 +44,22 @@ export function isAdminLikeRole(role: string | undefined): boolean {
   return role === "admin" || role === "superadmin";
 }
 
-export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+export async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
   if (!req.session.userId) {
     res.status(401).json({ error: "Nicht angemeldet" });
     return;
   }
   if (!isAdminLikeRole(req.session.role)) {
     res.status(403).json({ error: "Keine Berechtigung" });
+    return;
+  }
+  const [user] = await db
+    .select({ isActive: usersTable.isActive })
+    .from(usersTable)
+    .where(eq(usersTable.id, req.session.userId));
+  if (!user || !user.isActive) {
+    req.session.destroy(() => {});
+    res.status(401).json({ error: "Konto deaktiviert oder nicht gefunden" });
     return;
   }
   next();
@@ -57,10 +81,15 @@ export async function requireSuperadmin(
     return;
   }
   const [user] = await db
-    .select({ role: usersTable.role })
+    .select({ role: usersTable.role, isActive: usersTable.isActive })
     .from(usersTable)
     .where(eq(usersTable.id, req.session.userId));
-  if (!user || user.role !== "superadmin") {
+  if (!user || !user.isActive) {
+    req.session.destroy(() => {});
+    res.status(401).json({ error: "Konto deaktiviert oder nicht gefunden" });
+    return;
+  }
+  if (user.role !== "superadmin") {
     res.status(403).json({ error: "Keine Berechtigung" });
     return;
   }
@@ -85,10 +114,15 @@ export async function requireDienstleister(
     return;
   }
   const [user] = await db
-    .select({ accountType: usersTable.accountType })
+    .select({ accountType: usersTable.accountType, isActive: usersTable.isActive })
     .from(usersTable)
     .where(eq(usersTable.id, req.session.userId));
-  if (!user || user.accountType !== "dienstleister") {
+  if (!user || !user.isActive) {
+    req.session.destroy(() => {});
+    res.status(401).json({ error: "Konto deaktiviert oder nicht gefunden" });
+    return;
+  }
+  if (user.accountType !== "dienstleister") {
     res.status(403).json({ error: "Nur für Dienstleister-Konten verfügbar" });
     return;
   }

@@ -289,14 +289,15 @@ router.get("/auth/me", async (req, res) => {
     return res.status(401).json({ error: "Nicht angemeldet" });
   }
   const [user] = await db
-    .select(USER_SELECT)
+    .select({ ...USER_SELECT, isActive: usersTable.isActive })
     .from(usersTable)
     .where(eq(usersTable.id, req.session.userId));
-  if (!user) {
+  if (!user || !user.isActive) {
     req.session.destroy(() => {});
     return res.status(401).json({ error: "Benutzer nicht gefunden" });
   }
-  return res.json(user);
+  const { isActive: _isActive, ...publicUser } = user;
+  return res.json(publicUser);
 });
 
 router.post("/auth/set-password", async (req, res) => {
@@ -323,6 +324,9 @@ router.post("/auth/set-password", async (req, res) => {
   }
   if (user.inviteTokenExpiry && user.inviteTokenExpiry < new Date()) {
     return res.status(400).json({ error: "Token abgelaufen — bitte neuen Einladungslink anfordern" });
+  }
+  if (!user.isActive) {
+    return res.status(400).json({ error: "Konto ist deaktiviert" });
   }
 
   const passwordHash = hashPassword(password);
