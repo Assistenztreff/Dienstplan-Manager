@@ -66,10 +66,10 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
 ## Free/Premium (SaaS-Entitlements)
 
 - `users.plan` (`free` | `premium`, Default `free`), in OpenAPI an `AuthUser` UND `User` required.
-- **`@workspace/entitlements`** = Single Source of Truth (Frontend + API). `PLAN_CONFIG`: Features (boolean) + Limits (number | null = unbegrenzt). Free: maxAssistants 6, maxTeams 1, maxShiftModels 5, historyMonths 1, Basis-Features. Helfer: `hasAccess`, `getLimit`, `isWithinLimit`, `resolvePlan`, `isPremium`.
+- **`@workspace/entitlements`** = Single Source of Truth (Frontend + API). `PLAN_CONFIG`: Features (boolean) + Limits (number | null = unbegrenzt). Free: maxAssistants 6, maxTeams 1, maxShiftModels 4, historyMonths 1, Basis-Features. Helfer: `hasAccess`, `getLimit`, `isWithinLimit`, `resolvePlan`, `isPremium`.
 - **Server autoritativ, Frontend-Gates reine UX.** `lib/plan.ts`: `getUserPlan` liest IMMER frisch aus der DB (manuelle Freischaltung wirkt sofort); `userHasFeature`, `userWithinLimit`, `requirePlanFeature`. Maßgeblich ist der Plan des **Team-Eigentümers**, nicht des Anfragers.
 - **Durchgesetzte Gates** (403 `plan_limit_reached` / `plan_feature_required`):
-  - Limits `maxShiftModels`/`maxAssistants`/`maxTeams` beim Anlegen. `maxShiftModels`-Limit MUSS über der Seed-Anzahl (4) bleiben.
+  - Limits `maxShiftModels`/`maxAssistants`/`maxTeams` beim Anlegen. `maxShiftModels` = Seed-Anzahl (4): Free-Konten starten AM Limit; eigener Dienst erst nach Löschen eines Standard-Dienstes oder mit Premium (bewusste Produktentscheidung, Task #317). Abwesenheiten (Urlaub/Krankheit) sind für Free NICHT gegated (kein Feature-Gate im shifts-POST, nur historyMonths).
   - `historyMonths` (shifts POST + PATCH-mit-`startTime`): 403 wenn Monat weiter als erlaubt in der Zukunft; Vergangenheit nie blockiert; PATCH ohne `startTime` frei.
   - `bulkEdit`: Assistenten-Wechsel via `ShiftUpdate.userId` nur Premium; Einzel-Edit ohne Nutzerwechsel frei.
   - `advancedPersonnelFile` (users POST/PATCH): Lohn-/SV-Felder (birthDate, socialSecurityNumber, taxId, taxClass, healthInsurance, iban) nur Premium; PATCH blockt nur ECHTE Änderungen gegen den DB-Stand.

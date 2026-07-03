@@ -9,7 +9,7 @@ import {
 /**
  * API-Test: Eine manuelle Premium-Freischaltung hebt auch die beiden NICHT-
  * numerischen Free-Sperren sofort auf (Task #234):
- *   - `maxShiftModels` (Free = 5): das Anlegen eines weiteren Dienstes über dem
+ *   - `maxShiftModels` (Free = 4): das Anlegen eines weiteren Dienstes über dem
  *     Limit,
  *   - das Premium-Feature `bulkEdit`: der Assistenten-Wechsel an einer
  *     bestehenden Schicht via PATCH /api/shifts (Body mit `userId`).
@@ -24,12 +24,12 @@ import {
  * — dieser Test sichert genau das ab:
  *
  * 1. Frisches Free-Dienstleister-Konto registrieren (startet garantiert Free,
- *    inkl. 4 geseedeter Standard-Dienste).
- * 2. Free-Phase: 5. Dienst anlegen (= Free-Limit maxShiftModels), 6. → 403;
+ *    inkl. 4 geseedeter Standard-Dienste = genau am Free-Limit maxShiftModels).
+ * 2. Free-Phase: 5. Dienst → 403;
  *    Schicht für Assistent A anlegen, per PATCH auf Assistent B tauschen → 403
  *    plan_feature_required (bulkEdit).
  * 3. Konto direkt in der Test-DB auf `premium` heben (manuelle Freischaltung).
- * 4. OHNE Re-Login dieselben Aktionen erneut: 6. Dienst → 201, PATCH-Wechsel →
+ * 4. OHNE Re-Login dieselben Aktionen erneut: 5. Dienst → 201, PATCH-Wechsel →
  *    200 — beide Sperren sind sofort aufgehoben.
  *
  * Läuft rein über die API gegen den isolierten Test-Stack.
@@ -68,25 +68,20 @@ test("Premium-Freischaltung hebt maxShiftModels und bulkEdit sofort auf", async 
 
   // --- Free-Phase: an die Sperren fahren --------------------------------
 
-  // Registrierung seedet 4 Standard-Dienste; der 5. (1. eigener) ist erlaubt.
+  // Registrierung seedet 4 Standard-Dienste — genau das Free-Limit
+  // (maxShiftModels = 4); ein 5. Dienst ist im Free-Tarif blockiert.
   const seededRes = await acc.ctx.get("/api/shift-models");
   expect(seededRes.ok(), "GET /api/shift-models fehlgeschlagen").toBe(true);
   const seeded = (await seededRes.json()) as { id: number }[];
   expect(seeded.length, "Neues Free-Konto sollte mit 4 Standard-Diensten starten").toBe(4);
 
-  const fifthModel = await acc.ctx.post("/api/shift-models", {
-    data: { name: "Mein eigener Dienst", valuationPercent: 100 },
-  });
-  expect(fifthModel.status(), "5. Dienst (1. eigener) sollte 201 liefern").toBe(201);
-
-  // 6. Dienst: am Free-Limit (maxShiftModels = 5) blockiert.
-  const sixthFree = await acc.ctx.post("/api/shift-models", {
+  const fifthFree = await acc.ctx.post("/api/shift-models", {
     data: { name: "Ein Dienst zu viel", valuationPercent: 100 },
   });
-  expect(sixthFree.status(), "6. Dienst sollte im Free-Tarif 403 liefern").toBe(403);
-  const sixthFreeBody = (await sixthFree.json()) as LimitError;
-  expect(sixthFreeBody.code).toBe("plan_limit_reached");
-  expect(sixthFreeBody.limit).toBe("maxShiftModels");
+  expect(fifthFree.status(), "5. Dienst sollte im Free-Tarif 403 liefern").toBe(403);
+  const fifthFreeBody = (await fifthFree.json()) as LimitError;
+  expect(fifthFreeBody.code).toBe("plan_limit_reached");
+  expect(fifthFreeBody.limit).toBe("maxShiftModels");
 
   // Zwei Assistenten anlegen (beide Mitglied im Standard-Team via POST /users),
   // damit der bulkEdit-Assistenten-Wechsel getestet werden kann.
@@ -133,11 +128,11 @@ test("Premium-Freischaltung hebt maxShiftModels und bulkEdit sofort auf", async 
 
   // --- Premium-Phase: dieselbe Session, dieselben Aktionen -> jetzt erlaubt -
 
-  // 6. Dienst: jetzt erlaubt (Limit aufgehoben).
-  const sixthPremium = await acc.ctx.post("/api/shift-models", {
-    data: { name: "Sechster Dienst premium", valuationPercent: 100 },
+  // 5. Dienst: jetzt erlaubt (Limit aufgehoben).
+  const fifthPremium = await acc.ctx.post("/api/shift-models", {
+    data: { name: "Fuenfter Dienst premium", valuationPercent: 100 },
   });
-  expect(sixthPremium.status(), "6. Dienst sollte nach Upgrade 201 liefern").toBe(201);
+  expect(fifthPremium.status(), "5. Dienst sollte nach Upgrade 201 liefern").toBe(201);
 
   // Assistenten-Wechsel: jetzt erlaubt (bulkEdit freigeschaltet).
   const swapPremium = await acc.ctx.patch(`/api/shifts/${shiftId}`, {

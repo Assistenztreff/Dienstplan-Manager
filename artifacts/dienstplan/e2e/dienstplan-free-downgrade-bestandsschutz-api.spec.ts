@@ -24,7 +24,7 @@ import {
  * 1. Frisches Free-Dienstleister-Konto registrieren, sofort auf Premium heben.
  * 2. Als Premium über alle vier Free-Caps hinaus aufbauen: 2. Team (maxTeams),
  *    >6 Assistenten (maxAssistants), Schicht 2 Monate voraus (historyMonths),
- *    >5 Schichtmodelle (maxShiftModels).
+ *    >4 Schichtmodelle (maxShiftModels).
  * 3. Konto direkt in der Test-DB auf `free` zurückstufen.
  * 4. Bestandsschutz: JEDE bestehende Zeile wird weiterhin von der zuständigen
  *    GET-Route geliefert UND ist weiterhin PATCH-bar.
@@ -106,8 +106,8 @@ test.beforeAll(async () => {
   expect(shiftRes.status(), "Schicht 2 Monate voraus sollte als Premium 201 liefern").toBe(201);
   farShiftId = ((await shiftRes.json()) as Entity).id;
 
-  // Über maxShiftModels = 5 hinaus: Registrierung seedet 4 Standard-Dienste;
-  // zwei eigene ergeben 6 Bestands-Modelle (> Free-Limit 5).
+  // Über maxShiftModels = 4 hinaus: Registrierung seedet 4 Standard-Dienste;
+  // zwei eigene ergeben 6 Bestands-Modelle (> Free-Limit 4).
   for (let i = 0; i < 2; i++) {
     const modelRes = await acc.ctx.post("/api/shift-models", {
       data: { name: `E2E Downgrade Dienst ${unique}-${i}`, valuationPercent: 100 },
@@ -152,7 +152,7 @@ test("Bestandsschutz: alle über den Free-Caps angelegten Zeilen bleiben nach de
     "Weit voraus geplante Schicht sollte nach Downgrade sichtbar bleiben",
   ).toBe(true);
 
-  // Schichtmodelle: alle 6 (über maxShiftModels = 5) bleiben sichtbar.
+  // Schichtmodelle: alle 6 (über maxShiftModels = 4) bleiben sichtbar.
   const modelsRes = await acc.ctx.get("/api/shift-models");
   expect(modelsRes.ok(), "GET /api/shift-models fehlgeschlagen").toBe(true);
   const models = (await modelsRes.json()) as Entity[];

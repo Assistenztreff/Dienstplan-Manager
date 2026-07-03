@@ -7,7 +7,7 @@ import { deleteFreeAccount, registerFreeAccount, type FreeAccount } from "./help
  * Free-Limits werden dem Nutzer auch im Web-Frontend KLAR angezeigt statt
  * still zu scheitern:
  *
- *   - maxShiftModels (5): Anlegen eines weiteren Dienstes (Schichtmodells)
+ *   - maxShiftModels (4): Anlegen eines weiteren Dienstes (Schichtmodells)
  *     über dem Limit in den Einstellungen.
  *   - historyMonths (1): Planen einer Schicht mehr als 1 Monat im Voraus im
  *     Dienstplan (ShiftDialog).
@@ -26,7 +26,7 @@ import { deleteFreeAccount, registerFreeAccount, type FreeAccount } from "./help
  * Laeuft gegen den isolierten Test-Stack (eigener API + Vite auf der `_test`-DB).
  */
 
-const FREE_MAX_SHIFT_MODELS = 5;
+const FREE_MAX_SHIFT_MODELS = 4;
 
 /** Session-Cookies des per API registrierten Free-Kontos in den Browser uebernehmen. */
 async function adoptSession(page: Page, account: FreeAccount): Promise<void> {
@@ -39,9 +39,18 @@ test.describe("Free-Limit Schichtmodelle (UI)", () => {
   const createdModelIds: number[] = [];
 
   test.beforeAll(async () => {
-    // Registrierung seedet 4 Standard-Dienste -> das Konto startet bewusst
-    // UNTER dem Free-Limit von 5 (Button im UI also aktiv).
+    // Registrierung seedet 4 Standard-Dienste = genau das Free-Limit (4). Für
+    // das Race-Szenario (Dialog offen, Limit wird währenddessen erreicht) wird
+    // ein Seed-Dienst gelöscht, damit das Konto UNTER dem Limit startet und
+    // der Anlege-Button im UI aktiv ist.
     free = await registerFreeAccount("privat", "free.ui.model");
+    const listRes = await free.ctx.get("/api/shift-models");
+    expect(listRes.ok(), "Dienste-Liste sollte ladbar sein").toBe(true);
+    const models = (await listRes.json()) as { id: number }[];
+    if (models.length >= FREE_MAX_SHIFT_MODELS) {
+      const delRes = await free.ctx.delete(`/api/shift-models/${models[models.length - 1]!.id}`);
+      expect(delRes.ok(), "Seed-Dienst sollte löschbar sein").toBe(true);
+    }
   });
 
   test.afterAll(async () => {
@@ -70,8 +79,8 @@ test.describe("Free-Limit Schichtmodelle (UI)", () => {
     test.setTimeout(60000);
     await adoptSession(page, free);
 
-    // Mit 4 Diensten laden -> der Anlege-Button ist aktiv und der Dialog laesst
-    // sich oeffnen. Das 5. Modell wird DANACH per API angelegt (Race-Szenario:
+    // Mit 3 Diensten laden -> der Anlege-Button ist aktiv und der Dialog laesst
+    // sich oeffnen. Das 4. Modell wird DANACH per API angelegt (Race-Szenario:
     // Limit wird erreicht, waehrend der Dialog schon offen ist). Der Submit
     // muss dann den servergemappten Upgrade-Hinweis anzeigen — genau der Pfad,
     // der bei einer Regression still verschluckt wuerde.
@@ -87,14 +96,14 @@ test.describe("Free-Limit Schichtmodelle (UI)", () => {
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText("Neues Schichtmodell")).toBeVisible();
 
-    // Jetzt serverseitig ans Limit fahren (5. Dienst per API).
+    // Jetzt serverseitig ans Limit fahren (4. Dienst per API).
     await ensureModelCount(FREE_MAX_SHIFT_MODELS);
 
-    await dialog.getByPlaceholder("z.B. Aktivdienst").fill("Sechster Dienst");
+    await dialog.getByPlaceholder("z.B. Aktivdienst").fill("Fuenfter Dienst");
     await dialog.getByRole("button", { name: "Anlegen" }).click();
 
     // Klarer Upgrade-Hinweis statt stillem Fehlschlag.
-    await expect(dialog.getByText(/max\. 5 Dienste/i)).toBeVisible();
+    await expect(dialog.getByText(/max\. 4 Dienste/i)).toBeVisible();
     await expect(dialog.getByText(/Premium/i)).toBeVisible();
   });
 
@@ -110,7 +119,7 @@ test.describe("Free-Limit Schichtmodelle (UI)", () => {
     await expect(page.getByRole("heading", { name: "Einstellungen" })).toBeVisible();
 
     // Client-Gate: Banner mit Limit-Hinweis + deaktivierter Anlege-Button.
-    await expect(page.getByText(/maximal 5 Schichtmodelle/i)).toBeVisible();
+    await expect(page.getByText(/maximal 4 Schichtmodelle/i)).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Neu", exact: true }).first(),
     ).toBeDisabled();

@@ -47,7 +47,7 @@ const PLAN_LIMIT_MESSAGES: Record<string, string> = {
   maxTeams:
     "Free-Tarif: max. 1 Team. Für mehrere Teams auf Premium upgraden.",
   maxShiftModels:
-    "Free-Tarif: max. 5 Dienste. Für unbegrenzte Dienste auf Premium upgraden.",
+    "Free-Tarif: max. 4 Dienste. Für unbegrenzte Dienste auf Premium upgraden.",
   historyMonths:
     "Free-Tarif: Planung nur für den aktuellen und nächsten Monat. Für eine längere Vorausplanung auf Premium upgraden.",
 };

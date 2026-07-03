@@ -122,7 +122,7 @@ async function main(): Promise<void> {
   // Test-Admin auf Premium setzen (NUR Test-Infrastruktur, niemals die echte
   // Dev-DB). Hintergrund: Die serverseitige Durchsetzung der Free-Limits würde
   // sonst bestehende E2E-Specs brechen, die als Standard-Admin parallel viele
-  // Schichtmodelle anlegen (maxShiftModels=3 im Free-Tarif) bzw. die
+  // Schichtmodelle anlegen (maxShiftModels=4 im Free-Tarif) bzw. die
   // Massenbearbeitung (bulkEdit = Premium) testen. Die dedizierten Plan-Gate-
   // Specs registrieren sich stattdessen frische Free-Konten und prüfen die
   // Limits isoliert.

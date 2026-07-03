@@ -27,7 +27,7 @@ import {
  * - Als Premium UEBER alle Free-Caps fahren:
  *     - 2. Team            (Free: maxTeams = 1)
  *     - 7 Assistenten      (Free: maxAssistants = 6)
- *     - 2 Zusatz-Dienste   (4 Seeds + 2 = 6 > Free-Limit 5)
+ *     - 2 Zusatz-Dienste   (4 Seeds + 2 = 6 > Free-Limit 4)
  *     - FIX-Schicht 2 Monate im Voraus (Free: historyMonths = 1)
  * - Downgrade zurueck auf Free.
  *
@@ -41,7 +41,7 @@ import {
 
 const FREE_MAX_ASSISTANTS = 6;
 const OVER_LIMIT_ASSISTANTS = FREE_MAX_ASSISTANTS + 1; // 7 — einer ueber dem Cap
-const EXTRA_MODEL_COUNT = 2; // 4 Seeds + 2 = 6 > Free-Limit 5
+const EXTRA_MODEL_COUNT = 2; // 4 Seeds + 2 = 6 > Free-Limit 4
 
 const SECOND_TEAM_NAME = "E2E Downgrade Zweitteam";
 
@@ -118,7 +118,7 @@ test.describe("Downgrade auf Free: Bestandsdaten bleiben im UI sichtbar", () => 
       assistantNames.push(name);
     }
 
-    // 2 Zusatz-Dienste (4 Seeds + 2 = 6 > Free-Limit 5).
+    // 2 Zusatz-Dienste (4 Seeds + 2 = 6 > Free-Limit 4).
     for (let i = 1; i <= EXTRA_MODEL_COUNT; i++) {
       const name = `E2E Zusatzdienst ${unique}-${i}`;
       const res = await acc.ctx.post("/api/shift-models", {
@@ -172,7 +172,7 @@ test.describe("Downgrade auf Free: Bestandsdaten bleiben im UI sichtbar", () => 
     await expect(page.getByRole("heading", { name: "Einstellungen" })).toBeVisible();
 
     // ALLE 6 Dienste (4 Seeds + 2 als Premium angelegte) bleiben gelistet —
-    // insbesondere die beiden UEBER dem Free-Limit von 5.
+    // insbesondere die beiden UEBER dem Free-Limit von 4.
     for (const name of [...seededModelNames, ...extraModelNames]) {
       await expect(
         page.getByText(name, { exact: true }),
@@ -193,7 +193,7 @@ test.describe("Downgrade auf Free: Bestandsdaten bleiben im UI sichtbar", () => 
     await expect(dialog).not.toBeVisible();
 
     // NUR das Neu-Anlegen reflektiert das Limit: Banner + gesperrter Button.
-    await expect(page.getByText(/maximal 5 Schichtmodelle/i)).toBeVisible();
+    await expect(page.getByText(/maximal 4 Schichtmodelle/i)).toBeVisible();
     await expect(page.getByRole("button", { name: "Neu", exact: true }).first()).toBeDisabled();
   });
 
