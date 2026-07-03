@@ -20,8 +20,14 @@
 //   Bei Level "error" geht zusaetzlich eine gedrosselte Warn-E-Mail an den
 //   Betreiber (lib/alert-mailer.ts im api-server).
 //
-// Bereich 2 (Lexware-Buchungs-Log) bleibt Platzhalter mit DEMO-DATEN
-// (deutlich gekennzeichnet), bis die echte Lexware-Anbindung kommt.
+// Bereich 2 (Lexware-Buchungs-Log) ist an den Endpunkt
+// GET /api/operator/lexware/bookings angebunden. Die echte Lexware-Anbindung
+// ist bewusst verschoben, bis die Datenbank auf einen deutschen Server
+// migriert ist: bis dahin liefert serverseitig ein Mock-Adapter
+// (lib/lexware.ts im api-server) Beispieldaten mit source = "demo" — die
+// Karte kennzeichnet das deutlich per "Demo-Daten"-Badge. Sobald der echte
+// Client (Secret LEXWARE_API_KEY) antwortet, kommt source = "live" in
+// identischer Form; Badge und Hinweis verschwinden ohne Frontend-Umbau.
 //
 // Billing-Hintergrund: Abo-Buchungen erzeugen Rechnungsentwuerfe in Lexware.
 // Die Premium-Freischaltung erfolgt MANUELL hier im Dashboard, sobald die
@@ -36,6 +42,7 @@ import {
   useListOperatorErrors,
   useUpdateOperatorError,
   useResolveAllOperatorErrors,
+  useListOperatorLexwareBookings,
   getListOperatorAccountsQueryKey,
   getListOperatorPlanChangesQueryKey,
   getListOperatorErrorsQueryKey,
@@ -60,21 +67,11 @@ import { Users, Receipt, AlertTriangle, ShieldCheck, History, Check, CheckCheck,
 import { readableApiError } from "@/lib/api-error";
 import { useToast } from "@/hooks/use-toast";
 
-// --- Platzhalter-Daten (nur Bereich 2: Lexware, als Demo gekennzeichnet) ---
-
-type LexwareBooking = {
-  id: string;
-  accountName: string;
-  type: "Rechnungsentwurf" | "Zahlungseingang";
-  amount: string;
-  date: string;
-  status: "offen" | "bezahlt" | "storniert";
-};
-
-const PLACEHOLDER_BOOKINGS: LexwareBooking[] = [
-  { id: "LX-2026-0042", accountName: "Pflegedienst Nord GmbH", type: "Zahlungseingang", amount: "49,00 €", date: "2026-06-28", status: "bezahlt" },
-  { id: "LX-2026-0041", accountName: "Maria Beispiel", type: "Rechnungsentwurf", amount: "19,00 €", date: "2026-06-27", status: "offen" },
-];
+// Euro-Formatierung fuer Lexware-Betraege (z. B. 49 → "49,00 €").
+const euroFormat = new Intl.NumberFormat("de-DE", {
+  style: "currency",
+  currency: "EUR",
+});
 
 function planBadge(plan: "free" | "premium") {
   return plan === "premium" ? (
@@ -97,6 +94,7 @@ export default function OperatorDashboard() {
   const accountsQuery = useListOperatorAccounts();
   const planChangesQuery = useListOperatorPlanChanges();
   const errorsQuery = useListOperatorErrors();
+  const lexwareQuery = useListOperatorLexwareBookings();
   const updatePlan = useUpdateOperatorAccountPlan();
   const updateError = useUpdateOperatorError();
   const resolveAllErrors = useResolveAllOperatorErrors();
@@ -438,60 +436,88 @@ export default function OperatorDashboard() {
       </Card>
 
       {/* ----------------------------------------------------------------- */}
-      {/* Bereich 2: Lexware-Buchungs-Log                                    */}
+      {/* Bereich 2: Lexware-Buchungs-Log (Endpunkt live, Daten via Adapter)  */}
       {/* ----------------------------------------------------------------- */}
-      {/* API-ANDOCKPUNKT: Rechnungsentwuerfe & Zahlungseingaenge aus Lexware */}
-      {/* spiegeln, z. B. GET /api/operator/lexware/bookings (serverseitig   */}
-      {/* gegen die Lexware-API). Premium-Freischaltung erfolgt manuell in    */}
+      {/* GET /api/operator/lexware/bookings — heute Mock-Adapter mit         */}
+      {/* Beispieldaten (source = "demo", deutlich gekennzeichnet), nach der  */}
+      {/* Server-Migration echter Lexware-Client in identischer Form          */}
+      {/* (source = "live"). Premium-Freischaltung erfolgt manuell in         */}
       {/* Bereich 1, sobald hier ein Zahlungseingang bestaetigt ist.          */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Receipt className="h-5 w-5 text-brand-cyan" />
             Lexware-Buchungs-Log
-            <Badge variant="outline" className="ml-1 border-amber-400 bg-amber-50 text-amber-700" data-testid="badge-lexware-demo">
-              Demo-Daten
-            </Badge>
+            {lexwareQuery.data?.source === "demo" && (
+              <Badge variant="outline" className="ml-1 border-amber-400 bg-amber-50 text-amber-700" data-testid="badge-lexware-demo">
+                Demo-Daten
+              </Badge>
+            )}
           </CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Beispieldaten zur Veranschaulichung — die echte Lexware-Anbindung
-            folgt. Diese Einträge sind KEINE realen Buchungen.
-          </p>
+          {lexwareQuery.data?.source === "demo" && (
+            <p className="text-xs text-muted-foreground">
+              Beispieldaten zur Veranschaulichung — die echte Lexware-Anbindung
+              folgt nach der Server-Migration. Diese Einträge sind KEINE realen
+              Buchungen.
+            </p>
+          )}
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="border-b border-border/50 bg-slate-50 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Beleg</th>
-                  <th className="px-4 py-3 font-medium">Konto</th>
-                  <th className="px-4 py-3 font-medium">Art</th>
-                  <th className="px-4 py-3 font-medium">Betrag</th>
-                  <th className="px-4 py-3 font-medium">Datum</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {PLACEHOLDER_BOOKINGS.map((b) => (
-                  <tr key={b.id} className="border-b border-border/30 last:border-0">
-                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{b.id}</td>
-                    <td className="px-4 py-3 text-foreground">{b.accountName}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{b.type}</td>
-                    <td className="px-4 py-3 text-foreground">{b.amount}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{b.date}</td>
-                    <td className="px-4 py-3">
-                      <Badge
-                        variant={b.status === "bezahlt" ? "default" : b.status === "offen" ? "outline" : "destructive"}
-                        className={b.status === "bezahlt" ? "bg-brand-cyan text-brand-white hover:bg-brand-cyan" : ""}
-                      >
-                        {b.status}
-                      </Badge>
-                    </td>
+          {lexwareQuery.isLoading ? (
+            <div className="space-y-2 p-6">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-2/3" />
+            </div>
+          ) : lexwareQuery.isError ? (
+            <p className="p-6 text-sm text-destructive" data-testid="text-lexware-error">
+              Buchungs-Log konnte nicht geladen werden:{" "}
+              {readableApiError(lexwareQuery.error, "Unbekannter Fehler")}
+            </p>
+          ) : (lexwareQuery.data?.bookings.length ?? 0) === 0 ? (
+            <p className="p-6 text-sm text-muted-foreground" data-testid="text-lexware-empty">
+              Keine Buchungen vorhanden.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-border/50 bg-slate-50 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Beleg</th>
+                    <th className="px-4 py-3 font-medium">Konto</th>
+                    <th className="px-4 py-3 font-medium">Art</th>
+                    <th className="px-4 py-3 font-medium">Betrag</th>
+                    <th className="px-4 py-3 font-medium">Datum</th>
+                    <th className="px-4 py-3 font-medium">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {lexwareQuery.data?.bookings.map((b) => (
+                    <tr key={b.id} className="border-b border-border/30 last:border-0" data-testid={`row-lexware-booking-${b.id}`}>
+                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{b.id}</td>
+                      <td className="px-4 py-3 text-foreground">
+                        {b.accountName}
+                        <span className="block text-xs text-muted-foreground">{b.accountEmail}</span>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{b.type}</td>
+                      <td className="px-4 py-3 text-foreground">{euroFormat.format(b.amount)}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {new Date(b.date).toLocaleDateString("de-DE")}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge
+                          variant={b.status === "bezahlt" ? "default" : b.status === "offen" ? "outline" : "destructive"}
+                          className={b.status === "bezahlt" ? "bg-brand-cyan text-brand-white hover:bg-brand-cyan" : ""}
+                        >
+                          {b.status}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
 

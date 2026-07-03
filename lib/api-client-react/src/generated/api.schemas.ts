@@ -180,6 +180,59 @@ export interface OperatorErrorUpdate {
   resolved: boolean;
 }
 
+/**
+ * Art der Buchung
+ */
+export type LexwareBookingType = typeof LexwareBookingType[keyof typeof LexwareBookingType];
+
+
+export const LexwareBookingType = {
+  Rechnungsentwurf: 'Rechnungsentwurf',
+  Zahlungseingang: 'Zahlungseingang',
+} as const;
+
+export type LexwareBookingStatus = typeof LexwareBookingStatus[keyof typeof LexwareBookingStatus];
+
+
+export const LexwareBookingStatus = {
+  offen: 'offen',
+  bezahlt: 'bezahlt',
+  storniert: 'storniert',
+} as const;
+
+export interface LexwareBooking {
+  /** Belegnummer aus Lexware (z. B. Rechnungsnummer "LX-2026-0042") */
+  id: string;
+  /** Name des zugehörigen Kundenkontos */
+  accountName: string;
+  /** E-Mail des zugehörigen Kundenkontos */
+  accountEmail: string;
+  /** Art der Buchung */
+  type: LexwareBookingType;
+  /** Betrag in Euro (Brutto) */
+  amount: number;
+  /** Belegdatum (ISO-Format JJJJ-MM-TT) */
+  date: string;
+  status: LexwareBookingStatus;
+}
+
+/**
+ * Datenquelle: "demo" = Mock-Adapter mit Beispieldaten (kein LEXWARE_API_KEY konfiguriert), "live" = echte Lexware-API.
+ */
+export type LexwareBookingListSource = typeof LexwareBookingListSource[keyof typeof LexwareBookingListSource];
+
+
+export const LexwareBookingListSource = {
+  demo: 'demo',
+  live: 'live',
+} as const;
+
+export interface LexwareBookingList {
+  /** Datenquelle: "demo" = Mock-Adapter mit Beispieldaten (kein LEXWARE_API_KEY konfiguriert), "live" = echte Lexware-API. */
+  source: LexwareBookingListSource;
+  bookings: LexwareBooking[];
+}
+
 export interface OperatorErrorsResolveAllResult {
   /** Anzahl der Einträge, die von offen auf erledigt gesetzt wurden */
   resolvedCount: number;

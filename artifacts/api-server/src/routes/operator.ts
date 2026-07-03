@@ -20,6 +20,7 @@ import {
 } from "@workspace/api-zod";
 import { requireSuperadmin } from "../middleware/auth";
 import { MAX_STORED_ERRORS } from "../lib/platform-errors";
+import { getLexwareClient } from "../lib/lexware";
 
 const router = Router();
 
@@ -273,6 +274,23 @@ router.patch(
     }
 
     res.json(updated);
+    return;
+  },
+);
+
+// GET /operator/lexware/bookings — Buchungs-Log aus Lexware (Rechnungs-
+// entwuerfe + Zahlungseingaenge, neueste zuerst). Anbindung ueber das
+// austauschbare Adapter-Interface LexwareClient (lib/lexware.ts): ohne
+// Secret LEXWARE_API_KEY antwortet der Mock-Adapter mit Beispieldaten
+// (source = "demo"); der echte Client kommt nach der Server-Migration und
+// liefert dieselbe Form (source = "live") — kein Frontend-/Schema-Umbau.
+router.get(
+  "/operator/lexware/bookings",
+  requireSuperadmin,
+  async (_req, res): Promise<void> => {
+    const client = getLexwareClient();
+    const bookings = await client.listBookings();
+    res.json({ source: client.source, bookings });
     return;
   },
 );

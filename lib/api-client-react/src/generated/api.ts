@@ -42,6 +42,7 @@ import type {
   HealthStatus,
   HoursBalance,
   InviteResult,
+  LexwareBookingList,
   ListContractsParams,
   ListOperatorErrorsParams,
   ListOperatorPlanChangesParams,
@@ -5219,4 +5220,83 @@ export const useUpdateOperatorError = <TError = ErrorType<void>,
       > => {
       return useMutation(getUpdateOperatorErrorMutationOptions(options));
     }
+
+export const getListOperatorLexwareBookingsUrl = () => {
+
+
+
+
+  return `/api/operator/lexware/bookings`
+}
+
+/**
+ * Liefert die letzten Buchungen (Rechnungsentwürfe und Zahlungseingänge) aus Lexware für das Operator-Dashboard, neueste zuerst. Die Anbindung läuft über ein austauschbares Adapter-Interface (LexwareClient im api-server): ohne konfiguriertes Secret LEXWARE_API_KEY liefert ein Mock-Adapter realistische Beispieldaten (source = "demo"); mit Secret antwortet später der echte Lexware-Client in identischer Form (source = "live") — Frontend und Schema bleiben unverändert.
+
+ * @summary Lexware-Buchungs-Log (nur superadmin)
+ */
+export const listOperatorLexwareBookings = async ( options?: RequestInit): Promise<LexwareBookingList> => {
+
+  return customFetch<LexwareBookingList>(getListOperatorLexwareBookingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListOperatorLexwareBookingsQueryKey = () => {
+    return [
+    `/api/operator/lexware/bookings`
+    ] as const;
+    }
+
+
+export const getListOperatorLexwareBookingsQueryOptions = <TData = Awaited<ReturnType<typeof listOperatorLexwareBookings>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOperatorLexwareBookings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListOperatorLexwareBookingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOperatorLexwareBookings>>> = ({ signal }) => listOperatorLexwareBookings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listOperatorLexwareBookings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListOperatorLexwareBookingsQueryResult = NonNullable<Awaited<ReturnType<typeof listOperatorLexwareBookings>>>
+export type ListOperatorLexwareBookingsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Lexware-Buchungs-Log (nur superadmin)
+ */
+
+export function useListOperatorLexwareBookings<TData = Awaited<ReturnType<typeof listOperatorLexwareBookings>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOperatorLexwareBookings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListOperatorLexwareBookingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 

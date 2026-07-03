@@ -1548,3 +1548,22 @@ export const UpdateOperatorErrorResponse = zod.object({
 })
 
 
+/**
+ * Liefert die letzten Buchungen (Rechnungsentwürfe und Zahlungseingänge) aus Lexware für das Operator-Dashboard, neueste zuerst. Die Anbindung läuft über ein austauschbares Adapter-Interface (LexwareClient im api-server): ohne konfiguriertes Secret LEXWARE_API_KEY liefert ein Mock-Adapter realistische Beispieldaten (source = "demo"); mit Secret antwortet später der echte Lexware-Client in identischer Form (source = "live") — Frontend und Schema bleiben unverändert.
+
+ * @summary Lexware-Buchungs-Log (nur superadmin)
+ */
+export const ListOperatorLexwareBookingsResponse = zod.object({
+  "source": zod.enum(['demo', 'live']).describe('Datenquelle: \"demo\" = Mock-Adapter mit Beispieldaten (kein LEXWARE_API_KEY konfiguriert), \"live\" = echte Lexware-API.'),
+  "bookings": zod.array(zod.object({
+  "id": zod.string().describe('Belegnummer aus Lexware (z. B. Rechnungsnummer \"LX-2026-0042\")'),
+  "accountName": zod.string().describe('Name des zugehörigen Kundenkontos'),
+  "accountEmail": zod.string().describe('E-Mail des zugehörigen Kundenkontos'),
+  "type": zod.enum(['Rechnungsentwurf', 'Zahlungseingang']).describe('Art der Buchung'),
+  "amount": zod.number().describe('Betrag in Euro (Brutto)'),
+  "date": zod.string().describe('Belegdatum (ISO-Format JJJJ-MM-TT)'),
+  "status": zod.enum(['offen', 'bezahlt', 'storniert'])
+}))
+})
+
+

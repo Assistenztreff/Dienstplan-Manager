@@ -1557,6 +1557,29 @@ paths:
         "404":
           description: Fehler-Eintrag nicht gefunden
 
+  /operator/lexware/bookings:
+    get:
+      operationId: listOperatorLexwareBookings
+      tags: [operator]
+      summary: Lexware-Buchungs-Log (nur superadmin)
+      description: >
+        Liefert die letzten Buchungen (Rechnungsentwürfe und Zahlungseingänge)
+        aus Lexware für das Operator-Dashboard, neueste zuerst. Die Anbindung
+        läuft über ein austauschbares Adapter-Interface (LexwareClient im
+        api-server): ohne konfiguriertes Secret LEXWARE_API_KEY liefert ein
+        Mock-Adapter realistische Beispieldaten (source = "demo"); mit Secret
+        antwortet später der echte Lexware-Client in identischer Form
+        (source = "live") — Frontend und Schema bleiben unverändert.
+      responses:
+        "200":
+          description: Buchungsliste samt Quelle (demo oder live)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LexwareBookingList"
+        "403":
+          description: Keine Berechtigung (kein superadmin)
+
 components:
   schemas:
     HealthStatus:
@@ -1735,6 +1758,48 @@ components:
         resolved:
           type: boolean
           description: true = als erledigt abhaken, false = wieder auf offen setzen
+
+    LexwareBooking:
+      type: object
+      required: [id, accountName, accountEmail, type, amount, date, status]
+      properties:
+        id:
+          type: string
+          description: Belegnummer aus Lexware (z. B. Rechnungsnummer "LX-2026-0042")
+        accountName:
+          type: string
+          description: Name des zugehörigen Kundenkontos
+        accountEmail:
+          type: string
+          description: E-Mail des zugehörigen Kundenkontos
+        type:
+          type: string
+          enum: [Rechnungsentwurf, Zahlungseingang]
+          description: Art der Buchung
+        amount:
+          type: number
+          description: Betrag in Euro (Brutto)
+        date:
+          type: string
+          description: Belegdatum (ISO-Format JJJJ-MM-TT)
+        status:
+          type: string
+          enum: [offen, bezahlt, storniert]
+
+    LexwareBookingList:
+      type: object
+      required: [source, bookings]
+      properties:
+        source:
+          type: string
+          enum: [demo, live]
+          description: >-
+            Datenquelle: "demo" = Mock-Adapter mit Beispieldaten (kein
+            LEXWARE_API_KEY konfiguriert), "live" = echte Lexware-API.
+        bookings:
+          type: array
+          items:
+            $ref: "#/components/schemas/LexwareBooking"
 
     OperatorErrorsResolveAllResult:
       type: object
