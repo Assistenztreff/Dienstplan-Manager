@@ -170,6 +170,11 @@ export interface OperatorErrorUpdate {
   resolved: boolean;
 }
 
+export interface OperatorErrorsResolveAllResult {
+  /** Anzahl der Einträge, die von offen auf erledigt gesetzt wurden */
+  resolvedCount: number;
+}
+
 export type UserInputRole = typeof UserInputRole[keyof typeof UserInputRole];
 
 

@@ -284,4 +284,92 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
     await page.getByTestId("button-error-filter-open").click();
     await expect(row).toBeVisible();
   });
+
+  test("API: Alle offenen Fehler in einem Schritt abhaken (resolve-all), nur superadmin", async () => {
+    // Zwei zusätzliche offene Einträge erzeugen (Vorfall-Szenario mit
+    // mehreren gleichartigen Fehlern).
+    await superCtx.get("/api/dev/boom");
+    await superCtx.get("/api/dev/boom");
+
+    const beforeRes = await superCtx.get("/api/operator/errors");
+    const before = (await beforeRes.json()) as OperatorErrorRow[];
+    const openBefore = before.filter((e) => !e.resolved);
+    expect(openBefore.length, "Es müssen offene Einträge existieren").toBeGreaterThanOrEqual(2);
+
+    // Zugriffsschutz: normaler Admin (403) und anonym (401) dürfen NICHT
+    // sammel-abhaken.
+    const adminRes = await admin.ctx.post("/api/operator/errors/resolve-all");
+    expect(adminRes.status(), "Admin darf nicht sammel-abhaken").toBe(403);
+    const anonCtx = await playwrightRequest.newContext({ baseURL: BASE_URL });
+    try {
+      const anonRes = await anonCtx.post("/api/operator/errors/resolve-all");
+      expect(anonRes.status(), "Anonym muss 401 liefern").toBe(401);
+    } finally {
+      await anonCtx.dispose();
+    }
+
+    // Superadmin hakt alle offenen Einträge in einem Schritt ab.
+    const resolveAllRes = await superCtx.post("/api/operator/errors/resolve-all");
+    expect(resolveAllRes.status()).toBe(200);
+    const result = (await resolveAllRes.json()) as { resolvedCount: number };
+    expect(
+      result.resolvedCount,
+      "resolvedCount muss mindestens die vorher offenen Einträge umfassen",
+    ).toBeGreaterThanOrEqual(openBefore.length);
+
+    // Alle vorher offenen Einträge sind jetzt erledigt.
+    const afterRes = await superCtx.get("/api/operator/errors");
+    const after = (await afterRes.json()) as OperatorErrorRow[];
+    for (const e of openBefore) {
+      expect(
+        after.find((a) => a.id === e.id)?.resolved,
+        `Eintrag ${e.id} muss nach resolve-all erledigt sein`,
+      ).toBe(true);
+    }
+
+    // Zweiter Aufruf ohne offene Einträge ist ein sauberer No-Op (0).
+    const noopRes = await superCtx.post("/api/operator/errors/resolve-all");
+    expect(noopRes.status()).toBe(200);
+    expect(((await noopRes.json()) as { resolvedCount: number }).resolvedCount).toBe(0);
+  });
+
+  test("UI: Button „Alle abhaken“ mit Bestätigung räumt die Liste auf", async ({ page }) => {
+    // Frischen offenen Eintrag erzeugen, damit der Button sichtbar ist.
+    await superCtx.get("/api/dev/boom");
+
+    const loginRes = await page.request.post("/api/auth/login", {
+      data: { email: superEmail, password: superPassword },
+    });
+    expect(loginRes.ok(), "UI-Login als superadmin fehlgeschlagen").toBe(true);
+
+    await page.goto("/operator-dashboard");
+
+    // Button ist nur sichtbar, solange offene Einträge existieren.
+    const resolveAllButton = page.getByTestId("button-error-resolve-all");
+    await expect(resolveAllButton).toBeVisible();
+
+    // Abbrechen im Bestätigungs-Dialog ändert nichts.
+    await resolveAllButton.click();
+    const dialog = page.getByTestId("dialog-error-resolve-all");
+    await expect(dialog).toBeVisible();
+    await page.getByTestId("button-error-resolve-all-cancel").click();
+    await expect(dialog).not.toBeVisible();
+    await expect(resolveAllButton).toBeVisible();
+
+    // Bestätigen: alle offenen Einträge werden abgehakt, der Leerzustand
+    // „Keine offenen Fehler" erscheint und der Button verschwindet.
+    await resolveAllButton.click();
+    await expect(dialog).toBeVisible();
+    await page.getByTestId("button-error-resolve-all-confirm").click();
+    await expect(dialog).not.toBeVisible();
+    await expect(page.getByTestId("text-operator-errors-empty")).toContainText(
+      "Keine offenen Fehler",
+    );
+    await expect(resolveAllButton).not.toBeVisible();
+
+    // Filter „Alle": die erledigten Einträge sind weiterhin vorhanden
+    // (Bestandsschutz — abhaken löscht nichts).
+    await page.getByTestId("button-error-filter-all").click();
+    await expect(page.getByText("· Erledigt").first()).toBeVisible();
+  });
 });

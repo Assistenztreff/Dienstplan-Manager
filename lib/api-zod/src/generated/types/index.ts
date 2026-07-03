@@ -52,6 +52,7 @@ export * from './operatorAccountAccountType';
 export * from './operatorAccountPlan';
 export * from './operatorError';
 export * from './operatorErrorLevel';
+export * from './operatorErrorsResolveAllResult';
 export * from './operatorErrorUpdate';
 export * from './operatorPlanChange';
 export * from './operatorPlanChangeNewPlan';

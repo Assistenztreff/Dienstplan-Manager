@@ -1509,6 +1509,16 @@ export const ListOperatorErrorsResponse = zod.array(ListOperatorErrorsResponseIt
 
 
 /**
+ * Setzt resolved = true für ALLE aktuell offenen Plattform-Fehler in einem Schritt (z. B. nach einem Vorfall mit vielen gleichartigen Einträgen). Erledigte Einträge bleiben erhalten; das Aufbewahrungslimit gilt unverändert.
+
+ * @summary Alle offenen Fehler-Einträge abhaken (nur superadmin)
+ */
+export const ResolveAllOperatorErrorsResponse = zod.object({
+  "resolvedCount": zod.number().describe('Anzahl der Einträge, die von offen auf erledigt gesetzt wurden')
+})
+
+
+/**
  * Setzt den Erledigt-Status eines erfassten Plattform-Fehlers. Da wiederkehrende Fehler gebündelt sind, wirkt das Abhaken auf die ganze Gruppe; tritt der Fehler danach erneut auf, gilt der Eintrag wieder als offen. Erledigte Einträge bleiben erhalten (Aufbewahrungslimit unverändert), werden im Operator-Dashboard aber ausgegraut bzw. per Filter ausgeblendet.
 
  * @summary Fehler-Eintrag als erledigt/offen markieren (nur superadmin)

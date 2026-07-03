@@ -190,6 +190,29 @@ router.get(
   },
 );
 
+// POST /operator/errors/resolve-all — ALLE offenen Fehler-Eintraege in einem
+// Schritt abhaken (z. B. nach einem Vorfall mit vielen gleichartigen
+// Eintraegen). Erledigte Eintraege bleiben unveraendert; das
+// Aufbewahrungslimit (lib/platform-errors.ts) gilt weiterhin.
+router.post(
+  "/operator/errors/resolve-all",
+  requireSuperadmin,
+  async (req, res): Promise<void> => {
+    const updated = await db
+      .update(platformErrorsTable)
+      .set({ resolved: true })
+      .where(eq(platformErrorsTable.resolved, false))
+      .returning({ id: platformErrorsTable.id });
+
+    req.log.info(
+      { resolvedCount: updated.length },
+      "Operator hat alle offenen Fehler abgehakt",
+    );
+    res.json({ resolvedCount: updated.length });
+    return;
+  },
+);
+
 // PATCH /operator/errors/:id — Fehler-Eintrag als erledigt abhaken bzw.
 // wieder auf offen setzen. Wirkt auf die ganze Gruppe (gebuendelte
 // Wiederholungen); tritt der Fehler danach erneut auf, setzt der Upsert in

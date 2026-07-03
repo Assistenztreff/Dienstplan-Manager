@@ -54,6 +54,7 @@ import type {
   OperatorAccount,
   OperatorError,
   OperatorErrorUpdate,
+  OperatorErrorsResolveAllResult,
   OperatorPlanChange,
   OperatorPlanUpdate,
   RegisterInput,
@@ -5071,6 +5072,78 @@ export function useListOperatorErrors<TData = Awaited<ReturnType<typeof listOper
 
 
 
+
+export const getResolveAllOperatorErrorsUrl = () => {
+
+
+
+
+  return `/api/operator/errors/resolve-all`
+}
+
+/**
+ * Setzt resolved = true für ALLE aktuell offenen Plattform-Fehler in einem Schritt (z. B. nach einem Vorfall mit vielen gleichartigen Einträgen). Erledigte Einträge bleiben erhalten; das Aufbewahrungslimit gilt unverändert.
+
+ * @summary Alle offenen Fehler-Einträge abhaken (nur superadmin)
+ */
+export const resolveAllOperatorErrors = async ( options?: RequestInit): Promise<OperatorErrorsResolveAllResult> => {
+
+  return customFetch<OperatorErrorsResolveAllResult>(getResolveAllOperatorErrorsUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getResolveAllOperatorErrorsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resolveAllOperatorErrors>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resolveAllOperatorErrors>>, TError,void, TContext> => {
+
+const mutationKey = ['resolveAllOperatorErrors'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resolveAllOperatorErrors>>, void> = () => {
+
+
+          return  resolveAllOperatorErrors(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResolveAllOperatorErrorsMutationResult = NonNullable<Awaited<ReturnType<typeof resolveAllOperatorErrors>>>
+
+    export type ResolveAllOperatorErrorsMutationError = ErrorType<void>
+
+    /**
+ * @summary Alle offenen Fehler-Einträge abhaken (nur superadmin)
+ */
+export const useResolveAllOperatorErrors = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resolveAllOperatorErrors>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resolveAllOperatorErrors>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getResolveAllOperatorErrorsMutationOptions(options));
+    }
 
 export const getUpdateOperatorErrorUrl = (id: number,) => {
 

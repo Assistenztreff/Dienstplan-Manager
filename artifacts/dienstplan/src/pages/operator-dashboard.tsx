@@ -35,6 +35,7 @@ import {
   useListOperatorPlanChanges,
   useListOperatorErrors,
   useUpdateOperatorError,
+  useResolveAllOperatorErrors,
   getListOperatorAccountsQueryKey,
   getListOperatorPlanChangesQueryKey,
   getListOperatorErrorsQueryKey,
@@ -55,7 +56,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Users, Receipt, AlertTriangle, ShieldCheck, History, Check, Undo2 } from "lucide-react";
+import { Users, Receipt, AlertTriangle, ShieldCheck, History, Check, CheckCheck, Undo2 } from "lucide-react";
 import { readableApiError } from "@/lib/api-error";
 import { useToast } from "@/hooks/use-toast";
 
@@ -98,10 +99,37 @@ export default function OperatorDashboard() {
   const errorsQuery = useListOperatorErrors();
   const updatePlan = useUpdateOperatorAccountPlan();
   const updateError = useUpdateOperatorError();
+  const resolveAllErrors = useResolveAllOperatorErrors();
   // Filter der Fehlerliste: "open" (Default) blendet erledigte aus, "all"
   // zeigt alles (erledigte ausgegraut).
   const [errorFilter, setErrorFilter] = useState<"open" | "all">("open");
   const [pendingErrorId, setPendingErrorId] = useState<number | null>(null);
+  // Bestätigungs-Dialog vor dem Sammel-Abhaken aller offenen Fehler.
+  const [confirmResolveAllOpen, setConfirmResolveAllOpen] = useState(false);
+
+  // Alle offenen Fehler in einem Schritt abhaken (nach Bestätigung). Nach
+  // einem Vorfall mit vielen gleichartigen Einträgen erspart das das
+  // Einzel-Klicken; erledigte Einträge bleiben unverändert erhalten.
+  async function handleResolveAllErrors() {
+    try {
+      const result = await resolveAllErrors.mutateAsync();
+      await queryClient.invalidateQueries({ queryKey: getListOperatorErrorsQueryKey() });
+      setConfirmResolveAllOpen(false);
+      toast({
+        title: "Alle offenen Fehler abgehakt",
+        description:
+          result.resolvedCount === 1
+            ? "1 Eintrag wurde als erledigt markiert."
+            : `${result.resolvedCount} Einträge wurden als erledigt markiert.`,
+      });
+    } catch (err) {
+      toast({
+        title: "Abhaken fehlgeschlagen",
+        description: readableApiError(err, "Bitte erneut versuchen."),
+        variant: "destructive",
+      });
+    }
+  }
 
   // Erledigt-Status eines Fehler-Eintrags umschalten (abhaken / wieder
   // oeffnen). Serverseitig requireSuperadmin; danach Liste neu laden.
@@ -465,27 +493,43 @@ export default function OperatorDashboard() {
               <AlertTriangle className="h-5 w-5 text-brand-cyan" />
               Fehler-Tracking
             </CardTitle>
-            {/* Filter: offene (Default) / alle — erledigte werden bei "alle"
-                ausgegraut angezeigt statt ausgeblendet. */}
-            <div className="flex items-center gap-1 rounded-md border border-border/50 p-0.5">
-              <Button
-                variant={errorFilter === "open" ? "secondary" : "ghost"}
-                size="sm"
-                className="h-7 px-2.5 text-xs"
-                onClick={() => setErrorFilter("open")}
-                data-testid="button-error-filter-open"
-              >
-                Offene
-              </Button>
-              <Button
-                variant={errorFilter === "all" ? "secondary" : "ghost"}
-                size="sm"
-                className="h-7 px-2.5 text-xs"
-                onClick={() => setErrorFilter("all")}
-                data-testid="button-error-filter-all"
-              >
-                Alle
-              </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Sammel-Abhaken: nur sichtbar, wenn offene Einträge existieren.
+                  Öffnet einen Bestätigungs-Dialog vor dem Abhaken. */}
+              {(errorsQuery.data ?? []).some((e) => !e.resolved) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-2.5 text-xs"
+                  onClick={() => setConfirmResolveAllOpen(true)}
+                  data-testid="button-error-resolve-all"
+                >
+                  <CheckCheck className="mr-1 h-3.5 w-3.5" />
+                  Alle abhaken
+                </Button>
+              )}
+              {/* Filter: offene (Default) / alle — erledigte werden bei "alle"
+                  ausgegraut angezeigt statt ausgeblendet. */}
+              <div className="flex items-center gap-1 rounded-md border border-border/50 p-0.5">
+                <Button
+                  variant={errorFilter === "open" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="h-7 px-2.5 text-xs"
+                  onClick={() => setErrorFilter("open")}
+                  data-testid="button-error-filter-open"
+                >
+                  Offene
+                </Button>
+                <Button
+                  variant={errorFilter === "all" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="h-7 px-2.5 text-xs"
+                  onClick={() => setErrorFilter("all")}
+                  data-testid="button-error-filter-all"
+                >
+                  Alle
+                </Button>
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -584,6 +628,42 @@ export default function OperatorDashboard() {
           })()}
         </CardContent>
       </Card>
+
+      {/* Bestätigungs-Dialog: Sammel-Abhaken aller offenen Fehler. */}
+      <Dialog
+        open={confirmResolveAllOpen}
+        onOpenChange={(open) => {
+          if (!resolveAllErrors.isPending) setConfirmResolveAllOpen(open);
+        }}
+      >
+        <DialogContent data-testid="dialog-error-resolve-all">
+          <DialogHeader>
+            <DialogTitle>Alle offenen Fehler abhaken?</DialogTitle>
+            <DialogDescription>
+              Alle aktuell offenen Fehler-Einträge werden als erledigt markiert. Die Einträge
+              bleiben erhalten und können einzeln wieder geöffnet werden.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmResolveAllOpen(false)}
+              disabled={resolveAllErrors.isPending}
+              data-testid="button-error-resolve-all-cancel"
+            >
+              Abbrechen
+            </Button>
+            <Button
+              onClick={handleResolveAllErrors}
+              disabled={resolveAllErrors.isPending}
+              data-testid="button-error-resolve-all-confirm"
+            >
+              <CheckCheck className="mr-1 h-4 w-4" />
+              {resolveAllErrors.isPending ? "Wird abgehakt…" : "Alle abhaken"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

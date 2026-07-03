@@ -1498,6 +1498,26 @@ paths:
         "403":
           description: Keine Berechtigung (kein superadmin)
 
+  /operator/errors/resolve-all:
+    post:
+      operationId: resolveAllOperatorErrors
+      tags: [operator]
+      summary: Alle offenen Fehler-Einträge abhaken (nur superadmin)
+      description: >
+        Setzt resolved = true für ALLE aktuell offenen Plattform-Fehler in
+        einem Schritt (z. B. nach einem Vorfall mit vielen gleichartigen
+        Einträgen). Erledigte Einträge bleiben erhalten; das
+        Aufbewahrungslimit gilt unverändert.
+      responses:
+        "200":
+          description: Anzahl der abgehakten Einträge
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorErrorsResolveAllResult"
+        "403":
+          description: Keine Berechtigung (kein superadmin)
+
   /operator/errors/{id}:
     patch:
       operationId: updateOperatorError
@@ -1691,6 +1711,14 @@ components:
         resolved:
           type: boolean
           description: true = als erledigt abhaken, false = wieder auf offen setzen
+
+    OperatorErrorsResolveAllResult:
+      type: object
+      required: [resolvedCount]
+      properties:
+        resolvedCount:
+          type: integer
+          description: Anzahl der Einträge, die von offen auf erledigt gesetzt wurden
 
     UserInput:
       type: object
