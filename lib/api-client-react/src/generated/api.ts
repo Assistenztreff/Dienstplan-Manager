@@ -43,6 +43,7 @@ import type {
   HoursBalance,
   InviteResult,
   ListContractsParams,
+  ListOperatorErrorsParams,
   ListOperatorPlanChangesParams,
   ListShiftModelsParams,
   ListShiftTemplatesParams,
@@ -51,6 +52,7 @@ import type {
   ListUsersParams,
   LoginInput,
   OperatorAccount,
+  OperatorError,
   OperatorPlanChange,
   OperatorPlanUpdate,
   RegisterInput,
@@ -4971,6 +4973,92 @@ export function useListOperatorPlanChanges<TData = Awaited<ReturnType<typeof lis
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListOperatorPlanChangesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListOperatorErrorsUrl = (params?: ListOperatorErrorsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/operator/errors?${stringifiedParams}` : `/api/operator/errors`
+}
+
+/**
+ * Liefert die neuesten erfassten Serverfehler (unbehandelte 5xx-Fehler und gezielt gemeldete kritische Fehler) mit Schweregrad, Meldung, Kontext (Route) und Zeitstempel — neueste zuerst. Die Aufbewahrung ist serverseitig begrenzt.
+
+ * @summary Fehler-Tracking der Plattform (nur superadmin)
+ */
+export const listOperatorErrors = async (params?: ListOperatorErrorsParams, options?: RequestInit): Promise<OperatorError[]> => {
+
+  return customFetch<OperatorError[]>(getListOperatorErrorsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListOperatorErrorsQueryKey = (params?: ListOperatorErrorsParams,) => {
+    return [
+    `/api/operator/errors`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListOperatorErrorsQueryOptions = <TData = Awaited<ReturnType<typeof listOperatorErrors>>, TError = ErrorType<void>>(params?: ListOperatorErrorsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOperatorErrors>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListOperatorErrorsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOperatorErrors>>> = ({ signal }) => listOperatorErrors(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listOperatorErrors>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListOperatorErrorsQueryResult = NonNullable<Awaited<ReturnType<typeof listOperatorErrors>>>
+export type ListOperatorErrorsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Fehler-Tracking der Plattform (nur superadmin)
+ */
+
+export function useListOperatorErrors<TData = Awaited<ReturnType<typeof listOperatorErrors>>, TError = ErrorType<void>>(
+ params?: ListOperatorErrorsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOperatorErrors>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListOperatorErrorsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -141,6 +141,23 @@ export interface OperatorPlanChange {
   createdAt: string;
 }
 
+export type OperatorErrorLevel = typeof OperatorErrorLevel[keyof typeof OperatorErrorLevel];
+
+
+export const OperatorErrorLevel = {
+  error: 'error',
+  warning: 'warning',
+} as const;
+
+export interface OperatorError {
+  id: number;
+  level: OperatorErrorLevel;
+  message: string;
+  /** Route/Stelle, an der der Fehler auftrat (z. B. "GET /api/shifts") */
+  context: string;
+  createdAt: string;
+}
+
 export type UserInputRole = typeof UserInputRole[keyof typeof UserInputRole];
 
 
@@ -982,6 +999,14 @@ export type ChangePassword200 = {
 };
 
 export type ListOperatorPlanChangesParams = {
+/**
+ * @minimum 1
+ * @maximum 200
+ */
+limit?: number;
+};
+
+export type ListOperatorErrorsParams = {
 /**
  * @minimum 1
  * @maximum 200

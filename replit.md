@@ -25,12 +25,12 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
 - `pnpm --filter @workspace/scripts run setup-test-db` — Test-DB anlegen/aktualisieren (idempotent)
 - `pnpm --filter @workspace/scripts run verify-test-db-cleanup` — beweist die Selbstheilung der Test-DB: seedet einen Zombie-Konto-Baum in die `_test`-DB, führt `cleanup-test-accounts` aus und asserted, dass nur der Seed-Admin übrig bleibt; FK-Wächter schlägt fehl, wenn eine neue team-gebundene Tabelle (FK auf `teams.id` ohne Cascade) nicht in `TEAM_BOUND_TABLES` (`scripts/src/lib/account-tree.ts`) abgedeckt ist
 - `pnpm --filter @workspace/dienstplan run test:e2e` — Playwright gegen **isolierten Test-Stack** (API 8099 + Vite 5199, eigene DB `<dbname>_test`, via `setup-test-db` auto-provisioniert); Dev-DB wird nicht berührt. `setup-test-db` läuft automatisch beim Laden der Playwright-Config — gilt auch für Einzel-Specs via `pnpm exec playwright test <name>`; Skip via `E2E_SKIP_DB_SETUP=1`. Override via `E2E_BASE_URL` (überspringt Setup + Stack). Test-Konten (`e2e.*@dienstplan.test`) räumt `cleanup-test-accounts` vor/nach jedem Lauf ab — Test-E-Mails MÜSSEN dieses Muster behalten.
-- Required env: `DATABASE_URL`, `SESSION_SECRET`
+- Required env: `DATABASE_URL`, `SESSION_SECRET`. Optional: `RESEND_API_KEY` (Warn-Mails), `ERROR_ALERT_EMAIL`, `ERROR_ALERT_FROM`
 
 ## Where things live
 
 - `lib/api-spec/openapi.yaml` — Vertrags-Quelle
-- `lib/db/src/schema/` — Drizzle-Tabellen (users, teams, team_members, contracts, shifts, shift_models, time_tracking, allowance_settings, plan_changes, session)
+- `lib/db/src/schema/` — Drizzle-Tabellen (users, teams, team_members, contracts, shifts, shift_models, time_tracking, allowance_settings, plan_changes, platform_errors, session)
 - `lib/entitlements/src/index.ts` — Free/Premium-Config (Single Source)
 - `artifacts/api-server/src/routes/` — Express-Routen; `src/lib/` — `plan.ts` (Plan-Enforcement), `teams.ts`, `default-shift-models.ts`
 - `artifacts/dienstplan/src/pages/` — React-Seiten
@@ -107,10 +107,12 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
 
 ## Operator-Dashboard & superadmin
 
-- `pages/operator-dashboard.tsx`: interne Betreiber-Konsole. Bereich 1 (Nutzer-Monitoring + manuelle Premium-Freischaltung) ist LIVE angebunden; Lexware-Buchungs-Log und Fehler-Tracking bleiben Platzhalter.
+- `pages/operator-dashboard.tsx`: interne Betreiber-Konsole. Nutzer-Monitoring + Premium-Freischaltung und Fehler-Tracking sind LIVE angebunden; Lexware-Buchungs-Log bleibt Platzhalter (sichtbar als „Demo-Daten" markiert, Badge `badge-lexware-demo`).
 - **Serverseitige Autorisierung**: `requireSuperadmin`-Middleware (`middleware/auth.ts`, Rolle frisch aus DB — analog `requireDienstleister`) schützt alle `/api/operator/*`-Endpunkte. Admin/Assistant → 403, unauthentifiziert → 401. Frontend-Guard (`role === "superadmin"` in App.tsx) ist reine UX.
 - **Operator-Endpunkte** (`routes/operator.ts`): `GET /operator/accounts` (alle Admin-Konten plattformweit mit Team-/Assistenten-Aggregaten), `PATCH /operator/accounts/:id/plan` (`{plan: free|premium}`). Plan-Flip wirkt sofort, da `getUserPlan` frisch liest. Ziel muss Rolle `admin` haben (sonst 404) — nur Admin-Konten sind zahlende Konten.
 - **Plan-Audit-Log**: Jeder Plan-Flip schreibt append-only in `plan_changes` (`lib/db/src/schema/plan_changes.ts`: Konto, alter/neuer Plan, ausführender superadmin aus `req.session.userId`, Zeitstempel, optionale `note`; auch No-Op-Flips werden protokolliert). `note` = Rechnungs-/Zahlungsreferenz (z. B. Lexware-Belegnummer), optional in `OperatorPlanUpdate` (max. 500 Zeichen, Whitespace-only → NULL); erfasst im Bestätigungs-Dialog vor dem Plan-Flip im Operator-Dashboard, angezeigt als Spalte „Referenz / Notiz" im Protokoll. `GET /operator/plan-changes?limit=` (Default 50, max 200, neueste zuerst, Doppel-Join auf users via Drizzle-`alias`). Anzeige als Karte „Plan-Änderungsprotokoll" im Operator-Dashboard; der Plan-Toggle invalidiert beide Queries.
+- **Fehler-Tracking**: Zentraler Express-Error-Handler (`app.ts`, ganz am Ende) fängt unbehandelte Fehler, loggt, antwortet 500-JSON (ohne Details) und persistiert via `recordPlatformError` (`lib/platform-errors.ts`) in `platform_errors` (Level error|warning, Meldung, Kontext=Route, Zeitstempel; Aufbewahrung auf die 500 neuesten begrenzt). Helfer kann auch aus try/catch-Stellen gerufen werden. `GET /operator/errors?limit=` (Default 50, max 200, neueste zuerst, requireSuperadmin) → Karte „Fehler-Tracking" (Leerzustand „Keine Fehler im Betrieb"). Dev-Route `GET /api/dev/boom` (nur NODE_ENV≠production, `routes/health.ts`) löst absichtlich einen 500er aus. E2E: `dienstplan-operator-fehler-tracking.spec.ts`.
+- **Warn-E-Mail bei Level error**: `lib/alert-mailer.ts` sendet via Resend-API (fetch, fire-and-forget, wirft NIE — Versandfehler beeinträchtigen keinen Request). Ohne `RESEND_API_KEY` (Secret, optional) wird der Versand mit Log-Warnung übersprungen (graceful degradation). Empfänger: `ERROR_ALERT_EMAIL`, sonst E-Mail des ersten superadmin aus der DB; Absender: `ERROR_ALERT_FROM`, sonst onboarding@resend.dev. Drosselung: `AlertThrottle` (15 min pro Fehler-Schlüssel Meldung+Kontext, max 200 Schlüssel) — Unit-Tests in `platform-errors.test.ts`.
 - Zugang: Route `/operator-dashboard` nur bei `role === "superadmin"`; versteckter Link im Footer-Platzhalter. `superadmin` wird weiterhin NUR direkt in der DB vergeben.
 
 ## PWA & Plattform-Einbettung (iframe)

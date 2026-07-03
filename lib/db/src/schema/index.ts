@@ -8,5 +8,6 @@ export * from "./shift_templates";
 export * from "./allowances";
 export * from "./branding";
 export * from "./plan_changes";
+export * from "./platform_errors";
 export * from "./time_tracking";
 export * from "./session";

@@ -7,13 +7,14 @@
 // ---------------------------------------------------------------------------
 
 import { Router } from "express";
-import { db, usersTable, planChangesTable } from "@workspace/db";
+import { db, usersTable, planChangesTable, platformErrorsTable } from "@workspace/db";
 import { eq, sql, asc, desc } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
   UpdateOperatorAccountPlanParams,
   UpdateOperatorAccountPlanBody,
   ListOperatorPlanChangesQueryParams,
+  ListOperatorErrorsQueryParams,
 } from "@workspace/api-zod";
 import { requireSuperadmin } from "../middleware/auth";
 
@@ -146,6 +147,38 @@ router.get(
       .limit(limit);
 
     res.json(changes);
+    return;
+  },
+);
+
+// GET /operator/errors — Fehler-Tracking der Plattform (neueste zuerst).
+// Befuellt vom zentralen Express-Error-Handler (app.ts) bzw. per
+// recordPlatformError aus try/catch-Stellen; Aufbewahrung serverseitig
+// begrenzt (Pruning in lib/platform-errors.ts).
+router.get(
+  "/operator/errors",
+  requireSuperadmin,
+  async (req, res): Promise<void> => {
+    const queryResult = ListOperatorErrorsQueryParams.safeParse(req.query);
+    if (!queryResult.success) {
+      res.status(400).json({ error: "Ungültige Parameter" });
+      return;
+    }
+    const limit = queryResult.data.limit ?? 50;
+
+    const errors = await db
+      .select({
+        id: platformErrorsTable.id,
+        level: platformErrorsTable.level,
+        message: platformErrorsTable.message,
+        context: platformErrorsTable.context,
+        createdAt: platformErrorsTable.createdAt,
+      })
+      .from(platformErrorsTable)
+      .orderBy(desc(platformErrorsTable.createdAt), desc(platformErrorsTable.id))
+      .limit(limit);
+
+    res.json(errors);
     return;
   },
 );

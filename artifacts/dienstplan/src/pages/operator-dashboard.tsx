@@ -14,9 +14,14 @@
 // Die Wirkung ist sofort, da die Plan-Durchsetzung (lib/plan.ts) users.plan
 // pro Request frisch aus der DB liest.
 //
-// Bereiche 2+3 bleiben Platzhalter mit API-Andockpunkten:
-//   2. Lexware-Buchungs-Log (Rechnungsentwuerfe / Zahlungseingaenge)
-//   3. Fehler-Tracking (Plattform-Health)
+// Bereich 3 (Fehler-Tracking) ist LIVE angebunden:
+//   GET /api/operator/errors — echte Serverfehler aus platform_errors,
+//   befuellt vom zentralen Express-Error-Handler (recordPlatformError).
+//   Bei Level "error" geht zusaetzlich eine gedrosselte Warn-E-Mail an den
+//   Betreiber (lib/alert-mailer.ts im api-server).
+//
+// Bereich 2 (Lexware-Buchungs-Log) bleibt Platzhalter mit DEMO-DATEN
+// (deutlich gekennzeichnet), bis die echte Lexware-Anbindung kommt.
 //
 // Billing-Hintergrund: Abo-Buchungen erzeugen Rechnungsentwuerfe in Lexware.
 // Die Premium-Freischaltung erfolgt MANUELL hier im Dashboard, sobald die
@@ -28,6 +33,7 @@ import {
   useListOperatorAccounts,
   useUpdateOperatorAccountPlan,
   useListOperatorPlanChanges,
+  useListOperatorErrors,
   getListOperatorAccountsQueryKey,
   getListOperatorPlanChangesQueryKey,
   type OperatorAccount,
@@ -51,7 +57,7 @@ import { Users, Receipt, AlertTriangle, ShieldCheck, History } from "lucide-reac
 import { readableApiError } from "@/lib/api-error";
 import { useToast } from "@/hooks/use-toast";
 
-// --- Platzhalter-Daten (nur Bereiche 2+3) ----------------------------------
+// --- Platzhalter-Daten (nur Bereich 2: Lexware, als Demo gekennzeichnet) ---
 
 type LexwareBooking = {
   id: string;
@@ -65,19 +71,6 @@ type LexwareBooking = {
 const PLACEHOLDER_BOOKINGS: LexwareBooking[] = [
   { id: "LX-2026-0042", accountName: "Pflegedienst Nord GmbH", type: "Zahlungseingang", amount: "49,00 €", date: "2026-06-28", status: "bezahlt" },
   { id: "LX-2026-0041", accountName: "Maria Beispiel", type: "Rechnungsentwurf", amount: "19,00 €", date: "2026-06-27", status: "offen" },
-];
-
-type PlatformError = {
-  id: string;
-  level: "error" | "warning";
-  message: string;
-  context: string;
-  timestamp: string;
-};
-
-const PLACEHOLDER_ERRORS: PlatformError[] = [
-  { id: "e1", level: "error", message: "Lexware-API Timeout beim Erstellen eines Rechnungsentwurfs", context: "billing/createDraft", timestamp: "2026-06-29 14:22" },
-  { id: "e2", level: "warning", message: "SSO-Token-Validierung verzoegert (> 2s)", context: "auth/sso", timestamp: "2026-06-29 09:10" },
 ];
 
 function planBadge(plan: "free" | "premium") {
@@ -100,6 +93,7 @@ export default function OperatorDashboard() {
 
   const accountsQuery = useListOperatorAccounts();
   const planChangesQuery = useListOperatorPlanChanges();
+  const errorsQuery = useListOperatorErrors();
   const updatePlan = useUpdateOperatorAccountPlan();
 
   function openConfirmDialog(account: OperatorAccount) {
@@ -387,7 +381,14 @@ export default function OperatorDashboard() {
           <CardTitle className="flex items-center gap-2 text-lg">
             <Receipt className="h-5 w-5 text-brand-cyan" />
             Lexware-Buchungs-Log
+            <Badge variant="outline" className="ml-1 border-amber-400 bg-amber-50 text-amber-700" data-testid="badge-lexware-demo">
+              Demo-Daten
+            </Badge>
           </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Beispieldaten zur Veranschaulichung — die echte Lexware-Anbindung
+            folgt. Diese Einträge sind KEINE realen Buchungen.
+          </p>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -427,11 +428,11 @@ export default function OperatorDashboard() {
       </Card>
 
       {/* ----------------------------------------------------------------- */}
-      {/* Bereich 3: Fehler-Tracking                                         */}
+      {/* Bereich 3: Fehler-Tracking (LIVE)                                  */}
       {/* ----------------------------------------------------------------- */}
-      {/* API-ANDOCKPUNKT: Plattform-Fehler/Health aus zentralem Logging,    */}
-      {/* z. B. GET /api/operator/errors (oder Anbindung an einen externen    */}
-      {/* Error-Tracker). Dient der schnellen Reaktion auf Stoerungen.        */}
+      {/* Echte Serverfehler aus platform_errors (GET /api/operator/errors),  */}
+      {/* befuellt vom zentralen Express-Error-Handler. Bei Level "error"     */}
+      {/* geht zusaetzlich eine gedrosselte Warn-E-Mail an den Betreiber.     */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -440,22 +441,47 @@ export default function OperatorDashboard() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {PLACEHOLDER_ERRORS.map((e) => (
-            <div
-              key={e.id}
-              className="flex items-start gap-3 rounded-md border border-border/40 p-3"
-            >
-              <Badge variant={e.level === "error" ? "destructive" : "outline"} className="mt-0.5 shrink-0">
-                {e.level === "error" ? "Fehler" : "Warnung"}
-              </Badge>
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground">{e.message}</p>
-                <p className="text-xs text-muted-foreground">
-                  <span className="font-mono">{e.context}</span> · {e.timestamp}
-                </p>
-              </div>
+          {errorsQuery.isLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-14 w-full" />
+              <Skeleton className="h-14 w-full" />
             </div>
-          ))}
+          ) : errorsQuery.isError ? (
+            <p className="text-sm text-destructive" data-testid="text-operator-errors-error">
+              Fehlerliste konnte nicht geladen werden:{" "}
+              {readableApiError(errorsQuery.error, "Unbekannter Fehler.")}
+            </p>
+          ) : (errorsQuery.data ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground" data-testid="text-operator-errors-empty">
+              Keine Fehler im Betrieb — alles läuft rund.
+            </p>
+          ) : (
+            (errorsQuery.data ?? []).map((e) => (
+              <div
+                key={e.id}
+                className="flex items-start gap-3 rounded-md border border-border/40 p-3"
+                data-testid={`row-operator-error-${e.id}`}
+              >
+                <Badge variant={e.level === "error" ? "destructive" : "outline"} className="mt-0.5 shrink-0">
+                  {e.level === "error" ? "Fehler" : "Warnung"}
+                </Badge>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground break-words">{e.message}</p>
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-mono">{e.context}</span> ·{" "}
+                    {new Date(e.createdAt).toLocaleString("de-DE", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}{" "}
+                    Uhr
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
         </CardContent>
       </Card>
     </div>

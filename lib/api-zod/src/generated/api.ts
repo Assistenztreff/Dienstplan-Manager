@@ -1481,3 +1481,27 @@ export const ListOperatorPlanChangesResponseItem = zod.object({
 export const ListOperatorPlanChangesResponse = zod.array(ListOperatorPlanChangesResponseItem)
 
 
+/**
+ * Liefert die neuesten erfassten Serverfehler (unbehandelte 5xx-Fehler und gezielt gemeldete kritische Fehler) mit Schweregrad, Meldung, Kontext (Route) und Zeitstempel — neueste zuerst. Die Aufbewahrung ist serverseitig begrenzt.
+
+ * @summary Fehler-Tracking der Plattform (nur superadmin)
+ */
+export const listOperatorErrorsQueryLimitDefault = 50;
+export const listOperatorErrorsQueryLimitMax = 200;
+
+
+
+export const ListOperatorErrorsQueryParams = zod.object({
+  "limit": zod.coerce.number().min(1).max(listOperatorErrorsQueryLimitMax).default(listOperatorErrorsQueryLimitDefault)
+})
+
+export const ListOperatorErrorsResponseItem = zod.object({
+  "id": zod.number(),
+  "level": zod.enum(['error', 'warning']),
+  "message": zod.string(),
+  "context": zod.string().describe('Route\/Stelle, an der der Fehler auftrat (z. B. \"GET \/api\/shifts\")'),
+  "createdAt": zod.coerce.date()
+})
+export const ListOperatorErrorsResponse = zod.array(ListOperatorErrorsResponseItem)
+
+

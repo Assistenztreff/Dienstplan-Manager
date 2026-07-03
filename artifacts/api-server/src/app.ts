@@ -1,10 +1,16 @@
-import express, { type Express } from "express";
+import express, {
+  type Express,
+  type Request,
+  type Response,
+  type NextFunction,
+} from "express";
 import cors from "cors";
 import session from "express-session";
 import ConnectPgSimple from "connect-pg-simple";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { recordPlatformError } from "./lib/platform-errors";
 
 const PgStore = ConnectPgSimple(session);
 
@@ -129,5 +135,25 @@ app.use("/api", (req, res, next) => {
 });
 
 app.use("/api", router);
+
+// ---------------------------------------------------------------------------
+// Zentraler Error-Handler: JEDER unbehandelte Fehler (Express 5 leitet auch
+// abgelehnte Promises aus async-Handlern hierher) wird einheitlich geloggt,
+// als 500-JSON beantwortet und im Fehler-Tracking (platform_errors)
+// persistiert — inkl. gedrosselter Warn-E-Mail an den Betreiber. Die
+// Erfassung laeuft fire-and-forget und wirft nie, damit die Antwort an den
+// Client nie am Tracking scheitert.
+// ---------------------------------------------------------------------------
+app.use(
+  (err: unknown, req: Request, res: Response, _next: NextFunction): void => {
+    const message = err instanceof Error ? err.message : String(err);
+    const context = `${req.method} ${req.originalUrl?.split("?")[0] ?? req.path}`;
+    (req.log ?? logger).error({ err }, "Unbehandelter Serverfehler");
+    void recordPlatformError({ level: "error", message, context });
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Interner Serverfehler" });
+    }
+  },
+);
 
 export default app;
