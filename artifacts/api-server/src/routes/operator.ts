@@ -15,6 +15,8 @@ import {
   UpdateOperatorAccountPlanBody,
   ListOperatorPlanChangesQueryParams,
   ListOperatorErrorsQueryParams,
+  UpdateOperatorErrorParams,
+  UpdateOperatorErrorBody,
 } from "@workspace/api-zod";
 import { requireSuperadmin } from "../middleware/auth";
 
@@ -172,6 +174,7 @@ router.get(
         level: platformErrorsTable.level,
         message: platformErrorsTable.message,
         context: platformErrorsTable.context,
+        resolved: platformErrorsTable.resolved,
         createdAt: platformErrorsTable.createdAt,
       })
       .from(platformErrorsTable)
@@ -179,6 +182,49 @@ router.get(
       .limit(limit);
 
     res.json(errors);
+    return;
+  },
+);
+
+// PATCH /operator/errors/:id — Fehler-Eintrag als erledigt abhaken bzw.
+// wieder auf offen setzen. Erledigte Eintraege bleiben erhalten (das
+// Aufbewahrungslimit in lib/platform-errors.ts gilt unveraendert), werden im
+// Dashboard aber ausgegraut bzw. per Filter ausgeblendet.
+router.patch(
+  "/operator/errors/:id",
+  requireSuperadmin,
+  async (req, res): Promise<void> => {
+    const paramsResult = UpdateOperatorErrorParams.safeParse(req.params);
+    if (!paramsResult.success) {
+      res.status(400).json({ error: "Ungültige ID" });
+      return;
+    }
+    const bodyResult = UpdateOperatorErrorBody.safeParse(req.body ?? {});
+    if (!bodyResult.success) {
+      res.status(400).json({ error: "Ungültige Eingabe" });
+      return;
+    }
+    const { id } = paramsResult.data;
+    const { resolved } = bodyResult.data;
+
+    const [updated] = await db
+      .update(platformErrorsTable)
+      .set({ resolved })
+      .where(eq(platformErrorsTable.id, id))
+      .returning({
+        id: platformErrorsTable.id,
+        level: platformErrorsTable.level,
+        message: platformErrorsTable.message,
+        context: platformErrorsTable.context,
+        resolved: platformErrorsTable.resolved,
+        createdAt: platformErrorsTable.createdAt,
+      });
+    if (!updated) {
+      res.status(404).json({ error: "Fehler-Eintrag nicht gefunden" });
+      return;
+    }
+
+    res.json(updated);
     return;
   },
 );

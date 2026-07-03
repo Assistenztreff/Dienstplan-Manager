@@ -1500,8 +1500,32 @@ export const ListOperatorErrorsResponseItem = zod.object({
   "level": zod.enum(['error', 'warning']),
   "message": zod.string(),
   "context": zod.string().describe('Route\/Stelle, an der der Fehler auftrat (z. B. \"GET \/api\/shifts\")'),
+  "resolved": zod.boolean().describe('Vom Betreiber als erledigt abgehakt'),
   "createdAt": zod.coerce.date()
 })
 export const ListOperatorErrorsResponse = zod.array(ListOperatorErrorsResponseItem)
+
+
+/**
+ * Setzt den Erledigt-Status eines erfassten Plattform-Fehlers. Erledigte Einträge bleiben erhalten (Aufbewahrungslimit unverändert), werden im Operator-Dashboard aber ausgegraut bzw. per Filter ausgeblendet.
+
+ * @summary Fehler-Eintrag als erledigt/offen markieren (nur superadmin)
+ */
+export const UpdateOperatorErrorParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateOperatorErrorBody = zod.object({
+  "resolved": zod.boolean().describe('true = als erledigt abhaken, false = wieder auf offen setzen')
+})
+
+export const UpdateOperatorErrorResponse = zod.object({
+  "id": zod.number(),
+  "level": zod.enum(['error', 'warning']),
+  "message": zod.string(),
+  "context": zod.string().describe('Route\/Stelle, an der der Fehler auftrat (z. B. \"GET \/api\/shifts\")'),
+  "resolved": zod.boolean().describe('Vom Betreiber als erledigt abgehakt'),
+  "createdAt": zod.coerce.date()
+})
 
 

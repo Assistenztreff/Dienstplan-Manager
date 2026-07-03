@@ -39,6 +39,7 @@ interface OperatorErrorRow {
   level: "error" | "warning";
   message: string;
   context: string | null;
+  resolved: boolean;
   createdAt: string;
 }
 
@@ -120,10 +121,51 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
     );
     expect(entry, "Ausgelöster Fehler fehlt in /api/operator/errors").toBeTruthy();
     expect(entry!.level).toBe("error");
+    expect(entry!.resolved, "Neue Fehler starten als offen").toBe(false);
     const createdAt = new Date(entry!.createdAt).getTime();
     expect(Number.isNaN(createdAt), "createdAt muss ein Datum sein").toBe(false);
 
     recordedErrorId = entry!.id;
+  });
+
+  test("API: Fehler abhaken und wieder öffnen (PATCH), nur superadmin", async () => {
+    expect(recordedErrorId, "API-Test muss vorher gelaufen sein").toBeGreaterThan(0);
+
+    // Abhaken …
+    const resolveRes = await superCtx.patch(
+      `/api/operator/errors/${recordedErrorId}`,
+      { data: { resolved: true } },
+    );
+    expect(resolveRes.status()).toBe(200);
+    const resolvedRow = (await resolveRes.json()) as OperatorErrorRow;
+    expect(resolvedRow.resolved).toBe(true);
+
+    // … Status ist in der Liste sichtbar …
+    const listRes = await superCtx.get("/api/operator/errors");
+    const errors = (await listRes.json()) as OperatorErrorRow[];
+    expect(errors.find((e) => e.id === recordedErrorId)?.resolved).toBe(true);
+
+    // … und wieder öffnen (für den UI-Test unten, der mit einem OFFENEN
+    // Eintrag startet).
+    const reopenRes = await superCtx.patch(
+      `/api/operator/errors/${recordedErrorId}`,
+      { data: { resolved: false } },
+    );
+    expect(reopenRes.status()).toBe(200);
+    expect(((await reopenRes.json()) as OperatorErrorRow).resolved).toBe(false);
+
+    // Zugriffsschutz: normaler Admin darf NICHT abhaken (403), unbekannte
+    // ID liefert 404.
+    const adminPatch = await admin.ctx.patch(
+      `/api/operator/errors/${recordedErrorId}`,
+      { data: { resolved: true } },
+    );
+    expect(adminPatch.status(), "Admin darf Fehler nicht abhaken").toBe(403);
+
+    const missingPatch = await superCtx.patch("/api/operator/errors/999999", {
+      data: { resolved: true },
+    });
+    expect(missingPatch.status()).toBe(404);
   });
 
   test("API: Zugriffsschutz — admin 403, anonym 401", async () => {
@@ -162,5 +204,23 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
 
     // … und die Lexware-Karte ist ehrlich als Demo-Daten gekennzeichnet.
     await expect(page.getByTestId("badge-lexware-demo")).toBeVisible();
+
+    // --- Abhaken-Flow: Eintrag als erledigt markieren ---
+    // Standard-Filter „Offene": nach dem Abhaken verschwindet die Zeile.
+    await row.getByTestId(`button-error-toggle-${recordedErrorId}`).click();
+    await expect(row).not.toBeVisible();
+
+    // Filter „Alle": erledigter Eintrag ist ausgegraut sichtbar (Text
+    // „Erledigt") und lässt sich wieder öffnen.
+    await page.getByTestId("button-error-filter-all").click();
+    await expect(row).toBeVisible();
+    await expect(row).toContainText("Erledigt");
+
+    await row.getByTestId(`button-error-toggle-${recordedErrorId}`).click();
+    await expect(row).not.toContainText("· Erledigt");
+
+    // Zurück auf „Offene": der wieder geöffnete Eintrag ist dort sichtbar.
+    await page.getByTestId("button-error-filter-open").click();
+    await expect(row).toBeVisible();
   });
 });

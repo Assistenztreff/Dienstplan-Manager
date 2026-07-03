@@ -34,8 +34,10 @@ import {
   useUpdateOperatorAccountPlan,
   useListOperatorPlanChanges,
   useListOperatorErrors,
+  useUpdateOperatorError,
   getListOperatorAccountsQueryKey,
   getListOperatorPlanChangesQueryKey,
+  getListOperatorErrorsQueryKey,
   type OperatorAccount,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -53,7 +55,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Users, Receipt, AlertTriangle, ShieldCheck, History } from "lucide-react";
+import { Users, Receipt, AlertTriangle, ShieldCheck, History, Check, Undo2 } from "lucide-react";
 import { readableApiError } from "@/lib/api-error";
 import { useToast } from "@/hooks/use-toast";
 
@@ -95,6 +97,29 @@ export default function OperatorDashboard() {
   const planChangesQuery = useListOperatorPlanChanges();
   const errorsQuery = useListOperatorErrors();
   const updatePlan = useUpdateOperatorAccountPlan();
+  const updateError = useUpdateOperatorError();
+  // Filter der Fehlerliste: "open" (Default) blendet erledigte aus, "all"
+  // zeigt alles (erledigte ausgegraut).
+  const [errorFilter, setErrorFilter] = useState<"open" | "all">("open");
+  const [pendingErrorId, setPendingErrorId] = useState<number | null>(null);
+
+  // Erledigt-Status eines Fehler-Eintrags umschalten (abhaken / wieder
+  // oeffnen). Serverseitig requireSuperadmin; danach Liste neu laden.
+  async function handleToggleErrorResolved(errorId: number, resolved: boolean) {
+    setPendingErrorId(errorId);
+    try {
+      await updateError.mutateAsync({ id: errorId, data: { resolved } });
+      await queryClient.invalidateQueries({ queryKey: getListOperatorErrorsQueryKey() });
+    } catch (err) {
+      toast({
+        title: "Status konnte nicht geändert werden",
+        description: readableApiError(err, "Bitte erneut versuchen."),
+        variant: "destructive",
+      });
+    } finally {
+      setPendingErrorId(null);
+    }
+  }
 
   function openConfirmDialog(account: OperatorAccount) {
     setNote("");
@@ -435,10 +460,34 @@ export default function OperatorDashboard() {
       {/* geht zusaetzlich eine gedrosselte Warn-E-Mail an den Betreiber.     */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <AlertTriangle className="h-5 w-5 text-brand-cyan" />
-            Fehler-Tracking
-          </CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <AlertTriangle className="h-5 w-5 text-brand-cyan" />
+              Fehler-Tracking
+            </CardTitle>
+            {/* Filter: offene (Default) / alle — erledigte werden bei "alle"
+                ausgegraut angezeigt statt ausgeblendet. */}
+            <div className="flex items-center gap-1 rounded-md border border-border/50 p-0.5">
+              <Button
+                variant={errorFilter === "open" ? "secondary" : "ghost"}
+                size="sm"
+                className="h-7 px-2.5 text-xs"
+                onClick={() => setErrorFilter("open")}
+                data-testid="button-error-filter-open"
+              >
+                Offene
+              </Button>
+              <Button
+                variant={errorFilter === "all" ? "secondary" : "ghost"}
+                size="sm"
+                className="h-7 px-2.5 text-xs"
+                onClick={() => setErrorFilter("all")}
+                data-testid="button-error-filter-all"
+              >
+                Alle
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
           {errorsQuery.isLoading ? (
@@ -451,22 +500,40 @@ export default function OperatorDashboard() {
               Fehlerliste konnte nicht geladen werden:{" "}
               {readableApiError(errorsQuery.error, "Unbekannter Fehler.")}
             </p>
-          ) : (errorsQuery.data ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground" data-testid="text-operator-errors-empty">
-              Keine Fehler im Betrieb — alles läuft rund.
-            </p>
-          ) : (
-            (errorsQuery.data ?? []).map((e) => (
+          ) : (() => {
+            const allErrors = errorsQuery.data ?? [];
+            const visibleErrors =
+              errorFilter === "open" ? allErrors.filter((e) => !e.resolved) : allErrors;
+            if (visibleErrors.length === 0) {
+              // Leerzustand greift auch, wenn alle Fehler erledigt sind
+              // (Filter "Offene"). Bei "Alle" nur, wenn wirklich nichts da ist.
+              return (
+                <p className="text-sm text-muted-foreground" data-testid="text-operator-errors-empty">
+                  {allErrors.length === 0
+                    ? "Keine Fehler im Betrieb — alles läuft rund."
+                    : "Keine offenen Fehler — alle Einträge sind erledigt."}
+                </p>
+              );
+            }
+            return visibleErrors.map((e) => (
               <div
                 key={e.id}
-                className="flex items-start gap-3 rounded-md border border-border/40 p-3"
+                className={`flex items-start gap-3 rounded-md border border-border/40 p-3 ${
+                  e.resolved ? "opacity-50" : ""
+                }`}
                 data-testid={`row-operator-error-${e.id}`}
               >
                 <Badge variant={e.level === "error" ? "destructive" : "outline"} className="mt-0.5 shrink-0">
                   {e.level === "error" ? "Fehler" : "Warnung"}
                 </Badge>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground break-words">{e.message}</p>
+                <div className="min-w-0 flex-1">
+                  <p
+                    className={`text-sm font-medium break-words ${
+                      e.resolved ? "text-muted-foreground line-through" : "text-foreground"
+                    }`}
+                  >
+                    {e.message}
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     <span className="font-mono">{e.context}</span> ·{" "}
                     {new Date(e.createdAt).toLocaleString("de-DE", {
@@ -477,11 +544,33 @@ export default function OperatorDashboard() {
                       minute: "2-digit",
                     })}{" "}
                     Uhr
+                    {e.resolved ? " · Erledigt" : ""}
                   </p>
                 </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 shrink-0 px-2 text-xs"
+                  disabled={pendingErrorId === e.id}
+                  onClick={() => handleToggleErrorResolved(e.id, !e.resolved)}
+                  data-testid={`button-error-toggle-${e.id}`}
+                  title={e.resolved ? "Wieder auf offen setzen" : "Als erledigt abhaken"}
+                >
+                  {e.resolved ? (
+                    <>
+                      <Undo2 className="mr-1 h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Wieder öffnen</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="mr-1 h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Erledigt</span>
+                    </>
+                  )}
+                </Button>
               </div>
-            ))
-          )}
+            ));
+          })()}
         </CardContent>
       </Card>
     </div>

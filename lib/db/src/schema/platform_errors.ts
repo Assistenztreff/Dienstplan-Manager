@@ -10,7 +10,14 @@
 // unbegrenzt waechst.
 // ---------------------------------------------------------------------------
 
-import { pgTable, serial, timestamp, text, pgEnum } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  serial,
+  timestamp,
+  text,
+  pgEnum,
+  boolean,
+} from "drizzle-orm/pg-core";
 
 export const platformErrorLevelEnum = pgEnum("platform_error_level", [
   "error",
@@ -23,6 +30,10 @@ export const platformErrorsTable = pgTable("platform_errors", {
   message: text("message").notNull(),
   // Kontext = Route/Stelle, z. B. "GET /api/shifts" oder "billing/createDraft"
   context: text("context").notNull(),
+  // Vom Betreiber als erledigt abgehakt (Quittierung im Operator-Dashboard).
+  // Erledigte Eintraege bleiben erhalten (Aufbewahrungslimit unveraendert),
+  // werden aber im Dashboard ausgegraut bzw. per Filter ausgeblendet.
+  resolved: boolean("resolved").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

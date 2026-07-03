@@ -13,5 +13,7 @@ export interface OperatorError {
   message: string;
   /** Route/Stelle, an der der Fehler auftrat (z. B. "GET /api/shifts") */
   context: string;
+  /** Vom Betreiber als erledigt abgehakt */
+  resolved: boolean;
   createdAt: Date;
 }

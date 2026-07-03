@@ -53,6 +53,7 @@ import type {
   LoginInput,
   OperatorAccount,
   OperatorError,
+  OperatorErrorUpdate,
   OperatorPlanChange,
   OperatorPlanUpdate,
   RegisterInput,
@@ -5070,4 +5071,78 @@ export function useListOperatorErrors<TData = Awaited<ReturnType<typeof listOper
 
 
 
+
+export const getUpdateOperatorErrorUrl = (id: number,) => {
+
+
+
+
+  return `/api/operator/errors/${id}`
+}
+
+/**
+ * Setzt den Erledigt-Status eines erfassten Plattform-Fehlers. Erledigte Einträge bleiben erhalten (Aufbewahrungslimit unverändert), werden im Operator-Dashboard aber ausgegraut bzw. per Filter ausgeblendet.
+
+ * @summary Fehler-Eintrag als erledigt/offen markieren (nur superadmin)
+ */
+export const updateOperatorError = async (id: number,
+    operatorErrorUpdate: OperatorErrorUpdate, options?: RequestInit): Promise<OperatorError> => {
+
+  return customFetch<OperatorError>(getUpdateOperatorErrorUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      operatorErrorUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateOperatorErrorMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOperatorError>>, TError,{id: number;data: BodyType<OperatorErrorUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateOperatorError>>, TError,{id: number;data: BodyType<OperatorErrorUpdate>}, TContext> => {
+
+const mutationKey = ['updateOperatorError'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateOperatorError>>, {id: number;data: BodyType<OperatorErrorUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateOperatorError(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateOperatorErrorMutationResult = NonNullable<Awaited<ReturnType<typeof updateOperatorError>>>
+    export type UpdateOperatorErrorMutationBody = BodyType<OperatorErrorUpdate>
+    export type UpdateOperatorErrorMutationError = ErrorType<void>
+
+    /**
+ * @summary Fehler-Eintrag als erledigt/offen markieren (nur superadmin)
+ */
+export const useUpdateOperatorError = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOperatorError>>, TError,{id: number;data: BodyType<OperatorErrorUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateOperatorError>>,
+        TError,
+        {id: number;data: BodyType<OperatorErrorUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateOperatorErrorMutationOptions(options));
+    }
 

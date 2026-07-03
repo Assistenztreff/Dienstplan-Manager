@@ -1496,6 +1496,41 @@ paths:
         "403":
           description: Keine Berechtigung (kein superadmin)
 
+  /operator/errors/{id}:
+    patch:
+      operationId: updateOperatorError
+      tags: [operator]
+      summary: Fehler-Eintrag als erledigt/offen markieren (nur superadmin)
+      description: >
+        Setzt den Erledigt-Status eines erfassten Plattform-Fehlers. Erledigte
+        Einträge bleiben erhalten (Aufbewahrungslimit unverändert), werden im
+        Operator-Dashboard aber ausgegraut bzw. per Filter ausgeblendet.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OperatorErrorUpdate"
+      responses:
+        "200":
+          description: Aktualisierter Fehler-Eintrag
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorError"
+        "400":
+          description: Ungültige Eingabe
+        "403":
+          description: Keine Berechtigung (kein superadmin)
+        "404":
+          description: Fehler-Eintrag nicht gefunden
+
 components:
   schemas:
     HealthStatus:
@@ -1617,7 +1652,7 @@ components:
 
     OperatorError:
       type: object
-      required: [id, level, message, context, createdAt]
+      required: [id, level, message, context, resolved, createdAt]
       properties:
         id:
           type: integer
@@ -1629,9 +1664,20 @@ components:
         context:
           type: string
           description: Route/Stelle, an der der Fehler auftrat (z. B. "GET /api/shifts")
+        resolved:
+          type: boolean
+          description: Vom Betreiber als erledigt abgehakt
         createdAt:
           type: string
           format: date-time
+
+    OperatorErrorUpdate:
+      type: object
+      required: [resolved]
+      properties:
+        resolved:
+          type: boolean
+          description: true = als erledigt abhaken, false = wieder auf offen setzen
 
     UserInput:
       type: object

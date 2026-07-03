@@ -155,7 +155,14 @@ export interface OperatorError {
   message: string;
   /** Route/Stelle, an der der Fehler auftrat (z. B. "GET /api/shifts") */
   context: string;
+  /** Vom Betreiber als erledigt abgehakt */
+  resolved: boolean;
   createdAt: string;
+}
+
+export interface OperatorErrorUpdate {
+  /** true = als erledigt abhaken, false = wieder auf offen setzen */
+  resolved: boolean;
 }
 
 export type UserInputRole = typeof UserInputRole[keyof typeof UserInputRole];
