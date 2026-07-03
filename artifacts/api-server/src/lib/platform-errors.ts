@@ -17,7 +17,21 @@ import { logger } from "./logger";
 import { sendOperatorAlertEmail } from "./alert-mailer";
 
 // Aufbewahrung: maximal so viele Eintraege behalten (aelteste fliegen raus).
-const MAX_STORED_ERRORS = 500;
+// Fuer Tests ueber die Env PLATFORM_ERRORS_MAX_STORED klein stellbar, damit
+// die Beschneidung ohne 500 echte Zeilen pruefbar ist (wird beim Modul-Load
+// gelesen; im Betrieb bleibt der Default 500).
+const DEFAULT_MAX_STORED_ERRORS = 500;
+
+function readMaxStoredErrors(): number {
+  const raw = process.env.PLATFORM_ERRORS_MAX_STORED;
+  if (raw) {
+    const n = Number(raw);
+    if (Number.isInteger(n) && n > 0) return n;
+  }
+  return DEFAULT_MAX_STORED_ERRORS;
+}
+
+export const MAX_STORED_ERRORS = readMaxStoredErrors();
 
 // Drosselung der Warn-Mails: derselbe Fehler (Kontext + Meldung) loest
 // hoechstens alle 15 Minuten eine neue Mail aus.
@@ -53,6 +67,26 @@ export class AlertThrottle {
 }
 
 const alertThrottle = new AlertThrottle();
+
+/**
+ * Beschneidet die Aufbewahrung: alles ausserhalb der N zuletzt AUFGETRETENEN
+ * Eintraege wird geloescht. Massgeblich ist das LETZTE Auftreten
+ * (last_seen_at), nicht die Erstanlage — gebuendelte Dauerbrenner bleiben so
+ * erhalten. Erledigte (resolved) Eintraege zaehlen mit und werden nicht
+ * bevorzugt behalten oder verworfen. Das Limit ist fuer Tests injizierbar.
+ */
+export async function prunePlatformErrors(
+  maxStored: number = MAX_STORED_ERRORS,
+): Promise<void> {
+  await db.execute(sql`
+    DELETE FROM platform_errors
+    WHERE id NOT IN (
+      SELECT id FROM platform_errors
+      ORDER BY last_seen_at DESC, id DESC
+      LIMIT ${maxStored}
+    )
+  `);
+}
 
 export type PlatformErrorLevel = "error" | "warning";
 
@@ -126,18 +160,9 @@ export async function recordPlatformError(
       });
     }
 
-    // Aufbewahrung begrenzen: alles ausserhalb der N zuletzt aufgetretenen
-    // Eintraege loeschen (guenstig genug, um es bei jedem Insert
-    // mitzumachen). Massgeblich ist das LETZTE Auftreten, nicht die
-    // Erstanlage — gebuendelte Dauerbrenner bleiben so erhalten.
-    await db.execute(sql`
-      DELETE FROM platform_errors
-      WHERE id NOT IN (
-        SELECT id FROM platform_errors
-        ORDER BY last_seen_at DESC, id DESC
-        LIMIT ${MAX_STORED_ERRORS}
-      )
-    `);
+    // Aufbewahrung begrenzen (guenstig genug, um es bei jedem Insert
+    // mitzumachen).
+    await prunePlatformErrors();
   } catch (err) {
     // Fehler-Tracking darf den Request nie verschlimmern.
     logger.error({ err }, "Plattform-Fehler konnte nicht gespeichert werden");
