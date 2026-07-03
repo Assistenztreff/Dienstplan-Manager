@@ -16,3 +16,10 @@ auf — der Seeder hatte die Mitgliedschaft per onConflictDoNothing neu angelegt
 Seed-/ensure-Pfade prüfen (dev-login, setup-Skripte), die denselben Zustand
 "sicherstellen". Ensure-Logik als reinen Bootstrap gestalten (nur anlegen,
 wenn noch GAR NICHTS existiert), nicht als Dauer-Reparatur.
+
+Gleiche Falle in Post-Merge-Migrationen: ein Backfill "jeder Nutzer gehört
+zum ersten Team" lief bei JEDEM Task-Merge (post-merge.sh → migrate-teams)
+und fügte alle getrennten Testkonten wieder in Team 1 ein. Backfills, die
+Zugehörigkeit "sicherstellen", müssen ebenfalls Bootstrap-Semantik haben
+(nur Nutzer OHNE jede bestehende Mitgliedschaft), und Setup-Skripte sollten
+die Ziel-Belegung am Ende fail-fast assertieren.

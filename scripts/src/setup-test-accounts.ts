@@ -177,14 +177,19 @@ async function main(): Promise<void> {
 
     // Alle Mitglieder entfernen, die KEINE Assistenten sind (fremde Admins,
     // Superadmin) — ausser Oliver selbst. Zusaetzlich den Test-Assistenten
-    // (der gehoert kuenftig ins Betreiber-Team).
+    // (der gehoert kuenftig ins Betreiber-Team) und die Mustermann-Dummys
+    // (die gehoeren ins Betreiber- bzw. Dienstleister-Team; das
+    // migrate-teams-Skript hatte sie frueher bei jedem Merge wieder in
+    // Team 1 eingefuegt).
     const removed = await client.query(
       `DELETE FROM team_members tm
         USING users u
         WHERE tm.user_id = u.id
           AND tm.team_id = $1
           AND tm.user_id <> $2
-          AND (u.role <> 'assistant' OR u.id = $3)`,
+          AND (u.role <> 'assistant'
+               OR u.id = $3
+               OR u.email LIKE 'max.mustermann%@dienstplan.local')`,
       [mainTeamId, oliver.id, assistent.id],
     );
     if (removed.rowCount) {
@@ -264,6 +269,91 @@ async function main(): Promise<void> {
       "DELETE FROM team_members WHERE user_id = $1 AND team_id <> $2",
       [assistent.id, betreiberTeamId],
     );
+
+    // ------------------------------------------------------------------
+    // Endkontrolle (Fail-fast): Ziel-Belegung aller drei Teams pruefen,
+    // BEVOR committed wird. Schlaegt eine Pruefung fehl, wird die gesamte
+    // Transaktion zurueckgerollt.
+    // ------------------------------------------------------------------
+    const errors: string[] = [];
+
+    const memberRows = async (teamId: number): Promise<{ id: number; email: string; role: string }[]> => {
+      const res = await client.query<{ id: number; email: string; role: string }>(
+        `SELECT u.id, u.email, u.role
+           FROM team_members tm JOIN users u ON u.id = tm.user_id
+          WHERE tm.team_id = $1 ORDER BY u.id`,
+        [teamId],
+      );
+      return res.rows;
+    };
+
+    // Team 1 (Oliver): exakt Oliver + die realen Assistenzkraefte. Als
+    // Whitelist dienen die Vertraege in Team 1 (jede reale Assistenzkraft
+    // hat dort einen Vertrag) — so wird auch das versehentliche VERLIEREN
+    // einer erwarteten Mitgliedschaft erkannt, nicht nur Fremdzugaenge.
+    const contractHolders = await client.query<{ user_id: number }>(
+      `SELECT DISTINCT c.user_id
+         FROM contracts c JOIN users u ON u.id = c.user_id
+        WHERE c.team_id = $1 AND u.role = 'assistant'`,
+      [mainTeamId],
+    );
+    const expectedTeam1Ids = new Set<number>([
+      oliver.id,
+      ...contractHolders.rows.map((r) => r.user_id),
+    ]);
+    const team1Members = await memberRows(mainTeamId);
+    for (const m of team1Members) {
+      if (!expectedTeam1Ids.has(m.id)) {
+        errors.push(`Team ${mainTeamId}: unerwartetes Mitglied ${m.email} (id ${m.id}, role ${m.role}).`);
+      }
+    }
+    for (const id of expectedTeam1Ids) {
+      if (!team1Members.some((m) => m.id === id)) {
+        errors.push(`Team ${mainTeamId}: erwartetes Mitglied mit id ${id} fehlt.`);
+      }
+    }
+
+    // Betreiber-Team: exakt Betreiber + Test-Assistent + Mustermann 1-4.
+    const expectBetreiber = new Set<string>([
+      EMAIL_BETREIBER,
+      EMAIL_ASSISTENT,
+      ...[1, 2, 3, 4].map((n) => `max.mustermann${n}@dienstplan.local`),
+    ]);
+    const betreiberMembers = await memberRows(betreiberTeamId);
+    for (const m of betreiberMembers) {
+      if (!expectBetreiber.has(m.email)) {
+        errors.push(`Betreiber-Team: unerwartetes Mitglied ${m.email} (id ${m.id}).`);
+      }
+    }
+    for (const email of expectBetreiber) {
+      if (!betreiberMembers.some((m) => m.email === email)) {
+        errors.push(`Betreiber-Team: Mitglied ${email} fehlt.`);
+      }
+    }
+
+    // Dienstleister-Team: exakt Dienstleister + Mustermann 5-9.
+    const expectDl = new Set<string>([
+      EMAIL_DIENSTLEISTER,
+      ...[5, 6, 7, 8, 9].map((n) => `max.mustermann${n}@dienstplan.local`),
+    ]);
+    const dlMembers = await memberRows(dlTeamId);
+    for (const m of dlMembers) {
+      if (!expectDl.has(m.email)) {
+        errors.push(`Dienstleister-Team: unerwartetes Mitglied ${m.email} (id ${m.id}).`);
+      }
+    }
+    for (const email of expectDl) {
+      if (!dlMembers.some((m) => m.email === email)) {
+        errors.push(`Dienstleister-Team: Mitglied ${email} fehlt.`);
+      }
+    }
+
+    if (errors.length > 0) {
+      throw new Error(
+        "Ziel-Belegung der Teams nicht erreicht:\n  - " + errors.join("\n  - "),
+      );
+    }
+    console.log("Endkontrolle OK: Team-Belegung entspricht dem Zielbild.");
 
     await client.query("COMMIT");
 

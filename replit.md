@@ -55,7 +55,7 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
 - **Oliver Straub** `admin@dienstplan.local` — admin, privat, **premium**. Eigentümer „Standard-Team" (Team 1): 7 reale Assistenzkräfte inkl. Personalakten, 35 Schichten, 7 Verträge, 4 Modelle.
 - **Betreiber** `betreiber@dienstplan.local` — superadmin, privat, **free**. „Betreiber-Team": Dummys Max Mustermann 1–4 + Test-Assistent, 4 Modelle, leerer Dienstplan; zusätzlich Operator-Dashboard.
 - **Test-Dienstleister** `dienstleister@dienstplan.local` — admin, dienstleister, **premium**. „Dienstleister-Team": Dummys Max Mustermann 5–9, 4 Modelle, leerer Dienstplan.
-- **Test-Assistent** `assistent@dienstplan.local` — assistant, Mitglied im Betreiber-Team (Free-Eigentümer → historyMonths 1) UND im Standard-Team (Premium-Eigentümer Oliver → Arbeitgeber-Plan-Features wie Resturlaub-Karte/calendarSync greifen), eigener Vertrag (30h/30 Urlaubstage, im Betreiber-Team).
+- **Test-Assistent** `assistent@dienstplan.local` — assistant, Mitglied NUR im Betreiber-Team (Free-Eigentümer → Free-Gates wie historyMonths 1 greifen), eigener Vertrag (30h/30 Urlaubstage). Arbeitgeber-Plan-Features (Resturlaub-Karte/calendarSync) testet man, indem der Betreiber temporär auf premium gestellt wird. `setup-test-accounts` erzwingt diese Belegung mit einer Fail-fast-Endkontrolle; `migrate-teams` fügt Nutzer mit bestehender Mitgliedschaft NICHT mehr in Team 1 ein (Bootstrap-Semantik, sonst zerstörte jeder Task-Merge die Trennung).
 - Dummys (max.mustermannN@dienstplan.local) haben kein Passwort und keine Premium-Lohndaten; Vertrag 30h/30 Urlaubstage ab 2026-01-01. Alt-Konten Maria Hoffmann/„Assistenzdienst" sind gelöscht.
 
 ## Multi-Team & Datentrennung

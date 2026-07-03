@@ -100,7 +100,15 @@ async function main() {
       `);
     }
 
-    // Mitgliedschaften: jeder Nutzer gehört zum Standard-Team
+    // Mitgliedschaften-Backfill NUR als Bootstrap fuer Alt-Daten aus der
+    // Vor-Team-Aera: ausschliesslich Nutzer, die noch in KEINEM Team Mitglied
+    // sind, werden dem ersten Team zugeordnet. WICHTIG: Frueher stand hier
+    // "jeder Nutzer gehoert zum Standard-Team" (Pruefung nur gegen das erste
+    // Team) — da dieses Skript bei JEDEM Task-Merge laeuft, hat das die per
+    // setup-test-accounts eingerichtete Team-Trennung bei jedem Merge wieder
+    // zerstoert (alle Testkonten/Dummys landeten erneut in Team 1 und sahen
+    // dort fremde Daten). Nutzer mit irgendeiner bestehenden Mitgliedschaft
+    // duerfen hier NIE zusaetzlich ins erste Team eingefuegt werden.
     await client.query(`
       INSERT INTO "team_members" ("team_id", "user_id")
       SELECT (SELECT "id" FROM "teams" ORDER BY "id" LIMIT 1), u."id"
@@ -109,7 +117,6 @@ async function main() {
         AND NOT EXISTS (
           SELECT 1 FROM "team_members" tm
           WHERE tm."user_id" = u."id"
-            AND tm."team_id" = (SELECT "id" FROM "teams" ORDER BY "id" LIMIT 1)
         );
     `);
 
