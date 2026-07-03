@@ -1,6 +1,10 @@
 import { isAdminRole } from "@/lib/roles";
-import { useGetDashboardSummary } from "@workspace/api-client-react";
-import type { DashboardWarnings } from "@workspace/api-client-react";
+import {
+  useGetDashboardSummary,
+  useListContracts,
+  useGetVacationBalance,
+} from "@workspace/api-client-react";
+import type { DashboardWarnings, VacationBalance } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from "date-fns";
@@ -231,6 +235,65 @@ function UncountedPendingNotice({
   );
 }
 
+// Resturlaub-Karte für ASSISTENTEN: zeigt die eigene Bilanz (Anspruch /
+// genommen / verbleibend) aus dem Premium-Endpunkt vacation-balance. Das
+// Server-Gate läuft über den Plan des ARBEITGEBERS (Team-Eigentümers) —
+// liefert der Endpunkt 403 (Free-Arbeitgeber), wird die Karte schlicht nicht
+// gerendert (kein Upsell an Assistenten, die selbst nichts upgraden können).
+function AssistantVacationCard() {
+  const [, navigate] = useLocation();
+
+  // GET /contracts liefert für Assistenten serverseitig nur den EIGENEN
+  // Vertrag (userId wird auf die Session gezwungen).
+  const { data: contracts } = useListContracts();
+  const activeContract = (contracts ?? []).find(
+    (c) => !c.endDate || new Date(c.endDate) > new Date(),
+  );
+  const contractId = activeContract?.id ?? 0;
+
+  const { data: balance, isSuccess } = useGetVacationBalance(contractId, {
+    query: { enabled: contractId > 0, retry: false },
+  } as Parameters<typeof useGetVacationBalance>[1]) as {
+    data?: VacationBalance;
+    isSuccess: boolean;
+  };
+
+  if (!isSuccess || !balance) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={() => navigate("/dienstplan")}
+      data-testid="assistant-vacation-card"
+      className="group block w-full text-left rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <Card className="border-border/50 shadow-sm transition-colors group-hover:border-border group-hover:bg-muted/30">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center justify-between gap-2 text-sm font-medium text-muted-foreground">
+            <span className="flex items-center gap-2">
+              <Plane className="h-4 w-4" />
+              Mein Resturlaub {new Date().getFullYear()}
+            </span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5" />
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-3xl font-bold" data-testid="assistant-vacation-remaining">
+            {balance.vacationDaysRemaining}{" "}
+            <span className="text-lg text-muted-foreground font-normal">
+              von {balance.vacationDays} {balance.vacationDays === 1 ? "Tag" : "Tagen"}
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {balance.vacationDaysUsed}{" "}
+            {balance.vacationDaysUsed === 1 ? "Tag" : "Tage"} bereits genommen
+          </p>
+        </CardContent>
+      </Card>
+    </button>
+  );
+}
+
 export default function Dashboard() {
   const now = new Date();
   const month = now.getMonth() + 1;
@@ -292,6 +355,8 @@ export default function Dashboard() {
               </div>
             </KpiCard>
           </div>
+
+          {!isAdmin && <AssistantVacationCard />}
 
           {(summary.uncountedPendingHours ?? 0) > 0 && (
             <UncountedPendingNotice

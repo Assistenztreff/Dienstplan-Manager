@@ -4005,6 +4005,7 @@ export const getGetVacationBalanceUrl = (id: number,) => {
 }
 
 /**
+ * Premium-Feature absenceTracking. Admins sehen alle Verträge im eigenen Team-Scope (eigener Plan maßgeblich). Assistenten dürfen NUR den eigenen Vertrag abrufen; das Plan-Gate läuft dann über den Plan des Arbeitgebers (Team-Eigentümers), analog calendarSync.
  * @summary Urlaubskontigent abrufen
  */
 export const getVacationBalance = async (id: number, options?: RequestInit): Promise<VacationBalance> => {

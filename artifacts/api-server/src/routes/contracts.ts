@@ -11,7 +11,7 @@ import {
   DeleteContractParams,
 } from "@workspace/api-zod";
 import { requireAdmin, requireAuth, isAdminLikeRole } from "../middleware/auth";
-import { requirePlanFeature } from "../lib/plan";
+import { requirePlanFeatureViaTeamOwner } from "../lib/plan";
 import {
   resolveReadTeamScope,
   resolveWriteTeamId,
@@ -191,10 +191,17 @@ router.delete("/contracts/:id", requireAdmin, async (req, res): Promise<void> =>
 // Die Rohdaten (contracts.vacationDays/vacationDaysUsed) bleiben ueber
 // GET /contracts fuer alle Plaene zugaenglich (Buchhaltung laeuft plan-
 // unabhaengig weiter, Bestandsschutz).
+//
+// Zugriff: Admins wie bisher (eigener Plan massgeblich, Team-Scope). Zusaetzlich
+// duerfen ASSISTENTEN ihre EIGENE Bilanz abrufen — das Plan-Gate laeuft dann
+// ueber den Plan des ARBEITGEBERS (Team-Eigentuemers), analog calendarSync:
+// Assistenten-Konten sind praktisch immer Free, das Feature haengt am zahlenden
+// Admin-Konto. Fremde Vertraege bleiben fuer Assistenten 404 (kein PII-Leak,
+// auch nicht innerhalb des eigenen Teams).
 router.get(
   "/contracts/:id/vacation-balance",
-  requireAdmin,
-  requirePlanFeature("absenceTracking"),
+  requireAuth,
+  requirePlanFeatureViaTeamOwner("absenceTracking"),
   async (req, res): Promise<void> => {
     const id = Number(req.params["id"]);
     if (!id || isNaN(id)) {
@@ -208,6 +215,12 @@ router.get(
       .where(and(eq(contractsTable.id, id), inArray(contractsTable.teamId, allowedTeams)))
       .limit(1);
     if (!contract) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    // Assistenten: strikt nur der eigene Vertrag (Team-Scope allein wuerde
+    // Vertraege von Team-Kollegen sichtbar machen).
+    if (!isAdminLikeRole(req.session.role) && contract.userId !== req.session.userId) {
       res.status(404).json({ error: "Not found" });
       return;
     }
