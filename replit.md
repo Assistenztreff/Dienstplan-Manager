@@ -37,7 +37,7 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
 
 ## Product
 
-- **Rollen**: `admin` (Assistenznehmer, Vollzugriff), `assistant` (nur eigene Daten), `superadmin` (Betreiber; NUR direkt in DB/per Skript vergeben, nie über Registrierung).
+- **Rollen**: `admin` (Assistenznehmer, Vollzugriff), `assistant` (nur eigene Daten), `superadmin` (Betreiber; NUR direkt in DB/per Skript vergeben, nie über Registrierung). **Superadmin nutzt die normale App wie ein Admin** (eigene Teams/Daten; `isAdminLikeRole` in `middleware/auth.ts`, Frontend `lib/roles.ts` `isAdminRole`); zusätzlich exklusiv das Operator-Dashboard. `requireDienstleister` bleibt an `account_type` gebunden.
 - **Konto-Typ** (`users.account_type`, `privat` | `dienstleister`): bei Registrierung fixiert, danach NICHT im UI änderbar. Privat = einzelner Assistenznehmer; Dienstleister = mehrere Teams.
 - **Stammdaten**: Assistenten mit Vertragsdaten (Wochenstunden, Urlaubstage, Kontakt).
 - **Dienstplan-Kalender** (Monatsansicht): Schichten tragen `planning_status` (VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich). DB-Default FIX, neue Schichten im Dialog aber VORLAEUFIG — bewusst entkoppelt. **Nur FIX-Schichten zählen** in Auswertungen und PDF-Stundennachweis. Abwesenheiten sind Default-FIX. Admins können Entwürfe/Vorschläge per Ein-Klick (Badge/Dialog) und monatsweise sammelbestätigen (nur `planningStatus: FIX` + `force: true` via PATCH).
@@ -47,6 +47,15 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
 - **Regionale Feiertage**: wählbares Bundesland in den Einstellungen → landesspezifische Feiertage; ohne Bundesland nur bundesweite. Keine rückwirkende Neuberechnung bestehender Schichten.
 - **Farbkodierung nach `userId`** (deterministischer Hash, `lib/shift-model-colors.ts`), nicht nach Schichtart. Abwesenheiten behalten semantische Farben (Urlaub Gelb, Krankheit Grau). `shift_models.color` bleibt in der DB (Default `slate`), wird vom Frontend nicht mehr gesendet.
 - **24h-Dienst-Hinweis**: identische Start-/Enduhrzeit über Tagesgrenze oder Legacy `full_day` → `ShiftBadge` zeigt „24h-Dienst".
+
+## Dev-Testkonten (nur Dev-DB)
+
+- Neuaufsetzen/Reparieren: `pnpm --filter @workspace/scripts run setup-test-accounts` (idempotent; trennt die Bestände, legt Dummys/Verträge/Modelle an).
+- **Oliver Straub** `admin@dienstplan.local` — admin, privat, **premium**. Eigentümer „Standard-Team" (Team 1): 7 reale Assistenzkräfte inkl. Personalakten, 35 Schichten, 7 Verträge, 4 Modelle.
+- **Betreiber** `betreiber@dienstplan.local` — superadmin, privat, **free**. „Betreiber-Team": Dummys Max Mustermann 1–4 + Test-Assistent, 4 Modelle, leerer Dienstplan; zusätzlich Operator-Dashboard.
+- **Test-Dienstleister** `dienstleister@dienstplan.local` — admin, dienstleister, **premium**. „Dienstleister-Team": Dummys Max Mustermann 5–9, 4 Modelle, leerer Dienstplan.
+- **Test-Assistent** `assistent@dienstplan.local` — assistant, Mitglied NUR im Betreiber-Team (Free-Eigentümer → historyMonths 1), eigener Vertrag (30h/30 Urlaubstage).
+- Dummys (max.mustermannN@dienstplan.local) haben kein Passwort und keine Premium-Lohndaten; Vertrag 30h/30 Urlaubstage ab 2026-01-01. Alt-Konten Maria Hoffmann/„Assistenzdienst" sind gelöscht.
 
 ## Multi-Team & Datentrennung
 

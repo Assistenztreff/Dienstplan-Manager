@@ -18,12 +18,23 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   next();
 }
 
+/**
+ * "Admin-artig" = Rolle admin ODER superadmin. Der Betreiber (superadmin)
+ * nutzt die normale App wie ein Admin (nur eigene Teams/Daten über die
+ * regulären Team-Scoping-Helfer); zusätzlich hat er exklusiv die
+ * Operator-Endpunkte (requireSuperadmin). Superadmin ist also eine
+ * ERWEITERUNG von admin, keine getrennte Welt.
+ */
+export function isAdminLikeRole(role: string | undefined): boolean {
+  return role === "admin" || role === "superadmin";
+}
+
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
   if (!req.session.userId) {
     res.status(401).json({ error: "Nicht angemeldet" });
     return;
   }
-  if (req.session.role !== "admin") {
+  if (!isAdminLikeRole(req.session.role)) {
     res.status(403).json({ error: "Keine Berechtigung" });
     return;
   }
@@ -69,7 +80,7 @@ export async function requireDienstleister(
     res.status(401).json({ error: "Nicht angemeldet" });
     return;
   }
-  if (req.session.role !== "admin") {
+  if (!isAdminLikeRole(req.session.role)) {
     res.status(403).json({ error: "Keine Berechtigung" });
     return;
   }

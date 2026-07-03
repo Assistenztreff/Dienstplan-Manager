@@ -10,7 +10,7 @@ import {
   UpdateContractBody,
   DeleteContractParams,
 } from "@workspace/api-zod";
-import { requireAdmin, requireAuth } from "../middleware/auth";
+import { requireAdmin, requireAuth, isAdminLikeRole } from "../middleware/auth";
 import { requirePlanFeature } from "../lib/plan";
 import {
   resolveReadTeamScope,
@@ -59,8 +59,9 @@ router.get("/contracts", requireAuth, async (req, res): Promise<void> => {
   }
   // Nicht-Admins (Assistenten) dürfen ausschließlich ihren eigenen Vertrag
   // lesen — der userId-Filter wird zwingend auf die eigene Session gesetzt.
-  const filterUserId =
-    req.session.role === "admin" ? query.data.userId : req.session.userId;
+  const filterUserId = isAdminLikeRole(req.session.role)
+    ? query.data.userId
+    : req.session.userId;
 
   const teamScope = await resolveReadTeamScope(req.session.userId!, parseTeamIdParam(req));
   if (teamScope === null) {

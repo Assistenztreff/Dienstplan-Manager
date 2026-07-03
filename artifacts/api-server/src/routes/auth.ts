@@ -179,7 +179,17 @@ if (process.env.NODE_ENV !== "production") {
         })
         .returning();
     }
-    if (ownTeam) {
+    // Mitgliedschaft NUR als Bootstrap für eine frische DB anlegen (Assistent
+    // noch nirgends Mitglied). Sonst würde der automatische Dev-Login die von
+    // setup-test-accounts eingerichtete Team-Trennung (Test-Assistent gehört
+    // ins Betreiber-Team, NICHT ins Standard-Team) bei jedem Aufruf rückgängig
+    // machen.
+    const [anyMembership] = await db
+      .select({ id: teamMembersTable.id })
+      .from(teamMembersTable)
+      .where(eq(teamMembersTable.userId, assistant.id))
+      .limit(1);
+    if (ownTeam && !anyMembership) {
       await db
         .insert(teamMembersTable)
         .values({ teamId: ownTeam.id, userId: assistant.id })

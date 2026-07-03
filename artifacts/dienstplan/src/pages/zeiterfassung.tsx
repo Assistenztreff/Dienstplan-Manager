@@ -1,3 +1,4 @@
+import { isAdminRole } from "@/lib/roles";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "wouter";
 import {
@@ -83,7 +84,7 @@ function addOneDay(date: string): string {
 
 export default function Zeiterfassung() {
   const { currentUser } = useAuth();
-  const isAdmin = currentUser?.role === "admin";
+  const isAdmin = isAdminRole(currentUser?.role);
   const isAssistant = currentUser?.role === "assistant";
   // Premium-Feature strictTimeTracking: Bestätigen/Ablehnen von Ist-Zeiten.
   // UX-Gate — die autoritative Durchsetzung liegt beim Server (403).

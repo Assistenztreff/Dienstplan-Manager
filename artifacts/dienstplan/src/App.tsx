@@ -22,6 +22,7 @@ import Registrierung from "@/pages/registrierung";
 import Einladung from "@/pages/einladung";
 import PasswortVergessen from "@/pages/passwort-vergessen";
 import NotFound from "@/pages/not-found";
+import { isAdminRole } from "@/lib/roles";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient({
@@ -75,21 +76,21 @@ function Router() {
         <Route path="/" component={Dashboard} />
         <Route path="/dienstplan" component={Dienstplan} />
         <Route path="/zeiterfassung" component={Zeiterfassung} />
-        {currentUser.role === "admin" && (
+        {isAdminRole(currentUser.role) && (
           <Route path="/abwesenheiten" component={Abwesenheiten} />
         )}
-        {currentUser.role === "admin" && (
+        {isAdminRole(currentUser.role) && (
           <Route path="/assistenten" component={Assistenten} />
         )}
-        {currentUser.role === "admin" && (
+        {isAdminRole(currentUser.role) && (
           <Route path="/auswertungen" component={Auswertungen} />
         )}
-        {currentUser.role === "admin" && (
+        {isAdminRole(currentUser.role) && (
           <Route path="/einstellungen" component={Einstellungen} />
         )}
         {/* Preise & Premium: Ziel der Free-Limit-Hinweise (Upgrade-Anfrage). */}
-        {currentUser.role === "admin" && <Route path="/preise" component={Preise} />}
-        {currentUser.role === "admin" && currentUser.accountType === "dienstleister" && (
+        {isAdminRole(currentUser.role) && <Route path="/preise" component={Preise} />}
+        {isAdminRole(currentUser.role) && currentUser.accountType === "dienstleister" && (
           <Route path="/team-verwaltung" component={TeamVerwaltung} />
         )}
         {/* Operator-Dashboard ausschliesslich fuer Superadmins (Betreiber). */}

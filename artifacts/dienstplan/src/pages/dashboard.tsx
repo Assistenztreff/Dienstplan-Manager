@@ -1,3 +1,4 @@
+import { isAdminRole } from "@/lib/roles";
 import { useGetDashboardSummary } from "@workspace/api-client-react";
 import type { DashboardWarnings } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -237,7 +238,7 @@ export default function Dashboard() {
   
   const { selectedTeamId } = useTeam();
   const { currentUser } = useAuth();
-  const isAdmin = currentUser?.role === "admin";
+  const isAdmin = isAdminRole(currentUser?.role);
 
   const { data: summary, isLoading } = useGetDashboardSummary(
     { month, year, ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}) }

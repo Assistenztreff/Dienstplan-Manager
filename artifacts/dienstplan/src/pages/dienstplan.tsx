@@ -1,3 +1,4 @@
+import { isAdminRole } from "@/lib/roles";
 import { useEffect, useState } from "react";
 import { useSearchParams, useLocation } from "wouter";
 import {
@@ -836,7 +837,7 @@ function monthsAhead(target: Date, now: Date): number {
 
 export default function Dienstplan() {
   const { currentUser } = useAuth();
-  const isAdmin = currentUser?.role === "admin";
+  const isAdmin = isAdminRole(currentUser?.role);
   // Massenbearbeitung ("Mehrere bearbeiten") nur im Premium-Plan.
   const canBulkEdit = hasAccess(currentUser, "bulkEdit");
   // Free-Plan begrenzt die Vorausplanung (historyMonths, Free = 1 → aktueller

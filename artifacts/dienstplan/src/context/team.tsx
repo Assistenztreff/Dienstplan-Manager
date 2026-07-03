@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useListTeams } from "@workspace/api-client-react";
 import { useAuth } from "@/context/auth";
+import { isAdminRole } from "@/lib/roles";
 
 type Team = { id: number; name: string };
 
@@ -32,7 +33,7 @@ function readStored(): number | null {
 export function TeamProvider({ children }: { children: React.ReactNode }) {
   const { currentUser } = useAuth();
   const isDienstleister =
-    currentUser?.role === "admin" && currentUser?.accountType === "dienstleister";
+    isAdminRole(currentUser?.role) && currentUser?.accountType === "dienstleister";
 
   const { data: teamsData } = useListTeams({
     query: { enabled: !!isDienstleister },

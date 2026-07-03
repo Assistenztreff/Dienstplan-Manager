@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { usersTable, shiftsTable, timeTrackingTable, contractsTable, allowanceSettingsTable, teamMembersTable, teamsTable } from "@workspace/db";
 import { eq, and, sql, count, or, isNull, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { requireAuth, requireAdmin } from "../middleware/auth";
+import { requireAuth, requireAdmin, isAdminLikeRole } from "../middleware/auth";
 import { requirePlanFeature, getLenientTimeTrackingTeamIds } from "../lib/plan";
 import { resolveReadTeamScope, parseTeamIdParam, getAllowedTeamIds } from "../lib/teams";
 import {
@@ -56,7 +56,9 @@ const SAFE_SHIFT_USER = {
 router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> => {
   const month = req.query.month ? Number(req.query.month) : new Date().getMonth() + 1;
   const year = req.query.year ? Number(req.query.year) : new Date().getFullYear();
-  const isAdmin = req.session.role === "admin";
+  // Superadmin (Betreiber) nutzt das Dashboard wie ein Admin — nur mit den
+  // eigenen Teams (Team-Scoping-Helfer arbeiten rein über die userId).
+  const isAdmin = isAdminLikeRole(req.session.role);
   const userId = req.session.userId!;
 
   const today = new Date();

@@ -26,6 +26,7 @@
 - [Full e2e suite baseline green](full-e2e-suite-red-locally.md) — suite is green (171/3 skip); global 60s timeout vs. load flakes, hung-vs-slow triage, sibling-spec data tolerance.
 - [Sonner toasts need mounted Toaster](sonner-toaster-mount.md) — pages using `toast` from "sonner" render nothing unless the sonner `<Toaster>` is mounted in App root alongside the shadcn one.
 - [E2E mobile-viewport selectors](e2e-mobile-viewport-selectors.md) — 400px viewport hides `hidden sm:inline` button labels; getByRole-by-name fails, select via data-testid or title attribute.
+- [Dev-Seeder vs. manual DB state](dev-seeder-vs-manual-db-state.md) — auto-fired dev-login "ensure" seeding silently reverts scripted DB rearrangements; make ensure-paths bootstrap-only.
 - [drizzle push --force still prompts](drizzle-push-force-prompt.md) — non-TTY `drizzle-kit push --force` still dies on "suggestion" prompts (e.g. adding UNIQUE to populated table); repair via manual idempotent SQL, then push is clean.
 - [Drizzle raw-SQL correlated subqueries](drizzle-sql-correlated-subquery.md) — `${table.col}` inside sql`` subqueries in a select projection renders unqualified "id" and 500s; write `users.id` explicitly.
 - [Stale e2e test DB repair](test-db-stale-schema-repair.md) — `_test` DB drifts after schema changes; db push dies on interactive truncate prompts, repair with guarded SQL then re-run setup-test-db.

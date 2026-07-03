@@ -18,6 +18,7 @@ import logoUrl from "@assets/Arbeitgebermodell oder Assistenzdienst.png";
 import { useAuth } from "@/context/auth";
 import { useToast } from "@/hooks/use-toast";
 import { isEmbedded } from "@/lib/embed";
+import { isAdminRole } from "@/lib/roles";
 import { DevUserSwitcher } from "./dev-user-switcher";
 
 // Interne Navigationspunkte der Dienstplan-App. Rollen-/Konto-Typ-Sichtbarkeit
@@ -178,7 +179,7 @@ function AppSubNavigation() {
 
   const navItems = ALL_NAV_ITEMS.filter(
     (item) =>
-      (!item.adminOnly || currentUser?.role === "admin") &&
+      (!item.adminOnly || isAdminRole(currentUser?.role)) &&
       (!item.dienstleisterOnly || currentUser?.accountType === "dienstleister"),
   );
 

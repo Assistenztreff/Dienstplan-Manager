@@ -1,3 +1,4 @@
+import { isAdminRole } from "@/lib/roles";
 import { useState } from "react";
 import { useGetHoursBalance, useListUsers, getHoursBalance } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -230,7 +231,7 @@ export default function Auswertungen() {
   const [exportOpen, setExportOpen] = useState(false);
 
   const { currentUser } = useAuth();
-  const isAdmin = currentUser?.role === "admin";
+  const isAdmin = isAdminRole(currentUser?.role);
   const canPayrollExport = hasAccess(currentUser, "payrollExport");
 
   // Soll/Ist-Auswertung ist das Premium-Feature "advancedAnalytics" (Server

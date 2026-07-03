@@ -10,7 +10,7 @@ import {
   DeleteUserParams,
   GetUserParams,
 } from "@workspace/api-zod";
-import { requireAdmin, requireAuth } from "../middleware/auth";
+import { requireAdmin, requireAuth, isAdminLikeRole } from "../middleware/auth";
 import {
   getAllowedTeamIds,
   parseTeamIdParam,
@@ -85,12 +85,15 @@ router.get("/users", requireAdmin, async (req, res): Promise<void> => {
   // strikte Team-Trennung – sie bekommen niemals den globalen Pool, auch nicht bei
   // null Teams (sie sehen dann eine leere Liste, bis sie ein Team anlegen). Sobald
   // ein privat-Admin ≥1 Team hat, greift ebenfalls wieder strikte Trennung.
+  // WICHTIG: Die Ausnahme gilt NUR für die echte Rolle "admin" – superadmin
+  // (via isAdminLikeRole zugelassen) darf NIE auf den globalen Pool fallen,
+  // sonst läse ein Betreiber-Konto ohne Teams plattformweit alle Nutzer.
   if (teamId == null && allowedTeams.length === 0) {
     const [requester] = await db
-      .select({ accountType: usersTable.accountType })
+      .select({ accountType: usersTable.accountType, role: usersTable.role })
       .from(usersTable)
       .where(eq(usersTable.id, req.session.userId!));
-    if (requester?.accountType === "privat") {
+    if (requester?.accountType === "privat" && requester.role === "admin") {
       let rows = await db.select(SAFE_USER_SELECT).from(usersTable);
       if (query.data.role) {
         rows = rows.filter((u) => u.role === query.data.role);
@@ -202,7 +205,7 @@ router.get("/users/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const requestedId = params.data.id;
-  if (req.session.role !== "admin" && req.session.userId !== requestedId) {
+  if (!isAdminLikeRole(req.session.role) && req.session.userId !== requestedId) {
     res.status(403).json({ error: "Keine Berechtigung" });
     return;
   }
