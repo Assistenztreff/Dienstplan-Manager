@@ -17,6 +17,8 @@ export interface OperatorError {
   resolved: boolean;
   /** Wie oft dieser Fehler (gleiche Meldung + Kontext) aufgetreten ist */
   count: number;
+  /** Detailtext (Stacktrace, gekürzt) des LETZTEN Auftretens; kann fehlen */
+  lastStack?: string | null;
   /** Zeitpunkt des letzten Auftretens */
   lastSeenAt: Date;
   /** Zeitpunkt des ersten Auftretens */

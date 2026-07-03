@@ -50,6 +50,7 @@ interface OperatorErrorRow {
   context: string | null;
   resolved: boolean;
   count: number;
+  lastStack: string | null;
   lastSeenAt: string;
   createdAt: string;
 }
@@ -138,6 +139,12 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
     expect(Number.isNaN(createdAt), "createdAt muss ein Datum sein").toBe(false);
     const lastSeenAt = new Date(entry!.lastSeenAt).getTime();
     expect(Number.isNaN(lastSeenAt), "lastSeenAt muss ein Datum sein").toBe(false);
+
+    // Detailtext (Stacktrace) des letzten Auftretens wird mitgespeichert
+    // und im Operator-Endpunkt ausgeliefert (Task #343).
+    expect(entry!.lastStack, "Stacktrace muss gespeichert sein").toBeTruthy();
+    expect(entry!.lastStack!).toContain("Dev-Testfehler");
+    expect(entry!.lastStack!, "Stacktrace muss Aufruf-Zeilen enthalten").toContain("at ");
 
     recordedErrorId = entry!.id;
   });
@@ -274,6 +281,16 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
 
     // … und die Lexware-Karte ist ehrlich als Demo-Daten gekennzeichnet.
     await expect(page.getByTestId("badge-lexware-demo")).toBeVisible();
+
+    // --- Details-Flow: Stacktrace des letzten Auftretens aufklappen ---
+    const stack = page.getByTestId(`text-error-stack-${recordedErrorId}`);
+    await expect(stack).not.toBeVisible();
+    await row.getByTestId(`button-error-details-${recordedErrorId}`).click();
+    await expect(stack).toBeVisible();
+    await expect(stack).toContainText("Dev-Testfehler");
+    // Wieder zuklappen — der Rest des Tests arbeitet mit der kompakten Zeile.
+    await row.getByTestId(`button-error-details-${recordedErrorId}`).click();
+    await expect(stack).not.toBeVisible();
 
     // --- Abhaken-Flow: Eintrag als erledigt markieren ---
     // Standard-Filter „Offene": nach dem Abhaken verschwindet die Zeile.

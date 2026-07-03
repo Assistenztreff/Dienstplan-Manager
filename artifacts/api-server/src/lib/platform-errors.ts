@@ -61,7 +61,18 @@ export interface RecordPlatformErrorInput {
   message: string;
   /** Route/Stelle, z. B. "GET /api/shifts" oder "billing/createDraft" */
   context: string;
+  /**
+   * Optionaler Detailtext (i. d. R. der Stacktrace) des Auftretens. Wird
+   * gekuerzt gespeichert; beim Wiederauftreten ersetzt der Detailtext des
+   * LETZTEN Auftretens den alten (auch wenn er fehlt — es zaehlt immer der
+   * juengste Stand).
+   */
+  stack?: string | null;
 }
+
+// Detailtext (Stacktrace) wird gekuerzt gespeichert, damit die Tabelle
+// nicht durch riesige Traces aufgeblaeht wird.
+const MAX_STACK_LENGTH = 4000;
 
 /**
  * Persistiert einen Plattform-Fehler und sendet bei Level "error" eine
@@ -80,6 +91,7 @@ export async function recordPlatformError(
 ): Promise<void> {
   const message = input.message.slice(0, 2000) || "Unbekannter Fehler";
   const context = input.context.slice(0, 500) || "unbekannt";
+  const lastStack = input.stack?.slice(0, MAX_STACK_LENGTH) || null;
   try {
     // Manueller Upsert (Update-then-Insert) statt UNIQUE-Constraint:
     // message kann bis 2000 Zeichen lang sein — ein Btree-Unique-Index
@@ -92,6 +104,10 @@ export async function recordPlatformError(
         count: sql`${platformErrorsTable.count} + 1`,
         lastSeenAt: new Date(),
         resolved: false,
+        // Detailtext des LETZTEN Auftretens behalten — auch ueberschreiben,
+        // wenn das neue Auftreten keinen Stacktrace mitbringt (juengster
+        // Stand zaehlt, kein veralteter Trace zum falschen Zeitpunkt).
+        lastStack,
       })
       .where(
         and(
@@ -106,6 +122,7 @@ export async function recordPlatformError(
         level: input.level,
         message,
         context,
+        lastStack,
       });
     }
 

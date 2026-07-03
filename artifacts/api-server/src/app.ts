@@ -149,7 +149,12 @@ app.use(
     const message = err instanceof Error ? err.message : String(err);
     const context = `${req.method} ${req.originalUrl?.split("?")[0] ?? req.path}`;
     (req.log ?? logger).error({ err }, "Unbehandelter Serverfehler");
-    void recordPlatformError({ level: "error", message, context });
+    void recordPlatformError({
+      level: "error",
+      message,
+      context,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     if (!res.headersSent) {
       res.status(500).json({ error: "Interner Serverfehler" });
     }

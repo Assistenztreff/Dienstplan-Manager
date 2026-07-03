@@ -56,7 +56,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Users, Receipt, AlertTriangle, ShieldCheck, History, Check, CheckCheck, Undo2 } from "lucide-react";
+import { Users, Receipt, AlertTriangle, ShieldCheck, History, Check, CheckCheck, Undo2, ChevronDown, ChevronUp } from "lucide-react";
 import { readableApiError } from "@/lib/api-error";
 import { useToast } from "@/hooks/use-toast";
 
@@ -104,6 +104,21 @@ export default function OperatorDashboard() {
   // zeigt alles (erledigte ausgegraut).
   const [errorFilter, setErrorFilter] = useState<"open" | "all">("open");
   const [pendingErrorId, setPendingErrorId] = useState<number | null>(null);
+  // Aufgeklappte Fehler-Details (Stacktrace des letzten Auftretens);
+  // mehrere Eintraege koennen gleichzeitig offen sein.
+  const [expandedErrorIds, setExpandedErrorIds] = useState<Set<number>>(new Set());
+
+  function toggleErrorDetails(errorId: number) {
+    setExpandedErrorIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(errorId)) {
+        next.delete(errorId);
+      } else {
+        next.add(errorId);
+      }
+      return next;
+    });
+  }
   // Bestätigungs-Dialog vor dem Sammel-Abhaken aller offenen Fehler.
   const [confirmResolveAllOpen, setConfirmResolveAllOpen] = useState(false);
 
@@ -559,72 +574,111 @@ export default function OperatorDashboard() {
                 </p>
               );
             }
-            return visibleErrors.map((e) => (
-              <div
-                key={e.id}
-                className={`flex items-start gap-3 rounded-md border border-border/40 p-3 ${
-                  e.resolved ? "opacity-50" : ""
-                }`}
-                data-testid={`row-operator-error-${e.id}`}
-              >
-                <Badge variant={e.level === "error" ? "destructive" : "outline"} className="mt-0.5 shrink-0">
-                  {e.level === "error" ? "Fehler" : "Warnung"}
-                </Badge>
-                <div className="min-w-0 flex-1">
-                  <p
-                    className={`text-sm font-medium break-words ${
-                      e.resolved ? "text-muted-foreground line-through" : "text-foreground"
-                    }`}
-                  >
-                    {e.message}
-                  </p>
-                  {/* Wiederkehrende Fehler sind serverseitig gebuendelt:
-                      Zaehler + Zeitpunkt des LETZTEN Auftretens. */}
-                  <p className="text-xs text-muted-foreground">
-                    <span className="font-mono">{e.context}</span>
-                    {e.count > 1 ? (
-                      <span
-                        className="ml-2 inline-block rounded-full bg-muted px-1.5 py-0.5 font-medium text-foreground/80"
-                        data-testid={`badge-error-count-${e.id}`}
-                      >
-                        {e.count}×
-                      </span>
-                    ) : null}{" "}
-                    · {e.count > 1 ? "zuletzt " : ""}
-                    {new Date(e.lastSeenAt).toLocaleString("de-DE", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}{" "}
-                    Uhr
-                    {e.resolved ? " · Erledigt" : ""}
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 shrink-0 px-2 text-xs"
-                  disabled={pendingErrorId === e.id}
-                  onClick={() => handleToggleErrorResolved(e.id, !e.resolved)}
-                  data-testid={`button-error-toggle-${e.id}`}
-                  title={e.resolved ? "Wieder auf offen setzen" : "Als erledigt abhaken"}
+            return visibleErrors.map((e) => {
+              const detailsOpen = expandedErrorIds.has(e.id);
+              return (
+                <div
+                  key={e.id}
+                  className={`rounded-md border border-border/40 p-3 ${
+                    e.resolved ? "opacity-50" : ""
+                  }`}
+                  data-testid={`row-operator-error-${e.id}`}
                 >
-                  {e.resolved ? (
-                    <>
-                      <Undo2 className="mr-1 h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Wieder öffnen</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check className="mr-1 h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Erledigt</span>
-                    </>
-                  )}
-                </Button>
-              </div>
-            ));
+                  <div className="flex items-start gap-3">
+                    <Badge variant={e.level === "error" ? "destructive" : "outline"} className="mt-0.5 shrink-0">
+                      {e.level === "error" ? "Fehler" : "Warnung"}
+                    </Badge>
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={`text-sm font-medium break-words ${
+                          e.resolved ? "text-muted-foreground line-through" : "text-foreground"
+                        }`}
+                      >
+                        {e.message}
+                      </p>
+                      {/* Wiederkehrende Fehler sind serverseitig gebuendelt:
+                          Zaehler + Zeitpunkt des LETZTEN Auftretens. */}
+                      <p className="text-xs text-muted-foreground">
+                        <span className="font-mono">{e.context}</span>
+                        {e.count > 1 ? (
+                          <span
+                            className="ml-2 inline-block rounded-full bg-muted px-1.5 py-0.5 font-medium text-foreground/80"
+                            data-testid={`badge-error-count-${e.id}`}
+                          >
+                            {e.count}×
+                          </span>
+                        ) : null}{" "}
+                        · {e.count > 1 ? "zuletzt " : ""}
+                        {new Date(e.lastSeenAt).toLocaleString("de-DE", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}{" "}
+                        Uhr
+                        {e.resolved ? " · Erledigt" : ""}
+                      </p>
+                    </div>
+                    {/* Detail-Ansicht (Stacktrace des letzten Auftretens) nur
+                        anbieten, wenn Details vorhanden sind. */}
+                    {e.lastStack ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 shrink-0 px-2 text-xs"
+                        onClick={() => toggleErrorDetails(e.id)}
+                        data-testid={`button-error-details-${e.id}`}
+                        title={detailsOpen ? "Details ausblenden" : "Details anzeigen (Stacktrace)"}
+                      >
+                        {detailsOpen ? (
+                          <>
+                            <ChevronUp className="mr-1 h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">Details</span>
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown className="mr-1 h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">Details</span>
+                          </>
+                        )}
+                      </Button>
+                    ) : null}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 shrink-0 px-2 text-xs"
+                      disabled={pendingErrorId === e.id}
+                      onClick={() => handleToggleErrorResolved(e.id, !e.resolved)}
+                      data-testid={`button-error-toggle-${e.id}`}
+                      title={e.resolved ? "Wieder auf offen setzen" : "Als erledigt abhaken"}
+                    >
+                      {e.resolved ? (
+                        <>
+                          <Undo2 className="mr-1 h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Wieder öffnen</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="mr-1 h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Erledigt</span>
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  {/* Aufklappbare Details: Stacktrace/Detailtext des LETZTEN
+                      Auftretens (serverseitig gekuerzt, nur superadmin). */}
+                  {detailsOpen && e.lastStack ? (
+                    <pre
+                      className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-2 font-mono text-xs whitespace-pre-wrap break-words text-muted-foreground"
+                      data-testid={`text-error-stack-${e.id}`}
+                    >
+                      {e.lastStack}
+                    </pre>
+                  ) : null}
+                </div>
+              );
+            });
           })()}
         </CardContent>
       </Card>

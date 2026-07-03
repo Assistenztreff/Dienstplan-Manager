@@ -1502,6 +1502,7 @@ export const ListOperatorErrorsResponseItem = zod.object({
   "context": zod.string().describe('Route\/Stelle, an der der Fehler auftrat (z. B. \"GET \/api\/shifts\")'),
   "resolved": zod.boolean().describe('Vom Betreiber als erledigt abgehakt (gilt für die ganze Gruppe; erneutes Auftreten öffnet den Eintrag wieder)'),
   "count": zod.number().describe('Wie oft dieser Fehler (gleiche Meldung + Kontext) aufgetreten ist'),
+  "lastStack": zod.string().nullish().describe('Detailtext (Stacktrace, gekürzt) des LETZTEN Auftretens; kann fehlen'),
   "lastSeenAt": zod.coerce.date().describe('Zeitpunkt des letzten Auftretens'),
   "createdAt": zod.coerce.date().describe('Zeitpunkt des ersten Auftretens')
 })
@@ -1538,6 +1539,7 @@ export const UpdateOperatorErrorResponse = zod.object({
   "context": zod.string().describe('Route\/Stelle, an der der Fehler auftrat (z. B. \"GET \/api\/shifts\")'),
   "resolved": zod.boolean().describe('Vom Betreiber als erledigt abgehakt (gilt für die ganze Gruppe; erneutes Auftreten öffnet den Eintrag wieder)'),
   "count": zod.number().describe('Wie oft dieser Fehler (gleiche Meldung + Kontext) aufgetreten ist'),
+  "lastStack": zod.string().nullish().describe('Detailtext (Stacktrace, gekürzt) des LETZTEN Auftretens; kann fehlen'),
   "lastSeenAt": zod.coerce.date().describe('Zeitpunkt des letzten Auftretens'),
   "createdAt": zod.coerce.date().describe('Zeitpunkt des ersten Auftretens')
 })

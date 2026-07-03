@@ -178,6 +178,7 @@ router.get(
         context: platformErrorsTable.context,
         resolved: platformErrorsTable.resolved,
         count: platformErrorsTable.count,
+        lastStack: platformErrorsTable.lastStack,
         lastSeenAt: platformErrorsTable.lastSeenAt,
         createdAt: platformErrorsTable.createdAt,
       })
@@ -247,6 +248,7 @@ router.patch(
         context: platformErrorsTable.context,
         resolved: platformErrorsTable.resolved,
         count: platformErrorsTable.count,
+        lastStack: platformErrorsTable.lastStack,
         lastSeenAt: platformErrorsTable.lastSeenAt,
         createdAt: platformErrorsTable.createdAt,
       });

@@ -1695,6 +1695,10 @@ components:
         count:
           type: integer
           description: Wie oft dieser Fehler (gleiche Meldung + Kontext) aufgetreten ist
+        lastStack:
+          type: string
+          nullable: true
+          description: Detailtext (Stacktrace, gekürzt) des LETZTEN Auftretens; kann fehlen
         lastSeenAt:
           type: string
           format: date-time

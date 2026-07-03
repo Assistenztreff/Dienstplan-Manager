@@ -43,6 +43,11 @@ export const platformErrorsTable = pgTable("platform_errors", {
   // aktualisiert (lastSeenAt). So verdraengen Wiederholungen keine seltenen
   // Fehler aus dem Aufbewahrungslimit.
   count: integer("count").notNull().default(1),
+  // Optionaler Detailtext des LETZTEN Auftretens (i. d. R. der Stacktrace,
+  // gekuerzt). Beim Wiederauftreten wird er ueberschrieben — es zaehlt immer
+  // das juengste Auftreten (Upsert in recordPlatformError). Kann NULL sein
+  // (z. B. gezielte Meldungen ohne Stacktrace).
+  lastStack: text("last_stack"),
   lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
