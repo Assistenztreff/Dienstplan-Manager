@@ -511,7 +511,7 @@ export default function OperatorDashboard() {
             <div className="flex flex-wrap items-center gap-2">
               {/* Sammel-Abhaken: nur sichtbar, wenn offene Einträge existieren.
                   Öffnet einen Bestätigungs-Dialog vor dem Abhaken. */}
-              {(errorsQuery.data ?? []).some((e) => !e.resolved) && (
+              {(errorsQuery.data?.errors ?? []).some((e) => !e.resolved) && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -560,21 +560,41 @@ export default function OperatorDashboard() {
               {readableApiError(errorsQuery.error, "Unbekannter Fehler.")}
             </p>
           ) : (() => {
-            const allErrors = errorsQuery.data ?? [];
+            const allErrors = errorsQuery.data?.errors ?? [];
             const visibleErrors =
               errorFilter === "open" ? allErrors.filter((e) => !e.resolved) : allErrors;
+            // Dezenter Hinweis, wenn die Tabelle am Aufbewahrungslimit steht:
+            // beim Beschneiden (prune nach jedem Insert) wurden dann mit an
+            // Sicherheit grenzender Wahrscheinlichkeit bereits aelteste
+            // Eintraege verworfen — die Liste ist NICHT vollstaendig.
+            const retentionLimit = errorsQuery.data?.retentionLimit ?? 0;
+            const retentionReached =
+              retentionLimit > 0 && (errorsQuery.data?.totalStored ?? 0) >= retentionLimit;
+            const retentionNotice = retentionReached ? (
+              <p
+                className="text-xs text-muted-foreground"
+                data-testid="text-error-retention-notice"
+              >
+                Hinweis: Das Aufbewahrungslimit von {retentionLimit} Einträgen ist
+                erreicht — älteste Einträge wurden bereits entfernt, die Liste ist
+                nicht vollständig.
+              </p>
+            ) : null;
             if (visibleErrors.length === 0) {
               // Leerzustand greift auch, wenn alle Fehler erledigt sind
               // (Filter "Offene"). Bei "Alle" nur, wenn wirklich nichts da ist.
               return (
-                <p className="text-sm text-muted-foreground" data-testid="text-operator-errors-empty">
-                  {allErrors.length === 0
-                    ? "Keine Fehler im Betrieb — alles läuft rund."
-                    : "Keine offenen Fehler — alle Einträge sind erledigt."}
-                </p>
+                <>
+                  {retentionNotice}
+                  <p className="text-sm text-muted-foreground" data-testid="text-operator-errors-empty">
+                    {allErrors.length === 0
+                      ? "Keine Fehler im Betrieb — alles läuft rund."
+                      : "Keine offenen Fehler — alle Einträge sind erledigt."}
+                  </p>
+                </>
               );
             }
-            return visibleErrors.map((e) => {
+            const errorRows = visibleErrors.map((e) => {
               const detailsOpen = expandedErrorIds.has(e.id);
               return (
                 <div
@@ -679,6 +699,12 @@ export default function OperatorDashboard() {
                 </div>
               );
             });
+            return (
+              <>
+                {retentionNotice}
+                {errorRows}
+              </>
+            );
           })()}
         </CardContent>
       </Card>

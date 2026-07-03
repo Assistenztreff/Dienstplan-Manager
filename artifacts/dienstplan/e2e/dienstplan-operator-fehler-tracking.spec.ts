@@ -55,6 +55,18 @@ interface OperatorErrorRow {
   createdAt: string;
 }
 
+/**
+ * Antwort-Form von GET /api/operator/errors seit Task #353: die Liste ist in
+ * ein Objekt mit Aufbewahrungs-Metadaten gewickelt (totalStored = Gesamtzahl
+ * gespeicherter Eintraege unabhaengig vom limit-Parameter, retentionLimit =
+ * serverseitiges Aufbewahrungslimit).
+ */
+interface OperatorErrorList {
+  errors: OperatorErrorRow[];
+  totalStored: number;
+  retentionLimit: number;
+}
+
 /** Seedet einen superadmin direkt in der (Test-)DB via setup-superadmin-Skript. */
 function seedSuperadmin(email: string, password: string, name: string): void {
   const env: NodeJS.ProcessEnv = {
@@ -126,7 +138,20 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
     // Der Fehler MUSS im Operator-Endpunkt auftauchen (neueste zuerst).
     const listRes = await superCtx.get("/api/operator/errors");
     expect(listRes.status()).toBe(200);
-    const errors = (await listRes.json()) as OperatorErrorRow[];
+    const list = (await listRes.json()) as OperatorErrorList;
+    const errors = list.errors;
+
+    // Aufbewahrungs-Metadaten (Task #353): Gesamtzahl + Limit sind plausibel.
+    expect(typeof list.totalStored, "totalStored muss mitgeliefert werden").toBe("number");
+    expect(list.totalStored).toBeGreaterThanOrEqual(1);
+    expect(typeof list.retentionLimit, "retentionLimit muss mitgeliefert werden").toBe(
+      "number",
+    );
+    expect(list.retentionLimit).toBeGreaterThan(0);
+    expect(
+      list.totalStored,
+      "Gesamtzahl darf das Aufbewahrungslimit nicht überschreiten",
+    ).toBeLessThanOrEqual(list.retentionLimit);
 
     const entry = errors.find(
       (e) => e.message === BOOM_MESSAGE && e.context === "GET /api/dev/boom",
@@ -154,7 +179,7 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
 
     // Ausgangszustand des gebündelten Eintrags festhalten.
     const beforeRes = await superCtx.get("/api/operator/errors");
-    const before = ((await beforeRes.json()) as OperatorErrorRow[]).find(
+    const before = ((await beforeRes.json()) as OperatorErrorList).errors.find(
       (e) => e.id === recordedErrorId,
     );
     expect(before, "Gebündelter Eintrag muss existieren").toBeTruthy();
@@ -168,7 +193,7 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
     // … es bleibt EINE Zeile (gleiche id), der Zähler steigt um 2 und
     // lastSeenAt rückt nach vorn.
     const afterRes = await superCtx.get("/api/operator/errors");
-    const errors = (await afterRes.json()) as OperatorErrorRow[];
+    const errors = ((await afterRes.json()) as OperatorErrorList).errors;
     const matching = errors.filter(
       (e) => e.message === BOOM_MESSAGE && e.context === "GET /api/dev/boom",
     );
@@ -198,7 +223,7 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
 
     // … derselbe Eintrag ist wieder offen.
     const listRes = await superCtx.get("/api/operator/errors");
-    const entry = ((await listRes.json()) as OperatorErrorRow[]).find(
+    const entry = ((await listRes.json()) as OperatorErrorList).errors.find(
       (e) => e.id === recordedErrorId,
     );
     expect(entry, "Eintrag muss weiterhin existieren").toBeTruthy();
@@ -219,7 +244,7 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
 
     // … Status ist in der Liste sichtbar …
     const listRes = await superCtx.get("/api/operator/errors");
-    const errors = (await listRes.json()) as OperatorErrorRow[];
+    const errors = ((await listRes.json()) as OperatorErrorList).errors;
     expect(errors.find((e) => e.id === recordedErrorId)?.resolved).toBe(true);
 
     // … und wieder öffnen (für den UI-Test unten, der mit einem OFFENEN
@@ -319,7 +344,7 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
     await superCtx.get(`/api/dev/boom?label=resolveall-${stamp}`);
 
     const beforeRes = await superCtx.get("/api/operator/errors");
-    const before = (await beforeRes.json()) as OperatorErrorRow[];
+    const before = ((await beforeRes.json()) as OperatorErrorList).errors;
     const openBefore = before.filter((e) => !e.resolved);
     expect(openBefore.length, "Es müssen offene Einträge existieren").toBeGreaterThanOrEqual(2);
 
@@ -346,7 +371,7 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
 
     // Alle vorher offenen Einträge sind jetzt erledigt.
     const afterRes = await superCtx.get("/api/operator/errors");
-    const after = (await afterRes.json()) as OperatorErrorRow[];
+    const after = ((await afterRes.json()) as OperatorErrorList).errors;
     for (const e of openBefore) {
       expect(
         after.find((a) => a.id === e.id)?.resolved,
@@ -421,7 +446,7 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
     // Beide Einträge über die API identifizieren (IDs + erwarteter Zähler).
     const listRes = await superCtx.get("/api/operator/errors");
     expect(listRes.status()).toBe(200);
-    const errors = (await listRes.json()) as OperatorErrorRow[];
+    const errors = ((await listRes.json()) as OperatorErrorList).errors;
 
     const bundled = errors.find((e) => e.id === recordedErrorId);
     expect(bundled, "Gebündelter Eintrag muss existieren").toBeTruthy();

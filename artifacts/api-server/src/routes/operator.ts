@@ -19,6 +19,7 @@ import {
   UpdateOperatorErrorBody,
 } from "@workspace/api-zod";
 import { requireSuperadmin } from "../middleware/auth";
+import { MAX_STORED_ERRORS } from "../lib/platform-errors";
 
 const router = Router();
 
@@ -158,7 +159,10 @@ router.get(
 // (count + lastSeenAt, Upsert in lib/platform-errors.ts); sortiert nach
 // letztem Auftreten, neueste zuerst. Befuellt vom zentralen
 // Express-Error-Handler (app.ts) bzw. per recordPlatformError aus
-// try/catch-Stellen; Aufbewahrung serverseitig begrenzt.
+// try/catch-Stellen; Aufbewahrung serverseitig begrenzt. Die Antwort
+// liefert zusaetzlich totalStored (Gesamtzahl gespeicherter Eintraege)
+// und retentionLimit (MAX_STORED_ERRORS), damit das Dashboard warnen
+// kann, wenn aelteste Eintraege wegen des Limits bereits verworfen wurden.
 router.get(
   "/operator/errors",
   requireSuperadmin,
@@ -186,7 +190,18 @@ router.get(
       .orderBy(desc(platformErrorsTable.lastSeenAt), desc(platformErrorsTable.id))
       .limit(limit);
 
-    res.json(errors);
+    // Gesamtzahl UNABHAENGIG vom limit-Parameter: nur so laesst sich
+    // erkennen, ob die Tabelle am Aufbewahrungslimit steht (= aelteste
+    // Eintraege wurden beim Beschneiden bereits verworfen).
+    const [{ totalStored }] = await db
+      .select({ totalStored: sql<number>`count(*)::int` })
+      .from(platformErrorsTable);
+
+    res.json({
+      errors,
+      totalStored,
+      retentionLimit: MAX_STORED_ERRORS,
+    });
     return;
   },
 );

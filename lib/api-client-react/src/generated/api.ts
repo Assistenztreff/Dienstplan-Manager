@@ -53,6 +53,7 @@ import type {
   LoginInput,
   OperatorAccount,
   OperatorError,
+  OperatorErrorList,
   OperatorErrorUpdate,
   OperatorErrorsResolveAllResult,
   OperatorPlanChange,
@@ -5003,13 +5004,13 @@ export const getListOperatorErrorsUrl = (params?: ListOperatorErrorsParams,) => 
 }
 
 /**
- * Liefert die neuesten erfassten Serverfehler (unbehandelte 5xx-Fehler und gezielt gemeldete kritische Fehler) mit Schweregrad, Meldung, Kontext (Route) und Zeitstempel. Wiederkehrende Fehler (gleiche Meldung + gleicher Kontext) sind zu EINEM Eintrag gebündelt (count + lastSeenAt); sortiert nach letztem Auftreten, neueste zuerst. Die Aufbewahrung ist serverseitig begrenzt.
+ * Liefert die neuesten erfassten Serverfehler (unbehandelte 5xx-Fehler und gezielt gemeldete kritische Fehler) mit Schweregrad, Meldung, Kontext (Route) und Zeitstempel. Wiederkehrende Fehler (gleiche Meldung + gleicher Kontext) sind zu EINEM Eintrag gebündelt (count + lastSeenAt); sortiert nach letztem Auftreten, neueste zuerst. Die Aufbewahrung ist serverseitig begrenzt; die Antwort enthält dafür die Gesamtzahl gespeicherter Einträge (totalStored) und das Aufbewahrungslimit (retentionLimit), damit das Dashboard warnen kann, wenn älteste Einträge bereits verworfen wurden.
 
  * @summary Fehler-Tracking der Plattform (nur superadmin)
  */
-export const listOperatorErrors = async (params?: ListOperatorErrorsParams, options?: RequestInit): Promise<OperatorError[]> => {
+export const listOperatorErrors = async (params?: ListOperatorErrorsParams, options?: RequestInit): Promise<OperatorErrorList> => {
 
-  return customFetch<OperatorError[]>(getListOperatorErrorsUrl(params),
+  return customFetch<OperatorErrorList>(getListOperatorErrorsUrl(params),
   {
     ...options,
     method: 'GET'

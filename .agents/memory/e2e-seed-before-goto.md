@@ -10,3 +10,5 @@ The frontend fetches lists (e.g. shift templates) via React Query on page mount 
 **How to apply:** In specs, do all API seeding (templates, models, users) BEFORE `page.goto()`. If the target month/day matters (weekday-dependent data), compute it in Node (`today + N months`) instead of reading the UI month label first, then assert the label matches after navigating.
 
 Related: killed/timed-out Playwright runs leave orphan webServer processes on ports 8099/5199 ("healthz already used"). `fuser -k 8099/tcp 5199/tcp` then wait/poll until `curl localhost:8099/api/healthz` fails before re-running — the port takes several seconds to release.
+
+Related: a `timeout`-killed Playwright run (SIGTERM to pnpm) can leave its test-runner CHILDREN alive. Against a shared dev DB (E2E_BASE_URL), the zombie run keeps mutating state (e.g. resolve-all tests) and races the next run → spurious failures like "row not visible / all entries resolved". Before re-running, verify no stray `playwright`/`chrome` processes remain; a clean rerun then passes.

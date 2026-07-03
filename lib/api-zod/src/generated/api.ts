@@ -1482,7 +1482,7 @@ export const ListOperatorPlanChangesResponse = zod.array(ListOperatorPlanChanges
 
 
 /**
- * Liefert die neuesten erfassten Serverfehler (unbehandelte 5xx-Fehler und gezielt gemeldete kritische Fehler) mit Schweregrad, Meldung, Kontext (Route) und Zeitstempel. Wiederkehrende Fehler (gleiche Meldung + gleicher Kontext) sind zu EINEM Eintrag gebündelt (count + lastSeenAt); sortiert nach letztem Auftreten, neueste zuerst. Die Aufbewahrung ist serverseitig begrenzt.
+ * Liefert die neuesten erfassten Serverfehler (unbehandelte 5xx-Fehler und gezielt gemeldete kritische Fehler) mit Schweregrad, Meldung, Kontext (Route) und Zeitstempel. Wiederkehrende Fehler (gleiche Meldung + gleicher Kontext) sind zu EINEM Eintrag gebündelt (count + lastSeenAt); sortiert nach letztem Auftreten, neueste zuerst. Die Aufbewahrung ist serverseitig begrenzt; die Antwort enthält dafür die Gesamtzahl gespeicherter Einträge (totalStored) und das Aufbewahrungslimit (retentionLimit), damit das Dashboard warnen kann, wenn älteste Einträge bereits verworfen wurden.
 
  * @summary Fehler-Tracking der Plattform (nur superadmin)
  */
@@ -1495,7 +1495,8 @@ export const ListOperatorErrorsQueryParams = zod.object({
   "limit": zod.coerce.number().min(1).max(listOperatorErrorsQueryLimitMax).default(listOperatorErrorsQueryLimitDefault)
 })
 
-export const ListOperatorErrorsResponseItem = zod.object({
+export const ListOperatorErrorsResponse = zod.object({
+  "errors": zod.array(zod.object({
   "id": zod.number(),
   "level": zod.enum(['error', 'warning']),
   "message": zod.string(),
@@ -1505,8 +1506,10 @@ export const ListOperatorErrorsResponseItem = zod.object({
   "lastStack": zod.string().nullish().describe('Detailtext (Stacktrace, gekürzt) des LETZTEN Auftretens; kann fehlen'),
   "lastSeenAt": zod.coerce.date().describe('Zeitpunkt des letzten Auftretens'),
   "createdAt": zod.coerce.date().describe('Zeitpunkt des ersten Auftretens')
+})),
+  "totalStored": zod.number().describe('Gesamtzahl aktuell gespeicherter Fehler-Einträge (unabhängig vom limit-Parameter)'),
+  "retentionLimit": zod.number().describe('Aufbewahrungslimit des Servers (maximal so viele Einträge werden behalten; älteste nach letztem Auftreten werden verworfen). Ist totalStored gleich diesem Wert, wurden mit hoher Wahrscheinlichkeit bereits älteste Einträge entfernt.')
 })
-export const ListOperatorErrorsResponse = zod.array(ListOperatorErrorsResponseItem)
 
 
 /**

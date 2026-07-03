@@ -1476,7 +1476,10 @@ paths:
         Kontext (Route) und Zeitstempel. Wiederkehrende Fehler (gleiche
         Meldung + gleicher Kontext) sind zu EINEM Eintrag gebündelt (count +
         lastSeenAt); sortiert nach letztem Auftreten, neueste zuerst. Die
-        Aufbewahrung ist serverseitig begrenzt.
+        Aufbewahrung ist serverseitig begrenzt; die Antwort enthält dafür die
+        Gesamtzahl gespeicherter Einträge (totalStored) und das
+        Aufbewahrungslimit (retentionLimit), damit das Dashboard warnen kann,
+        wenn älteste Einträge bereits verworfen wurden.
       parameters:
         - name: limit
           in: query
@@ -1488,13 +1491,11 @@ paths:
             default: 50
       responses:
         "200":
-          description: Liste der Plattform-Fehler (neueste zuerst)
+          description: Liste der Plattform-Fehler (neueste zuerst) samt Aufbewahrungs-Metadaten
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/OperatorError"
+                $ref: "#/components/schemas/OperatorErrorList"
         "403":
           description: Keine Berechtigung (kein superadmin)
 
@@ -1707,6 +1708,25 @@ components:
           type: string
           format: date-time
           description: Zeitpunkt des ersten Auftretens
+
+    OperatorErrorList:
+      type: object
+      required: [errors, totalStored, retentionLimit]
+      properties:
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/OperatorError"
+        totalStored:
+          type: integer
+          description: Gesamtzahl aktuell gespeicherter Fehler-Einträge (unabhängig vom limit-Parameter)
+        retentionLimit:
+          type: integer
+          description: >-
+            Aufbewahrungslimit des Servers (maximal so viele Einträge werden
+            behalten; älteste nach letztem Auftreten werden verworfen). Ist
+            totalStored gleich diesem Wert, wurden mit hoher Wahrscheinlichkeit
+            bereits älteste Einträge entfernt.
 
     OperatorErrorUpdate:
       type: object

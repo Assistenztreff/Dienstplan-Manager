@@ -167,6 +167,14 @@ export interface OperatorError {
   createdAt: string;
 }
 
+export interface OperatorErrorList {
+  errors: OperatorError[];
+  /** Gesamtzahl aktuell gespeicherter Fehler-Einträge (unabhängig vom limit-Parameter) */
+  totalStored: number;
+  /** Aufbewahrungslimit des Servers (maximal so viele Einträge werden behalten; älteste nach letztem Auftreten werden verworfen). Ist totalStored gleich diesem Wert, wurden mit hoher Wahrscheinlichkeit bereits älteste Einträge entfernt. */
+  retentionLimit: number;
+}
+
 export interface OperatorErrorUpdate {
   /** true = als erledigt abhaken, false = wieder auf offen setzen */
   resolved: boolean;
