@@ -23,3 +23,8 @@ the playwright config runs setup-test-db at load time (managed stack, main proce
 and setup-test-db self-heals a blocked push by drop+recreate of the throwaway test DB.
 Manual guarded-SQL repair is only needed if the DEV DB (not the `_test` one) drifts.
 Purely additive drift (new nullable/defaulted columns) pushes cleanly without prompts.
+
+Standalone verify-* scripts that seed directly into the `_test` DB hit this drift too
+(e.g. enum values added after the test DB was created → 22P02 invalid enum input).
+Pattern: probe pg_enum/pg_attribute for a recently-added schema element and, on miss,
+re-run `setup-test-db` (self-heals via drop+recreate) before seeding.
