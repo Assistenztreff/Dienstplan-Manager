@@ -38,3 +38,4 @@
 - [Features via team-owner plan](feature-via-team-owner-plan.md) — assistants are always free; assistant-facing premium features gate on the employer's plan, frontend must probe a gated endpoint (not currentUser.plan).
 - [Allowance team overrides](allowance-team-overrides.md) — account row (team_id NULL) + override row share one table; readers must filter isNull(teamId) and display percents must match the applied chain.
 - [Workflow names in monorepo](workflow-names-monorepo.md) — workflows are named `artifacts/<dir>: <service>` (e.g. `artifacts/dienstplan: web`); slug/title fail, use listWorkflows() on RUN_COMMAND_NOT_FOUND.
+- [Resend test-sender restriction](resend-test-sender-restriction.md) — onboarding@resend.dev only delivers to the Resend account owner's email (403 otherwise); verify a domain for free recipients.
