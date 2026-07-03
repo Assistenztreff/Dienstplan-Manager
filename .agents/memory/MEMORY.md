@@ -1,7 +1,7 @@
 - [DB push & session table](db-push-session-table.md) — connect-pg-simple's session table must live in the Drizzle schema or `db push` (incl. non-interactive post-merge) tries to drop it as data loss.
 - [Orval query hooks enabled cast](orval-query-hooks-enabled.md) — generated query hooks require queryKey in full UseQueryOptions; pass `enabled` via dual cast (options + result), or data infers to `{}`.
 - [Time-tracking shift linkage](time-tracking-shift-link.md) — validate shift ownership (403) before the global shiftId dedupe (409) on POST /api/time-tracking
-- [Restart dev after codegen/db push](dev-restart-after-codegen.md) — running api-server keeps stale Zod/Drizzle schema; new fields silently stripped until workflow restart
+- [Restart dev after codegen/db push](dev-restart-after-codegen.md) — running api-server keeps stale Zod/Drizzle schema until restart; post-merge reconciliation restarts workflows on success AND failure
 - [Contracts self-scoping](contracts-self-scoping.md) — GET /api/contracts is shared: admin sees all/by-param, assistant forced to own userId; relax admin endpoints over adding new ones.
 - [Team scoping & GET:id IDOR](team-scoping-idor.md) — list scoping isn't enough: every by-id read/PATCH/DELETE must check row.teamId ∈ allowedTeams (404 on mismatch) or admins leak cross-team rows.
 - [team_id insert invariant](team-id-insert-invariant.md) — team_id is NOT NULL on shifts/contracts/shift_models/time_tracking; every insert (incl. hidden absence auto-booking in shifts route) must supply it.

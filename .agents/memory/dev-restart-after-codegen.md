@@ -17,3 +17,15 @@ disk does not hot-reload them in the long-running workflow.
 **How to apply:** after `pnpm --filter @workspace/api-spec run codegen` and/or
 `pnpm --filter @workspace/db run push`, restart the affected workflow
 (`artifacts/api-server: API Server`) before smoke-testing the new field.
+
+## Post-merge reconciliation restarts workflows (verified)
+
+Platform workflow reconciliation runs after the post-merge script and restarts
+already-running workflows **both on script success and on script failure**
+(verified empirically via `runPostMergeSetup()` + PID comparison).
+
+- Success path: the API server is guaranteed to reload fresh Drizzle/Zod state
+  after `db push` — no manual restart step needed inside `post-merge.sh`.
+- Failure path: the server restarts anyway, so it runs NEW code against a
+  possibly STALE dev DB. The post-merge script must fail loudly (it does) so
+  the agent knows to repair `db push` before trusting runtime behavior.
