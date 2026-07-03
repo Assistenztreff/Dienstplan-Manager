@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { spawnSync } from "node:child_process";
 
 /**
  * E2E-Konfiguration für die Dienstplan-App.
@@ -11,9 +12,11 @@ import { defineConfig, devices } from "@playwright/test";
  *   - eigener API-Server (PORT 8099) mit DATABASE_URL = `<dbname>_test`
  *   - eigener Vite-Server (PORT 5199), der /api an den Test-API weiterleitet
  *
- * Die Test-DB wird vor dem Lauf provisioniert (siehe `test:e2e`-Script:
- * `pnpm --filter @workspace/scripts run setup-test-db`). Die laufenden
- * Replit-Workflows und die echte Datenbank bleiben unangetastet.
+ * Die Test-DB wird direkt hier in der Konfiguration provisioniert (siehe
+ * unten: `setup-test-db` läuft synchron beim Laden der Config) — damit gilt
+ * das auch für Einzel-Spec-Läufe via `pnpm exec playwright test <name>`,
+ * die das `test:e2e`-npm-Skript umgehen. Die laufenden Replit-Workflows und
+ * die echte Datenbank bleiben unangetastet.
  *
  * Override-Möglichkeit: Ist `E2E_BASE_URL` von außen gesetzt, wird KEIN
  * Test-Stack gestartet und die Tests laufen gegen die angegebene URL
@@ -48,6 +51,34 @@ if (useManagedStack && !databaseUrl) {
   throw new Error("DATABASE_URL muss für den isolierten E2E-Test-Stack gesetzt sein.");
 }
 const testDatabaseUrl = databaseUrl ? deriveTestDbUrl(databaseUrl) : "";
+
+// Test-DB VOR jedem Lauf idempotent provisionieren — bewusst hier in der
+// Config statt im `test:e2e`-npm-Skript oder in einem globalSetup:
+//   - Einzel-Spec-Läufe via `pnpm exec playwright test <name>` umgehen das
+//     npm-Skript; ohne dieses Setup liefen sie nach Schema-Änderungen gegen
+//     eine veraltete `<dbname>_test`-DB (500 "column ... does not exist").
+//   - Die Config lädt garantiert BEVOR die webServer starten — der API-Server
+//     bootet also nie gegen eine fehlende/veraltete Test-DB (bei globalSetup
+//     ist die Reihenfolge relativ zu webServer nicht garantiert).
+// Guards: nur im Hauptprozess (Worker laden die Config erneut, sollen aber
+// nicht erneut provisionieren) und nur für den verwalteten Stack —
+// `E2E_BASE_URL`-Läufe gegen externe Stacks überspringen das Setup weiterhin.
+// `E2E_SKIP_DB_SETUP=1` als bewusste Abkürzung für schnelle Wiederholungs-
+// läufe ohne zwischenzeitliche Schema-Änderung.
+const isWorkerProcess = !!process.env.TEST_WORKER_INDEX;
+if (useManagedStack && !isWorkerProcess && !process.env.E2E_SKIP_DB_SETUP) {
+  console.log("[e2e] Test-Datenbank wird provisioniert (setup-test-db)...");
+  const setup = spawnSync(
+    "pnpm",
+    ["--filter", "@workspace/scripts", "run", "setup-test-db"],
+    { stdio: "inherit", timeout: 300_000 },
+  );
+  if (setup.status !== 0 || setup.error != null) {
+    throw new Error(
+      "setup-test-db fehlgeschlagen — Test-Datenbank konnte nicht provisioniert werden (siehe Ausgabe oben).",
+    );
+  }
+}
 
 // Damit Specs/Helper, die zur Laufzeit einen zweiten Admin seeden
 // (`seedForeignAdmin` -> setup-admin per execSync), in DIESELBE Datenbank

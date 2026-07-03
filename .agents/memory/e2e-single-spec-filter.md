@@ -4,13 +4,17 @@ description: Why `pnpm run test:e2e -- <file>` runs the whole suite, and how to 
 ---
 
 `pnpm --filter @workspace/dienstplan run test:e2e -- <file>` does NOT filter to one spec.
-The npm script is `setup-test-db && playwright test -- <file>`; the extra `--` disables
-Playwright's positional file-filter, so all specs run (147+), which blows past any bash timeout
-and orphans the webServer on ports 8099/5199 (later runs then fail with "port already in use").
+Historically the npm script was `setup-test-db && playwright test`, where the extra `--`
+disabled Playwright's positional file-filter, so all specs ran (147+), blowing past any bash
+timeout and orphaning the webServer on 8099/5199 ("port already in use" on later runs).
+The script is now plain `playwright test` (setup moved into the config), but the direct
+`pnpm exec` form below remains the reliable way to run one spec.
 
 **How to apply:** run one spec directly from the artifact dir, no `--`:
 `cd artifacts/dienstplan && pnpm exec playwright test <spec-name-substring>`.
-setup-test-db only needs to run once per session (it's idempotent); the playwright config's
+The playwright config itself runs setup-test-db at load time (managed stack only,
+main process only), so single-spec runs auto-provision the `<db>_test` DB; skip via
+`E2E_SKIP_DB_SETUP=1` for fast repeat runs without schema changes. The config's
 webServer boots its own isolated stack + `<db>_test` DB and provides E2E_TEST_DATABASE_URL
 (needed by setAccountPlan/seedForeignAdmin). If ports are stuck, kill the specific PIDs and
 `fuser -k 8099/tcp 5199/tcp` — broad `pkill -f playwright` tends to also SIGKILL the caller shell.

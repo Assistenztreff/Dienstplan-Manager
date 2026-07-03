@@ -18,7 +18,8 @@ pg_constraint-guarded `ADD CONSTRAINT`), then re-run `setup-test-db` — once th
 empty, push passes and setup is idempotent again. Derive the test DB URL from
 `DATABASE_URL` + `_test` suffix.
 
-Note: running a single spec via `pnpm exec playwright test <name>` bypasses the
-`test:e2e` npm script and therefore SKIPS setup-test-db — after any schema change,
-run `pnpm --filter @workspace/scripts run setup-test-db` once first. Purely additive
-drift (new nullable/defaulted columns) pushes cleanly without prompts.
+Note: single-spec runs via `pnpm exec playwright test <name>` no longer skip setup —
+the playwright config runs setup-test-db at load time (managed stack, main process only),
+and setup-test-db self-heals a blocked push by drop+recreate of the throwaway test DB.
+Manual guarded-SQL repair is only needed if the DEV DB (not the `_test` one) drifts.
+Purely additive drift (new nullable/defaulted columns) pushes cleanly without prompts.
