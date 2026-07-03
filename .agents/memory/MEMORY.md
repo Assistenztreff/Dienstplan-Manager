@@ -40,3 +40,4 @@
 - [Workflow names in monorepo](workflow-names-monorepo.md) — workflows are named `artifacts/<dir>: <service>` (e.g. `artifacts/dienstplan: web`); slug/title fail, use listWorkflows() on RUN_COMMAND_NOT_FOUND.
 - [Resend test-sender restriction](resend-test-sender-restriction.md) — onboarding@resend.dev only delivers to the Resend account owner's email (403 otherwise); verify a domain for free recipients.
 - [DB-backed vitest against _test DB](db-backed-vitest-test-db.md) — rewrite DATABASE_URL before dynamic import of @workspace/db, self-provision via setup-test-db, pool.end() in afterAll.
+- [E2E team-ID discovery](e2e-team-id-discovery.md) — DTOs strip teamId and privat accounts can't GET /teams; register throwaway accounts as dienstleister to learn their Standard-Team ID via API.
