@@ -8,9 +8,12 @@ function hashPassword(password: string): string {
 }
 
 async function main() {
-  const [argEmail, argPassword, argName] = process.argv
-    .slice(2)
-    .filter((a) => a !== "--");
+  const rawArgs = process.argv.slice(2).filter((a) => a !== "--");
+  const allowPromote =
+    rawArgs.includes("--promote") || process.env.SUPERADMIN_ALLOW_PROMOTE === "1";
+  const [argEmail, argPassword, argName] = rawArgs.filter(
+    (a) => !a.startsWith("--")
+  );
 
   const email = (argEmail ?? process.env.SUPERADMIN_EMAIL ?? "").toLowerCase().trim();
   const password = argPassword ?? process.env.SUPERADMIN_PASSWORD ?? "";
@@ -46,6 +49,16 @@ async function main() {
       if (role === "superadmin") {
         console.log(`Superadmin '${email}' existiert bereits (ID: ${id}). Nichts zu tun.`);
         return;
+      }
+      if (!allowPromote) {
+        console.error(
+          `Abbruch: Konto '${email}' existiert bereits (ID: ${id}, Rolle: ${role}).\n` +
+            `Das Befördern eines BESTEHENDEN Kontos zum Superadmin verlangt eine explizite Bestätigung,\n` +
+            `um versehentliche Betreiber-Rechte durch E-Mail-Tippfehler zu verhindern.\n` +
+            `Zum Bestätigen: Flag '--promote' anhängen oder Env SUPERADMIN_ALLOW_PROMOTE=1 setzen.\n` +
+            `Beispiel: pnpm --filter @workspace/scripts run setup-superadmin -- <email> <passwort> --promote`
+        );
+        process.exit(1);
       }
       await client.query(
         "UPDATE users SET role = 'superadmin', is_active = true WHERE id = $1",
