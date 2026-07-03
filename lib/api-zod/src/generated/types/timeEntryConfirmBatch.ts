@@ -13,5 +13,4 @@ export interface TimeEntryConfirmBatch {
      * @maxItems 500
      */
   ids: number[];
-  confirmedBy: number;
 }

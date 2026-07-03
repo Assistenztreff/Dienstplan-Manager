@@ -225,7 +225,6 @@ export default function Zeiterfassung() {
       const result = await confirmBatch.mutateAsync({
         data: {
           ids: pendingFiltered.map((e) => e.id),
-          confirmedBy: currentUser.id,
         },
       });
       await queryClient.invalidateQueries({
@@ -255,7 +254,7 @@ export default function Zeiterfassung() {
 
   const handleConfirm = (id: number, status: "confirmed" | "rejected") => {
     confirmEntry(
-      { id, data: { status, confirmedBy: currentUser?.id ?? 0 } },
+      { id, data: { status } },
       {
         onSuccess: () => {
           toast({ title: status === "confirmed" ? "Eintrag bestätigt" : "Eintrag abgelehnt" });

@@ -1043,7 +1043,6 @@ export const ConfirmTimeEntryParams = zod.object({
 
 export const ConfirmTimeEntryBody = zod.object({
   "status": zod.enum(['confirmed', 'rejected']),
-  "confirmedBy": zod.number(),
   "notes": zod.string().optional()
 })
 
@@ -1088,8 +1087,7 @@ export const confirmTimeEntriesBatchBodyIdsMax = 500;
 
 
 export const ConfirmTimeEntriesBatchBody = zod.object({
-  "ids": zod.array(zod.number()).min(1).max(confirmTimeEntriesBatchBodyIdsMax).describe('IDs der zu bestätigenden offenen Zeiteinträge.'),
-  "confirmedBy": zod.number()
+  "ids": zod.array(zod.number()).min(1).max(confirmTimeEntriesBatchBodyIdsMax).describe('IDs der zu bestätigenden offenen Zeiteinträge.')
 })
 
 export const ConfirmTimeEntriesBatchResponse = zod.object({

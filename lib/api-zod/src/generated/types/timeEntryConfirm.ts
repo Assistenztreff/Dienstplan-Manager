@@ -9,6 +9,5 @@ import type { TimeEntryConfirmStatus } from './timeEntryConfirmStatus';
 
 export interface TimeEntryConfirm {
   status: TimeEntryConfirmStatus;
-  confirmedBy: number;
   notes?: string;
 }

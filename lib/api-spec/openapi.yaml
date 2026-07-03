@@ -2415,19 +2415,17 @@ components:
 
     TimeEntryConfirm:
       type: object
-      required: [status, confirmedBy]
+      required: [status]
       properties:
         status:
           type: string
           enum: [confirmed, rejected]
-        confirmedBy:
-          type: integer
         notes:
           type: string
 
     TimeEntryConfirmBatch:
       type: object
-      required: [ids, confirmedBy]
+      required: [ids]
       properties:
         ids:
           type: array
@@ -2436,8 +2434,6 @@ components:
             type: integer
           minItems: 1
           maxItems: 500
-        confirmedBy:
-          type: integer
 
     TimeEntryConfirmBatchResult:
       type: object

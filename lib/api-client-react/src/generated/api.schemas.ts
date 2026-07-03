@@ -764,7 +764,6 @@ export const TimeEntryConfirmStatus = {
 
 export interface TimeEntryConfirm {
   status: TimeEntryConfirmStatus;
-  confirmedBy: number;
   notes?: string;
 }
 
@@ -775,7 +774,6 @@ export interface TimeEntryConfirmBatch {
      * @maxItems 500
      */
   ids: number[];
-  confirmedBy: number;
 }
 
 export interface TimeEntryConfirmBatchResult {

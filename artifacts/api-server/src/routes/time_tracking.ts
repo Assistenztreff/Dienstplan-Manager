@@ -277,7 +277,7 @@ router.patch("/time-tracking/:id/confirm", requireAdmin, requirePlanFeature("str
     .update(timeTrackingTable)
     .set({
       status: body.data.status,
-      confirmedBy: body.data.confirmedBy,
+      confirmedBy: req.session.userId!,
       confirmedAt: new Date(),
     })
     .where(and(eq(timeTrackingTable.id, params.data.id), inArray(timeTrackingTable.teamId, allowedTeams)))
@@ -316,7 +316,7 @@ router.post("/time-tracking/confirm-batch", requireAdmin, requirePlanFeature("st
     .update(timeTrackingTable)
     .set({
       status: "confirmed",
-      confirmedBy: body.data.confirmedBy,
+      confirmedBy: req.session.userId!,
       confirmedAt: new Date(),
     })
     .where(

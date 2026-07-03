@@ -43,3 +43,4 @@
 - [E2E team-ID discovery](e2e-team-id-discovery.md) — DTOs strip teamId and privat accounts can't GET /teams; register throwaway accounts as dienstleister to learn their Standard-Team ID via API.
 - [Global-singleton-to-owner-scoped migration](tenant-isolation-singleton-fallback.md) — converting a fixed-id global settings row to owner-scoped hits non-interactive drizzle-push prompts and a "type serial does not exist" bug; fix via manual SQL.
 - [Session isActive revocation](session-isactive-revocation.md) — requireAuth/requireAdmin/requireSuperadmin/requireDienstleister must reload isActive from DB per request; standalone inline session checks (e.g. GET /auth/me) bypass middleware and need the same check.
+- [Client-trusted audit actor fields](client-trusted-audit-actor-fields.md) — approve/confirm endpoints must derive the actor from req.session, never accept `confirmedBy`-style fields from the request body.
