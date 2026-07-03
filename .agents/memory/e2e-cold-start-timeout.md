@@ -33,3 +33,8 @@ calls** — they produce empty output files. So:
   verdict is on disk the instant a test ends, surviving a slow/killed teardown.
   Run with `timeout --kill-after=3 116 ... --reporter=/tmp/rep.cjs`, then read the
   results file. Run tests one at a time (`-g`) so each fits the budget.
+- Practical recipe that fits the budget: run `setup-test-db` once in its own tool
+  call, then foreground spec runs with `E2E_SKIP_DB_SETUP=1` and `-g` batches of
+  ~5-6 tests (incl. any earlier test that sets shared state like recordedErrorId).
+  ~6 tests + stack boot ≈ 35-45s. The code_execution notebook also gets reset
+  between calls, so spawning long runs there fails the same way as nohup.

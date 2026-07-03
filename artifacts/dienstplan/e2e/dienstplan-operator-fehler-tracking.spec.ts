@@ -67,6 +67,31 @@ interface OperatorErrorList {
   retentionLimit: number;
 }
 
+/**
+ * Seedet bzw. entfernt kuenstliche platform_errors-Zeilen direkt in der
+ * (Test-)DB via seed-platform-errors-Skript (Retention-Hinweis-Tests).
+ * DB-Targeting wie bei seedSuperadmin: gegen den isolierten Test-Stack muss
+ * die `_test`-DB getroffen werden (E2E_TEST_DATABASE_URL).
+ */
+function runSeedPlatformErrors(
+  prefix: string,
+  opts: { count?: number; cleanup?: boolean },
+): void {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    SEED_PLATFORM_ERRORS_PREFIX: prefix,
+  };
+  if (opts.count != null) env.SEED_PLATFORM_ERRORS_COUNT = String(opts.count);
+  if (opts.cleanup) env.SEED_PLATFORM_ERRORS_CLEANUP = "1";
+  if (process.env.E2E_TEST_DATABASE_URL) {
+    env.DATABASE_URL = process.env.E2E_TEST_DATABASE_URL;
+  }
+  execSync("pnpm --filter @workspace/scripts run seed-platform-errors", {
+    env,
+    stdio: "pipe",
+  });
+}
+
 /** Seedet einen superadmin direkt in der (Test-)DB via setup-superadmin-Skript. */
 function seedSuperadmin(email: string, password: string, name: string): void {
   const env: NodeJS.ProcessEnv = {
@@ -97,6 +122,11 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
   let superCtx: APIRequestContext;
   let recordedErrorId = 0;
 
+  // Lauf-eindeutiger Praefix fuer die kuenstlich geseedeten Retention-Zeilen —
+  // Cleanup loescht ausschliesslich Zeilen mit diesem Praefix, echte
+  // Fehler-Eintraege (auch aus frueheren Laeufen) bleiben unberuehrt.
+  const retentionSeedPrefix = `E2E-Retention-Seed ${stamp}`;
+
   test.beforeAll(async () => {
     // Normales Admin-Konto: darf die Operator-Endpunkte NICHT sehen.
     admin = await registerFreeAccount("privat", "fehlertracking");
@@ -113,6 +143,13 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
   });
 
   test.afterAll(async () => {
+    try {
+      // Crash-sicheres Netz: geseedete Retention-Zeilen restlos entfernen,
+      // auch wenn der Retention-Test selbst vorher abgebrochen ist.
+      runSeedPlatformErrors(retentionSeedPrefix, { cleanup: true });
+    } catch {
+      /* Best effort — Cleanup darf den Lauf nicht kippen. */
+    }
     try {
       deleteAccountByEmail(superEmail);
     } catch {
@@ -478,5 +515,103 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
     await expect(onceRow).toContainText(`[${label}]`);
     await expect(onceRow.getByTestId(`badge-error-count-${once!.id}`)).toHaveCount(0);
     await expect(onceRow).not.toContainText("zuletzt");
+  });
+
+  test("UI: Retention-Hinweis ist unterhalb des Aufbewahrungslimits NICHT sichtbar", async ({
+    page,
+  }) => {
+    // Vorbedingung: die Test-DB liegt unter dem Limit. Die persistente
+    // `_test`-DB sammelt ueber Laeufe hinweg nur wenige gebuendelte
+    // Boom-Eintraege an — sollte sie jemals voll laufen, macht diese
+    // Assertion das explizit sichtbar statt still falsch-gruen zu werden.
+    const listRes = await superCtx.get("/api/operator/errors");
+    expect(listRes.status()).toBe(200);
+    const list = (await listRes.json()) as OperatorErrorList;
+    expect(
+      list.totalStored,
+      "Vorbedingung verletzt: Test-DB steht bereits am Aufbewahrungslimit — platform_errors manuell leeren",
+    ).toBeLessThan(list.retentionLimit);
+
+    const loginRes = await page.request.post("/api/auth/login", {
+      data: { email: superEmail, password: superPassword },
+    });
+    expect(loginRes.ok(), "UI-Login als superadmin fehlgeschlagen").toBe(true);
+
+    await page.goto("/operator-dashboard");
+
+    // Karte ist geladen (Zeile des aufgezeichneten Fehlers sichtbar) …
+    await expect(
+      page.getByTestId(`row-operator-error-${recordedErrorId}`),
+    ).toBeVisible();
+    // … aber der Retention-Hinweis fehlt: unterhalb des Limits ist die
+    // Liste vollstaendig, ein Hinweis waere irrefuehrend.
+    await expect(page.getByTestId("text-error-retention-notice")).toHaveCount(0);
+  });
+
+  test("UI: Retention-Hinweis erscheint, wenn das Aufbewahrungslimit erreicht ist", async ({
+    page,
+  }) => {
+    // Serverseitiges Limit dynamisch aus der API lesen (Default 500, via
+    // PLATFORM_ERRORS_MAX_STORED injizierbar) — der Test funktioniert mit
+    // jedem konfigurierten Limit.
+    const beforeRes = await superCtx.get("/api/operator/errors");
+    expect(beforeRes.status()).toBe(200);
+    const before = (await beforeRes.json()) as OperatorErrorList;
+    expect(before.retentionLimit).toBeGreaterThan(0);
+
+    // Genau `retentionLimit` Zeilen seeden: damit gilt totalStored >= Limit
+    // selbst dann, wenn ein parallel laufender Spec zwischendurch ein Pruning
+    // ausloest (das behaelt die neuesten N — also unsere frisch geseedeten).
+    runSeedPlatformErrors(retentionSeedPrefix, { count: before.retentionLimit });
+
+    try {
+      // API-Zwischenkontrolle: das Limit ist jetzt erreicht.
+      const atLimitRes = await superCtx.get("/api/operator/errors");
+      expect(atLimitRes.status()).toBe(200);
+      const atLimit = (await atLimitRes.json()) as OperatorErrorList;
+      expect(
+        atLimit.totalStored,
+        "Nach dem Seeden muss die Tabelle am Aufbewahrungslimit stehen",
+      ).toBeGreaterThanOrEqual(atLimit.retentionLimit);
+
+      const loginRes = await page.request.post("/api/auth/login", {
+        data: { email: superEmail, password: superPassword },
+      });
+      expect(loginRes.ok(), "UI-Login als superadmin fehlgeschlagen").toBe(true);
+
+      await page.goto("/operator-dashboard");
+
+      // Der Hinweis ist sichtbar und nennt das konkrete Limit.
+      const notice = page.getByTestId("text-error-retention-notice");
+      await expect(notice).toBeVisible();
+      await expect(notice).toContainText(
+        `Aufbewahrungslimit von ${atLimit.retentionLimit} Einträgen`,
+      );
+      await expect(notice).toContainText("älteste Einträge wurden bereits entfernt");
+    } finally {
+      // Seed-Daten restlos entfernen — unabhaengig vom Testausgang
+      // (zusaetzlich abgesichert im afterAll fuer harte Abbrueche).
+      runSeedPlatformErrors(retentionSeedPrefix, { cleanup: true });
+    }
+
+    // Gegenprobe nach dem Cleanup: Tabelle wieder unter dem Limit, geseedete
+    // Zeilen komplett verschwunden, Hinweis nach Reload wieder weg.
+    const afterRes = await superCtx.get("/api/operator/errors");
+    expect(afterRes.status()).toBe(200);
+    const after = (await afterRes.json()) as OperatorErrorList;
+    expect(
+      after.totalStored,
+      "Nach dem Cleanup muss die Tabelle wieder unter dem Limit liegen",
+    ).toBeLessThan(after.retentionLimit);
+    expect(
+      after.errors.some((e) => e.message.startsWith(retentionSeedPrefix)),
+      "Geseedete Zeilen muessen restlos entfernt sein",
+    ).toBe(false);
+
+    await page.reload();
+    await expect(
+      page.getByTestId(`row-operator-error-${recordedErrorId}`),
+    ).toBeVisible();
+    await expect(page.getByTestId("text-error-retention-notice")).toHaveCount(0);
   });
 });

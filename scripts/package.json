@@ -11,6 +11,7 @@
     "set-plan": "tsx ./src/set-plan.ts",
     "delete-account": "tsx ./src/delete-account.ts",
     "seed-owned-team": "tsx ./src/seed-owned-team.ts",
+    "seed-platform-errors": "tsx ./src/seed-platform-errors.ts",
     "cleanup-test-accounts": "tsx ./src/cleanup-test-accounts.ts",
     "migrate-teams": "tsx ./src/migrate-teams.ts",
     "migrate-allowance-settings": "tsx ./src/migrate-allowance-settings.ts",
