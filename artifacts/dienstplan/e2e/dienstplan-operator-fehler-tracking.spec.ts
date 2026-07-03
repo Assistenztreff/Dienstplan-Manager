@@ -34,6 +34,15 @@ import {
 
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
 
+/**
+ * Exakte Meldung des ungelabelten Dev-Booms. Die Buendelungs-Tests filtern
+ * bewusst mit `===` (nicht includes): der Labeled-Boom des Zaehler-Badge-Tests
+ * (und Reste aus frueheren Laeufen in der persistenten Test-DB) erzeugt
+ * Meldungen mit demselben Praefix + ` [label]`-Suffix, die sonst als
+ * vermeintliche Duplikate zaehlen wuerden.
+ */
+const BOOM_MESSAGE = "Dev-Testfehler (absichtlich ausgeloest ueber /dev/boom)";
+
 interface OperatorErrorRow {
   id: number;
   level: "error" | "warning";
@@ -119,7 +128,7 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
     const errors = (await listRes.json()) as OperatorErrorRow[];
 
     const entry = errors.find(
-      (e) => e.message.includes("Dev-Testfehler") && e.context === "GET /api/dev/boom",
+      (e) => e.message === BOOM_MESSAGE && e.context === "GET /api/dev/boom",
     );
     expect(entry, "Ausgelöster Fehler fehlt in /api/operator/errors").toBeTruthy();
     expect(entry!.level).toBe("error");
@@ -154,7 +163,7 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
     const afterRes = await superCtx.get("/api/operator/errors");
     const errors = (await afterRes.json()) as OperatorErrorRow[];
     const matching = errors.filter(
-      (e) => e.message.includes("Dev-Testfehler") && e.context === "GET /api/dev/boom",
+      (e) => e.message === BOOM_MESSAGE && e.context === "GET /api/dev/boom",
     );
     expect(matching.length, "Wiederholungen dürfen KEINE neuen Zeilen anlegen").toBe(1);
     expect(matching[0].id, "Gebündelt in denselben Eintrag").toBe(recordedErrorId);
@@ -286,10 +295,11 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
   });
 
   test("API: Alle offenen Fehler in einem Schritt abhaken (resolve-all), nur superadmin", async () => {
-    // Zwei zusätzliche offene Einträge erzeugen (Vorfall-Szenario mit
-    // mehreren gleichartigen Fehlern).
+    // Zwei offene Einträge erzeugen. WICHTIG: seit der Bündelung (Task #341)
+    // landen identische Booms in EINER Zeile — für "mehrere offene Einträge"
+    // braucht der zweite Boom eine eigene Meldung (Label ⇒ eigene Zeile).
     await superCtx.get("/api/dev/boom");
-    await superCtx.get("/api/dev/boom");
+    await superCtx.get(`/api/dev/boom?label=resolveall-${stamp}`);
 
     const beforeRes = await superCtx.get("/api/operator/errors");
     const before = (await beforeRes.json()) as OperatorErrorRow[];
@@ -371,5 +381,60 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
     // (Bestandsschutz — abhaken löscht nichts).
     await page.getByTestId("button-error-filter-all").click();
     await expect(page.getByText("· Erledigt").first()).toBeVisible();
+  });
+
+  test("UI: Wiederholungs-Zähler (N×) und „zuletzt“ sichtbar, Einmal-Fehler OHNE Badge", async ({
+    page,
+  }) => {
+    expect(recordedErrorId, "API-Test muss vorher gelaufen sein").toBeGreaterThan(0);
+
+    // 1) Gebündelten Eintrag erneut auslösen: nach dem Sammel-Abhaken des
+    //    vorigen Tests öffnet ihn das Wiederauftreten wieder (Filter „Offene")
+    //    — sein Zähler steht durch die früheren Tests längst über 1.
+    const boomRes = await superCtx.get("/api/dev/boom");
+    expect(boomRes.status()).toBe(500);
+
+    // 2) Einmal-Fehler mit lauf-eindeutigem Label erzeugen: eigene Meldung
+    //    => eigene Zeile mit count === 1 (auch über Läufe hinweg eindeutig,
+    //    da platform_errors in der Test-DB persistiert).
+    const label = `einmalig-${stamp}`;
+    const onceRes = await superCtx.get(`/api/dev/boom?label=${label}`);
+    expect(onceRes.status()).toBe(500);
+
+    // Beide Einträge über die API identifizieren (IDs + erwarteter Zähler).
+    const listRes = await superCtx.get("/api/operator/errors");
+    expect(listRes.status()).toBe(200);
+    const errors = (await listRes.json()) as OperatorErrorRow[];
+
+    const bundled = errors.find((e) => e.id === recordedErrorId);
+    expect(bundled, "Gebündelter Eintrag muss existieren").toBeTruthy();
+    expect(bundled!.count, "Gebündelter Eintrag muss mehrfach aufgetreten sein").toBeGreaterThan(1);
+    expect(bundled!.resolved, "Wiederauftreten öffnet den Eintrag").toBe(false);
+
+    const once = errors.find((e) => e.message === `${BOOM_MESSAGE} [${label}]`);
+    expect(once, "Einmal-Fehler fehlt in /api/operator/errors").toBeTruthy();
+    expect(once!.count, "Einmal-Fehler darf nur einmal gezählt sein").toBe(1);
+
+    // Als superadmin ins Operator-Dashboard.
+    const loginRes = await page.request.post("/api/auth/login", {
+      data: { email: superEmail, password: superPassword },
+    });
+    expect(loginRes.ok(), "UI-Login als superadmin fehlgeschlagen").toBe(true);
+    await page.goto("/operator-dashboard");
+
+    // Gebündelter Eintrag: Badge „N×" (exakter Zählerstand) + Zusatz „zuletzt".
+    const bundledRow = page.getByTestId(`row-operator-error-${recordedErrorId}`);
+    await expect(bundledRow).toBeVisible();
+    const countBadge = bundledRow.getByTestId(`badge-error-count-${recordedErrorId}`);
+    await expect(countBadge).toBeVisible();
+    await expect(countBadge).toHaveText(`${bundled!.count}×`);
+    await expect(bundledRow).toContainText("zuletzt");
+
+    // Einmal-Fehler: Zeile sichtbar, aber KEIN Zähler-Badge und KEIN „zuletzt".
+    const onceRow = page.getByTestId(`row-operator-error-${once!.id}`);
+    await expect(onceRow).toBeVisible();
+    await expect(onceRow).toContainText(`[${label}]`);
+    await expect(onceRow.getByTestId(`badge-error-count-${once!.id}`)).toHaveCount(0);
+    await expect(onceRow).not.toContainText("zuletzt");
   });
 });

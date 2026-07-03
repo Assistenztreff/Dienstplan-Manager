@@ -12,8 +12,17 @@ router.get("/healthz", (_req, res) => {
 // zentralen Error-Handler + das Fehler-Tracking (platform_errors) end-to-end
 // zu testen. Durch den NODE_ENV-Guard in Produktion nicht vorhanden.
 if (process.env.NODE_ENV !== "production") {
-  router.get("/dev/boom", async (): Promise<void> => {
-    throw new Error("Dev-Testfehler (absichtlich ausgeloest ueber /dev/boom)");
+  // Optionales `?label=`: haengt eine Markierung an die Fehlermeldung an.
+  // Da die Buendelung in platform_errors ueber Meldung+Kontext laeuft,
+  // erzeugt ein eindeutiges Label gezielt einen EIGENEN (einmaligen)
+  // Eintrag — noetig fuer E2E-Tests des Wiederholungs-Zaehlers (N×),
+  // die einen nur einmal aufgetretenen Fehler daneben brauchen.
+  router.get("/dev/boom", async (req): Promise<void> => {
+    const label = typeof req.query.label === "string" ? req.query.label.trim() : "";
+    const suffix = label ? ` [${label}]` : "";
+    throw new Error(
+      `Dev-Testfehler (absichtlich ausgeloest ueber /dev/boom)${suffix}`,
+    );
   });
 }
 
