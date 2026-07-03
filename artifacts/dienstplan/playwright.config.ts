@@ -78,6 +78,28 @@ if (useManagedStack && !isWorkerProcess && !process.env.E2E_SKIP_DB_SETUP) {
       "setup-test-db fehlgeschlagen — Test-Datenbank konnte nicht provisioniert werden (siehe Ausgabe oben).",
     );
   }
+
+  // Regressionscheck Testkonten-Trennung: beweist VOR jedem E2E-Lauf, dass
+  // setup-test-accounts + migrate-teams die Team-Belegung der Dev-Testkonten
+  // nicht zerstoeren. Laeuft bewusst HIER (Config-Load, vor dem Start der
+  // webServer): der Check seedet/entfernt Konten in der `_test`-DB und darf
+  // deshalb nie parallel zu laufenden Specs arbeiten. Er raeumt nach sich
+  // selbst restlos auf (Test-DB danach wieder nur Seed-Admin + Standard-Team).
+  // Skip via `E2E_SKIP_SEPARATION_CHECK=1` fuer schnelle Wiederholungslaeufe
+  // (analog E2E_SKIP_DB_SETUP, das den Check ebenfalls ueberspringt).
+  if (!process.env.E2E_SKIP_SEPARATION_CHECK) {
+    console.log("[e2e] Testkonten-Trennungs-Check (verify-account-separation)...");
+    const separation = spawnSync(
+      "pnpm",
+      ["--filter", "@workspace/scripts", "run", "verify-account-separation"],
+      { stdio: "inherit", timeout: 600_000 },
+    );
+    if (separation.status !== 0 || separation.error != null) {
+      throw new Error(
+        "verify-account-separation fehlgeschlagen — die Testkonten-Trennung ist beschaedigt oder der Check konnte nicht laufen (siehe Ausgabe oben). Kein E2E-Lauf gegen einen unklaren Zustand.",
+      );
+    }
+  }
 }
 
 // Damit Specs/Helper, die zur Laufzeit einen zweiten Admin seeden
