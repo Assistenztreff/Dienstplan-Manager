@@ -155,8 +155,13 @@ export interface OperatorError {
   message: string;
   /** Route/Stelle, an der der Fehler auftrat (z. B. "GET /api/shifts") */
   context: string;
-  /** Vom Betreiber als erledigt abgehakt */
+  /** Vom Betreiber als erledigt abgehakt (gilt für die ganze Gruppe; erneutes Auftreten öffnet den Eintrag wieder) */
   resolved: boolean;
+  /** Wie oft dieser Fehler (gleiche Meldung + Kontext) aufgetreten ist */
+  count: number;
+  /** Zeitpunkt des letzten Auftretens */
+  lastSeenAt: string;
+  /** Zeitpunkt des ersten Auftretens */
   createdAt: string;
 }
 

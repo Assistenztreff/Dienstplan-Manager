@@ -5002,7 +5002,7 @@ export const getListOperatorErrorsUrl = (params?: ListOperatorErrorsParams,) => 
 }
 
 /**
- * Liefert die neuesten erfassten Serverfehler (unbehandelte 5xx-Fehler und gezielt gemeldete kritische Fehler) mit Schweregrad, Meldung, Kontext (Route) und Zeitstempel — neueste zuerst. Die Aufbewahrung ist serverseitig begrenzt.
+ * Liefert die neuesten erfassten Serverfehler (unbehandelte 5xx-Fehler und gezielt gemeldete kritische Fehler) mit Schweregrad, Meldung, Kontext (Route) und Zeitstempel. Wiederkehrende Fehler (gleiche Meldung + gleicher Kontext) sind zu EINEM Eintrag gebündelt (count + lastSeenAt); sortiert nach letztem Auftreten, neueste zuerst. Die Aufbewahrung ist serverseitig begrenzt.
 
  * @summary Fehler-Tracking der Plattform (nur superadmin)
  */
@@ -5081,7 +5081,7 @@ export const getUpdateOperatorErrorUrl = (id: number,) => {
 }
 
 /**
- * Setzt den Erledigt-Status eines erfassten Plattform-Fehlers. Erledigte Einträge bleiben erhalten (Aufbewahrungslimit unverändert), werden im Operator-Dashboard aber ausgegraut bzw. per Filter ausgeblendet.
+ * Setzt den Erledigt-Status eines erfassten Plattform-Fehlers. Da wiederkehrende Fehler gebündelt sind, wirkt das Abhaken auf die ganze Gruppe; tritt der Fehler danach erneut auf, gilt der Eintrag wieder als offen. Erledigte Einträge bleiben erhalten (Aufbewahrungslimit unverändert), werden im Operator-Dashboard aber ausgegraut bzw. per Filter ausgeblendet.
 
  * @summary Fehler-Eintrag als erledigt/offen markieren (nur superadmin)
  */

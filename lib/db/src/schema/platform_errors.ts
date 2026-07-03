@@ -17,6 +17,7 @@ import {
   text,
   pgEnum,
   boolean,
+  integer,
 } from "drizzle-orm/pg-core";
 
 export const platformErrorLevelEnum = pgEnum("platform_error_level", [
@@ -33,7 +34,16 @@ export const platformErrorsTable = pgTable("platform_errors", {
   // Vom Betreiber als erledigt abgehakt (Quittierung im Operator-Dashboard).
   // Erledigte Eintraege bleiben erhalten (Aufbewahrungslimit unveraendert),
   // werden aber im Dashboard ausgegraut bzw. per Filter ausgeblendet.
+  // Taucht derselbe Fehler (Meldung + Kontext) erneut auf, wird der Eintrag
+  // wieder auf offen gesetzt (Upsert in recordPlatformError).
   resolved: boolean("resolved").notNull().default(false),
+  // Buendelung wiederkehrender Fehler: gleiche Meldung + gleicher Kontext
+  // werden NICHT als neue Zeile gespeichert, sondern der bestehende Eintrag
+  // hochgezaehlt (count) und der Zeitpunkt des letzten Auftretens
+  // aktualisiert (lastSeenAt). So verdraengen Wiederholungen keine seltenen
+  // Fehler aus dem Aufbewahrungslimit.
+  count: integer("count").notNull().default(1),
+  lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

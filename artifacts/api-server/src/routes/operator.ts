@@ -153,10 +153,12 @@ router.get(
   },
 );
 
-// GET /operator/errors — Fehler-Tracking der Plattform (neueste zuerst).
-// Befuellt vom zentralen Express-Error-Handler (app.ts) bzw. per
-// recordPlatformError aus try/catch-Stellen; Aufbewahrung serverseitig
-// begrenzt (Pruning in lib/platform-errors.ts).
+// GET /operator/errors — Fehler-Tracking der Plattform. Wiederkehrende
+// Fehler (gleiche Meldung + Kontext) sind zu EINEM Eintrag gebuendelt
+// (count + lastSeenAt, Upsert in lib/platform-errors.ts); sortiert nach
+// letztem Auftreten, neueste zuerst. Befuellt vom zentralen
+// Express-Error-Handler (app.ts) bzw. per recordPlatformError aus
+// try/catch-Stellen; Aufbewahrung serverseitig begrenzt.
 router.get(
   "/operator/errors",
   requireSuperadmin,
@@ -175,10 +177,12 @@ router.get(
         message: platformErrorsTable.message,
         context: platformErrorsTable.context,
         resolved: platformErrorsTable.resolved,
+        count: platformErrorsTable.count,
+        lastSeenAt: platformErrorsTable.lastSeenAt,
         createdAt: platformErrorsTable.createdAt,
       })
       .from(platformErrorsTable)
-      .orderBy(desc(platformErrorsTable.createdAt), desc(platformErrorsTable.id))
+      .orderBy(desc(platformErrorsTable.lastSeenAt), desc(platformErrorsTable.id))
       .limit(limit);
 
     res.json(errors);
@@ -187,9 +191,11 @@ router.get(
 );
 
 // PATCH /operator/errors/:id — Fehler-Eintrag als erledigt abhaken bzw.
-// wieder auf offen setzen. Erledigte Eintraege bleiben erhalten (das
-// Aufbewahrungslimit in lib/platform-errors.ts gilt unveraendert), werden im
-// Dashboard aber ausgegraut bzw. per Filter ausgeblendet.
+// wieder auf offen setzen. Wirkt auf die ganze Gruppe (gebuendelte
+// Wiederholungen); tritt der Fehler danach erneut auf, setzt der Upsert in
+// lib/platform-errors.ts den Eintrag wieder auf offen. Erledigte Eintraege
+// bleiben erhalten (Aufbewahrungslimit unveraendert), werden im Dashboard
+// aber ausgegraut bzw. per Filter ausgeblendet.
 router.patch(
   "/operator/errors/:id",
   requireSuperadmin,
@@ -217,6 +223,8 @@ router.patch(
         message: platformErrorsTable.message,
         context: platformErrorsTable.context,
         resolved: platformErrorsTable.resolved,
+        count: platformErrorsTable.count,
+        lastSeenAt: platformErrorsTable.lastSeenAt,
         createdAt: platformErrorsTable.createdAt,
       });
     if (!updated) {

@@ -12,7 +12,7 @@
 // ---------------------------------------------------------------------------
 
 import { db, platformErrorsTable } from "@workspace/db";
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { sendOperatorAlertEmail } from "./alert-mailer";
 
@@ -66,6 +66,14 @@ export interface RecordPlatformErrorInput {
 /**
  * Persistiert einen Plattform-Fehler und sendet bei Level "error" eine
  * gedrosselte Warn-E-Mail an den Betreiber. Wirft NIE.
+ *
+ * Buendelung wiederkehrender Fehler: Existiert bereits ein Eintrag mit
+ * derselben Meldung + demselben Kontext, wird KEINE neue Zeile angelegt,
+ * sondern der bestehende Eintrag hochgezaehlt (count), der Zeitpunkt des
+ * letzten Auftretens aktualisiert (lastSeenAt) und der Eintrag wieder auf
+ * offen gesetzt (resolved = false) — ein abgehakter Fehler, der erneut
+ * auftritt, gilt wieder als offen. So verdraengen Wiederholungen keine
+ * seltenen Fehler aus dem Aufbewahrungslimit.
  */
 export async function recordPlatformError(
   input: RecordPlatformErrorInput,
@@ -73,18 +81,44 @@ export async function recordPlatformError(
   const message = input.message.slice(0, 2000) || "Unbekannter Fehler";
   const context = input.context.slice(0, 500) || "unbekannt";
   try {
-    await db.insert(platformErrorsTable).values({
-      level: input.level,
-      message,
-      context,
-    });
+    // Manueller Upsert (Update-then-Insert) statt UNIQUE-Constraint:
+    // message kann bis 2000 Zeichen lang sein — ein Btree-Unique-Index
+    // darauf waere fragil (Zeilenlimit), und die seltene Race zweier
+    // paralleler Erst-Fehler ist harmlos (zwei Zeilen statt einer).
+    const [existing] = await db
+      .update(platformErrorsTable)
+      .set({
+        level: input.level,
+        count: sql`${platformErrorsTable.count} + 1`,
+        lastSeenAt: new Date(),
+        resolved: false,
+      })
+      .where(
+        and(
+          eq(platformErrorsTable.message, message),
+          eq(platformErrorsTable.context, context),
+        ),
+      )
+      .returning({ id: platformErrorsTable.id });
 
-    // Aufbewahrung begrenzen: alles ausserhalb der neuesten N Eintraege
-    // loeschen (guenstig genug, um es bei jedem Insert mitzumachen).
+    if (!existing) {
+      await db.insert(platformErrorsTable).values({
+        level: input.level,
+        message,
+        context,
+      });
+    }
+
+    // Aufbewahrung begrenzen: alles ausserhalb der N zuletzt aufgetretenen
+    // Eintraege loeschen (guenstig genug, um es bei jedem Insert
+    // mitzumachen). Massgeblich ist das LETZTE Auftreten, nicht die
+    // Erstanlage — gebuendelte Dauerbrenner bleiben so erhalten.
     await db.execute(sql`
       DELETE FROM platform_errors
       WHERE id NOT IN (
-        SELECT id FROM platform_errors ORDER BY id DESC LIMIT ${MAX_STORED_ERRORS}
+        SELECT id FROM platform_errors
+        ORDER BY last_seen_at DESC, id DESC
+        LIMIT ${MAX_STORED_ERRORS}
       )
     `);
   } catch (err) {

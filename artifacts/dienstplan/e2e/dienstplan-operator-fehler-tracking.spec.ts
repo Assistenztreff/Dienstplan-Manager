@@ -40,6 +40,8 @@ interface OperatorErrorRow {
   message: string;
   context: string | null;
   resolved: boolean;
+  count: number;
+  lastSeenAt: string;
   createdAt: string;
 }
 
@@ -122,10 +124,69 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
     expect(entry, "Ausgelöster Fehler fehlt in /api/operator/errors").toBeTruthy();
     expect(entry!.level).toBe("error");
     expect(entry!.resolved, "Neue Fehler starten als offen").toBe(false);
+    expect(entry!.count, "Zähler startet bei mindestens 1").toBeGreaterThanOrEqual(1);
     const createdAt = new Date(entry!.createdAt).getTime();
     expect(Number.isNaN(createdAt), "createdAt muss ein Datum sein").toBe(false);
+    const lastSeenAt = new Date(entry!.lastSeenAt).getTime();
+    expect(Number.isNaN(lastSeenAt), "lastSeenAt muss ein Datum sein").toBe(false);
 
     recordedErrorId = entry!.id;
+  });
+
+  test("API: Wiederholungen werden gebündelt (eine Zeile, Zähler steigt)", async () => {
+    expect(recordedErrorId, "API-Test muss vorher gelaufen sein").toBeGreaterThan(0);
+
+    // Ausgangszustand des gebündelten Eintrags festhalten.
+    const beforeRes = await superCtx.get("/api/operator/errors");
+    const before = ((await beforeRes.json()) as OperatorErrorRow[]).find(
+      (e) => e.id === recordedErrorId,
+    );
+    expect(before, "Gebündelter Eintrag muss existieren").toBeTruthy();
+
+    // Denselben Fehler zweimal erneut auslösen …
+    for (let i = 0; i < 2; i++) {
+      const res = await superCtx.get("/api/dev/boom");
+      expect(res.status()).toBe(500);
+    }
+
+    // … es bleibt EINE Zeile (gleiche id), der Zähler steigt um 2 und
+    // lastSeenAt rückt nach vorn.
+    const afterRes = await superCtx.get("/api/operator/errors");
+    const errors = (await afterRes.json()) as OperatorErrorRow[];
+    const matching = errors.filter(
+      (e) => e.message.includes("Dev-Testfehler") && e.context === "GET /api/dev/boom",
+    );
+    expect(matching.length, "Wiederholungen dürfen KEINE neuen Zeilen anlegen").toBe(1);
+    expect(matching[0].id, "Gebündelt in denselben Eintrag").toBe(recordedErrorId);
+    expect(matching[0].count).toBe(before!.count + 2);
+    expect(
+      new Date(matching[0].lastSeenAt).getTime(),
+      "lastSeenAt muss beim Wiederauftreten nach vorn rücken",
+    ).toBeGreaterThanOrEqual(new Date(before!.lastSeenAt).getTime());
+  });
+
+  test("API: abgehakter Fehler gilt beim Wiederauftreten wieder als offen", async () => {
+    expect(recordedErrorId, "API-Test muss vorher gelaufen sein").toBeGreaterThan(0);
+
+    // Ganze Gruppe abhaken …
+    const resolveRes = await superCtx.patch(
+      `/api/operator/errors/${recordedErrorId}`,
+      { data: { resolved: true } },
+    );
+    expect(resolveRes.status()).toBe(200);
+    expect(((await resolveRes.json()) as OperatorErrorRow).resolved).toBe(true);
+
+    // … Fehler tritt erneut auf …
+    const boomRes = await superCtx.get("/api/dev/boom");
+    expect(boomRes.status()).toBe(500);
+
+    // … derselbe Eintrag ist wieder offen.
+    const listRes = await superCtx.get("/api/operator/errors");
+    const entry = ((await listRes.json()) as OperatorErrorRow[]).find(
+      (e) => e.id === recordedErrorId,
+    );
+    expect(entry, "Eintrag muss weiterhin existieren").toBeTruthy();
+    expect(entry!.resolved, "Wiederauftreten öffnet den Eintrag erneut").toBe(false);
   });
 
   test("API: Fehler abhaken und wieder öffnen (PATCH), nur superadmin", async () => {

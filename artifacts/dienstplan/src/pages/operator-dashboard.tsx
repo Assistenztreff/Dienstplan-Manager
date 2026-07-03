@@ -534,9 +534,20 @@ export default function OperatorDashboard() {
                   >
                     {e.message}
                   </p>
+                  {/* Wiederkehrende Fehler sind serverseitig gebuendelt:
+                      Zaehler + Zeitpunkt des LETZTEN Auftretens. */}
                   <p className="text-xs text-muted-foreground">
-                    <span className="font-mono">{e.context}</span> ·{" "}
-                    {new Date(e.createdAt).toLocaleString("de-DE", {
+                    <span className="font-mono">{e.context}</span>
+                    {e.count > 1 ? (
+                      <span
+                        className="ml-2 inline-block rounded-full bg-muted px-1.5 py-0.5 font-medium text-foreground/80"
+                        data-testid={`badge-error-count-${e.id}`}
+                      >
+                        {e.count}×
+                      </span>
+                    ) : null}{" "}
+                    · {e.count > 1 ? "zuletzt " : ""}
+                    {new Date(e.lastSeenAt).toLocaleString("de-DE", {
                       day: "2-digit",
                       month: "2-digit",
                       year: "numeric",

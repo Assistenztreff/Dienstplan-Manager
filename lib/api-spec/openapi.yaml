@@ -1473,8 +1473,10 @@ paths:
       description: >
         Liefert die neuesten erfassten Serverfehler (unbehandelte 5xx-Fehler
         und gezielt gemeldete kritische Fehler) mit Schweregrad, Meldung,
-        Kontext (Route) und Zeitstempel — neueste zuerst. Die Aufbewahrung ist
-        serverseitig begrenzt.
+        Kontext (Route) und Zeitstempel. Wiederkehrende Fehler (gleiche
+        Meldung + gleicher Kontext) sind zu EINEM Eintrag gebündelt (count +
+        lastSeenAt); sortiert nach letztem Auftreten, neueste zuerst. Die
+        Aufbewahrung ist serverseitig begrenzt.
       parameters:
         - name: limit
           in: query
@@ -1502,9 +1504,12 @@ paths:
       tags: [operator]
       summary: Fehler-Eintrag als erledigt/offen markieren (nur superadmin)
       description: >
-        Setzt den Erledigt-Status eines erfassten Plattform-Fehlers. Erledigte
-        Einträge bleiben erhalten (Aufbewahrungslimit unverändert), werden im
-        Operator-Dashboard aber ausgegraut bzw. per Filter ausgeblendet.
+        Setzt den Erledigt-Status eines erfassten Plattform-Fehlers. Da
+        wiederkehrende Fehler gebündelt sind, wirkt das Abhaken auf die ganze
+        Gruppe; tritt der Fehler danach erneut auf, gilt der Eintrag wieder
+        als offen. Erledigte Einträge bleiben erhalten (Aufbewahrungslimit
+        unverändert), werden im Operator-Dashboard aber ausgegraut bzw. per
+        Filter ausgeblendet.
       parameters:
         - name: id
           in: path
@@ -1652,7 +1657,7 @@ components:
 
     OperatorError:
       type: object
-      required: [id, level, message, context, resolved, createdAt]
+      required: [id, level, message, context, resolved, count, lastSeenAt, createdAt]
       properties:
         id:
           type: integer
@@ -1666,10 +1671,18 @@ components:
           description: Route/Stelle, an der der Fehler auftrat (z. B. "GET /api/shifts")
         resolved:
           type: boolean
-          description: Vom Betreiber als erledigt abgehakt
+          description: Vom Betreiber als erledigt abgehakt (gilt für die ganze Gruppe; erneutes Auftreten öffnet den Eintrag wieder)
+        count:
+          type: integer
+          description: Wie oft dieser Fehler (gleiche Meldung + Kontext) aufgetreten ist
+        lastSeenAt:
+          type: string
+          format: date-time
+          description: Zeitpunkt des letzten Auftretens
         createdAt:
           type: string
           format: date-time
+          description: Zeitpunkt des ersten Auftretens
 
     OperatorErrorUpdate:
       type: object

@@ -1482,7 +1482,7 @@ export const ListOperatorPlanChangesResponse = zod.array(ListOperatorPlanChanges
 
 
 /**
- * Liefert die neuesten erfassten Serverfehler (unbehandelte 5xx-Fehler und gezielt gemeldete kritische Fehler) mit Schweregrad, Meldung, Kontext (Route) und Zeitstempel — neueste zuerst. Die Aufbewahrung ist serverseitig begrenzt.
+ * Liefert die neuesten erfassten Serverfehler (unbehandelte 5xx-Fehler und gezielt gemeldete kritische Fehler) mit Schweregrad, Meldung, Kontext (Route) und Zeitstempel. Wiederkehrende Fehler (gleiche Meldung + gleicher Kontext) sind zu EINEM Eintrag gebündelt (count + lastSeenAt); sortiert nach letztem Auftreten, neueste zuerst. Die Aufbewahrung ist serverseitig begrenzt.
 
  * @summary Fehler-Tracking der Plattform (nur superadmin)
  */
@@ -1500,14 +1500,16 @@ export const ListOperatorErrorsResponseItem = zod.object({
   "level": zod.enum(['error', 'warning']),
   "message": zod.string(),
   "context": zod.string().describe('Route\/Stelle, an der der Fehler auftrat (z. B. \"GET \/api\/shifts\")'),
-  "resolved": zod.boolean().describe('Vom Betreiber als erledigt abgehakt'),
-  "createdAt": zod.coerce.date()
+  "resolved": zod.boolean().describe('Vom Betreiber als erledigt abgehakt (gilt für die ganze Gruppe; erneutes Auftreten öffnet den Eintrag wieder)'),
+  "count": zod.number().describe('Wie oft dieser Fehler (gleiche Meldung + Kontext) aufgetreten ist'),
+  "lastSeenAt": zod.coerce.date().describe('Zeitpunkt des letzten Auftretens'),
+  "createdAt": zod.coerce.date().describe('Zeitpunkt des ersten Auftretens')
 })
 export const ListOperatorErrorsResponse = zod.array(ListOperatorErrorsResponseItem)
 
 
 /**
- * Setzt den Erledigt-Status eines erfassten Plattform-Fehlers. Erledigte Einträge bleiben erhalten (Aufbewahrungslimit unverändert), werden im Operator-Dashboard aber ausgegraut bzw. per Filter ausgeblendet.
+ * Setzt den Erledigt-Status eines erfassten Plattform-Fehlers. Da wiederkehrende Fehler gebündelt sind, wirkt das Abhaken auf die ganze Gruppe; tritt der Fehler danach erneut auf, gilt der Eintrag wieder als offen. Erledigte Einträge bleiben erhalten (Aufbewahrungslimit unverändert), werden im Operator-Dashboard aber ausgegraut bzw. per Filter ausgeblendet.
 
  * @summary Fehler-Eintrag als erledigt/offen markieren (nur superadmin)
  */
@@ -1524,8 +1526,10 @@ export const UpdateOperatorErrorResponse = zod.object({
   "level": zod.enum(['error', 'warning']),
   "message": zod.string(),
   "context": zod.string().describe('Route\/Stelle, an der der Fehler auftrat (z. B. \"GET \/api\/shifts\")'),
-  "resolved": zod.boolean().describe('Vom Betreiber als erledigt abgehakt'),
-  "createdAt": zod.coerce.date()
+  "resolved": zod.boolean().describe('Vom Betreiber als erledigt abgehakt (gilt für die ganze Gruppe; erneutes Auftreten öffnet den Eintrag wieder)'),
+  "count": zod.number().describe('Wie oft dieser Fehler (gleiche Meldung + Kontext) aufgetreten ist'),
+  "lastSeenAt": zod.coerce.date().describe('Zeitpunkt des letzten Auftretens'),
+  "createdAt": zod.coerce.date().describe('Zeitpunkt des ersten Auftretens')
 })
 
 
