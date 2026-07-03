@@ -218,6 +218,12 @@ async function main(): Promise<void> {
     for (let n = 1; n <= 4; n++) {
       await ensureDummyAssistant(client, n, betreiberTeamId);
     }
+    // Zielbild explizit durchsetzen: Betreiber bleibt FREE (auch wenn der
+    // Plan in der Dev-DB zwischenzeitlich verstellt wurde) — davon haengen
+    // die Free-Gates des Betreiber-Teams ab (z. B. historyMonths=1 fuer den
+    // Test-Assistenten).
+    await client.query("UPDATE users SET plan = 'free' WHERE id = $1", [betreiber.id]);
+    console.log("Betreiber -> free.");
 
     // ------------------------------------------------------------------
     // 3) Test-Dienstleister (Premium): 5 Dummys im Dienstleister-Team.
