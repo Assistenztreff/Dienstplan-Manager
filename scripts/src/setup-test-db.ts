@@ -1,5 +1,6 @@
 import { execSync, spawnSync } from "node:child_process";
 import pg from "pg";
+import { deriveTestDbUrl } from "./lib/test-db-url.js";
 
 /**
  * Richtet eine isolierte Test-Datenbank für die E2E-Tests ein.
@@ -20,14 +21,6 @@ import pg from "pg";
  * automatisch verworfen und frisch neu aufgebaut (Drop + Recreate + Push) —
  * kein manueller SQL-Eingriff mehr nötig.
  */
-
-function deriveTestDbUrl(base: string): { url: string; name: string } {
-  const u = new URL(base);
-  const current = decodeURIComponent(u.pathname.replace(/^\//, "")) || "postgres";
-  const testName = `${current}_test`;
-  u.pathname = `/${testName}`;
-  return { url: u.toString(), name: testName };
-}
 
 async function main(): Promise<void> {
   const base = process.env.DATABASE_URL;

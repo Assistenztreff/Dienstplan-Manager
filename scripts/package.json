@@ -15,6 +15,7 @@
     "migrate-teams": "tsx ./src/migrate-teams.ts",
     "migrate-allowance-settings": "tsx ./src/migrate-allowance-settings.ts",
     "setup-test-db": "tsx ./src/setup-test-db.ts",
+    "verify-test-db-cleanup": "tsx ./src/verify-test-db-cleanup.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

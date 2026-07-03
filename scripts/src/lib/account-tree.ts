@@ -22,6 +22,25 @@ import type pg from "pg";
  *
  * Ausschliesslich fuer Test-Infrastruktur gedacht.
  */
+/**
+ * Team-gebundene Tabellen, die `teams.id` OHNE `ON DELETE CASCADE`
+ * referenzieren und daher hier explizit VOR dem Team-Delete geleert werden
+ * muessen. Reihenfolge beachten (FKs untereinander: time_tracking -> shifts
+ * -> shift_models).
+ *
+ * WICHTIG: Kommt eine neue Tabelle mit nicht-kaskadierendem FK auf `teams.id`
+ * hinzu, MUSS sie hier ergaenzt werden — sonst schlaegt das Loeschen der Teams
+ * mit FK-Fehler fehl und die Test-DB sammelt wieder Konten-Leichen an. Das
+ * Skript `verify-test-db-cleanup` prueft genau diese Invariante automatisch.
+ */
+export const TEAM_BOUND_TABLES = [
+  "time_tracking",
+  "shifts",
+  "contracts",
+  "shift_templates",
+  "shift_models",
+] as const;
+
 export interface DeleteAccountTreesResult {
   deletedUsers: number;
   deletedTeams: number;
@@ -47,11 +66,9 @@ export async function deleteAccountTrees(
     let orphanCount = 0;
     if (teamIds.length > 0) {
       // 1) Team-gebundene Daten (team_id ohne Cascade auf teams.id).
-      await client.query("DELETE FROM time_tracking WHERE team_id = ANY($1)", [teamIds]);
-      await client.query("DELETE FROM shifts WHERE team_id = ANY($1)", [teamIds]);
-      await client.query("DELETE FROM contracts WHERE team_id = ANY($1)", [teamIds]);
-      await client.query("DELETE FROM shift_templates WHERE team_id = ANY($1)", [teamIds]);
-      await client.query("DELETE FROM shift_models WHERE team_id = ANY($1)", [teamIds]);
+      for (const table of TEAM_BOUND_TABLES) {
+        await client.query(`DELETE FROM ${table} WHERE team_id = ANY($1)`, [teamIds]);
+      }
 
       // 2) Verwaiste Assistenten: nur Mitglied in den zu loeschenden Teams,
       //    besitzen selbst keine Teams. (User-Delete kaskadiert deren
