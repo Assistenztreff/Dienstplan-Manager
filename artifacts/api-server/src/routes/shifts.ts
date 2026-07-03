@@ -406,6 +406,15 @@ async function forwardPlanningBlocked(
   return false;
 }
 
+// HINWEIS (Produktentscheidung, Task #319): Das Abwesenheits-SYSTEM (Urlaub/
+// Krankheit eintragen, anzeigen, loeschen) bleibt fuer ALLE Plaene frei —
+// hier gibt es bewusst KEIN Plan-Gate. Premium ist nur das TRACKING
+// (Resturlaub-Konto, Tage-Zaehlung), ein reines Anzeige-Feature im Frontend
+// ("absenceTracking"). Die zugrunde liegenden Daten (contracts.vacationDays,
+// vacationDaysUsed, Abwesenheits-Schichten) sind fuer Free-Konten legitim
+// zugaenglich; die Buchhaltung (vacationDaysUsed) laeuft planunabhaengig
+// weiter, damit beim Upgrade sofort korrekte Salden vorliegen.
+
 router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
   const body = CreateShiftBody.safeParse(req.body);
   if (!body.success) {
@@ -600,6 +609,7 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
       return;
     }
   }
+
   if (!isAbsenceType(effectiveType) && !force) {
     const conflicts = await findOverlappingShifts(
       effectiveUserId,

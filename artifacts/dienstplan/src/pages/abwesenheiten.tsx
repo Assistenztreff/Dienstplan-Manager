@@ -26,7 +26,9 @@ import { Plus, Trash2, Plane, Stethoscope } from "lucide-react";
 import { eachDayOfInterval, format } from "date-fns";
 import { de } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
-import { planUpgradeMessage } from "@/lib/api-error";
+import { planUpgradeMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
+import { useAuth } from "@/context/auth";
+import { hasAccess } from "@/lib/entitlements";
 import {
   buildRanges,
   dayKey,
@@ -43,6 +45,12 @@ const TYPE_LABEL: Record<AbsenceType, string> = {
 export default function Abwesenheiten() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { currentUser } = useAuth();
+
+  // Premium-Gate: Das EINTRAGEN von Urlaub/Krankheit bleibt fuer alle Plaene
+  // frei. Premium ist nur das TRACKING — die automatische Zaehlung im
+  // Resturlaub-Konto (Anspruch/genommen/verbleibend).
+  const trackingLocked = !hasAccess(currentUser, "absenceTracking");
 
   const { data: users, isLoading: usersLoading } = useListUsers();
   const { data: contracts, isLoading: contractsLoading } = useListContracts();
@@ -286,7 +294,14 @@ export default function Abwesenheiten() {
           <Card className="border-border/50 shadow-sm">
             <CardContent className="p-5">
               <h3 className="font-semibold mb-4">Resturlaub {currentYear}</h3>
-              {isLoading ? (
+              {trackingLocked ? (
+                <p
+                  className="text-sm text-muted-foreground"
+                  data-testid="absence-tracking-premium-hint"
+                >
+                  {PLAN_FEATURE_MESSAGES["absenceTracking"]}
+                </p>
+              ) : isLoading ? (
                 <div className="space-y-3">
                   <Skeleton className="h-10 w-full" />
                   <Skeleton className="h-10 w-full" />

@@ -94,6 +94,8 @@ export const PLAN_FEATURE_MESSAGES: Record<string, string> = {
     "Der Kalender-Export (.ics) ist ein Premium-Feature. Für den Export in die eigene Kalender-App auf Premium upgraden.",
   caregiverLogin:
     "Einladungslinks für Assistenten sind ein Premium-Feature. Damit Assistenzkräfte einen eigenen Zugang erhalten, auf Premium upgraden.",
+  absenceTracking:
+    "Das Tracking von Urlaubs- und Krankheitstagen (Resturlaub-Konto) ist ein Premium-Feature. Abwesenheiten eintragen bleibt im Free-Tarif möglich — für die automatische Zählung auf Premium upgraden.",
 };
 
 /**

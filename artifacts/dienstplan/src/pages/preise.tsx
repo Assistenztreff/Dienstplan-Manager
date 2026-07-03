@@ -48,6 +48,7 @@ const FEATURE_ROWS: { key: PlanFeature; label: string }[] = [
   { key: "strictTimeTracking", label: "Strikte Arbeitszeiterfassung" },
   { key: "calendarSync", label: "Export in die eigene Kalender-App" },
   { key: "caregiverLogin", label: "Zugang für Assistenzkräfte (Team-Ansicht)" },
+  { key: "absenceTracking", label: "Urlaubs- & Krankheits-Tracking (Resturlaub-Konto)" },
 ];
 
 /** Limit-Wert menschenlesbar formatieren (null = unbegrenzt). */

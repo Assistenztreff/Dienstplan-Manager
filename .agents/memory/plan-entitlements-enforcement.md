@@ -45,6 +45,13 @@ All four numeric limits + the `bulkEdit` feature are now enforced authoritativel
 ALL feature flags now have authoritative server enforcement (see below) —
 `payrollExport` only transitively via hours-balance, plus frontend UX gates.
 
+**Frontend-only gates are acceptable when no API exists:** `absenceTracking`
+(Resturlaub balance) is gated purely in the UI because the balance is computed
+client-side from legitimately free-accessible data (contracts + vacation
+shifts) — there is no server endpoint to protect. Creating absences
+(vacation/sick) stays FREE on all plans; only the tracked balance is premium.
+If a dedicated balance endpoint ever appears, it must get a server gate.
+
 ## Gotcha: registration seeds 4 shift models, Free maxShiftModels = 4 (AT limit)
 
 A freshly registered Free account already has 4 seeded default shift models

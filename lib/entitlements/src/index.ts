@@ -67,7 +67,8 @@ export type PlanFeature =
   | "advancedAnalytics" // Soll/Ist-Berechnung, Abwesenheits-Management
   | "strictTimeTracking" // Strikte Arbeitszeiterfassung
   | "calendarSync" // Export in eigene Kalender-App
-  | "caregiverLogin"; // Assistenzkraefte erhalten Zugang zur Team-Ansicht
+  | "caregiverLogin" // Assistenzkraefte erhalten Zugang zur Team-Ansicht
+  | "absenceTracking"; // Tracking/Zaehlung von Urlaubs- & Krankheitstagen (Resturlaub, Statistik)
 
 /** Numerische Limits pro Plan (`null` = unbegrenzt). */
 export type PlanLimit =
@@ -93,6 +94,12 @@ export const PLAN_CONFIG: Record<Plan, PlanConfig> = {
       strictTimeTracking: false,
       calendarSync: false,
       caregiverLogin: false,
+      // Das Abwesenheits-SYSTEM (Urlaub/Krankheit EINTRAGEN, anzeigen, loeschen)
+      // bleibt fuer ALLE Plaene frei. Premium ist nur das TRACKING: die
+      // Zaehlung/Auswertung (Resturlaub-Konto, genommene Urlaubs-/Krankheitstage).
+      // Im einfachen PDF-Stundennachweis (basicExport) erscheinen Abwesenheiten
+      // weiterhin als Eintraege — ohne Tracking-Salden.
+      absenceTracking: false,
     },
     limits: {
       maxAssistants: 6,
@@ -118,6 +125,7 @@ export const PLAN_CONFIG: Record<Plan, PlanConfig> = {
       strictTimeTracking: true,
       calendarSync: true,
       caregiverLogin: true,
+      absenceTracking: true,
     },
     limits: {
       maxAssistants: null, // unbegrenzt
