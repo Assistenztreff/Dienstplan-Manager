@@ -49,3 +49,4 @@ channel = "stable-25_05"
 
 [userenv.shared]
 ERROR_ALERT_EMAIL = "kontakt@assistenztreff.de"
+ERROR_ALERT_FROM = "Dienstplan-App <alerts@mail.assistenztreff.de>"

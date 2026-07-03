@@ -9,7 +9,10 @@
 //
 // Empfaenger-Aufloesung: ERROR_ALERT_EMAIL (Env) hat Vorrang; sonst die
 // E-Mail-Adresse des (aeltesten) superadmin-Kontos aus der DB.
-// Absender: ERROR_ALERT_FROM (Env) oder Resend-Testabsender.
+// Absender: ERROR_ALERT_FROM (Env) oder Resend-Testabsender. Lehnt Resend den
+// konfigurierten Absender ab (z. B. Domain noch nicht fertig verifiziert),
+// wird EINMAL mit dem Testabsender nachversucht — Warn-Mails duerfen nicht
+// still ausfallen, nur weil die Domain-Verifizierung noch laeuft.
 // ---------------------------------------------------------------------------
 
 import { db, usersTable } from "@workspace/db";
@@ -17,6 +20,7 @@ import { eq, asc } from "drizzle-orm";
 import { logger } from "./logger";
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
+const FALLBACK_FROM = "Dienstplan-App <onboarding@resend.dev>";
 
 /** Empfaenger-Adresse fuer Warn-Mails: Env-Override oder superadmin aus DB. */
 export async function resolveAlertRecipient(): Promise<string | null> {
@@ -55,27 +59,46 @@ export async function sendOperatorAlertEmail(
       );
       return false;
     }
-    const from =
-      process.env.ERROR_ALERT_FROM?.trim() ||
-      "Dienstplan-App <onboarding@resend.dev>";
+    const customFrom = process.env.ERROR_ALERT_FROM?.trim();
+    const from = customFrom || FALLBACK_FROM;
 
-    const response = await fetch(RESEND_ENDPOINT, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ from, to: [to], subject, text }),
-    });
+    const attempt = async (sender: string): Promise<Response> =>
+      fetch(RESEND_ENDPOINT, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ from: sender, to: [to], subject, text }),
+      });
+
+    let usedFrom = from;
+    let response = await attempt(from);
+    if (
+      !response.ok &&
+      customFrom &&
+      customFrom !== FALLBACK_FROM &&
+      (response.status === 403 || response.status === 422)
+    ) {
+      // Konfigurierter Absender abgelehnt (typisch: Domain-Verifizierung bei
+      // Resend noch nicht abgeschlossen) → EINMAL mit Testabsender nachversuchen.
+      const body = await response.text().catch(() => "");
+      logger.warn(
+        { status: response.status, body: body.slice(0, 500), from: customFrom },
+        "Warn-E-Mail: konfigurierter Absender abgelehnt, versuche Testabsender (Domain bei Resend evtl. noch nicht verifiziert)",
+      );
+      usedFrom = FALLBACK_FROM;
+      response = await attempt(FALLBACK_FROM);
+    }
     if (!response.ok) {
       const body = await response.text().catch(() => "");
       logger.error(
-        { status: response.status, body: body.slice(0, 500) },
+        { status: response.status, body: body.slice(0, 500), from: usedFrom },
         "Warn-E-Mail-Versand fehlgeschlagen (Resend-API)",
       );
       return false;
     }
-    logger.info({ to, subject }, "Warn-E-Mail an Betreiber gesendet");
+    logger.info({ to, subject, from: usedFrom }, "Warn-E-Mail an Betreiber gesendet");
     return true;
   } catch (err) {
     // NIEMALS werfen — der ausloesende Request darf nicht beeintraechtigt werden.
