@@ -94,7 +94,17 @@ export async function deleteAccountTrees(
       await client.query("DELETE FROM teams WHERE id = ANY($1)", [teamIds]);
     }
 
-    // 4) Konten selbst.
+    // 4) Plan-Aenderungsprotokoll: plan_changes referenziert users OHNE
+    //    Cascade (account_id + changed_by). Das Audit-Log ist in der App
+    //    bewusst append-only — hier geht es NUR um Test-Infrastruktur, die
+    //    Test-Konten samt ihrer Protokollzeilen restlos entfernen muss, sonst
+    //    blockiert der FK jedes Loeschen von Konten mit Plan-Historie.
+    await client.query(
+      "DELETE FROM plan_changes WHERE account_id = ANY($1) OR changed_by = ANY($1)",
+      [userIds],
+    );
+
+    // 5) Konten selbst.
     const usersRes = await client.query("DELETE FROM users WHERE id = ANY($1)", [
       userIds,
     ]);

@@ -11,4 +11,6 @@ Accounts registered via `/api/auth/register` in E2E specs CANNOT be removed via 
 
 **How to apply:** any new spec that calls `registerFreeAccount` must call `deleteFreeAccount` in its afterAll/afterEach. The script deletes in FK-safe order (team-bound data → orphaned assistants → teams → user), is idempotent, and refuses non-`@dienstplan.test` emails unless `DELETE_ACCOUNT_ALLOW_ANY=1`.
 
+**Audit-log FK:** `plan_changes` references users (account_id + changed_by) without cascade — the shared delete tree in `account-tree.ts` purges those rows before deleting users. Any future append-only audit table referencing users needs the same treatment or every account with history becomes undeletable in test cleanup.
+
 **Safety net (self-healing):** a batch variant (`scripts cleanup-test-accounts`, shared FK-safe core in `scripts/src/lib/account-tree.ts`) deletes ALL `e2e.%@dienstplan.test` accounts. It runs in Playwright globalTeardown (after every run) AND in `setup-test-db` (before every run — heals leftovers of aborted runs where afterAll never fired). Spec-level cleanup is still required so sibling specs don't see each other's data mid-run. New test emails MUST keep the `e2e.` prefix + `@dienstplan.test` domain or the sweeper won't catch them.
