@@ -20,6 +20,13 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -186,6 +193,9 @@ export default function Zeiterfassung() {
 
   // Manueller Zeiteintrag ohne Schichtbezug (z.B. Nacht-Eintrag über Mitternacht).
   const [manualOpen, setManualOpen] = useState(false);
+  // Nur Admin: für welche Assistenzkraft die Ist-Zeit erfasst wird. Assistenten
+  // erfassen immer nur für sich selbst (Server erzwingt die eigene userId).
+  const [manualUserId, setManualUserId] = useState<number | null>(null);
   const [manualDate, setManualDate] = useState("");
   const [manualStart, setManualStart] = useState("");
   const [manualEnd, setManualEnd] = useState("");
@@ -292,6 +302,15 @@ export default function Zeiterfassung() {
     setManualEndsNextDay(false);
     setManualNotes("");
     setManualError(null);
+    // Admin: bereits gewählte Assistenzkraft aus dem Filter übernehmen,
+    // sonst muss im Dialog eine ausgewählt werden. Assistent: für sich selbst.
+    setManualUserId(
+      isAdmin
+        ? typeof selectedAssistant === "number"
+          ? selectedAssistant
+          : null
+        : (currentUser?.id ?? null),
+    );
     setManualOpen(true);
   }
 
@@ -322,11 +341,18 @@ export default function Zeiterfassung() {
       setManualError("Die Endzeit muss nach der Startzeit liegen.");
       return;
     }
+    // Admin erfasst für eine gewählte Assistenzkraft; Assistent für sich selbst.
+    const targetUserId = isAdmin ? manualUserId : currentUser.id;
+    if (targetUserId == null) {
+      setManualError("Bitte eine Assistenzkraft auswählen.");
+      return;
+    }
     setManualSaving(true);
     try {
       await createEntry.mutateAsync({
         data: {
-          userId: currentUser.id,
+          userId: targetUserId,
+          ...(isAdmin && selectedTeamId != null ? { teamId: selectedTeamId } : {}),
           actualStart: start.toISOString(),
           actualEnd: end.toISOString(),
           ...(manualNotes.trim() ? { notes: manualNotes.trim() } : {}),
@@ -408,7 +434,7 @@ export default function Zeiterfassung() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {isAssistant && (
+          {(isAssistant || isAdmin) && (
             <Button className="gap-1.5 shrink-0" onClick={openManual} data-testid="manual-entry">
               <Plus className="h-4 w-4" />
               Zeit erfassen
@@ -722,6 +748,26 @@ export default function Zeiterfassung() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            {isAdmin && (
+              <div className="space-y-1.5">
+                <Label>Assistenzkraft</Label>
+                <Select
+                  value={manualUserId != null ? String(manualUserId) : ""}
+                  onValueChange={(v) => setManualUserId(Number(v))}
+                >
+                  <SelectTrigger data-testid="manual-user">
+                    <SelectValue placeholder="Assistenzkraft auswählen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {assistants.map((a) => (
+                      <SelectItem key={a.id} value={String(a.id)}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>Datum</Label>
               <Input
