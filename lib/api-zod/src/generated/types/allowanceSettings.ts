@@ -5,6 +5,7 @@
  * Dienstplan-App API für Persönliche Assistenz
  * OpenAPI spec version: 0.1.0
  */
+import type { AllowanceSettingsBillingMethod } from './allowanceSettingsBillingMethod';
 import type { AllowanceSettingsState } from './allowanceSettingsState';
 
 export interface AllowanceSettings {
@@ -23,5 +24,10 @@ export interface AllowanceSettings {
   holidayPercent: number;
   /** @nullable */
   state?: AllowanceSettingsState;
+  /**
+     * Abrechnungsart auf Team- bzw. Konto-Ebene; null = erbt.
+     * @nullable
+     */
+  billingMethod?: AllowanceSettingsBillingMethod;
   updatedAt: Date;
 }

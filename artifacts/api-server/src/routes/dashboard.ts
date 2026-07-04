@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { usersTable, shiftsTable, timeTrackingTable, contractsTable, allowanceSettingsTable, teamMembersTable, teamsTable } from "@workspace/db";
+import { computeShiftMetrics, type GermanState } from "@workspace/db";
 import { eq, and, sql, count, or, isNull, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { requireAuth, requireAdmin, isAdminLikeRole } from "../middleware/auth";
@@ -477,9 +478,17 @@ router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advance
           overrideNightPercent: overrideSettings.nightPercent,
           overrideSundayPercent: overrideSettings.sundayPercent,
           overrideHolidayPercent: overrideSettings.holidayPercent,
+          overrideNightStart: overrideSettings.nightStart,
+          overrideNightEnd: overrideSettings.nightEnd,
+          overrideState: overrideSettings.state,
+          overrideBillingMethod: overrideSettings.billingMethod,
           nightPercent: allowanceSettingsTable.nightPercent,
           sundayPercent: allowanceSettingsTable.sundayPercent,
           holidayPercent: allowanceSettingsTable.holidayPercent,
+          nightStart: allowanceSettingsTable.nightStart,
+          nightEnd: allowanceSettingsTable.nightEnd,
+          state: allowanceSettingsTable.state,
+          billingMethod: allowanceSettingsTable.billingMethod,
         })
         .from(teamsTable)
         // LEFT JOINs: Hat ein Team weder Override noch der Eigentümer eine
@@ -503,6 +512,25 @@ router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advance
         nightPercent: r.overrideNightPercent ?? r.nightPercent ?? DEFAULT_NIGHT_PERCENT,
         sundayPercent: r.overrideSundayPercent ?? r.sundayPercent ?? DEFAULT_SUNDAY_PERCENT,
         holidayPercent: r.overrideHolidayPercent ?? r.holidayPercent ?? DEFAULT_HOLIDAY_PERCENT,
+      },
+    ])
+  );
+  // Nachtfenster, Bundesland und Abrechnungsart je Team — nötig, um im IST-Modus
+  // die Zuschlagsstunden aus den erfassten Ist-Zeiten neu zu berechnen. Fallback
+  // je Feld: Team-Override → Konto des Team-Eigentümers → Default.
+  const DEFAULT_NIGHT_START = "23:00";
+  const DEFAULT_NIGHT_END = "06:00";
+  const teamMetaByTeam = new Map(
+    teamAllowanceRows.map((r) => [
+      r.teamId,
+      {
+        nightStart: r.overrideNightStart ?? r.nightStart ?? DEFAULT_NIGHT_START,
+        nightEnd: r.overrideNightEnd ?? r.nightEnd ?? DEFAULT_NIGHT_END,
+        state: (r.overrideState ?? r.state ?? null) as GermanState | null,
+        billingMethod: (r.overrideBillingMethod ?? r.billingMethod ?? null) as
+          | "SOLL"
+          | "IST"
+          | null,
       },
     ])
   );
@@ -550,6 +578,9 @@ router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advance
       const timeEntriesWithShift = await db
         .select({
           actualHours: timeTrackingTable.actualHours,
+          actualStart: timeTrackingTable.actualStart,
+          actualEnd: timeTrackingTable.actualEnd,
+          teamId: timeTrackingTable.teamId,
           shiftType: shiftsTable.type,
         })
         .from(timeTrackingTable)
@@ -566,14 +597,68 @@ router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advance
 
       const contract = await activeContractFor(assistant.id, referenceDate);
 
+      // Abrechnungsart-Kette: Assistent (Vertrag) → Team-Override/Konto des
+      // Team-Eigentümers → SOLL (Bestandsschutz-Default). teamMetaByTeam faltet
+      // Override und Team-Eigentümer-Konto bereits zusammen.
+      // Für die Team-Ebene brauchen wir ein Team IM aktuellen Scope: bevorzugt
+      // das Vertrags-Team (nur wenn es im Scope liegt — activeContractFor ist
+      // nicht team-gescoped und könnte bei Multi-Team-Assistenten ein fremdes
+      // Team liefern), sonst das explizit angefragte Team, sonst — wenn der
+      // Scope eindeutig ein einziges Team umfasst — dieses. Ohne eindeutiges
+      // Team greift der SOLL-Default (auch wenn gar kein Vertrag existiert).
+      const contractTeamId =
+        contract?.teamId != null && teamMetaByTeam.has(contract.teamId)
+          ? contract.teamId
+          : undefined;
+      const fallbackTeamId =
+        contractTeamId ?? requestedTeamId ?? (teamScope.length === 1 ? teamScope[0] : undefined);
+      const teamBilling =
+        fallbackTeamId != null ? teamMetaByTeam.get(fallbackTeamId)?.billingMethod : null;
+      const billingMethod: "SOLL" | "IST" =
+        contract?.billingMethod ?? teamBilling ?? "SOLL";
+
+      // Im IST-Modus werden gewertete Stunden UND Zuschläge aus den tatsächlich
+      // erfassten Zeiten je Eintrag berechnet (Nachtfenster/Bundesland des
+      // jeweiligen Team-Kontos). Im SOLL-Modus bleiben die Roh-Kennzahlen der
+      // Schicht maßgeblich — die Ist-Metriken werden dann nicht angesetzt.
+      const timeEntries = timeEntriesWithShift.map((e) => {
+        if (billingMethod !== "IST" || !e.actualStart || !e.actualEnd) {
+          return { actualHours: e.actualHours, shiftType: e.shiftType, teamId: e.teamId };
+        }
+        const meta = e.teamId != null ? teamMetaByTeam.get(e.teamId) : undefined;
+        const metrics = computeShiftMetrics(
+          {
+            startTime: new Date(e.actualStart),
+            endTime: new Date(e.actualEnd),
+            isAbsence: false,
+            valuationPercent: 100,
+          },
+          {
+            nightStart: meta?.nightStart ?? DEFAULT_NIGHT_START,
+            nightEnd: meta?.nightEnd ?? DEFAULT_NIGHT_END,
+          },
+          meta?.state ?? null,
+        );
+        return {
+          actualHours: e.actualHours,
+          shiftType: e.shiftType,
+          teamId: e.teamId,
+          valuedHours: metrics.valuedHours,
+          nightHours: metrics.nightHours,
+          sundayHours: metrics.sundayHours,
+          holidayHours: metrics.holidayHours,
+        };
+      });
+
       return computeHoursBalanceRow({
         userId: assistant.id,
         userName: assistant.name,
         shifts,
-        timeEntries: timeEntriesWithShift,
+        timeEntries,
         allowance: allowancePercents,
         allowanceByTeam,
         contract,
+        billingMethod,
       });
     })
   );

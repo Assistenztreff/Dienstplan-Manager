@@ -5,6 +5,7 @@
  * Dienstplan-App API für Persönliche Assistenz
  * OpenAPI spec version: 0.1.0
  */
+import type { ContractUpdateBillingMethod } from './contractUpdateBillingMethod';
 
 export interface ContractUpdate {
   /** @minimum 0 */
@@ -17,4 +18,9 @@ export interface ContractUpdate {
   endDate?: string | null;
   /** @nullable */
   notes?: string | null;
+  /**
+     * Abrechnungsart pro Assistenzkraft; null = erbt von Team/Konto.
+     * @nullable
+     */
+  billingMethod?: ContractUpdateBillingMethod;
 }

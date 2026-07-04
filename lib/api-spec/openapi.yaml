@@ -1625,6 +1625,9 @@ components:
           type: ["string", "null"]
         iban:
           type: ["string", "null"]
+        hourlyWage:
+          type: ["number", "null"]
+          description: Bruttostundenlohn in Euro (erweiterte Personalakte, premium).
         isActive:
           type: boolean
         createdAt:
@@ -1838,6 +1841,9 @@ components:
           type: string
         iban:
           type: string
+        hourlyWage:
+          type: number
+          description: Bruttostundenlohn in Euro (erweiterte Personalakte, premium).
         isActive:
           type: boolean
         teamId:
@@ -1872,6 +1878,9 @@ components:
           type: ["string", "null"]
         iban:
           type: ["string", "null"]
+        hourlyWage:
+          type: ["number", "null"]
+          description: Bruttostundenlohn in Euro (erweiterte Personalakte, premium).
         isActive:
           type: boolean
 
@@ -1957,6 +1966,10 @@ components:
           type: ["string", "null"]
         notes:
           type: ["string", "null"]
+        billingMethod:
+          type: ["string", "null"]
+          enum: [SOLL, IST, null]
+          description: Abrechnungsart pro Assistenzkraft; null = erbt von Team/Konto.
         createdAt:
           type: string
           format: date-time
@@ -1986,6 +1999,10 @@ components:
           format: date
         notes:
           type: string
+        billingMethod:
+          type: ["string", "null"]
+          enum: [SOLL, IST, null]
+          description: Abrechnungsart pro Assistenzkraft; null = erbt von Team/Konto.
 
     ContractUpdate:
       type: object
@@ -2003,6 +2020,10 @@ components:
           type: ["string", "null"]
         notes:
           type: ["string", "null"]
+        billingMethod:
+          type: ["string", "null"]
+          enum: [SOLL, IST, null]
+          description: Abrechnungsart pro Assistenzkraft; null = erbt von Team/Konto.
 
     Shift:
       type: object
@@ -2259,6 +2280,10 @@ components:
         state:
           type: ["string", "null"]
           enum: [BW, BY, BE, BB, HB, HH, HE, MV, NI, NW, RP, SL, SN, ST, SH, TH, null]
+        billingMethod:
+          type: ["string", "null"]
+          enum: [SOLL, IST, null]
+          description: Abrechnungsart auf Team- bzw. Konto-Ebene; null = erbt.
         updatedAt:
           type: string
           format: date-time
@@ -2288,6 +2313,10 @@ components:
         state:
           type: ["string", "null"]
           enum: [BW, BY, BE, BB, HB, HH, HE, MV, NI, NW, RP, SL, SN, ST, SH, TH, null]
+        billingMethod:
+          type: ["string", "null"]
+          enum: [SOLL, IST, null]
+          description: Abrechnungsart auf Team- bzw. Konto-Ebene; null = erbt.
 
     BrandingSettings:
       type: object
@@ -2555,7 +2584,7 @@ components:
 
     HoursBalance:
       type: object
-      required: [userId, userName, plannedHours, actualHours, balance, workedHours, sickHours, vacationDaysTaken, vacationDaysUsed, vacationDaysRemaining, valuedHours, vacationFulfilledHours, totalFulfilledHours, nightHours, nightSurchargeHours, sundayHours, sundaySurchargeHours, holidayHours, holidaySurchargeHours, nightPercent, sundayPercent, holidayPercent]
+      required: [userId, userName, plannedHours, actualHours, balance, workedHours, sickHours, vacationDaysTaken, vacationDaysUsed, vacationDaysRemaining, valuedHours, vacationFulfilledHours, totalFulfilledHours, nightHours, nightSurchargeHours, sundayHours, sundaySurchargeHours, holidayHours, holidaySurchargeHours, nightPercent, sundayPercent, holidayPercent, billingMethod]
       properties:
         userId:
           type: integer
@@ -2603,6 +2632,10 @@ components:
           type: integer
         holidayPercent:
           type: integer
+        billingMethod:
+          type: string
+          enum: [SOLL, IST]
+          description: Angewandte Abrechnungsart dieser Zeile (SOLL = Plan, IST = Ist-Zeiten).
 
     VacationBalance:
       type: object

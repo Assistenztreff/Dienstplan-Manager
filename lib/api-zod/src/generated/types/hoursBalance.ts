@@ -5,6 +5,7 @@
  * Dienstplan-App API für Persönliche Assistenz
  * OpenAPI spec version: 0.1.0
  */
+import type { HoursBalanceBillingMethod } from './hoursBalanceBillingMethod';
 
 export interface HoursBalance {
   userId: number;
@@ -31,4 +32,6 @@ export interface HoursBalance {
   nightPercent: number;
   sundayPercent: number;
   holidayPercent: number;
+  /** Angewandte Abrechnungsart dieser Zeile (SOLL = Plan, IST = Ist-Zeiten). */
+  billingMethod: HoursBalanceBillingMethod;
 }

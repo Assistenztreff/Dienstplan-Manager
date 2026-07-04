@@ -1,9 +1,15 @@
-import { pgTable, serial, integer, real, date, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, real, date, text, timestamp, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
 import { teamsTable } from "./teams";
 import { relations } from "drizzle-orm";
+
+// Abrechnungsart: SOLL = Abrechnung nach Plan (geplante FIX-Schichten), IST =
+// Abrechnung nach den tatsächlich erfassten Zeiten (Stunden UND Zuschläge werden
+// aus den Ist-Zeiten berechnet). NULL auf einer Zeile bedeutet "erben": die
+// wirksame Art ergibt sich aus der Kette Assistent → Team → Konto → SOLL.
+export const billingMethodEnum = pgEnum("billing_method", ["SOLL", "IST"]);
 
 export const contractsTable = pgTable("contracts", {
   id: serial("id").primaryKey(),
@@ -15,6 +21,8 @@ export const contractsTable = pgTable("contracts", {
   startDate: date("start_date").notNull(),
   endDate: date("end_date"),
   notes: text("notes"),
+  // Abrechnungsart pro Assistenzkraft; NULL = erbt von Team/Konto.
+  billingMethod: billingMethodEnum("billing_method"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

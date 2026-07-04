@@ -5,6 +5,7 @@ import {
   useDeleteAllowanceSettingsOverride,
   getGetAllowanceSettingsQueryKey,
   type AllowanceSettingsInputState,
+  type AllowanceSettingsInputBillingMethod,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,7 +24,11 @@ type FormState = {
   sundayPercent: string;
   holidayPercent: string;
   state: string;
+  billingMethod: string;
 };
+
+// Sonderwert für "erbt" (Abrechnungsart nicht auf dieser Ebene gesetzt).
+const INHERIT_BILLING = "inherit";
 
 const TIME_PATTERN = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
 
@@ -111,6 +116,7 @@ export function AllowanceSettingsForm() {
     sundayPercent: "50",
     holidayPercent: "100",
     state: NO_STATE,
+    billingMethod: INHERIT_BILLING,
   });
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [saving, setSaving] = useState(false);
@@ -130,6 +136,7 @@ export function AllowanceSettingsForm() {
         sundayPercent: String(settings.sundayPercent),
         holidayPercent: String(settings.holidayPercent),
         state: settings.state ?? NO_STATE,
+        billingMethod: settings.billingMethod ?? INHERIT_BILLING,
       });
       setErrors({});
       setSaved(false);
@@ -183,6 +190,9 @@ export function AllowanceSettingsForm() {
           sundayPercent: Number(form.sundayPercent),
           holidayPercent: Number(form.holidayPercent),
           state: (form.state === NO_STATE ? null : form.state) as AllowanceSettingsInputState,
+          billingMethod: (form.billingMethod === INHERIT_BILLING
+            ? null
+            : form.billingMethod) as AllowanceSettingsInputBillingMethod,
         },
         params: queryParams,
       });
@@ -328,6 +338,30 @@ export function AllowanceSettingsForm() {
                   Bestimmt, welche regionalen gesetzlichen Feiertage (z.B. Fronleichnam) für den
                   Feiertagszuschlag berücksichtigt werden. Ohne Auswahl gelten nur die bundesweiten
                   Feiertage. Die Änderung wirkt sich auf neu gespeicherte Schichten aus.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="billingMethod">Abrechnungsart</Label>
+                <Select value={form.billingMethod} onValueChange={(v) => set("billingMethod", v)}>
+                  <SelectTrigger id="billingMethod" data-testid="allowance-billing-method-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={INHERIT_BILLING}>
+                      {isTeamScope
+                        ? "Konto-Standard übernehmen"
+                        : "Standard (Soll-Stunden)"}
+                    </SelectItem>
+                    <SelectItem value="SOLL">Soll – nach geplanten Schichten</SelectItem>
+                    <SelectItem value="IST">Ist – nach erfassten Zeiten</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Bestimmt, ob Stunden und Zuschläge in Auswertungen und Stundennachweis aus den
+                  geplanten Schichten (Soll) oder aus den tatsächlich erfassten Zeiten (Ist)
+                  berechnet werden. Eine Einstellung pro Assistenzkraft (Personalakte) hat Vorrang
+                  vor dieser {isTeamScope ? "Team-" : "Konto-"}Regelung.
                 </p>
               </div>
 

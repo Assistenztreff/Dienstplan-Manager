@@ -34,6 +34,7 @@ const ADVANCED_PERSONNEL_FIELDS = [
   "taxClass",
   "healthInsurance",
   "iban",
+  "hourlyWage",
 ] as const;
 
 /** Vergleichsnormalisierung: null/undefined/"" gelten als "kein Wert". */
@@ -55,6 +56,7 @@ const SAFE_USER_SELECT = {
   taxClass: usersTable.taxClass,
   healthInsurance: usersTable.healthInsurance,
   iban: usersTable.iban,
+  hourlyWage: usersTable.hourlyWage,
   isActive: usersTable.isActive,
   createdAt: usersTable.createdAt,
 };
@@ -290,6 +292,7 @@ router.patch("/users/:id", requireAdmin, async (req, res): Promise<void> => {
         taxClass: usersTable.taxClass,
         healthInsurance: usersTable.healthInsurance,
         iban: usersTable.iban,
+        hourlyWage: usersTable.hourlyWage,
       })
       .from(usersTable)
       .where(eq(usersTable.id, params.data.id));

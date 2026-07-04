@@ -25,10 +25,21 @@ export interface BalanceShift {
   teamId?: number | null;
 }
 
+/** Abrechnungsart: SOLL = nach Plan, IST = nach erfassten Ist-Zeiten. */
+export type BillingMethod = "SOLL" | "IST";
+
 /** Bestätigter Zeiterfassungs-Eintrag inkl. Typ der verknüpften Schicht. */
 export interface BalanceTimeEntry {
   actualHours?: number | null;
   shiftType?: string | null;
+  // IST-Modus: aus den tatsächlich erfassten Zeiten (actualStart/actualEnd)
+  // berechnete Kennzahlen. Werden nur bei billingMethod === "IST" verwendet.
+  valuedHours?: number | null;
+  nightHours?: number | null;
+  sundayHours?: number | null;
+  holidayHours?: number | null;
+  /** Team des Eintrags — bestimmt die anzuwendenden Zuschlags-Prozente. */
+  teamId?: number | null;
 }
 
 export interface AllowancePercents {
@@ -65,6 +76,8 @@ export interface HoursBalanceRow {
   nightPercent: number;
   sundayPercent: number;
   holidayPercent: number;
+  /** Angewandte Abrechnungsart dieser Zeile. */
+  billingMethod: BillingMethod;
 }
 
 function shiftHours(s: BalanceShift): number {
@@ -102,33 +115,72 @@ export function computeHoursBalanceRow(params: {
    */
   allowanceByTeam?: Map<number, AllowancePercents>;
   contract: AssistantContractInfo | null;
+  /** Abrechnungsart dieses Assistenten; ohne Angabe SOLL (Bestandsschutz). */
+  billingMethod?: BillingMethod;
 }): HoursBalanceRow {
   const { userId, userName, shifts, timeEntries, allowance, allowanceByTeam, contract } = params;
   const { nightPercent, sundayPercent, holidayPercent } = allowance;
+  // Default SOLL = Bestandsschutz: ohne explizite Abrechnungsart bleibt alles planbasiert.
+  const billingMethod: BillingMethod = params.billingMethod ?? "SOLL";
 
-  const percentsFor = (s: BalanceShift): AllowancePercents =>
-    (s.teamId != null ? allowanceByTeam?.get(s.teamId) : undefined) ?? allowance;
+  const percentsForTeam = (teamId?: number | null): AllowancePercents =>
+    (teamId != null ? allowanceByTeam?.get(teamId) : undefined) ?? allowance;
+  const percentsFor = (s: BalanceShift): AllowancePercents => percentsForTeam(s.teamId);
 
   const workShifts = shifts.filter(isWorkShift);
 
+  // Soll-Stunden (Plan) sind IMMER planbasiert, unabhängig von der Abrechnungsart.
   const plannedHours = workShifts.reduce((acc, s) => acc + shiftHours(s), 0);
 
-  const valuedHours = workShifts.reduce((acc, s) => acc + (s.valuedHours ?? 0), 0);
-  const nightHours = workShifts.reduce((acc, s) => acc + (s.nightHours ?? 0), 0);
-  const sundayHours = workShifts.reduce((acc, s) => acc + (s.sundayHours ?? 0), 0);
-  const holidayHours = workShifts.reduce((acc, s) => acc + (s.holidayHours ?? 0), 0);
-  const nightSurchargeHours = workShifts.reduce(
-    (acc, s) => acc + ((s.nightHours ?? 0) * percentsFor(s).nightPercent) / 100,
-    0
-  );
-  const sundaySurchargeHours = workShifts.reduce(
-    (acc, s) => acc + ((s.sundayHours ?? 0) * percentsFor(s).sundayPercent) / 100,
-    0
-  );
-  const holidaySurchargeHours = workShifts.reduce(
-    (acc, s) => acc + ((s.holidayHours ?? 0) * percentsFor(s).holidayPercent) / 100,
-    0
-  );
+  // Quelle der gewerteten Arbeits- und Zuschlagsstunden hängt an der Abrechnungsart:
+  // SOLL = geplante FIX-Schichten, IST = tatsächlich erfasste (bestätigte) Ist-Zeiten.
+  const isWorkEntry = (e: BalanceTimeEntry) =>
+    e.shiftType !== "sick" && e.shiftType !== "vacation";
+  const workEntries = timeEntries.filter(isWorkEntry);
+
+  let valuedHours: number;
+  let nightHours: number;
+  let sundayHours: number;
+  let holidayHours: number;
+  let nightSurchargeHours: number;
+  let sundaySurchargeHours: number;
+  let holidaySurchargeHours: number;
+
+  if (billingMethod === "IST") {
+    valuedHours = workEntries.reduce((acc, e) => acc + (e.valuedHours ?? 0), 0);
+    nightHours = workEntries.reduce((acc, e) => acc + (e.nightHours ?? 0), 0);
+    sundayHours = workEntries.reduce((acc, e) => acc + (e.sundayHours ?? 0), 0);
+    holidayHours = workEntries.reduce((acc, e) => acc + (e.holidayHours ?? 0), 0);
+    nightSurchargeHours = workEntries.reduce(
+      (acc, e) => acc + ((e.nightHours ?? 0) * percentsForTeam(e.teamId).nightPercent) / 100,
+      0
+    );
+    sundaySurchargeHours = workEntries.reduce(
+      (acc, e) => acc + ((e.sundayHours ?? 0) * percentsForTeam(e.teamId).sundayPercent) / 100,
+      0
+    );
+    holidaySurchargeHours = workEntries.reduce(
+      (acc, e) => acc + ((e.holidayHours ?? 0) * percentsForTeam(e.teamId).holidayPercent) / 100,
+      0
+    );
+  } else {
+    valuedHours = workShifts.reduce((acc, s) => acc + (s.valuedHours ?? 0), 0);
+    nightHours = workShifts.reduce((acc, s) => acc + (s.nightHours ?? 0), 0);
+    sundayHours = workShifts.reduce((acc, s) => acc + (s.sundayHours ?? 0), 0);
+    holidayHours = workShifts.reduce((acc, s) => acc + (s.holidayHours ?? 0), 0);
+    nightSurchargeHours = workShifts.reduce(
+      (acc, s) => acc + ((s.nightHours ?? 0) * percentsFor(s).nightPercent) / 100,
+      0
+    );
+    sundaySurchargeHours = workShifts.reduce(
+      (acc, s) => acc + ((s.sundayHours ?? 0) * percentsFor(s).sundayPercent) / 100,
+      0
+    );
+    holidaySurchargeHours = workShifts.reduce(
+      (acc, s) => acc + ((s.holidayHours ?? 0) * percentsFor(s).holidayPercent) / 100,
+      0
+    );
+  }
 
   const vacationShifts = shifts.filter((s) => s.type === "vacation");
   const vacationFulfilledHours = vacationShifts.reduce((acc, s) => acc + (s.valuedHours ?? 0), 0);
@@ -173,5 +225,6 @@ export function computeHoursBalanceRow(params: {
     nightPercent,
     sundayPercent,
     holidayPercent,
+    billingMethod,
   };
 }

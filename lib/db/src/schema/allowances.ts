@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
 import { teamsTable } from "./teams";
+import { billingMethodEnum } from "./contracts";
 
 // Zuschlags-Einstellungen sind PRO KONTO (Team-Eigentümer) gespeichert — früher
 // eine globale Singleton-Zeile (id=1), was in einem Multi-Tenant-SaaS ein
@@ -32,6 +33,10 @@ export const allowanceSettingsTable = pgTable(
     sundayPercent: integer("sunday_percent").notNull().default(50),
     holidayPercent: integer("holiday_percent").notNull().default(100),
     state: text("state"),
+    // Abrechnungsart auf Konto- (team_id NULL) bzw. Team-Override-Ebene (team_id
+    // gesetzt); NULL = erbt (Team-Override → Konto → SOLL). Vorrang vor beidem hat
+    // eine am Vertrag der Assistenzkraft gesetzte Abrechnungsart.
+    billingMethod: billingMethodEnum("billing_method"),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [

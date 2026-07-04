@@ -28,5 +28,10 @@ export interface UserUpdate {
   healthInsurance?: string | null;
   /** @nullable */
   iban?: string | null;
+  /**
+     * Bruttostundenlohn in Euro (erweiterte Personalakte, premium).
+     * @nullable
+     */
+  hourlyWage?: number | null;
   isActive?: boolean;
 }

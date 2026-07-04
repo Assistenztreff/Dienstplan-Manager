@@ -39,6 +39,7 @@
 - [One-off Playwright chromium](playwright-oneoff-chromium.md) — downloaded browsers fail (libglib missing on NixOS); ad-hoc scripts must launch with REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE.
 - [Features via team-owner plan](feature-via-team-owner-plan.md) — assistants are always free; assistant-facing premium features gate on the employer's plan, frontend must probe a gated endpoint (not currentUser.plan).
 - [Allowance team overrides](allowance-team-overrides.md) — account row (team_id NULL) + override row share one table; readers must filter isNull(teamId) and display percents must match the applied chain.
+- [Abrechnungsart SOLL/IST fallback](billing-method-fallback.md) — billing method resolves Assistent→Team→Konto→SOLL; activeContractFor isn't team-scoped, so guard contract.teamId ∈ scope and fall back to requestedTeamId/single-team (else missing contract skips team level).
 - [Workflow names in monorepo](workflow-names-monorepo.md) — workflows are named `artifacts/<dir>: <service>` (e.g. `artifacts/dienstplan: web`); slug/title fail, use listWorkflows() on RUN_COMMAND_NOT_FOUND.
 - [Resend test-sender restriction](resend-test-sender-restriction.md) — onboarding@resend.dev only delivers to the Resend account owner's email (403 otherwise); verify a domain for free recipients.
 - [DB-backed vitest against _test DB](db-backed-vitest-test-db.md) — rewrite DATABASE_URL before dynamic import of @workspace/db, self-provision via setup-test-db, pool.end() in afterAll.

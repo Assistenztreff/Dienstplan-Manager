@@ -57,6 +57,11 @@ export interface User {
   healthInsurance?: string | null;
   /** @nullable */
   iban?: string | null;
+  /**
+     * Bruttostundenlohn in Euro (erweiterte Personalakte, premium).
+     * @nullable
+     */
+  hourlyWage?: number | null;
   isActive?: boolean;
   createdAt: string;
 }
@@ -259,6 +264,8 @@ export interface UserInput {
   taxClass?: string;
   healthInsurance?: string;
   iban?: string;
+  /** Bruttostundenlohn in Euro (erweiterte Personalakte, premium). */
+  hourlyWage?: number;
   isActive?: boolean;
   /** Optionales Ziel-Team; der neue Nutzer wird Mitglied dieses Teams. Ohne Angabe das Standard-Team des Erstellers. */
   teamId?: number;
@@ -293,6 +300,11 @@ export interface UserUpdate {
   healthInsurance?: string | null;
   /** @nullable */
   iban?: string | null;
+  /**
+     * Bruttostundenlohn in Euro (erweiterte Personalakte, premium).
+     * @nullable
+     */
+  hourlyWage?: number | null;
   isActive?: boolean;
 }
 
@@ -337,6 +349,18 @@ export interface TeamMemberInput {
   userId: number;
 }
 
+/**
+ * Abrechnungsart pro Assistenzkraft; null = erbt von Team/Konto.
+ * @nullable
+ */
+export type ContractBillingMethod = typeof ContractBillingMethod[keyof typeof ContractBillingMethod] | null;
+
+
+export const ContractBillingMethod = {
+  SOLL: 'SOLL',
+  IST: 'IST',
+} as const;
+
 export interface Contract {
   id: number;
   userId: number;
@@ -348,9 +372,26 @@ export interface Contract {
   endDate?: string | null;
   /** @nullable */
   notes?: string | null;
+  /**
+     * Abrechnungsart pro Assistenzkraft; null = erbt von Team/Konto.
+     * @nullable
+     */
+  billingMethod?: ContractBillingMethod;
   createdAt: string;
   user?: User;
 }
+
+/**
+ * Abrechnungsart pro Assistenzkraft; null = erbt von Team/Konto.
+ * @nullable
+ */
+export type ContractInputBillingMethod = typeof ContractInputBillingMethod[keyof typeof ContractInputBillingMethod] | null;
+
+
+export const ContractInputBillingMethod = {
+  SOLL: 'SOLL',
+  IST: 'IST',
+} as const;
 
 export interface ContractInput {
   userId: number;
@@ -363,7 +404,24 @@ export interface ContractInput {
   startDate: string;
   endDate?: string;
   notes?: string;
+  /**
+     * Abrechnungsart pro Assistenzkraft; null = erbt von Team/Konto.
+     * @nullable
+     */
+  billingMethod?: ContractInputBillingMethod;
 }
+
+/**
+ * Abrechnungsart pro Assistenzkraft; null = erbt von Team/Konto.
+ * @nullable
+ */
+export type ContractUpdateBillingMethod = typeof ContractUpdateBillingMethod[keyof typeof ContractUpdateBillingMethod] | null;
+
+
+export const ContractUpdateBillingMethod = {
+  SOLL: 'SOLL',
+  IST: 'IST',
+} as const;
 
 export interface ContractUpdate {
   /** @minimum 0 */
@@ -376,6 +434,11 @@ export interface ContractUpdate {
   endDate?: string | null;
   /** @nullable */
   notes?: string | null;
+  /**
+     * Abrechnungsart pro Assistenzkraft; null = erbt von Team/Konto.
+     * @nullable
+     */
+  billingMethod?: ContractUpdateBillingMethod;
 }
 
 export type ShiftType = typeof ShiftType[keyof typeof ShiftType];
@@ -591,6 +654,18 @@ export const AllowanceSettingsState = {
   TH: 'TH',
 } as const;
 
+/**
+ * Abrechnungsart auf Team- bzw. Konto-Ebene; null = erbt.
+ * @nullable
+ */
+export type AllowanceSettingsBillingMethod = typeof AllowanceSettingsBillingMethod[keyof typeof AllowanceSettingsBillingMethod] | null;
+
+
+export const AllowanceSettingsBillingMethod = {
+  SOLL: 'SOLL',
+  IST: 'IST',
+} as const;
+
 export interface AllowanceSettings {
   id: number;
   /**
@@ -607,6 +682,11 @@ export interface AllowanceSettings {
   holidayPercent: number;
   /** @nullable */
   state?: AllowanceSettingsState;
+  /**
+     * Abrechnungsart auf Team- bzw. Konto-Ebene; null = erbt.
+     * @nullable
+     */
+  billingMethod?: AllowanceSettingsBillingMethod;
   updatedAt: string;
 }
 
@@ -635,6 +715,18 @@ export const AllowanceSettingsInputState = {
   TH: 'TH',
 } as const;
 
+/**
+ * Abrechnungsart auf Team- bzw. Konto-Ebene; null = erbt.
+ * @nullable
+ */
+export type AllowanceSettingsInputBillingMethod = typeof AllowanceSettingsInputBillingMethod[keyof typeof AllowanceSettingsInputBillingMethod] | null;
+
+
+export const AllowanceSettingsInputBillingMethod = {
+  SOLL: 'SOLL',
+  IST: 'IST',
+} as const;
+
 export interface AllowanceSettingsInput {
   /**
      * @minimum 0
@@ -657,6 +749,11 @@ export interface AllowanceSettingsInput {
   holidayPercent: number;
   /** @nullable */
   state?: AllowanceSettingsInputState;
+  /**
+     * Abrechnungsart auf Team- bzw. Konto-Ebene; null = erbt.
+     * @nullable
+     */
+  billingMethod?: AllowanceSettingsInputBillingMethod;
 }
 
 export interface BrandingSettings {
@@ -833,6 +930,17 @@ export interface DashboardSummary {
   warnings?: DashboardWarnings;
 }
 
+/**
+ * Angewandte Abrechnungsart dieser Zeile (SOLL = Plan, IST = Ist-Zeiten).
+ */
+export type HoursBalanceBillingMethod = typeof HoursBalanceBillingMethod[keyof typeof HoursBalanceBillingMethod];
+
+
+export const HoursBalanceBillingMethod = {
+  SOLL: 'SOLL',
+  IST: 'IST',
+} as const;
+
 export interface HoursBalance {
   userId: number;
   userName: string;
@@ -858,6 +966,8 @@ export interface HoursBalance {
   nightPercent: number;
   sundayPercent: number;
   holidayPercent: number;
+  /** Angewandte Abrechnungsart dieser Zeile (SOLL = Plan, IST = Ist-Zeiten). */
+  billingMethod: HoursBalanceBillingMethod;
 }
 
 export interface VacationBalance {

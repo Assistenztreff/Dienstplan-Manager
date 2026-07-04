@@ -1,4 +1,4 @@
-import { pgTable, serial, text, boolean, timestamp, date, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, timestamp, date, pgEnum, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -24,6 +24,9 @@ export const usersTable = pgTable("users", {
   taxClass: text("tax_class"),
   healthInsurance: text("health_insurance"),
   iban: text("iban"),
+  // Bruttostundenlohn in Euro (Teil der erweiterten Personalakte, premium-gated);
+  // NULL = nicht erfasst.
+  hourlyWage: real("hourly_wage"),
   isActive: boolean("is_active").notNull().default(true),
   passwordHash: text("password_hash"),
   inviteToken: text("invite_token"),

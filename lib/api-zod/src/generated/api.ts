@@ -40,6 +40,7 @@ export const ListUsersResponseItem = zod.object({
   "taxClass": zod.string().nullish(),
   "healthInsurance": zod.string().nullish(),
   "iban": zod.string().nullish(),
+  "hourlyWage": zod.number().nullish().describe('Bruttostundenlohn in Euro (erweiterte Personalakte, premium).'),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 })
@@ -64,6 +65,7 @@ export const CreateUserBody = zod.object({
   "taxClass": zod.string().optional(),
   "healthInsurance": zod.string().optional(),
   "iban": zod.string().optional(),
+  "hourlyWage": zod.number().optional().describe('Bruttostundenlohn in Euro (erweiterte Personalakte, premium).'),
   "isActive": zod.boolean().optional(),
   "teamId": zod.number().optional().describe('Optionales Ziel-Team; der neue Nutzer wird Mitglied dieses Teams. Ohne Angabe das Standard-Team des Erstellers.')
 })
@@ -91,6 +93,7 @@ export const GetUserResponse = zod.object({
   "taxClass": zod.string().nullish(),
   "healthInsurance": zod.string().nullish(),
   "iban": zod.string().nullish(),
+  "hourlyWage": zod.number().nullish().describe('Bruttostundenlohn in Euro (erweiterte Personalakte, premium).'),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 })
@@ -118,6 +121,7 @@ export const UpdateUserBody = zod.object({
   "taxClass": zod.string().nullish(),
   "healthInsurance": zod.string().nullish(),
   "iban": zod.string().nullish(),
+  "hourlyWage": zod.number().nullish().describe('Bruttostundenlohn in Euro (erweiterte Personalakte, premium).'),
   "isActive": zod.boolean().optional()
 })
 
@@ -136,6 +140,7 @@ export const UpdateUserResponse = zod.object({
   "taxClass": zod.string().nullish(),
   "healthInsurance": zod.string().nullish(),
   "iban": zod.string().nullish(),
+  "hourlyWage": zod.number().nullish().describe('Bruttostundenlohn in Euro (erweiterte Personalakte, premium).'),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 })
@@ -166,6 +171,7 @@ export const ListContractsResponseItem = zod.object({
   "startDate": zod.coerce.date(),
   "endDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "billingMethod": zod.union([zod.literal('SOLL'),zod.literal('IST'),zod.literal(null)]).nullish().describe('Abrechnungsart pro Assistenzkraft; null = erbt von Team\/Konto.'),
   "createdAt": zod.coerce.date(),
   "user": zod.object({
   "id": zod.number(),
@@ -182,6 +188,7 @@ export const ListContractsResponseItem = zod.object({
   "taxClass": zod.string().nullish(),
   "healthInsurance": zod.string().nullish(),
   "iban": zod.string().nullish(),
+  "hourlyWage": zod.number().nullish().describe('Bruttostundenlohn in Euro (erweiterte Personalakte, premium).'),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -205,7 +212,8 @@ export const CreateContractBody = zod.object({
   "vacationDays": zod.number().min(createContractBodyVacationDaysMin),
   "startDate": zod.coerce.date(),
   "endDate": zod.coerce.date().optional(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "billingMethod": zod.union([zod.literal('SOLL'),zod.literal('IST'),zod.literal(null)]).nullish().describe('Abrechnungsart pro Assistenzkraft; null = erbt von Team\/Konto.')
 })
 
 
@@ -225,6 +233,7 @@ export const GetContractResponse = zod.object({
   "startDate": zod.coerce.date(),
   "endDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "billingMethod": zod.union([zod.literal('SOLL'),zod.literal('IST'),zod.literal(null)]).nullish().describe('Abrechnungsart pro Assistenzkraft; null = erbt von Team\/Konto.'),
   "createdAt": zod.coerce.date(),
   "user": zod.object({
   "id": zod.number(),
@@ -241,6 +250,7 @@ export const GetContractResponse = zod.object({
   "taxClass": zod.string().nullish(),
   "healthInsurance": zod.string().nullish(),
   "iban": zod.string().nullish(),
+  "hourlyWage": zod.number().nullish().describe('Bruttostundenlohn in Euro (erweiterte Personalakte, premium).'),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -267,7 +277,8 @@ export const UpdateContractBody = zod.object({
   "vacationDays": zod.number().min(updateContractBodyVacationDaysMin).optional(),
   "vacationDaysUsed": zod.number().min(updateContractBodyVacationDaysUsedMin).optional(),
   "endDate": zod.string().nullish(),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "billingMethod": zod.union([zod.literal('SOLL'),zod.literal('IST'),zod.literal(null)]).nullish().describe('Abrechnungsart pro Assistenzkraft; null = erbt von Team\/Konto.')
 })
 
 export const UpdateContractResponse = zod.object({
@@ -279,6 +290,7 @@ export const UpdateContractResponse = zod.object({
   "startDate": zod.coerce.date(),
   "endDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "billingMethod": zod.union([zod.literal('SOLL'),zod.literal('IST'),zod.literal(null)]).nullish().describe('Abrechnungsart pro Assistenzkraft; null = erbt von Team\/Konto.'),
   "createdAt": zod.coerce.date(),
   "user": zod.object({
   "id": zod.number(),
@@ -295,6 +307,7 @@ export const UpdateContractResponse = zod.object({
   "taxClass": zod.string().nullish(),
   "healthInsurance": zod.string().nullish(),
   "iban": zod.string().nullish(),
+  "hourlyWage": zod.number().nullish().describe('Bruttostundenlohn in Euro (erweiterte Personalakte, premium).'),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -349,6 +362,7 @@ export const ListShiftsResponseItem = zod.object({
   "taxClass": zod.string().nullish(),
   "healthInsurance": zod.string().nullish(),
   "iban": zod.string().nullish(),
+  "hourlyWage": zod.number().nullish().describe('Bruttostundenlohn in Euro (erweiterte Personalakte, premium).'),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -407,6 +421,7 @@ export const GetShiftResponse = zod.object({
   "taxClass": zod.string().nullish(),
   "healthInsurance": zod.string().nullish(),
   "iban": zod.string().nullish(),
+  "hourlyWage": zod.number().nullish().describe('Bruttostundenlohn in Euro (erweiterte Personalakte, premium).'),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -459,6 +474,7 @@ export const UpdateShiftResponse = zod.object({
   "taxClass": zod.string().nullish(),
   "healthInsurance": zod.string().nullish(),
   "iban": zod.string().nullish(),
+  "hourlyWage": zod.number().nullish().describe('Bruttostundenlohn in Euro (erweiterte Personalakte, premium).'),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -743,6 +759,7 @@ export const GetAllowanceSettingsResponse = zod.object({
   "sundayPercent": zod.number(),
   "holidayPercent": zod.number(),
   "state": zod.union([zod.literal('BW'),zod.literal('BY'),zod.literal('BE'),zod.literal('BB'),zod.literal('HB'),zod.literal('HH'),zod.literal('HE'),zod.literal('MV'),zod.literal('NI'),zod.literal('NW'),zod.literal('RP'),zod.literal('SL'),zod.literal('SN'),zod.literal('ST'),zod.literal('SH'),zod.literal('TH'),zod.literal(null)]).nullish(),
+  "billingMethod": zod.union([zod.literal('SOLL'),zod.literal('IST'),zod.literal(null)]).nullish().describe('Abrechnungsart auf Team- bzw. Konto-Ebene; null = erbt.'),
   "updatedAt": zod.coerce.date()
 })
 
@@ -773,7 +790,8 @@ export const UpdateAllowanceSettingsBody = zod.object({
   "nightEnd": zod.string().regex(updateAllowanceSettingsBodyNightEndRegExp),
   "sundayPercent": zod.number().min(updateAllowanceSettingsBodySundayPercentMin).max(updateAllowanceSettingsBodySundayPercentMax),
   "holidayPercent": zod.number().min(updateAllowanceSettingsBodyHolidayPercentMin).max(updateAllowanceSettingsBodyHolidayPercentMax),
-  "state": zod.union([zod.literal('BW'),zod.literal('BY'),zod.literal('BE'),zod.literal('BB'),zod.literal('HB'),zod.literal('HH'),zod.literal('HE'),zod.literal('MV'),zod.literal('NI'),zod.literal('NW'),zod.literal('RP'),zod.literal('SL'),zod.literal('SN'),zod.literal('ST'),zod.literal('SH'),zod.literal('TH'),zod.literal(null)]).nullish()
+  "state": zod.union([zod.literal('BW'),zod.literal('BY'),zod.literal('BE'),zod.literal('BB'),zod.literal('HB'),zod.literal('HH'),zod.literal('HE'),zod.literal('MV'),zod.literal('NI'),zod.literal('NW'),zod.literal('RP'),zod.literal('SL'),zod.literal('SN'),zod.literal('ST'),zod.literal('SH'),zod.literal('TH'),zod.literal(null)]).nullish(),
+  "billingMethod": zod.union([zod.literal('SOLL'),zod.literal('IST'),zod.literal(null)]).nullish().describe('Abrechnungsart auf Team- bzw. Konto-Ebene; null = erbt.')
 })
 
 export const UpdateAllowanceSettingsResponse = zod.object({
@@ -786,6 +804,7 @@ export const UpdateAllowanceSettingsResponse = zod.object({
   "sundayPercent": zod.number(),
   "holidayPercent": zod.number(),
   "state": zod.union([zod.literal('BW'),zod.literal('BY'),zod.literal('BE'),zod.literal('BB'),zod.literal('HB'),zod.literal('HH'),zod.literal('HE'),zod.literal('MV'),zod.literal('NI'),zod.literal('NW'),zod.literal('RP'),zod.literal('SL'),zod.literal('SN'),zod.literal('ST'),zod.literal('SH'),zod.literal('TH'),zod.literal(null)]).nullish(),
+  "billingMethod": zod.union([zod.literal('SOLL'),zod.literal('IST'),zod.literal(null)]).nullish().describe('Abrechnungsart auf Team- bzw. Konto-Ebene; null = erbt.'),
   "updatedAt": zod.coerce.date()
 })
 
@@ -920,6 +939,7 @@ export const ListTimeEntriesResponseItem = zod.object({
   "taxClass": zod.string().nullish(),
   "healthInsurance": zod.string().nullish(),
   "iban": zod.string().nullish(),
+  "hourlyWage": zod.number().nullish().describe('Bruttostundenlohn in Euro (erweiterte Personalakte, premium).'),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -974,6 +994,7 @@ export const GetTimeEntryResponse = zod.object({
   "taxClass": zod.string().nullish(),
   "healthInsurance": zod.string().nullish(),
   "iban": zod.string().nullish(),
+  "hourlyWage": zod.number().nullish().describe('Bruttostundenlohn in Euro (erweiterte Personalakte, premium).'),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -1020,6 +1041,7 @@ export const UpdateTimeEntryResponse = zod.object({
   "taxClass": zod.string().nullish(),
   "healthInsurance": zod.string().nullish(),
   "iban": zod.string().nullish(),
+  "hourlyWage": zod.number().nullish().describe('Bruttostundenlohn in Euro (erweiterte Personalakte, premium).'),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -1073,6 +1095,7 @@ export const ConfirmTimeEntryResponse = zod.object({
   "taxClass": zod.string().nullish(),
   "healthInsurance": zod.string().nullish(),
   "iban": zod.string().nullish(),
+  "hourlyWage": zod.number().nullish().describe('Bruttostundenlohn in Euro (erweiterte Personalakte, premium).'),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -1210,6 +1233,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "taxClass": zod.string().nullish(),
   "healthInsurance": zod.string().nullish(),
   "iban": zod.string().nullish(),
+  "hourlyWage": zod.number().nullish().describe('Bruttostundenlohn in Euro (erweiterte Personalakte, premium).'),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -1241,6 +1265,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "taxClass": zod.string().nullish(),
   "healthInsurance": zod.string().nullish(),
   "iban": zod.string().nullish(),
+  "hourlyWage": zod.number().nullish().describe('Bruttostundenlohn in Euro (erweiterte Personalakte, premium).'),
   "isActive": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 }).optional()
@@ -1291,7 +1316,8 @@ export const GetHoursBalanceResponseItem = zod.object({
   "holidaySurchargeHours": zod.number(),
   "nightPercent": zod.number(),
   "sundayPercent": zod.number(),
-  "holidayPercent": zod.number()
+  "holidayPercent": zod.number(),
+  "billingMethod": zod.enum(['SOLL', 'IST']).describe('Angewandte Abrechnungsart dieser Zeile (SOLL = Plan, IST = Ist-Zeiten).')
 })
 export const GetHoursBalanceResponse = zod.array(GetHoursBalanceResponseItem)
 

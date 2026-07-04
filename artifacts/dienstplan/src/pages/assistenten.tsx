@@ -62,6 +62,7 @@ type User = {
   taxClass?: string | null;
   healthInsurance?: string | null;
   iban?: string | null;
+  hourlyWage?: number | null;
   isActive: boolean;
 };
 
@@ -73,6 +74,7 @@ type Contract = {
   startDate: string;
   endDate?: string | null;
   notes?: string | null;
+  billingMethod?: "SOLL" | "IST" | null;
 };
 
 type FormState = {
@@ -87,11 +89,17 @@ type FormState = {
   taxClass: string;
   healthInsurance: string;
   iban: string;
+  hourlyWage: string;
   weeklyHours: string;
   vacationDays: string;
   startDate: string;
   notes: string;
+  billingMethod: string;
 };
+
+// Sonderwert für "erbt" (Abrechnungsart nicht auf Assistenten-Ebene gesetzt →
+// Fallback auf Team-/Konto-Regelung).
+const INHERIT_BILLING = "inherit";
 
 const EMPTY_FORM: FormState = {
   vorname: "",
@@ -105,10 +113,12 @@ const EMPTY_FORM: FormState = {
   taxClass: "",
   healthInsurance: "",
   iban: "",
+  hourlyWage: "",
   weeklyHours: "20",
   vacationDays: "30",
   startDate: format(new Date(), "yyyy-MM-dd"),
   notes: "",
+  billingMethod: INHERIT_BILLING,
 };
 
 function splitName(name: string): { vorname: string; nachname: string } {
@@ -290,10 +300,12 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
         taxClass: editUser.taxClass ?? "",
         healthInsurance: editUser.healthInsurance ?? "",
         iban: editUser.iban ?? "",
+        hourlyWage: editUser.hourlyWage != null ? String(editUser.hourlyWage) : "",
         weeklyHours: editContract ? String(editContract.weeklyHours) : "20",
         vacationDays: editContract ? String(editContract.vacationDays) : "30",
         startDate: editContract ? editContract.startDate : format(new Date(), "yyyy-MM-dd"),
         notes: editContract?.notes ?? "",
+        billingMethod: editContract?.billingMethod ?? INHERIT_BILLING,
       };
     }
     return EMPTY_FORM;
@@ -349,6 +361,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
                   taxClass: form.taxClass || null,
                   healthInsurance: form.healthInsurance || null,
                   iban: form.iban || null,
+                  hourlyWage: form.hourlyWage ? Number(form.hourlyWage) : null,
                 }
               : {}),
           },
@@ -361,6 +374,9 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
               weeklyHours: Number(form.weeklyHours),
               vacationDays: Number(form.vacationDays),
               notes: form.notes || null,
+              billingMethod: (form.billingMethod === INHERIT_BILLING
+                ? null
+                : form.billingMethod) as "SOLL" | "IST" | null,
             },
           });
         } else {
@@ -371,6 +387,9 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
               vacationDays: Number(form.vacationDays),
               startDate: form.startDate,
               notes: form.notes || undefined,
+              billingMethod: (form.billingMethod === INHERIT_BILLING
+                ? null
+                : form.billingMethod) as "SOLL" | "IST" | null,
               ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
             },
           });
@@ -391,6 +410,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
                   taxClass: form.taxClass || undefined,
                   healthInsurance: form.healthInsurance || undefined,
                   iban: form.iban || undefined,
+                  hourlyWage: form.hourlyWage ? Number(form.hourlyWage) : undefined,
                 }
               : {}),
             ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
@@ -404,6 +424,9 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
             vacationDays: Number(form.vacationDays),
             startDate: form.startDate,
             notes: form.notes || undefined,
+            billingMethod: (form.billingMethod === INHERIT_BILLING
+              ? null
+              : form.billingMethod) as "SOLL" | "IST" | null,
             ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
           },
         });
@@ -595,6 +618,24 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
                   disabled={!canEditWageData}
                 />
               </FieldRow>
+
+              <FieldRow label="Stundenlohn">
+                <div className="relative">
+                  <Input
+                    className="bg-card pr-10"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.hourlyWage}
+                    onChange={(e) => set("hourlyWage", e.target.value)}
+                    placeholder="z.B. 18,50"
+                    disabled={!canEditWageData}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                    €/h
+                  </span>
+                </div>
+              </FieldRow>
             </div>
           </section>
 
@@ -648,6 +689,32 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
                   onChange={(e) => set("notes", e.target.value)}
                   placeholder="z.B. Teilzeit Nachmittag"
                 />
+              </FieldRow>
+
+              <FieldRow label="Abrechnungsart">
+                <Select
+                  value={form.billingMethod}
+                  onValueChange={(v) => set("billingMethod", v)}
+                >
+                  <SelectTrigger
+                    className="bg-card"
+                    data-testid="contract-billing-method-select"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={INHERIT_BILLING}>
+                      Team-/Konto-Regelung übernehmen
+                    </SelectItem>
+                    <SelectItem value="SOLL">Soll – nach geplanten Schichten</SelectItem>
+                    <SelectItem value="IST">Ist – nach erfassten Zeiten</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Legt fest, ob Stunden und Zuschläge für diese Assistenzkraft aus den geplanten
+                  Schichten (Soll) oder den tatsächlich erfassten Zeiten (Ist) berechnet werden.
+                  Ohne eigene Wahl gilt die Team- bzw. Konto-Regelung.
+                </p>
               </FieldRow>
             </div>
           </section>

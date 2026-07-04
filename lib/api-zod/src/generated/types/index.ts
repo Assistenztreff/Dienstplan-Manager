@@ -7,7 +7,9 @@
  */
 
 export * from './allowanceSettings';
+export * from './allowanceSettingsBillingMethod';
 export * from './allowanceSettingsInput';
+export * from './allowanceSettingsInputBillingMethod';
 export * from './allowanceSettingsInputState';
 export * from './allowanceSettingsState';
 export * from './authUser';
@@ -20,8 +22,11 @@ export * from './calendarToken';
 export * from './changePassword200';
 export * from './changePasswordInput';
 export * from './contract';
+export * from './contractBillingMethod';
 export * from './contractInput';
+export * from './contractInputBillingMethod';
 export * from './contractUpdate';
+export * from './contractUpdateBillingMethod';
 export * from './dashboardSummary';
 export * from './dashboardWarnings';
 export * from './deleteAllowanceSettingsOverrideParams';
@@ -33,6 +38,7 @@ export * from './getDashboardSummaryParams';
 export * from './getHoursBalanceParams';
 export * from './healthStatus';
 export * from './hoursBalance';
+export * from './hoursBalanceBillingMethod';
 export * from './inviteResult';
 export * from './lexwareBooking';
 export * from './lexwareBookingList';
