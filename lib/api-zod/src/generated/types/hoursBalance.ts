@@ -34,4 +34,34 @@ export interface HoursBalance {
   holidayPercent: number;
   /** Angewandte Abrechnungsart dieser Zeile (SOLL = Plan, IST = Ist-Zeiten). */
   billingMethod: HoursBalanceBillingMethod;
+  /**
+     * Stundenlohn der Assistenzkraft (Premium-Lohnauswertung); null wenn nicht gesetzt/kein Zugriff.
+     * @nullable
+     */
+  hourlyWage?: number | null;
+  /**
+     * Grundvergütung = Summe(Stundenlohn * bewertete IST-Stunden je Dienst, ggf. prozentual) + Festbeträge. Nur Premium.
+     * @nullable
+     */
+  basePay?: number | null;
+  /**
+     * Geldwert des Nachtzuschlags auf IST-Basis. Nur Premium.
+     * @nullable
+     */
+  nightSurchargePay?: number | null;
+  /**
+     * Geldwert des Sonntagszuschlags auf IST-Basis. Nur Premium.
+     * @nullable
+     */
+  sundaySurchargePay?: number | null;
+  /**
+     * Geldwert des Feiertagszuschlags auf IST-Basis. Nur Premium.
+     * @nullable
+     */
+  holidaySurchargePay?: number | null;
+  /**
+     * Gesamtvergütung = basePay + Zuschläge. Nur Premium.
+     * @nullable
+     */
+  totalPay?: number | null;
 }

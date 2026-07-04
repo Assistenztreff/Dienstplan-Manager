@@ -7,6 +7,7 @@
  */
 import type { AllowanceSettingsInputBillingMethod } from './allowanceSettingsInputBillingMethod';
 import type { AllowanceSettingsInputState } from './allowanceSettingsInputState';
+import type { AllowanceSettingsInputVacationMethod } from './allowanceSettingsInputVacationMethod';
 
 export interface AllowanceSettingsInput {
   /**
@@ -35,4 +36,10 @@ export interface AllowanceSettingsInput {
      * @nullable
      */
   billingMethod?: AllowanceSettingsInputBillingMethod;
+  autoApproveTimesheets?: boolean;
+  vacationMethod?: AllowanceSettingsInputVacationMethod;
+  /** @minimum 0.1 */
+  vacationHoursPerDay?: number;
+  /** @minimum 0 */
+  vacationFactor?: number;
 }

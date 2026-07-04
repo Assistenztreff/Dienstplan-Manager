@@ -14,6 +14,8 @@ export interface Contract {
   weeklyHours: number;
   vacationDays: number;
   vacationDaysUsed: number;
+  /** Stundengenau verbrauchter Urlaub (Point 7). Pool = vacationDays * vacationHoursPerDay. */
+  vacationHoursUsed?: number;
   startDate: Date;
   /** @nullable */
   endDate?: string | null;

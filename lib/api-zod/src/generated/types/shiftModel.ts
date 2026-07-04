@@ -5,6 +5,7 @@
  * Dienstplan-App API für Persönliche Assistenz
  * OpenAPI spec version: 0.1.0
  */
+import type { ShiftModelCompensationType } from './shiftModelCompensationType';
 
 export interface ShiftModel {
   id: number;
@@ -12,5 +13,23 @@ export interface ShiftModel {
   valuationPercent: number;
   sortOrder: number;
   isActive: boolean;
+  /** Standard-Startzeit im Format "HH:MM". */
+  defaultStartTime: string;
+  /** Standard-Endzeit im Format "HH:MM". Gleicher Wert wie Start = 24h-Dienst. */
+  defaultEndTime: string;
+  /** Standard-Wochentage, 1 (Montag) bis 7 (Sonntag). */
+  defaultWeekdays: number[];
+  /** Vergütungstyp (Geld) — regulär, prozentualer Stundenlohn oder Festbetrag pro Schicht. */
+  compensationType: ShiftModelCompensationType;
+  /**
+     * Prozentsatz des Stundenlohns bei compensationType=percentage.
+     * @nullable
+     */
+  compensationPercent?: number | null;
+  /**
+     * Festbetrag pro Schicht in Cent bei compensationType=flat.
+     * @nullable
+     */
+  compensationFlatCents?: number | null;
   createdAt: Date;
 }

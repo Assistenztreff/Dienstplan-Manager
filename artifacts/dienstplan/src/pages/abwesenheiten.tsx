@@ -313,8 +313,18 @@ export default function Abwesenheiten() {
                   {assistants.map((u) => {
                     const contract = activeContractFor(u.id);
                     const entitlement = contract?.vacationDays ?? null;
-                    const taken = vacationByUser.get(u.id) ?? 0;
-                    const remaining = entitlement !== null ? entitlement - taken : null;
+                    // Urlaub wird stundengenau geführt (Point 7): 1 Tag = 8 h,
+                    // ein 24h-Dienst zählt als 3,0 Tage. Für die Anzeige rechnen
+                    // wir die verbrauchten Stunden in Tage um (Stunden / 8). Ohne
+                    // Vertrag fehlt der Stundenzähler → Fallback: geplante Tage
+                    // (Anzahl Urlaubs-Schichten dieses Jahres).
+                    const HOURS_PER_DAY = 8;
+                    const taken =
+                      contract != null
+                        ? Math.round(((contract.vacationHoursUsed ?? 0) / HOURS_PER_DAY) * 10) / 10
+                        : vacationByUser.get(u.id) ?? 0;
+                    const remaining =
+                      entitlement !== null ? Math.round((entitlement - taken) * 10) / 10 : null;
                     return (
                       <div
                         key={u.id}

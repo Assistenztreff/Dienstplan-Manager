@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable, shiftsTable, timeTrackingTable, contractsTable, allowanceSettingsTable, teamMembersTable, teamsTable } from "@workspace/db";
+import { usersTable, shiftsTable, timeTrackingTable, contractsTable, allowanceSettingsTable, teamMembersTable, teamsTable, shiftModelsTable } from "@workspace/db";
 import { computeShiftMetrics, type GermanState } from "@workspace/db";
 import { eq, and, sql, count, or, isNull, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -582,9 +582,13 @@ router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advance
           actualEnd: timeTrackingTable.actualEnd,
           teamId: timeTrackingTable.teamId,
           shiftType: shiftsTable.type,
+          compensationType: shiftModelsTable.compensationType,
+          compensationPercent: shiftModelsTable.compensationPercent,
+          compensationFlatCents: shiftModelsTable.compensationFlatCents,
         })
         .from(timeTrackingTable)
         .leftJoin(shiftsTable, eq(timeTrackingTable.shiftId, shiftsTable.id))
+        .leftJoin(shiftModelsTable, eq(shiftsTable.shiftModelId, shiftModelsTable.id))
         .where(
           and(
             eq(timeTrackingTable.userId, assistant.id),
@@ -621,9 +625,18 @@ router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advance
       // erfassten Zeiten je Eintrag berechnet (Nachtfenster/Bundesland des
       // jeweiligen Team-Kontos). Im SOLL-Modus bleiben die Roh-Kennzahlen der
       // Schicht maßgeblich — die Ist-Metriken werden dann nicht angesetzt.
+      // Ist-Metriken je Eintrag werden IMMER berechnet: die Stunden-Spalten
+      // nutzen sie nur im IST-Modus, aber die Premium-Geldrechnung (Point 6) ist
+      // stets IST-basiert und braucht valuedHours/Zuschlagsstunden unabhängig von
+      // der Abrechnungsart. Ohne erfasste Ist-Zeiten bleibt es bei actualHours.
       const timeEntries = timeEntriesWithShift.map((e) => {
-        if (billingMethod !== "IST" || !e.actualStart || !e.actualEnd) {
-          return { actualHours: e.actualHours, shiftType: e.shiftType, teamId: e.teamId };
+        const comp = {
+          compensationType: e.compensationType,
+          compensationPercent: e.compensationPercent,
+          compensationFlatCents: e.compensationFlatCents,
+        };
+        if (!e.actualStart || !e.actualEnd) {
+          return { actualHours: e.actualHours, shiftType: e.shiftType, teamId: e.teamId, ...comp };
         }
         const meta = e.teamId != null ? teamMetaByTeam.get(e.teamId) : undefined;
         const metrics = computeShiftMetrics(
@@ -647,6 +660,7 @@ router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advance
           nightHours: metrics.nightHours,
           sundayHours: metrics.sundayHours,
           holidayHours: metrics.holidayHours,
+          ...comp,
         };
       });
 
@@ -659,6 +673,7 @@ router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advance
         allowanceByTeam,
         contract,
         billingMethod,
+        hourlyWage: assistant.hourlyWage,
       });
     })
   );

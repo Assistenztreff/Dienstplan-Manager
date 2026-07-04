@@ -168,6 +168,7 @@ export const ListContractsResponseItem = zod.object({
   "weeklyHours": zod.number(),
   "vacationDays": zod.number(),
   "vacationDaysUsed": zod.number(),
+  "vacationHoursUsed": zod.number().optional().describe('Stundengenau verbrauchter Urlaub (Point 7). Pool = vacationDays \* vacationHoursPerDay.'),
   "startDate": zod.coerce.date(),
   "endDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
@@ -230,6 +231,7 @@ export const GetContractResponse = zod.object({
   "weeklyHours": zod.number(),
   "vacationDays": zod.number(),
   "vacationDaysUsed": zod.number(),
+  "vacationHoursUsed": zod.number().optional().describe('Stundengenau verbrauchter Urlaub (Point 7). Pool = vacationDays \* vacationHoursPerDay.'),
   "startDate": zod.coerce.date(),
   "endDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
@@ -287,6 +289,7 @@ export const UpdateContractResponse = zod.object({
   "weeklyHours": zod.number(),
   "vacationDays": zod.number(),
   "vacationDaysUsed": zod.number(),
+  "vacationHoursUsed": zod.number().optional().describe('Stundengenau verbrauchter Urlaub (Point 7). Pool = vacationDays \* vacationHoursPerDay.'),
   "startDate": zod.coerce.date(),
   "endDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
@@ -497,12 +500,22 @@ export const ListShiftModelsQueryParams = zod.object({
   "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext für die Datentrennung.')
 })
 
+export const listShiftModelsResponseDefaultWeekdaysItemMax = 7;
+
+
+
 export const ListShiftModelsResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "valuationPercent": zod.number(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
+  "defaultStartTime": zod.string().describe('Standard-Startzeit im Format \"HH:MM\".'),
+  "defaultEndTime": zod.string().describe('Standard-Endzeit im Format \"HH:MM\". Gleicher Wert wie Start = 24h-Dienst.'),
+  "defaultWeekdays": zod.array(zod.number().min(1).max(listShiftModelsResponseDefaultWeekdaysItemMax)).describe('Standard-Wochentage, 1 (Montag) bis 7 (Sonntag).'),
+  "compensationType": zod.enum(['regular', 'percentage', 'flat']).describe('Vergütungstyp (Geld) — regulär, prozentualer Stundenlohn oder Festbetrag pro Schicht.'),
+  "compensationPercent": zod.number().nullish().describe('Prozentsatz des Stundenlohns bei compensationType=percentage.'),
+  "compensationFlatCents": zod.number().nullish().describe('Festbetrag pro Schicht in Cent bei compensationType=flat.'),
   "createdAt": zod.coerce.date()
 })
 export const ListShiftModelsResponse = zod.array(ListShiftModelsResponseItem)
@@ -514,6 +527,14 @@ export const ListShiftModelsResponse = zod.array(ListShiftModelsResponseItem)
 
 export const createShiftModelBodyValuationPercentMin = 0;
 
+export const createShiftModelBodyDefaultStartTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+export const createShiftModelBodyDefaultEndTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+export const createShiftModelBodyDefaultWeekdaysItemMax = 7;
+
+export const createShiftModelBodyCompensationPercentMin = 0;
+
+export const createShiftModelBodyCompensationFlatCentsMin = 0;
+
 
 
 export const CreateShiftModelBody = zod.object({
@@ -522,7 +543,13 @@ export const CreateShiftModelBody = zod.object({
   "valuationPercent": zod.number().min(createShiftModelBodyValuationPercentMin).optional(),
   "color": zod.string().optional(),
   "sortOrder": zod.number().optional(),
-  "isActive": zod.boolean().optional()
+  "isActive": zod.boolean().optional(),
+  "defaultStartTime": zod.string().regex(createShiftModelBodyDefaultStartTimeRegExp).optional(),
+  "defaultEndTime": zod.string().regex(createShiftModelBodyDefaultEndTimeRegExp).optional(),
+  "defaultWeekdays": zod.array(zod.number().min(1).max(createShiftModelBodyDefaultWeekdaysItemMax)).optional(),
+  "compensationType": zod.enum(['regular', 'percentage', 'flat']).optional(),
+  "compensationPercent": zod.number().min(createShiftModelBodyCompensationPercentMin).nullish(),
+  "compensationFlatCents": zod.number().min(createShiftModelBodyCompensationFlatCentsMin).nullish()
 })
 
 
@@ -536,6 +563,14 @@ export const UpdateShiftModelParams = zod.object({
 
 export const updateShiftModelBodyValuationPercentMin = 0;
 
+export const updateShiftModelBodyDefaultStartTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+export const updateShiftModelBodyDefaultEndTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+export const updateShiftModelBodyDefaultWeekdaysItemMax = 7;
+
+export const updateShiftModelBodyCompensationPercentMin = 0;
+
+export const updateShiftModelBodyCompensationFlatCentsMin = 0;
+
 
 
 export const UpdateShiftModelBody = zod.object({
@@ -543,8 +578,18 @@ export const UpdateShiftModelBody = zod.object({
   "valuationPercent": zod.number().min(updateShiftModelBodyValuationPercentMin).optional(),
   "color": zod.string().optional(),
   "sortOrder": zod.number().optional(),
-  "isActive": zod.boolean().optional()
+  "isActive": zod.boolean().optional(),
+  "defaultStartTime": zod.string().regex(updateShiftModelBodyDefaultStartTimeRegExp).optional(),
+  "defaultEndTime": zod.string().regex(updateShiftModelBodyDefaultEndTimeRegExp).optional(),
+  "defaultWeekdays": zod.array(zod.number().min(1).max(updateShiftModelBodyDefaultWeekdaysItemMax)).optional(),
+  "compensationType": zod.enum(['regular', 'percentage', 'flat']).optional(),
+  "compensationPercent": zod.number().min(updateShiftModelBodyCompensationPercentMin).nullish(),
+  "compensationFlatCents": zod.number().min(updateShiftModelBodyCompensationFlatCentsMin).nullish()
 })
+
+export const updateShiftModelResponseDefaultWeekdaysItemMax = 7;
+
+
 
 export const UpdateShiftModelResponse = zod.object({
   "id": zod.number(),
@@ -552,6 +597,12 @@ export const UpdateShiftModelResponse = zod.object({
   "valuationPercent": zod.number(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
+  "defaultStartTime": zod.string().describe('Standard-Startzeit im Format \"HH:MM\".'),
+  "defaultEndTime": zod.string().describe('Standard-Endzeit im Format \"HH:MM\". Gleicher Wert wie Start = 24h-Dienst.'),
+  "defaultWeekdays": zod.array(zod.number().min(1).max(updateShiftModelResponseDefaultWeekdaysItemMax)).describe('Standard-Wochentage, 1 (Montag) bis 7 (Sonntag).'),
+  "compensationType": zod.enum(['regular', 'percentage', 'flat']).describe('Vergütungstyp (Geld) — regulär, prozentualer Stundenlohn oder Festbetrag pro Schicht.'),
+  "compensationPercent": zod.number().nullish().describe('Prozentsatz des Stundenlohns bei compensationType=percentage.'),
+  "compensationFlatCents": zod.number().nullish().describe('Festbetrag pro Schicht in Cent bei compensationType=flat.'),
   "createdAt": zod.coerce.date()
 })
 
@@ -560,90 +611,6 @@ export const UpdateShiftModelResponse = zod.object({
  * @summary Schichtmodell löschen
  */
 export const DeleteShiftModelParams = zod.object({
-  "id": zod.coerce.number()
-})
-
-
-/**
- * @summary Arbeitszeit-Vorlagen auflisten
- */
-export const ListShiftTemplatesQueryParams = zod.object({
-  "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext für die Datentrennung.')
-})
-
-export const listShiftTemplatesResponseWeekdaysItemMax = 7;
-
-
-
-export const ListShiftTemplatesResponseItem = zod.object({
-  "id": zod.number(),
-  "name": zod.string(),
-  "startTime": zod.string().describe('Startzeit im Format \"HH:MM\".'),
-  "endTime": zod.string().describe('Endzeit im Format \"HH:MM\".'),
-  "weekdays": zod.array(zod.number().min(1).max(listShiftTemplatesResponseWeekdaysItemMax)).describe('Gültige Wochentage, 1 (Montag) bis 7 (Sonntag).'),
-  "createdAt": zod.coerce.date()
-})
-export const ListShiftTemplatesResponse = zod.array(ListShiftTemplatesResponseItem)
-
-
-/**
- * @summary Arbeitszeit-Vorlage anlegen
- */
-
-export const createShiftTemplateBodyStartTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
-export const createShiftTemplateBodyEndTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
-export const createShiftTemplateBodyWeekdaysItemMax = 7;
-
-
-
-export const CreateShiftTemplateBody = zod.object({
-  "name": zod.string().min(1),
-  "teamId": zod.number().optional().describe('Optionaler Team-Kontext; muss ein erlaubtes Team sein.'),
-  "startTime": zod.string().regex(createShiftTemplateBodyStartTimeRegExp),
-  "endTime": zod.string().regex(createShiftTemplateBodyEndTimeRegExp),
-  "weekdays": zod.array(zod.number().min(1).max(createShiftTemplateBodyWeekdaysItemMax)).optional()
-})
-
-
-/**
- * @summary Arbeitszeit-Vorlage aktualisieren
- */
-export const UpdateShiftTemplateParams = zod.object({
-  "id": zod.coerce.number()
-})
-
-
-export const updateShiftTemplateBodyStartTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
-export const updateShiftTemplateBodyEndTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
-export const updateShiftTemplateBodyWeekdaysItemMax = 7;
-
-
-
-export const UpdateShiftTemplateBody = zod.object({
-  "name": zod.string().min(1).optional(),
-  "startTime": zod.string().regex(updateShiftTemplateBodyStartTimeRegExp).optional(),
-  "endTime": zod.string().regex(updateShiftTemplateBodyEndTimeRegExp).optional(),
-  "weekdays": zod.array(zod.number().min(1).max(updateShiftTemplateBodyWeekdaysItemMax)).optional()
-})
-
-export const updateShiftTemplateResponseWeekdaysItemMax = 7;
-
-
-
-export const UpdateShiftTemplateResponse = zod.object({
-  "id": zod.number(),
-  "name": zod.string(),
-  "startTime": zod.string().describe('Startzeit im Format \"HH:MM\".'),
-  "endTime": zod.string().describe('Endzeit im Format \"HH:MM\".'),
-  "weekdays": zod.array(zod.number().min(1).max(updateShiftTemplateResponseWeekdaysItemMax)).describe('Gültige Wochentage, 1 (Montag) bis 7 (Sonntag).'),
-  "createdAt": zod.coerce.date()
-})
-
-
-/**
- * @summary Arbeitszeit-Vorlage löschen
- */
-export const DeleteShiftTemplateParams = zod.object({
   "id": zod.coerce.number()
 })
 
@@ -760,6 +727,10 @@ export const GetAllowanceSettingsResponse = zod.object({
   "holidayPercent": zod.number(),
   "state": zod.union([zod.literal('BW'),zod.literal('BY'),zod.literal('BE'),zod.literal('BB'),zod.literal('HB'),zod.literal('HH'),zod.literal('HE'),zod.literal('MV'),zod.literal('NI'),zod.literal('NW'),zod.literal('RP'),zod.literal('SL'),zod.literal('SN'),zod.literal('ST'),zod.literal('SH'),zod.literal('TH'),zod.literal(null)]).nullish(),
   "billingMethod": zod.union([zod.literal('SOLL'),zod.literal('IST'),zod.literal(null)]).nullish().describe('Abrechnungsart auf Team- bzw. Konto-Ebene; null = erbt.'),
+  "autoApproveTimesheets": zod.boolean().describe('Eingereichte Zeiteinträge automatisch genehmigen.'),
+  "vacationMethod": zod.enum(['bwavg', 'factor']).describe('Urlaubs-Berechnung — bwavg = §11 BUrlG 13-Wochen-Schnitt, factor = prozentualer Stunden-Faktor.'),
+  "vacationHoursPerDay": zod.number().describe('Stunden je Urlaubstag (Anzeige Tage = Stunden \/ diesem Wert).'),
+  "vacationFactor": zod.number().describe('Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor.'),
   "updatedAt": zod.coerce.date()
 })
 
@@ -782,6 +753,10 @@ export const updateAllowanceSettingsBodySundayPercentMax = 100;
 export const updateAllowanceSettingsBodyHolidayPercentMin = 0;
 export const updateAllowanceSettingsBodyHolidayPercentMax = 100;
 
+export const updateAllowanceSettingsBodyVacationHoursPerDayMin = 0.1;
+
+export const updateAllowanceSettingsBodyVacationFactorMin = 0;
+
 
 
 export const UpdateAllowanceSettingsBody = zod.object({
@@ -791,7 +766,11 @@ export const UpdateAllowanceSettingsBody = zod.object({
   "sundayPercent": zod.number().min(updateAllowanceSettingsBodySundayPercentMin).max(updateAllowanceSettingsBodySundayPercentMax),
   "holidayPercent": zod.number().min(updateAllowanceSettingsBodyHolidayPercentMin).max(updateAllowanceSettingsBodyHolidayPercentMax),
   "state": zod.union([zod.literal('BW'),zod.literal('BY'),zod.literal('BE'),zod.literal('BB'),zod.literal('HB'),zod.literal('HH'),zod.literal('HE'),zod.literal('MV'),zod.literal('NI'),zod.literal('NW'),zod.literal('RP'),zod.literal('SL'),zod.literal('SN'),zod.literal('ST'),zod.literal('SH'),zod.literal('TH'),zod.literal(null)]).nullish(),
-  "billingMethod": zod.union([zod.literal('SOLL'),zod.literal('IST'),zod.literal(null)]).nullish().describe('Abrechnungsart auf Team- bzw. Konto-Ebene; null = erbt.')
+  "billingMethod": zod.union([zod.literal('SOLL'),zod.literal('IST'),zod.literal(null)]).nullish().describe('Abrechnungsart auf Team- bzw. Konto-Ebene; null = erbt.'),
+  "autoApproveTimesheets": zod.boolean().optional(),
+  "vacationMethod": zod.enum(['bwavg', 'factor']).optional(),
+  "vacationHoursPerDay": zod.number().min(updateAllowanceSettingsBodyVacationHoursPerDayMin).optional(),
+  "vacationFactor": zod.number().min(updateAllowanceSettingsBodyVacationFactorMin).optional()
 })
 
 export const UpdateAllowanceSettingsResponse = zod.object({
@@ -805,6 +784,10 @@ export const UpdateAllowanceSettingsResponse = zod.object({
   "holidayPercent": zod.number(),
   "state": zod.union([zod.literal('BW'),zod.literal('BY'),zod.literal('BE'),zod.literal('BB'),zod.literal('HB'),zod.literal('HH'),zod.literal('HE'),zod.literal('MV'),zod.literal('NI'),zod.literal('NW'),zod.literal('RP'),zod.literal('SL'),zod.literal('SN'),zod.literal('ST'),zod.literal('SH'),zod.literal('TH'),zod.literal(null)]).nullish(),
   "billingMethod": zod.union([zod.literal('SOLL'),zod.literal('IST'),zod.literal(null)]).nullish().describe('Abrechnungsart auf Team- bzw. Konto-Ebene; null = erbt.'),
+  "autoApproveTimesheets": zod.boolean().describe('Eingereichte Zeiteinträge automatisch genehmigen.'),
+  "vacationMethod": zod.enum(['bwavg', 'factor']).describe('Urlaubs-Berechnung — bwavg = §11 BUrlG 13-Wochen-Schnitt, factor = prozentualer Stunden-Faktor.'),
+  "vacationHoursPerDay": zod.number().describe('Stunden je Urlaubstag (Anzeige Tage = Stunden \/ diesem Wert).'),
+  "vacationFactor": zod.number().describe('Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor.'),
   "updatedAt": zod.coerce.date()
 })
 
@@ -1180,9 +1163,14 @@ export const GetVacationBalanceParams = zod.object({
 export const GetVacationBalanceResponse = zod.object({
   "contractId": zod.number(),
   "userId": zod.number(),
-  "vacationDays": zod.number(),
-  "vacationDaysUsed": zod.number(),
-  "vacationDaysRemaining": zod.number()
+  "vacationDays": zod.number().describe('Anspruch in Tagen (vacationHoursTotal \/ hoursPerDay, gerundet).'),
+  "vacationDaysUsed": zod.number().describe('Verbrauchte Tage (vacationHoursUsed \/ hoursPerDay, gerundet, Anzeige).'),
+  "vacationDaysRemaining": zod.number(),
+  "vacationHoursTotal": zod.number().describe('Gesamt-Urlaubsanspruch in Stunden (vacationDays \* hoursPerDay).'),
+  "vacationHoursUsed": zod.number().describe('Stundengenau verbrauchter Urlaub.'),
+  "vacationHoursRemaining": zod.number(),
+  "hoursPerDay": zod.number().describe('Umrechnungsfaktor Stunden je Tag (Standard 8).'),
+  "method": zod.enum(['bwavg', 'factor'])
 })
 
 
@@ -1317,7 +1305,13 @@ export const GetHoursBalanceResponseItem = zod.object({
   "nightPercent": zod.number(),
   "sundayPercent": zod.number(),
   "holidayPercent": zod.number(),
-  "billingMethod": zod.enum(['SOLL', 'IST']).describe('Angewandte Abrechnungsart dieser Zeile (SOLL = Plan, IST = Ist-Zeiten).')
+  "billingMethod": zod.enum(['SOLL', 'IST']).describe('Angewandte Abrechnungsart dieser Zeile (SOLL = Plan, IST = Ist-Zeiten).'),
+  "hourlyWage": zod.number().nullish().describe('Stundenlohn der Assistenzkraft (Premium-Lohnauswertung); null wenn nicht gesetzt\/kein Zugriff.'),
+  "basePay": zod.number().nullish().describe('Grundvergütung = Summe(Stundenlohn \* bewertete IST-Stunden je Dienst, ggf. prozentual) + Festbeträge. Nur Premium.'),
+  "nightSurchargePay": zod.number().nullish().describe('Geldwert des Nachtzuschlags auf IST-Basis. Nur Premium.'),
+  "sundaySurchargePay": zod.number().nullish().describe('Geldwert des Sonntagszuschlags auf IST-Basis. Nur Premium.'),
+  "holidaySurchargePay": zod.number().nullish().describe('Geldwert des Feiertagszuschlags auf IST-Basis. Nur Premium.'),
+  "totalPay": zod.number().nullish().describe('Gesamtvergütung = basePay + Zuschläge. Nur Premium.')
 })
 export const GetHoursBalanceResponse = zod.array(GetHoursBalanceResponseItem)
 

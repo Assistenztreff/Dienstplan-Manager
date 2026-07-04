@@ -113,7 +113,10 @@ async function renderStatementPage(
   doc.text(`Monat: ${monthLabel}`, 14, 39);
 
   // --- Summary box ---
-  const summaryRows = [
+  const eur = (n: number) =>
+    n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+
+  const summaryRows: string[][] = [
     ["Soll-Stunden", `${balance.plannedHours} h`],
     ["Geleistete Stunden (gewertet)", `${balance.valuedHours} h`],
     [
@@ -131,19 +134,45 @@ async function renderStatementPage(
       "Urlaubstage (verbleibend)",
       `${balance.vacationDaysRemaining} Tage`,
     ],
-    [
+  ];
+
+  // Zuschlaege: 0%-Zuschlaege werden NICHT aufgelistet (Point 6).
+  if (balance.nightPercent > 0) {
+    summaryRows.push([
       `Nachtstunden (Zuschlag ${balance.nightPercent}%)`,
       `${balance.nightHours} h (+${balance.nightSurchargeHours} h)`,
-    ],
-    [
+    ]);
+  }
+  if (balance.sundayPercent > 0) {
+    summaryRows.push([
       `Sonntagsstunden (Zuschlag ${balance.sundayPercent}%)`,
       `${balance.sundayHours} h (+${balance.sundaySurchargeHours} h)`,
-    ],
-    [
+    ]);
+  }
+  if (balance.holidayPercent > 0) {
+    summaryRows.push([
       `Feiertagsstunden (Zuschlag ${balance.holidayPercent}%)`,
       `${balance.holidayHours} h (+${balance.holidaySurchargeHours} h)`,
-    ],
-  ];
+    ]);
+  }
+
+  // Lohnauswertung (Premium): nur wenn ein Stundenlohn hinterlegt ist. Geld
+  // ist stets IST-basiert (bestaetigte Ist-Zeiten). 0%-Zuschlaege werden nicht
+  // aufgelistet.
+  if (balance.hourlyWage != null) {
+    summaryRows.push(["Stundenlohn", eur(balance.hourlyWage)]);
+    summaryRows.push(["Grundlohn (Ist)", eur(balance.basePay ?? 0)]);
+    if (balance.nightPercent > 0 && (balance.nightSurchargePay ?? 0) !== 0) {
+      summaryRows.push(["Nachtzuschlag", eur(balance.nightSurchargePay ?? 0)]);
+    }
+    if (balance.sundayPercent > 0 && (balance.sundaySurchargePay ?? 0) !== 0) {
+      summaryRows.push(["Sonntagszuschlag", eur(balance.sundaySurchargePay ?? 0)]);
+    }
+    if (balance.holidayPercent > 0 && (balance.holidaySurchargePay ?? 0) !== 0) {
+      summaryRows.push(["Feiertagszuschlag", eur(balance.holidaySurchargePay ?? 0)]);
+    }
+    summaryRows.push(["Gesamtlohn (brutto)", eur(balance.totalPay ?? 0)]);
+  }
 
   autoTable(doc, {
     startY: 46,

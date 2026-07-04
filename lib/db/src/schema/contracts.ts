@@ -18,6 +18,9 @@ export const contractsTable = pgTable("contracts", {
   weeklyHours: real("weekly_hours").notNull(),
   vacationDays: integer("vacation_days").notNull().default(30),
   vacationDaysUsed: integer("vacation_days_used").notNull().default(0),
+  // Stundengenaue Urlaubsbuchhaltung (Point 7): verbrauchte Urlaubsstunden.
+  // Pool = vacationDays * vacationHoursPerDay; Anzeige in Tagen = Stunden / 8.
+  vacationHoursUsed: real("vacation_hours_used").notNull().default(0),
   startDate: date("start_date").notNull(),
   endDate: date("end_date"),
   notes: text("notes"),

@@ -1,0 +1,28 @@
+Hallo! Bitte setze die folgenden architektonischen Änderungen, Fehlerbehebungen und Logik-Erweiterungen im System um. Arbeite strukturiert und stelle sicher, dass alle neuen Datenfelder korrekt in unseren Datenmodellen (PostgreSQL) berücksichtigt werden.
+1. Globale Einstellungen & Dienst-Verwaltung (Generalüberholung)
+Entfernung der Arbeitszeit-Vorlagen: Die bisherigen "Arbeitszeit-Vorlagen" im unteren Bereich der Einstellungen werden komplett entfernt.
+Standard-Zeiten direkt im Schichtmodell: Jedes Schichtmodell (Dienst) in den Einstellungen erhält ab sofort zwei Pflichtfelder: Standard-Startzeit und Standard-Endzeit.
+Standard-Wochentage pro Dienst: Beim Erstellen/Bearbeiten eines Dienstes in den Einstellungen muss festgelegt werden können, an welchen Tagen dieser standardmäßig stattfindet. Optionen: Montag bis Freitag, Montag bis Sonntag oder eine individuelle Auswahl von Wochentagen (Checkboxen für Mo–So).
+Verhalten im Dienstplan (Kalender): Wenn ein Admin im Kalender einen Dienst anlegt, wählt er das Schichtmodell. Die App füllt Start-, Endzeit und Wochentage automatisch mit den Standardwerten aus den Einstellungen. Der Admin kann diese Uhrzeiten im Pop-up/Modal der Schicht jedoch weiterhin jederzeit individuell für diesen Tag anpassen.
+Fehlerbehebung (Dienst erstellen): Es fehlt aktuell ein Button, um ein komplett neues Schichtmodell/einen neuen Dienst anzulegen. Füge in den Einstellungen (sowohl für Free- als auch Premium-User) den Button + Neuen Dienst anlegen hinzu.
+2. Onboarding-Logik (Standard-Dienste für neue Nutzer)
+Wenn sich ein neuer Betreiber/Nutzer registriert (bzw. ein neues Konto erstellt wird), müssen im Hintergrund automatisch folgende fünf Standard-Dienste mit ihren Kernzeiten in dessen Einstellungen angelegt werden:
+Frühdienst: 08:00 – 16:00 Uhr
+Spätdienst: 16:00 – 23:00 Uhr
+Nachtdienst: 23:00 – 08:00 Uhr
+Bereitschaft: 08:00 – 14:00 Uhr
+24H Dienst: 09:00 – 09:00 Uhr (Folgetag)
+Hinweis: Der Nutzer muss Namen und Uhrzeiten dieser Dienste später in seinen Einstellungen jederzeit anpassen können.
+3. Erweiterte Bereitschaftsdienst-Logik
+Bereitschaftsdienste (z.B. Rufbereitschaft oder Backup-Dienste) erfordern eine flexible Vergütung. Füge beim Erstellen/Bearbeiten eines Dienstes in den Einstellungen folgende Vergütungs-Optionen hinzu:
+Vergütungstyp wählen: Regulärer Stundenlohn, Prozentualer Stundenlohn oder Festbetrag.
+Wenn Prozentualer Stundenlohn gewählt wird: Feld für Prozentwert (z.B. 50 % des normalen Basis-Stundenlohns der Assistenzkraft für die Dauer der Bereitschaft).
+Wenn Festbetrag gewählt wird: Feld für einen pauschalen Euro-Betrag pro Schicht (unabhängig von der Dauer).
+4. Zeiterfassung: Automatisierungs-Schalter
+Füge in den globalen Einstellungen eine neue Option hinzu: [ ] Stundenzettel automatisch genehmigen.
+Logik: Ist dieser Haken aktiviert, werden die von den Assistenten eingereichten Zeiteinträge im System sofort automatisch auf den Status "Bestätigt" gesetzt. Ist er deaktiviert (Standard), bleiben sie im Status "Offen", bis der Admin sie im Menü "Zeiterfassung" manuell freigibt oder ablehnt.
+5. Premium-Feature: Vollständige Lohnauswertung & Dynamische Zuschläge
+Lohnberechnung aktivieren: In der Premium-Auswertung muss die finanzielle Berechnung aktiv geschaltet werden. Nutze dafür den Basis-Stundenlohn aus der jeweiligen Personalakte der Assistenzkraft multipliziert mit den bestätigten Ist-Stunden (unter Berücksichtigung der neuen Bereitschafts-Logik).
+Dynamische Zuschläge: Die in den Einstellungen definierten Zuschläge (z. B. Sonntagszuschlag, Feiertagszuschlag) müssen dynamisch auf die Ist-Zeiten angewendet werden.
+Filter für 0 %-Zuschläge: Wenn ein Zuschlag in den Einstellungen vom Admin auf 0 % gesetzt wurde, darf dieser spezifische Zuschlag in der finalen Lohnauswertung für den Mitarbeiter nicht aufgeführt werden (weder als Zeile noch mit 0 €), um die Übersichtlichkeit zu wahren.
+Bitte setze diese Punkte sauber um und stelle sicher, dass die Datenbank-Migration auf unsere lokale Replit-Testumgebung angewendet wird, damit wir das System vor dem finalen Scaleway-Umzug auf Herz und Nieren prüfen können.

@@ -151,11 +151,6 @@ async function main(): Promise<void> {
       [teamId],
     );
     await client.query(
-      `INSERT INTO shift_templates (team_id, name, start_time, end_time)
-       VALUES ($1, 'Zombie-Vorlage', '08:00', '16:00')`,
-      [teamId],
-    );
-    await client.query(
       `INSERT INTO contracts (team_id, user_id, weekly_hours, start_date)
        VALUES ($1, $2, 30, '2026-01-01')`,
       [teamId, orphanId],

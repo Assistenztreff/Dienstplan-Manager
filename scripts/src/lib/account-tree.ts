@@ -7,7 +7,7 @@ import type pg from "pg";
  * Konten, weil die Registrierung ein "Standard-Team" (teams.owner_id) inkl.
  * 4 geseedeter Schichtmodelle anlegt. `teams.owner_id` kaskadiert zwar beim
  * User-Delete, aber die team-gebundenen Tabellen (shift_models, shifts,
- * contracts, time_tracking, shift_templates) referenzieren `teams.id` OHNE
+ * contracts, time_tracking) referenzieren `teams.id` OHNE
  * Cascade — der Team-Cascade schlaegt also mit FK-Fehler fehl und die Test-DB
  * sammelt mit jedem E2E-Lauf tote Konten + Teams an.
  *
@@ -37,7 +37,6 @@ export const TEAM_BOUND_TABLES = [
   "time_tracking",
   "shifts",
   "contracts",
-  "shift_templates",
   "shift_models",
 ] as const;
 

@@ -23,6 +23,10 @@ function monthIndex(date: Date): number {
   return date.getFullYear() * 12 + date.getMonth();
 }
 
+function formatEur(n: number): string {
+  return n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+}
+
 type ExportRangeDialogProps = {
   open: boolean;
   onClose: () => void;
@@ -434,34 +438,77 @@ export default function Auswertungen() {
                           <span className="text-muted-foreground">Bewertete Stunden</span>
                           <span className="font-semibold">{balance.valuedHours} h</span>
                         </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            Nacht ({balance.nightPercent}%)
-                          </span>
-                          <span className="font-medium">
-                            {balance.nightHours} h
-                            <span className="text-primary"> (+{balance.nightSurchargeHours} h)</span>
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            Sonntag ({balance.sundayPercent}%)
-                          </span>
-                          <span className="font-medium">
-                            {balance.sundayHours} h
-                            <span className="text-primary"> (+{balance.sundaySurchargeHours} h)</span>
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            Feiertag ({balance.holidayPercent}%)
-                          </span>
-                          <span className="font-medium">
-                            {balance.holidayHours} h
-                            <span className="text-primary"> (+{balance.holidaySurchargeHours} h)</span>
-                          </span>
-                        </div>
+                        {/* 0%-Zuschläge werden NICHT aufgelistet (Point 6). */}
+                        {balance.nightPercent > 0 && (
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              Nacht ({balance.nightPercent}%)
+                            </span>
+                            <span className="font-medium">
+                              {balance.nightHours} h
+                              <span className="text-primary"> (+{balance.nightSurchargeHours} h)</span>
+                            </span>
+                          </div>
+                        )}
+                        {balance.sundayPercent > 0 && (
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              Sonntag ({balance.sundayPercent}%)
+                            </span>
+                            <span className="font-medium">
+                              {balance.sundayHours} h
+                              <span className="text-primary"> (+{balance.sundaySurchargeHours} h)</span>
+                            </span>
+                          </div>
+                        )}
+                        {balance.holidayPercent > 0 && (
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              Feiertag ({balance.holidayPercent}%)
+                            </span>
+                            <span className="font-medium">
+                              {balance.holidayHours} h
+                              <span className="text-primary"> (+{balance.holidaySurchargeHours} h)</span>
+                            </span>
+                          </div>
+                        )}
                       </div>
+
+                      {/* Lohnauswertung (Premium): nur wenn ein Stundenlohn
+                          hinterlegt ist. Geld ist stets IST-basiert. */}
+                      {balance.hourlyWage != null && (
+                        <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 space-y-2">
+                          <div className="text-xs font-medium uppercase tracking-wide text-emerald-700">
+                            Lohnauswertung (Ist)
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Grundlohn</span>
+                            <span className="font-medium">{formatEur(balance.basePay ?? 0)}</span>
+                          </div>
+                          {balance.nightPercent > 0 && (balance.nightSurchargePay ?? 0) !== 0 && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Nachtzuschlag</span>
+                              <span className="font-medium">{formatEur(balance.nightSurchargePay ?? 0)}</span>
+                            </div>
+                          )}
+                          {balance.sundayPercent > 0 && (balance.sundaySurchargePay ?? 0) !== 0 && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Sonntagszuschlag</span>
+                              <span className="font-medium">{formatEur(balance.sundaySurchargePay ?? 0)}</span>
+                            </div>
+                          )}
+                          {balance.holidayPercent > 0 && (balance.holidaySurchargePay ?? 0) !== 0 && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Feiertagszuschlag</span>
+                              <span className="font-medium">{formatEur(balance.holidaySurchargePay ?? 0)}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between text-sm pt-1.5 border-t border-emerald-200">
+                            <span className="font-medium text-emerald-800">Gesamtlohn (brutto)</span>
+                            <span className="font-semibold text-emerald-800">{formatEur(balance.totalPay ?? 0)}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Urlaubs-Seite */}

@@ -447,86 +447,6 @@ paths:
         "404":
           description: Nicht gefunden
 
-  /shift-templates:
-    get:
-      operationId: listShiftTemplates
-      tags: [shift-templates]
-      summary: Arbeitszeit-Vorlagen auflisten
-      parameters:
-        - name: teamId
-          in: query
-          description: Optionaler Team-Kontext für die Datentrennung.
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: Liste der Vorlagen
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ShiftTemplate"
-    post:
-      operationId: createShiftTemplate
-      tags: [shift-templates]
-      summary: Arbeitszeit-Vorlage anlegen
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ShiftTemplateInput"
-      responses:
-        "201":
-          description: Erstellt
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ShiftTemplate"
-
-  /shift-templates/{id}:
-    patch:
-      operationId: updateShiftTemplate
-      tags: [shift-templates]
-      summary: Arbeitszeit-Vorlage aktualisieren
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ShiftTemplateUpdate"
-      responses:
-        "200":
-          description: Aktualisiert
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ShiftTemplate"
-        "404":
-          description: Nicht gefunden
-    delete:
-      operationId: deleteShiftTemplate
-      tags: [shift-templates]
-      summary: Arbeitszeit-Vorlage löschen
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        "204":
-          description: Gelöscht
-        "404":
-          description: Nicht gefunden
-
   /teams:
     get:
       operationId: listTeams
@@ -1959,6 +1879,9 @@ components:
           type: integer
         vacationDaysUsed:
           type: integer
+        vacationHoursUsed:
+          type: number
+          description: Stundengenau verbrauchter Urlaub (Point 7). Pool = vacationDays * vacationHoursPerDay.
         startDate:
           type: string
           format: date
@@ -2127,7 +2050,7 @@ components:
 
     ShiftModel:
       type: object
-      required: [id, name, valuationPercent, sortOrder, isActive, createdAt]
+      required: [id, name, valuationPercent, sortOrder, isActive, defaultStartTime, defaultEndTime, defaultWeekdays, compensationType, createdAt]
       properties:
         id:
           type: integer
@@ -2139,6 +2062,29 @@ components:
           type: integer
         isActive:
           type: boolean
+        defaultStartTime:
+          type: string
+          description: Standard-Startzeit im Format "HH:MM".
+        defaultEndTime:
+          type: string
+          description: Standard-Endzeit im Format "HH:MM". Gleicher Wert wie Start = 24h-Dienst.
+        defaultWeekdays:
+          type: array
+          description: Standard-Wochentage, 1 (Montag) bis 7 (Sonntag).
+          items:
+            type: integer
+            minimum: 1
+            maximum: 7
+        compensationType:
+          type: string
+          enum: [regular, percentage, flat]
+          description: Vergütungstyp (Geld) — regulär, prozentualer Stundenlohn oder Festbetrag pro Schicht.
+        compensationPercent:
+          type: ["integer", "null"]
+          description: Prozentsatz des Stundenlohns bei compensationType=percentage.
+        compensationFlatCents:
+          type: ["integer", "null"]
+          description: Festbetrag pro Schicht in Cent bei compensationType=flat.
         createdAt:
           type: string
           format: date-time
@@ -2162,6 +2108,27 @@ components:
           type: integer
         isActive:
           type: boolean
+        defaultStartTime:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        defaultEndTime:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        defaultWeekdays:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+            maximum: 7
+        compensationType:
+          type: string
+          enum: [regular, percentage, flat]
+        compensationPercent:
+          type: ["integer", "null"]
+          minimum: 0
+        compensationFlatCents:
+          type: ["integer", "null"]
+          minimum: 0
 
     ShiftModelUpdate:
       type: object
@@ -2178,73 +2145,27 @@ components:
           type: integer
         isActive:
           type: boolean
-
-    ShiftTemplate:
-      type: object
-      required: [id, name, startTime, endTime, weekdays, createdAt]
-      properties:
-        id:
-          type: integer
-        name:
-          type: string
-        startTime:
-          type: string
-          description: Startzeit im Format "HH:MM".
-        endTime:
-          type: string
-          description: Endzeit im Format "HH:MM".
-        weekdays:
-          type: array
-          description: Gültige Wochentage, 1 (Montag) bis 7 (Sonntag).
-          items:
-            type: integer
-            minimum: 1
-            maximum: 7
-        createdAt:
-          type: string
-          format: date-time
-
-    ShiftTemplateInput:
-      type: object
-      required: [name, startTime, endTime]
-      properties:
-        name:
-          type: string
-          minLength: 1
-        teamId:
-          type: integer
-          description: Optionaler Team-Kontext; muss ein erlaubtes Team sein.
-        startTime:
+        defaultStartTime:
           type: string
           pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
-        endTime:
+        defaultEndTime:
           type: string
           pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
-        weekdays:
+        defaultWeekdays:
           type: array
           items:
             type: integer
             minimum: 1
             maximum: 7
-
-    ShiftTemplateUpdate:
-      type: object
-      properties:
-        name:
+        compensationType:
           type: string
-          minLength: 1
-        startTime:
-          type: string
-          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
-        endTime:
-          type: string
-          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
-        weekdays:
-          type: array
-          items:
-            type: integer
-            minimum: 1
-            maximum: 7
+          enum: [regular, percentage, flat]
+        compensationPercent:
+          type: ["integer", "null"]
+          minimum: 0
+        compensationFlatCents:
+          type: ["integer", "null"]
+          minimum: 0
 
     AllowanceSettings:
       type: object
@@ -2256,6 +2177,10 @@ components:
           nightEnd,
           sundayPercent,
           holidayPercent,
+          autoApproveTimesheets,
+          vacationMethod,
+          vacationHoursPerDay,
+          vacationFactor,
           updatedAt,
         ]
       properties:
@@ -2284,6 +2209,19 @@ components:
           type: ["string", "null"]
           enum: [SOLL, IST, null]
           description: Abrechnungsart auf Team- bzw. Konto-Ebene; null = erbt.
+        autoApproveTimesheets:
+          type: boolean
+          description: Eingereichte Zeiteinträge automatisch genehmigen.
+        vacationMethod:
+          type: string
+          enum: [bwavg, factor]
+          description: Urlaubs-Berechnung — bwavg = §11 BUrlG 13-Wochen-Schnitt, factor = prozentualer Stunden-Faktor.
+        vacationHoursPerDay:
+          type: number
+          description: Stunden je Urlaubstag (Anzeige Tage = Stunden / diesem Wert).
+        vacationFactor:
+          type: number
+          description: Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor.
         updatedAt:
           type: string
           format: date-time
@@ -2317,6 +2255,17 @@ components:
           type: ["string", "null"]
           enum: [SOLL, IST, null]
           description: Abrechnungsart auf Team- bzw. Konto-Ebene; null = erbt.
+        autoApproveTimesheets:
+          type: boolean
+        vacationMethod:
+          type: string
+          enum: [bwavg, factor]
+        vacationHoursPerDay:
+          type: number
+          minimum: 0.1
+        vacationFactor:
+          type: number
+          minimum: 0
 
     BrandingSettings:
       type: object
@@ -2636,10 +2585,40 @@ components:
           type: string
           enum: [SOLL, IST]
           description: Angewandte Abrechnungsart dieser Zeile (SOLL = Plan, IST = Ist-Zeiten).
+        hourlyWage:
+          type: ["number", "null"]
+          description: Stundenlohn der Assistenzkraft (Premium-Lohnauswertung); null wenn nicht gesetzt/kein Zugriff.
+        basePay:
+          type: ["number", "null"]
+          description: Grundvergütung = Summe(Stundenlohn * bewertete IST-Stunden je Dienst, ggf. prozentual) + Festbeträge. Nur Premium.
+        nightSurchargePay:
+          type: ["number", "null"]
+          description: Geldwert des Nachtzuschlags auf IST-Basis. Nur Premium.
+        sundaySurchargePay:
+          type: ["number", "null"]
+          description: Geldwert des Sonntagszuschlags auf IST-Basis. Nur Premium.
+        holidaySurchargePay:
+          type: ["number", "null"]
+          description: Geldwert des Feiertagszuschlags auf IST-Basis. Nur Premium.
+        totalPay:
+          type: ["number", "null"]
+          description: Gesamtvergütung = basePay + Zuschläge. Nur Premium.
 
     VacationBalance:
       type: object
-      required: [contractId, userId, vacationDays, vacationDaysUsed, vacationDaysRemaining]
+      required:
+        [
+          contractId,
+          userId,
+          vacationDays,
+          vacationDaysUsed,
+          vacationDaysRemaining,
+          vacationHoursTotal,
+          vacationHoursUsed,
+          vacationHoursRemaining,
+          hoursPerDay,
+          method,
+        ]
       properties:
         contractId:
           type: integer
@@ -2647,10 +2626,26 @@ components:
           type: integer
         vacationDays:
           type: integer
+          description: Anspruch in Tagen (vacationHoursTotal / hoursPerDay, gerundet).
         vacationDaysUsed:
           type: integer
+          description: Verbrauchte Tage (vacationHoursUsed / hoursPerDay, gerundet, Anzeige).
         vacationDaysRemaining:
           type: integer
+        vacationHoursTotal:
+          type: number
+          description: Gesamt-Urlaubsanspruch in Stunden (vacationDays * hoursPerDay).
+        vacationHoursUsed:
+          type: number
+          description: Stundengenau verbrauchter Urlaub.
+        vacationHoursRemaining:
+          type: number
+        hoursPerDay:
+          type: number
+          description: Umrechnungsfaktor Stunden je Tag (Standard 8).
+        method:
+          type: string
+          enum: [bwavg, factor]
 
     AuthUser:
       type: object

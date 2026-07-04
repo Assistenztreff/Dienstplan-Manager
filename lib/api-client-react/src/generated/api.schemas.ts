@@ -367,6 +367,8 @@ export interface Contract {
   weeklyHours: number;
   vacationDays: number;
   vacationDaysUsed: number;
+  /** Stundengenau verbrauchter Urlaub (Point 7). Pool = vacationDays * vacationHoursPerDay. */
+  vacationHoursUsed?: number;
   startDate: string;
   /** @nullable */
   endDate?: string | null;
@@ -564,14 +566,53 @@ export interface ShiftUpdate {
   notes?: string | null;
 }
 
+/**
+ * Vergütungstyp (Geld) — regulär, prozentualer Stundenlohn oder Festbetrag pro Schicht.
+ */
+export type ShiftModelCompensationType = typeof ShiftModelCompensationType[keyof typeof ShiftModelCompensationType];
+
+
+export const ShiftModelCompensationType = {
+  regular: 'regular',
+  percentage: 'percentage',
+  flat: 'flat',
+} as const;
+
 export interface ShiftModel {
   id: number;
   name: string;
   valuationPercent: number;
   sortOrder: number;
   isActive: boolean;
+  /** Standard-Startzeit im Format "HH:MM". */
+  defaultStartTime: string;
+  /** Standard-Endzeit im Format "HH:MM". Gleicher Wert wie Start = 24h-Dienst. */
+  defaultEndTime: string;
+  /** Standard-Wochentage, 1 (Montag) bis 7 (Sonntag). */
+  defaultWeekdays: number[];
+  /** Vergütungstyp (Geld) — regulär, prozentualer Stundenlohn oder Festbetrag pro Schicht. */
+  compensationType: ShiftModelCompensationType;
+  /**
+     * Prozentsatz des Stundenlohns bei compensationType=percentage.
+     * @nullable
+     */
+  compensationPercent?: number | null;
+  /**
+     * Festbetrag pro Schicht in Cent bei compensationType=flat.
+     * @nullable
+     */
+  compensationFlatCents?: number | null;
   createdAt: string;
 }
+
+export type ShiftModelInputCompensationType = typeof ShiftModelInputCompensationType[keyof typeof ShiftModelInputCompensationType];
+
+
+export const ShiftModelInputCompensationType = {
+  regular: 'regular',
+  percentage: 'percentage',
+  flat: 'flat',
+} as const;
 
 export interface ShiftModelInput {
   /** @minLength 1 */
@@ -583,7 +624,32 @@ export interface ShiftModelInput {
   color?: string;
   sortOrder?: number;
   isActive?: boolean;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  defaultStartTime?: string;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  defaultEndTime?: string;
+  defaultWeekdays?: number[];
+  compensationType?: ShiftModelInputCompensationType;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  compensationPercent?: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  compensationFlatCents?: number | null;
 }
+
+export type ShiftModelUpdateCompensationType = typeof ShiftModelUpdateCompensationType[keyof typeof ShiftModelUpdateCompensationType];
+
+
+export const ShiftModelUpdateCompensationType = {
+  regular: 'regular',
+  percentage: 'percentage',
+  flat: 'flat',
+} as const;
 
 export interface ShiftModelUpdate {
   /** @minLength 1 */
@@ -593,40 +659,22 @@ export interface ShiftModelUpdate {
   color?: string;
   sortOrder?: number;
   isActive?: boolean;
-}
-
-export interface ShiftTemplate {
-  id: number;
-  name: string;
-  /** Startzeit im Format "HH:MM". */
-  startTime: string;
-  /** Endzeit im Format "HH:MM". */
-  endTime: string;
-  /** Gültige Wochentage, 1 (Montag) bis 7 (Sonntag). */
-  weekdays: number[];
-  createdAt: string;
-}
-
-export interface ShiftTemplateInput {
-  /** @minLength 1 */
-  name: string;
-  /** Optionaler Team-Kontext; muss ein erlaubtes Team sein. */
-  teamId?: number;
   /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
-  startTime: string;
+  defaultStartTime?: string;
   /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
-  endTime: string;
-  weekdays?: number[];
-}
-
-export interface ShiftTemplateUpdate {
-  /** @minLength 1 */
-  name?: string;
-  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
-  startTime?: string;
-  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
-  endTime?: string;
-  weekdays?: number[];
+  defaultEndTime?: string;
+  defaultWeekdays?: number[];
+  compensationType?: ShiftModelUpdateCompensationType;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  compensationPercent?: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  compensationFlatCents?: number | null;
 }
 
 /**
@@ -666,6 +714,17 @@ export const AllowanceSettingsBillingMethod = {
   IST: 'IST',
 } as const;
 
+/**
+ * Urlaubs-Berechnung — bwavg = §11 BUrlG 13-Wochen-Schnitt, factor = prozentualer Stunden-Faktor.
+ */
+export type AllowanceSettingsVacationMethod = typeof AllowanceSettingsVacationMethod[keyof typeof AllowanceSettingsVacationMethod];
+
+
+export const AllowanceSettingsVacationMethod = {
+  bwavg: 'bwavg',
+  factor: 'factor',
+} as const;
+
 export interface AllowanceSettings {
   id: number;
   /**
@@ -687,6 +746,14 @@ export interface AllowanceSettings {
      * @nullable
      */
   billingMethod?: AllowanceSettingsBillingMethod;
+  /** Eingereichte Zeiteinträge automatisch genehmigen. */
+  autoApproveTimesheets: boolean;
+  /** Urlaubs-Berechnung — bwavg = §11 BUrlG 13-Wochen-Schnitt, factor = prozentualer Stunden-Faktor. */
+  vacationMethod: AllowanceSettingsVacationMethod;
+  /** Stunden je Urlaubstag (Anzeige Tage = Stunden / diesem Wert). */
+  vacationHoursPerDay: number;
+  /** Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor. */
+  vacationFactor: number;
   updatedAt: string;
 }
 
@@ -727,6 +794,14 @@ export const AllowanceSettingsInputBillingMethod = {
   IST: 'IST',
 } as const;
 
+export type AllowanceSettingsInputVacationMethod = typeof AllowanceSettingsInputVacationMethod[keyof typeof AllowanceSettingsInputVacationMethod];
+
+
+export const AllowanceSettingsInputVacationMethod = {
+  bwavg: 'bwavg',
+  factor: 'factor',
+} as const;
+
 export interface AllowanceSettingsInput {
   /**
      * @minimum 0
@@ -754,6 +829,12 @@ export interface AllowanceSettingsInput {
      * @nullable
      */
   billingMethod?: AllowanceSettingsInputBillingMethod;
+  autoApproveTimesheets?: boolean;
+  vacationMethod?: AllowanceSettingsInputVacationMethod;
+  /** @minimum 0.1 */
+  vacationHoursPerDay?: number;
+  /** @minimum 0 */
+  vacationFactor?: number;
 }
 
 export interface BrandingSettings {
@@ -968,14 +1049,62 @@ export interface HoursBalance {
   holidayPercent: number;
   /** Angewandte Abrechnungsart dieser Zeile (SOLL = Plan, IST = Ist-Zeiten). */
   billingMethod: HoursBalanceBillingMethod;
+  /**
+     * Stundenlohn der Assistenzkraft (Premium-Lohnauswertung); null wenn nicht gesetzt/kein Zugriff.
+     * @nullable
+     */
+  hourlyWage?: number | null;
+  /**
+     * Grundvergütung = Summe(Stundenlohn * bewertete IST-Stunden je Dienst, ggf. prozentual) + Festbeträge. Nur Premium.
+     * @nullable
+     */
+  basePay?: number | null;
+  /**
+     * Geldwert des Nachtzuschlags auf IST-Basis. Nur Premium.
+     * @nullable
+     */
+  nightSurchargePay?: number | null;
+  /**
+     * Geldwert des Sonntagszuschlags auf IST-Basis. Nur Premium.
+     * @nullable
+     */
+  sundaySurchargePay?: number | null;
+  /**
+     * Geldwert des Feiertagszuschlags auf IST-Basis. Nur Premium.
+     * @nullable
+     */
+  holidaySurchargePay?: number | null;
+  /**
+     * Gesamtvergütung = basePay + Zuschläge. Nur Premium.
+     * @nullable
+     */
+  totalPay?: number | null;
 }
+
+export type VacationBalanceMethod = typeof VacationBalanceMethod[keyof typeof VacationBalanceMethod];
+
+
+export const VacationBalanceMethod = {
+  bwavg: 'bwavg',
+  factor: 'factor',
+} as const;
 
 export interface VacationBalance {
   contractId: number;
   userId: number;
+  /** Anspruch in Tagen (vacationHoursTotal / hoursPerDay, gerundet). */
   vacationDays: number;
+  /** Verbrauchte Tage (vacationHoursUsed / hoursPerDay, gerundet, Anzeige). */
   vacationDaysUsed: number;
   vacationDaysRemaining: number;
+  /** Gesamt-Urlaubsanspruch in Stunden (vacationDays * hoursPerDay). */
+  vacationHoursTotal: number;
+  /** Stundengenau verbrauchter Urlaub. */
+  vacationHoursUsed: number;
+  vacationHoursRemaining: number;
+  /** Umrechnungsfaktor Stunden je Tag (Standard 8). */
+  hoursPerDay: number;
+  method: VacationBalanceMethod;
 }
 
 export type AuthUserRole = typeof AuthUserRole[keyof typeof AuthUserRole];
@@ -1102,13 +1231,6 @@ export const ListShiftsType = {
 
 export type ListShiftModelsParams = {
 activeOnly?: boolean;
-/**
- * Optionaler Team-Kontext für die Datentrennung.
- */
-teamId?: number;
-};
-
-export type ListShiftTemplatesParams = {
 /**
  * Optionaler Team-Kontext für die Datentrennung.
  */

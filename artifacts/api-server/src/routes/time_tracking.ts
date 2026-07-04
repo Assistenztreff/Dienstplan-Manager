@@ -22,6 +22,7 @@ import {
   parseTeamIdParam,
   isUserMemberOfTeam,
 } from "../lib/teams";
+import { resolveAllowanceOps } from "../lib/allowance-resolve";
 
 const router = Router();
 
@@ -166,9 +167,21 @@ router.post("/time-tracking", requireAuth, async (req, res): Promise<void> => {
   const actualStart = new Date(body.data.actualStart as unknown as string);
   const actualEnd = new Date(body.data.actualEnd as unknown as string);
   const actualHours = calcHours(actualStart, actualEnd);
+
+  // Globaler Schalter „Stundenzettel automatisch genehmigen" (Fallback-Kette
+  // Team-Override → Konto des Team-Eigentümers → Default false): eingereichte
+  // Ist-Zeiten werden dann sofort als bestätigt gebucht (mit Prüfer = Ersteller).
+  const ops = await resolveAllowanceOps(teamId);
+  const autoConfirm = ops.autoApproveTimesheets
+    ? {
+        status: "confirmed" as const,
+        confirmedBy: req.session.userId!,
+        confirmedAt: new Date(),
+      }
+    : {};
   const [entry] = await db
     .insert(timeTrackingTable)
-    .values({ ...body.data, userId, teamId, actualHours })
+    .values({ ...body.data, userId, teamId, actualHours, ...autoConfirm })
     .returning();
   const [withUser] = await db
     .select(withUserSelect)

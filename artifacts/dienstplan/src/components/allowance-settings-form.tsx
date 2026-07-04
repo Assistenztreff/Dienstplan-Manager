@@ -6,6 +6,7 @@ import {
   getGetAllowanceSettingsQueryKey,
   type AllowanceSettingsInputState,
   type AllowanceSettingsInputBillingMethod,
+  type AllowanceSettingsInputVacationMethod,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { readableApiError } from "@/lib/api-error";
 import { useTeam } from "@/context/team";
@@ -25,6 +27,10 @@ type FormState = {
   holidayPercent: string;
   state: string;
   billingMethod: string;
+  autoApproveTimesheets: boolean;
+  vacationMethod: string;
+  vacationHoursPerDay: string;
+  vacationFactor: string;
 };
 
 // Sonderwert für "erbt" (Abrechnungsart nicht auf dieser Ebene gesetzt).
@@ -117,6 +123,10 @@ export function AllowanceSettingsForm() {
     holidayPercent: "100",
     state: NO_STATE,
     billingMethod: INHERIT_BILLING,
+    autoApproveTimesheets: false,
+    vacationMethod: "bwavg",
+    vacationHoursPerDay: "8",
+    vacationFactor: "0.0941",
   });
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [saving, setSaving] = useState(false);
@@ -137,6 +147,10 @@ export function AllowanceSettingsForm() {
         holidayPercent: String(settings.holidayPercent),
         state: settings.state ?? NO_STATE,
         billingMethod: settings.billingMethod ?? INHERIT_BILLING,
+        autoApproveTimesheets: settings.autoApproveTimesheets ?? false,
+        vacationMethod: settings.vacationMethod ?? "bwavg",
+        vacationHoursPerDay: String(settings.vacationHoursPerDay ?? 8),
+        vacationFactor: String(settings.vacationFactor ?? 0.0941),
       });
       setErrors({});
       setSaved(false);
@@ -168,6 +182,16 @@ export function AllowanceSettingsForm() {
     errs.holidayPercent = validatePercent(form.holidayPercent);
     if (!TIME_PATTERN.test(form.nightStart)) errs.nightStart = "Ungültige Uhrzeit";
     if (!TIME_PATTERN.test(form.nightEnd)) errs.nightEnd = "Ungültige Uhrzeit";
+    if (scopeTeamId === undefined) {
+      const hpd = Number(form.vacationHoursPerDay);
+      if (form.vacationHoursPerDay === "" || Number.isNaN(hpd) || hpd < 0.1)
+        errs.vacationHoursPerDay = "Mindestens 0,1";
+      if (form.vacationMethod === "factor") {
+        const vf = Number(form.vacationFactor);
+        if (form.vacationFactor === "" || Number.isNaN(vf) || vf < 0)
+          errs.vacationFactor = "Mindestens 0";
+      }
+    }
     const cleaned = Object.fromEntries(Object.entries(errs).filter(([, v]) => v));
     setErrors(cleaned);
     return Object.keys(cleaned).length === 0;
@@ -193,6 +217,16 @@ export function AllowanceSettingsForm() {
           billingMethod: (form.billingMethod === INHERIT_BILLING
             ? null
             : form.billingMethod) as AllowanceSettingsInputBillingMethod,
+          // Konto-weite Regeln (Auto-Genehmigung + Urlaubsberechnung) gelten global
+          // und werden nur im Konto-Bereich mitgesendet, nicht bei Team-Overrides.
+          ...(scopeTeamId === undefined
+            ? {
+                autoApproveTimesheets: form.autoApproveTimesheets,
+                vacationMethod: form.vacationMethod as AllowanceSettingsInputVacationMethod,
+                vacationHoursPerDay: Number(form.vacationHoursPerDay),
+                vacationFactor: Number(form.vacationFactor),
+              }
+            : {}),
         },
         params: queryParams,
       });
@@ -364,6 +398,100 @@ export function AllowanceSettingsForm() {
                   vor dieser {isTeamScope ? "Team-" : "Konto-"}Regelung.
                 </p>
               </div>
+
+              {!isTeamScope && (
+                <>
+                  <div className="border-t border-border/60 pt-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="autoApproveTimesheets" className="text-sm font-semibold">
+                          Stundenzettel automatisch genehmigen
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Eingereichte Zeiteinträge werden ohne manuelle Prüfung sofort bestätigt und
+                          in die Auswertung übernommen.
+                        </p>
+                      </div>
+                      <Switch
+                        id="autoApproveTimesheets"
+                        data-testid="allowance-auto-approve-switch"
+                        checked={form.autoApproveTimesheets}
+                        onCheckedChange={(v) => set("autoApproveTimesheets", v)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="border-t border-border/60 pt-5 space-y-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="vacationMethod" className="text-sm font-semibold">
+                        Urlaubsberechnung
+                      </Label>
+                      <Select
+                        value={form.vacationMethod}
+                        onValueChange={(v) => set("vacationMethod", v)}
+                      >
+                        <SelectTrigger id="vacationMethod" data-testid="allowance-vacation-method-select">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="bwavg">
+                            §11 BUrlG – Durchschnitt der letzten 13 Wochen
+                          </SelectItem>
+                          <SelectItem value="factor">
+                            Faktor – feste Urlaubsstunden je Arbeitsstunde
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Bestimmt, wie viele Stunden ein Urlaubstag wert ist. Der §11-BUrlG-Schnitt
+                        rechnet nach dem Durchschnitt der letzten 13 Wochen; der Faktor rechnet einen
+                        festen Anteil pro geleisteter Arbeitsstunde.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="vacationHoursPerDay">Stunden je Urlaubstag</Label>
+                        <Input
+                          id="vacationHoursPerDay"
+                          type="number"
+                          min="0.1"
+                          step="0.1"
+                          value={form.vacationHoursPerDay}
+                          onChange={(e) => set("vacationHoursPerDay", e.target.value)}
+                          className={errors.vacationHoursPerDay ? "border-destructive" : ""}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Anzeige: Tage = Urlaubsstunden ÷ diesem Wert (Standard 8).
+                        </p>
+                        {errors.vacationHoursPerDay && (
+                          <p className="text-xs text-destructive">{errors.vacationHoursPerDay}</p>
+                        )}
+                      </div>
+                      {form.vacationMethod === "factor" && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="vacationFactor">Urlaubsstunden je Arbeitsstunde</Label>
+                          <Input
+                            id="vacationFactor"
+                            type="number"
+                            min="0"
+                            step="0.0001"
+                            value={form.vacationFactor}
+                            onChange={(e) => set("vacationFactor", e.target.value)}
+                            className={errors.vacationFactor ? "border-destructive" : ""}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Nur bei Methode „Faktor" (Standard 0,0941).
+                          </p>
+                          {errors.vacationFactor && (
+                            <p className="text-xs text-destructive">{errors.vacationFactor}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
 
               <div className="flex flex-wrap items-center gap-3 pt-1">
                 <Button onClick={handleSave} disabled={saving} data-testid="allowance-save-button">

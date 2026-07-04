@@ -5,7 +5,6 @@ import {
   useUpdateShift,
   useDeleteShift,
   useListShiftModels,
-  useListShiftTemplates,
   getListShiftsQueryKey,
   ApiError,
   type ShiftInputType,
@@ -156,16 +155,6 @@ function weekdaysLabel(weekdays: number[]): string {
     .join(", ");
 }
 
-type TemplateWeekdays = { weekdays: number[] };
-
-// Prüft, ob eine Vorlage laut ihren Wochentagen zu einem Datum passt.
-// Eine leere Wochentagsliste bedeutet "gilt an allen Tagen".
-function templateMatchesDate(tpl: TemplateWeekdays, dateStr: string): boolean {
-  if (!tpl.weekdays || tpl.weekdays.length === 0) return true;
-  if (!dateStr) return true;
-  return tpl.weekdays.includes(isoWeekday(dateStr));
-}
-
 function initialSelection(editShift: ShiftForEdit | undefined, firstModelId: number | undefined): string {
   if (!editShift) return firstModelId ? `model:${firstModelId}` : "";
   if (editShift.type === "vacation" || editShift.type === "sick") return editShift.type;
@@ -191,12 +180,17 @@ export function ShiftDialog({
   const updateShift = useUpdateShift();
   const deleteShift = useDeleteShift();
   const { data: models } = useListShiftModels();
-  const { data: templates } = useListShiftTemplates(teamId != null ? { teamId } : undefined);
 
-  const allTemplates = templates ?? [];
   const allModels = models ?? [];
   const activeModels = allModels.filter((m) => m.isActive);
-  const firstModelId = activeModels[0]?.id;
+  const firstModel = activeModels[0];
+  const firstModelId = firstModel?.id;
+
+  function modelFromSelection(sel: string) {
+    if (!sel.startsWith("model:")) return undefined;
+    const id = Number(sel.slice("model:".length));
+    return allModels.find((m) => m.id === id);
+  }
 
   const isEditing = !!editShift;
   // Mehrfach-Anlegen ist nur im Anlege-Modus (nicht beim Bearbeiten) aktiv und
@@ -213,8 +207,12 @@ export function ShiftDialog({
       // Im Mehrfach-Modus ist das einzelne Datumsfeld bedeutungslos (die Tage
       // stehen über bulkDates fest); wir füllen es nur, damit validate() greift.
       date: editShift ? toDateString(editShift.startTime) : isBulk ? bulkDates![0] : defaultDate,
-      startTime: editShift ? toTimeString(editShift.startTime) : "08:00",
-      endTime: editShift ? toTimeString(editShift.endTime) : "16:00",
+      startTime: editShift
+        ? toTimeString(editShift.startTime)
+        : firstModel?.defaultStartTime || "08:00",
+      endTime: editShift
+        ? toTimeString(editShift.endTime)
+        : firstModel?.defaultEndTime || "16:00",
       selection: initialSelection(editShift, firstModelId),
       // Beim Bearbeiten den gespeicherten Status übernehmen; neue Schichten
       // starten bewusst als Entwurf (Beginn des Planungs-Workflows).
@@ -237,9 +235,6 @@ export function ShiftDialog({
   // Überschneidung (für die Warnung + force-Wiederholung).
   const [bulkCreated, setBulkCreated] = useState<Set<string>>(new Set());
   const [bulkConflicts, setBulkConflicts] = useState<string[] | null>(null);
-  // Gewählte Arbeitszeit-Vorlage (nur zur Anzeige im Select); das Anwenden
-  // belegt Start-/Endzeit vor.
-  const [templateId, setTemplateId] = useState<string>("");
 
   // Formular nur beim Öffnen / beim Wechsel des Bearbeitungsziels zurücksetzen,
   // nicht wenn die Schichtmodelle asynchron nachladen (sonst gehen Eingaben verloren).
@@ -250,7 +245,6 @@ export function ShiftDialog({
       setOverlapConflicts(null);
       setBulkCreated(new Set());
       setBulkConflicts(null);
-      setTemplateId("");
       setForm(buildInitialForm());
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -259,8 +253,17 @@ export function ShiftDialog({
   // Sobald die Modelle geladen sind, im Anlegen-Modus eine Standardauswahl setzen,
   // falls der Nutzer noch nichts gewählt hat.
   useEffect(() => {
-    if (open && !isEditing && firstModelId) {
-      setForm((f) => (f.selection === "" ? { ...f, selection: `model:${firstModelId}` } : f));
+    if (open && !isEditing && firstModel) {
+      setForm((f) =>
+        f.selection === ""
+          ? {
+              ...f,
+              selection: `model:${firstModel.id}`,
+              startTime: firstModel.defaultStartTime || f.startTime,
+              endTime: firstModel.defaultEndTime || f.endTime,
+            }
+          : f,
+      );
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, firstModelId, isEditing]);
@@ -274,37 +277,35 @@ export function ShiftDialog({
     setBulkConflicts(null);
   }
 
-  // Wendet eine Arbeitszeit-Vorlage an: belegt Start-/Endzeit vor.
-  function applyTemplate(value: string) {
-    setTemplateId(value);
-    const tpl = allTemplates.find((t) => String(t.id) === value);
-    if (!tpl) return;
-    setForm((f) => ({ ...f, startTime: tpl.startTime, endTime: tpl.endTime }));
-    setErrors((e) => ({ ...e, startTime: undefined, endTime: undefined }));
+  // Wechselt Typ/Modell. Beim Wählen eines Schichtmodells werden dessen
+  // Standard-Start-/Endzeit vorbelegt (überschreibbar).
+  function handleSelectionChange(value: string) {
+    setErrors((e) => ({ ...e, selection: undefined, startTime: undefined, endTime: undefined }));
     setOverlapConflicts(null);
     setBulkConflicts(null);
+    const m = modelFromSelection(value);
+    setForm((f) => ({
+      ...f,
+      selection: value,
+      ...(m && m.defaultStartTime && m.defaultEndTime
+        ? { startTime: m.defaultStartTime, endTime: m.defaultEndTime }
+        : {}),
+    }));
   }
 
   const isAbsence = form.selection === "vacation" || form.selection === "sick";
   const is24h = form.selection === "legacy:full_day";
 
-  // Wochentags-Abgleich der Vorlagen mit dem gewählten Datum bzw. den
-  // ausgewählten Tagen (Mehrfach-Modus). Reine Hinweis-/Sortierlogik —
-  // das Anwenden einer "unpassenden" Vorlage bleibt bewusst erlaubt.
+  // Abgleich der Standard-Wochentage des gewählten Modells mit dem gewählten
+  // Datum bzw. den ausgewählten Tagen (Mehrfach-Modus). Reine Hinweis-Logik —
+  // das Anlegen an einem "unpassenden" Tag bleibt bewusst erlaubt.
+  const selectedModel = modelFromSelection(form.selection);
   const relevantDates = isBulk ? bulkDates ?? [] : form.date ? [form.date] : [];
-  const templateFitsAllDates = (tpl: TemplateWeekdays) =>
-    relevantDates.every((d) => templateMatchesDate(tpl, d));
-
-  // Passende Vorlagen zuerst listen (stabile Reihenfolge innerhalb der Gruppen).
-  const matchingTemplates = allTemplates.filter((t) => templateFitsAllDates(t));
-  const otherTemplates = allTemplates.filter((t) => !templateFitsAllDates(t));
-
-  // Hinweis, wenn die aktuell angewendete Vorlage nicht zu den Tagen passt.
-  // Reagiert auch auf nachträgliche Datumsänderungen, da rein abgeleitet.
-  const selectedTemplate = allTemplates.find((t) => String(t.id) === templateId);
-  const templateMismatchDates = selectedTemplate
-    ? relevantDates.filter((d) => !templateMatchesDate(selectedTemplate, d))
-    : [];
+  const modelWeekdays = selectedModel?.defaultWeekdays ?? [];
+  const weekdayMismatchDates =
+    selectedModel && modelWeekdays.length > 0
+      ? relevantDates.filter((d) => !modelWeekdays.includes(isoWeekday(d)))
+      : [];
 
   // Wenn das bearbeitete Modell inaktiv ist, trotzdem als Option anzeigen.
   const editModelId =
@@ -692,7 +693,7 @@ export function ShiftDialog({
           {/* Schicht-Typ / Modell */}
           <div className="space-y-1.5">
             <Label>Typ *</Label>
-            <Select value={form.selection} onValueChange={(v) => set("selection", v)}>
+            <Select value={form.selection} onValueChange={handleSelectionChange}>
               <SelectTrigger data-testid="shift-dialog-type">
                 <SelectValue placeholder="Typ auswählen..." />
               </SelectTrigger>
@@ -768,78 +769,28 @@ export function ShiftDialog({
             </div>
           )}
 
-          {/* Arbeitszeit-Vorlage (Schnellauswahl, belegt Zeiten vor) */}
-          {!isAbsence && allTemplates.length > 0 && (
-            <div className="space-y-1.5">
-              <Label>Vorlage</Label>
-              <Select value={templateId} onValueChange={applyTemplate}>
-                <SelectTrigger data-testid="shift-dialog-template">
-                  <SelectValue placeholder="Vorlage wählen (optional)..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {otherTemplates.length === 0 ? (
-                    // Alle Vorlagen passen (oder haben keine Wochentags-
-                    // Einschränkung): flache Liste ohne Gruppierung.
-                    allTemplates.map((t) => (
-                      <SelectItem key={t.id} value={String(t.id)}>
-                        {t.name} ({t.startTime}–{t.endTime})
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <>
-                      {matchingTemplates.length > 0 && (
-                        <SelectGroup>
-                          <SelectLabel>
-                            {isBulk ? "Passend zu den Tagen" : "Passend zum Datum"}
-                          </SelectLabel>
-                          {matchingTemplates.map((t) => (
-                            <SelectItem key={t.id} value={String(t.id)}>
-                              {t.name} ({t.startTime}–{t.endTime})
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      )}
-                      {matchingTemplates.length > 0 && <SelectSeparator />}
-                      <SelectGroup>
-                        <SelectLabel>Andere Wochentage</SelectLabel>
-                        {otherTemplates.map((t) => (
-                          <SelectItem key={t.id} value={String(t.id)}>
-                            {t.name} ({t.startTime}–{t.endTime}) · {weekdaysLabel(t.weekdays)}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
-              {selectedTemplate && templateMismatchDates.length > 0 ? (
-                <p
-                  className="text-xs text-amber-700 dark:text-amber-500"
-                  data-testid="shift-dialog-template-mismatch"
-                >
-                  {isBulk
-                    ? `Die Vorlage „${selectedTemplate.name}" gilt nur ${weekdaysLabel(
-                        selectedTemplate.weekdays,
-                      )} — ${templateMismatchDates.length} ${
-                        templateMismatchDates.length === 1
-                          ? "ausgewählter Tag passt"
-                          : "der ausgewählten Tage passen"
-                      } nicht dazu (${[...templateMismatchDates]
-                        .sort()
-                        .map((d) => format(new Date(`${d}T00:00:00`), "d. MMM"))
-                        .join(", ")}). Die Zeiten wurden trotzdem übernommen.`
-                    : `Die Vorlage „${selectedTemplate.name}" gilt nur ${weekdaysLabel(
-                        selectedTemplate.weekdays,
-                      )} — das gewählte Datum ist ein ${
-                        WEEKDAY_SHORT[isoWeekday(form.date) - 1]
-                      }. Die Zeiten wurden trotzdem übernommen.`}
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  Belegt Start- und Endzeit automatisch vor. Unter Einstellungen verwaltbar.
-                </p>
-              )}
-            </div>
+          {/* Hinweis: gewähltes Datum passt nicht zu den Standard-Wochentagen
+              des Modells. Reine Warnung — das Anlegen bleibt erlaubt. */}
+          {!isAbsence && selectedModel && weekdayMismatchDates.length > 0 && (
+            <p
+              className="text-xs text-amber-700 dark:text-amber-500"
+              data-testid="shift-dialog-weekday-mismatch"
+            >
+              {isBulk
+                ? `„${selectedModel.name}" ist üblich ${weekdaysLabel(
+                    modelWeekdays,
+                  )} — ${weekdayMismatchDates.length} ${
+                    weekdayMismatchDates.length === 1
+                      ? "ausgewählter Tag passt"
+                      : "der ausgewählten Tage passen"
+                  } nicht dazu (${[...weekdayMismatchDates]
+                    .sort()
+                    .map((d) => format(new Date(`${d}T00:00:00`), "d. MMM"))
+                    .join(", ")}).`
+                : `„${selectedModel.name}" ist üblich ${weekdaysLabel(
+                    modelWeekdays,
+                  )} — das gewählte Datum ist ein ${WEEKDAY_SHORT[isoWeekday(form.date) - 1]}.`}
+            </p>
           )}
 
           {/* Zeiten (nur für reguläre Schichten) */}

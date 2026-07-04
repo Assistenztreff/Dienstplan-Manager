@@ -7,6 +7,7 @@
  */
 import type { AllowanceSettingsBillingMethod } from './allowanceSettingsBillingMethod';
 import type { AllowanceSettingsState } from './allowanceSettingsState';
+import type { AllowanceSettingsVacationMethod } from './allowanceSettingsVacationMethod';
 
 export interface AllowanceSettings {
   id: number;
@@ -29,5 +30,13 @@ export interface AllowanceSettings {
      * @nullable
      */
   billingMethod?: AllowanceSettingsBillingMethod;
+  /** Eingereichte Zeiteinträge automatisch genehmigen. */
+  autoApproveTimesheets: boolean;
+  /** Urlaubs-Berechnung — bwavg = §11 BUrlG 13-Wochen-Schnitt, factor = prozentualer Stunden-Faktor. */
+  vacationMethod: AllowanceSettingsVacationMethod;
+  /** Stunden je Urlaubstag (Anzeige Tage = Stunden / diesem Wert). */
+  vacationHoursPerDay: number;
+  /** Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor. */
+  vacationFactor: number;
   updatedAt: Date;
 }

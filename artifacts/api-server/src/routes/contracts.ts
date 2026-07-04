@@ -12,6 +12,8 @@ import {
 } from "@workspace/api-zod";
 import { requireAdmin, requireAuth, isAdminLikeRole } from "../middleware/auth";
 import { requirePlanFeatureViaTeamOwner } from "../lib/plan";
+import { resolveAllowanceOps } from "../lib/allowance-resolve";
+import { round2 } from "../lib/dashboard-hours-balance";
 import {
   resolveReadTeamScope,
   resolveWriteTeamId,
@@ -28,6 +30,7 @@ const CONTRACT_SELECT = {
   weeklyHours: contractsTable.weeklyHours,
   vacationDays: contractsTable.vacationDays,
   vacationDaysUsed: contractsTable.vacationDaysUsed,
+  vacationHoursUsed: contractsTable.vacationHoursUsed,
   startDate: contractsTable.startDate,
   endDate: contractsTable.endDate,
   notes: contractsTable.notes,
@@ -225,12 +228,29 @@ router.get(
       res.status(404).json({ error: "Not found" });
       return;
     }
+
+    // Urlaub wird stundengenau gefuehrt (Point 7): Pool = vacationDays *
+    // vacationHoursPerDay (Standard 8h/Tag), Verbrauch stundenweise in
+    // vacationHoursUsed. Ein 24h-Dienst verbraucht 24h = 3,0 Tage. Der
+    // Umrechnungsfaktor und die Berechnungsmethode kommen aus den
+    // Einstellungen des Team-Eigentuemers (Fallback-Kette).
+    const ops = await resolveAllowanceOps(contract.teamId);
+    const hoursPerDay = ops.vacationHoursPerDay;
+    const vacationHoursTotal = round2(contract.vacationDays * hoursPerDay);
+    const vacationHoursUsed = round2(contract.vacationHoursUsed);
+    const vacationHoursRemaining = round2(vacationHoursTotal - vacationHoursUsed);
+    const daysUsed = Math.round((vacationHoursUsed / hoursPerDay) * 10) / 10;
     res.json({
       contractId: contract.id,
       userId: contract.userId,
       vacationDays: contract.vacationDays,
-      vacationDaysUsed: contract.vacationDaysUsed,
-      vacationDaysRemaining: contract.vacationDays - contract.vacationDaysUsed,
+      vacationDaysUsed: daysUsed,
+      vacationDaysRemaining: Math.round((contract.vacationDays - daysUsed) * 10) / 10,
+      vacationHoursTotal,
+      vacationHoursUsed,
+      vacationHoursRemaining,
+      hoursPerDay,
+      method: ops.vacationMethod,
     });
   },
 );

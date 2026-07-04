@@ -5,11 +5,22 @@
  * Dienstplan-App API für Persönliche Assistenz
  * OpenAPI spec version: 0.1.0
  */
+import type { VacationBalanceMethod } from './vacationBalanceMethod';
 
 export interface VacationBalance {
   contractId: number;
   userId: number;
+  /** Anspruch in Tagen (vacationHoursTotal / hoursPerDay, gerundet). */
   vacationDays: number;
+  /** Verbrauchte Tage (vacationHoursUsed / hoursPerDay, gerundet, Anzeige). */
   vacationDaysUsed: number;
   vacationDaysRemaining: number;
+  /** Gesamt-Urlaubsanspruch in Stunden (vacationDays * hoursPerDay). */
+  vacationHoursTotal: number;
+  /** Stundengenau verbrauchter Urlaub. */
+  vacationHoursUsed: number;
+  vacationHoursRemaining: number;
+  /** Umrechnungsfaktor Stunden je Tag (Standard 8). */
+  hoursPerDay: number;
+  method: VacationBalanceMethod;
 }

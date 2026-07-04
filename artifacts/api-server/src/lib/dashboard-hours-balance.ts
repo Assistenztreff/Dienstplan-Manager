@@ -28,6 +28,9 @@ export interface BalanceShift {
 /** Abrechnungsart: SOLL = nach Plan, IST = nach erfassten Ist-Zeiten. */
 export type BillingMethod = "SOLL" | "IST";
 
+/** Vergütungstyp des zugrundeliegenden Dienstes (Geld-Berechnung, Point 4). */
+export type CompensationType = "regular" | "percentage" | "flat";
+
 /** Bestätigter Zeiterfassungs-Eintrag inkl. Typ der verknüpften Schicht. */
 export interface BalanceTimeEntry {
   actualHours?: number | null;
@@ -40,6 +43,12 @@ export interface BalanceTimeEntry {
   holidayHours?: number | null;
   /** Team des Eintrags — bestimmt die anzuwendenden Zuschlags-Prozente. */
   teamId?: number | null;
+  // Vergütung (Geld) des verknüpften Dienstmodells — für die Premium-
+  // Lohnauswertung (Point 6). compensationPercent nur bei "percentage",
+  // compensationFlatCents (Cent, dauerunabhängig) nur bei "flat".
+  compensationType?: CompensationType | null;
+  compensationPercent?: number | null;
+  compensationFlatCents?: number | null;
 }
 
 export interface AllowancePercents {
@@ -78,6 +87,14 @@ export interface HoursBalanceRow {
   holidayPercent: number;
   /** Angewandte Abrechnungsart dieser Zeile. */
   billingMethod: BillingMethod;
+  // Premium-Lohnauswertung (Point 6). null, wenn kein Stundenlohn hinterlegt
+  // ist (dann keine Geldwerte). Immer IST-basiert (bestätigte Ist-Zeiten).
+  hourlyWage: number | null;
+  basePay: number | null;
+  nightSurchargePay: number | null;
+  sundaySurchargePay: number | null;
+  holidaySurchargePay: number | null;
+  totalPay: number | null;
 }
 
 function shiftHours(s: BalanceShift): number {
@@ -117,6 +134,11 @@ export function computeHoursBalanceRow(params: {
   contract: AssistantContractInfo | null;
   /** Abrechnungsart dieses Assistenten; ohne Angabe SOLL (Bestandsschutz). */
   billingMethod?: BillingMethod;
+  /**
+   * Bruttostundenlohn (Premium-Lohnauswertung, Point 6). null/undefined ⇒ keine
+   * Geldwerte (alle *Pay-Felder null). Die Geldrechnung ist IMMER IST-basiert.
+   */
+  hourlyWage?: number | null;
 }): HoursBalanceRow {
   const { userId, userName, shifts, timeEntries, allowance, allowanceByTeam, contract } = params;
   const { nightPercent, sundayPercent, holidayPercent } = allowance;
@@ -202,6 +224,45 @@ export function computeHoursBalanceRow(params: {
   const vacationDays = contract?.vacationDays ?? DEFAULT_VACATION_DAYS;
   const vacationDaysUsed = contract?.vacationDaysUsed ?? 0;
 
+  // Premium-Lohnauswertung (Point 6): Geld = Stundenlohn * bestätigte IST-Stunden
+  // je Dienst (regulär/prozentual) + Festbeträge, plus dynamische Zuschläge auf
+  // IST-Basis. Immer aus den bestätigten Ist-Zeiten (workEntries), unabhängig von
+  // der Abrechnungsart der Stunden-Spalten. Ohne hinterlegten Stundenlohn (null)
+  // gibt es keine Geldwerte.
+  const wage = params.hourlyWage ?? null;
+  let basePay: number | null = null;
+  let nightSurchargePay: number | null = null;
+  let sundaySurchargePay: number | null = null;
+  let holidaySurchargePay: number | null = null;
+  let totalPay: number | null = null;
+  if (wage != null) {
+    let base = 0;
+    let istNightSurcharge = 0;
+    let istSundaySurcharge = 0;
+    let istHolidaySurcharge = 0;
+    for (const e of workEntries) {
+      const hours = e.valuedHours ?? e.actualHours ?? 0;
+      const compType = e.compensationType ?? "regular";
+      if (compType === "flat") {
+        // Festbetrag pro Schicht (dauerunabhängig).
+        base += (e.compensationFlatCents ?? 0) / 100;
+      } else if (compType === "percentage") {
+        base += wage * hours * ((e.compensationPercent ?? 100) / 100);
+      } else {
+        base += wage * hours;
+      }
+      const p = percentsForTeam(e.teamId);
+      istNightSurcharge += ((e.nightHours ?? 0) * p.nightPercent) / 100;
+      istSundaySurcharge += ((e.sundayHours ?? 0) * p.sundayPercent) / 100;
+      istHolidaySurcharge += ((e.holidayHours ?? 0) * p.holidayPercent) / 100;
+    }
+    basePay = round2(base);
+    nightSurchargePay = round2(istNightSurcharge * wage);
+    sundaySurchargePay = round2(istSundaySurcharge * wage);
+    holidaySurchargePay = round2(istHolidaySurcharge * wage);
+    totalPay = round2(basePay + nightSurchargePay + sundaySurchargePay + holidaySurchargePay);
+  }
+
   return {
     userId,
     userName,
@@ -226,5 +287,11 @@ export function computeHoursBalanceRow(params: {
     sundayPercent,
     holidayPercent,
     billingMethod,
+    hourlyWage: wage,
+    basePay,
+    nightSurchargePay,
+    sundaySurchargePay,
+    holidaySurchargePay,
+    totalPay,
   };
 }

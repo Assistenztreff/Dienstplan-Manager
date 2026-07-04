@@ -32,6 +32,7 @@ import {
 } from "../lib/teams";
 import { isAbsenceType, resolveShiftMetrics } from "../lib/shift-metrics-resolve";
 import { userHasFeature, getUserLimit } from "../lib/plan";
+import { resolveAllowanceOps } from "../lib/allowance-resolve";
 
 const router = Router();
 
@@ -124,23 +125,59 @@ async function removeAbsenceTimeTracking(shiftId: number): Promise<void> {
   await db.delete(timeTrackingTable).where(eq(timeTrackingTable.shiftId, shiftId));
 }
 
-// Schreibt den genommenen Urlaub auf einem konkreten Vertrag fort. Geht nie unter null.
+// Urlaub wird stundengenau geführt (Point 7): Ein normaler Urlaubstag verbraucht
+// vacationHoursPerDay (Standard 8h), ein 24h-Dienst verbraucht 24h (= 3,0 Tage).
+// Ein 24h-Dienst erkennt man an identischer Start-/Enduhrzeit über die
+// Tagesgrenze (analog ShiftBadge); ein normaler Abwesenheitstag ist
+// 00:00–23:59 und damit KEIN 24h-Dienst.
+function vacationHoursForShift(
+  startTime: Date | string,
+  endTime: Date | string,
+  hoursPerDay: number
+): number {
+  const start = new Date(startTime);
+  const end = new Date(endTime);
+  const durationH = (end.getTime() - start.getTime()) / 3_600_000;
+  const sameClock =
+    start.getHours() === end.getHours() && start.getMinutes() === end.getMinutes();
+  if (sameClock && durationH >= 23) return 24;
+  return hoursPerDay;
+}
+
+// Löst die Urlaubs-Stunden eines Abwesenheits-Datums über die Einstellungen des
+// Team-Eigentümers (Fallback-Kette) auf.
+async function resolveVacationHours(
+  teamId: number | null,
+  startTime: Date | string,
+  endTime: Date | string
+): Promise<number> {
+  const ops = await resolveAllowanceOps(teamId);
+  return vacationHoursForShift(startTime, endTime, ops.vacationHoursPerDay);
+}
+
+// Schreibt den genommenen Urlaub (in Stunden) auf einem konkreten Vertrag fort.
+// Geht nie unter null.
 async function applyVacationDelta(
-  contract: { id: number; vacationDaysUsed: number },
-  delta: number
+  contract: { id: number; vacationHoursUsed: number },
+  deltaHours: number
 ): Promise<void> {
-  const next = contract.vacationDaysUsed + delta;
+  const next = contract.vacationHoursUsed + deltaHours;
   await db
     .update(contractsTable)
-    .set({ vacationDaysUsed: next < 0 ? 0 : next })
+    .set({ vacationHoursUsed: next < 0 ? 0 : Math.round(next * 100) / 100 })
     .where(eq(contractsTable.id, contract.id));
 }
 
-// Bucht +1/-1 auf den Vertrag, der für (userId, Datum) gilt.
-async function adjustVacationDaysUsed(userId: number, date: Date, delta: number): Promise<void> {
+// Bucht die Urlaubs-Stunden der Abwesenheit auf den Vertrag, der für
+// (userId, Datum) gilt.
+async function adjustVacationHours(
+  userId: number,
+  date: Date,
+  deltaHours: number
+): Promise<void> {
   const contract = await activeContractFor(userId, date);
   if (!contract) return;
-  await applyVacationDelta(contract, delta);
+  await applyVacationDelta(contract, deltaHours);
 }
 
 // Prüft, ob für denselben Nutzer, Abwesenheitstyp und Kalendertag bereits eine
@@ -493,7 +530,8 @@ router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
   if (isAbsenceType(shift.type)) {
     await bookAbsenceTimeTracking(shift);
     if (shift.type === "vacation") {
-      await adjustVacationDaysUsed(shift.userId, new Date(shift.startTime), 1);
+      const hours = await resolveVacationHours(shift.teamId, shift.startTime, shift.endTime);
+      await adjustVacationHours(shift.userId, new Date(shift.startTime), hours);
     }
   }
 
@@ -675,9 +713,11 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
     await syncAbsenceTimeTracking(updated);
   }
 
-  // Urlaubsanspruch rebalancieren: Ein Urlaubstag bucht genau 1 Tag auf den Vertrag,
-  // der für (userId, Datum) gilt — vor und nach dem Update. Ändert sich der gültige
-  // Vertrag (z.B. durch Datumswechsel über Vertragsgrenzen) oder der Typ, umbuchen.
+  // Urlaubsanspruch rebalancieren (stundengenau): Ein Urlaubstag bucht seine
+  // Urlaubs-Stunden auf den Vertrag, der für (userId, Datum) gilt — vor und nach
+  // dem Update. Ändert sich der gültige Vertrag (z.B. Datumswechsel über
+  // Vertragsgrenzen), der Typ ODER die Stundenzahl (z.B. Zeit-Edit von/zu 24h),
+  // wird umgebucht.
   const oldVacationContract =
     oldType === "vacation"
       ? await activeContractFor(oldShift.userId, new Date(oldShift.startTime))
@@ -686,9 +726,18 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
     newType === "vacation"
       ? await activeContractFor(updated.userId, new Date(updated.startTime))
       : null;
+  const oldVacationHours = oldVacationContract
+    ? await resolveVacationHours(oldShift.teamId, oldShift.startTime, oldShift.endTime)
+    : 0;
+  const newVacationHours = newVacationContract
+    ? await resolveVacationHours(updated.teamId, updated.startTime, updated.endTime)
+    : 0;
   if (oldVacationContract?.id !== newVacationContract?.id) {
-    if (oldVacationContract) await applyVacationDelta(oldVacationContract, -1);
-    if (newVacationContract) await applyVacationDelta(newVacationContract, 1);
+    if (oldVacationContract) await applyVacationDelta(oldVacationContract, -oldVacationHours);
+    if (newVacationContract) await applyVacationDelta(newVacationContract, newVacationHours);
+  } else if (newVacationContract && oldVacationHours !== newVacationHours) {
+    // Gleicher Vertrag, aber geänderte Stundenzahl: Differenz umbuchen.
+    await applyVacationDelta(newVacationContract, newVacationHours - oldVacationHours);
   }
 
   // Kennzahlen nach der Änderung (Zeiten/Typ/Modell) neu berechnen und speichern.
@@ -729,7 +778,8 @@ router.delete("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
   if (isAbsenceType(shift.type)) {
     await removeAbsenceTimeTracking(shift.id);
     if (shift.type === "vacation") {
-      await adjustVacationDaysUsed(shift.userId, new Date(shift.startTime), -1);
+      const hours = await resolveVacationHours(shift.teamId, shift.startTime, shift.endTime);
+      await adjustVacationHours(shift.userId, new Date(shift.startTime), -hours);
     }
   }
 

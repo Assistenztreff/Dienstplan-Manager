@@ -5,6 +5,7 @@
  * Dienstplan-App API für Persönliche Assistenz
  * OpenAPI spec version: 0.1.0
  */
+import type { ShiftModelInputCompensationType } from './shiftModelInputCompensationType';
 
 export interface ShiftModelInput {
   /** @minLength 1 */
@@ -16,4 +17,20 @@ export interface ShiftModelInput {
   color?: string;
   sortOrder?: number;
   isActive?: boolean;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  defaultStartTime?: string;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  defaultEndTime?: string;
+  defaultWeekdays?: number[];
+  compensationType?: ShiftModelInputCompensationType;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  compensationPercent?: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  compensationFlatCents?: number | null;
 }
