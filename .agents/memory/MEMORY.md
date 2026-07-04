@@ -22,7 +22,7 @@
 - [Test DB lacks seeded shift models](test-db-no-seeded-models.md) — setup-test-db only runs setup-admin+migrate-teams; default shift models seed only on register/dev-login, so e2e specs needing a model must create it.
 - [Shift planning status defaults](shift-planning-status.md) — planning_status column defaults to FIX (backfill = binding) but the dialog defaults new shifts to VORLAEUFIG (draft); keep the two decoupled.
 - [Bodyless POST req.body undefined](dev-login-bodyless-post.md) — auto-fired bodyless POSTs (dev-login) leave req.body undefined; destructure with `?? {}` or adding optional body params crashes the default path.
-- [Plan entitlements enforcement](plan-entitlements-enforcement.md) — Free/Premium config is a shared lib enforced server-side (plan read fresh from DB); all 4 limits (maxShiftModels=5 w/ 4 seeded, maxAssistants, maxTeams, historyMonths on POST+PATCH) + bulkEdit (PATCH /shifts userId swap) gated.
+- [Plan entitlements enforcement](plan-entitlements-enforcement.md) — Free/Premium limits live in a shared lib, enforced server-side with the plan read fresh from DB; maxShiftModels=5 matches the 5 seeded defaults (Free starts AT the cap).
 - [Running a single e2e spec](e2e-single-spec-filter.md) — `test:e2e -- <file>` runs ALL specs (the npm script's extra `--` kills Playwright's filter); use `pnpm exec playwright test <name>` from the artifact dir.
 - [Full e2e suite baseline green](full-e2e-suite-red-locally.md) — suite is green (171/3 skip); global 60s timeout vs. load flakes, hung-vs-slow triage, sibling-spec data tolerance.
 - [Sonner toasts need mounted Toaster](sonner-toaster-mount.md) — pages using `toast` from "sonner" render nothing unless the sonner `<Toaster>` is mounted in App root alongside the shadcn one.

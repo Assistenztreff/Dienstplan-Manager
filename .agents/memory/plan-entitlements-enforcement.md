@@ -56,13 +56,13 @@ uses. Creating absences (vacation/sick) stays FREE on all plans; only the
 tracked balance is premium, and the raw inputs (contracts, vacation shifts)
 remain free-accessible (Bestandsschutz).
 
-## Gotcha: registration seeds 4 shift models, Free maxShiftModels = 4 (AT limit)
+## Gotcha: registration seeds 5 shift models, Free maxShiftModels = 5 (AT limit)
 
-A freshly registered Free account already has 4 seeded default shift models
-(Frühdienst/Spätdienst/24h/Bereitschaft). The limit deliberately EQUALS the seed
-count: a fresh Free account starts exactly AT the limit — the 5th POST is
-blocked immediately; an own model is only possible after deleting a seeded model
-or upgrading. This is a conscious product decision, not a bug. Seeded models
+A freshly registered Free account already has 5 seeded default shift models
+(Frühdienst/Spätdienst/Nachtdienst/Bereitschaft/24h Dienst). The limit
+deliberately EQUALS the seed count: a fresh Free account starts exactly AT the
+limit — the 6th POST is blocked immediately; an own model is only possible after
+deleting a seeded model or upgrading. This is a conscious product decision, not a bug. Seeded models
 stay editable/deletable (Bestandsschutz); only creating over the limit is
 blocked. If the product wants Free users to add more, raise the limit — don't
 special-case the seeded ones. Absences (Urlaub/Krankheit) are NOT shift models

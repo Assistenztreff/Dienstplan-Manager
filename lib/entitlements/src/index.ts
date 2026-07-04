@@ -104,13 +104,13 @@ export const PLAN_CONFIG: Record<Plan, PlanConfig> = {
     limits: {
       maxAssistants: 6,
       maxTeams: 1,
-      // 4 = genau die bei der Registrierung vorinstallierten Standard-Dienste
-      // (Fruehdienst, Spaetdienst, 24h Dienst, Bereitschaft, siehe
+      // 5 = genau die bei der Registrierung vorinstallierten Standard-Dienste
+      // (Fruehdienst, Spaetdienst, Nachtdienst, Bereitschaft, 24h Dienst, siehe
       // default-shift-models.ts). Ein frisches Free-Konto startet damit AM
-      // Limit: Die 4 Standard-Dienste bleiben voll nutzbar (Bestandsschutz),
+      // Limit: Die 5 Standard-Dienste bleiben voll nutzbar (Bestandsschutz),
       // ein EIGENER Dienst ist erst nach Loeschen eines Standard-Dienstes oder
       // mit Premium moeglich — bewusste Produktentscheidung.
-      maxShiftModels: 4,
+      maxShiftModels: 5,
       historyMonths: 1, // nur aktueller und naechster Monat sichtbar
     },
   },

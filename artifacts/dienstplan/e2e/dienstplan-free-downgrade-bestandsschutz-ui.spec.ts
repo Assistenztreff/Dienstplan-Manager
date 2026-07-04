@@ -22,12 +22,12 @@ import {
  *
  * Aufbau (einmalig in beforeAll):
  * - Frisches Dienstleister-Konto per Self-Service-Registrierung (startet Free,
- *   Registrierung legt 1 "Standard-Team" + 4 Standard-Dienste an).
+ *   Registrierung legt 1 "Standard-Team" + 5 Standard-Dienste an).
  * - Plan-Flip auf Premium (direkt in der Test-DB = manuelle Freischaltung).
  * - Als Premium UEBER alle Free-Caps fahren:
  *     - 2. Team            (Free: maxTeams = 1)
  *     - 7 Assistenten      (Free: maxAssistants = 6)
- *     - 2 Zusatz-Dienste   (4 Seeds + 2 = 6 > Free-Limit 4)
+ *     - 2 Zusatz-Dienste   (5 Seeds + 2 = 7 > Free-Limit 5)
  *     - FIX-Schicht 2 Monate im Voraus (Free: historyMonths = 1)
  * - Downgrade zurueck auf Free.
  *
@@ -41,7 +41,7 @@ import {
 
 const FREE_MAX_ASSISTANTS = 6;
 const OVER_LIMIT_ASSISTANTS = FREE_MAX_ASSISTANTS + 1; // 7 — einer ueber dem Cap
-const EXTRA_MODEL_COUNT = 2; // 4 Seeds + 2 = 6 > Free-Limit 4
+const EXTRA_MODEL_COUNT = 2; // 5 Seeds + 2 = 7 > Free-Limit 5
 
 const SECOND_TEAM_NAME = "E2E Downgrade Zweitteam";
 
@@ -85,11 +85,11 @@ test.describe("Downgrade auf Free: Bestandsdaten bleiben im UI sichtbar", () => 
     standardTeamId = teams[0].id;
     standardTeamName = teams[0].name;
 
-    // Namen der 4 geseedeten Standard-Dienste merken (Sichtbarkeits-Assertions).
+    // Namen der 5 geseedeten Standard-Dienste merken (Sichtbarkeits-Assertions).
     const modelsRes = await acc.ctx.get("/api/shift-models");
     expect(modelsRes.ok(), "Dienste-Liste sollte ladbar sein").toBe(true);
     const seeded = (await modelsRes.json()) as { id: number; name: string }[];
-    expect(seeded.length, "Registrierung sollte 4 Standard-Dienste seeden").toBe(4);
+    expect(seeded.length, "Registrierung sollte 5 Standard-Dienste seeden").toBe(5);
     for (const m of seeded) seededModelNames.push(m.name);
 
     // === Premium: ueber alle Free-Caps hinaus Bestandsdaten aufbauen ========
@@ -118,7 +118,7 @@ test.describe("Downgrade auf Free: Bestandsdaten bleiben im UI sichtbar", () => 
       assistantNames.push(name);
     }
 
-    // 2 Zusatz-Dienste (4 Seeds + 2 = 6 > Free-Limit 4).
+    // 2 Zusatz-Dienste (5 Seeds + 2 = 7 > Free-Limit 5).
     for (let i = 1; i <= EXTRA_MODEL_COUNT; i++) {
       const name = `E2E Zusatzdienst ${unique}-${i}`;
       const res = await acc.ctx.post("/api/shift-models", {
@@ -162,7 +162,7 @@ test.describe("Downgrade auf Free: Bestandsdaten bleiben im UI sichtbar", () => 
     await deleteFreeAccount(acc);
   });
 
-  test("Einstellungen: alle 6 Dienste bleiben sichtbar und bearbeitbar, nur Neu-Anlegen ist gesperrt", async ({
+  test("Einstellungen: alle 7 Dienste bleiben sichtbar und bearbeitbar, nur Neu-Anlegen ist gesperrt", async ({
     page,
   }) => {
     test.setTimeout(60000);
@@ -171,8 +171,8 @@ test.describe("Downgrade auf Free: Bestandsdaten bleiben im UI sichtbar", () => 
     await page.goto("/einstellungen");
     await expect(page.getByRole("heading", { name: "Einstellungen" })).toBeVisible();
 
-    // ALLE 6 Dienste (4 Seeds + 2 als Premium angelegte) bleiben gelistet —
-    // insbesondere die beiden UEBER dem Free-Limit von 4.
+    // ALLE 7 Dienste (5 Seeds + 2 als Premium angelegte) bleiben gelistet —
+    // insbesondere die beiden UEBER dem Free-Limit von 5.
     for (const name of [...seededModelNames, ...extraModelNames]) {
       await expect(
         page.getByText(name, { exact: true }),
@@ -192,9 +192,17 @@ test.describe("Downgrade auf Free: Bestandsdaten bleiben im UI sichtbar", () => 
     await page.keyboard.press("Escape");
     await expect(dialog).not.toBeVisible();
 
-    // NUR das Neu-Anlegen reflektiert das Limit: Banner + gesperrter Button.
-    await expect(page.getByText(/maximal 4 Schichtmodelle/i)).toBeVisible();
-    await expect(page.getByRole("button", { name: "Neu", exact: true }).first()).toBeDisabled();
+    // NUR das Neu-Anlegen reflektiert das Limit: Der "Neu"-Button bleibt bewusst
+    // aktiv (kein Anzeige-/Button-Gate), aber das Speichern eines weiteren
+    // Dienstes ueber dem Free-Limit zeigt den servergemappten Upgrade-Hinweis.
+    const addButton = page.getByRole("button", { name: "Neu", exact: true }).first();
+    await expect(addButton).toBeEnabled();
+    await addButton.click();
+    const createDialog = page.getByRole("dialog");
+    await expect(createDialog.getByText("Neues Schichtmodell")).toBeVisible();
+    await createDialog.getByPlaceholder("z.B. Aktivdienst").fill("Achter Dienst");
+    await createDialog.getByRole("button", { name: "Anlegen" }).click();
+    await expect(createDialog.getByText(/max\. 5 Dienste/i)).toBeVisible();
   });
 
   test("Team-Wechsler und Team-Verwaltung zeigen weiterhin beide Teams", async ({ page }) => {

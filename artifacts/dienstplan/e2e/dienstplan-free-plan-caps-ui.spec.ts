@@ -7,15 +7,15 @@ import { deleteFreeAccount, registerFreeAccount, type FreeAccount } from "./help
  * Free-Limits werden dem Nutzer auch im Web-Frontend KLAR angezeigt statt
  * still zu scheitern:
  *
- *   - maxShiftModels (4): Anlegen eines weiteren Dienstes (Schichtmodells)
+ *   - maxShiftModels (5): Anlegen eines weiteren Dienstes (Schichtmodells)
  *     über dem Limit in den Einstellungen.
  *   - historyMonths (1): Planen einer Schicht mehr als 1 Monat im Voraus im
  *     Dienstplan (ShiftDialog).
  *
  * Beide Limits liefern serverseitig 403 `plan_limit_reached` (durch API-Tests
  * abgedeckt); hier wird geprueft, dass die Dialoge die gemappten
- * Upgrade-Hinweise (PLAN_LIMIT_MESSAGES in lib/api-error.ts) bzw. die
- * Client-Gates (deaktivierter Button + Banner, Toast) sichtbar machen.
+ * Upgrade-Hinweise (PLAN_LIMIT_MESSAGES in lib/api-error.ts) beim Speichern
+ * sichtbar machen (der Anlege-Button bleibt bewusst immer aktiv).
  *
  * Vorgehen wie in dienstplan-free-plan-limits-ui.spec.ts (#224):
  * - Frisches Free-Konto per Self-Service-Registrierung (der Standard-Test-Admin
@@ -26,7 +26,7 @@ import { deleteFreeAccount, registerFreeAccount, type FreeAccount } from "./help
  * Laeuft gegen den isolierten Test-Stack (eigener API + Vite auf der `_test`-DB).
  */
 
-const FREE_MAX_SHIFT_MODELS = 4;
+const FREE_MAX_SHIFT_MODELS = 5;
 
 /** Session-Cookies des per API registrierten Free-Kontos in den Browser uebernehmen. */
 async function adoptSession(page: Page, account: FreeAccount): Promise<void> {
@@ -39,7 +39,7 @@ test.describe("Free-Limit Schichtmodelle (UI)", () => {
   const createdModelIds: number[] = [];
 
   test.beforeAll(async () => {
-    // Registrierung seedet 4 Standard-Dienste = genau das Free-Limit (4). Für
+    // Registrierung seedet 5 Standard-Dienste = genau das Free-Limit (5). Für
     // das Race-Szenario (Dialog offen, Limit wird währenddessen erreicht) wird
     // ein Seed-Dienst gelöscht, damit das Konto UNTER dem Limit startet und
     // der Anlege-Button im UI aktiv ist.
@@ -79,8 +79,8 @@ test.describe("Free-Limit Schichtmodelle (UI)", () => {
     test.setTimeout(60000);
     await adoptSession(page, free);
 
-    // Mit 3 Diensten laden -> der Anlege-Button ist aktiv und der Dialog laesst
-    // sich oeffnen. Das 4. Modell wird DANACH per API angelegt (Race-Szenario:
+    // Mit 4 Diensten laden -> der Anlege-Button ist aktiv und der Dialog laesst
+    // sich oeffnen. Das 5. Modell wird DANACH per API angelegt (Race-Szenario:
     // Limit wird erreicht, waehrend der Dialog schon offen ist). Der Submit
     // muss dann den servergemappten Upgrade-Hinweis anzeigen — genau der Pfad,
     // der bei einer Regression still verschluckt wuerde.
@@ -96,33 +96,15 @@ test.describe("Free-Limit Schichtmodelle (UI)", () => {
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText("Neues Schichtmodell")).toBeVisible();
 
-    // Jetzt serverseitig ans Limit fahren (4. Dienst per API).
+    // Jetzt serverseitig ans Limit fahren (5. Dienst per API).
     await ensureModelCount(FREE_MAX_SHIFT_MODELS);
 
-    await dialog.getByPlaceholder("z.B. Aktivdienst").fill("Fuenfter Dienst");
+    await dialog.getByPlaceholder("z.B. Aktivdienst").fill("Sechster Dienst");
     await dialog.getByRole("button", { name: "Anlegen" }).click();
 
     // Klarer Upgrade-Hinweis statt stillem Fehlschlag.
-    await expect(dialog.getByText(/max\. 4 Dienste/i)).toBeVisible();
+    await expect(dialog.getByText(/max\. 5 Dienste/i)).toBeVisible();
     await expect(dialog.getByText(/Premium/i)).toBeVisible();
-  });
-
-  test("Am Limit ist das Anlegen gesperrt und ein Hinweis-Banner sichtbar", async ({
-    page,
-  }) => {
-    test.setTimeout(60000);
-    // Unabhaengig vom vorherigen Test sicherstellen, dass das Konto am Limit ist.
-    await ensureModelCount(FREE_MAX_SHIFT_MODELS);
-    await adoptSession(page, free);
-
-    await page.goto("/einstellungen");
-    await expect(page.getByRole("heading", { name: "Einstellungen" })).toBeVisible();
-
-    // Client-Gate: Banner mit Limit-Hinweis + deaktivierter Anlege-Button.
-    await expect(page.getByText(/maximal 4 Schichtmodelle/i)).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Neu", exact: true }).first(),
-    ).toBeDisabled();
   });
 });
 

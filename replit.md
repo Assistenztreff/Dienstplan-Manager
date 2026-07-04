@@ -56,7 +56,7 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
 ## Free/Premium (Entitlements)
 
 - `users.plan` (`free` | `premium`, Default `free`), in OpenAPI an `AuthUser` UND `User` required.
-- **`@workspace/entitlements`** = Single Source of Truth (`PLAN_CONFIG`: Features boolean + Limits number|null=unbegrenzt). Free-Limits: maxAssistants 6, maxTeams 1, maxShiftModels 4, historyMonths 1.
+- **`@workspace/entitlements`** = Single Source of Truth (`PLAN_CONFIG`: Features boolean + Limits number|null=unbegrenzt). Free-Limits: maxAssistants 6, maxTeams 1, maxShiftModels 5 (= Seed-Anzahl; Free startet AM Limit), historyMonths 1.
 - **Server autoritativ, Frontend-Gates reine UX.** `getUserPlan` liest IMMER frisch aus der DB (manuelle Freischaltung wirkt sofort). Maßgeblich ist der Plan des **Team-Eigentümers**. Assistenten-Zugang via Arbeitgeber-Plan: `requirePlanFeatureViaTeamOwner` (Owner-Fallback NUR für Rolle assistant, ein Premium-Arbeitgeber genügt).
 - **Durchgesetzte Gates** (403 `plan_limit_reached` / `plan_feature_required`):
   - Limits `maxShiftModels`/`maxAssistants`/`maxTeams` beim Anlegen; `historyMonths` bei shifts POST + PATCH-mit-`startTime` (Zukunft blockiert, Vergangenheit nie; PATCH ohne `startTime` frei). Abwesenheiten NICHT gegated.
