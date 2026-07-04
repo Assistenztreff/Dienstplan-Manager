@@ -1,3 +1,4 @@
+- [DATABASE_URL secret shadows managed DB](database-url-secret-shadowing.md) — a user's DATABASE_URL secret overrides the managed URL; malformed value = 500 on all DB ops; agent can't delete secrets, env change needs workflow restart.
 - [DB push & session table](db-push-session-table.md) — connect-pg-simple's session table must live in the Drizzle schema or `db push` (incl. non-interactive post-merge) tries to drop it as data loss.
 - [Orval query hooks enabled cast](orval-query-hooks-enabled.md) — generated query hooks require queryKey in full UseQueryOptions; pass `enabled` via dual cast (options + result), or data infers to `{}`.
 - [Time-tracking shift linkage](time-tracking-shift-link.md) — validate shift ownership (403) before the global shiftId dedupe (409) on POST /api/time-tracking
