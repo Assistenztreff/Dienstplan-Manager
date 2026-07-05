@@ -32,7 +32,7 @@ const ALL_NAV_ITEMS = [
   { href: "/abwesenheiten", label: "Abwesenheiten", icon: CalendarOff, adminOnly: true, dienstleisterOnly: false },
   { href: "/auswertungen", label: "Auswertungen", icon: BarChart3, adminOnly: true, dienstleisterOnly: false },
   { href: "/team-verwaltung", label: "Team-Verwaltung", icon: Building2, adminOnly: true, dienstleisterOnly: true },
-  { href: "/einstellungen", label: "Einstellungen", icon: Settings, adminOnly: true, dienstleisterOnly: false },
+  { href: "/einstellungen", label: "Einstellungen", icon: Settings, adminOnly: false, dienstleisterOnly: false },
 ];
 
 // ---------------------------------------------------------------------------

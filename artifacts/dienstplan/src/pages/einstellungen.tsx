@@ -22,6 +22,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/auth";
 import { useTeam } from "@/context/team";
+import { isAdminRole } from "@/lib/roles";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1038,6 +1039,10 @@ export default function Einstellungen() {
   const deleteModel = useDeleteShiftModel();
 
   const isDienstleister = currentUser?.accountType === "dienstleister";
+  // Assistenten sehen die Einstellungen-Seite nur fuer Profil + Kalender-Abo;
+  // alle verwaltenden Bereiche (Schichtmodelle, Zuschlaege, Logo) sind Admins
+  // (inkl. superadmin) vorbehalten.
+  const isAdmin = isAdminRole(currentUser?.role);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editModel, setEditModel] = useState<ShiftModel | undefined>();
@@ -1086,19 +1091,27 @@ export default function Einstellungen() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Einstellungen</h2>
-          <p className="text-muted-foreground mt-1 text-sm">Schichtmodelle für den Dienstplan verwalten</p>
+          <p className="text-muted-foreground mt-1 text-sm">
+            {isAdmin
+              ? "Schichtmodelle für den Dienstplan verwalten"
+              : "Profil und Kalender-Abo verwalten"}
+          </p>
         </div>
-        <Button onClick={openCreate} className="gap-2">
-          <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">Neuen Dienst</span>
-          <span className="sm:hidden">Neu</span>
-        </Button>
+        {isAdmin && (
+          <Button onClick={openCreate} className="gap-2">
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Neuen Dienst</span>
+            <span className="sm:hidden">Neu</span>
+          </Button>
+        )}
       </div>
 
       <ProfileCard />
 
       <CalendarExportCard />
 
+      {isAdmin && (
+      <>
       <Card className="border-border/50 shadow-sm">
         <CardContent className="p-0">
           {isLoading ? (
@@ -1181,8 +1194,10 @@ export default function Einstellungen() {
         Zuschläge gelten nur für Ihr Konto und werden bei der Auswertung angewandt. Änderungen wirken
         sich rückwirkend auf Ihre Auswertungen aus, ohne dass Schichten neu gespeichert werden müssen.
       </p>
+      </>
+      )}
 
-      {dialogOpen && (
+      {isAdmin && dialogOpen && (
         <ModelDialog
           open={dialogOpen}
           onClose={closeDialog}

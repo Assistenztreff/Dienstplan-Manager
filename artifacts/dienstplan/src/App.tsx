@@ -85,9 +85,11 @@ function Router() {
         {isAdminRole(currentUser.role) && (
           <Route path="/auswertungen" component={Auswertungen} />
         )}
-        {isAdminRole(currentUser.role) && (
-          <Route path="/einstellungen" component={Einstellungen} />
-        )}
+        {/* Einstellungen auch fuer Assistenten: die Seite zeigt ihnen nur die
+            fuer sie relevanten Bereiche (Profil + Kalender-Abo-Karte). Admin-
+            Bereiche (Schichtmodelle, Zuschlaege, Logo) sind in der Seite selbst
+            per isAdminRole gegatet. */}
+        <Route path="/einstellungen" component={Einstellungen} />
         {/* Preise & Premium: Ziel der Free-Limit-Hinweise (Upgrade-Anfrage). */}
         {isAdminRole(currentUser.role) && <Route path="/preise" component={Preise} />}
         {isAdminRole(currentUser.role) && currentUser.accountType === "dienstleister" && (
