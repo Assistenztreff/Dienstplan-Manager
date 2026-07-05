@@ -94,12 +94,17 @@ async function main(): Promise<void> {
     await client.query(
       "ALTER TABLE allowance_settings ALTER COLUMN owner_id SET NOT NULL"
     );
-    // UNIQUE + FK idempotent (42P07/42710 = existiert bereits).
-    await client.query(`DO $$ BEGIN
-      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'allowance_settings_owner_id_unique') THEN
-        ALTER TABLE allowance_settings ADD CONSTRAINT allowance_settings_owner_id_unique UNIQUE (owner_id);
-      END IF;
-    END $$`);
+    // Eindeutigkeit auf owner_id: seit Einführung der Team-Overrides gilt sie
+    // NUR noch für die Konto-Zeile (team_id IS NULL) — ein Eigentümer darf
+    // zusätzlich beliebig viele Team-Override-Zeilen (team_id gesetzt) haben.
+    // Der frühere volle UNIQUE(owner_id) verhindert das und muss weichen; er
+    // wird durch den partiellen Index ersetzt (identisch zum aktuellen Drizzle-
+    // Schema und zu post-merge.sh). Idempotent.
+    await client.query(
+      "ALTER TABLE allowance_settings DROP CONSTRAINT IF EXISTS allowance_settings_owner_id_unique"
+    );
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS allowance_settings_owner_account_unique
+      ON allowance_settings (owner_id) WHERE team_id IS NULL`);
     await client.query(`DO $$ BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'allowance_settings_owner_id_users_id_fk') THEN
         ALTER TABLE allowance_settings
