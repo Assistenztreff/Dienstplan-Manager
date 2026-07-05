@@ -19,6 +19,7 @@
     "migrate-allowance-settings": "tsx ./src/migrate-allowance-settings.ts",
     "setup-test-db": "tsx ./src/setup-test-db.ts",
     "verify-test-db-cleanup": "tsx ./src/verify-test-db-cleanup.ts",
+    "verify-test-platform-errors-cleanup": "tsx ./src/verify-test-platform-errors-cleanup.ts",
     "verify-account-separation": "tsx ./src/verify-account-separation.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

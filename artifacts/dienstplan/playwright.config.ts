@@ -230,6 +230,30 @@ if (useManagedStack && !isWorkerProcess && !process.env.E2E_SKIP_DB_SETUP) {
       );
     }
   }
+
+  // Fehlerzeilen-Cleanup-Nachweis (verify-test-platform-errors-cleanup): beweist
+  // VOR jedem E2E-Lauf, dass der platform_errors-Cleanup wirklich greift (beide
+  // Test-Kontexte weg) UND echte Fehler verschont (fremder Kontext bleibt),
+  // zweiter Lauf idempotent. Ohne diesen Beweis kann der Cleanup still
+  // verrutschen und die _test-DB wieder mit Alt-Fehlerzeilen volllaufen.
+  // Laeuft bewusst HIER (Config-Load, vor dem webServer-Start): er seedet/
+  // entfernt Zeilen in der `_test`-DB und darf nie parallel zu Specs laufen.
+  // Skip via `E2E_SKIP_CLEANUP_CHECK=1` (analog verify-test-db-cleanup).
+  if (!process.env.E2E_SKIP_CLEANUP_CHECK) {
+    console.log(
+      "[e2e] Fehlerzeilen-Cleanup-Check (verify-test-platform-errors-cleanup)...",
+    );
+    const errorsCleanup = spawnSync(
+      "pnpm",
+      ["--filter", "@workspace/scripts", "run", "verify-test-platform-errors-cleanup"],
+      { stdio: "inherit", timeout: 600_000 },
+    );
+    if (errorsCleanup.status !== 0 || errorsCleanup.error != null) {
+      throw new Error(
+        "verify-test-platform-errors-cleanup fehlgeschlagen — der platform_errors-Cleanup ist beschaedigt oder der Check konnte nicht laufen (siehe Ausgabe oben). Kein E2E-Lauf gegen einen unklaren Zustand.",
+      );
+    }
+  }
 }
 
 // Damit Specs/Helper, die zur Laufzeit einen zweiten Admin seeden
