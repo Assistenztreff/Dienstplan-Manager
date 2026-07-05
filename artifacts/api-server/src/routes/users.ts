@@ -194,10 +194,42 @@ router.post("/users", requireAdmin, async (req, res): Promise<void> => {
     }
   }
 
-  const [user] = await db
-    .insert(usersTable)
-    .values(userValues)
-    .returning(SAFE_USER_SELECT);
+  // E-Mail-Kollision explizit als 409 mit lesbarer Meldung melden — sonst
+  // knallt der UNIQUE-Constraint (23505) als unbehandelter 500 und der Dialog
+  // zeigt nur eine generische Fehlermeldung (analog zum PATCH-Pfad).
+  if (typeof userValues.email === "string") {
+    const requestedEmail = userValues.email.trim();
+    const [existing] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(sql`lower(${usersTable.email}) = lower(${requestedEmail})`);
+    if (existing) {
+      res.status(409).json({
+        error: "Diese E-Mail-Adresse wird bereits von einem anderen Konto verwendet.",
+      });
+      return;
+    }
+  }
+
+  let user;
+  try {
+    [user] = await db
+      .insert(usersTable)
+      .values(userValues)
+      .returning(SAFE_USER_SELECT);
+  } catch (err) {
+    // Sicherheitsnetz gegen Race: UNIQUE-Verletzung (23505) sauber als 409.
+    const pgCode =
+      (err as { cause?: { code?: string }; code?: string })?.cause?.code ??
+      (err as { code?: string })?.code;
+    if (pgCode === "23505") {
+      res.status(409).json({
+        error: "Diese E-Mail-Adresse wird bereits von einem anderen Konto verwendet.",
+      });
+      return;
+    }
+    throw err;
+  }
   // Neuen Nutzer dem Ziel-Team zuordnen, damit er in gescopten Listen erscheint.
   // Wenn der Ersteller (noch) kein Team hat (reason "none"), bleibt der Nutzer
   // ohne Mitgliedschaft – er taucht dann erst nach Team-Zuordnung in Listen auf.
