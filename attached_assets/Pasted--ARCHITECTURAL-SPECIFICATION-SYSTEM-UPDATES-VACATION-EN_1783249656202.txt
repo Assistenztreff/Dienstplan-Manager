@@ -1,0 +1,75 @@
+### ARCHITECTURAL SPECIFICATION & SYSTEM UPDATES (VACATION ENGINE & PAYROLL OVERHAUL)
+Please implement the following business logic modifications, UI updates, and data model extensions. Apply these updates safely to the backend and frontend components within our current staging environment.
+
+---
+
+#### 1. FEATURE "ABRECHNUNGSART" & ZUSCHLÄGE (IST-ZEIT LOGIK)
+- Completely rebuild the surcharge calculation logic to strictly enforce "Option 2" (Calculated from Actual Clock-In Times / Ist-Zeiten).
+- All night, Sunday, and holiday surcharges must be calculated dynamically based on the verified timestamps from the time tracking module ("Zeiterfassung"), NOT from the planned roster ("Dienstplan").
+- UI Filtering rule: If any surcharge rate (e.g., Sonntagszuschlag) is explicitly configured as 0% in the settings, entirely hide/omit this specific row from the final payroll generation view to ensure a clean interface.
+
+#### 2. DIENST- & ARBEITSZEIT-EINSTELLUNGEN (SETTINGS OVERHAUL)
+- Completely remove the legacy "Arbeitszeit-Vorlagen" (Time Templates) section from the UI.
+- Update the Shift Model data model ("Schichtmodelle / Dienste"). Every shift model must now include the following properties/fields in the settings:
+  * Standard-Startzeit (Time)
+  * Standard-Endzeit (Time)
+  * Standard-Wochentage (Dropdown/Selection: "Mo-Fr", "Mo-So", or "Individuell" with checkboxes for Mon-Sun).
+- Roster Integration: When an admin clicks on the calendar to add a shift, the selected shift model must auto-populate the start time, end time, and day constraints. However, the admin must still be able to manually override the times individually inside the shift creation modal.
+- Bug Fix: Add a prominent "+ Neuen Dienst anlegen" (Create New Shift Model) button to the settings panel, available for both Free and Premium tiers.
+
+#### 3. DEFAULT SYSTEM SHIFTS FOR NEW USERS (ONBOARDING)
+- Upon creation/registration of a new account, the database must automatically seed the following 5 standard shift models for the user (fully editable later):
+  1. Frühdienst: 08:00 – 16:00
+  2. Spätdienst: 16:00 – 23:00
+  3. Nachtdienst: 23:00 – 08:00 (Crosses midnight to next day)
+  4. Bereitschaft: 08:00 – 14:00
+  5. 24H Dienst: 09:00 – 09:00 (Crosses midnight to next day, duration: 24 hours)
+
+#### 4. EXTENDED LOGIC FOR READY-TO-WORK SHIFTS (BEREITSCHAFTSDIENSTE)
+- Add a payment type configuration ("Vergütungstyp") to the shift model settings. The admin must be able to choose between:
+  * Regulärer Stundenlohn (100% base hourly rate)
+  * Prozentualer Stundenlohn (Percentage field, e.g., 50% of the assistant's base hourly rate from their profile for the duration of the shift)
+  * Festbetrag (Fixed flat-rate amount in EUR per shift, independent of duration).
+
+#### 5. TIME TRACKING AUTOMATION TOGGLE (ZEITERFASSUNG)
+- Add a new global configuration switch in the settings: "[ ] Stundenzettel automatisch genehmigen" (Auto-approve time entries).
+- Logic:
+  * If checked/active: Time entries submitted by assistants must instantly be marked as "Bestätigt" (Approved) and enter the payroll cycle.
+  * If unchecked/inactive (Default): Submitted entries must remain "Offen" (Pending) until manually approved or rejected by the admin in the "Zeiterfassung" view.
+
+#### 6. DYNAMIC SUBSTITUTION & READY-TO-WORK LOGIC (ROSTER MODAL INTEGRATION)
+Instead of global toggle configurations, implement a dynamic, shift-specific logic directly inside the roster creation/edit modal ("Dienstplan Pop-up"):
+- Add a checkbox: "[ ] Als Bereitschaftsdienst werten" (Apply Ready-to-Work Mode).
+  * Logic: If checked, the system overrides the standard wage for this shift and applies the custom rate defined in the shift model settings (Flat-rate or percentage).
+- Add a checkbox: "[ ] Ausfall-Vertretung / Einspringdienst" (Emergency Substitution).
+  * Logic: If checked, display a dynamic conditional sub-field labeled "Einspring-Bonus".
+  * The admin can choose to apply either a percentage bonus (e.g., +25% on top of the base hourly rate for this specific shift) or a flat-rate bonus (e.g., +30.00 EUR one-time motivation bonus).
+
+#### 7. PREMIUM VACATION MANAGEMENT & CONVERSION ENGINE (RIGHT TO HOLIDAY)
+Create a new "Urlaubsberechnungen" (Vacation Configuration) panel in settings. The system must process vacation strictly hourly in the backend but display it converted to days in the UI.
+
+- System Basis Constants:
+  * 1 Vacation Day = 8 Hours (Standard baseline value for day-to-day conversion).
+  * A standard yearly allocation of 24 days translates internally to a pool of 192 vacation hours.
+
+- Selection Method (Dropdown Toggle as seen in UI):
+  * Method A: "Gesetzlicher 13-Wochen-Durchschnitt (§ 11 BUrlG)" (Default)
+    -> When a vacation day is applied to the roster, calculate the employee's average weekly/daily hours over the trailing 3 months (13 weeks). This calculated average hour value is credited to the monthly working hour account as paid leave. The internal hour-based vacation account is reduced by this exact hour value, and divided by 8 to dynamically display the subtracted days in the UI.
+  * Method B: "Prozentualer Stunden-Faktor"
+    -> Scale vacation accumulation dynamically. For every confirmed working hour, credit the assistant with 0.0941 vacation hours. When vacation is taken, subtract the exact hour value of the missed rostered shift from their accumulated hourly pool.
+
+- Deductions for 24H Shifts (Dilemma Correction Logic):
+  * If a vacation entry is logged for a day containing a 24-hour shift (or fiktiv preset), credit the employee with 24 hours of paid leave. Concurrently, subtract 24 hours from the vacation pool. In the frontend UI, this must correctly display as a deduction of exactly 3.0 Vacation Days deducted (24 hours taken / 8 hour base = 3 days).
+  * If a short shift of 4 hours is taken as vacation, credit 4 hours and subtract 0.5 Vacation Days from the profile (4 hours taken / 8 hour base = 0.5 days).
+
+- Absence Instant Fix (Task #395 Context):
+  * Any absence (Urlaub/Krankheit) created via the calendar modal must instantly be saved with a persistent "FIX" (verbindlich) status, regardless of the creation path. Retroactively update all existing preliminary July absences to "FIX" to ensure they show up in evaluations.
+
+#### 8. LEGAL COMPLIANCE FOR SICK LEAVE & SURCHARGE CONTINUED PAYMENTS
+- Sick Leave (Krankheit) Calculation: When an employee is registered as "Krank", the system must credit the exact number of hours that were originally scheduled for that shift in the roster (Lohnausfallprinzip). If a 24H shift was planned, 24 hours must be credited to the monthly working account.
+- Surcharge Continued Payment (Zuschlagsfortzahlung): If an absence (Urlaub or Krankheit) covers a shift that would have yielded contractual surcharges (e.g., Nachtzuschlag during a 24H shift, or Sonntags-/Feiertagszuschlag if configured), the system must calculate and append these surcharges to the payroll evaluation for that absence period.
+
+#### 9. PUBLIC HOLIDAYS & COMPENSATORY REST DAYS (FEIERTAGS-LOGIK)
+- Automatic "Ersatzruhetag-Konto" (Compensatory Holiday Account): Create a virtual balance inside the employee's profile/Personalakte.
+- Logic for Working on a Public Holiday: If an assistant works actual hours on a public holiday, they receive their worked hours + the Feiertagszuschlag. Concurrently, the system must automatically credit +1 Day to their "Ersatzruhetag-Konto" (pursuant to § 11 Abs. 3 ArbZG). Introduce a new absence/shift status type: "Freizeitausgleich (Feiertag)" to redeem these days.
+- Public Holiday Time-Credit (Minus-Hours Prevention): On statutory public holidays, if an employee is NOT scheduled to work (the business/household rests), the system must automatically inject a time-credit equal to their average daily contract hours (e.g., 8 hours for full-time or calculated based on their individual contract) into their monthly actual hour balance ("Ist-Stunden"). This credit directly offsets the day's target hours ("Soll-Stunden") to prevent the employee from generating illegal negative hours ("Minusstunden") due to a public holiday rest period.
