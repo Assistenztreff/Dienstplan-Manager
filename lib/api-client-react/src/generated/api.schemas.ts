@@ -1314,6 +1314,12 @@ export type ListOperatorPlanChangesParams = {
  * @maximum 200
  */
 limit?: number;
+/**
+ * Optionaler Suchbegriff. Filtert die Einträge nach Konto (Name oder E-Mail) oder nach dem Inhalt der Referenz/Notiz (z. B. Belegnummer). Groß-/Kleinschreibung wird ignoriert.
+
+ * @maxLength 200
+ */
+search?: string;
 };
 
 export type ListOperatorErrorsParams = {

@@ -8,7 +8,7 @@
 
 import { Router } from "express";
 import { db, usersTable, planChangesTable, platformErrorsTable } from "@workspace/db";
-import { eq, sql, asc, desc } from "drizzle-orm";
+import { eq, sql, asc, desc, or, ilike } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
   UpdateOperatorAccountPlanParams,
@@ -23,6 +23,14 @@ import { MAX_STORED_ERRORS } from "../lib/platform-errors";
 import { getLexwareClient } from "../lib/lexware";
 
 const router = Router();
+
+// Escaped LIKE-Sonderzeichen (\ % _), damit ein Suchbegriff sie als Literale
+// und nicht als Wildcards behandelt. Drizzles ilike() bindet den Wert als
+// Parameter (kein SQL-Injection-Risiko); das Escaping betrifft nur die
+// LIKE-Muster-Semantik.
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
 
 // Aggregat-Auswahl für ein Konto: Anzahl besessener Teams + Anzahl
 // unterschiedlicher Assistenten in diesen Teams (plattformweit, NICHT
@@ -131,6 +139,18 @@ router.get(
       return;
     }
     const limit = queryResult.data.limit ?? 50;
+    // Optionaler Suchbegriff: filtert nach Konto (Name/E-Mail) oder Inhalt der
+    // Referenz/Notiz. Groß-/Kleinschreibung ignoriert (ILIKE), Wildcards im
+    // Begriff werden escaped, damit % und _ als Literale gesucht werden.
+    const search = queryResult.data.search?.trim();
+    const searchFilter =
+      search && search.length > 0
+        ? or(
+            ilike(usersTable.name, `%${escapeLike(search)}%`),
+            ilike(usersTable.email, `%${escapeLike(search)}%`),
+            ilike(planChangesTable.note, `%${escapeLike(search)}%`),
+          )
+        : undefined;
 
     const changes = await db
       .select({
@@ -147,6 +167,7 @@ router.get(
       .from(planChangesTable)
       .innerJoin(usersTable, eq(planChangesTable.accountId, usersTable.id))
       .innerJoin(changedByUser, eq(planChangesTable.changedBy, changedByUser.id))
+      .where(searchFilter)
       .orderBy(desc(planChangesTable.createdAt), desc(planChangesTable.id))
       .limit(limit);
 

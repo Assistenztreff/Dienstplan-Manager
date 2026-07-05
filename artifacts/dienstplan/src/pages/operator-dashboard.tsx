@@ -34,7 +34,7 @@
 // Zahlung bestaetigt ist (kein Stripe / keine automatische Verlaengerung).
 // ---------------------------------------------------------------------------
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useListOperatorAccounts,
   useUpdateOperatorAccountPlan,
@@ -63,7 +63,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Users, Receipt, AlertTriangle, ShieldCheck, History, Check, CheckCheck, Undo2, ChevronDown, ChevronUp } from "lucide-react";
+import { Users, Receipt, AlertTriangle, ShieldCheck, History, Check, CheckCheck, Undo2, ChevronDown, ChevronUp, Search } from "lucide-react";
 import { readableApiError } from "@/lib/api-error";
 import { useToast } from "@/hooks/use-toast";
 
@@ -91,8 +91,22 @@ export default function OperatorDashboard() {
   const [confirmAccount, setConfirmAccount] = useState<OperatorAccount | null>(null);
   const [note, setNote] = useState("");
 
+  // Suche im Plan-Änderungsprotokoll (nach Konto Name/E-Mail oder Notiz).
+  // Der Eingabewert wird entkoppelt (debounced) an die Query übergeben, damit
+  // nicht bei jedem Tastendruck ein Request feuert.
+  const [planSearchInput, setPlanSearchInput] = useState("");
+  const [planSearch, setPlanSearch] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setPlanSearch(planSearchInput.trim());
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [planSearchInput]);
+
   const accountsQuery = useListOperatorAccounts();
-  const planChangesQuery = useListOperatorPlanChanges();
+  const planChangesQuery = useListOperatorPlanChanges(
+    planSearch ? { search: planSearch } : undefined,
+  );
   const errorsQuery = useListOperatorErrors();
   const lexwareQuery = useListOperatorLexwareBookings();
   const updatePlan = useUpdateOperatorAccountPlan();
@@ -354,11 +368,23 @@ export default function OperatorDashboard() {
       {/* Jeder manuelle Plan-Flip schreibt einen Audit-Eintrag — hier sind   */}
       {/* die letzten Änderungen belegbar (wer, wann, welches Konto).         */}
       <Card className="border-border/50 shadow-sm">
-        <CardHeader>
+        <CardHeader className="gap-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <History className="h-5 w-5 text-brand-cyan" />
             Plan-Änderungsprotokoll
           </CardTitle>
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              value={planSearchInput}
+              onChange={(e) => setPlanSearchInput(e.target.value)}
+              maxLength={200}
+              placeholder="Nach Konto oder Belegnummer/Notiz suchen…"
+              className="pl-9"
+              data-testid="input-plan-change-search"
+            />
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {planChangesQuery.isLoading ? (
@@ -373,7 +399,9 @@ export default function OperatorDashboard() {
             </p>
           ) : (planChangesQuery.data ?? []).length === 0 ? (
             <p className="p-4 text-sm text-muted-foreground" data-testid="text-operator-plan-changes-empty">
-              Noch keine Plan-Änderungen protokolliert.
+              {planSearch
+                ? `Keine Plan-Änderungen gefunden für „${planSearch}".`
+                : "Noch keine Plan-Änderungen protokolliert."}
             </p>
           ) : (
             <div className="overflow-x-auto">

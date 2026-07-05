@@ -1373,6 +1373,16 @@ paths:
             minimum: 1
             maximum: 200
             default: 50
+        - name: search
+          in: query
+          required: false
+          description: >
+            Optionaler Suchbegriff. Filtert die Einträge nach Konto (Name oder
+            E-Mail) oder nach dem Inhalt der Referenz/Notiz (z. B. Belegnummer).
+            Groß-/Kleinschreibung wird ignoriert.
+          schema:
+            type: string
+            maxLength: 200
       responses:
         "200":
           description: Liste der Plan-Änderungen (neueste zuerst)

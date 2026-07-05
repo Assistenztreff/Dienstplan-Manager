@@ -1479,10 +1479,13 @@ export const UpdateOperatorAccountPlanResponse = zod.object({
 export const listOperatorPlanChangesQueryLimitDefault = 50;
 export const listOperatorPlanChangesQueryLimitMax = 200;
 
+export const listOperatorPlanChangesQuerySearchMax = 200;
+
 
 
 export const ListOperatorPlanChangesQueryParams = zod.object({
-  "limit": zod.coerce.number().min(1).max(listOperatorPlanChangesQueryLimitMax).default(listOperatorPlanChangesQueryLimitDefault)
+  "limit": zod.coerce.number().min(1).max(listOperatorPlanChangesQueryLimitMax).default(listOperatorPlanChangesQueryLimitDefault),
+  "search": zod.coerce.string().max(listOperatorPlanChangesQuerySearchMax).optional().describe('Optionaler Suchbegriff. Filtert die Einträge nach Konto (Name oder E-Mail) oder nach dem Inhalt der Referenz\/Notiz (z. B. Belegnummer). Groß-\/Kleinschreibung wird ignoriert.\n')
 })
 
 export const ListOperatorPlanChangesResponseItem = zod.object({
