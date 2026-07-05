@@ -100,6 +100,29 @@ if (useManagedStack && !isWorkerProcess && !process.env.E2E_SKIP_DB_SETUP) {
       );
     }
   }
+
+  // Selbstheilungs-Nachweis (verify-test-db-cleanup): beweist VOR jedem E2E-Lauf,
+  // dass die `_test`-DB nach einem ABGEBROCHENEN Lauf wieder sauber startet
+  // (cleanup-test-accounts entfernt Zombie-Konten restlos, Seed-Admin bleibt).
+  // Er dient zusaetzlich als FK-Waechter und erkennt neue team-gebundene
+  // Tabellen ohne Cleanup-Zweig.
+  // Laeuft bewusst HIER (Config-Load, vor dem webServer-Start):
+  // er seedet/entfernt Konten in der `_test`-DB und darf nie parallel zu Specs
+  // laufen. Skip via `E2E_SKIP_CLEANUP_CHECK=1` fuer schnelle Wiederholungslaeufe
+  // (analog E2E_SKIP_SEPARATION_CHECK).
+  if (!process.env.E2E_SKIP_CLEANUP_CHECK) {
+    console.log("[e2e] Selbstheilungs-Check (verify-test-db-cleanup)...");
+    const cleanup = spawnSync(
+      "pnpm",
+      ["--filter", "@workspace/scripts", "run", "verify-test-db-cleanup"],
+      { stdio: "inherit", timeout: 600_000 },
+    );
+    if (cleanup.status !== 0 || cleanup.error != null) {
+      throw new Error(
+        "verify-test-db-cleanup fehlgeschlagen — die Test-DB-Selbstheilung ist beschaedigt oder der Check konnte nicht laufen (siehe Ausgabe oben). Kein E2E-Lauf gegen einen unklaren Zustand.",
+      );
+    }
+  }
 }
 
 // Damit Specs/Helper, die zur Laufzeit einen zweiten Admin seeden
