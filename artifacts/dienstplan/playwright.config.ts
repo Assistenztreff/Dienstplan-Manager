@@ -1,5 +1,14 @@
 import { defineConfig, devices } from "@playwright/test";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
+import path from "node:path";
 
 /**
  * E2E-Konfiguration für die Dienstplan-App.
@@ -52,6 +61,83 @@ if (useManagedStack && !databaseUrl) {
 }
 const testDatabaseUrl = databaseUrl ? deriveTestDbUrl(databaseUrl) : "";
 
+// --- Schema-Fingerprint zum Überspringen von setup-test-db bei unverändertem
+// Schema (Task #327/#377) ---------------------------------------------------
+// Idee: `setup-test-db` (Schema-Push + Seed, ~20s) muss nur laufen, wenn sich
+// seit dem letzten erfolgreichen Lauf am relevanten Zustand etwas geändert hat.
+// Wir hashen dafür die Drizzle-Schema-Dateien plus die Skripte, die die Test-DB
+// aufbauen. Passt der Hash zum Marker (gitignored unter node_modules/.cache),
+// wird die Provisionierung übersprungen. Sicherheit vor Geschwindigkeit: bei
+// jedem Zweifel (fehlender Marker, Lese-/Schreibfehler, geänderter Hash) wird
+// provisioniert. Marker wird ERST nach erfolgreichem setup-test-db geschrieben.
+
+// Repo-Wurzel von cwd aus suchen (playwright.config läuft ohne __dirname in
+// ESM; cwd ist der Artefakt-Ordner, aber wir laufen robust nach oben).
+function findRepoRoot(start: string): string {
+  let dir = start;
+  for (;;) {
+    if (existsSync(path.join(dir, "pnpm-workspace.yaml"))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) return start;
+    dir = parent;
+  }
+}
+
+// Deterministischer Hash über alle Eingaben, die den Test-DB-Zustand bestimmen:
+// Schema-Dateien (Struktur) + drizzle.config + die Setup/Seed-Skripte. Ändert
+// sich davon irgendetwas, ist der Marker ungültig und es wird neu provisioniert.
+// Der Test-DB-Name fließt mit ein, damit ein Wechsel der DATABASE_URL (andere
+// Ziel-DB) ebenfalls neu provisioniert.
+function computeSchemaFingerprint(repoRoot: string, testDbName: string): string {
+  const files: string[] = [];
+  const schemaDir = path.join(repoRoot, "lib/db/src/schema");
+  if (existsSync(schemaDir)) {
+    for (const entry of readdirSync(schemaDir).sort()) {
+      if (entry.endsWith(".ts")) files.push(path.join(schemaDir, entry));
+    }
+  }
+  for (const rel of [
+    "lib/db/drizzle.config.ts",
+    "scripts/src/setup-test-db.ts",
+  ]) {
+    const abs = path.join(repoRoot, rel);
+    if (existsSync(abs)) files.push(abs);
+  }
+  const hash = createHash("sha256");
+  hash.update(`db:${testDbName}\0`);
+  for (const file of files) {
+    hash.update(path.relative(repoRoot, file));
+    hash.update("\0");
+    hash.update(readFileSync(file));
+    hash.update("\0");
+  }
+  return hash.digest("hex");
+}
+
+const repoRoot = findRepoRoot(process.cwd());
+const testDbName = testDatabaseUrl
+  ? decodeURIComponent(new URL(testDatabaseUrl).pathname.replace(/^\//, ""))
+  : "";
+const schemaMarkerPath = path.join(
+  repoRoot,
+  "node_modules/.cache/dienstplan-e2e/test-db-schema.hash",
+);
+
+let schemaFingerprint = "";
+let schemaUnchanged = false;
+if (useManagedStack) {
+  try {
+    schemaFingerprint = computeSchemaFingerprint(repoRoot, testDbName);
+    schemaUnchanged =
+      existsSync(schemaMarkerPath) &&
+      readFileSync(schemaMarkerPath, "utf8").trim() === schemaFingerprint;
+  } catch {
+    // Im Zweifel provisionieren: leerer Fingerprint verhindert Marker-Treffer.
+    schemaFingerprint = "";
+    schemaUnchanged = false;
+  }
+}
+
 // Test-DB VOR jedem Lauf idempotent provisionieren — bewusst hier in der
 // Config statt im `test:e2e`-npm-Skript oder in einem globalSetup:
 //   - Einzel-Spec-Läufe via `pnpm exec playwright test <name>` umgehen das
@@ -67,16 +153,37 @@ const testDatabaseUrl = databaseUrl ? deriveTestDbUrl(databaseUrl) : "";
 // läufe ohne zwischenzeitliche Schema-Änderung.
 const isWorkerProcess = !!process.env.TEST_WORKER_INDEX;
 if (useManagedStack && !isWorkerProcess && !process.env.E2E_SKIP_DB_SETUP) {
-  console.log("[e2e] Test-Datenbank wird provisioniert (setup-test-db)...");
-  const setup = spawnSync(
-    "pnpm",
-    ["--filter", "@workspace/scripts", "run", "setup-test-db"],
-    { stdio: "inherit", timeout: 300_000 },
-  );
-  if (setup.status !== 0 || setup.error != null) {
-    throw new Error(
-      "setup-test-db fehlgeschlagen — Test-Datenbank konnte nicht provisioniert werden (siehe Ausgabe oben).",
+  if (schemaUnchanged) {
+    // Schema (+ Setup/Seed-Skripte) seit dem letzten erfolgreichen Lauf
+    // unverändert -> teure Provisionierung sicher überspringen.
+    console.log(
+      "[e2e] Schema unverändert (Marker-Treffer) — setup-test-db wird übersprungen. Erzwingen: node_modules/.cache/dienstplan-e2e löschen oder E2E ohne Marker laufen lassen.",
     );
+  } else {
+    console.log("[e2e] Test-Datenbank wird provisioniert (setup-test-db)...");
+    const setup = spawnSync(
+      "pnpm",
+      ["--filter", "@workspace/scripts", "run", "setup-test-db"],
+      { stdio: "inherit", timeout: 300_000 },
+    );
+    if (setup.status !== 0 || setup.error != null) {
+      throw new Error(
+        "setup-test-db fehlgeschlagen — Test-Datenbank konnte nicht provisioniert werden (siehe Ausgabe oben).",
+      );
+    }
+    // Marker ERST nach Erfolg schreiben. Schlägt das Schreiben fehl, läuft der
+    // nächste Lauf halt wieder voll durch (Sicherheit vor Geschwindigkeit).
+    if (schemaFingerprint) {
+      try {
+        mkdirSync(path.dirname(schemaMarkerPath), { recursive: true });
+        writeFileSync(schemaMarkerPath, `${schemaFingerprint}\n`);
+      } catch (err) {
+        console.warn(
+          "[e2e] Schema-Marker konnte nicht geschrieben werden — nächster Lauf provisioniert erneut.",
+          err,
+        );
+      }
+    }
   }
 
   // Regressionscheck Testkonten-Trennung: beweist VOR jedem E2E-Lauf, dass
