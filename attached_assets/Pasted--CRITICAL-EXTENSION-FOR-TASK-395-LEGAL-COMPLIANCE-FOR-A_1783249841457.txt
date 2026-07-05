@@ -1,0 +1,19 @@
+### CRITICAL EXTENSION FOR TASK #395: LEGAL COMPLIANCE FOR ABSENCES & HOLIDAY BALANCES
+
+Please incorporate the following strict legal specifications regarding Entgeltfortzahlung (Lohnfortzahlung) and Feiertagsausgleich into the rewrite of Task #395:
+
+1. Dynamic Vacation System Selection (UI Context):
+- As configured in the settings, the admin can toggle between "Referenzprinzip / 13-Wochen-Durchschnitt" and "Prozentualer Stunden-Faktor". The vacation engine must strictly evaluate deductions and credits based on the active selection.
+
+2. Sick Leave (Krankheit) Calculation & Planned Hours:
+- When an employee is registered as "Krank", the system must credit the exact number of hours that were originally scheduled for that shift in the roster (Lohnausfallprinzip). If a 24H shift was planned, 24 hours must be credited to the monthly working account.
+
+3. Surcharge Continued Payment (Zuschlagsfortzahlung for Urlaub/Krankheit):
+- If an absence (Urlaub or Krankheit) covers a shift that would have yielded contractual surcharges (e.g., Nachtzuschlag during a 24H shift, or Sonntags-/Feiertagszuschlag if configured in settings), the system must calculate and append these surcharges to the payroll evaluation for that absence period. 
+
+4. Public Holidays & Compensatory Rest Days (Feiertags-Ausgleichskonto):
+- Implement an automatic "Ersatzruhetag-Konto" (Compensatory Holiday Account) inside the employee's profile/Personalakte.
+- Logic for Working on a Public Holiday: If an assistant works actual hours on a public holiday, they receive their hours + the Feiertagszuschlag. Concurrently, the system must automatically credit +1 Day to their "Ersatzruhetag-Konto" (pursuant to § 11 Abs. 3 ArbZG).
+- Logic for Redeeming: Introduce a new absence/shift status type: "Freizeitausgleich (Feiertag)". When scheduled, it deducts 1 Day from the Ersatzruhetag-Konto without touching the standard Vacation (Urlaub) pool.
+
+Please execute Task #395 now with these architectural rules applied to the backend payroll calculators and frontend modals.
