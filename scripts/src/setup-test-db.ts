@@ -112,6 +112,12 @@ async function main(): Promise<void> {
   // ausschliesslich `e2e.*@dienstplan.test`-Konten, nie den Seed-Admin.
   run("pnpm --filter @workspace/scripts run cleanup-test-accounts");
 
+  // Selbstheilung (analog Konten-Cleanup): liegengebliebene Test-Zeilen in
+  // `platform_errors` (Dev-Boom + geseedete Retention-Zeilen) abgebrochener
+  // Laeufe VOR dem Lauf entfernen. Loescht ausschliesslich die Test-Kontexte
+  // in der `_test`-DB, nie echte Fehler-Eintraege.
+  run("pnpm --filter @workspace/scripts run cleanup-test-platform-errors");
+
   // Test-Admin auf Premium setzen (NUR Test-Infrastruktur, niemals die echte
   // Dev-DB). Hintergrund: Die serverseitige Durchsetzung der Free-Limits würde
   // sonst bestehende E2E-Specs brechen, die als Standard-Admin parallel viele

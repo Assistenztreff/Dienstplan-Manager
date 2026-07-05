@@ -2,12 +2,14 @@ import { execSync } from "node:child_process";
 
 /**
  * Playwright-globalTeardown: entfernt nach JEDEM E2E-Lauf alle uebrig
- * gebliebenen Test-Konten (`e2e.*@dienstplan.test`) aus der Test-DB.
+ * gebliebenen Test-Reste aus der Test-DB — sowohl Test-Konten
+ * (`e2e.*@dienstplan.test`) als auch liegengebliebene Test-Zeilen in
+ * `platform_errors` (Dev-Boom + geseedete Retention-Zeilen).
  *
- * Die Specs raeumen ihre Konten zwar selbst in afterAll auf — bei fehlenden
+ * Die Specs raeumen ihre Daten zwar selbst in afterAll auf — bei fehlenden
  * oder fehlgeschlagenen Cleanups faengt dieser Teardown die Reste ab. (Bei
- * hartem Abbruch/Ctrl-C laeuft auch der Teardown nicht; diesen Fall heilt
- * `setup-test-db` vor dem NAECHSTEN Lauf mit demselben Skript.)
+ * hartem Abbruch/Ctrl-C laeuft auch der Teardown nicht; diesen Fall heilen
+ * dieselben Skripte in `setup-test-db` vor dem NAECHSTEN Lauf.)
  *
  * Best effort: Ein Fehlschlag der Bereinigung darf das Testergebnis nicht
  * kippen.
@@ -25,15 +27,33 @@ export default function globalTeardown(): void {
     return;
   }
 
+  const cleanupEnv = { ...process.env, DATABASE_URL: testDatabaseUrl };
+
   try {
     execSync("pnpm --filter @workspace/scripts run cleanup-test-accounts", {
-      env: { ...process.env, DATABASE_URL: testDatabaseUrl },
+      env: cleanupEnv,
       stdio: "inherit",
       timeout: 120_000,
     });
   } catch (err) {
     console.error(
       "globalTeardown: Bereinigung der E2E-Test-Konten fehlgeschlagen (Testergebnis bleibt unberuehrt):",
+      err,
+    );
+  }
+
+  try {
+    execSync(
+      "pnpm --filter @workspace/scripts run cleanup-test-platform-errors",
+      {
+        env: cleanupEnv,
+        stdio: "inherit",
+        timeout: 120_000,
+      },
+    );
+  } catch (err) {
+    console.error(
+      "globalTeardown: Bereinigung der Test-platform_errors-Zeilen fehlgeschlagen (Testergebnis bleibt unberuehrt):",
       err,
     );
   }
