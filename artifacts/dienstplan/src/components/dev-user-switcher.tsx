@@ -45,7 +45,11 @@ function DevUserSwitcherInner() {
     try {
       await devSwitchUser(id);
       // Sauberer Neustart, damit alle teams-/rollengebundenen Queries neu laden.
-      window.location.reload();
+      // WICHTIG: auf die Startseite gehen statt den aktuellen (evtl. tiefen)
+      // Pfad neu zu laden. Sonst landet ein Wechsel auf eine Assistenzkraft auf
+      // einer nur fuer Admins definierten Route (z.B. /auswertungen,
+      // /assistenten, /operator-dashboard) → wouter zeigt die 404-Seite.
+      window.location.assign(import.meta.env.BASE_URL);
     } catch {
       setSwitching(false);
     }
