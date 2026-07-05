@@ -50,3 +50,4 @@
 - [Client-trusted audit actor fields](client-trusted-audit-actor-fields.md) — approve/confirm endpoints must derive the actor from req.session, never accept `confirmedBy`-style fields from the request body.
 - [Assistant Einstellungen access](assistant-einstellungen-access.md) — /einstellungen + nav reachable for all roles; admin-only sections gated behind isAdmin so assistants see only Profil + CalendarExportCard.
 - [Object storage ACL no finalize flow](object-storage-acl-no-finalize-flow.md) — upload URLs are signed before the object exists, so per-owner ACLs can't be stamped at upload time; reads fall back to "authenticated = allowed" when no ACL policy exists.
+- [becomeDienstleister blocked by guard](becomedienstleister-guard-blocked.md) — accountType-fixed 403 guard breaks the harness becomeDienstleister suite-wide; write specs as the privat admin using its Standard-Team (omit teamId → resolveWriteTeamId fallback).
