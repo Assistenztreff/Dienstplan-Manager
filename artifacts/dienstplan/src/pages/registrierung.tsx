@@ -17,11 +17,13 @@ export default function Registrierung() {
   const [password, setPassword] = useState("");
   const [accountType, setAccountType] = useState<"privat" | "dienstleister">("privat");
   const [error, setError] = useState("");
+  const [emailError, setEmailError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setEmailError("");
     if (password.length < 8) {
       setError("Passwort muss mindestens 8 Zeichen lang sein");
       return;
@@ -31,7 +33,14 @@ export default function Registrierung() {
       await register({ name: name.trim(), email: email.trim(), password, accountType });
       navigate("/");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Registrierung fehlgeschlagen");
+      const message = err instanceof Error ? err.message : "Registrierung fehlgeschlagen";
+      // Eine bereits vergebene E-Mail (409) direkt am E-Mail-Feld anzeigen —
+      // analog zum Anlege-/Bearbeiten-Pfad für Assistenten.
+      if (err instanceof Error && (err as { status?: number }).status === 409) {
+        setEmailError(message);
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -77,10 +86,19 @@ export default function Registrierung() {
                   autoComplete="email"
                   required
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setEmailError("");
+                  }}
                   placeholder="name@beispiel.de"
                   disabled={loading}
+                  aria-invalid={emailError ? true : undefined}
                 />
+                {emailError && (
+                  <p className="text-sm text-destructive" data-testid="registrierung-email-error">
+                    {emailError}
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="password">Passwort</Label>

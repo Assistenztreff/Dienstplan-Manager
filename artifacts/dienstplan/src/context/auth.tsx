@@ -165,7 +165,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     if (!r.ok) {
       const data = (await r.json().catch(() => ({}))) as { error?: string };
-      throw new Error(data.error ?? "Registrierung fehlgeschlagen");
+      const err = new Error(data.error ?? "Registrierung fehlgeschlagen") as Error & {
+        status?: number;
+      };
+      err.status = r.status;
+      throw err;
     }
     const user = (await r.json()) as AuthUser;
     setCurrentUser(user);
