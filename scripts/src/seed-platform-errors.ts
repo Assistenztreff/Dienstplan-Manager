@@ -1,4 +1,5 @@
 import pg from "pg";
+import { RETENTION_SEED_CONTEXT } from "@workspace/test-fixtures";
 
 /**
  * Seedet oder entfernt kuenstliche Eintraege in `platform_errors` — NUR fuer
@@ -78,9 +79,9 @@ async function main(): Promise<void> {
     // die Herkunft fuer manuelle Inspektion.
     const res = await client.query(
       `INSERT INTO platform_errors (level, message, context)
-       SELECT 'warning', $1 || ' #' || g, 'e2e/retention-seed'
+       SELECT 'warning', $1 || ' #' || g, $3
        FROM generate_series(1, $2::int) AS g`,
-      [prefix, count],
+      [prefix, count, RETENTION_SEED_CONTEXT],
     );
     console.log(
       `Seed: ${res.rowCount ?? 0} platform_errors-Zeilen mit Praefix "${prefix}" angelegt.`,

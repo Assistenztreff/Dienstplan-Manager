@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { HealthCheckResponse } from "@workspace/api-zod";
+import { DEV_BOOM_ROUTE_PATH } from "@workspace/test-fixtures";
 
 const router: IRouter = Router();
 
@@ -17,7 +18,7 @@ if (process.env.NODE_ENV !== "production") {
   // erzeugt ein eindeutiges Label gezielt einen EIGENEN (einmaligen)
   // Eintrag — noetig fuer E2E-Tests des Wiederholungs-Zaehlers (N×),
   // die einen nur einmal aufgetretenen Fehler daneben brauchen.
-  router.get("/dev/boom", async (req): Promise<void> => {
+  router.get(DEV_BOOM_ROUTE_PATH, async (req): Promise<void> => {
     const label = typeof req.query.label === "string" ? req.query.label.trim() : "";
     const suffix = label ? ` [${label}]` : "";
     throw new Error(

@@ -175,6 +175,9 @@ importers:
       '@workspace/entitlements':
         specifier: workspace:*
         version: link:../../lib/entitlements
+      '@workspace/test-fixtures':
+        specifier: workspace:*
+        version: link:../../lib/test-fixtures
       connect-pg-simple:
         specifier: ^10.0.0
         version: 10.0.0
@@ -369,6 +372,9 @@ importers:
       '@workspace/entitlements':
         specifier: workspace:*
         version: link:../../lib/entitlements
+      '@workspace/test-fixtures':
+        specifier: workspace:*
+        version: link:../../lib/test-fixtures
       class-variance-authority:
         specifier: 'catalog:'
         version: 0.7.1
@@ -683,8 +689,17 @@ importers:
         specifier: ^4.1.8
         version: 4.1.8(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4)
 
+  lib/test-fixtures:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+
   scripts:
     dependencies:
+      '@workspace/test-fixtures':
+        specifier: workspace:*
+        version: link:../lib/test-fixtures
       pg:
         specifier: ^8.20.0
         version: 8.20.0

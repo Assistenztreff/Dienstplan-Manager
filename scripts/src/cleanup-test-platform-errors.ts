@@ -1,4 +1,5 @@
 import pg from "pg";
+import { TEST_ERROR_CONTEXTS } from "@workspace/test-fixtures";
 
 /**
  * Entfernt ALLE liegengebliebenen Test-Zeilen aus `platform_errors` in EINEM
@@ -32,11 +33,10 @@ import pg from "pg";
  * Idempotent: keine Treffer = Erfolg (Exit 0).
  */
 
-// Test-Kontexte, unter denen E2E-/Seed-Zeilen in platform_errors landen.
-// Muessen synchron bleiben mit:
-//   - artifacts/api-server/src/routes/health.ts (Dev-Boom-Route)
-//   - scripts/src/seed-platform-errors.ts (Retention-Seed)
-const TEST_ERROR_CONTEXTS = ["GET /api/dev/boom", "e2e/retention-seed"] as const;
+// Die Test-Kontexte, unter denen E2E-/Seed-Zeilen in platform_errors landen,
+// stammen aus der geteilten Konstante `@workspace/test-fixtures`. Sie werden
+// dort auch von der Dev-Boom-Route (health.ts) und dem Retention-Seed-Skript
+// referenziert — ein Auseinanderlaufen ist damit ausgeschlossen.
 
 async function main(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;
@@ -65,7 +65,7 @@ async function main(): Promise<void> {
   try {
     const res = await client.query(
       "DELETE FROM platform_errors WHERE context = ANY($1::text[])",
-      [TEST_ERROR_CONTEXTS],
+      [[...TEST_ERROR_CONTEXTS]],
     );
     const deleted = res.rowCount ?? 0;
     if (deleted === 0) {

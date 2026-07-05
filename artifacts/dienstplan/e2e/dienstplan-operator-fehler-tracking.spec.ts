@@ -11,6 +11,10 @@ import {
   deleteAccountByEmail,
   type FreeAccount,
 } from "./helpers/teams";
+import {
+  DEV_BOOM_ROUTE_PATH,
+  DEV_BOOM_ERROR_CONTEXT,
+} from "@workspace/test-fixtures";
 
 /**
  * E2E-/Regressionstest: Echtes Fehler-Tracking im Operator-Dashboard (Task #337).
@@ -42,6 +46,12 @@ const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
  * vermeintliche Duplikate zaehlen wuerden.
  */
 const BOOM_MESSAGE = "Dev-Testfehler (absichtlich ausgeloest ueber /dev/boom)";
+
+// Voller URL-Pfad der Dev-Boom-Route bzw. der daraus abgeleitete
+// platform_errors-Kontext — beide aus der geteilten Konstante, damit Spec,
+// Route und Cleanup nie auseinanderlaufen.
+const BOOM_URL = `/api${DEV_BOOM_ROUTE_PATH}`;
+const BOOM_CONTEXT = DEV_BOOM_ERROR_CONTEXT;
 
 interface OperatorErrorRow {
   id: number;
@@ -165,7 +175,7 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
 
   test("API: unbehandelter Serverfehler wird persistiert und geliefert", async () => {
     // Absichtlich einen 500er auslösen (Dev-Route, wirft synchron).
-    const boomRes = await superCtx.get("/api/dev/boom");
+    const boomRes = await superCtx.get(BOOM_URL);
     expect(boomRes.status(), "Dev-Boom-Route muss 500 liefern").toBe(500);
     const body = (await boomRes.json()) as { error: string };
     expect(body.error, "Kein Stacktrace/Details im Response-Body").toBe(
@@ -191,7 +201,7 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
     ).toBeLessThanOrEqual(list.retentionLimit);
 
     const entry = errors.find(
-      (e) => e.message === BOOM_MESSAGE && e.context === "GET /api/dev/boom",
+      (e) => e.message === BOOM_MESSAGE && e.context === BOOM_CONTEXT,
     );
     expect(entry, "Ausgelöster Fehler fehlt in /api/operator/errors").toBeTruthy();
     expect(entry!.level).toBe("error");
@@ -223,7 +233,7 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
 
     // Denselben Fehler zweimal erneut auslösen …
     for (let i = 0; i < 2; i++) {
-      const res = await superCtx.get("/api/dev/boom");
+      const res = await superCtx.get(BOOM_URL);
       expect(res.status()).toBe(500);
     }
 
@@ -232,7 +242,7 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
     const afterRes = await superCtx.get("/api/operator/errors");
     const errors = ((await afterRes.json()) as OperatorErrorList).errors;
     const matching = errors.filter(
-      (e) => e.message === BOOM_MESSAGE && e.context === "GET /api/dev/boom",
+      (e) => e.message === BOOM_MESSAGE && e.context === BOOM_CONTEXT,
     );
     expect(matching.length, "Wiederholungen dürfen KEINE neuen Zeilen anlegen").toBe(1);
     expect(matching[0].id, "Gebündelt in denselben Eintrag").toBe(recordedErrorId);
@@ -255,7 +265,7 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
     expect(((await resolveRes.json()) as OperatorErrorRow).resolved).toBe(true);
 
     // … Fehler tritt erneut auf …
-    const boomRes = await superCtx.get("/api/dev/boom");
+    const boomRes = await superCtx.get(BOOM_URL);
     expect(boomRes.status()).toBe(500);
 
     // … derselbe Eintrag ist wieder offen.
@@ -338,7 +348,7 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
     const row = page.getByTestId(`row-operator-error-${recordedErrorId}`);
     await expect(row).toBeVisible();
     await expect(row).toContainText("Dev-Testfehler");
-    await expect(row).toContainText("GET /api/dev/boom");
+    await expect(row).toContainText(BOOM_CONTEXT);
     await expect(row).toContainText("Fehler");
 
     // … und die Lexware-Karte ist ehrlich als Demo-Daten gekennzeichnet.
@@ -377,8 +387,8 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
     // Zwei offene Einträge erzeugen. WICHTIG: seit der Bündelung (Task #341)
     // landen identische Booms in EINER Zeile — für "mehrere offene Einträge"
     // braucht der zweite Boom eine eigene Meldung (Label ⇒ eigene Zeile).
-    await superCtx.get("/api/dev/boom");
-    await superCtx.get(`/api/dev/boom?label=resolveall-${stamp}`);
+    await superCtx.get(BOOM_URL);
+    await superCtx.get(`${BOOM_URL}?label=resolveall-${stamp}`);
 
     const beforeRes = await superCtx.get("/api/operator/errors");
     const before = ((await beforeRes.json()) as OperatorErrorList).errors;
@@ -424,7 +434,7 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
 
   test("UI: Button „Alle abhaken“ mit Bestätigung räumt die Liste auf", async ({ page }) => {
     // Frischen offenen Eintrag erzeugen, damit der Button sichtbar ist.
-    await superCtx.get("/api/dev/boom");
+    await superCtx.get(BOOM_URL);
 
     const loginRes = await page.request.post("/api/auth/login", {
       data: { email: superEmail, password: superPassword },
@@ -470,14 +480,14 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
     // 1) Gebündelten Eintrag erneut auslösen: nach dem Sammel-Abhaken des
     //    vorigen Tests öffnet ihn das Wiederauftreten wieder (Filter „Offene")
     //    — sein Zähler steht durch die früheren Tests längst über 1.
-    const boomRes = await superCtx.get("/api/dev/boom");
+    const boomRes = await superCtx.get(BOOM_URL);
     expect(boomRes.status()).toBe(500);
 
     // 2) Einmal-Fehler mit lauf-eindeutigem Label erzeugen: eigene Meldung
     //    => eigene Zeile mit count === 1 (auch über Läufe hinweg eindeutig,
     //    da platform_errors in der Test-DB persistiert).
     const label = `einmalig-${stamp}`;
-    const onceRes = await superCtx.get(`/api/dev/boom?label=${label}`);
+    const onceRes = await superCtx.get(`${BOOM_URL}?label=${label}`);
     expect(onceRes.status()).toBe(500);
 
     // Beide Einträge über die API identifizieren (IDs + erwarteter Zähler).
