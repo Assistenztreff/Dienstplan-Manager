@@ -98,6 +98,9 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       .where(
         and(
           inArray(shiftsTable.teamId, teamScope),
+          // Nur verbindlich bestätigte (FIX) Schichten zählen; Entwürfe
+          // (VORLAEUFIG) und Angebote (ANGEBOTEN) verfälschen den KPI nicht.
+          eq(shiftsTable.planningStatus, "FIX"),
           sql`${shiftsTable.startTime} >= ${todayStart}`,
           sql`${shiftsTable.startTime} < ${todayEnd}`,
         )
@@ -290,6 +293,8 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     .where(
       and(
         eq(shiftsTable.userId, userId),
+        // Nur verbindlich bestätigte (FIX) Schichten zählen (siehe Admin-Branch).
+        eq(shiftsTable.planningStatus, "FIX"),
         sql`${shiftsTable.startTime} >= ${todayStart}`,
         sql`${shiftsTable.startTime} < ${todayEnd}`,
       )
