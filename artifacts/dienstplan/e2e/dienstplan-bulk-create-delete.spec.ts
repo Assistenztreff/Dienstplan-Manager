@@ -112,12 +112,7 @@ async function openDesktopCalendar(page: Page): Promise<Locator> {
   return desktop;
 }
 
-// TODO(#257-followup): Haengt im Gesamtlauf reproduzierbar (Timeout auch bei
-// 60s), vermutlich Daten-/Terminkollision mit anderen Specs derselben Suite.
-// Braucht eine eigene Isolations-Analyse; bis dahin uebersprungen, damit die
-// Suite als Regressionsnetz laeuft. Der zweite Test dieses Specs deckt den
-// Auswahl-Modus weiterhin ab.
-test.skip("Massen-Eintragen und Massen-Löschen über mehrere Tage funktioniert", async ({ page }) => {
+test("Massen-Eintragen und Massen-Löschen über mehrere Tage funktioniert", async ({ page }) => {
   // Mehrstufiger UI-Flow (Massen-Anlegen + Massen-Loeschen) — unter Volllast
   // der Gesamtsuite reichen die 30s-Defaults nicht zuverlaessig.
   test.setTimeout(60000);
@@ -128,10 +123,13 @@ test.skip("Massen-Eintragen und Massen-Löschen über mehrere Tage funktioniert"
   try {
     await openDesktopCalendar(page);
 
-    // Weit in die Zukunft navigieren, um Kollisionen mit Bestandsdaten zu
-    // vermeiden. (Vor dem Auswahl-Modus — Monatswechsel würde sie ohnehin
-    // leeren.)
-    for (let i = 0; i < 8; i++) {
+    // Spec-eigener Zielmonat (+11, innerhalb des Premium-Vorausplanungs-
+    // Fensters von 12 Monaten): Da der „Alle Assistenten"-Massen-Löschen alle
+    // Schichten der gewählten Tage zählt, muss dieser Monat kollisionsfrei zu
+    // anderen Specs sein. +8 teilt sich shift-dialog (dort Tag 16), +4/5/10
+    // sind ebenfalls belegt — +11 ist exklusiv für diesen Ablauf. (Vor dem
+    // Auswahl-Modus — Monatswechsel würde die Auswahl ohnehin leeren.)
+    for (let i = 0; i < 11; i++) {
       await page.getByTestId("next-month").click();
     }
     const { year, month } = parseMonthLabel(
