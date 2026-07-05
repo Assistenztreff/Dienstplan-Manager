@@ -31,7 +31,7 @@ describe("resolveShiftMetrics — Urlaub/Krank als Sonderfall", () => {
       {
         type: "vacation",
         startTime: utc(2026, 0, 5, 0),
-        endTime: utc(2026, 0, 6, 0),
+        endTime: utc(2026, 0, 5, 23, 59),
         plannedHours: 7.6,
         valuationPercent: 100,
       },
@@ -50,7 +50,7 @@ describe("resolveShiftMetrics — Urlaub/Krank als Sonderfall", () => {
       {
         type: "sick",
         startTime: utc(2026, 0, 5, 0),
-        endTime: utc(2026, 0, 6, 0),
+        endTime: utc(2026, 0, 5, 23, 59),
         plannedHours: 8,
         valuationPercent: 50,
       },
@@ -69,7 +69,7 @@ describe("resolveShiftMetrics — Urlaub/Krank als Sonderfall", () => {
       {
         type: "vacation",
         startTime: utc(2026, 0, 11, 0),
-        endTime: utc(2026, 0, 12, 0),
+        endTime: utc(2026, 0, 11, 23, 59),
         plannedHours: 8,
         valuationPercent: 100,
       },

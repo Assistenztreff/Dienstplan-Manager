@@ -108,16 +108,47 @@ describe("computeHoursBalanceRow — Zuschlagsberechnung (Prozentsätze)", () =>
     expect(result.holidaySurchargeHours).toBe(9);
   });
 
-  it("summiert Roh-Zuschlagsstunden über mehrere Schichten und ignoriert Urlaub/Krank dabei", () => {
+  it("summiert Roh-Zuschlagsstunden aus Arbeit und rechnet Abwesenheits-Zuschläge (Fortzahlung) hinzu", () => {
+    // Ein normaler Ganztags-Urlaub trägt 0 Zuschlagsstunden (resolveShiftMetrics
+    // speichert sie so); ein 24h-Dienst-Urlaub trägt die fortzuzahlenden Nacht-/
+    // Sonntagsstunden und wird der Auswertung zugeschlagen (Punkt 3).
     const shifts: BalanceShift[] = [
       { type: "active", startTime: local(2026, 6, 1, 0), endTime: local(2026, 6, 1, 8), nightHours: 2, sundayHours: 1, holidayHours: 0 },
       { type: "night", startTime: local(2026, 6, 2, 0), endTime: local(2026, 6, 2, 8), nightHours: 3, sundayHours: 0, holidayHours: 4 },
-      { type: "vacation", startTime: local(2026, 6, 3, 0), endTime: local(2026, 6, 4, 0), nightHours: 99, sundayHours: 99, holidayHours: 99, valuedHours: 8 },
+      { type: "vacation", startTime: local(2026, 6, 3, 0), endTime: local(2026, 6, 4, 0), nightHours: 0, sundayHours: 0, holidayHours: 0, valuedHours: 8 },
+      { type: "sick", startTime: local(2026, 6, 5, 9), endTime: local(2026, 6, 6, 9), nightHours: 7, sundayHours: 0, holidayHours: 0, valuedHours: 24 },
     ];
     const result = row({ shifts });
-    expect(result.nightHours).toBe(5);
+    // Arbeit: Nacht 2+3=5, Sonntag 1, Feiertag 4. Abwesenheit (24h-Krank): +7 Nacht.
+    expect(result.nightHours).toBe(12);
     expect(result.sundayHours).toBe(1);
     expect(result.holidayHours).toBe(4);
+    // Zuschlagsstunden: Nacht 25% von 12 = 3; Sonntag 50% von 1 = 0.5; Feiertag 100% von 4 = 4
+    expect(result.nightSurchargeHours).toBe(3);
+    expect(result.sundaySurchargeHours).toBe(0.5);
+    expect(result.holidaySurchargeHours).toBe(4);
+  });
+
+  it("zahlt Zuschläge einer 24h-Dienst-Abwesenheit fort (Geldwert), auch ohne Ist-Zeit", () => {
+    // 24h-Urlaubsdienst mit 7 Nacht- und 9 Sonntagsstunden, Stundenlohn 20.
+    // Keine erfassten Ist-Zeiten -> Grundvergütung 0, nur Zuschlagsfortzahlung.
+    const result = computeHoursBalanceRow({
+      userId: 1,
+      userName: "Anna",
+      shifts: [
+        { type: "vacation", startTime: local(2026, 6, 3, 9), endTime: local(2026, 6, 4, 9), nightHours: 7, sundayHours: 9, holidayHours: 0, valuedHours: 24 },
+      ],
+      timeEntries: [],
+      allowance: STD_ALLOWANCE,
+      contract: null,
+      hourlyWage: 20,
+    });
+    // Nacht 25% von 7 = 1.75 -> 1.75*20 = 35; Sonntag 50% von 9 = 4.5 -> 4.5*20 = 90
+    expect(result.basePay).toBe(0);
+    expect(result.nightSurchargePay).toBe(35);
+    expect(result.sundaySurchargePay).toBe(90);
+    expect(result.holidaySurchargePay).toBe(0);
+    expect(result.totalPay).toBe(125);
   });
 
   it("behandelt fehlende (null/undefined) Roh-Stunden als 0", () => {

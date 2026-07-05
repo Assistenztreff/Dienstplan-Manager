@@ -204,6 +204,36 @@ export function computeHoursBalanceRow(params: {
     );
   }
 
+  // Zuschlagsfortzahlung bei Abwesenheit (Punkt 3): Deckt eine geplante Urlaubs-/
+  // Krank-Schicht Zuschlags-relevante Stunden ab (z. B. ein 24h-Dienst mit
+  // Nacht-/Feiertagsanteil), werden diese Zuschläge fortgezahlt — plan-basiert
+  // und unabhängig von der Abrechnungsart, da für die Abwesenheit keine Ist-Zeit
+  // existiert. Die Roh-Zuschlagsstunden liegen an der Abwesenheits-Schicht
+  // gespeichert (resolveShiftMetrics erkennt 24h-Dienste).
+  const absenceShifts = shifts.filter((s) => !isWorkShift(s));
+  const absenceNightHours = absenceShifts.reduce((a, s) => a + (s.nightHours ?? 0), 0);
+  const absenceSundayHours = absenceShifts.reduce((a, s) => a + (s.sundayHours ?? 0), 0);
+  const absenceHolidayHours = absenceShifts.reduce((a, s) => a + (s.holidayHours ?? 0), 0);
+  const absenceNightSurchargeHours = absenceShifts.reduce(
+    (a, s) => a + ((s.nightHours ?? 0) * percentsFor(s).nightPercent) / 100,
+    0
+  );
+  const absenceSundaySurchargeHours = absenceShifts.reduce(
+    (a, s) => a + ((s.sundayHours ?? 0) * percentsFor(s).sundayPercent) / 100,
+    0
+  );
+  const absenceHolidaySurchargeHours = absenceShifts.reduce(
+    (a, s) => a + ((s.holidayHours ?? 0) * percentsFor(s).holidayPercent) / 100,
+    0
+  );
+
+  nightHours += absenceNightHours;
+  sundayHours += absenceSundayHours;
+  holidayHours += absenceHolidayHours;
+  nightSurchargeHours += absenceNightSurchargeHours;
+  sundaySurchargeHours += absenceSundaySurchargeHours;
+  holidaySurchargeHours += absenceHolidaySurchargeHours;
+
   const vacationShifts = shifts.filter((s) => s.type === "vacation");
   const vacationFulfilledHours = vacationShifts.reduce((acc, s) => acc + (s.valuedHours ?? 0), 0);
   const vacationDaysTaken = vacationShifts.length;
@@ -257,9 +287,11 @@ export function computeHoursBalanceRow(params: {
       istHolidaySurcharge += ((e.holidayHours ?? 0) * p.holidayPercent) / 100;
     }
     basePay = round2(base);
-    nightSurchargePay = round2(istNightSurcharge * wage);
-    sundaySurchargePay = round2(istSundaySurcharge * wage);
-    holidaySurchargePay = round2(istHolidaySurcharge * wage);
+    // Zuschlagsfortzahlung (Punkt 3): Abwesenheits-Zuschläge (plan-basiert)
+    // kommen zu den IST-Zuschlägen der Arbeitsschichten hinzu.
+    nightSurchargePay = round2((istNightSurcharge + absenceNightSurchargeHours) * wage);
+    sundaySurchargePay = round2((istSundaySurcharge + absenceSundaySurchargeHours) * wage);
+    holidaySurchargePay = round2((istHolidaySurcharge + absenceHolidaySurchargeHours) * wage);
     totalPay = round2(basePay + nightSurchargePay + sundaySurchargePay + holidaySurchargePay);
   }
 

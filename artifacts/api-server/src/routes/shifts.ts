@@ -96,10 +96,13 @@ async function dailyTargetHours(userId: number, date: Date): Promise<number> {
   return contract ? Math.round((contract.weeklyHours / 5) * 100) / 100 : 8;
 }
 
-// Bucht die Soll-Stunden des Tages als bestätigte Zeiterfassung (Lohnfortzahlung,
-// keine Zuschläge), da Abwesenheiten kein Arbeits-Schichtmodell sind.
+// Bucht die geplanten Stunden der Abwesenheit als bestätigte Zeiterfassung
+// (Lohnausfallprinzip): ein 24h-Dienst schreibt 24h gut, ein normaler
+// Abwesenheitstag die vertraglichen Tages-Soll-Stunden. Keine Zuschläge hier,
+// da Abwesenheiten kein Arbeits-Schichtmodell sind.
 async function bookAbsenceTimeTracking(shift: AbsenceShift): Promise<void> {
-  const dailyHours = await dailyTargetHours(shift.userId, new Date(shift.startTime));
+  const target = await dailyTargetHours(shift.userId, new Date(shift.startTime));
+  const dailyHours = vacationHoursForShift(shift.startTime, shift.endTime, target);
   await db.insert(timeTrackingTable).values({
     userId: shift.userId,
     teamId: shift.teamId,
@@ -114,7 +117,8 @@ async function bookAbsenceTimeTracking(shift: AbsenceShift): Promise<void> {
 // Hält die gebuchte Zeiterfassung einer Abwesenheit synchron, wenn sich Datum,
 // Zeiten oder der zugrundeliegende Vertrag geändert haben.
 async function syncAbsenceTimeTracking(shift: AbsenceShift): Promise<void> {
-  const dailyHours = await dailyTargetHours(shift.userId, new Date(shift.startTime));
+  const target = await dailyTargetHours(shift.userId, new Date(shift.startTime));
+  const dailyHours = vacationHoursForShift(shift.startTime, shift.endTime, target);
   await db
     .update(timeTrackingTable)
     .set({ actualHours: dailyHours, actualStart: shift.startTime, actualEnd: shift.endTime })
@@ -286,9 +290,15 @@ async function storeShiftMetrics(shift: {
   endTime: Date;
 }): Promise<void> {
   const absence = isAbsenceType(shift.type);
-  // Bei Abwesenheit zählen die geplanten Tagesstunden, sonst die Modell-Wertung.
+  // Bei Abwesenheit zählen die geplanten Schichtstunden (Lohnausfallprinzip):
+  // 24h-Dienst → 24h, normaler Tag → vertragliche Tages-Soll-Stunden. Bei
+  // Arbeitsschichten übernimmt computeShiftMetrics die Wertung.
   const plannedHours = absence
-    ? await dailyTargetHours(shift.userId, new Date(shift.startTime))
+    ? vacationHoursForShift(
+        shift.startTime,
+        shift.endTime,
+        await dailyTargetHours(shift.userId, new Date(shift.startTime))
+      )
     : 0;
   const valuationPercent = absence
     ? 100

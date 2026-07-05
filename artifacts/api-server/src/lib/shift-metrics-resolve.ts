@@ -45,6 +45,30 @@ export function resolveShiftMetrics(
   state?: GermanState | null
 ): ShiftMetrics {
   if (isAbsenceType(input.type)) {
+    // Zuschlagsfortzahlung (Lohnausfallprinzip): Deckt die Abwesenheit einen
+    // geplanten 24h-Dienst ab (identische Start-/Enduhrzeit über die
+    // Tagesgrenze, ≥23h), so werden die Nacht-/Sonntags-/Feiertagsstunden aus
+    // dem Zeitfenster berechnet und fortgezahlt. Ein normaler ganztägiger
+    // Abwesenheitstag (00:00–23:59) löst KEINE Zuschläge aus, sonst würde jede
+    // Nacht/jeder Sonntag fälschlich mitgezählt.
+    const start = new Date(input.startTime);
+    const end = new Date(input.endTime);
+    const durationH = (end.getTime() - start.getTime()) / 3_600_000;
+    const sameClock =
+      start.getHours() === end.getHours() && start.getMinutes() === end.getMinutes();
+    if (sameClock && durationH >= 23) {
+      const m = computeShiftMetrics(
+        { startTime: start, endTime: end, isAbsence: false, valuationPercent: 100 },
+        window,
+        state
+      );
+      return {
+        valuedHours: input.plannedHours,
+        nightHours: m.nightHours,
+        sundayHours: m.sundayHours,
+        holidayHours: m.holidayHours,
+      };
+    }
     return {
       valuedHours: input.plannedHours,
       nightHours: 0,
