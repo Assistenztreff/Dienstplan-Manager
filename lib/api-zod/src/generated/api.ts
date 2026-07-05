@@ -1481,11 +1481,17 @@ export const listOperatorPlanChangesQueryLimitMax = 200;
 
 export const listOperatorPlanChangesQuerySearchMax = 200;
 
+export const listOperatorPlanChangesQueryFromMax = 40;
+
+export const listOperatorPlanChangesQueryToMax = 40;
+
 
 
 export const ListOperatorPlanChangesQueryParams = zod.object({
   "limit": zod.coerce.number().min(1).max(listOperatorPlanChangesQueryLimitMax).default(listOperatorPlanChangesQueryLimitDefault),
-  "search": zod.coerce.string().max(listOperatorPlanChangesQuerySearchMax).optional().describe('Optionaler Suchbegriff. Filtert die Einträge nach Konto (Name oder E-Mail) oder nach dem Inhalt der Referenz\/Notiz (z. B. Belegnummer). Groß-\/Kleinschreibung wird ignoriert.\n')
+  "search": zod.coerce.string().max(listOperatorPlanChangesQuerySearchMax).optional().describe('Optionaler Suchbegriff. Filtert die Einträge nach Konto (Name oder E-Mail) oder nach dem Inhalt der Referenz\/Notiz (z. B. Belegnummer). Groß-\/Kleinschreibung wird ignoriert.\n'),
+  "from": zod.coerce.string().max(listOperatorPlanChangesQueryFromMax).optional().describe('Optionaler Zeitraum-Anfang als ISO-8601-Zeitstempel. Es werden nur Änderungen ab diesem Zeitpunkt (einschließlich) zurückgegeben. Kombinierbar mit search und to.\n'),
+  "to": zod.coerce.string().max(listOperatorPlanChangesQueryToMax).optional().describe('Optionales Zeitraum-Ende als ISO-8601-Zeitstempel. Es werden nur Änderungen bis zu diesem Zeitpunkt (einschließlich) zurückgegeben. Kombinierbar mit search und from.\n')
 })
 
 export const ListOperatorPlanChangesResponseItem = zod.object({

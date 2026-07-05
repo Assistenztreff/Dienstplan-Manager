@@ -8,7 +8,7 @@
 
 import { Router } from "express";
 import { db, usersTable, planChangesTable, platformErrorsTable } from "@workspace/db";
-import { eq, sql, asc, desc, or, ilike } from "drizzle-orm";
+import { eq, sql, asc, desc, or, and, gte, lte, ilike } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
   UpdateOperatorAccountPlanParams,
@@ -152,6 +152,28 @@ router.get(
           )
         : undefined;
 
+    // Optionaler Zeitraum-Filter (von/bis) über den Zeitstempel — jeweils
+    // einschließlich. Kombinierbar mit der Textsuche; and() ignoriert
+    // undefined-Bedingungen, sodass fehlende Grenzen einfach entfallen.
+    const from = queryResult.data.from?.trim();
+    const to = queryResult.data.to?.trim();
+    const fromDate = from ? new Date(from) : undefined;
+    const toDate = to ? new Date(to) : undefined;
+    if (
+      (fromDate && Number.isNaN(fromDate.getTime())) ||
+      (toDate && Number.isNaN(toDate.getTime()))
+    ) {
+      res.status(400).json({ error: "Ungültiges Datum im Zeitraum-Filter" });
+      return;
+    }
+    const fromFilter = fromDate
+      ? gte(planChangesTable.createdAt, fromDate)
+      : undefined;
+    const toFilter = toDate
+      ? lte(planChangesTable.createdAt, toDate)
+      : undefined;
+    const whereFilter = and(searchFilter, fromFilter, toFilter);
+
     const changes = await db
       .select({
         id: planChangesTable.id,
@@ -167,7 +189,7 @@ router.get(
       .from(planChangesTable)
       .innerJoin(usersTable, eq(planChangesTable.accountId, usersTable.id))
       .innerJoin(changedByUser, eq(planChangesTable.changedBy, changedByUser.id))
-      .where(searchFilter)
+      .where(whereFilter)
       .orderBy(desc(planChangesTable.createdAt), desc(planChangesTable.id))
       .limit(limit);
 

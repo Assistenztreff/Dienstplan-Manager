@@ -86,6 +86,17 @@ async function main(): Promise<void> {
     }
   };
 
+  // pg_trgm-Extension in der Test-DB anlegen, BEVOR gepusht wird: der
+  // Trigram-GIN-Index auf plan_changes.note braucht die Operator-Klasse
+  // gin_trgm_ops, sonst schlägt CREATE INDEX im Push fehl.
+  const ensureTrgm = async (): Promise<void> => {
+    const c = new pg.Client({ connectionString: testUrl });
+    await c.connect();
+    await c.query("CREATE EXTENSION IF NOT EXISTS pg_trgm");
+    await c.end();
+  };
+
+  await ensureTrgm();
   try {
     pushSchema();
   } catch {
@@ -101,6 +112,7 @@ async function main(): Promise<void> {
     await rebuild.query(`CREATE DATABASE "${testDbName}"`);
     await rebuild.end();
     console.log(`Test-Datenbank "${testDbName}" frisch angelegt.`);
+    await ensureTrgm();
     pushSchema();
   }
   run("pnpm --filter @workspace/scripts run setup-admin");

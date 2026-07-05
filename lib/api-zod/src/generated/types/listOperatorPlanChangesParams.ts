@@ -18,4 +18,16 @@ limit?: number;
  * @maxLength 200
  */
 search?: string;
+/**
+ * Optionaler Zeitraum-Anfang als ISO-8601-Zeitstempel. Es werden nur Änderungen ab diesem Zeitpunkt (einschließlich) zurückgegeben. Kombinierbar mit search und to.
+
+ * @maxLength 40
+ */
+from?: string;
+/**
+ * Optionales Zeitraum-Ende als ISO-8601-Zeitstempel. Es werden nur Änderungen bis zu diesem Zeitpunkt (einschließlich) zurückgegeben. Kombinierbar mit search und from.
+
+ * @maxLength 40
+ */
+to?: string;
 };

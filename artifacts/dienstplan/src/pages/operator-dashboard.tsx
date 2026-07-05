@@ -34,7 +34,7 @@
 // Zahlung bestaetigt ist (kein Stripe / keine automatische Verlaengerung).
 // ---------------------------------------------------------------------------
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useListOperatorAccounts,
   useUpdateOperatorAccountPlan,
@@ -103,10 +103,23 @@ export default function OperatorDashboard() {
     return () => window.clearTimeout(handle);
   }, [planSearchInput]);
 
+  // Zeitraum-Filter (von/bis) im Plan-Änderungsprotokoll. Die Datums-Eingaben
+  // liefern YYYY-MM-DD; daraus werden ISO-Zeitstempel für den Tagesbeginn (von)
+  // bzw. das Tagesende (bis, einschließlich) gebaut, damit ein ganzer Tag
+  // vollständig im Zeitraum liegt.
+  const [planFrom, setPlanFrom] = useState("");
+  const [planTo, setPlanTo] = useState("");
+  const planChangesParams = useMemo(() => {
+    const params: { search?: string; from?: string; to?: string } = {};
+    if (planSearch) params.search = planSearch;
+    if (planFrom) params.from = `${planFrom}T00:00:00.000Z`;
+    if (planTo) params.to = `${planTo}T23:59:59.999Z`;
+    return Object.keys(params).length > 0 ? params : undefined;
+  }, [planSearch, planFrom, planTo]);
+  const hasPlanFilter = Boolean(planSearch || planFrom || planTo);
+
   const accountsQuery = useListOperatorAccounts();
-  const planChangesQuery = useListOperatorPlanChanges(
-    planSearch ? { search: planSearch } : undefined,
-  );
+  const planChangesQuery = useListOperatorPlanChanges(planChangesParams);
   const errorsQuery = useListOperatorErrors();
   const lexwareQuery = useListOperatorLexwareBookings();
   const updatePlan = useUpdateOperatorAccountPlan();
@@ -385,6 +398,50 @@ export default function OperatorDashboard() {
               data-testid="input-plan-change-search"
             />
           </div>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="plan-change-from" className="text-xs text-muted-foreground">
+                Zeitraum von
+              </Label>
+              <Input
+                id="plan-change-from"
+                type="date"
+                value={planFrom}
+                max={planTo || undefined}
+                onChange={(e) => setPlanFrom(e.target.value)}
+                className="w-auto"
+                data-testid="input-plan-change-from"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="plan-change-to" className="text-xs text-muted-foreground">
+                Zeitraum bis
+              </Label>
+              <Input
+                id="plan-change-to"
+                type="date"
+                value={planTo}
+                min={planFrom || undefined}
+                onChange={(e) => setPlanTo(e.target.value)}
+                className="w-auto"
+                data-testid="input-plan-change-to"
+              />
+            </div>
+            {(planFrom || planTo) && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setPlanFrom("");
+                  setPlanTo("");
+                }}
+                data-testid="button-plan-change-clear-range"
+              >
+                Zeitraum zurücksetzen
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {planChangesQuery.isLoading ? (
@@ -399,8 +456,8 @@ export default function OperatorDashboard() {
             </p>
           ) : (planChangesQuery.data ?? []).length === 0 ? (
             <p className="p-4 text-sm text-muted-foreground" data-testid="text-operator-plan-changes-empty">
-              {planSearch
-                ? `Keine Plan-Änderungen gefunden für „${planSearch}".`
+              {hasPlanFilter
+                ? "Keine Plan-Änderungen für die aktuelle Filterung gefunden."
                 : "Noch keine Plan-Änderungen protokolliert."}
             </p>
           ) : (

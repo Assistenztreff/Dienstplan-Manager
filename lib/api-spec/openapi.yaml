@@ -1383,6 +1383,26 @@ paths:
           schema:
             type: string
             maxLength: 200
+        - name: from
+          in: query
+          required: false
+          description: >
+            Optionaler Zeitraum-Anfang als ISO-8601-Zeitstempel. Es werden nur
+            Änderungen ab diesem Zeitpunkt (einschließlich) zurückgegeben.
+            Kombinierbar mit search und to.
+          schema:
+            type: string
+            maxLength: 40
+        - name: to
+          in: query
+          required: false
+          description: >
+            Optionales Zeitraum-Ende als ISO-8601-Zeitstempel. Es werden nur
+            Änderungen bis zu diesem Zeitpunkt (einschließlich) zurückgegeben.
+            Kombinierbar mit search und from.
+          schema:
+            type: string
+            maxLength: 40
       responses:
         "200":
           description: Liste der Plan-Änderungen (neueste zuerst)

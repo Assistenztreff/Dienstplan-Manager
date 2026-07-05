@@ -56,3 +56,5 @@
 - [accountType no longer API-mutable](accounttype-api-immutable.md) — users PATCH now rejects any REAL accountType change; e2e harness becomeDienstleister() 403s. Use registerFreeAccount("dienstleister",...)+setAccountPlan for dienstleister scenarios.
 - [Curly quotes in test() titles](curly-quotes-in-test-titles.md) — German typographic quotes in a test title string can degrade the closing glyph to ASCII `"`, terminating the JS string → Babel SyntaxError. Keep title literals quote-free.
 - [Playwright config env & schema-skip marker](playwright-config-schema-marker.md) — ESM config has no __dirname (use cwd→pnpm-workspace.yaml); setup-test-db skipped via gitignored schema-hash marker, E2E_SKIP_DB_SETUP still skips whole block.
+- [OpenAPI date query params](openapi-date-query-param-coerce.md) — declare date/time query params as type:string (maxLength), not format:date-time, or Orval emits zod.date() that rejects string query values.
+- [pg_trgm before db push](pg-trgm-extension-before-push.md) — a gin_trgm_ops index needs CREATE EXTENSION pg_trgm before push in every env (post-merge + setup-test-db incl. rebuild path).

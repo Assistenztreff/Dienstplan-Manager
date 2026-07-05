@@ -39,6 +39,13 @@ ALTER TABLE allowance_settings DROP CONSTRAINT IF EXISTS allowance_settings_owne
 CREATE UNIQUE INDEX IF NOT EXISTS allowance_settings_owner_account_unique
   ON allowance_settings (owner_id) WHERE team_id IS NULL;
 SQL
+# pg_trgm-Extension VOR db push anlegen: der Trigram-GIN-Index auf
+# plan_changes.note (schnelle Betreiber-Suche im Änderungsprotokoll) braucht die
+# Operator-Klasse gin_trgm_ops. Ohne die Extension schlägt der von push erzeugte
+# CREATE INDEX fehl. Idempotent (IF NOT EXISTS).
+psql "$DATABASE_URL" <<'SQL'
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+SQL
 # WICHTIG (verifiziert): Nach diesem Skript laeuft die Plattform-
 # "Workflow-Reconciliation" und startet bereits laufende Workflows neu —
 # und zwar SOWOHL bei Erfolg ALS AUCH bei Fehlschlag des Skripts. Der
