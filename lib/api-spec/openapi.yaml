@@ -266,7 +266,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [active, standby, night, full_day, vacation, sick, work]
+            enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich]
         - name: teamId
           in: query
           description: Optionaler Team-Kontext für die Datentrennung.
@@ -1994,7 +1994,7 @@ components:
           format: date-time
         type:
           type: string
-          enum: [active, standby, night, full_day, vacation, sick, work]
+          enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich]
         planningStatus:
           type: string
           description: >-
@@ -2036,7 +2036,7 @@ components:
           format: date-time
         type:
           type: string
-          enum: [active, standby, night, full_day, vacation, sick, work]
+          enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich]
         planningStatus:
           type: string
           description: >-
@@ -2066,7 +2066,7 @@ components:
           format: date-time
         type:
           type: string
-          enum: [active, standby, night, full_day, vacation, sick, work]
+          enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich]
         planningStatus:
           type: string
           description: >-
@@ -2676,6 +2676,17 @@ components:
         method:
           type: string
           enum: [bwavg, factor]
+        restDaysEarned:
+          type: integer
+          description: >-
+            Ersatzruhetage (§ 11 Abs. 3 ArbZG): Anzahl Feiertage mit
+            bestaetigter Arbeit.
+        restDaysRedeemed:
+          type: integer
+          description: Eingeloeste Ersatzruhetage (Anzahl Freizeitausgleich-Tage).
+        restDaysBalance:
+          type: integer
+          description: Verbleibendes Ersatzruhetag-Guthaben (verdient − eingeloest).
 
     AuthUser:
       type: object

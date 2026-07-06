@@ -19,7 +19,33 @@ import {
 // Urlaub und Krankheit sind Abwesenheiten: sie referenzieren kein Schichtmodell
 // und lösen keine Zuschlagsberechnung aus.
 export function isAbsenceType(type: string): boolean {
-  return type === "vacation" || type === "sick";
+  // "freizeitausgleich" (Ersatzruhetag nach § 11 Abs. 3 ArbZG) ist ein bezahlter
+  // Ausgleichs-Ruhetag und wird wie eine Abwesenheit gewertet: volle Tages-
+  // Gutschrift ohne Zuschläge, statt einer Arbeitswertung.
+  return type === "vacation" || type === "sick" || type === "freizeitausgleich";
+}
+
+// Ein "ganztägiger" Abwesenheitseintrag folgt der Frontend-Konvention
+// 00:00–23:59 (Tagesbeginn bis Tagesende) und trägt KEINE echten Schichtzeiten.
+// Alles andere (vom geplanten Dienst geerbte oder aus einem Schichtmodell
+// abgeleitete Zeiten) gilt als konkrete Schicht und löst die Zuschlagsrechnung
+// aus. Hinweis: getHours/getMinutes folgen der bestehenden Engine-Konvention
+// (UTC-Zeitstempel, Serverlauf in UTC), konsistent zu computeShiftMetrics.
+export function isPlainFullDay(start: Date, end: Date): boolean {
+  return (
+    start.getHours() === 0 &&
+    start.getMinutes() === 0 &&
+    end.getHours() === 23 &&
+    end.getMinutes() === 59
+  );
+}
+
+// §11-BUrlG-Durchschnitt: gutzuschreibende Tages-Stunden eines Urlaubs-/Krank-Tages
+// = bestätigte Arbeits-IST-Stunden der Referenzperiode / Anzahl gearbeiteter Tage.
+// Ohne gearbeitete Tage (keine Historie) → null (Aufrufer nimmt Fallback).
+export function averageDailyHours(totalHours: number, workedDays: number): number | null {
+  if (workedDays <= 0) return null;
+  return Math.round((totalHours / workedDays) * 100) / 100;
 }
 
 export interface ResolveShiftMetricsInput {
@@ -45,35 +71,36 @@ export function resolveShiftMetrics(
   state?: GermanState | null
 ): ShiftMetrics {
   if (isAbsenceType(input.type)) {
-    // Zuschlagsfortzahlung (Lohnausfallprinzip): Deckt die Abwesenheit einen
-    // geplanten 24h-Dienst ab (identische Start-/Enduhrzeit über die
-    // Tagesgrenze, ≥23h), so werden die Nacht-/Sonntags-/Feiertagsstunden aus
-    // dem Zeitfenster berechnet und fortgezahlt. Ein normaler ganztägiger
-    // Abwesenheitstag (00:00–23:59) löst KEINE Zuschläge aus, sonst würde jede
-    // Nacht/jeder Sonntag fälschlich mitgezählt.
     const start = new Date(input.startTime);
     const end = new Date(input.endTime);
-    const durationH = (end.getTime() - start.getTime()) / 3_600_000;
-    const sameClock =
-      start.getHours() === end.getHours() && start.getMinutes() === end.getMinutes();
-    if (sameClock && durationH >= 23) {
-      const m = computeShiftMetrics(
-        { startTime: start, endTime: end, isAbsence: false, valuationPercent: 100 },
-        window,
-        state
-      );
+    // Ein ganztägiger Abwesenheitseintrag (00:00–23:59, kein zugrundeliegender
+    // Dienst) wird rein plan-basiert gewertet: die vollen geplanten Tages-Soll-
+    // Stunden gelten als erfüllt, KEINE Zuschläge — sonst würde jede Nacht/jeder
+    // Sonntag fälschlich mitgezählt.
+    if (isPlainFullDay(start, end)) {
       return {
         valuedHours: input.plannedHours,
-        nightHours: m.nightHours,
-        sundayHours: m.sundayHours,
-        holidayHours: m.holidayHours,
+        nightHours: 0,
+        sundayHours: 0,
+        holidayHours: 0,
       };
     }
+    // Zuschlagsfortzahlung (Lohnausfallprinzip): Deckt die Abwesenheit einen
+    // konkret geplanten Dienst ab (echte Schichtzeiten — vom Primary-Lookup
+    // geerbt oder aus einem Schichtmodell abgeleitet), werden dessen Nacht-/
+    // Sonntags-/Feiertagsstunden aus dem Zeitfenster berechnet und fortgezahlt.
+    // Ein 24h-Dienst (identische Start-/Enduhrzeit über die Tagesgrenze) ist ein
+    // Spezialfall dieses Zeitfensters.
+    const m = computeShiftMetrics(
+      { startTime: start, endTime: end, isAbsence: false, valuationPercent: 100 },
+      window,
+      state
+    );
     return {
       valuedHours: input.plannedHours,
-      nightHours: 0,
-      sundayHours: 0,
-      holidayHours: 0,
+      nightHours: m.nightHours,
+      sundayHours: m.sundayHours,
+      holidayHours: m.holidayHours,
     };
   }
   return computeShiftMetrics(

@@ -23,4 +23,10 @@ export interface VacationBalance {
   /** Umrechnungsfaktor Stunden je Tag (Standard 8). */
   hoursPerDay: number;
   method: VacationBalanceMethod;
+  /** Ersatzruhetage (§ 11 Abs. 3 ArbZG): Anzahl Feiertage mit bestaetigter Arbeit. */
+  restDaysEarned?: number;
+  /** Eingeloeste Ersatzruhetage (Anzahl Freizeitausgleich-Tage). */
+  restDaysRedeemed?: number;
+  /** Verbleibendes Ersatzruhetag-Guthaben (verdient − eingeloest). */
+  restDaysBalance?: number;
 }

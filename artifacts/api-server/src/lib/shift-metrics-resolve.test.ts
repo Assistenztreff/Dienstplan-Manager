@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { NightWindow } from "@workspace/db";
-import { isAbsenceType, resolveShiftMetrics } from "./shift-metrics-resolve";
+import { isAbsenceType, resolveShiftMetrics, averageDailyHours } from "./shift-metrics-resolve";
 
 // Zeitstempel werden in UTC interpretiert (siehe @workspace/db shift-metrics.ts).
 // Die Tests konstruieren daher bewusst UTC-Daten.
@@ -9,6 +9,18 @@ const NIGHT: NightWindow = { nightStart: "23:00", nightEnd: "06:00" };
 function utc(y: number, m: number, d: number, h: number, min = 0): Date {
   return new Date(Date.UTC(y, m, d, h, min));
 }
+
+describe("averageDailyHours (§11 BUrlG)", () => {
+  it("mittelt Gesamtstunden auf gearbeitete Tage (auf 2 Nachkommastellen)", () => {
+    expect(averageDailyHours(160, 20)).toBe(8);
+    expect(averageDailyHours(100, 13)).toBe(7.69);
+  });
+
+  it("liefert null ohne gearbeitete Tage (Fallback beim Aufrufer)", () => {
+    expect(averageDailyHours(0, 0)).toBeNull();
+    expect(averageDailyHours(120, 0)).toBeNull();
+  });
+});
 
 describe("isAbsenceType", () => {
   it("erkennt Urlaub und Krankheit als Abwesenheit", () => {

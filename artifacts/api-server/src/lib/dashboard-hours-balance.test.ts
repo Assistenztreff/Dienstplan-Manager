@@ -49,14 +49,28 @@ describe("computeHoursBalanceRow — geplante Stunden", () => {
     expect(result.plannedHours).toBe(18);
   });
 
-  it("ignoriert Urlaub und Krank in den geplanten Stunden", () => {
+  it("ignoriert ganztägigen Urlaub und Krank in den geplanten Stunden", () => {
     const shifts: BalanceShift[] = [
       { type: "active", startTime: local(2026, 6, 1, 8), endTime: local(2026, 6, 1, 16) }, // 8h
-      { type: "vacation", startTime: local(2026, 6, 2, 0), endTime: local(2026, 6, 3, 0), valuedHours: 8 },
-      { type: "sick", startTime: local(2026, 6, 4, 0), endTime: local(2026, 6, 5, 0), valuedHours: 8 },
+      { type: "vacation", startTime: local(2026, 6, 2, 0), endTime: local(2026, 6, 2, 23, 59), valuedHours: 8 },
+      { type: "sick", startTime: local(2026, 6, 4, 0), endTime: local(2026, 6, 4, 23, 59), valuedHours: 8 },
     ];
     const result = row({ shifts });
     expect(result.plannedHours).toBe(8);
+  });
+
+  it("zählt eine geerbte 24h-Abwesenheit ins Soll (Bilanz-Neutralität)", () => {
+    // Ein 24h-Dienst, der zu Krankheit wird, erbt echte Schichtzeiten (09:00 →
+    // Folgetag 09:00) und ersetzt den Dienst. Er zählt daher wie der ersetzte
+    // Dienst zum Soll (24h) und wird zugleich fortgezahlt (valuedHours 24):
+    // Soll +24, Ist +24 -> Bilanz 0. Ein reiner Ganztags-Eintrag zählt NICHT.
+    const shifts: BalanceShift[] = [
+      { type: "sick", startTime: local(2026, 6, 2, 9), endTime: local(2026, 6, 3, 9), valuedHours: 24 },
+    ];
+    const result = row({ shifts });
+    expect(result.plannedHours).toBe(24);
+    expect(result.totalFulfilledHours).toBe(24);
+    expect(result.balance).toBe(0);
   });
 
   it("liefert für einen Assistenten ohne Schichten lauter Nullen", () => {
@@ -115,7 +129,7 @@ describe("computeHoursBalanceRow — Zuschlagsberechnung (Prozentsätze)", () =>
     const shifts: BalanceShift[] = [
       { type: "active", startTime: local(2026, 6, 1, 0), endTime: local(2026, 6, 1, 8), nightHours: 2, sundayHours: 1, holidayHours: 0 },
       { type: "night", startTime: local(2026, 6, 2, 0), endTime: local(2026, 6, 2, 8), nightHours: 3, sundayHours: 0, holidayHours: 4 },
-      { type: "vacation", startTime: local(2026, 6, 3, 0), endTime: local(2026, 6, 4, 0), nightHours: 0, sundayHours: 0, holidayHours: 0, valuedHours: 8 },
+      { type: "vacation", startTime: local(2026, 6, 3, 0), endTime: local(2026, 6, 3, 23, 59), nightHours: 0, sundayHours: 0, holidayHours: 0, valuedHours: 8 },
       { type: "sick", startTime: local(2026, 6, 5, 9), endTime: local(2026, 6, 6, 9), nightHours: 7, sundayHours: 0, holidayHours: 0, valuedHours: 24 },
     ];
     const result = row({ shifts });
@@ -168,8 +182,8 @@ describe("computeHoursBalanceRow — Trennung Arbeit vs. Urlaub/Krank", () => {
     const shifts: BalanceShift[] = [
       { type: "active", startTime: local(2026, 6, 1, 8), endTime: local(2026, 6, 1, 16), valuedHours: 8 },
       { type: "work", startTime: local(2026, 6, 2, 8), endTime: local(2026, 6, 2, 14), valuedHours: 6 },
-      { type: "vacation", startTime: local(2026, 6, 3, 0), endTime: local(2026, 6, 4, 0), valuedHours: 7 },
-      { type: "sick", startTime: local(2026, 6, 5, 0), endTime: local(2026, 6, 6, 0), valuedHours: 5 },
+      { type: "vacation", startTime: local(2026, 6, 3, 0), endTime: local(2026, 6, 3, 23, 59), valuedHours: 7 },
+      { type: "sick", startTime: local(2026, 6, 5, 0), endTime: local(2026, 6, 5, 23, 59), valuedHours: 5 },
     ];
     const result = row({ shifts });
     expect(result.valuedHours).toBe(14); // nur Arbeit
@@ -184,7 +198,7 @@ describe("computeHoursBalanceRow — Trennung Arbeit vs. Urlaub/Krank", () => {
       // geplant 8h, gewertet nur 6h -> balance -2
       { type: "active", startTime: local(2026, 6, 1, 8), endTime: local(2026, 6, 1, 16), valuedHours: 6 },
       // Urlaubstag fügt 8 erfüllte Stunden hinzu, aber 0 geplante -> balance +8
-      { type: "vacation", startTime: local(2026, 6, 2, 0), endTime: local(2026, 6, 3, 0), valuedHours: 8 },
+      { type: "vacation", startTime: local(2026, 6, 2, 0), endTime: local(2026, 6, 2, 23, 59), valuedHours: 8 },
     ];
     const result = row({ shifts });
     expect(result.plannedHours).toBe(8);
@@ -196,9 +210,9 @@ describe("computeHoursBalanceRow — Trennung Arbeit vs. Urlaub/Krank", () => {
 describe("computeHoursBalanceRow — Zählung der Urlaubstage pro Monat", () => {
   it("zählt eine Urlaubs-Schicht als einen Tag (nicht den Jahreszähler aus dem Vertrag)", () => {
     const shifts: BalanceShift[] = [
-      { type: "vacation", startTime: local(2026, 6, 1, 0), endTime: local(2026, 6, 2, 0), valuedHours: 8 },
-      { type: "vacation", startTime: local(2026, 6, 2, 0), endTime: local(2026, 6, 3, 0), valuedHours: 8 },
-      { type: "vacation", startTime: local(2026, 6, 3, 0), endTime: local(2026, 6, 4, 0), valuedHours: 8 },
+      { type: "vacation", startTime: local(2026, 6, 1, 0), endTime: local(2026, 6, 1, 23, 59), valuedHours: 8 },
+      { type: "vacation", startTime: local(2026, 6, 2, 0), endTime: local(2026, 6, 2, 23, 59), valuedHours: 8 },
+      { type: "vacation", startTime: local(2026, 6, 3, 0), endTime: local(2026, 6, 3, 23, 59), valuedHours: 8 },
     ];
     const result = row({ shifts, contract: { vacationDays: 30, vacationDaysUsed: 12 } });
     expect(result.vacationDaysTaken).toBe(3);

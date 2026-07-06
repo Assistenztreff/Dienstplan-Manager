@@ -1,7 +1,14 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { contractsTable, usersTable } from "@workspace/db";
-import { eq, and, inArray } from "drizzle-orm";
+import {
+  contractsTable,
+  usersTable,
+  shiftsTable,
+  timeTrackingTable,
+  isGermanHoliday,
+  type GermanState,
+} from "@workspace/db";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import {
   ListContractsQueryParams,
   CreateContractBody,
@@ -240,6 +247,46 @@ router.get(
     const vacationHoursUsed = round2(contract.vacationHoursUsed);
     const vacationHoursRemaining = round2(vacationHoursTotal - vacationHoursUsed);
     const daysUsed = Math.round((vacationHoursUsed / hoursPerDay) * 10) / 10;
+
+    // Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG): Wer an einem gesetzlichen
+    // Feiertag TATSAECHLICH arbeitet (bestaetigte IST-Zeit auf einer
+    // Arbeitsschicht), hat Anspruch auf einen Ausgleichs-Ruhetag. Das Konto
+    // ist vollstaendig aus den Schichten ableitbar (kein separater Zaehler):
+    //   verdient   = Anzahl DISTINCT Feiertage mit bestaetigter Arbeit
+    //   eingeloest = Anzahl "freizeitausgleich"-Tage
+    const restState = (ops.state as GermanState | null) ?? null;
+    // UTC-Kalendertag als garantierte "YYYY-MM-DD"-Zeichenkette (isGermanHoliday
+    // und die Zuschlagsberechnung interpretieren Zeitstempel in UTC).
+    const workedHolidayDates = await db
+      .selectDistinct({
+        day: sql<string>`TO_CHAR(${timeTrackingTable.actualStart} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
+      })
+      .from(timeTrackingTable)
+      .innerJoin(shiftsTable, eq(timeTrackingTable.shiftId, shiftsTable.id))
+      .where(
+        and(
+          eq(timeTrackingTable.userId, contract.userId),
+          eq(shiftsTable.teamId, contract.teamId),
+          eq(timeTrackingTable.status, "confirmed"),
+          eq(shiftsTable.type, "work"),
+        ),
+      );
+    const restDaysEarned = workedHolidayDates.filter((r) =>
+      isGermanHoliday(new Date(`${r.day}T12:00:00Z`), restState),
+    ).length;
+    const [redeemedRow] = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(shiftsTable)
+      .where(
+        and(
+          eq(shiftsTable.userId, contract.userId),
+          eq(shiftsTable.teamId, contract.teamId),
+          eq(shiftsTable.type, "freizeitausgleich"),
+        ),
+      );
+    const restDaysRedeemed = Number(redeemedRow?.count ?? 0);
+    const restDaysBalance = restDaysEarned - restDaysRedeemed;
+
     res.json({
       contractId: contract.id,
       userId: contract.userId,
@@ -251,6 +298,9 @@ router.get(
       vacationHoursRemaining,
       hoursPerDay,
       method: ops.vacationMethod,
+      restDaysEarned,
+      restDaysRedeemed,
+      restDaysBalance,
     });
   },
 );

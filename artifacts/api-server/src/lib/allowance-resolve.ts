@@ -11,6 +11,9 @@ export interface ResolvedAllowanceOps {
   vacationMethod: "bwavg" | "factor";
   vacationHoursPerDay: number;
   vacationFactor: number;
+  // Bundesland für die Feiertagserkennung (z. B. Ersatzruhetag-Konto). null =
+  // nur bundesweite Feiertage.
+  state: string | null;
 }
 
 export const DEFAULT_ALLOWANCE_OPS: ResolvedAllowanceOps = {
@@ -18,6 +21,7 @@ export const DEFAULT_ALLOWANCE_OPS: ResolvedAllowanceOps = {
   vacationMethod: "bwavg",
   vacationHoursPerDay: 8,
   vacationFactor: 0.0941,
+  state: null,
 };
 
 const opsColumns = {
@@ -25,6 +29,7 @@ const opsColumns = {
   vacationMethod: allowanceSettingsTable.vacationMethod,
   vacationHoursPerDay: allowanceSettingsTable.vacationHoursPerDay,
   vacationFactor: allowanceSettingsTable.vacationFactor,
+  state: allowanceSettingsTable.state,
 };
 
 // Löst die betrieblichen Einstellungen (Auto-Genehmigung, Urlaub) für ein Team

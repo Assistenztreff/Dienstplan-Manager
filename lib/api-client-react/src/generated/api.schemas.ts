@@ -454,6 +454,7 @@ export const ShiftType = {
   vacation: 'vacation',
   sick: 'sick',
   work: 'work',
+  freizeitausgleich: 'freizeitausgleich',
 } as const;
 
 /**
@@ -499,6 +500,7 @@ export const ShiftInputType = {
   vacation: 'vacation',
   sick: 'sick',
   work: 'work',
+  freizeitausgleich: 'freizeitausgleich',
 } as const;
 
 /**
@@ -538,6 +540,7 @@ export const ShiftUpdateType = {
   vacation: 'vacation',
   sick: 'sick',
   work: 'work',
+  freizeitausgleich: 'freizeitausgleich',
 } as const;
 
 /**
@@ -1105,6 +1108,12 @@ export interface VacationBalance {
   /** Umrechnungsfaktor Stunden je Tag (Standard 8). */
   hoursPerDay: number;
   method: VacationBalanceMethod;
+  /** Ersatzruhetage (§ 11 Abs. 3 ArbZG): Anzahl Feiertage mit bestaetigter Arbeit. */
+  restDaysEarned?: number;
+  /** Eingeloeste Ersatzruhetage (Anzahl Freizeitausgleich-Tage). */
+  restDaysRedeemed?: number;
+  /** Verbleibendes Ersatzruhetag-Guthaben (verdient − eingeloest). */
+  restDaysBalance?: number;
 }
 
 export type AuthUserRole = typeof AuthUserRole[keyof typeof AuthUserRole];
@@ -1227,6 +1236,7 @@ export const ListShiftsType = {
   vacation: 'vacation',
   sick: 'sick',
   work: 'work',
+  freizeitausgleich: 'freizeitausgleich',
 } as const;
 
 export type ListShiftModelsParams = {

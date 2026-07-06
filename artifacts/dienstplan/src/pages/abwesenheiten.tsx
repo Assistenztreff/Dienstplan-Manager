@@ -3,6 +3,7 @@ import {
   useListUsers,
   useListContracts,
   useListShifts,
+  useListShiftModels,
   useCreateShift,
   useDeleteShift,
   ApiError,
@@ -54,6 +55,7 @@ export default function Abwesenheiten() {
 
   const { data: users, isLoading: usersLoading } = useListUsers();
   const { data: contracts, isLoading: contractsLoading } = useListContracts();
+  const { data: shiftModels } = useListShiftModels();
   const { data: vacationShifts, isLoading: vacationLoading } = useListShifts({ type: "vacation" });
   const { data: sickShifts, isLoading: sickLoading } = useListShifts({ type: "sick" });
 
@@ -62,6 +64,7 @@ export default function Abwesenheiten() {
 
   const [userId, setUserId] = useState<string>("");
   const [type, setType] = useState<AbsenceType>("vacation");
+  const [shiftModelId, setShiftModelId] = useState<string>("");
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -160,7 +163,7 @@ export default function Abwesenheiten() {
             startTime: startIso,
             endTime: endIso,
             type: type as ShiftInputType,
-            shiftModelId: null,
+            shiftModelId: shiftModelId ? Number(shiftModelId) : null,
           },
         });
       }
@@ -174,6 +177,7 @@ export default function Abwesenheiten() {
       });
       setFrom("");
       setTo("");
+      setShiftModelId("");
     } catch (err) {
       const planMsg = planUpgradeMessage(err);
       if (err instanceof ApiError && err.status === 401) {
@@ -251,6 +255,31 @@ export default function Abwesenheiten() {
                   <SelectItem value="sick">Krank</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Dienst (optional)</Label>
+              <Select
+                value={shiftModelId || "none"}
+                onValueChange={(v) => setShiftModelId(v === "none" ? "" : v)}
+              >
+                <SelectTrigger data-testid="absence-shift-model">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Ganztägig (Standard)</SelectItem>
+                  {(shiftModels ?? []).map((m) => (
+                    <SelectItem key={m.id} value={String(m.id)}>
+                      {m.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Ersetzt die Abwesenheit einen geplanten Dienst, werden dessen Zeiten
+                automatisch übernommen. Ohne geplanten Dienst legt ein gewähltes
+                Modell die Stunden fest (sonst ganztägig).
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

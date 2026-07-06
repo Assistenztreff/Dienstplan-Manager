@@ -88,6 +88,7 @@ const SHIFT_TYPE_LABELS: Record<string, string> = {
   full_day: "24h-Dienst",
   vacation: "Urlaub",
   sick: "Krankheit",
+  freizeitausgleich: "Freizeitausgleich",
 };
 
 const SHIFT_TYPE_CLASSES: Record<string, string> = {
@@ -97,6 +98,7 @@ const SHIFT_TYPE_CLASSES: Record<string, string> = {
   full_day: "bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100",
   vacation: "bg-yellow-100 text-yellow-900 border-yellow-400 hover:bg-yellow-200",
   sick: "bg-slate-200 text-slate-700 border-slate-400 hover:bg-slate-300",
+  freizeitausgleich: "bg-emerald-100 text-emerald-900 border-emerald-400 hover:bg-emerald-200",
 };
 
 function shiftLabel(shift: Shift, modelMap: Map<number, ShiftModelInfo>): string {
@@ -151,6 +153,7 @@ const SHIFT_TYPE_DOTS: Record<string, string> = {
   full_day: "bg-purple-500",
   vacation: "bg-yellow-400",
   sick: "bg-slate-400",
+  freizeitausgleich: "bg-emerald-500",
 };
 
 function shiftDotClass(shift: Shift): string {
@@ -175,7 +178,7 @@ function shiftDotStatusClass(shift: Shift): string {
 // Abwesenheiten (Urlaub/Krank) werden als ganztägige Tagesblöcke gespeichert —
 // ein Datensatz pro Tag. Mehrtägige Abwesenheiten bestehen aus mehreren
 // aufeinanderfolgenden Datensätzen desselben Typs.
-const ABSENCE_TYPES = new Set(["vacation", "sick"]);
+const ABSENCE_TYPES = new Set(["vacation", "sick", "freizeitausgleich"]);
 function isAbsenceShift(shift: Shift): boolean {
   return ABSENCE_TYPES.has(shift.type);
 }

@@ -30,7 +30,12 @@ import {
   isUserMemberOfTeam,
   isShiftModelInTeam,
 } from "../lib/teams";
-import { isAbsenceType, resolveShiftMetrics } from "../lib/shift-metrics-resolve";
+import {
+  isAbsenceType,
+  isPlainFullDay,
+  resolveShiftMetrics,
+  averageDailyHours,
+} from "../lib/shift-metrics-resolve";
 import { userHasFeature, getUserLimit } from "../lib/plan";
 import { resolveAllowanceOps } from "../lib/allowance-resolve";
 
@@ -102,7 +107,13 @@ async function dailyTargetHours(userId: number, date: Date): Promise<number> {
 // da Abwesenheiten kein Arbeits-Schichtmodell sind.
 async function bookAbsenceTimeTracking(shift: AbsenceShift): Promise<void> {
   const target = await dailyTargetHours(shift.userId, new Date(shift.startTime));
-  const dailyHours = vacationHoursForShift(shift.startTime, shift.endTime, target);
+  const dailyHours = await absenceHoursFor(
+    shift.userId,
+    shift.teamId,
+    shift.startTime,
+    shift.endTime,
+    target
+  );
   await db.insert(timeTrackingTable).values({
     userId: shift.userId,
     teamId: shift.teamId,
@@ -118,7 +129,13 @@ async function bookAbsenceTimeTracking(shift: AbsenceShift): Promise<void> {
 // Zeiten oder der zugrundeliegende Vertrag geändert haben.
 async function syncAbsenceTimeTracking(shift: AbsenceShift): Promise<void> {
   const target = await dailyTargetHours(shift.userId, new Date(shift.startTime));
-  const dailyHours = vacationHoursForShift(shift.startTime, shift.endTime, target);
+  const dailyHours = await absenceHoursFor(
+    shift.userId,
+    shift.teamId,
+    shift.startTime,
+    shift.endTime,
+    target
+  );
   await db
     .update(timeTrackingTable)
     .set({ actualHours: dailyHours, actualStart: shift.startTime, actualEnd: shift.endTime })
@@ -129,11 +146,11 @@ async function removeAbsenceTimeTracking(shiftId: number): Promise<void> {
   await db.delete(timeTrackingTable).where(eq(timeTrackingTable.shiftId, shiftId));
 }
 
-// Urlaub wird stundengenau geführt (Point 7): Ein normaler Urlaubstag verbraucht
-// vacationHoursPerDay (Standard 8h), ein 24h-Dienst verbraucht 24h (= 3,0 Tage).
-// Ein 24h-Dienst erkennt man an identischer Start-/Enduhrzeit über die
-// Tagesgrenze (analog ShiftBadge); ein normaler Abwesenheitstag ist
-// 00:00–23:59 und damit KEIN 24h-Dienst.
+// Urlaub wird stundengenau geführt (Point 7): Ein ganztägiger Urlaubstag
+// (00:00–23:59, kein zugrundeliegender Dienst) verbraucht vacationHoursPerDay
+// (Standard 8h). Ersetzt der Urlaub einen konkret geplanten Dienst (echte
+// Schichtzeiten — vom Primary-Lookup geerbt oder aus einem Schichtmodell
+// abgeleitet), zählt dessen tatsächliche Dauer (ein 24h-Dienst = 24h = 3,0 Tage).
 function vacationHoursForShift(
   startTime: Date | string,
   endTime: Date | string,
@@ -141,22 +158,75 @@ function vacationHoursForShift(
 ): number {
   const start = new Date(startTime);
   const end = new Date(endTime);
+  if (isPlainFullDay(start, end)) return hoursPerDay;
   const durationH = (end.getTime() - start.getTime()) / 3_600_000;
-  const sameClock =
-    start.getHours() === end.getHours() && start.getMinutes() === end.getMinutes();
-  if (sameClock && durationH >= 23) return 24;
-  return hoursPerDay;
+  return Math.round(durationH * 100) / 100;
+}
+
+// §11-BUrlG-Durchschnitt: mittlere Tages-Stunden der letzten 13 Wochen aus
+// BESTÄTIGTEN Arbeits-IST-Zeiten (nur type "work", Abwesenheits-Buchungen
+// ausgenommen, sonst zirkulär). Ohne Historie → null (Aufrufer nutzt Fallback).
+async function bwavgDailyHours(userId: number, refDate: Date): Promise<number | null> {
+  const end = new Date(refDate);
+  const start = new Date(end.getTime() - 91 * 24 * 3_600_000); // 13 Wochen
+  const startStr = start.toISOString();
+  const endStr = end.toISOString();
+  const [row] = await db
+    .select({
+      total: sql<number>`COALESCE(SUM(${timeTrackingTable.actualHours}), 0)`,
+      days: sql<number>`COUNT(DISTINCT DATE(${timeTrackingTable.actualStart}))`,
+    })
+    .from(timeTrackingTable)
+    .innerJoin(shiftsTable, eq(timeTrackingTable.shiftId, shiftsTable.id))
+    .where(
+      and(
+        eq(timeTrackingTable.userId, userId),
+        eq(timeTrackingTable.status, "confirmed"),
+        eq(shiftsTable.type, "work"),
+        sql`${timeTrackingTable.actualStart} >= ${startStr}`,
+        sql`${timeTrackingTable.actualStart} < ${endStr}`
+      )
+    );
+  return averageDailyHours(Number(row?.total ?? 0), Number(row?.days ?? 0));
+}
+
+// Effektive Tages-Stunden einer GANZTÄGIGEN Abwesenheit (kein zugrundeliegender
+// Dienst), abhängig von der aktiven Urlaubsmethode des Team-Eigentümers:
+//   bwavg  → §11-BUrlG-Durchschnitt der letzten 13 Wochen (Fallback = übergebener
+//            Standardwert, wenn keine bestätigte Arbeitshistorie existiert);
+//   factor → Standardwert (der Anspruch baut sich stundenweise auf).
+// Ersetzt die Abwesenheit einen konkreten Dienst (echte Zeiten), zählt immer
+// dessen tatsächliche Dauer — unabhängig von der Methode.
+async function absenceHoursFor(
+  userId: number,
+  teamId: number | null,
+  startTime: Date | string,
+  endTime: Date | string,
+  fallbackPerDay: number
+): Promise<number> {
+  const start = new Date(startTime);
+  const end = new Date(endTime);
+  if (!isPlainFullDay(start, end)) {
+    return vacationHoursForShift(start, end, fallbackPerDay);
+  }
+  const ops = await resolveAllowanceOps(teamId);
+  let perDay = fallbackPerDay;
+  if (ops.vacationMethod === "bwavg") {
+    perDay = (await bwavgDailyHours(userId, start)) ?? fallbackPerDay;
+  }
+  return vacationHoursForShift(start, end, perDay);
 }
 
 // Löst die Urlaubs-Stunden eines Abwesenheits-Datums über die Einstellungen des
 // Team-Eigentümers (Fallback-Kette) auf.
 async function resolveVacationHours(
+  userId: number,
   teamId: number | null,
   startTime: Date | string,
   endTime: Date | string
 ): Promise<number> {
   const ops = await resolveAllowanceOps(teamId);
-  return vacationHoursForShift(startTime, endTime, ops.vacationHoursPerDay);
+  return absenceHoursFor(userId, teamId, startTime, endTime, ops.vacationHoursPerDay);
 }
 
 // Schreibt den genommenen Urlaub (in Stunden) auf einem konkreten Vertrag fort.
@@ -294,7 +364,9 @@ async function storeShiftMetrics(shift: {
   // 24h-Dienst → 24h, normaler Tag → vertragliche Tages-Soll-Stunden. Bei
   // Arbeitsschichten übernimmt computeShiftMetrics die Wertung.
   const plannedHours = absence
-    ? vacationHoursForShift(
+    ? await absenceHoursFor(
+        shift.userId,
+        shift.teamId,
         shift.startTime,
         shift.endTime,
         await dailyTargetHours(shift.userId, new Date(shift.startTime))
@@ -462,6 +534,64 @@ async function forwardPlanningBlocked(
 // zugaenglich; die Buchhaltung (vacationDaysUsed) laeuft planunabhaengig
 // weiter, damit beim Upgrade sofort korrekte Salden vorliegen.
 
+// Alle geplanten Arbeitsschichten (keine Abwesenheiten) eines Assistenten an
+// einem Kalendertag im angegebenen Team — längste zuerst. Grundlage der
+// Primary-Lookup-Ersetzung: eine neue Abwesenheit "überschreibt" den an dem Tag
+// geplanten Dienst und erbt dessen Zeiten (damit Stunden + Zuschlagspotenzial).
+async function findPlannedWorkShiftsForDay(
+  userId: number,
+  teamId: number,
+  day: Date
+): Promise<{ id: number; startTime: Date; endTime: Date }[]> {
+  const dateStr = day.toISOString().split("T")[0];
+  const rows = await db
+    .select({
+      id: shiftsTable.id,
+      startTime: shiftsTable.startTime,
+      endTime: shiftsTable.endTime,
+    })
+    .from(shiftsTable)
+    .where(
+      and(
+        eq(shiftsTable.userId, userId),
+        eq(shiftsTable.teamId, teamId),
+        notInArray(shiftsTable.type, ["vacation", "sick", "freizeitausgleich"]),
+        sql`DATE(${shiftsTable.startTime}) = ${dateStr}`
+      )
+    );
+  return rows.sort(
+    (a, b) =>
+      b.endTime.getTime() -
+      b.startTime.getTime() -
+      (a.endTime.getTime() - a.startTime.getTime())
+  );
+}
+
+// Entfernt eine geplante Arbeitsschicht samt zugehöriger Zeiterfassung. Wird eine
+// Abwesenheit angelegt, die sie "überschreibt", bliebe der Dienst sonst als
+// Doppelbuchung in Soll/Zuschlägen stehen.
+async function deleteReplacedWorkShift(shiftId: number): Promise<void> {
+  await db.delete(timeTrackingTable).where(eq(timeTrackingTable.shiftId, shiftId));
+  await db.delete(shiftsTable).where(eq(shiftsTable.id, shiftId));
+}
+
+// Leitet Start/Ende eines Abwesenheits-Datums aus den Standardzeiten eines
+// Schichtmodells ab (Fallback-Lookup bei leerem Dienstplan). Liegt das Ende vor
+// oder gleich der Startzeit, endet die Schicht am Folgetag (Nacht-/24h-Dienst).
+function shiftModelTimesForDay(
+  day: Date,
+  startHHMM: string,
+  endHHMM: string
+): { startTime: Date; endTime: Date } {
+  const dateStr = day.toISOString().split("T")[0];
+  const startTime = new Date(`${dateStr}T${startHHMM}:00Z`);
+  let endTime = new Date(`${dateStr}T${endHHMM}:00Z`);
+  if (endTime.getTime() <= startTime.getTime()) {
+    endTime = new Date(endTime.getTime() + 24 * 3_600_000);
+  }
+  return { startTime, endTime };
+}
+
 router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
   const body = CreateShiftBody.safeParse(req.body);
   if (!body.success) {
@@ -533,14 +663,60 @@ router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
     }
   }
 
-  const [shift] = await db.insert(shiftsTable).values({ ...body.data, teamId: write.teamId }).returning();
+  const insertValues = { ...body.data, teamId: write.teamId };
+
+  // Abwesenheits-Zeiten auflösen (Lohnausfallprinzip, Punkt 2 & 3):
+  //  • Primary: existiert am Tag bereits ein geplanter Dienst, "überschreibt" die
+  //    Abwesenheit ihn — sie erbt dessen exakte Start-/Endzeit (und damit Stunden
+  //    + Zuschlagspotenzial); der Dienst wird entfernt (keine Doppelbuchung).
+  //  • Fallback (leerer Tag): ist optional ein Schichtmodell verknüpft, gelten
+  //    dessen Standardzeiten. Sonst bleibt es ein ganztägiger Eintrag (00:00–23:59
+  //    aus dem Frontend → vertragliche Tages-Soll-Stunden, keine Zuschläge).
+  if (isAbsenceType(body.data.type)) {
+    const planned = await findPlannedWorkShiftsForDay(
+      body.data.userId,
+      write.teamId,
+      new Date(body.data.startTime)
+    );
+    if (planned.length > 0) {
+      insertValues.startTime = planned[0]!.startTime;
+      insertValues.endTime = planned[0]!.endTime;
+      for (const p of planned) {
+        await deleteReplacedWorkShift(p.id);
+      }
+    } else if (body.data.shiftModelId != null) {
+      const [model] = await db
+        .select({
+          defaultStartTime: shiftModelsTable.defaultStartTime,
+          defaultEndTime: shiftModelsTable.defaultEndTime,
+        })
+        .from(shiftModelsTable)
+        .where(eq(shiftModelsTable.id, body.data.shiftModelId));
+      if (model?.defaultStartTime && model?.defaultEndTime) {
+        const t = shiftModelTimesForDay(
+          new Date(body.data.startTime),
+          model.defaultStartTime,
+          model.defaultEndTime
+        );
+        insertValues.startTime = t.startTime;
+        insertValues.endTime = t.endTime;
+      }
+    }
+  }
+
+  const [shift] = await db.insert(shiftsTable).values(insertValues).returning();
 
   await storeShiftMetrics(shift);
 
   if (isAbsenceType(shift.type)) {
     await bookAbsenceTimeTracking(shift);
     if (shift.type === "vacation") {
-      const hours = await resolveVacationHours(shift.teamId, shift.startTime, shift.endTime);
+      const hours = await resolveVacationHours(
+        shift.userId,
+        shift.teamId,
+        shift.startTime,
+        shift.endTime
+      );
       await adjustVacationHours(shift.userId, new Date(shift.startTime), hours);
     }
   }
@@ -737,10 +913,20 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
       ? await activeContractFor(updated.userId, new Date(updated.startTime))
       : null;
   const oldVacationHours = oldVacationContract
-    ? await resolveVacationHours(oldShift.teamId, oldShift.startTime, oldShift.endTime)
+    ? await resolveVacationHours(
+        oldShift.userId,
+        oldShift.teamId,
+        oldShift.startTime,
+        oldShift.endTime
+      )
     : 0;
   const newVacationHours = newVacationContract
-    ? await resolveVacationHours(updated.teamId, updated.startTime, updated.endTime)
+    ? await resolveVacationHours(
+        updated.userId,
+        updated.teamId,
+        updated.startTime,
+        updated.endTime
+      )
     : 0;
   if (oldVacationContract?.id !== newVacationContract?.id) {
     if (oldVacationContract) await applyVacationDelta(oldVacationContract, -oldVacationHours);
@@ -788,7 +974,12 @@ router.delete("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
   if (isAbsenceType(shift.type)) {
     await removeAbsenceTimeTracking(shift.id);
     if (shift.type === "vacation") {
-      const hours = await resolveVacationHours(shift.teamId, shift.startTime, shift.endTime);
+      const hours = await resolveVacationHours(
+        shift.userId,
+        shift.teamId,
+        shift.startTime,
+        shift.endTime
+      );
       await adjustVacationHours(shift.userId, new Date(shift.startTime), -hours);
     }
   }

@@ -157,7 +157,12 @@ function weekdaysLabel(weekdays: number[]): string {
 
 function initialSelection(editShift: ShiftForEdit | undefined, firstModelId: number | undefined): string {
   if (!editShift) return firstModelId ? `model:${firstModelId}` : "";
-  if (editShift.type === "vacation" || editShift.type === "sick") return editShift.type;
+  if (
+    editShift.type === "vacation" ||
+    editShift.type === "sick" ||
+    editShift.type === "freizeitausgleich"
+  )
+    return editShift.type;
   if (editShift.type === "work" && editShift.shiftModelId) return `model:${editShift.shiftModelId}`;
   return `legacy:${editShift.type}`;
 }
@@ -293,7 +298,10 @@ export function ShiftDialog({
     }));
   }
 
-  const isAbsence = form.selection === "vacation" || form.selection === "sick";
+  const isAbsence =
+    form.selection === "vacation" ||
+    form.selection === "sick" ||
+    form.selection === "freizeitausgleich";
   const is24h = form.selection === "legacy:full_day";
 
   // Abgleich der Standard-Wochentage des gewählten Modells mit dem gewählten
@@ -733,6 +741,12 @@ export function ShiftDialog({
                       Krank
                     </span>
                   </SelectItem>
+                  <SelectItem value="freizeitausgleich">
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                      Freizeitausgleich (Ersatzruhetag)
+                    </span>
+                  </SelectItem>
                 </SelectGroup>
               </SelectContent>
             </Select>
@@ -831,7 +845,9 @@ export function ShiftDialog({
             <p className="text-xs text-muted-foreground rounded-md bg-muted/50 px-3 py-2">
               {form.selection === "vacation"
                 ? "Urlaubstag wird als ganzer Tag eingetragen und vom Urlaubskontigent abgezogen."
-                : "Krankheitstag wird als ganzer Tag eingetragen. Vertragsstunden werden als Lohnfortzahlung gutgeschrieben."}
+                : form.selection === "freizeitausgleich"
+                  ? "Ersatzruhetag für geleistete Feiertagsarbeit. Wird als bezahlter ganzer Tag eingetragen und vom Ersatzruhetag-Konto abgezogen — der Urlaubsanspruch bleibt unberührt."
+                  : "Krankheitstag wird als ganzer Tag eingetragen. Vertragsstunden werden als Lohnfortzahlung gutgeschrieben."}
             </p>
           )}
 

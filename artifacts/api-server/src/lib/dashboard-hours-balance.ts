@@ -12,6 +12,13 @@ export const DEFAULT_VACATION_DAYS = 30;
 
 export const round2 = (n: number) => Math.round(n * 100) / 100;
 
+// Abwesenheits-Schichtarten: Urlaub, Krankheit UND "freizeitausgleich"
+// (Ersatzruhetag nach § 11 Abs. 3 ArbZG — ein bezahlter freier Tag, KEINE
+// Arbeitszeit). Muss mit isAbsenceType (shift-metrics-resolve) übereinstimmen;
+// bewusst lokal dupliziert, damit dieses Modul DB-/Express-frei bleibt.
+const ABSENCE_SHIFT_TYPES = new Set(["vacation", "sick", "freizeitausgleich"]);
+const isAbsenceShiftType = (type: string): boolean => ABSENCE_SHIFT_TYPES.has(type);
+
 /** Schicht-Felder, die in die Auswertung einfließen. */
 export interface BalanceShift {
   type: string;
@@ -101,7 +108,22 @@ function shiftHours(s: BalanceShift): number {
   return (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3_600_000;
 }
 
-const isWorkShift = (s: BalanceShift) => s.type !== "vacation" && s.type !== "sick";
+const isWorkShift = (s: BalanceShift) => !isAbsenceShiftType(s.type);
+
+// Unterscheidet einen ganztägigen Abwesenheitseintrag (00:00–23:59, kein
+// zugrundeliegender Dienst) von einer Abwesenheit, die einen konkret geplanten
+// Dienst ersetzt (echte Schichtzeiten). Nur letztere zählt zum Soll (Plan) und
+// trägt Zuschläge. Spiegelt isPlainFullDay der Engine (shift-metrics-resolve).
+function isPlainFullDay(startTime: Date | string, endTime: Date | string): boolean {
+  const s = new Date(startTime);
+  const e = new Date(endTime);
+  return (
+    s.getHours() === 0 &&
+    s.getMinutes() === 0 &&
+    e.getHours() === 23 &&
+    e.getMinutes() === 59
+  );
+}
 
 /**
  * Berechnet die Soll/Ist-Auswertung eines Assistenten für einen Monat.
@@ -152,12 +174,11 @@ export function computeHoursBalanceRow(params: {
   const workShifts = shifts.filter(isWorkShift);
 
   // Soll-Stunden (Plan) sind IMMER planbasiert, unabhängig von der Abrechnungsart.
-  const plannedHours = workShifts.reduce((acc, s) => acc + shiftHours(s), 0);
+  let plannedHours = workShifts.reduce((acc, s) => acc + shiftHours(s), 0);
 
   // Quelle der gewerteten Arbeits- und Zuschlagsstunden hängt an der Abrechnungsart:
   // SOLL = geplante FIX-Schichten, IST = tatsächlich erfasste (bestätigte) Ist-Zeiten.
-  const isWorkEntry = (e: BalanceTimeEntry) =>
-    e.shiftType !== "sick" && e.shiftType !== "vacation";
+  const isWorkEntry = (e: BalanceTimeEntry) => !isAbsenceShiftType(e.shiftType ?? "");
   const workEntries = timeEntries.filter(isWorkEntry);
 
   let valuedHours: number;
@@ -234,6 +255,18 @@ export function computeHoursBalanceRow(params: {
   sundaySurchargeHours += absenceSundaySurchargeHours;
   holidaySurchargeHours += absenceHolidaySurchargeHours;
 
+  // Punkt 2 (Lohnausfallprinzip): Eine Abwesenheit, die einen konkret geplanten
+  // Dienst ersetzt (Primary-Lookup — echte Schichtzeiten statt ganztägig), zählt
+  // wie der ersetzte Dienst zum Soll (Plan). Die Lohnfortzahlung erfüllt dieses
+  // Soll (valuedHours der Abwesenheit), sodass die Bilanz neutral bleibt: ein 24h-
+  // Dienst, der zu Krankheit wird, ergibt Soll 24 + Ist 24 = 0. Ein rein
+  // ganztägiger Urlaubs-/Krank-Tag (00:00–23:59) zählt NICHT zum Soll
+  // (Bestandsverhalten unverändert).
+  const inheritedAbsenceHours = absenceShifts
+    .filter((s) => !isPlainFullDay(s.startTime, s.endTime))
+    .reduce((acc, s) => acc + shiftHours(s), 0);
+  plannedHours += inheritedAbsenceHours;
+
   const vacationShifts = shifts.filter((s) => s.type === "vacation");
   const vacationFulfilledHours = vacationShifts.reduce((acc, s) => acc + (s.valuedHours ?? 0), 0);
   const vacationDaysTaken = vacationShifts.length;
@@ -245,7 +278,7 @@ export function computeHoursBalanceRow(params: {
   let trackedHours = 0;
   for (const entry of timeEntries) {
     const hours = entry.actualHours ?? 0;
-    if (entry.shiftType !== "sick" && entry.shiftType !== "vacation") {
+    if (!isAbsenceShiftType(entry.shiftType ?? "")) {
       trackedHours += hours;
     }
   }

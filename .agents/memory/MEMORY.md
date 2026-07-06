@@ -58,3 +58,4 @@
 - [Playwright config env & schema-skip marker](playwright-config-schema-marker.md) — ESM config has no __dirname (use cwd→pnpm-workspace.yaml); setup-test-db skipped via gitignored schema-hash marker, E2E_SKIP_DB_SETUP still skips whole block.
 - [OpenAPI date query params](openapi-date-query-param-coerce.md) — declare date/time query params as type:string (maxLength), not format:date-time, or Orval emits zod.date() that rejects string query values.
 - [pg_trgm before db push](pg-trgm-extension-before-push.md) — a gin_trgm_ops index needs CREATE EXTENSION pg_trgm before push in every env (post-merge + setup-test-db incl. rebuild path).
+- [Freizeitausgleich absence classification](freizeitausgleich-absence-classification.md) — a new absence shift type must be added to EVERY inline work/absence predicate (multiple, not shared); shift-derived per-contract balances must be team-scoped.
