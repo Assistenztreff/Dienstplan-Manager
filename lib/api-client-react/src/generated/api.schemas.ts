@@ -757,6 +757,8 @@ export interface AllowanceSettings {
   vacationHoursPerDay: number;
   /** Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor. */
   vacationFactor: number;
+  /** Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktiv? Bei false verdient Feiertagsarbeit keinen Ausgleichs-Ruhetag. */
+  ersatzruhetagEnabled: boolean;
   updatedAt: string;
 }
 
@@ -838,6 +840,8 @@ export interface AllowanceSettingsInput {
   vacationHoursPerDay?: number;
   /** @minimum 0 */
   vacationFactor?: number;
+  /** Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktivieren/deaktivieren. */
+  ersatzruhetagEnabled?: boolean;
 }
 
 export interface BrandingSettings {
@@ -1114,6 +1118,8 @@ export interface VacationBalance {
   restDaysRedeemed?: number;
   /** Verbleibendes Ersatzruhetag-Guthaben (verdient − eingeloest). */
   restDaysBalance?: number;
+  /** Ist das Ersatzruhetag-Konto für dieses Team aktiv? Bei false wird keine Feiertagsarbeit gutgeschrieben (restDaysEarned = 0). */
+  ersatzruhetagEnabled?: boolean;
 }
 
 export type AuthUserRole = typeof AuthUserRole[keyof typeof AuthUserRole];

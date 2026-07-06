@@ -731,6 +731,7 @@ export const GetAllowanceSettingsResponse = zod.object({
   "vacationMethod": zod.enum(['bwavg', 'factor']).describe('Urlaubs-Berechnung — bwavg = §11 BUrlG 13-Wochen-Schnitt, factor = prozentualer Stunden-Faktor.'),
   "vacationHoursPerDay": zod.number().describe('Stunden je Urlaubstag (Anzeige Tage = Stunden \/ diesem Wert).'),
   "vacationFactor": zod.number().describe('Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor.'),
+  "ersatzruhetagEnabled": zod.boolean().describe('Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktiv? Bei false verdient Feiertagsarbeit keinen Ausgleichs-Ruhetag.'),
   "updatedAt": zod.coerce.date()
 })
 
@@ -770,7 +771,8 @@ export const UpdateAllowanceSettingsBody = zod.object({
   "autoApproveTimesheets": zod.boolean().optional(),
   "vacationMethod": zod.enum(['bwavg', 'factor']).optional(),
   "vacationHoursPerDay": zod.number().min(updateAllowanceSettingsBodyVacationHoursPerDayMin).optional(),
-  "vacationFactor": zod.number().min(updateAllowanceSettingsBodyVacationFactorMin).optional()
+  "vacationFactor": zod.number().min(updateAllowanceSettingsBodyVacationFactorMin).optional(),
+  "ersatzruhetagEnabled": zod.boolean().optional().describe('Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktivieren\/deaktivieren.')
 })
 
 export const UpdateAllowanceSettingsResponse = zod.object({
@@ -788,6 +790,7 @@ export const UpdateAllowanceSettingsResponse = zod.object({
   "vacationMethod": zod.enum(['bwavg', 'factor']).describe('Urlaubs-Berechnung — bwavg = §11 BUrlG 13-Wochen-Schnitt, factor = prozentualer Stunden-Faktor.'),
   "vacationHoursPerDay": zod.number().describe('Stunden je Urlaubstag (Anzeige Tage = Stunden \/ diesem Wert).'),
   "vacationFactor": zod.number().describe('Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor.'),
+  "ersatzruhetagEnabled": zod.boolean().describe('Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktiv? Bei false verdient Feiertagsarbeit keinen Ausgleichs-Ruhetag.'),
   "updatedAt": zod.coerce.date()
 })
 
@@ -1173,7 +1176,8 @@ export const GetVacationBalanceResponse = zod.object({
   "method": zod.enum(['bwavg', 'factor']),
   "restDaysEarned": zod.number().optional().describe('Ersatzruhetage (§ 11 Abs. 3 ArbZG): Anzahl Feiertage mit bestaetigter Arbeit.'),
   "restDaysRedeemed": zod.number().optional().describe('Eingeloeste Ersatzruhetage (Anzahl Freizeitausgleich-Tage).'),
-  "restDaysBalance": zod.number().optional().describe('Verbleibendes Ersatzruhetag-Guthaben (verdient − eingeloest).')
+  "restDaysBalance": zod.number().optional().describe('Verbleibendes Ersatzruhetag-Guthaben (verdient − eingeloest).'),
+  "ersatzruhetagEnabled": zod.boolean().optional().describe('Ist das Ersatzruhetag-Konto für dieses Team aktiv? Bei false wird keine Feiertagsarbeit gutgeschrieben (restDaysEarned = 0).')
 })
 
 

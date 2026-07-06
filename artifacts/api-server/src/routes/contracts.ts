@@ -271,9 +271,17 @@ router.get(
           eq(shiftsTable.type, "work"),
         ),
       );
-    const restDaysEarned = workedHolidayDates.filter((r) =>
-      isGermanHoliday(new Date(`${r.day}T12:00:00Z`), restState),
-    ).length;
+    // Werktags-Regel (§ 11 Abs. 3 ArbZG): Nur Feiertage auf einem Werktag (Mo–Sa)
+    // verdienen einen Ersatzruhetag. Faellt der Feiertag auf einen Sonntag,
+    // entstehen nur Sonntags-/Feiertagszuschlaege, aber KEIN zusaetzlicher
+    // Ausgleichs-Ruhetag. Ist das Konto deaktiviert, wird nichts gutgeschrieben
+    // (bereits eingeloeste Tage bleiben unberuehrt).
+    const restDaysEarned = ops.ersatzruhetagEnabled
+      ? workedHolidayDates.filter((r) => {
+          const holidayDate = new Date(`${r.day}T12:00:00Z`);
+          return holidayDate.getUTCDay() !== 0 && isGermanHoliday(holidayDate, restState);
+        }).length
+      : 0;
     const [redeemedRow] = await db
       .select({ count: sql<number>`COUNT(*)` })
       .from(shiftsTable)
@@ -301,6 +309,7 @@ router.get(
       restDaysEarned,
       restDaysRedeemed,
       restDaysBalance,
+      ersatzruhetagEnabled: ops.ersatzruhetagEnabled,
     });
   },
 );

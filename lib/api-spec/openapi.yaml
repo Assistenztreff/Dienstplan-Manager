@@ -2211,6 +2211,7 @@ components:
           vacationMethod,
           vacationHoursPerDay,
           vacationFactor,
+          ersatzruhetagEnabled,
           updatedAt,
         ]
       properties:
@@ -2252,6 +2253,11 @@ components:
         vacationFactor:
           type: number
           description: Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor.
+        ersatzruhetagEnabled:
+          type: boolean
+          description: >-
+            Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktiv? Bei false verdient
+            Feiertagsarbeit keinen Ausgleichs-Ruhetag.
         updatedAt:
           type: string
           format: date-time
@@ -2296,6 +2302,9 @@ components:
         vacationFactor:
           type: number
           minimum: 0
+        ersatzruhetagEnabled:
+          type: boolean
+          description: Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktivieren/deaktivieren.
 
     BrandingSettings:
       type: object
@@ -2687,6 +2696,11 @@ components:
         restDaysBalance:
           type: integer
           description: Verbleibendes Ersatzruhetag-Guthaben (verdient − eingeloest).
+        ersatzruhetagEnabled:
+          type: boolean
+          description: >-
+            Ist das Ersatzruhetag-Konto für dieses Team aktiv? Bei false wird
+            keine Feiertagsarbeit gutgeschrieben (restDaysEarned = 0).
 
     AuthUser:
       type: object

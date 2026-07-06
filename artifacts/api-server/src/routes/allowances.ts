@@ -85,13 +85,26 @@ router.put("/allowance-settings", requireAdmin, async (req, res): Promise<void> 
   if (teamId !== undefined) {
     const team = await assertOwnTeam(req, res, teamId);
     if (!team) return;
+    // Nur Zuschläge/Bundesland/Abrechnungsart sind Team-Overrides. Konto-weite
+    // Regeln (Auto-Genehmigung, Urlaubsberechnung, Ersatzruhetag-Konto) gelten
+    // global und werden hier bewusst NICHT übernommen — sonst könnte ein Client
+    // sie pro Team abweichend setzen.
+    const teamOverridable = {
+      nightPercent: body.data.nightPercent,
+      nightStart: body.data.nightStart,
+      nightEnd: body.data.nightEnd,
+      sundayPercent: body.data.sundayPercent,
+      holidayPercent: body.data.holidayPercent,
+      state: body.data.state,
+      billingMethod: body.data.billingMethod,
+    };
     // Upsert des Team-Overrides (UNIQUE team_id).
     const [saved] = await db
       .insert(allowanceSettingsTable)
-      .values({ ownerId, teamId, ...body.data })
+      .values({ ownerId, teamId, ...teamOverridable })
       .onConflictDoUpdate({
         target: allowanceSettingsTable.teamId,
-        set: { ...body.data, updatedAt: new Date() },
+        set: { ...teamOverridable, updatedAt: new Date() },
       })
       .returning();
     res.json({ ...saved, isOverride: true });

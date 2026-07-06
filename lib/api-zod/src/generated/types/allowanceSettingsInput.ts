@@ -42,4 +42,6 @@ export interface AllowanceSettingsInput {
   vacationHoursPerDay?: number;
   /** @minimum 0 */
   vacationFactor?: number;
+  /** Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktivieren/deaktivieren. */
+  ersatzruhetagEnabled?: boolean;
 }

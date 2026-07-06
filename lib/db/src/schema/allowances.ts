@@ -51,6 +51,10 @@ export const allowanceSettingsTable = pgTable(
     vacationMethod: vacationMethodEnum("vacation_method").notNull().default("bwavg"),
     vacationHoursPerDay: real("vacation_hours_per_day").notNull().default(8),
     vacationFactor: real("vacation_factor").notNull().default(0.0941),
+    // Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG): steuert, ob Feiertagsarbeit einen
+    // Ausgleichs-Ruhetag verdient. Aus Förder-/Kostenträger-Gründen abschaltbar;
+    // Default true = Bestandsschutz (bisheriges Verhalten bleibt gleich).
+    ersatzruhetagEnabled: boolean("ersatzruhetag_enabled").notNull().default(true),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [

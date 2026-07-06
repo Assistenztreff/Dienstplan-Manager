@@ -31,6 +31,7 @@ type FormState = {
   vacationMethod: string;
   vacationHoursPerDay: string;
   vacationFactor: string;
+  ersatzruhetagEnabled: boolean;
 };
 
 // Sonderwert für "erbt" (Abrechnungsart nicht auf dieser Ebene gesetzt).
@@ -127,6 +128,7 @@ export function AllowanceSettingsForm() {
     vacationMethod: "bwavg",
     vacationHoursPerDay: "8",
     vacationFactor: "0.0941",
+    ersatzruhetagEnabled: true,
   });
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [saving, setSaving] = useState(false);
@@ -151,6 +153,7 @@ export function AllowanceSettingsForm() {
         vacationMethod: settings.vacationMethod ?? "bwavg",
         vacationHoursPerDay: String(settings.vacationHoursPerDay ?? 8),
         vacationFactor: String(settings.vacationFactor ?? 0.0941),
+        ersatzruhetagEnabled: settings.ersatzruhetagEnabled ?? true,
       });
       setErrors({});
       setSaved(false);
@@ -225,6 +228,7 @@ export function AllowanceSettingsForm() {
                 vacationMethod: form.vacationMethod as AllowanceSettingsInputVacationMethod,
                 vacationHoursPerDay: Number(form.vacationHoursPerDay),
                 vacationFactor: Number(form.vacationFactor),
+                ersatzruhetagEnabled: form.ersatzruhetagEnabled,
               }
             : {}),
         },
@@ -417,6 +421,29 @@ export function AllowanceSettingsForm() {
                         data-testid="allowance-auto-approve-switch"
                         checked={form.autoApproveTimesheets}
                         onCheckedChange={(v) => set("autoApproveTimesheets", v)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="border-t border-border/60 pt-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="ersatzruhetagEnabled" className="text-sm font-semibold">
+                          Ersatzruhetag-Konto für Feiertage
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Wer an einem gesetzlichen Feiertag arbeitet, erhält nach § 11 Abs. 3 ArbZG
+                          einen Ausgleichs-Ruhetag gutgeschrieben. Nur Feiertage an Werktagen (Mo–Sa)
+                          zählen — fällt ein Feiertag auf einen Sonntag, entstehen nur Zuschläge, aber
+                          kein zusätzlicher Ausgleichstag. Ausschalten, wenn kein Ausgleichskonto
+                          geführt werden soll.
+                        </p>
+                      </div>
+                      <Switch
+                        id="ersatzruhetagEnabled"
+                        data-testid="allowance-ersatzruhetag-switch"
+                        checked={form.ersatzruhetagEnabled}
+                        onCheckedChange={(v) => set("ersatzruhetagEnabled", v)}
                       />
                     </div>
                   </div>

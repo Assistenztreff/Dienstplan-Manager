@@ -29,4 +29,6 @@ export interface VacationBalance {
   restDaysRedeemed?: number;
   /** Verbleibendes Ersatzruhetag-Guthaben (verdient − eingeloest). */
   restDaysBalance?: number;
+  /** Ist das Ersatzruhetag-Konto für dieses Team aktiv? Bei false wird keine Feiertagsarbeit gutgeschrieben (restDaysEarned = 0). */
+  ersatzruhetagEnabled?: boolean;
 }

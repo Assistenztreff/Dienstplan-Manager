@@ -14,6 +14,9 @@ export interface ResolvedAllowanceOps {
   // Bundesland für die Feiertagserkennung (z. B. Ersatzruhetag-Konto). null =
   // nur bundesweite Feiertage.
   state: string | null;
+  // Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktiv? false = keine Gutschrift für
+  // Feiertagsarbeit.
+  ersatzruhetagEnabled: boolean;
 }
 
 export const DEFAULT_ALLOWANCE_OPS: ResolvedAllowanceOps = {
@@ -22,6 +25,7 @@ export const DEFAULT_ALLOWANCE_OPS: ResolvedAllowanceOps = {
   vacationHoursPerDay: 8,
   vacationFactor: 0.0941,
   state: null,
+  ersatzruhetagEnabled: true,
 };
 
 const opsColumns = {
@@ -30,6 +34,7 @@ const opsColumns = {
   vacationHoursPerDay: allowanceSettingsTable.vacationHoursPerDay,
   vacationFactor: allowanceSettingsTable.vacationFactor,
   state: allowanceSettingsTable.state,
+  ersatzruhetagEnabled: allowanceSettingsTable.ersatzruhetagEnabled,
 };
 
 // Löst die betrieblichen Einstellungen (Auto-Genehmigung, Urlaub) für ein Team

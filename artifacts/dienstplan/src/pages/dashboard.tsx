@@ -313,7 +313,7 @@ function AssistantVacationCard() {
             {balance.vacationDaysUsed}{" "}
             {balance.vacationDaysUsed === 1 ? "Tag" : "Tage"} bereits genommen
           </p>
-          {(balance.restDaysBalance ?? 0) !== 0 && (
+          {balance.ersatzruhetagEnabled !== false && (balance.restDaysBalance ?? 0) !== 0 && (
             <p
               className="mt-2 text-sm text-emerald-700"
               data-testid="assistant-rest-days"

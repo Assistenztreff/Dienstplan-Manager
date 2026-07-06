@@ -38,5 +38,7 @@ export interface AllowanceSettings {
   vacationHoursPerDay: number;
   /** Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor. */
   vacationFactor: number;
+  /** Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktiv? Bei false verdient Feiertagsarbeit keinen Ausgleichs-Ruhetag. */
+  ersatzruhetagEnabled: boolean;
   updatedAt: Date;
 }

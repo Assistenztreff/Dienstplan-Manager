@@ -59,3 +59,4 @@
 - [OpenAPI date query params](openapi-date-query-param-coerce.md) — declare date/time query params as type:string (maxLength), not format:date-time, or Orval emits zod.date() that rejects string query values.
 - [pg_trgm before db push](pg-trgm-extension-before-push.md) — a gin_trgm_ops index needs CREATE EXTENSION pg_trgm before push in every env (post-merge + setup-test-db incl. rebuild path).
 - [Freizeitausgleich absence classification](freizeitausgleich-absence-classification.md) — a new absence shift type must be added to EVERY inline work/absence predicate (multiple, not shared); shift-derived per-contract balances must be team-scoped.
+- [Allowance account-global vs team fields](allowance-account-global-fields.md) — team-scope PUT must whitelist only surcharge/state/billing; account-global ops (autoApprove, vacation*, ersatzruhetagEnabled) resolve from override-row defaults for teams WITH an override (pre-existing).
