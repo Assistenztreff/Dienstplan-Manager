@@ -1,0 +1,18 @@
+### CRITICAL BUGFIX DIRECTIVE: REPAIRING VACATION DEDUCTION & HOLIDAY TRACKING LOOPS
+
+We have conducted an architectural audit of the provided Drizzle schema and payroll modules. There are critical logical flaws violating our specification that need to be refactored immediately:
+
+1. Fix Vacation Day Deduction Flaw (dashboard-hours-balance.ts):
+- CRITICAL ERROR: The current code calculates vacation days taken via `.length` (1 shift = 1 day): `const vacationDaysTaken = shifts(type=vacation).length;`
+- REFACTOR: You must calculate `vacationDaysTaken` dynamically based on the configured baseline hour teiler from `allowanceSettingsTable.vacationHoursPerDay` (default 8). 
+- NEW LOGIC: `vacationDaysTaken = Σ (vacationShifts.valuedHours) / allowance.vacationHoursPerDay`. If a vacation shift credits 24 valuedHours, it must deduct exactly 3.0 days (24 / 8 = 3.0), NOT 1 day.
+
+2. Implement Public Holiday Auto-Credit Loop (dashboard-hours-balance.ts):
+- Ensure that if `allowance.autoApproveTimesheets` or a specific holiday condition is met, the monthly balance injector checks for statutory public holidays within the active month where the employee had NO shift scheduled.
+- For each un-scheduled holiday, inject a dynamic credit to `totalFulfilledHours` equal to the employee's average daily target hours to completely neutralize the day's contract target and prevent illegal negative hours ("Minusstunden").
+
+3. Fix the Absence Metrics Resolution (shift-metrics.ts & shift-metrics-resolve.ts):
+- Clean up the conflict where `computeShiftMetrics` hard-returns 0 for absences while `resolveShiftMetrics` tries to pass `isAbsence: false` to mimic a shift. 
+- Ensure that when a shift type is "sick" or "vacation" and replaces a concrete rostered 24H service, the database explicitly populates `shiftsTable.night_hours`, `sunday_hours`, and `holiday_hours` with the original shift's footprint so that the `dashboard-hours-balance.ts` aggregator can multiply them seamlessly for legal continued payments (Zuschlagsfortzahlung).
+
+Please apply these structural code fixes right away, run your internal playspec validation suites, and verify that the preview re-runs stably.
