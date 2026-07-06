@@ -1048,7 +1048,9 @@ export default function Einstellungen() {
   const [editModel, setEditModel] = useState<ShiftModel | undefined>();
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
-  const sortedModels: ShiftModel[] = (models ?? []) as ShiftModel[];
+  // Soft-geloeschte Modelle (isActive=false) bleiben fuer die Historie in der DB,
+  // sollen aber weder in der Verwaltung noch in den Auswahllisten auftauchen.
+  const sortedModels: ShiftModel[] = ((models ?? []) as ShiftModel[]).filter((m) => m.isActive);
   const nextSortOrder =
     sortedModels.length > 0 ? Math.max(...sortedModels.map((m) => m.sortOrder)) + 10 : 10;
 

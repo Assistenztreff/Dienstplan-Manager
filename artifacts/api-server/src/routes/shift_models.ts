@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { shiftModelsTable } from "@workspace/db";
+import { shiftModelsTable, shiftsTable } from "@workspace/db";
 import { eq, asc, and, inArray, count } from "drizzle-orm";
 import {
   ListShiftModelsQueryParams,
@@ -70,10 +70,13 @@ router.post("/shift-models", requireAdmin, async (req, res): Promise<void> => {
   // WEITEREN Modells ueber dem Limit sperren (Bestandsschutz — vorhandene
   // Modelle bleiben unberuehrt und editierbar/loeschbar). Gezaehlt wird pro
   // Ziel-Team, da Schichtmodelle team-scoped sind.
+  // Nur AKTIVE Modelle zaehlen gegen das Free-Limit. Soft-geloeschte Modelle
+  // (isActive=false, s. DELETE-Route) belegen keinen Slot mehr, damit das
+  // Loeschen eines historisch verknuepften Dienstes wieder Platz schafft.
   const [{ value: existingCount }] = await db
     .select({ value: count() })
     .from(shiftModelsTable)
-    .where(eq(shiftModelsTable.teamId, write.teamId));
+    .where(and(eq(shiftModelsTable.teamId, write.teamId), eq(shiftModelsTable.isActive, true)));
   if (!(await userWithinLimit(req.session.userId!, "maxShiftModels", existingCount))) {
     const max = await getUserLimit(req.session.userId!, "maxShiftModels");
     res.status(403).json({
@@ -115,13 +118,38 @@ router.delete("/shift-models/:id", requireAdmin, async (req, res): Promise<void>
     return;
   }
   const allowedTeams = await getAllowedTeamIds(req.session.userId!);
-  const [deleted] = await db
-    .delete(shiftModelsTable)
+
+  // Existenz + Team-Scope pruefen (404 bei fremdem/unbekanntem Modell, kein IDOR).
+  const [existing] = await db
+    .select({ id: shiftModelsTable.id })
+    .from(shiftModelsTable)
     .where(and(eq(shiftModelsTable.id, params.data.id), inArray(shiftModelsTable.teamId, allowedTeams)))
-    .returning();
-  if (!deleted) {
+    .limit(1);
+  if (!existing) {
     res.status(404).json({ error: "Not found" });
     return;
+  }
+
+  // Ist das Modell noch mit (auch vergangenen) Schichten verknuepft, wuerde ein
+  // Hard-Delete deren Bezug kappen (shifts.shift_model_id ON DELETE SET NULL) und
+  // damit die historische Lohnauswertung verfaelschen (Verguetungs-/Bewertungs-
+  // daten stammen aus dem Modell). Deshalb Soft-Delete: isActive=false. Das
+  // Modell verschwindet aus den Auswahllisten, bleibt aber fuer die Historie
+  // erhalten. Nur ein nie genutztes Modell wird echt geloescht (kein Datenmuell).
+  const [{ value: linkedShifts }] = await db
+    .select({ value: count() })
+    .from(shiftsTable)
+    .where(eq(shiftsTable.shiftModelId, params.data.id));
+
+  if (linkedShifts > 0) {
+    await db
+      .update(shiftModelsTable)
+      .set({ isActive: false })
+      .where(and(eq(shiftModelsTable.id, params.data.id), inArray(shiftModelsTable.teamId, allowedTeams)));
+  } else {
+    await db
+      .delete(shiftModelsTable)
+      .where(and(eq(shiftModelsTable.id, params.data.id), inArray(shiftModelsTable.teamId, allowedTeams)));
   }
   res.status(204).send();
 });

@@ -268,11 +268,13 @@ export default function Abwesenheiten() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Ganztägig (Standard)</SelectItem>
-                  {(shiftModels ?? []).map((m) => (
-                    <SelectItem key={m.id} value={String(m.id)}>
-                      {m.name}
-                    </SelectItem>
-                  ))}
+                  {(shiftModels ?? [])
+                    .filter((m) => m.isActive)
+                    .map((m) => (
+                      <SelectItem key={m.id} value={String(m.id)}>
+                        {m.name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
