@@ -2308,16 +2308,14 @@ components:
 
     BrandingSettings:
       type: object
-      required: [id, updatedAt]
       properties:
-        id:
-          type: integer
         logoPath:
           type: ["string", "null"]
           description: Object-Storage-Pfad des hochgeladenen Logos (z.B. `/objects/uploads/uuid`) oder null.
         updatedAt:
-          type: string
+          type: ["string", "null"]
           format: date-time
+          description: Zeitpunkt der letzten Änderung; null, wenn (noch) keine Konto-/Team-Zeile existiert (Fallback ohne Team).
 
     BrandingSettingsInput:
       type: object

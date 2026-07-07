@@ -35,7 +35,7 @@ const PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 const PNG_BUFFER = Buffer.from(PNG_BASE64, "base64");
 
-type BrandingSettings = { id: number; logoPath: string | null };
+type BrandingSettings = { logoPath: string | null };
 
 let adminCtx: APIRequestContext;
 let originalLogoPath: string | null = null;

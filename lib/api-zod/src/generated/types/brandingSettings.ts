@@ -7,11 +7,14 @@
  */
 
 export interface BrandingSettings {
-  id: number;
   /**
      * Object-Storage-Pfad des hochgeladenen Logos (z.B. `/objects/uploads/uuid`) oder null.
      * @nullable
      */
   logoPath?: string | null;
-  updatedAt: Date;
+  /**
+     * Zeitpunkt der letzten Änderung; null, wenn (noch) keine Konto-/Team-Zeile existiert (Fallback ohne Team).
+     * @nullable
+     */
+  updatedAt?: Date | null;
 }

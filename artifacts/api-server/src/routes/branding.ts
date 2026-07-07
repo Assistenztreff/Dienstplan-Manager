@@ -84,7 +84,7 @@ router.get("/branding-settings", requireAuth, async (req, res): Promise<void> =>
   }
   const ownerId = await resolveAccountOwnerId(req.session.userId!);
   if (ownerId == null) {
-    res.json({ id: null, ownerId: null, logoPath: null, updatedAt: null });
+    res.json({ ownerId: null, logoPath: null, updatedAt: null });
     return;
   }
   const settings = await ensureAccountSettings(ownerId);

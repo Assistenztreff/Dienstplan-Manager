@@ -811,9 +811,8 @@ export const GetBrandingSettingsQueryParams = zod.object({
 })
 
 export const GetBrandingSettingsResponse = zod.object({
-  "id": zod.number(),
   "logoPath": zod.string().nullish().describe('Object-Storage-Pfad des hochgeladenen Logos (z.B. `\/objects\/uploads\/uuid`) oder null.'),
-  "updatedAt": zod.coerce.date()
+  "updatedAt": zod.coerce.date().nullish().describe('Zeitpunkt der letzten Änderung; null, wenn (noch) keine Konto-\/Team-Zeile existiert (Fallback ohne Team).')
 })
 
 
@@ -826,9 +825,8 @@ export const UpdateBrandingSettingsBody = zod.object({
 })
 
 export const UpdateBrandingSettingsResponse = zod.object({
-  "id": zod.number(),
   "logoPath": zod.string().nullish().describe('Object-Storage-Pfad des hochgeladenen Logos (z.B. `\/objects\/uploads\/uuid`) oder null.'),
-  "updatedAt": zod.coerce.date()
+  "updatedAt": zod.coerce.date().nullish().describe('Zeitpunkt der letzten Änderung; null, wenn (noch) keine Konto-\/Team-Zeile existiert (Fallback ohne Team).')
 })
 
 
