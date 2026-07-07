@@ -1,20 +1,32 @@
 ---
-name: pg_trgm extension before db push
-description: A trigram GIN index needs the pg_trgm extension created in every DB that runs db push, before the push.
+name: pg_trgm / extension-dependent indexes break Replit publish
+description: Why trigram GIN (or any extension-dependent) indexes are a bad fit for schemas published to Replit production, and what to do instead.
 ---
 
-# pg_trgm extension must exist before db push
+# Extension-dependent indexes (pg_trgm GIN) don't survive Replit publish
 
-Any Drizzle schema index using `gin_trgm_ops` (trigram GIN index, e.g. for fast
-text search on a note/reference column) requires the `pg_trgm` extension to
-already exist in the target database, or `drizzle-kit push`'s `CREATE INDEX`
-fails.
+A Drizzle schema index using `gin_trgm_ops` (trigram GIN, e.g. for fast ILIKE
+search on a note/reference column) requires the `pg_trgm` extension to exist in
+the target DB before `drizzle-kit push` runs its `CREATE INDEX` — `push` never
+creates extensions itself.
 
-**Why:** `db push` does not create extensions. Dev DB was fixed once by hand,
-but every other environment that runs push needs it too.
+**Why this bites in production:** dev/test push paths can be made to run
+`CREATE EXTENSION IF NOT EXISTS pg_trgm` first (post-merge, setup-test-db), but
+the **Replit Publish flow does not** — it only applies the dev→prod schema
+diff, and it cannot `CREATE EXTENSION` on the managed production DB. So an
+extension-dependent index publishes fine in dev yet fails the production publish
+("pg_trgm not enabled" / CREATE INDEX error). You must not add prod DDL, hooks,
+or startup DDL to work around it — see `database-migrations-on-publish`.
 
-**How to apply:** Run `CREATE EXTENSION IF NOT EXISTS pg_trgm` (idempotent)
-BEFORE `db push` in every push path:
-- `scripts/post-merge.sh` (production/main reconciliation)
-- `scripts/src/setup-test-db.ts` — both the initial push AND the drop+recreate
-  rebuild path (a fresh `<db>_test` starts without the extension).
+**Decision (applied):** the trigram GIN index on `plan_changes.note` was
+removed entirely. The operator-dashboard note search is plain
+`ilike(..., '%term%')` and stays fully functional without the index (just a
+sequential scan; the audit log is small). The `CREATE EXTENSION pg_trgm` steps
+were also removed from `post-merge.sh` and `setup-test-db.ts` since nothing else
+used the extension.
+
+**How to apply:** for any schema that will be published to Replit production,
+avoid indexes/column types that need a Postgres extension. If a genuine
+performance need for trigram/GIN search ever returns, it cannot be solved purely
+in the schema — it needs the extension enabled on production through a supported
+mechanism, which the publish flow does not provide.
