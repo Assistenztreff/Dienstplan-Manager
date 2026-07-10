@@ -1,0 +1,38 @@
+Hallo Replit-Agent! Unser nächster Meilenstein ist es, das nutzerseitige Frontend unserer Dienstplan-App (Kalenderblatt, Schichttabelle, Steuerungsleiste, Filter, ShiftDialog) strikt nach den WCAG 2.1 (AA) Richtlinien barrierefrei umzusetzen, um einen Google Lighthouse Accessibility Score von 90+ zu erreichen. 
+
+Fokussiere dich NUR auf das User-Frontend (lasse das Operator/Admin-Dashboard vorerst außen vor). Führe die folgenden Tasks sequenziell und ohne Schritte zu überspringen aus.
+
+---
+
+### TASK 1: SEMANTISCHES HTML & ARIA-ATTRIBUTE (USER-FRONTEND)
+1. Analysiere die Hauptansichten (src/pages/dienstplan.tsx, src/components/layout.tsx und src/components/shift-dialog.tsx).
+2. Refaktoriere interaktive Elemente: Falls <div> oder <span> für Klicks/Interaktionen genutzt werden, ersetze sie durch native <button>- oder <a>-Elemente.
+3. Ergänze komplexe Custom-Komponenten (wie den Monatswechsler oder die Filter-Pillen) mit expliziten ARIA-Attributen:
+   - `aria-expanded="true/false"` bei geöffneten/geschlossenen Dropdowns oder Drawern.
+   - Eindeutige `aria-label` für Icon-Buttons (z. B. die Pfeiltasten des Monatswechslers: aria-label="Vorheriger Monat").
+   - Der Monatswechsler oder dynamische Fehlermeldungen (z.B. im ShiftDialog bei Überschneidungen) müssen für Screenreader mit `aria-live="polite"` umschlossen sein, damit Änderungen angesagt werden.
+
+---
+
+### TASK 2: TASTATUR-NAVIGATION & FOKUS-MANAGEMENT
+1. Jedes interaktive Element (jeder Tag/jede Zelle im Kalender, Knöpfe in der Sticky-Leiste, Inputs im Dialog) muss mittels [TAB]-Taste erreichbar sein. Nutze falls nötig `tabIndex={0}` für interaktive Grid-Zellen.
+2. Implementiere einen sichtbaren, kontrastreichen Fokus-Ring mit Tailwind CSS auf ALLEN interaktiven Elementen bei Tastaturfokus. Verwende dazu konsistent:
+   `focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none focus:outline-none`
+3. Stelle sicher, dass im Multi-Select-Modus (Mehrere bearbeiten) ausgewählte Tage im Kalender auch per [LEERTASTE] oder [ENTER] umgeschaltet werden können, wenn die Zelle fokussiert ist (`onKeyDown` Handler ergänzen).
+
+---
+
+### TASK 3: FARBKONTRASTE & VISUELLE BARRIEREFREIHEIT
+1. Überprüfe die Pastell-Farben der Schichten (Dienstplan-Ansicht) und die Status-Badges im `ShiftDialog`.
+2. Die Text-zu-Hintergrund-Kontraste MÜSSEN die WCAG AA-Kriterien erfüllen:
+   - Mindestens 4,5:1 für normalen Text.
+   - Mindestens 3:1 für großen/fetten Text.
+   - Falls nötig, dunkle die Textfarben auf hellen Schichthintergründen ab oder nutze `dark:text-...` Modifikatoren.
+3. WICHTIG: Information darf NIEMALS nur durch Farbe übertragen werden. Wenn eine Schicht ein "Entwurf" (VORLAEUFIG) oder ein "Vorschlag" (ANGEBOTEN) ist oder einen Konflikt aufweist, darf das nicht nur über die Badge-Farbe signalisiert werden. Füge gut sichtbare Text-Indikatoren oder beschreibende Lucide-Icons (z. B. eine Warnung oder ein Stift-Symbol) mit passendem `aria-label` bzw. visuellem Text hinzu.
+
+---
+
+### TASK 4: CODE-VALIDIERUNG & TYP-SICHERHEIT
+1. Stelle sicher, dass alle modifizierten TSX-Komponenten valides HTML erzeugen (z. B. keine <button> innerhalb von anderen <button>).
+2. Führe nach den Änderungen ein lokales Typechecking durch. Der Befehl `pnpm run typecheck` (oder `npm run typecheck`) muss fehlerfrei durchlaufen.
+3. Gib mir eine kurze Zusammenfassung, welche Dateien du optimiert hast und welche ARIA-Features eingebaut wurden.

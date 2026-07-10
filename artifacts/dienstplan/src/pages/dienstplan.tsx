@@ -284,7 +284,9 @@ function TeamAbsenceOverview({
   onShiftClick: (shift: Shift) => void;
   canEdit: boolean;
 }) {
-  const [open, setOpen] = useState(true);
+  // Standardmaessig eingeklappt, damit im Full-Screen-Layout maximale Hoehe
+  // fuer den Kalender bleibt; bei Bedarf per Klick aufklappbar.
+  const [open, setOpen] = useState(false);
   const today = startOfDay(new Date());
   const nameById = new Map(assistants.map((a) => [a.id, a.name]));
   const ranges = buildAbsenceRanges(shifts, nameById).filter(
@@ -336,7 +338,7 @@ function TeamAbsenceOverview({
       </button>
 
       {open && (
-        <div className="border-t border-border/50 px-4 py-3">
+        <div className="max-h-56 overflow-y-auto border-t border-border/50 px-4 py-3">
           {ranges.length === 0 ? (
             <p className="text-sm text-muted-foreground" data-testid="team-absence-empty">
               Keine laufenden oder anstehenden Abwesenheiten in diesem Monat.
@@ -1103,12 +1105,14 @@ export default function Dienstplan() {
     }
   }
 
+  // Kompakte Steuerleiste: bleibt im Full-Screen-Layout fix am oberen Rand
+  // (shrink-0), damit der Kalender darunter den Rest der Hoehe bekommt.
   const Header = () => (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+    <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
         <div>
-          <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Dienstplan</h2>
-          <p className="text-muted-foreground mt-1 text-sm">Monatsansicht der Schichten</p>
+          <h2 className="text-xl md:text-2xl font-serif font-bold text-foreground">Dienstplan</h2>
+          <p className="text-muted-foreground text-xs hidden lg:block">Monatsansicht der Schichten</p>
         </div>
         <TeamSwitcher />
       </div>
@@ -1200,9 +1204,11 @@ export default function Dienstplan() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6 animate-in fade-in duration-300">
+      /* Gleiches Full-Screen-Geruest wie der geladene Zustand, damit der
+         Lade-Skeleton auf kleinen Viewports nicht abgeschnitten wird. */
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden animate-in fade-in duration-300">
         <Header />
-        <div className="space-y-3">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
           {[1, 2, 3, 4, 5].map((i) => (
             <Skeleton key={i} className="h-16 w-full rounded-lg" />
           ))}
@@ -1215,7 +1221,10 @@ export default function Dienstplan() {
     isAdmin && forwardLimit !== null && monthsAhead(currentDate, new Date()) > forwardLimit;
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    /* Full-Screen-Grid: Seite fuellt exakt die vom Layout bereitgestellte
+       Hoehe (flex-1) und scrollt NICHT selbst — nur der Kalenderbereich
+       weiter unten scrollt autark (overflow-y-auto). */
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden animate-in fade-in duration-300">
       <Header />
 
       {/* Free-Plan: Hinweis, wenn der angezeigte Monat ausserhalb des erlaubten
@@ -1240,9 +1249,10 @@ export default function Dienstplan() {
         />
       )}
 
-      {/* Mobile: umschaltbare Ansicht (Liste / Monatsgitter) */}
-      <div className="md:hidden space-y-3" data-testid="dienstplan-mobile">
-        <div className="flex items-center justify-between gap-2">
+      {/* Mobile: umschaltbare Ansicht (Liste / Monatsgitter) — nimmt die
+          restliche Hoehe ein, die eigentliche Ansicht scrollt intern. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-3 md:hidden" data-testid="dienstplan-mobile">
+        <div className="flex shrink-0 items-center justify-between gap-2">
           <ViewToggle
             value={mobileView}
             onChange={(v) => setMobileView(v as "list" | "grid")}
@@ -1261,6 +1271,9 @@ export default function Dienstplan() {
           />
         )}
 
+        {/* Kalender-Streckung: fuellt den Rest bis zum unteren Rand und
+            scrollt bei Bedarf in sich selbst. */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
         {mobileView === "list" ? (
           <AgendaView
             days={days}
@@ -1291,11 +1304,13 @@ export default function Dienstplan() {
             onToggleDate={toggleDate}
           />
         )}
+        </div>
       </div>
 
-      {/* Desktop: umschaltbare Ansicht (Tabelle / Monatsgitter) */}
-      <div className="hidden md:block space-y-4" data-testid="dienstplan-desktop">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
+      {/* Desktop: umschaltbare Ansicht (Tabelle / Monatsgitter) — nimmt die
+          restliche Hoehe ein, die eigentliche Ansicht scrollt intern. */}
+      <div className="hidden min-h-0 flex-1 flex-col gap-3 md:flex" data-testid="dienstplan-desktop">
+        <div className="flex shrink-0 items-center justify-between gap-3 flex-wrap">
           <ViewToggle
             value={desktopView}
             onChange={(v) => setDesktopView(v as "table" | "grid")}
@@ -1313,6 +1328,9 @@ export default function Dienstplan() {
           )}
         </div>
 
+        {/* Kalender-Streckung: fuellt den Rest bis zum unteren Rand und
+            scrollt bei Bedarf in sich selbst (Monatsgitter wie Tabelle). */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
         {desktopView === "grid" ? (
           <MonthGrid
             days={days}
@@ -1486,6 +1504,7 @@ export default function Dienstplan() {
         </table>
       </Card>
         )}
+        </div>
       </div>
 
       {/* Floating Action Bar im Auswahl-Modus mit mindestens einem Tag. */}

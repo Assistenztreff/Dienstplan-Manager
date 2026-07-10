@@ -280,15 +280,16 @@ function AppSubNavigation() {
         </div>
       </div>
 
-      {/* Desktop: zweizeiliger, zentrierter Pillen-Balken mit Umbruch.
-          Unveraendert wie zuvor, nur ab md sichtbar. */}
+      {/* Desktop: kompakter, einzeiliger Pillen-Balken (text-xs, wenig
+          vertikales Padding), damit die Navigation auf iPad/Desktop in einer
+          Zeile bleibt und maximal Hoehe fuer den Inhalt (Kalender) frei wird. */}
       <div className="sticky top-0 z-30 hidden shrink-0 border-b border-slate-200 bg-slate-100 md:block">
-        <div className="mx-auto max-w-7xl px-4 py-8">
-          <nav className="flex flex-wrap items-center justify-center gap-x-3 gap-y-4">
+        <div className="mx-auto max-w-7xl px-4 py-2">
+          <nav className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
             {navItems.map((item) => (
               <Link key={item.href} href={item.href}>
                 <span
-                  className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors cursor-pointer ${
+                  className={`flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors cursor-pointer ${
                     location === item.href
                       ? "bg-brand-yellow text-brand-dark font-medium"
                       : "text-slate-600 hover:bg-slate-200 hover:text-slate-900"
@@ -303,7 +304,7 @@ function AppSubNavigation() {
               type="button"
               onClick={() => void handleLogout()}
               disabled={loggingOut}
-              className="flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-sm text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 disabled:opacity-60"
+              className="flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 disabled:opacity-60"
               title={currentUser ? `Angemeldet als ${currentUser.name}` : "Abmelden"}
             >
               <LogOut className="h-4 w-4 shrink-0" />
@@ -321,28 +322,55 @@ function AppSubNavigation() {
 }
 
 // ---------------------------------------------------------------------------
-// App-Layout: natuerlich scrollendes Dokument (kein fixierter Footer mehr).
-// Aeusserer Container waechst mit dem Inhalt (min-h-screen, flex-col); der
-// Hauptbereich nimmt den verbleibenden Platz ein (flex-grow), der Footer
-// erscheint erst am Ende des Inhalts. Im Embed-Modus werden die
-// Plattform-Platzhalter ausgeblendet.
+// App-Layout: Full-Screen-Grid-Konzept.
+// Der aeussere Wrapper ist exakt viewport-hoch (h-dvh, overflow-hidden) —
+// die Seite selbst scrollt NIE. Header + Sub-Navigation sind fixe Zeilen,
+// der Hauptbereich nimmt den restlichen Platz ein (flex-1).
+//
+// Zwei Modi:
+// - Dienstplan (/dienstplan): main ist overflow-hidden; die Seite verwaltet
+//   ihr Scrollen selbst (Kalender scrollt autark). Der Plattform-Footer wird
+//   hier ausgeblendet, damit der Kalender bis zum unteren Rand reicht.
+// - Alle anderen Seiten: der Inhalt scrollt in einem eigenen Scroll-Container
+//   (statt im Dokument); der Footer erscheint wie bisher am Ende des Inhalts.
+// Im Embed-Modus werden die Plattform-Platzhalter ausgeblendet.
 // ---------------------------------------------------------------------------
 export function Layout({ children }: { children: React.ReactNode }) {
   const embedded = isEmbedded();
+  const [location] = useLocation();
+  // Seiten im Full-Screen-Modus (Viewport-fixiert, eigenes internes Scrollen).
+  const fullScreen = location === "/dienstplan";
 
   return (
-    <div className="flex min-h-screen flex-col bg-brand-white font-sans text-foreground">
+    <div className="flex h-dvh w-full flex-col overflow-hidden bg-brand-white font-sans text-foreground">
       {/* Plattform-Header (Platzhalter) — im Embed-Modus ausgeblendet */}
       {!embedded && <PlatformHeaderPlaceholder />}
 
       {/* Dienstplan-App: Sub-Navigation */}
       <AppSubNavigation />
 
-      {/* Hauptbereich: waechst mit dem Inhalt, zentriert & breitenbegrenzt */}
-      <main className="mx-auto w-full max-w-7xl flex-grow p-4 md:p-6">{children}</main>
+      {fullScreen ? (
+        /* Full-Screen-Modus: main fuellt den Rest des Viewports, globales
+           Scrollen ist deaktiviert — die Seite scrollt intern (Kalender). */
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col p-4 md:p-6">
+            {children}
+          </div>
+        </main>
+      ) : (
+        /* Standard-Modus: Inhalt + Footer scrollen gemeinsam in einem
+           eigenen Scroll-Container (ersetzt das fruehere Dokument-Scrollen).
+           min-h-full + flex-1 auf main druecken den Footer bei kurzen Seiten
+           wie zuvor an den unteren Viewport-Rand. */
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="flex min-h-full flex-col">
+            <main className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-6">{children}</main>
 
-      {/* Plattform-Footer (Platzhalter) — im Embed-Modus ausgeblendet */}
-      {!embedded && <PlatformFooterPlaceholder />}
+            {/* Plattform-Footer (Platzhalter) — im Embed-Modus ausgeblendet */}
+            {!embedded && <PlatformFooterPlaceholder />}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

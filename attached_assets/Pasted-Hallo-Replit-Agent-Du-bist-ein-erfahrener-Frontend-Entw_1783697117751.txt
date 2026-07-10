@@ -1,0 +1,18 @@
+Hallo Replit-Agent! Du bist ein erfahrener Frontend-Entwickler. Wir optimieren aktuell das UI/UX-Master-Layout unserer Dienstplan-App für alle Plattformen (Desktop, iPad, Mobil). Das Ziel ist ein "Full-Screen-Grid-Konzept" wie bei "Assistenz Connect", bei dem der Kalender immer zu 100 % im sichtbaren Bereich (Viewport) bleibt und nicht aus dem Bildschirm scrollt.
+
+Bitte setze folgende zwei Schritte präzise um:
+
+SCHRITT 1: Aktualisierung der Master-Layout-Datei
+Datei: `src/components/layout.tsx` (oder die entsprechende Layout-Datei)
+- Setze den äußeren Wrapper auf eine feste Höhe (`h-screen w-screen flex flex-col overflow-hidden`).
+- Verschmälere das Desktop-Menü (Sub-Navigation): Reduziere das vertikale Padding in der Navigations-Zeile von `py-8` auf `py-2`. Die Nav-Items sollen kompakten Text (`text-xs`) erhalten, damit sie auf dem iPad und Desktop in einer einzigen Zeile bleiben und nicht umbrechen.
+- Das `main`-Element, welches `{children}` rendert, muss flexibel den restlichen Platz einnehmen (`flex-1 overflow-hidden`). Ein globales Scrollen der Seite soll damit deaktiviert werden.
+
+SCHRITT 2: Optimierung der Dienstplan-Hauptseite
+Datei: `src/pages/dienstplan.tsx` (oder die Hauptansicht im pages-Ordner)
+- Der Haupt-Container dieser Seite muss die volle verfügbare Höhe einnehmen (`h-full flex flex-col overflow-hidden`).
+- Steuerungsleiste fixieren: Die Zeile mit der Überschrift ("Dienstplan"), der Mehrfachauswahl ("Mehrere bearbeiten") und dem Monatswechsler (Pfeile + "Juli 2026") soll als kompakte Flex-Zeile ganz oben in der Komponente fixiert werden.
+- Team-Abwesenheiten komprimieren: Ändere die "Team-Abwesenheiten"-Leiste so ab, dass sie standardmäßig eingeklappt (`collapsed` / geschlossen) ist, oder blende sie temporär ganz aus, um in der Höhe maximalen Platz für den Kalender zu sparen.
+- Kalender-Streckung: Das Grid oder die Tabellen-Ansicht des Kalenders muss auf `flex-grow` / `flex-1` sowie `overflow-y-auto` gesetzt werden. Dadurch füllt der Kalender exakt den restlichen Raum bis zum unteren Bildschirmrand aus und scrollt autark in sich selbst, falls der Inhalt einer Zelle groß wird.
+
+Bitte passe den Code in diesen Dateien sauber an. Achte darauf, bestehende logische Funktionen oder Hooks (wie den Monatswechsel oder die Filter) nicht zu beschädigen, sondern nur die CSS- und Tailwind-Klassen für das Layout zu optimieren. Danke!
