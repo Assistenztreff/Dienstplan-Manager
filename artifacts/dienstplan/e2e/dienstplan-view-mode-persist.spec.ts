@@ -48,13 +48,13 @@ test.describe("Dienstplan: gemerkte Kalender-Ansicht (Reload)", () => {
     const mobile = await openCalendar(page);
 
     // Standard ist das Monatsgitter ("grid").
-    await expect(mobile.getByTestId("view-toggle-grid")).toHaveAttribute("data-active", "true");
-    await expect(mobile.getByTestId("view-toggle-list")).toHaveAttribute("data-active", "false");
+    await expect(page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-grid")).toHaveAttribute("data-active", "true");
+    await expect(page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list")).toHaveAttribute("data-active", "false");
 
     // Auf die Listenansicht umschalten.
-    await mobile.getByTestId("view-toggle-list").click();
-    await expect(mobile.getByTestId("view-toggle-list")).toHaveAttribute("data-active", "true");
-    await expect(mobile.getByTestId("view-toggle-grid")).toHaveAttribute("data-active", "false");
+    await page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list").click();
+    await expect(page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list")).toHaveAttribute("data-active", "true");
+    await expect(page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-grid")).toHaveAttribute("data-active", "false");
 
     // Auswahl muss in localStorage gemerkt worden sein.
     const stored = await page.evaluate((key) => localStorage.getItem(key), MOBILE_VIEW_KEY);
@@ -65,8 +65,8 @@ test.describe("Dienstplan: gemerkte Kalender-Ansicht (Reload)", () => {
     await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible();
 
     const mobileAfter = page.getByTestId("dienstplan-mobile");
-    await expect(mobileAfter.getByTestId("view-toggle-list")).toHaveAttribute("data-active", "true");
-    await expect(mobileAfter.getByTestId("view-toggle-grid")).toHaveAttribute(
+    await expect(page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list")).toHaveAttribute("data-active", "true");
+    await expect(page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-grid")).toHaveAttribute(
       "data-active",
       "false",
     );
@@ -90,8 +90,8 @@ test.describe("Dienstplan: gemerkte Kalender-Ansicht (Reload)", () => {
     await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible();
 
     const mobile = page.getByTestId("dienstplan-mobile");
-    await expect(mobile.getByTestId("view-toggle-grid")).toHaveAttribute("data-active", "true");
-    await expect(mobile.getByTestId("view-toggle-list")).toHaveAttribute("data-active", "false");
+    await expect(page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-grid")).toHaveAttribute("data-active", "true");
+    await expect(page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list")).toHaveAttribute("data-active", "false");
 
     // Der Standard muss auch in localStorage zurückgeschrieben werden.
     await expect

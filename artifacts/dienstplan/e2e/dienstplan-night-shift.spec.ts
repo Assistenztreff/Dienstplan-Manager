@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
-import { clearUserShiftsAroundDay } from "./helpers/shifts";
+import { clearUserShiftsAroundDay, selectDayCell } from "./helpers/shifts";
 
 /**
  * E2E-Test für Nachtdienste über Mitternacht (z. B. 16:00–08:00).
@@ -141,7 +141,7 @@ test.describe("Nachtdienst über Mitternacht (Admin, mobile)", () => {
     // Einen Tag mit garantiertem Folgetag im selben Monat auswählen.
     const day = 12;
     const cell = mobile.getByTestId(dayCellId(year, month, day));
-    await cell.click();
+    await selectDayCell(page, cell);
     await expect(cell).toHaveAttribute("data-selected", "true");
 
     // --- Nachtschicht über Mitternacht anlegen ----------------------------
@@ -194,7 +194,7 @@ test.describe("Nachtdienst über Mitternacht (Admin, mobile)", () => {
 
     // Folgetag auswählen → die Schicht darf dort NICHT erscheinen.
     const nextCell = mobile.getByTestId(dayCellId(year, month, day + 1));
-    await nextCell.click();
+    await selectDayCell(page, nextCell);
     await expect(nextCell).toHaveAttribute("data-selected", "true");
     await expect(mobile.getByTestId(`shift-badge-${shiftId}`)).toHaveCount(0);
 

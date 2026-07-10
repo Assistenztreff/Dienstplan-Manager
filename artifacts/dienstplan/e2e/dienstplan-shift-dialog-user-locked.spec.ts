@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
-import { clearUserShiftsAroundDay } from "./helpers/shifts";
+import { clearUserShiftsAroundDay, selectDayCell } from "./helpers/shifts";
 
 /**
  * E2E-Test: Im Bearbeiten-Modus des ShiftDialogs ist das Assistenten-Feld
@@ -138,7 +138,7 @@ test.describe("ShiftDialog: Assistent im Bearbeiten-Modus gesperrt (Admin, mobil
 
     const day = 15;
     const cell = mobile.getByTestId(dayCellId(year, month, day));
-    await cell.click();
+    await selectDayCell(page, cell);
     await expect(cell).toHaveAttribute("data-selected", "true");
 
     // --- Schicht anlegen (für den anschließenden Bearbeiten-Test) ----------

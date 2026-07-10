@@ -716,7 +716,17 @@ function MonthGrid({
                 type="button"
                 data-testid={`day-cell-${format(day, "yyyy-MM-dd")}`}
                 data-selected={(selectionMode ? bulkSelected : selected) ? "true" : "false"}
-                onClick={() => (selectionMode ? onToggleDate?.(day) : onSelectDay(day))}
+                onClick={() => {
+                  if (selectionMode) {
+                    onToggleDate?.(day);
+                    return;
+                  }
+                  // Tag als Detail auswählen UND (für Admins) direkt den
+                  // Schicht-Dialog mit vorbelegtem Datum öffnen — wie in der
+                  // Tabellenansicht.
+                  onSelectDay(day);
+                  if (canEdit) onAddShift(day);
+                }}
                 className={`aspect-square rounded-lg bg-card flex flex-col items-center justify-start pt-1.5 gap-1 border transition-colors ${
                   bulkSelected
                     ? "border-primary ring-2 ring-primary bg-primary/5"
@@ -817,12 +827,15 @@ function ViewToggle({
             data-testid={`view-toggle-${opt.value}`}
             data-active={active ? "true" : "false"}
             onClick={() => onChange(opt.value)}
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+            title={opt.label}
+            aria-label={opt.label}
+            className={`flex items-center gap-1.5 rounded-md px-2.5 md:px-3 py-1.5 text-sm font-medium transition-colors ${
               active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
             }`}
           >
             <Icon className="h-4 w-4" />
-            {opt.label}
+            {/* Auf kleinen Screens icon-only, um die Header-Zeile schmal zu halten. */}
+            <span className="hidden md:inline">{opt.label}</span>
           </button>
         );
       })}
@@ -1105,18 +1118,37 @@ export default function Dienstplan() {
     }
   }
 
-  // Kompakte Steuerleiste: bleibt im Full-Screen-Layout fix am oberen Rand
-  // (shrink-0), damit der Kalender darunter den Rest der Hoehe bekommt.
+  // Superkompakte Steuerleiste: Überschrift, Ansicht-Umschalter, Aktionen und
+  // Monatswechsler in EINER Zeile (umbricht nur bei extrem wenig Platz).
+  // Bleibt im Full-Screen-Layout fix am oberen Rand (shrink-0), damit der
+  // Kalender darunter den Rest der Hoehe bekommt. Auf kleinen Screens
+  // schrumpfen die Buttons zu reinen Icons (Text erst ab md sichtbar).
   const Header = () => (
-    <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-        <div>
-          <h2 className="text-xl md:text-2xl font-serif font-bold text-foreground">Dienstplan</h2>
-          <p className="text-muted-foreground text-xs hidden lg:block">Monatsansicht der Schichten</p>
+    <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5">
+      <h2 className="text-lg md:text-xl font-serif font-bold text-foreground">Dienstplan</h2>
+      <TeamSwitcher />
+      <div className="ml-auto flex flex-wrap items-center gap-1.5">
+        {/* Ansicht-Umschalter: mobil Liste/Monat, ab md Tabelle/Monat. */}
+        <div className="md:hidden" data-testid="view-toggles-mobile">
+          <ViewToggle
+            value={mobileView}
+            onChange={(v) => setMobileView(v as "list" | "grid")}
+            options={[
+              { value: "list", label: "Liste", icon: List },
+              { value: "grid", label: "Monat", icon: CalendarDays },
+            ]}
+          />
         </div>
-        <TeamSwitcher />
-      </div>
-      <div className="flex items-center gap-2 md:gap-4 flex-wrap">
+        <div className="hidden md:block" data-testid="view-toggles-desktop">
+          <ViewToggle
+            value={desktopView}
+            onChange={(v) => setDesktopView(v as "table" | "grid")}
+            options={[
+              { value: "table", label: "Tabelle", icon: Table2 },
+              { value: "grid", label: "Monat", icon: CalendarDays },
+            ]}
+          />
+        </div>
         {/* Sammelaktion: alle Entwürfe/Vorschläge des sichtbaren Monats mit
             einem Klick verbindlich machen. Nur sichtbar, solange es etwas zu
             bestätigen gibt — sonst wäre der Button ein totes Element. */}
@@ -1127,11 +1159,12 @@ export default function Dienstplan() {
             className="gap-1.5"
             onClick={() => setDialog({ mode: "confirm-all" })}
             disabled={isBulkConfirming}
+            title="Alle Entwürfe bestätigen"
+            aria-label="Alle Entwürfe bestätigen"
             data-testid="confirm-all-drafts"
           >
             <Check className="h-4 w-4" />
-            <span className="hidden sm:inline">Alle Entwürfe bestätigen</span>
-            <span className="sm:hidden">Alle bestätigen</span>
+            <span className="hidden md:inline">Alle bestätigen</span>
             <span className="rounded-full bg-primary/10 px-1.5 text-xs font-semibold text-primary">
               {confirmableShifts.length}
             </span>
@@ -1149,13 +1182,13 @@ export default function Dienstplan() {
             onClick={handleSimpleExport}
             disabled={isExporting}
             title="Monatsübersicht als PDF: bestätigte Dienste und Abwesenheiten, ohne Zeiterfassung."
+            aria-label="Monatsübersicht als PDF exportieren"
             data-testid="simple-month-export"
           >
             <Download className="h-4 w-4" />
-            <span className="hidden sm:inline">
+            <span className="hidden md:inline">
               {isExporting ? "Exportiere..." : "Monats-PDF"}
             </span>
-            <span className="sm:hidden">PDF</span>
           </Button>
         )}
         {/* Massenbearbeitung ist ein Premium-Feature. Free-Konten sehen den
@@ -1168,10 +1201,14 @@ export default function Dienstplan() {
               size="sm"
               className="gap-1.5"
               onClick={toggleSelectionMode}
+              title={isSelectionMode ? "Auswahl beenden" : "Mehrere bearbeiten"}
+              aria-label={isSelectionMode ? "Auswahl beenden" : "Mehrere bearbeiten"}
               data-testid="toggle-selection-mode"
             >
               {isSelectionMode ? <X className="h-4 w-4" /> : <CheckSquare className="h-4 w-4" />}
-              {isSelectionMode ? "Auswahl beenden" : "Mehrere bearbeiten"}
+              <span className="hidden md:inline">
+                {isSelectionMode ? "Auswahl beenden" : "Mehrere bearbeiten"}
+              </span>
             </Button>
           ) : (
             <Button
@@ -1180,24 +1217,42 @@ export default function Dienstplan() {
               className="gap-1.5"
               disabled
               title="Massenbearbeitung ist in Premium enthalten."
+              aria-label="Mehrere bearbeiten (Premium)"
               data-testid="toggle-selection-mode-locked"
             >
               <Lock className="h-4 w-4" />
-              Mehrere bearbeiten
+              <span className="hidden md:inline">Mehrere bearbeiten</span>
             </Button>
           ))}
-        <Button variant="outline" size="icon" onClick={prevMonth} data-testid="prev-month">
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <span
-          className="font-medium text-sm md:text-lg min-w-[120px] md:min-w-40 text-center"
-          data-testid="month-label"
-        >
-          {format(currentDate, "MMMM yyyy", { locale: de })}
-        </span>
-        <Button variant="outline" size="icon" onClick={nextMonth} data-testid="next-month">
-          <ChevronRight className="h-4 w-4" />
-        </Button>
+        {/* Monatswechsler: Pfeile direkt am Monatstext, ohne breite Lücken. */}
+        <div className="flex items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={prevMonth}
+            aria-label="Vorheriger Monat"
+            data-testid="prev-month"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span
+            className="font-medium text-sm md:text-base whitespace-nowrap text-center"
+            data-testid="month-label"
+          >
+            {format(currentDate, "MMMM yyyy", { locale: de })}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={nextMonth}
+            aria-label="Nächster Monat"
+            data-testid="next-month"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -1249,28 +1304,22 @@ export default function Dienstplan() {
         />
       )}
 
-      {/* Mobile: umschaltbare Ansicht (Liste / Monatsgitter) — nimmt die
-          restliche Hoehe ein, die eigentliche Ansicht scrollt intern. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-3 md:hidden" data-testid="dienstplan-mobile">
-        <div className="flex shrink-0 items-center justify-between gap-2">
-          <ViewToggle
-            value={mobileView}
-            onChange={(v) => setMobileView(v as "list" | "grid")}
-            options={[
-              { value: "list", label: "Liste", icon: List },
-              { value: "grid", label: "Monat", icon: CalendarDays },
-            ]}
-          />
-        </div>
-
-        {isAdmin && assistants.length > 0 && (
+      {/* Assistenten-Legende: eine schmale, horizontal wischbare Zeile —
+          gemeinsam fuer Mobile- und Desktop-Ansicht. */}
+      {isAdmin && assistants.length > 0 && (
+        <div className="shrink-0">
           <AssistantFilter
             assistants={assistants}
             selected={selectedAssistant}
             onSelect={setSelectedAssistant}
           />
-        )}
+        </div>
+      )}
 
+      {/* Mobile: umschaltbare Ansicht (Liste / Monatsgitter) — nimmt die
+          restliche Hoehe ein, die eigentliche Ansicht scrollt intern.
+          Der Umschalter selbst sitzt in der Header-Zeile. */}
+      <div className="flex min-h-0 flex-1 flex-col md:hidden" data-testid="dienstplan-mobile">
         {/* Kalender-Streckung: fuellt den Rest bis zum unteren Rand und
             scrollt bei Bedarf in sich selbst. */}
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -1308,29 +1357,15 @@ export default function Dienstplan() {
       </div>
 
       {/* Desktop: umschaltbare Ansicht (Tabelle / Monatsgitter) — nimmt die
-          restliche Hoehe ein, die eigentliche Ansicht scrollt intern. */}
-      <div className="hidden min-h-0 flex-1 flex-col gap-3 md:flex" data-testid="dienstplan-desktop">
-        <div className="flex shrink-0 items-center justify-between gap-3 flex-wrap">
-          <ViewToggle
-            value={desktopView}
-            onChange={(v) => setDesktopView(v as "table" | "grid")}
-            options={[
-              { value: "table", label: "Tabelle", icon: Table2 },
-              { value: "grid", label: "Monat", icon: CalendarDays },
-            ]}
-          />
-          {isAdmin && assistants.length > 0 && (
-            <AssistantFilter
-              assistants={assistants}
-              selected={selectedAssistant}
-              onSelect={setSelectedAssistant}
-            />
-          )}
-        </div>
-
-        {/* Kalender-Streckung: fuellt den Rest bis zum unteren Rand und
-            scrollt bei Bedarf in sich selbst (Monatsgitter wie Tabelle). */}
-        <div className="min-h-0 flex-1 overflow-y-auto">
+          restliche Hoehe ein, die eigentliche Ansicht scrollt intern.
+          Der Umschalter selbst sitzt in der Header-Zeile. */}
+      <div className="hidden min-h-0 flex-1 flex-col md:flex" data-testid="dienstplan-desktop">
+        {/* Kalender-Streckung: Monatsgitter scrollt bei Bedarf in sich selbst;
+            die Tabelle streckt ihre Zeilen stattdessen auf die volle Hoehe
+            (kein vertikales Scrollen noetig). */}
+        <div
+          className={`min-h-0 flex-1 ${desktopView === "grid" ? "overflow-y-auto" : "overflow-hidden"}`}
+        >
         {desktopView === "grid" ? (
           <MonthGrid
             days={days}
@@ -1348,10 +1383,15 @@ export default function Dienstplan() {
             onToggleDate={toggleDate}
           />
         ) : (
-      <Card className="overflow-x-auto border-border/50 shadow-sm">
-        <table className="w-full text-sm">
+      /* Tabellen-Streckung: Card und Tabelle fuellen die volle Hoehe; die
+         Assistenten-Zeilen teilen sich den restlichen vertikalen Platz
+         gleichmaessig (Tabellenhoehe 100 %, Kopfzeile per h-px auf ihre
+         natuerliche Hoehe fixiert) — alle Zeilen ohne Scrollen sichtbar.
+         Horizontal bleibt die Tabelle bei Bedarf wischbar. */
+      <Card className="h-full overflow-auto border-border/50 shadow-sm">
+        <table className="h-full w-full text-sm">
           <thead>
-            <tr className="border-b bg-muted/50">
+            <tr className="h-px border-b bg-muted/50">
               <th className="p-3 text-left font-medium sticky left-0 bg-muted/50 backdrop-blur-sm z-10 w-48">
                 {isAdmin ? "Assistent" : "Schicht"}
               </th>
@@ -1398,12 +1438,14 @@ export default function Dienstplan() {
               tableAssistants.map((assistant) => {
                 const assistantShifts = allShifts.filter((s) => s.userId === assistant.id);
                 const absMap = absenceMapFor(assistantShifts);
+                // Keine feste Zeilenhoehe: die Zeilen strecken sich ueber die
+                // Tabellenhoehe und teilen den Platz gleichmaessig auf.
                 return (
                 <tr
                   key={assistant.id}
                   className="border-b last:border-0 hover:bg-muted/20 transition-colors"
                 >
-                  <td className="p-3 font-medium sticky left-0 bg-card hover:bg-muted/20 transition-colors z-10 shadow-[1px_0_0_0_hsl(var(--border))]">
+                  <td className="px-3 py-1.5 font-medium sticky left-0 bg-card hover:bg-muted/20 transition-colors z-10 shadow-[1px_0_0_0_hsl(var(--border))]">
                     {isAdmin ? (
                       <span className="inline-flex items-center gap-2">
                         {/* Farb-Punkt als Legende: gleiche Personenfarbe wie die
@@ -1464,7 +1506,7 @@ export default function Dienstplan() {
                             : undefined
                         }
                       >
-                        <div className="space-y-1 min-h-[32px]">
+                        <div className="space-y-1 min-h-[26px]">
                           {absence && (
                             <AbsenceTableBar
                               shift={absence}

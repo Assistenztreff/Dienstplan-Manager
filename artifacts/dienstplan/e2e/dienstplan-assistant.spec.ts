@@ -180,7 +180,7 @@ test.describe("Dienstplan-Sicht als Assistent (eingeschränkte Rechte)", () => {
 
     // Tagesgenaue Prüfung im Monatsgitter: der eigene Tag zeigt die Schicht,
     // der fremde Tag ist leer (kein Datenleck über die Tagesauswahl).
-    await desktop.getByTestId("view-toggle-grid").click();
+    await page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-grid").click();
     await expect(desktop.getByTestId("month-grid")).toBeVisible();
 
     await desktop.getByTestId(dayCellId(OWN_DAY)).click();
@@ -213,7 +213,7 @@ test.describe("Dienstplan-Sicht als Assistent (eingeschränkte Rechte)", () => {
 
     // Auch in der Monatsgitter-Ansicht gibt es keinen "Schicht"-Button und ein
     // Tagesklick legt nichts an.
-    await desktop.getByTestId("view-toggle-grid").click();
+    await page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-grid").click();
     await expect(desktop.getByTestId("month-grid")).toBeVisible();
     await expect(desktop.getByRole("button", { name: "Schicht", exact: true })).toHaveCount(0);
 

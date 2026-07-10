@@ -123,7 +123,7 @@ test("Gezieltes Löschen pro Assistent entfernt nur dessen Einträge", async ({ 
     await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible();
     const desktop = page.getByTestId("dienstplan-desktop");
     await expect(desktop).toBeVisible();
-    await expect(desktop.getByTestId("view-toggle-table")).toHaveAttribute("data-active", "true");
+    await expect(page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-table")).toHaveAttribute("data-active", "true");
 
     const { year, month } = parseMonthLabel(
       await page.getByTestId("month-label").innerText(),

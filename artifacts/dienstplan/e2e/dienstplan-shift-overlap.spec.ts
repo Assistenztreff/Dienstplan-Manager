@@ -7,6 +7,7 @@ import {
   type Locator,
 } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
+import { selectDayCell } from "./helpers/shifts";
 
 /**
  * E2E-Tests für die Kollisionswarnung beim Planen von Schichten (Task #27).
@@ -294,7 +295,7 @@ test.describe("Kollisionswarnung: ShiftDialog (Admin, mobile)", () => {
     try {
       // Den Tag auswählen, damit Bestand und neue Schicht sichtbar werden.
       const cell = mobile.getByTestId(dayCellId(year, month, day));
-      await cell.click();
+      await selectDayCell(page, cell);
       await expect(cell).toHaveAttribute("data-selected", "true");
 
       // Überschneidende Schicht 12–18 über den Dialog anlegen.

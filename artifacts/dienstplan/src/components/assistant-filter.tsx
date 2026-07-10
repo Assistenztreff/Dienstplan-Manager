@@ -1,5 +1,14 @@
 import { useEffect, useState } from "react";
-import { userBadgeClass, userDotClass } from "@/lib/shift-model-colors";
+import { userBadgeClass, userInitialsClass } from "@/lib/shift-model-colors";
+
+// Zwei-Buchstaben-Initialen (z. B. "CN" für "Camillo Neubert"): erste
+// Buchstaben der ersten beiden Namensbestandteile, sonst die ersten zwei
+// Zeichen des Namens.
+function nameInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.trim().slice(0, 2).toUpperCase();
+}
 
 export type Assistant = { id: number; name: string };
 
@@ -59,13 +68,18 @@ export function AssistantFilter({
   onSelect: (val: number | "all") => void;
 }) {
   return (
-    <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1" data-testid="assistant-filter">
+    /* Horizontale, platzsparende Legende: eine schmale Zeile, bei Überlauf
+       seitlich wischbar (Scrollbalken ausgeblendet). */
+    <div
+      className="flex flex-row items-center gap-1.5 overflow-x-auto whitespace-nowrap py-1 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      data-testid="assistant-filter"
+    >
       <button
         type="button"
         data-testid="assistant-chip-all"
         data-active={selected === "all" ? "true" : "false"}
         onClick={() => onSelect("all")}
-        className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition-colors ${
+        className={`shrink-0 rounded-full border px-3 py-1 text-xs transition-colors ${
           selected === "all"
             ? "bg-primary text-primary-foreground border-primary"
             : "bg-card text-muted-foreground border-border"
@@ -80,15 +94,21 @@ export function AssistantFilter({
           data-testid={`assistant-chip-${a.id}`}
           data-active={selected === a.id ? "true" : "false"}
           onClick={() => onSelect(a.id)}
-          className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition-colors inline-flex items-center gap-1.5 ${
+          className={`shrink-0 rounded-full border pl-1 pr-3 py-1 text-xs transition-colors inline-flex items-center gap-1.5 ${
             selected === a.id
               ? "bg-primary text-primary-foreground border-primary"
               : userBadgeClass(a.id)
           }`}
         >
-          {/* Farb-Punkt in der Personenfarbe — dient als Legende zu den
-              gleichfarbigen Dienst-Kacheln im Kalender. */}
-          <span className={`inline-block h-2 w-2 rounded-full ${userDotClass(a.id)}`} />
+          {/* Initialen-Kreis in der Personenfarbe (dunkler Ton, weiße Schrift
+              für hohen Kontrast) — hilft, ähnliche Farbtöne zu unterscheiden,
+              und dient als Legende zu den gleichfarbigen Dienst-Kacheln. */}
+          <span
+            aria-hidden="true"
+            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none ${userInitialsClass(a.id)}`}
+          >
+            {nameInitials(a.name)}
+          </span>
           {a.name}
         </button>
       ))}

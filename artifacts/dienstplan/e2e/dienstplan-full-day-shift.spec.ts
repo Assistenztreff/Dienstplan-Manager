@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
+import { selectDayCell } from "./helpers/shifts";
 
 /**
  * E2E-Test für den 24h-Dienst.
@@ -201,7 +202,7 @@ test.describe("24h-Dienst über den Folgetag (Admin, mobile)", () => {
 
     // --- Zieltag auswählen und Anlegen-Dialog öffnen -----------------------
     const cell = mobile.getByTestId(dayCellId(year, month, day));
-    await cell.click();
+    await selectDayCell(page, cell);
     await expect(cell).toHaveAttribute("data-selected", "true");
 
     await mobile.getByTestId("add-shift").click();
@@ -255,7 +256,7 @@ test.describe("24h-Dienst über den Folgetag (Admin, mobile)", () => {
 
     // Folgetag auswählen → die Schicht darf dort NICHT erscheinen.
     const nextCell = mobile.getByTestId(dayCellId(year, month, day + 1));
-    await nextCell.click();
+    await selectDayCell(page, nextCell);
     await expect(nextCell).toHaveAttribute("data-selected", "true");
     await expect(mobile.getByTestId(`shift-badge-${shiftId}`)).toHaveCount(0);
 

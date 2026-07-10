@@ -163,7 +163,7 @@ test("Listenansicht: Urlaub/Krank zeigen nur den Typ, reguläre Schicht zeigt Uh
     await expect(mobile).toBeVisible();
 
     // Auf die Listenansicht umschalten.
-    const listToggle = mobile.getByTestId("view-toggle-list");
+    const listToggle = page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list");
     await listToggle.click();
     await expect(listToggle).toHaveAttribute("data-active", "true");
 

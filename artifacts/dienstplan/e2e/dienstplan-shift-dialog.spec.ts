@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
-import { clearUserShiftsAroundDay } from "./helpers/shifts";
+import { clearUserShiftsAroundDay, selectDayCell } from "./helpers/shifts";
 
 /**
  * E2E-Test für das Anlegen und Bearbeiten einer Schicht über den ShiftDialog.
@@ -136,7 +136,7 @@ test.describe("ShiftDialog: Schicht anlegen und bearbeiten (Admin, mobile)", () 
     // Einen festen Tag im Monat auswählen.
     const day = 16;
     const cell = mobile.getByTestId(dayCellId(year, month, day));
-    await cell.click();
+    await selectDayCell(page, cell);
     await expect(cell).toHaveAttribute("data-selected", "true");
 
     // --- Neue Schicht anlegen ---------------------------------------------

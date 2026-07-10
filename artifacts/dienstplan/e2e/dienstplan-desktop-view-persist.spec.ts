@@ -59,13 +59,13 @@ test.describe("Dienstplan: gemerkte Kalender-Ansicht am PC (Reload)", () => {
     const desktop = await openCalendar(page);
 
     // Standard am PC ist die Tabellenansicht ("table").
-    await expect(desktop.getByTestId("view-toggle-table")).toHaveAttribute("data-active", "true");
-    await expect(desktop.getByTestId("view-toggle-grid")).toHaveAttribute("data-active", "false");
+    await expect(page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-table")).toHaveAttribute("data-active", "true");
+    await expect(page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-grid")).toHaveAttribute("data-active", "false");
 
     // Auf die Monatsansicht umschalten.
-    await desktop.getByTestId("view-toggle-grid").click();
-    await expect(desktop.getByTestId("view-toggle-grid")).toHaveAttribute("data-active", "true");
-    await expect(desktop.getByTestId("view-toggle-table")).toHaveAttribute("data-active", "false");
+    await page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-grid").click();
+    await expect(page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-grid")).toHaveAttribute("data-active", "true");
+    await expect(page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-table")).toHaveAttribute("data-active", "false");
 
     // Auswahl muss in localStorage gemerkt worden sein.
     const stored = await page.evaluate((key) => localStorage.getItem(key), DESKTOP_VIEW_KEY);
@@ -76,11 +76,11 @@ test.describe("Dienstplan: gemerkte Kalender-Ansicht am PC (Reload)", () => {
     await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible();
 
     const desktopAfter = page.getByTestId("dienstplan-desktop");
-    await expect(desktopAfter.getByTestId("view-toggle-grid")).toHaveAttribute(
+    await expect(page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-grid")).toHaveAttribute(
       "data-active",
       "true",
     );
-    await expect(desktopAfter.getByTestId("view-toggle-table")).toHaveAttribute(
+    await expect(page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-table")).toHaveAttribute(
       "data-active",
       "false",
     );
@@ -104,8 +104,8 @@ test.describe("Dienstplan: gemerkte Kalender-Ansicht am PC (Reload)", () => {
     await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible();
 
     const desktop = page.getByTestId("dienstplan-desktop");
-    await expect(desktop.getByTestId("view-toggle-table")).toHaveAttribute("data-active", "true");
-    await expect(desktop.getByTestId("view-toggle-grid")).toHaveAttribute("data-active", "false");
+    await expect(page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-table")).toHaveAttribute("data-active", "true");
+    await expect(page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-grid")).toHaveAttribute("data-active", "false");
 
     // Der Standard muss auch in localStorage zurückgeschrieben werden.
     await expect

@@ -134,7 +134,7 @@ async function openDesktopCalendar(page: Page): Promise<Locator> {
   const desktop = page.getByTestId("dienstplan-desktop");
   await expect(desktop).toBeVisible();
   // Tabellenansicht ist auf dem Desktop der Standard.
-  await expect(desktop.getByTestId("view-toggle-table")).toHaveAttribute("data-active", "true");
+  await expect(page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-table")).toHaveAttribute("data-active", "true");
   return desktop;
 }
 

@@ -1,6 +1,30 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 type ApiShift = { id: number; userId: number; startTime: string };
+
+/**
+ * Wählt eine Tageszelle im Monatsgitter aus, ohne den seit dem UI-Refresh
+ * automatisch geöffneten Schicht-Dialog offen zu lassen.
+ *
+ * Hintergrund: Für Admins öffnet ein Klick auf eine Monatszelle jetzt
+ * zusätzlich zur Tagesauswahl direkt den Schicht-Dialog mit vorbelegtem
+ * Datum. Specs, die nur den Tag auswählen wollen (um z. B. das Tagesdetail
+ * zu prüfen oder anschließend gezielt "+ Schicht" zu klicken), schließen den
+ * Dialog hier wieder per Escape. Bei Rollen ohne Bearbeitungsrecht oder im
+ * Auswahlmodus öffnet sich kein Dialog — dann ist das Schließen ein No-Op.
+ */
+export async function selectDayCell(page: Page, cell: Locator): Promise<void> {
+  await cell.click();
+  const dialog = page.getByTestId("shift-dialog");
+  const opened = await dialog
+    .waitFor({ state: "visible", timeout: 1500 })
+    .then(() => true)
+    .catch(() => false);
+  if (opened) {
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+  }
+}
 
 /**
  * Entfernt alle Schichten des Nutzers, die an den Tagen day-1..day+1 des

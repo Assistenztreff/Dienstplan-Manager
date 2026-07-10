@@ -69,7 +69,7 @@ test.describe("Dienstplan: gemerkter Assistenten-Filter (Reload)", () => {
   test("behält die Assistenten-Auswahl nach einem Reload bei", async ({ page }) => {
     const mobile = await openCalendar(page);
 
-    const filter = mobile.getByTestId("assistant-filter");
+    const filter = page.getByTestId("assistant-filter");
     await expect(filter).toBeVisible();
     await expect(filter.getByTestId("assistant-chip-all")).toHaveAttribute("data-active", "true");
 
@@ -91,7 +91,7 @@ test.describe("Dienstplan: gemerkter Assistenten-Filter (Reload)", () => {
     await page.reload();
     await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible();
 
-    const filterAfter = page.getByTestId("dienstplan-mobile").getByTestId("assistant-filter");
+    const filterAfter = page.getByTestId("assistant-filter");
     await expect(filterAfter.getByTestId(`assistant-chip-${assistantId}`)).toHaveAttribute(
       "data-active",
       "true",
@@ -119,7 +119,7 @@ test.describe("Dienstplan: gemerkter Assistenten-Filter (Reload)", () => {
     await page.reload();
     await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible();
 
-    const filter = page.getByTestId("dienstplan-mobile").getByTestId("assistant-filter");
+    const filter = page.getByTestId("assistant-filter");
     await expect(filter).toBeVisible();
 
     // Es darf keinen aktiven Chip für den verschwundenen Assistenten geben …

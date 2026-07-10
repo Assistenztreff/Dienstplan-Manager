@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
-import { clearUserShiftsAroundDay } from "./helpers/shifts";
+import { clearUserShiftsAroundDay, selectDayCell } from "./helpers/shifts";
 
 /**
  * E2E-Test: Beim Öffnen einer Nachtschicht ÜBER MITTERNACHT (z. B. 22:00–06:00)
@@ -140,7 +140,7 @@ test.describe("ShiftDialog: Bearbeiten belegt Nachtschicht über Mitternacht kor
     const day = 16;
     const expectedDate = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     const cell = mobile.getByTestId(dayCellId(year, month, day));
-    await cell.click();
+    await selectDayCell(page, cell);
     await expect(cell).toHaveAttribute("data-selected", "true");
 
     // --- Nachtschicht über Mitternacht anlegen (Ende < Start → Folgetag) ----

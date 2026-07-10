@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
+import { selectDayCell } from "./helpers/shifts";
 
 /**
  * E2E-Test für den Dienstplan-Kalender nach Admin-Login.
@@ -95,7 +96,7 @@ test.describe("Dienstplan-Kalender (Admin, mobile)", () => {
     parseMonthLabel(label);
 
     // Standardmäßig ist die Monatsansicht aktiv.
-    await expect(mobile.getByTestId("view-toggle-grid")).toHaveAttribute("data-active", "true");
+    await expect(page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-grid")).toHaveAttribute("data-active", "true");
     await expect(mobile.getByTestId("month-grid")).toBeVisible();
 
     // Wochentags-Kopfzeile Mo..So.
@@ -108,13 +109,13 @@ test.describe("Dienstplan-Kalender (Admin, mobile)", () => {
     const mobile = await openCalendar(page);
 
     // In die Listenansicht wechseln: Monatsgitter verschwindet.
-    await mobile.getByTestId("view-toggle-list").click();
-    await expect(mobile.getByTestId("view-toggle-list")).toHaveAttribute("data-active", "true");
+    await page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list").click();
+    await expect(page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list")).toHaveAttribute("data-active", "true");
     await expect(mobile.getByTestId("month-grid")).toHaveCount(0);
 
     // Zurück zur Monatsansicht: Gitter und Tagesdetail sichtbar.
-    await mobile.getByTestId("view-toggle-grid").click();
-    await expect(mobile.getByTestId("view-toggle-grid")).toHaveAttribute("data-active", "true");
+    await page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-grid").click();
+    await expect(page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-grid")).toHaveAttribute("data-active", "true");
     await expect(mobile.getByTestId("month-grid")).toBeVisible();
     await expect(mobile.getByTestId("day-detail-header")).toBeVisible();
   });
@@ -122,7 +123,7 @@ test.describe("Dienstplan-Kalender (Admin, mobile)", () => {
   test("Assistenten-Filter wählt aus und setzt zurück", async ({ page }) => {
     const mobile = await openCalendar(page);
 
-    const filter = mobile.getByTestId("assistant-filter");
+    const filter = page.getByTestId("assistant-filter");
     await expect(filter).toBeVisible();
     await expect(filter.getByTestId("assistant-chip-all")).toHaveAttribute("data-active", "true");
 
@@ -148,12 +149,12 @@ test.describe("Dienstplan-Kalender (Admin, mobile)", () => {
     );
 
     const cell15 = mobile.getByTestId(dayCellId(year, monthIndex, 15));
-    await cell15.click();
+    await selectDayCell(page, cell15);
     await expect(cell15).toHaveAttribute("data-selected", "true");
     await expect(mobile.getByTestId("day-detail-header")).toContainText("15.");
 
     const cell20 = mobile.getByTestId(dayCellId(year, monthIndex, 20));
-    await cell20.click();
+    await selectDayCell(page, cell20);
     await expect(cell20).toHaveAttribute("data-selected", "true");
     await expect(cell15).toHaveAttribute("data-selected", "false");
     await expect(mobile.getByTestId("day-detail-header")).toContainText("20.");

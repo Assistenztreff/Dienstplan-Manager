@@ -123,7 +123,7 @@ async function openDesktopCalendar(page: Page): Promise<Locator> {
   const desktop = page.getByTestId("dienstplan-desktop");
   await expect(desktop).toBeVisible();
   // Tabellenansicht ist auf dem Desktop der Standard.
-  await expect(desktop.getByTestId("view-toggle-table")).toHaveAttribute("data-active", "true");
+  await expect(page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-table")).toHaveAttribute("data-active", "true");
   return desktop;
 }
 
@@ -345,8 +345,8 @@ test("Monatsgitter: Mehrtägige Abwesenheiten bilden auch im Desktop- und Mobil-
     await page.reload();
     const desktop = page.getByTestId("dienstplan-desktop");
     await expect(desktop).toBeVisible();
-    await desktop.getByTestId("view-toggle-grid").click();
-    await expect(desktop.getByTestId("view-toggle-grid")).toHaveAttribute(
+    await page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-grid").click();
+    await expect(page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-grid")).toHaveAttribute(
       "data-active",
       "true",
     );

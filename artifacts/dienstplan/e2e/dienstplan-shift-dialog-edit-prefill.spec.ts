@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
-import { clearUserShiftsAroundDay } from "./helpers/shifts";
+import { clearUserShiftsAroundDay, selectDayCell } from "./helpers/shifts";
 
 /**
  * E2E-Test: Beim Öffnen einer bestehenden Schicht im Bearbeiten-Modus werden
@@ -134,7 +134,7 @@ test.describe("ShiftDialog: Bearbeiten belegt Datum/Zeit korrekt vor (Admin, mob
     const day = 16;
     const expectedDate = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     const cell = mobile.getByTestId(dayCellId(year, month, day));
-    await cell.click();
+    await selectDayCell(page, cell);
     await expect(cell).toHaveAttribute("data-selected", "true");
 
     // --- Schicht mit bekanntem Datum/Zeit anlegen --------------------------

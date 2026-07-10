@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
-import { clearUserShiftsAroundDay } from "./helpers/shifts";
+import { clearUserShiftsAroundDay, selectDayCell } from "./helpers/shifts";
 
 /**
  * E2E-Test: Beim Öffnen eines 24h-DIENSTES (identische Start-/Endzeit, z. B.
@@ -162,7 +162,7 @@ test.describe("ShiftDialog: Bearbeiten belegt 24h-Dienst korrekt vor (Admin, mob
     // In der Mobile-Ansicht erscheinen Schicht-Badges erst, wenn der Tag
     // ausgewählt ist (Tagesliste unter dem Kalender) — Tag 16 anklicken.
     const cell = mobile.getByTestId(dayCellId(year, month, day));
-    await cell.click();
+    await selectDayCell(page, cell);
     await expect(cell).toHaveAttribute("data-selected", "true");
 
     // --- Schicht im Bearbeiten-Modus öffnen --------------------------------

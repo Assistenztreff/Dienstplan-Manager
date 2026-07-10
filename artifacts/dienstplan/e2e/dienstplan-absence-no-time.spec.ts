@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
+import { selectDayCell } from "./helpers/shifts";
 
 /**
  * E2E-Test: Abwesenheiten (Urlaub/Krank) erscheinen im Kalender als
@@ -160,7 +161,7 @@ test("Urlaub/Krank zeigen nur den Typ, reguläre Schicht zeigt Uhrzeiten", async
     await expect(mobile).toBeVisible();
 
     // --- Urlaub: nur "Urlaub", keine Uhrzeit -------------------------------
-    await mobile.getByTestId(dayCellId(year, month, vacationDay)).click();
+    await selectDayCell(page, mobile.getByTestId(dayCellId(year, month, vacationDay)));
     const vacationBadge = mobile.getByTestId(`shift-badge-${vacation.id}`);
     await expect(vacationBadge).toBeVisible();
     await expect(vacationBadge).toContainText("Urlaub");
@@ -169,7 +170,7 @@ test("Urlaub/Krank zeigen nur den Typ, reguläre Schicht zeigt Uhrzeiten", async
     expect(await vacationBadge.innerText()).not.toMatch(/\d{1,2}:\d{2}/);
 
     // --- Krank: nur "Krank", keine Uhrzeit ---------------------------------
-    await mobile.getByTestId(dayCellId(year, month, sickDay)).click();
+    await selectDayCell(page, mobile.getByTestId(dayCellId(year, month, sickDay)));
     const sickBadge = mobile.getByTestId(`shift-badge-${sick.id}`);
     await expect(sickBadge).toBeVisible();
     await expect(sickBadge).toContainText("Krank");
@@ -177,7 +178,7 @@ test("Urlaub/Krank zeigen nur den Typ, reguläre Schicht zeigt Uhrzeiten", async
     expect(await sickBadge.innerText()).not.toMatch(/\d{1,2}:\d{2}/);
 
     // --- Gegenprobe: reguläre Schicht zeigt ihre Uhrzeiten -----------------
-    await mobile.getByTestId(dayCellId(year, month, workDay)).click();
+    await selectDayCell(page, mobile.getByTestId(dayCellId(year, month, workDay)));
     const workBadge = mobile.getByTestId(`shift-badge-${work.id}`);
     await expect(workBadge).toBeVisible();
     await expect(workBadge).toContainText("09:00–17:00");

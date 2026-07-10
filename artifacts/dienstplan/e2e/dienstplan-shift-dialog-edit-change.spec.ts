@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
-import { clearUserShiftsAroundDay } from "./helpers/shifts";
+import { clearUserShiftsAroundDay, selectDayCell } from "./helpers/shifts";
 
 /**
  * E2E-Test: Beim Bearbeiten einer bestehenden Schicht werden geänderte Werte
@@ -132,7 +132,7 @@ test.describe("ShiftDialog: Bearbeiten speichert geändertes Datum/Zeit korrekt 
 
     const createDay = 10;
     const cell = mobile.getByTestId(dayCellId(year, month, createDay));
-    await cell.click();
+    await selectDayCell(page, cell);
     await expect(cell).toHaveAttribute("data-selected", "true");
 
     // --- Schicht mit bekanntem Datum/Zeit anlegen --------------------------
