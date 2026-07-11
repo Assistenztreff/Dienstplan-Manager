@@ -1,14 +1,5 @@
 import { useEffect, useState } from "react";
-import { userBadgeClass, userInitialsClass } from "@/lib/shift-model-colors";
-
-// Zwei-Buchstaben-Initialen (z. B. "CN" für "Camillo Neubert"): erste
-// Buchstaben der ersten beiden Namensbestandteile, sonst die ersten zwei
-// Zeichen des Namens.
-function nameInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return name.trim().slice(0, 2).toUpperCase();
-}
+import { userBadgeClass, userInitialsClass, nameInitials } from "@/lib/shift-model-colors";
 
 export type Assistant = { id: number; name: string };
 

@@ -195,8 +195,8 @@ test.describe("Dienstplan-Sicht als Assistent (eingeschränkte Rechte)", () => {
   });
 
   test("zeigt keinen Assistenten-Filter", async ({ page }) => {
-    await expect(page.getByTestId("assistant-filter")).toHaveCount(0);
-    await expect(page.getByTestId("assistant-chip-all")).toHaveCount(0);
+    await expect(page.getByTestId("assistant-select")).toHaveCount(0);
+    await expect(page.getByTestId("assistant-option-all")).toHaveCount(0);
   });
 
   test("erlaubt kein Anlegen oder Bearbeiten von Schichten", async ({ page }) => {

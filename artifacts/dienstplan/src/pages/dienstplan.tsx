@@ -22,10 +22,17 @@ import { BulkEditDialog } from "@/components/bulk-edit-dialog";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
-import { userBadgeClass, userDotClass } from "@/lib/shift-model-colors";
+import { userBadgeClass, userDotClass, userInitialsClass, nameInitials } from "@/lib/shift-model-colors";
 import { hasAccess, getLimit } from "@/lib/entitlements";
 import { toast } from "sonner";
-import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
+import { useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { exportSimpleMonthPdf } from "@/lib/pdf-export";
 import {
@@ -155,15 +162,6 @@ const SHIFT_TYPE_DOTS: Record<string, string> = {
   sick: "bg-slate-400",
   freizeitausgleich: "bg-emerald-500",
 };
-
-function shiftDotClass(shift: Shift): string {
-  // Abwesenheiten behalten ihre semantische Punktfarbe (Urlaub/Krankheit).
-  if (isAbsenceShift(shift)) {
-    return SHIFT_TYPE_DOTS[shift.type] ?? "bg-primary";
-  }
-  // Reguläre Dienste: Punktfarbe pro Assistenzkraft (userId).
-  return userDotClass(shift.userId);
-}
 
 // Unverbindliche Dienste (Entwurf/Vorschlag) erscheinen im Monatsgitter als
 // abgeschwächte Punkte — analog zur reduzierten Deckkraft der Badges. So ist
@@ -747,12 +745,15 @@ function MonthGrid({
                 <span className="flex flex-col items-stretch gap-0.5 w-full">
                   {absenceBars}
                   {dots.length > 0 && (
-                    <span className="flex items-center justify-center gap-0.5 h-1.5">
+                    <span className="flex flex-wrap items-center justify-center gap-0.5">
                       {dots.map((s) => (
                         <span
                           key={s.id}
-                          className={`h-1.5 w-1.5 rounded-full ${shiftDotClass(s)} ${shiftDotStatusClass(s)}`}
-                        />
+                          title={s.user?.name}
+                          className={`flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-bold leading-none text-white ${userInitialsClass(s.userId)} ${shiftDotStatusClass(s)}`}
+                        >
+                          {s.user?.name ? nameInitials(s.user.name) : ""}
+                        </span>
                       ))}
                     </span>
                   )}
@@ -829,7 +830,7 @@ function ViewToggle({
             onClick={() => onChange(opt.value)}
             title={opt.label}
             aria-label={opt.label}
-            className={`flex items-center gap-1.5 rounded-md px-2.5 md:px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`flex items-center gap-1.5 rounded-md h-11 px-4 text-base font-medium transition-colors ${
               active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
             }`}
           >
@@ -853,10 +854,14 @@ function monthsAhead(target: Date, now: Date): number {
   );
 }
 
+// Vergrößerte Steuerbuttons der Dienstplan-Kopfzeile (leicht zurückdrehbar:
+// diese Klassen entfernen → Standard-Button-Größe size="sm").
+const CONTROL_BTN = "h-11 px-4 text-base font-medium rounded-md";
+
 export default function Dienstplan() {
   const { currentUser } = useAuth();
   const isAdmin = isAdminRole(currentUser?.role);
-  // Massenbearbeitung ("Mehrere bearbeiten") nur im Premium-Plan.
+  // Massenbearbeitung ("Mehrfachauswahl") nur im Premium-Plan.
   const canBulkEdit = hasAccess(currentUser, "bulkEdit");
   // Free-Plan begrenzt die Vorausplanung (historyMonths, Free = 1 → aktueller
   // und naechster Monat). `null` = unbegrenzt (Premium). Bestandsschutz:
@@ -1124,9 +1129,43 @@ export default function Dienstplan() {
   // Kalender darunter den Rest der Hoehe bekommt. Auf kleinen Screens
   // schrumpfen die Buttons zu reinen Icons (Text erst ab md sichtbar).
   const Header = () => (
-    <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5">
+    <div className="sticky top-0 z-40 -mx-4 -mt-4 mb-1 flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-border/40 bg-white/95 px-4 py-3 backdrop-blur md:-mx-6 md:-mt-6 md:px-6">
       <h2 className="text-lg md:text-xl font-serif font-bold text-foreground">Dienstplan</h2>
       <TeamSwitcher />
+      {/* Kompakter Assistenten-Filter direkt neben dem Titel (ersetzt die
+          frühere Pillenleiste). Default "Alle Assistenten". */}
+      {isAdmin && assistants.length > 0 && (
+        <Select
+          value={String(selectedAssistant)}
+          onValueChange={(v) => setSelectedAssistant(v === "all" ? "all" : Number(v))}
+        >
+          <SelectTrigger
+            className="h-9 w-auto min-w-[170px] gap-2"
+            data-testid="assistant-select"
+            aria-label="Assistent filtern"
+          >
+            <SelectValue placeholder="Alle Assistenten" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all" data-testid="assistant-option-all">
+              Alle Assistenten
+            </SelectItem>
+            {assistants.map((a) => (
+              <SelectItem key={a.id} value={String(a.id)} data-testid={`assistant-option-${a.id}`}>
+                <span className="inline-flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none ${userInitialsClass(a.id)}`}
+                  >
+                    {nameInitials(a.name)}
+                  </span>
+                  {a.name}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
       <div className="ml-auto flex flex-wrap items-center gap-1.5">
         {/* Ansicht-Umschalter: mobil Liste/Monat, ab md Tabelle/Monat. */}
         <div className="md:hidden" data-testid="view-toggles-mobile">
@@ -1156,7 +1195,7 @@ export default function Dienstplan() {
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5"
+            className={`gap-1.5 ${CONTROL_BTN}`}
             onClick={() => setDialog({ mode: "confirm-all" })}
             disabled={isBulkConfirming}
             title="Alle Entwürfe bestätigen"
@@ -1178,7 +1217,7 @@ export default function Dienstplan() {
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5"
+            className={`gap-1.5 ${CONTROL_BTN}`}
             onClick={handleSimpleExport}
             disabled={isExporting}
             title="Monatsübersicht als PDF: bestätigte Dienste und Abwesenheiten, ohne Zeiterfassung."
@@ -1199,29 +1238,29 @@ export default function Dienstplan() {
             <Button
               variant={isSelectionMode ? "default" : "outline"}
               size="sm"
-              className="gap-1.5"
+              className={`gap-1.5 ${CONTROL_BTN}`}
               onClick={toggleSelectionMode}
-              title={isSelectionMode ? "Auswahl beenden" : "Mehrere bearbeiten"}
-              aria-label={isSelectionMode ? "Auswahl beenden" : "Mehrere bearbeiten"}
+              title={isSelectionMode ? "Auswahl beenden" : "Mehrfachauswahl"}
+              aria-label={isSelectionMode ? "Auswahl beenden" : "Mehrfachauswahl"}
               data-testid="toggle-selection-mode"
             >
               {isSelectionMode ? <X className="h-4 w-4" /> : <CheckSquare className="h-4 w-4" />}
               <span className="hidden md:inline">
-                {isSelectionMode ? "Auswahl beenden" : "Mehrere bearbeiten"}
+                {isSelectionMode ? "Auswahl beenden" : "Mehrfachauswahl"}
               </span>
             </Button>
           ) : (
             <Button
               variant="outline"
               size="sm"
-              className="gap-1.5"
+              className={`gap-1.5 ${CONTROL_BTN}`}
               disabled
               title="Massenbearbeitung ist in Premium enthalten."
-              aria-label="Mehrere bearbeiten (Premium)"
+              aria-label="Mehrfachauswahl (Premium)"
               data-testid="toggle-selection-mode-locked"
             >
               <Lock className="h-4 w-4" />
-              <span className="hidden md:inline">Mehrere bearbeiten</span>
+              <span className="hidden md:inline">Mehrfachauswahl</span>
             </Button>
           ))}
         {/* Monatswechsler: Pfeile direkt am Monatstext, ohne breite Lücken. */}
@@ -1259,11 +1298,11 @@ export default function Dienstplan() {
 
   if (isLoading) {
     return (
-      /* Gleiches Full-Screen-Geruest wie der geladene Zustand, damit der
-         Lade-Skeleton auf kleinen Viewports nicht abgeschnitten wird. */
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden animate-in fade-in duration-300">
+      /* Gleiches Geruest wie der geladene Zustand: natuerlich fliessender
+         Inhalt, der mit der Seite scrollt (kein viewport-fixes Grid mehr). */
+      <div className="flex flex-col gap-3 animate-in fade-in duration-300">
         <Header />
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
+        <div className="space-y-3">
           {[1, 2, 3, 4, 5].map((i) => (
             <Skeleton key={i} className="h-16 w-full rounded-lg" />
           ))}
@@ -1276,10 +1315,10 @@ export default function Dienstplan() {
     isAdmin && forwardLimit !== null && monthsAhead(currentDate, new Date()) > forwardLimit;
 
   return (
-    /* Full-Screen-Grid: Seite fuellt exakt die vom Layout bereitgestellte
-       Hoehe (flex-1) und scrollt NICHT selbst — nur der Kalenderbereich
-       weiter unten scrollt autark (overflow-y-auto). */
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden animate-in fade-in duration-300">
+    /* Natuerlich fliessendes Layout: der Inhalt waechst mit seiner Hoehe und
+       scrollt mit der Seite (der aeussere Scroll-Container liegt im Layout).
+       Volle Breite; die Kopfzeile bleibt beim Scrollen sticky oben. */
+    <div className="flex flex-col gap-3 animate-in fade-in duration-300">
       <Header />
 
       {/* Free-Plan: Hinweis, wenn der angezeigte Monat ausserhalb des erlaubten
@@ -1292,37 +1331,13 @@ export default function Dienstplan() {
         </PlanLimitBanner>
       )}
 
-      {/* Team-Abwesenheits-Übersicht (nur Admin): wer ist gerade/demnächst
-          abwesend? Über das ganze team-gescopte Team, unabhängig vom
-          Assistenten-Filter. */}
-      {isAdmin && assistants.length > 0 && (
-        <TeamAbsenceOverview
-          shifts={allShifts}
-          assistants={assistants}
-          onShiftClick={openEdit}
-          canEdit={isAdmin}
-        />
-      )}
-
-      {/* Assistenten-Legende: eine schmale, horizontal wischbare Zeile —
-          gemeinsam fuer Mobile- und Desktop-Ansicht. */}
-      {isAdmin && assistants.length > 0 && (
-        <div className="shrink-0">
-          <AssistantFilter
-            assistants={assistants}
-            selected={selectedAssistant}
-            onSelect={setSelectedAssistant}
-          />
-        </div>
-      )}
-
-      {/* Mobile: umschaltbare Ansicht (Liste / Monatsgitter) — nimmt die
-          restliche Hoehe ein, die eigentliche Ansicht scrollt intern.
-          Der Umschalter selbst sitzt in der Header-Zeile. */}
-      <div className="flex min-h-0 flex-1 flex-col md:hidden" data-testid="dienstplan-mobile">
-        {/* Kalender-Streckung: fuellt den Rest bis zum unteren Rand und
-            scrollt bei Bedarf in sich selbst. */}
-        <div className="min-h-0 flex-1 overflow-y-auto">
+      {/* Mobile: umschaltbare Ansicht (Liste / Monatsgitter). Der Kalender
+          nutzt die volle Breite und waechst mit seiner Hoehe (kein interner
+          Scrollbalken mehr) — gescrollt wird die ganze Seite. Der Umschalter
+          selbst sitzt in der Header-Zeile. Der Assistenten-Filter liegt jetzt
+          als kompaktes Select neben dem Titel. */}
+      <div className="flex flex-col md:hidden" data-testid="dienstplan-mobile">
+        <div className="w-full">
         {mobileView === "list" ? (
           <AgendaView
             days={days}
@@ -1356,16 +1371,12 @@ export default function Dienstplan() {
         </div>
       </div>
 
-      {/* Desktop: umschaltbare Ansicht (Tabelle / Monatsgitter) — nimmt die
-          restliche Hoehe ein, die eigentliche Ansicht scrollt intern.
-          Der Umschalter selbst sitzt in der Header-Zeile. */}
-      <div className="hidden min-h-0 flex-1 flex-col md:flex" data-testid="dienstplan-desktop">
-        {/* Kalender-Streckung: Monatsgitter scrollt bei Bedarf in sich selbst;
-            die Tabelle streckt ihre Zeilen stattdessen auf die volle Hoehe
-            (kein vertikales Scrollen noetig). */}
-        <div
-          className={`min-h-0 flex-1 ${desktopView === "grid" ? "overflow-y-auto" : "overflow-hidden"}`}
-        >
+      {/* Desktop: umschaltbare Ansicht (Tabelle / Monatsgitter). Kalender in
+          voller Breite; der Inhalt waechst mit seiner Hoehe und scrollt mit
+          der Seite (keine starren inneren Scrollbalken). Der Umschalter selbst
+          sitzt in der Header-Zeile. */}
+      <div className="hidden flex-col md:flex" data-testid="dienstplan-desktop">
+        <div className="w-full">
         {desktopView === "grid" ? (
           <MonthGrid
             days={days}
@@ -1383,13 +1394,11 @@ export default function Dienstplan() {
             onToggleDate={toggleDate}
           />
         ) : (
-      /* Tabellen-Streckung: Card und Tabelle fuellen die volle Hoehe; die
-         Assistenten-Zeilen teilen sich den restlichen vertikalen Platz
-         gleichmaessig (Tabellenhoehe 100 %, Kopfzeile per h-px auf ihre
-         natuerliche Hoehe fixiert) — alle Zeilen ohne Scrollen sichtbar.
-         Horizontal bleibt die Tabelle bei Bedarf wischbar. */
-      <Card className="h-full overflow-auto border-border/50 shadow-sm">
-        <table className="h-full w-full text-sm">
+      /* Tabelle in voller Breite: waechst mit ihrer natuerlichen Hoehe und
+         scrollt mit der Seite (kein starrer interner Vertikal-Scroll).
+         Horizontal bleibt die Tabelle bei Bedarf wischbar (overflow-x-auto). */
+      <Card className="w-full overflow-x-auto border-border/50 shadow-sm">
+        <table className="w-full text-sm">
           <thead>
             <tr className="h-px border-b bg-muted/50">
               <th className="p-3 text-left font-medium sticky left-0 bg-muted/50 backdrop-blur-sm z-10 w-48">
@@ -1548,6 +1557,18 @@ export default function Dienstplan() {
         )}
         </div>
       </div>
+
+      {/* Team-Abwesenheits-Übersicht (nur Admin): jetzt UNTER dem Kalender als
+          einklappbares Accordion. Zeigt team-weit, wer gerade/demnächst
+          abwesend ist — unabhängig vom Assistenten-Filter. */}
+      {isAdmin && assistants.length > 0 && (
+        <TeamAbsenceOverview
+          shifts={allShifts}
+          assistants={assistants}
+          onShiftClick={openEdit}
+          canEdit={isAdmin}
+        />
+      )}
 
       {/* Floating Action Bar im Auswahl-Modus mit mindestens einem Tag. */}
       {isAdmin && isSelectionMode && selectedDates.length > 0 && (

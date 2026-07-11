@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Locator } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
 
 /**
@@ -7,12 +7,13 @@ import { loginViaUi } from "./helpers/auth";
  *
  * Deckt ab:
  * - Admin-Login über den echten Auth-Flow und Öffnen von /dienstplan
- * - Assistent im Filter auswählen, Seite neu laden → Auswahl bleibt aktiv
+ * - Assistent im kompakten Select auswählen, Seite neu laden → Auswahl bleibt
  * - Bereinigungsfall: gespeicherter Assistent existiert nicht mehr → der
- *   Filter fällt nach dem Reload sauber auf "Alle" zurück
+ *   Filter fällt nach dem Reload sauber auf "Alle Assistenten" zurück
  *
- * Läuft im standardmäßig mobilen Viewport (siehe playwright.config.ts); der
- * Assistenten-Filter ist dort im Block `dienstplan-mobile` sichtbar.
+ * Der Assistenten-Filter ist ein shadcn/Radix-<Select> in der (sticky)
+ * Kopfzeile: Trigger `assistant-select`, Optionen `assistant-option-<id>`
+ * bzw. `assistant-option-all`.
  */
 
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "admin@dienstplan.local";
@@ -28,7 +29,7 @@ async function loginAsAdmin(page: Page): Promise<void> {
 
 /**
  * Legt deterministisch einen frischen Assistenten an und liefert dessen ID,
- * damit der zugehörige Filter-Chip (`assistant-chip-<id>`) eindeutig
+ * damit die zugehörige Filter-Option (`assistant-option-<id>`) eindeutig
  * adressierbar ist. Nutzt die authentifizierte Session des eingeloggten Admins
  * (page.request teilt die Cookies des Browser-Kontexts).
  */
@@ -46,12 +47,15 @@ async function createAssistant(page: Page): Promise<number> {
   return user.id;
 }
 
-async function openCalendar(page: Page): Promise<Locator> {
+async function openCalendar(page: Page): Promise<void> {
   await page.goto("/dienstplan");
   await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible();
-  const mobile = page.getByTestId("dienstplan-mobile");
-  await expect(mobile).toBeVisible();
-  return mobile;
+}
+
+/** Öffnet das Filter-Select und wählt die Option mit dem gegebenen testid. */
+async function selectOption(page: Page, optionTestId: string): Promise<void> {
+  await page.getByTestId("assistant-select").click();
+  await page.getByTestId(optionTestId).click();
 }
 
 test.describe("Dienstplan: gemerkter Assistenten-Filter (Reload)", () => {
@@ -67,39 +71,31 @@ test.describe("Dienstplan: gemerkter Assistenten-Filter (Reload)", () => {
   });
 
   test("behält die Assistenten-Auswahl nach einem Reload bei", async ({ page }) => {
-    const mobile = await openCalendar(page);
+    await openCalendar(page);
 
-    const filter = page.getByTestId("assistant-filter");
-    await expect(filter).toBeVisible();
-    await expect(filter.getByTestId("assistant-chip-all")).toHaveAttribute("data-active", "true");
+    const trigger = page.getByTestId("assistant-select");
+    await expect(trigger).toBeVisible();
+    await expect(trigger).toContainText("Alle Assistenten");
 
     // Den konkreten Assistenten auswählen.
-    const chip = filter.getByTestId(`assistant-chip-${assistantId}`);
-    await expect(chip).toBeVisible();
-    await chip.click();
-    await expect(chip).toHaveAttribute("data-active", "true");
-    await expect(filter.getByTestId("assistant-chip-all")).toHaveAttribute("data-active", "false");
+    await selectOption(page, `assistant-option-${assistantId}`);
+    await expect(trigger).toContainText(`E2E Filter-Assistent`);
 
     // Auswahl muss in localStorage gemerkt worden sein.
-    const stored = await page.evaluate(
-      (key) => localStorage.getItem(key),
-      ASSISTANT_FILTER_KEY,
-    );
-    expect(stored).toBe(String(assistantId));
+    await expect
+      .poll(async () =>
+        page.evaluate((key) => localStorage.getItem(key), ASSISTANT_FILTER_KEY),
+      )
+      .toBe(String(assistantId));
 
     // Seite neu laden: die Auswahl bleibt erhalten.
     await page.reload();
     await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible();
 
-    const filterAfter = page.getByTestId("assistant-filter");
-    await expect(filterAfter.getByTestId(`assistant-chip-${assistantId}`)).toHaveAttribute(
-      "data-active",
-      "true",
-    );
-    await expect(filterAfter.getByTestId("assistant-chip-all")).toHaveAttribute(
-      "data-active",
-      "false",
-    );
+    await expect(page.getByTestId("assistant-select")).toContainText(`E2E Filter-Assistent`);
+    expect(
+      await page.evaluate((key) => localStorage.getItem(key), ASSISTANT_FILTER_KEY),
+    ).toBe(String(assistantId));
   });
 
   test("fällt auf 'Alle' zurück, wenn der gemerkte Assistent nicht mehr existiert", async ({
@@ -119,13 +115,8 @@ test.describe("Dienstplan: gemerkter Assistenten-Filter (Reload)", () => {
     await page.reload();
     await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible();
 
-    const filter = page.getByTestId("assistant-filter");
-    await expect(filter).toBeVisible();
-
-    // Es darf keinen aktiven Chip für den verschwundenen Assistenten geben …
-    await expect(filter.getByTestId(`assistant-chip-${STALE_ID}`)).toHaveCount(0);
-    // … und der Filter steht wieder auf "Alle".
-    await expect(filter.getByTestId("assistant-chip-all")).toHaveAttribute("data-active", "true");
+    // Der Filter steht wieder auf "Alle Assistenten".
+    await expect(page.getByTestId("assistant-select")).toContainText("Alle Assistenten");
 
     // Die Bereinigung muss auch in localStorage zurückgeschrieben werden.
     await expect

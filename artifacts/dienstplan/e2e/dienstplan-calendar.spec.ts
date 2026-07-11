@@ -121,25 +121,26 @@ test.describe("Dienstplan-Kalender (Admin, mobile)", () => {
   });
 
   test("Assistenten-Filter wählt aus und setzt zurück", async ({ page }) => {
-    const mobile = await openCalendar(page);
+    await openCalendar(page);
 
-    const filter = page.getByTestId("assistant-filter");
-    await expect(filter).toBeVisible();
-    await expect(filter.getByTestId("assistant-chip-all")).toHaveAttribute("data-active", "true");
+    // Der Assistenten-Filter ist ein kompaktes Select in der Kopfzeile.
+    const trigger = page.getByTestId("assistant-select");
+    await expect(trigger).toBeVisible();
+    await expect(trigger).toContainText("Alle Assistenten");
 
-    // Ersten konkreten Assistenten-Chip auswählen.
-    const assistantChip = filter
-      .locator('button:not([data-testid="assistant-chip-all"])')
+    // Ersten konkreten Assistenten auswählen (erste Option nach "Alle").
+    await trigger.click();
+    const firstAssistant = page
+      .locator('[data-testid^="assistant-option-"]:not([data-testid="assistant-option-all"])')
       .first();
-    await expect(assistantChip).toBeVisible();
-    await assistantChip.click();
-    await expect(assistantChip).toHaveAttribute("data-active", "true");
-    await expect(filter.getByTestId("assistant-chip-all")).toHaveAttribute("data-active", "false");
+    await firstAssistant.click();
+    // Trigger zeigt jetzt einen konkreten Assistenten statt "Alle Assistenten".
+    await expect(trigger).not.toContainText("Alle Assistenten");
 
     // Auf "Alle" zurücksetzen.
-    await filter.getByTestId("assistant-chip-all").click();
-    await expect(filter.getByTestId("assistant-chip-all")).toHaveAttribute("data-active", "true");
-    await expect(assistantChip).toHaveAttribute("data-active", "false");
+    await trigger.click();
+    await page.getByTestId("assistant-option-all").click();
+    await expect(trigger).toContainText("Alle Assistenten");
   });
 
   test("Tagesauswahl im Monatsgitter aktualisiert das Tagesdetail", async ({ page }) => {

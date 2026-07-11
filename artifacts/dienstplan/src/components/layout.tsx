@@ -322,24 +322,25 @@ function AppSubNavigation() {
 }
 
 // ---------------------------------------------------------------------------
-// App-Layout: Full-Screen-Grid-Konzept.
+// App-Layout.
 // Der aeussere Wrapper ist exakt viewport-hoch (h-dvh, overflow-hidden) —
-// die Seite selbst scrollt NIE. Header + Sub-Navigation sind fixe Zeilen,
-// der Hauptbereich nimmt den restlichen Platz ein (flex-1).
+// das Dokument selbst scrollt nie; gescrollt wird ein innerer Container.
+// Header + Sub-Navigation sind fixe Zeilen, der Hauptbereich nimmt den Rest
+// (flex-1) und scrollt natuerlich nach unten.
 //
 // Zwei Modi:
-// - Dienstplan (/dienstplan): main ist overflow-hidden; die Seite verwaltet
-//   ihr Scrollen selbst (Kalender scrollt autark). Der Plattform-Footer wird
-//   hier ausgeblendet, damit der Kalender bis zum unteren Rand reicht.
-// - Alle anderen Seiten: der Inhalt scrollt in einem eigenen Scroll-Container
-//   (statt im Dokument); der Footer erscheint wie bisher am Ende des Inhalts.
+// - Dienstplan (/dienstplan): full-bleed — der Inhalt nutzt die VOLLE Breite
+//   (kein max-w-7xl), scrollt natuerlich nach unten (kein viewport-fixes
+//   Grid mehr). Der Plattform-Footer bleibt hier ausgeblendet, damit die
+//   App-Ansicht nicht durch die Plattform-Huelle unterbrochen wird.
+// - Alle anderen Seiten: zentrierter Inhalt (max-w-7xl) + Footer am Ende.
 // Im Embed-Modus werden die Plattform-Platzhalter ausgeblendet.
 // ---------------------------------------------------------------------------
 export function Layout({ children }: { children: React.ReactNode }) {
   const embedded = isEmbedded();
   const [location] = useLocation();
-  // Seiten im Full-Screen-Modus (Viewport-fixiert, eigenes internes Scrollen).
-  const fullScreen = location === "/dienstplan";
+  // Dienstplan nutzt die volle Bildschirmbreite (kein zentrierter Container).
+  const fullBleed = location === "/dienstplan";
 
   return (
     <div className="flex h-dvh w-full flex-col overflow-hidden bg-brand-white font-sans text-foreground">
@@ -349,14 +350,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Dienstplan-App: Sub-Navigation */}
       <AppSubNavigation />
 
-      {fullScreen ? (
-        /* Full-Screen-Modus: main fuellt den Rest des Viewports, globales
-           Scrollen ist deaktiviert — die Seite scrollt intern (Kalender). */
-        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col p-4 md:p-6">
-            {children}
-          </div>
-        </main>
+      {fullBleed ? (
+        /* Dienstplan: volle Breite, natuerliches Scrollen (der innere
+           Container scrollt, das Dokument bleibt fix). Kein Footer, damit die
+           Kalenderansicht durchgehend bis zum unteren Rand reicht. */
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <main className="w-full p-4 md:p-6">{children}</main>
+        </div>
       ) : (
         /* Standard-Modus: Inhalt + Footer scrollen gemeinsam in einem
            eigenen Scroll-Container (ersetzt das fruehere Dokument-Scrollen).

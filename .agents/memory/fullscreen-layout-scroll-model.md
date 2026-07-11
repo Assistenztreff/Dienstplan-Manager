@@ -1,15 +1,23 @@
 ---
-name: Full-Screen-Layout & Scroll-Modell
-description: Seit dem Full-Screen-Grid-Umbau scrollt nie das Dokument, sondern innere Container; Auswirkungen auf neue Seiten und E2E-Tests.
+name: Layout & Scroll-Modell
+description: Das Dokument scrollt nie (h-dvh overflow-hidden); ein innerer Container scrollt. /dienstplan ist full-bleed & scrollt natürlich mit der Seite (NICHT mehr viewport-fixiert).
 ---
 
-Das Master-Layout ist viewport-fixiert (`h-dvh overflow-hidden`); das Dokument/`body` scrollt NIE mehr.
+Das Master-Layout ist viewport-fixiert (`h-dvh overflow-hidden`); das Dokument/`body` scrollt NIE. Gescrollt wird stets ein innerer Container im Layout.
 
-**Regel:** Seiten scrollen in einem inneren Scroll-Container. `/dienstplan` läuft im Full-Screen-Modus (Layout ist route-aware): die Seite bekommt exakt die Resthöhe, nur der Kalenderbereich scrollt autark, der Plattform-Footer ist dort ausgeblendet. Alle anderen Routen scrollen in einem Container-Div (Footer via `min-h-full`-Spalte + `flex-1` auf main unten angepinnt).
+**Regel:** Jede Route (inkl. `/dienstplan`) rendert ihren Inhalt in einem inneren Scroll-Container (`min-h-0 flex-1 overflow-y-auto`) und wächst natürlich nach unten. Es gibt KEINEN viewport-fixierten „Full-Screen"-Modus mehr, in dem nur der Kalender autark scrollt.
 
-**Why:** Anforderung „Kalender 100 % im Viewport, kein globales Scrollen“, ohne lange Seiten (Dashboard/Einstellungen) zu brechen.
+`/dienstplan` läuft im **full-bleed**-Modus (Layout ist route-aware, Flag `fullBleed`):
+- volle Bildschirmbreite (KEIN `max-w-7xl`-Container; Header-/Footer-Platzhalter der Plattform behalten `max-w-7xl`),
+- natürliches Seiten-Scrollen (kein `overflow-hidden`/`flex-1`/`min-h-0` auf Seiten-Root oder Sektions-Wrappern; keine starren inneren Scrollbalken auf Kalender/Tabelle),
+- Plattform-Footer dort weiterhin ausgeblendet.
+Alle anderen Routen: zentrierter Inhalt (`max-w-7xl`) + Footer via `min-h-full`-Spalte.
+
+Die Dienstplan-Kopfzeile ist `sticky top-0 z-40 bg-white/95 backdrop-blur` und bleibt beim Scrollen oben; sie nutzt `-mx-4 -mt-4 md:-mx-6 md:-mt-6`, passend zum `main`-Padding `p-4 md:p-6`.
+
+**Why:** Anforderung „Dienstplan volle Breite + natürliches Scrollen"; der frühere viewport-fixierte Full-Screen-Grid-Ansatz wurde bewusst zurückgebaut.
 
 **How to apply:**
-- Neue Seiten, die viewport-fixiert sein sollen, müssen in der Layout-`fullScreen`-Routenprüfung ergänzt werden UND selbst `flex min-h-0 flex-1 flex-col overflow-hidden` als Root nutzen (auch im Loading-Branch, sonst Clipping!).
-- E2E/Screenshots: `window.scrollTo`/Dokument-Scroll ist wirkungslos; gescrollt wird der innere Container. Playwrights `scrollIntoViewIfNeeded` funktioniert weiter.
-- Die `min-h-0`-Kette darf an keinem Zwischen-Flex-Glied fehlen, sonst wächst der Kalender aus dem Viewport statt intern zu scrollen.
+- Seiten-Root und Sektions-Wrapper NICHT mit `overflow-hidden`/`min-h-0 flex-1` fesseln, sonst kein natürliches Wachstum. Auch den Loading-Branch gleich fließend halten.
+- Der Assistenten-Filter auf `/dienstplan` ist ein kompaktes shadcn-`<Select>` in der Kopfzeile (testids `assistant-select`, `assistant-option-all`, `assistant-option-<id>`); die Pillen-`AssistantFilter`-Komponente bleibt nur auf `auswertungen`/`zeiterfassung`.
+- E2E/Screenshots: gescrollt wird der innere Layout-Container; Playwrights `scrollIntoViewIfNeeded` funktioniert weiter.
