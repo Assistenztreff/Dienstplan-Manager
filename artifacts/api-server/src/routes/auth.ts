@@ -76,17 +76,30 @@ router.post("/auth/register", async (req, res) => {
     return res.status(409).json({ error: "E-Mail-Adresse wird bereits verwendet" });
   }
 
-  const [user] = await db
-    .insert(usersTable)
-    .values({
-      name: trimmedName,
-      email: normalizedEmail,
-      role: "admin",
-      accountType,
-      passwordHash: hashPassword(password),
-      isActive: true,
-    })
-    .returning();
+  let user: User;
+  try {
+    [user] = await db
+      .insert(usersTable)
+      .values({
+        name: trimmedName,
+        email: normalizedEmail,
+        role: "admin",
+        accountType,
+        passwordHash: hashPassword(password),
+        isActive: true,
+      })
+      .returning();
+  } catch (err) {
+    // Sicherheitsnetz gegen Race: UNIQUE-Verletzung (23505) sauber als 409
+    // melden statt als unbehandelter 500 (analog POST/PATCH /users).
+    const pgCode =
+      (err as { cause?: { code?: string }; code?: string })?.cause?.code ??
+      (err as { code?: string })?.code;
+    if (pgCode === "23505") {
+      return res.status(409).json({ error: "E-Mail-Adresse wird bereits verwendet" });
+    }
+    throw err;
+  }
 
   const [team] = await db
     .insert(teamsTable)
