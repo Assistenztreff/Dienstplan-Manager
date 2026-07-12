@@ -10,6 +10,7 @@
     "revoke-superadmin": "tsx ./src/revoke-superadmin.ts",
     "setup-test-accounts": "tsx ./src/setup-test-accounts.ts",
     "set-plan": "tsx ./src/set-plan.ts",
+    "backdate-plan-change": "tsx ./src/backdate-plan-change.ts",
     "delete-account": "tsx ./src/delete-account.ts",
     "seed-owned-team": "tsx ./src/seed-owned-team.ts",
     "add-team-member": "tsx ./src/add-team-member.ts",
