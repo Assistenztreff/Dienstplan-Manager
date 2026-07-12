@@ -1,5 +1,6 @@
 import { isAdminRole } from "@/lib/roles";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams, useLocation } from "wouter";
 import {
   useListShifts,
@@ -1797,8 +1798,13 @@ export default function Dienstplan() {
         />
       )}
 
-      {/* Floating Action Bar im Auswahl-Modus mit mindestens einem Tag. */}
-      {isAdmin && isSelectionMode && selectedDates.length > 0 && (
+      {/* Floating Action Bar im Auswahl-Modus mit mindestens einem Tag.
+          Per Portal in document.body gerendert: innerhalb des inneren
+          overflow-y-auto-Scroll-Containers behandeln Safari/iOS und manche
+          Chrome-Versionen den Container als Containing Block fuer
+          position:fixed — die Leiste laege dann ausserhalb des sichtbaren
+          Viewports bzw. wuerde vom overflow-hidden-Wrapper abgeschnitten. */}
+      {isAdmin && isSelectionMode && selectedDates.length > 0 && createPortal(
         <div
           className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2.5 shadow-lg"
           data-testid="bulk-action-bar"
@@ -1845,7 +1851,8 @@ export default function Dienstplan() {
             <X className="h-4 w-4" />
             Abbrechen
           </Button>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {isAdmin && (
