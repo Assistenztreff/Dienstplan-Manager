@@ -104,6 +104,66 @@ function hashPassword(password: string): string {
 }
 
 /**
+ * Seedet einen superadmin direkt in der (Test-)DB — In-Prozess-Variante des
+ * setup-superadmin-Skripts fuer FRISCHE Test-E-Mails (idempotent: existiert
+ * die E-Mail bereits als superadmin, No-Op; existiert sie mit anderer Rolle,
+ * Fehler — Specs sollen eindeutige e2e.*@dienstplan.test-Adressen nutzen).
+ * Ersetzt den ~3s teuren execSync-Skriptaufruf pro Spec-Setup.
+ */
+export async function dbSeedSuperadmin(
+  email: string,
+  password: string,
+  name: string,
+): Promise<void> {
+  await withDbClient(async (client) => {
+    const normalized = email.toLowerCase().trim();
+    const existing = await client.query(
+      "SELECT id, role FROM users WHERE email = $1",
+      [normalized],
+    );
+    const row = existing.rows[0] as { id: number; role: string } | undefined;
+    if (row) {
+      if (row.role === "superadmin") return; // idempotent
+      throw new Error(
+        `Konto "${normalized}" existiert bereits mit Rolle "${row.role}" — kein stilles Befoerdern im Test-Helfer.`,
+      );
+    }
+    await client.query(
+      `INSERT INTO users (name, email, role, password_hash, is_active)
+       VALUES ($1, $2, 'superadmin', $3, true)`,
+      [name, normalized, hashPassword(password)],
+    );
+  });
+}
+
+/**
+ * Backdatiert einen plan_changes-Eintrag (identifiziert per eindeutiger
+ * Notiz) direkt in der (Test-)DB — In-Prozess-Variante des
+ * backdate-plan-change-Skripts (created_at wird serverseitig immer auf
+ * "jetzt" gesetzt; fuer Zeitraum-Filter-Specs muessen Eintraege nachtraeglich
+ * auf definierte Grenz-Zeitpunkte gesetzt werden).
+ */
+export async function dbBackdatePlanChange(
+  note: string,
+  createdAt: Date,
+): Promise<void> {
+  await withDbClient(async (client) => {
+    const res = await client.query(
+      "UPDATE plan_changes SET created_at = $1 WHERE note = $2",
+      [createdAt.toISOString(), note],
+    );
+    if (res.rowCount === 0) {
+      throw new Error(`Kein plan_changes-Eintrag mit Notiz "${note}" gefunden.`);
+    }
+    if ((res.rowCount ?? 0) > 1) {
+      throw new Error(
+        `Notiz "${note}" traf ${res.rowCount} plan_changes-Eintraege — Notizen muessen im Spec eindeutig sein (verschmutzte Test-DB?).`,
+      );
+    }
+  });
+}
+
+/**
  * Seedet einen Admin direkt in der (Test-)DB — Verhalten identisch zum
  * setup-admin-Skript: idempotent (bestehende E-Mail = No-Op), legt NUR dann
  * ein "Standard-Team" an, wenn noch GAR KEIN Team existiert (Bootstrap-
