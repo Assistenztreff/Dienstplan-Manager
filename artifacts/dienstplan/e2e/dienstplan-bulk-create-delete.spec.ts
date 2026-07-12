@@ -3,7 +3,7 @@ import { test, expect, type Page, type Locator } from "@playwright/test";
 /**
  * E2E-Test: Massen-Eintragen und Massen-Löschen über mehrere Tage.
  *
- * Der Auswahl-Modus ("Mehrere bearbeiten") markiert mehrere Tage und legt/
+ * Der Auswahl-Modus ("Mehrfachauswahl") markiert mehrere Tage und legt/
  * löscht dann Schichten für alle ausgewählten Tage in einer Schleife. Dieser
  * Test fängt Regressionen ab, bevor sie Nutzer treffen — etwa wenn die
  * Floating-Action-Bar den Zähler falsch anzeigt, der Mehrfach-Anlegen-Dialog
@@ -171,7 +171,7 @@ test("Massen-Eintragen und Massen-Löschen über mehrere Tage funktioniert", asy
     // Dialog schließt; Auswahl wird geleert, Modus beendet.
     await expect(dialog).toHaveCount(0);
     await expect(page.getByTestId("bulk-action-bar")).toHaveCount(0);
-    await expect(page.getByTestId("toggle-selection-mode")).toContainText("Mehrere bearbeiten");
+    await expect(page.getByTestId("toggle-selection-mode")).toContainText("Mehrfachauswahl");
 
     // Genau drei Schichten angelegt (eine pro gewähltem Tag).
     let created: ApiShift[] = [];
@@ -249,7 +249,7 @@ test("Monatswechsel im Auswahl-Modus leert die Auswahl", async ({ page }) => {
   await page.getByTestId("next-month").click();
 
   await expect(page.getByTestId("bulk-action-bar")).toHaveCount(0);
-  await expect(page.getByTestId("toggle-selection-mode")).toContainText("Mehrere bearbeiten");
+  await expect(page.getByTestId("toggle-selection-mode")).toContainText("Mehrfachauswahl");
 
   // Zurück zum Ausgangsmonat: die vormals gewählten Tage sind nicht mehr
   // ausgewählt (Auswahl-Modus ist aus, daher gibt es keine col-header mehr).

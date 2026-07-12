@@ -1,5 +1,5 @@
 import { isAdminRole } from "@/lib/roles";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams, useLocation } from "wouter";
 import {
   useListShifts,
@@ -811,13 +811,18 @@ function ViewToggle({
   value,
   onChange,
   options,
+  showLabels,
 }: {
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: string; icon: LucideIcon }[];
+  // Platzbasiert statt Breakpoint: Der Header entscheidet anhand des real
+  // verfuegbaren Platzes, ob die Beschriftungen sichtbar sind (Icon-only als
+  // Eskalationsstufe bei Platzmangel).
+  showLabels: boolean;
 }) {
   return (
-    <div className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5">
+    <div className="inline-flex shrink-0 rounded-lg border border-border bg-muted/40 p-0.5">
       {options.map((opt) => {
         const Icon = opt.icon;
         const active = value === opt.value;
@@ -830,16 +835,387 @@ function ViewToggle({
             onClick={() => onChange(opt.value)}
             title={opt.label}
             aria-label={opt.label}
-            className={`flex items-center gap-1.5 rounded-md px-2.5 md:px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`flex items-center gap-1.5 rounded-md ${showLabels ? "px-3" : "px-1.5"} py-1.5 text-sm font-medium transition-colors ${
               active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
             }`}
           >
             <Icon className="h-4 w-4" />
-            {/* Auf kleinen Screens icon-only, um die Header-Zeile schmal zu halten. */}
-            <span className="hidden md:inline">{opt.label}</span>
+            {showLabels && <span>{opt.label}</span>}
           </button>
         );
       })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive Kopfzeile: drei Eskalationsstufen je nach real verfuegbarem Platz.
+//   labels → einzeilig mit Text-Beschriftungen
+//   icons  → einzeilig, Aktionen als reine Icon-Buttons
+//   stack  → zweizeilig nach dem Smartphone-Mockup "Aktionen unten"
+//            (Zeile 1: Titel + Filter, Zeile 2: Ansicht/Aktionen/Monat)
+// Gemessen wird der tatsaechliche Ueberlauf des Zeilen-Containers (nicht ein
+// fester Breakpoint), damit auch lange Filter-Namen, der Team-Switcher oder
+// eine schmale iframe-Einbettung korrekt reagieren.
+// ---------------------------------------------------------------------------
+type HeaderTier = "labels" | "icons" | "stack";
+
+// Smartphone-Erkennung (Tailwind-sm-Grenze): Auf Handys gilt IMMER das feste
+// Zwei-Zeilen-Layout aus dem Mockup — auch wenn wenige Aktionen theoretisch in
+// eine Zeile passen wuerden. Die messbasierte Eskalation greift nur darueber.
+const MOBILE_STACK_QUERY = "(max-width: 639px)";
+
+function useIsMobileViewport() {
+  const [isMobile, setIsMobile] = useState<boolean>(() =>
+    typeof window !== "undefined" ? window.matchMedia(MOBILE_STACK_QUERY).matches : false,
+  );
+  useLayoutEffect(() => {
+    const mql = window.matchMedia(MOBILE_STACK_QUERY);
+    const onChange = () => setIsMobile(mql.matches);
+    onChange();
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+  return isMobile;
+}
+
+function useHeaderTier(contentKey: string) {
+  const measureRef = useRef<HTMLDivElement | null>(null);
+  const isMobile = useIsMobileViewport();
+  const [tier, setTier] = useState<HeaderTier>("labels");
+  const tierRef = useRef<HeaderTier>(tier);
+  tierRef.current = tier;
+  // Merkt sich, bei welcher Container-Breite eine Stufe zuletzt uebergelaufen
+  // ist — erst deutlich oberhalb davon wird die groessere Stufe erneut
+  // probiert (Hysterese gegen Flackern an der Kante).
+  const failedAt = useRef<{ labels: number; icons: number }>({ labels: 0, icons: 0 });
+
+  // Inhalts-Aenderungen (Badge erscheint, Label wechselt, Filterwahl …)
+  // veraendern den Platzbedarf → von der groessten Stufe aus neu messen.
+  useLayoutEffect(() => {
+    failedAt.current = { labels: 0, icons: 0 };
+    setTier("labels");
+  }, [contentKey]);
+
+  useLayoutEffect(() => {
+    if (isMobile) return; // Handy: Stufe ist fix "stack", nichts messen.
+    const el = measureRef.current;
+    if (!el) return;
+    const check = () => {
+      const t = tierRef.current;
+      const width = el.clientWidth;
+      if (width === 0) return;
+      if (t !== "stack" && el.scrollWidth > width + 1) {
+        failedAt.current[t] = Math.max(failedAt.current[t], width);
+        setTier(t === "labels" ? "icons" : "stack");
+        return;
+      }
+      // Wieder mehr Platz? Eine Stufe zurueck (mit Puffer), der naechste
+      // Messdurchlauf eskaliert notfalls erneut.
+      if (t === "stack" && width > failedAt.current.icons + 48) {
+        setTier("icons");
+      } else if (t === "icons" && failedAt.current.labels > 0 && width > failedAt.current.labels + 48) {
+        setTier("labels");
+      }
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [tier, contentKey, isMobile]);
+
+  return { measureRef, tier: isMobile ? ("stack" as const) : tier };
+}
+
+function DienstplanHeader({
+  isAdmin,
+  assistants,
+  selectedAssistant,
+  onSelectAssistant,
+  mobileView,
+  onMobileView,
+  desktopView,
+  onDesktopView,
+  confirmableCount,
+  isBulkConfirming,
+  onConfirmAll,
+  canBasicExport,
+  isExporting,
+  onExport,
+  canBulkEdit,
+  isSelectionMode,
+  onToggleSelection,
+  monthLabel,
+  onPrevMonth,
+  onNextMonth,
+}: {
+  isAdmin: boolean;
+  assistants: Assistant[];
+  selectedAssistant: number | "all";
+  onSelectAssistant: (v: number | "all") => void;
+  mobileView: "list" | "grid";
+  onMobileView: (v: "list" | "grid") => void;
+  desktopView: "table" | "grid";
+  onDesktopView: (v: "table" | "grid") => void;
+  confirmableCount: number;
+  isBulkConfirming: boolean;
+  onConfirmAll: () => void;
+  canBasicExport: boolean;
+  isExporting: boolean;
+  onExport: () => void;
+  canBulkEdit: boolean;
+  isSelectionMode: boolean;
+  onToggleSelection: () => void;
+  monthLabel: string;
+  onPrevMonth: () => void;
+  onNextMonth: () => void;
+}) {
+  const { selectedTeamId } = useTeam();
+  // Alles, was die benoetigte Breite der Leiste veraendert, fliesst in den
+  // Mess-Schluessel ein → bei Aenderung wird von "labels" aus neu gemessen.
+  const contentKey = [
+    isAdmin,
+    assistants.length,
+    String(selectedAssistant),
+    selectedTeamId ?? "none",
+    confirmableCount,
+    isExporting,
+    isSelectionMode,
+    canBasicExport,
+    canBulkEdit,
+    monthLabel,
+  ].join("|");
+  const { measureRef, tier } = useHeaderTier(contentKey);
+  const showLabels = tier === "labels";
+  const stacked = tier === "stack";
+
+  const title = (
+    <h2 className={`text-lg md:text-xl font-serif font-bold text-foreground ${stacked ? "min-w-0 shrink truncate" : "shrink-0"}`}>
+      Dienstplan
+    </h2>
+  );
+
+  const assistantFilter = isAdmin && assistants.length > 0 && (
+    <Select
+      value={String(selectedAssistant)}
+      onValueChange={(v) => onSelectAssistant(v === "all" ? "all" : Number(v))}
+    >
+      <SelectTrigger
+        className={stacked ? "h-9 w-full min-w-0 gap-1.5 truncate" : "h-9 w-auto min-w-[170px] gap-2"}
+        data-testid="assistant-select"
+        aria-label="Assistent filtern"
+      >
+        <SelectValue placeholder="Alle Assistenten" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="all" data-testid="assistant-option-all">
+          Alle Assistenten
+        </SelectItem>
+        {assistants.map((a) => (
+          <SelectItem key={a.id} value={String(a.id)} data-testid={`assistant-option-${a.id}`}>
+            <span className="inline-flex items-center gap-2">
+              <span
+                aria-hidden="true"
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none ${userInitialsClass(a.id)}`}
+              >
+                {nameInitials(a.name)}
+              </span>
+              {a.name}
+            </span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  // Ansicht-Umschalter: mobil Liste/Monat, ab md Tabelle/Monat (an den
+  // darunter gerenderten Inhalt gekoppelt); Beschriftung platzbasiert.
+  const viewToggles = (
+    <>
+      <div className="md:hidden" data-testid="view-toggles-mobile">
+        <ViewToggle
+          value={mobileView}
+          onChange={(v) => onMobileView(v as "list" | "grid")}
+          showLabels={showLabels}
+          options={[
+            { value: "list", label: "Liste", icon: List },
+            { value: "grid", label: "Monat", icon: CalendarDays },
+          ]}
+        />
+      </div>
+      <div className="hidden md:block" data-testid="view-toggles-desktop">
+        <ViewToggle
+          value={desktopView}
+          onChange={(v) => onDesktopView(v as "table" | "grid")}
+          showLabels={showLabels}
+          options={[
+            { value: "table", label: "Tabelle", icon: Table2 },
+            { value: "grid", label: "Monat", icon: CalendarDays },
+          ]}
+        />
+      </div>
+    </>
+  );
+
+  // Sammelaktion: alle Entwürfe/Vorschläge des sichtbaren Monats mit einem
+  // Klick verbindlich machen. Nur sichtbar, solange es etwas zu bestätigen
+  // gibt. Im Icon-Modus wandert der Zähler als Badge an die Button-Ecke.
+  const confirmAllButton = isAdmin && confirmableCount > 0 && (
+    <Button
+      variant="outline"
+      size="sm"
+      className={showLabels ? "gap-1.5" : `relative h-9 shrink-0 px-0 ${stacked ? "w-8" : "w-9"}`}
+      onClick={onConfirmAll}
+      disabled={isBulkConfirming}
+      title="Alle Entwürfe bestätigen"
+      aria-label="Alle Entwürfe bestätigen"
+      data-testid="confirm-all-drafts"
+    >
+      <Check className="h-4 w-4" />
+      {showLabels ? (
+        <>
+          <span>Alle bestätigen</span>
+          <span className="rounded-full bg-primary/10 px-1.5 text-xs font-semibold text-primary">
+            {confirmableCount}
+          </span>
+        </>
+      ) : (
+        <span className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary/10 px-1 text-[10px] font-semibold text-primary ring-1 ring-primary/20 backdrop-blur-sm">
+          {confirmableCount}
+        </span>
+      )}
+    </Button>
+  );
+
+  // Einfacher Monats-Export (basicExport, auch im Free-Plan): PDF des
+  // sichtbaren Monats mit bestätigten Diensten und Abwesenheiten.
+  const exportButton = canBasicExport && (
+    <Button
+      variant="outline"
+      size="sm"
+      className={showLabels ? "gap-1.5" : `h-9 shrink-0 px-0 ${stacked ? "w-8" : "w-9"}`}
+      onClick={onExport}
+      disabled={isExporting}
+      title="Monatsübersicht als PDF: bestätigte Dienste und Abwesenheiten, ohne Zeiterfassung."
+      aria-label="Monatsübersicht als PDF exportieren"
+      data-testid="simple-month-export"
+    >
+      <Download className="h-4 w-4" />
+      {showLabels && <span>{isExporting ? "Exportiere..." : "Monats-PDF"}</span>}
+    </Button>
+  );
+
+  // Massenbearbeitung ist ein Premium-Feature. Free-Konten sehen den Button
+  // deaktiviert mit Upgrade-Hinweis (Durchsetzung zusaetzlich serverseitig).
+  const selectionButton =
+    isAdmin &&
+    (canBulkEdit ? (
+      <Button
+        variant={isSelectionMode ? "default" : "outline"}
+        size="sm"
+        className={showLabels ? "gap-1.5" : `h-9 shrink-0 px-0 ${stacked ? "w-8" : "w-9"}`}
+        onClick={onToggleSelection}
+        title={isSelectionMode ? "Auswahl beenden" : "Mehrfachauswahl"}
+        aria-label={isSelectionMode ? "Auswahl beenden" : "Mehrfachauswahl"}
+        data-testid="toggle-selection-mode"
+      >
+        {isSelectionMode ? <X className="h-4 w-4" /> : <CheckSquare className="h-4 w-4" />}
+        {showLabels && <span>{isSelectionMode ? "Auswahl beenden" : "Mehrfachauswahl"}</span>}
+      </Button>
+    ) : (
+      <Button
+        variant="outline"
+        size="sm"
+        className={showLabels ? "gap-1.5" : `h-9 shrink-0 px-0 ${stacked ? "w-8" : "w-9"}`}
+        disabled
+        title="Massenbearbeitung ist in Premium enthalten."
+        aria-label="Mehrfachauswahl (Premium)"
+        data-testid="toggle-selection-mode-locked"
+      >
+        <Lock className="h-4 w-4" />
+        {showLabels && <span>Mehrfachauswahl</span>}
+      </Button>
+    ));
+
+  // Monatswechsler: Pfeile direkt am Monatstext. In der Zwei-Zeilen-Ansicht
+  // waechst das Monatslabel auf Ueberschrift-Groesse (nicht fett) mit.
+  const monthSwitcher = (
+    <div className={`flex items-center gap-0.5 ${stacked ? "min-w-0" : "shrink-0"}`}>
+      <Button
+        variant="ghost"
+        size="icon"
+        className={stacked ? "h-8 w-6 shrink-0" : "h-8 w-8"}
+        onClick={onPrevMonth}
+        aria-label="Vorheriger Monat"
+        data-testid="prev-month"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </Button>
+      <span
+        className={
+          stacked
+            ? "min-w-0 truncate whitespace-nowrap text-center text-lg font-normal tracking-tight text-foreground"
+            : "whitespace-nowrap text-center text-sm font-medium md:text-base"
+        }
+        data-testid="month-label"
+      >
+        {monthLabel}
+      </span>
+      <Button
+        variant="ghost"
+        size="icon"
+        className={stacked ? "h-8 w-6 shrink-0" : "h-8 w-8"}
+        onClick={onNextMonth}
+        aria-label="Nächster Monat"
+        data-testid="next-month"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+
+  return (
+    <div className="sticky top-0 z-40 -mx-4 -mt-4 mb-1 border-b border-border/40 bg-white/95 px-4 py-3 backdrop-blur md:-mx-6 md:-mt-6 md:px-6">
+      {stacked ? (
+        /* Zwei-Zeilen-Struktur nach dem gewaehlten Mockup "Aktionen unten":
+           Zeile 1: Titel (+ Team-Switcher) links, Assistenten-Filter rechts.
+           Zeile 2: Ansicht-Umschalter, Aktions-Icons, Monatswechsler rechts.
+           Beide Zeilen sind nowrap — mehr als zwei Zeilen gibt es nie. */
+        <div ref={measureRef} className="flex w-full flex-col gap-2.5">
+          <div className="flex w-full flex-nowrap items-center gap-2">
+            {title}
+            <div className="min-w-0 shrink">
+              <TeamSwitcher />
+            </div>
+            {assistantFilter && (
+              <div className="ml-auto w-full min-w-0 max-w-[190px] shrink">{assistantFilter}</div>
+            )}
+          </div>
+          <div className="flex w-full flex-nowrap items-center gap-1">
+            {viewToggles}
+            {confirmAllButton}
+            {exportButton}
+            {selectionButton}
+            <div className="ml-auto flex min-w-0 items-center">{monthSwitcher}</div>
+          </div>
+        </div>
+      ) : (
+        /* Einzeilig (Desktop/Tablet bzw. genug Platz): alles in EINER Zeile.
+           flex-nowrap, damit Platzmangel als Ueberlauf messbar ist und die
+           Leiste kontrolliert eskaliert statt frei umzubrechen. */
+        <div ref={measureRef} className="flex w-full flex-nowrap items-center gap-2">
+          {title}
+          <TeamSwitcher />
+          {assistantFilter}
+          <div className="ml-auto flex flex-nowrap items-center gap-1.5">
+            {viewToggles}
+            {confirmAllButton}
+            {exportButton}
+            {selectionButton}
+            {monthSwitcher}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1119,177 +1495,32 @@ export default function Dienstplan() {
     }
   }
 
-  // Superkompakte Steuerleiste: Überschrift, Ansicht-Umschalter, Aktionen und
-  // Monatswechsler in EINER Zeile (umbricht nur bei extrem wenig Platz).
-  // Bleibt im Full-Screen-Layout fix am oberen Rand (shrink-0), damit der
-  // Kalender darunter den Rest der Hoehe bekommt. Auf kleinen Screens
-  // schrumpfen die Buttons zu reinen Icons (Text erst ab md sichtbar).
-  const Header = () => (
-    <div className="sticky top-0 z-40 -mx-4 -mt-4 mb-1 flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-border/40 bg-white/95 px-4 py-3 backdrop-blur md:-mx-6 md:-mt-6 md:px-6">
-      <h2 className="text-lg md:text-xl font-serif font-bold text-foreground">Dienstplan</h2>
-      <TeamSwitcher />
-      {/* Kompakter Assistenten-Filter direkt neben dem Titel (ersetzt die
-          frühere Pillenleiste). Default "Alle Assistenten". */}
-      {isAdmin && assistants.length > 0 && (
-        <Select
-          value={String(selectedAssistant)}
-          onValueChange={(v) => setSelectedAssistant(v === "all" ? "all" : Number(v))}
-        >
-          <SelectTrigger
-            className="h-9 w-auto min-w-[170px] gap-2"
-            data-testid="assistant-select"
-            aria-label="Assistent filtern"
-          >
-            <SelectValue placeholder="Alle Assistenten" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all" data-testid="assistant-option-all">
-              Alle Assistenten
-            </SelectItem>
-            {assistants.map((a) => (
-              <SelectItem key={a.id} value={String(a.id)} data-testid={`assistant-option-${a.id}`}>
-                <span className="inline-flex items-center gap-2">
-                  <span
-                    aria-hidden="true"
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none ${userInitialsClass(a.id)}`}
-                  >
-                    {nameInitials(a.name)}
-                  </span>
-                  {a.name}
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-      <div className="ml-auto flex flex-wrap items-center gap-1.5">
-        {/* Ansicht-Umschalter: mobil Liste/Monat, ab md Tabelle/Monat. */}
-        <div className="md:hidden" data-testid="view-toggles-mobile">
-          <ViewToggle
-            value={mobileView}
-            onChange={(v) => setMobileView(v as "list" | "grid")}
-            options={[
-              { value: "list", label: "Liste", icon: List },
-              { value: "grid", label: "Monat", icon: CalendarDays },
-            ]}
-          />
-        </div>
-        <div className="hidden md:block" data-testid="view-toggles-desktop">
-          <ViewToggle
-            value={desktopView}
-            onChange={(v) => setDesktopView(v as "table" | "grid")}
-            options={[
-              { value: "table", label: "Tabelle", icon: Table2 },
-              { value: "grid", label: "Monat", icon: CalendarDays },
-            ]}
-          />
-        </div>
-        {/* Sammelaktion: alle Entwürfe/Vorschläge des sichtbaren Monats mit
-            einem Klick verbindlich machen. Nur sichtbar, solange es etwas zu
-            bestätigen gibt — sonst wäre der Button ein totes Element. */}
-        {isAdmin && confirmableShifts.length > 0 && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setDialog({ mode: "confirm-all" })}
-            disabled={isBulkConfirming}
-            title="Alle Entwürfe bestätigen"
-            aria-label="Alle Entwürfe bestätigen"
-            data-testid="confirm-all-drafts"
-          >
-            <Check className="h-4 w-4" />
-            <span className="hidden md:inline">Alle bestätigen</span>
-            <span className="rounded-full bg-primary/10 px-1.5 text-xs font-semibold text-primary">
-              {confirmableShifts.length}
-            </span>
-          </Button>
-        )}
-        {/* Einfacher Monats-Export (basicExport, auch im Free-Plan): PDF des
-            sichtbaren Monats mit bestätigten Diensten und Abwesenheiten
-            (Urlaub/Krank), ohne Zeiterfassung. Sichtbar für Admins UND
-            Assistenzkräfte (eigene Dienste). */}
-        {canBasicExport && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={handleSimpleExport}
-            disabled={isExporting}
-            title="Monatsübersicht als PDF: bestätigte Dienste und Abwesenheiten, ohne Zeiterfassung."
-            aria-label="Monatsübersicht als PDF exportieren"
-            data-testid="simple-month-export"
-          >
-            <Download className="h-4 w-4" />
-            <span className="hidden md:inline">
-              {isExporting ? "Exportiere..." : "Monats-PDF"}
-            </span>
-          </Button>
-        )}
-        {/* Massenbearbeitung ist ein Premium-Feature. Free-Konten sehen den
-            Button deaktiviert mit Upgrade-Hinweis (Durchsetzung zusaetzlich
-            serverseitig erforderlich). */}
-        {isAdmin &&
-          (canBulkEdit ? (
-            <Button
-              variant={isSelectionMode ? "default" : "outline"}
-              size="sm"
-              className="gap-1.5"
-              onClick={toggleSelectionMode}
-              title={isSelectionMode ? "Auswahl beenden" : "Mehrfachauswahl"}
-              aria-label={isSelectionMode ? "Auswahl beenden" : "Mehrfachauswahl"}
-              data-testid="toggle-selection-mode"
-            >
-              {isSelectionMode ? <X className="h-4 w-4" /> : <CheckSquare className="h-4 w-4" />}
-              <span className="hidden md:inline">
-                {isSelectionMode ? "Auswahl beenden" : "Mehrfachauswahl"}
-              </span>
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              disabled
-              title="Massenbearbeitung ist in Premium enthalten."
-              aria-label="Mehrfachauswahl (Premium)"
-              data-testid="toggle-selection-mode-locked"
-            >
-              <Lock className="h-4 w-4" />
-              <span className="hidden md:inline">Mehrfachauswahl</span>
-            </Button>
-          ))}
-        {/* Monatswechsler: Pfeile direkt am Monatstext, ohne breite Lücken. */}
-        <div className="flex items-center gap-0.5">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={prevMonth}
-            aria-label="Vorheriger Monat"
-            data-testid="prev-month"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span
-            className="font-medium text-sm md:text-base whitespace-nowrap text-center"
-            data-testid="month-label"
-          >
-            {format(currentDate, "MMMM yyyy", { locale: de })}
-          </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={nextMonth}
-            aria-label="Nächster Monat"
-            data-testid="next-month"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-    </div>
+  // Adaptive Steuerleiste (eigene Komponente DienstplanHeader): einzeilig mit
+  // Beschriftungen, solange der Platz reicht; bei Platzmangel erst Icon-only,
+  // dann die Zwei-Zeilen-Struktur des Smartphone-Mockups. Bleibt sticky oben.
+  const header = (
+    <DienstplanHeader
+      isAdmin={isAdmin}
+      assistants={assistants}
+      selectedAssistant={selectedAssistant}
+      onSelectAssistant={setSelectedAssistant}
+      mobileView={mobileView}
+      onMobileView={setMobileView}
+      desktopView={desktopView}
+      onDesktopView={setDesktopView}
+      confirmableCount={confirmableShifts.length}
+      isBulkConfirming={isBulkConfirming}
+      onConfirmAll={() => setDialog({ mode: "confirm-all" })}
+      canBasicExport={canBasicExport}
+      isExporting={isExporting}
+      onExport={handleSimpleExport}
+      canBulkEdit={canBulkEdit}
+      isSelectionMode={isSelectionMode}
+      onToggleSelection={toggleSelectionMode}
+      monthLabel={format(currentDate, "MMMM yyyy", { locale: de })}
+      onPrevMonth={prevMonth}
+      onNextMonth={nextMonth}
+    />
   );
 
   if (isLoading) {
@@ -1297,7 +1528,7 @@ export default function Dienstplan() {
       /* Gleiches Geruest wie der geladene Zustand: natuerlich fliessender
          Inhalt, der mit der Seite scrollt (kein viewport-fixes Grid mehr). */
       <div className="flex flex-col gap-3 animate-in fade-in duration-300">
-        <Header />
+        {header}
         <div className="space-y-3">
           {[1, 2, 3, 4, 5].map((i) => (
             <Skeleton key={i} className="h-16 w-full rounded-lg" />
@@ -1315,7 +1546,7 @@ export default function Dienstplan() {
        scrollt mit der Seite (der aeussere Scroll-Container liegt im Layout).
        Volle Breite; die Kopfzeile bleibt beim Scrollen sticky oben. */
     <div className="flex flex-col gap-3 animate-in fade-in duration-300">
-      <Header />
+      {header}
 
       {/* Free-Plan: Hinweis, wenn der angezeigte Monat ausserhalb des erlaubten
           Vorausplanungs-Fensters liegt. Bestehende Schichten bleiben sichtbar;
