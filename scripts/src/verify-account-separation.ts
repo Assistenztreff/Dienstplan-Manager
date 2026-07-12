@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process";
 import pg from "pg";
-import { deleteAccountTrees } from "./lib/account-tree.js";
+import { deleteAccountTrees } from "@workspace/test-fixtures";
 import { deriveTestDbUrl } from "./lib/test-db-url.js";
 
 /**

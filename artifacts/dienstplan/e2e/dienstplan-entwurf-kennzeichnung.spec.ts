@@ -104,7 +104,7 @@ test.beforeAll(async () => {
   // Premium-Freischaltung (direkt in der Test-DB, wie im Operator-Dashboard):
   // nötig für hours-balance + Export-Dialog. Vor dem Login geflippt, damit
   // /auth/me im Browser bereits plan=premium liefert (Frontend-Gates).
-  setAccountPlan(acc.email, "premium");
+  await setAccountPlan(acc.email, "premium");
 });
 
 test.afterAll(async () => {

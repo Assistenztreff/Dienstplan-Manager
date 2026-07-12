@@ -54,7 +54,7 @@ test.beforeAll(async () => {
   admin = await registerFreeAccount("privat", "kal-rotate");
   // Manuelle Premium-Freischaltung direkt in der Test-DB (wie im Operator-
   // Dashboard) — Einladen + Kalender-Token sind Premium-Features.
-  setAccountPlan(admin.email, "premium");
+  await setAccountPlan(admin.email, "premium");
 
   publicCtx = await playwrightRequest.newContext({ baseURL: BASE_URL });
 
@@ -139,7 +139,7 @@ test("Link erneuern macht die alte Abo-URL sofort ungültig; neue URL liefert di
 }) => {
   test.setTimeout(90_000);
   // Arbeitgeber sicher auf Premium (unabhängig von der Reihenfolge der Tests).
-  setAccountPlan(admin.email, "premium");
+  await setAccountPlan(admin.email, "premium");
   await adoptAssistant(page);
 
   await page.goto("/einstellungen");

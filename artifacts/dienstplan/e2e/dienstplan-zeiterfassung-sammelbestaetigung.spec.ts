@@ -119,7 +119,7 @@ test.describe("Sammelbestätigung: API (confirm-batch)", () => {
   });
 
   test("Premium: bestätigt nur offene Einträge; abgelehnte/unbekannte IDs werden übersprungen", async () => {
-    setAccountPlan(acc.email, "premium");
+    await setAccountPlan(acc.email, "premium");
 
     // Einen Eintrag vorab ablehnen — die Sammelbestätigung darf ihn NICHT
     // auf "confirmed" umdrehen (nur pending wird angefasst).
@@ -206,7 +206,7 @@ test.describe("Sammelbestätigung: UI (Zeiterfassung)", () => {
     page,
   }) => {
     test.setTimeout(90000);
-    setAccountPlan(acc.email, "premium");
+    await setAccountPlan(acc.email, "premium");
     await adoptSession(page, acc);
 
     // Über den Pending-Filter (Ziel des Dashboard-Hinweis-Links) einsteigen.

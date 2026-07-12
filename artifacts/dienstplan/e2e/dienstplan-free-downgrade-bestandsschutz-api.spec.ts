@@ -64,7 +64,7 @@ test.beforeAll(async () => {
   acc = await registerFreeAccount("dienstleister", "downgrade-bestandsschutz");
 
   // --- Sofort auf Premium heben (manuelle Freischaltung nachstellen) --------
-  setAccountPlan(acc.email, "premium");
+  await setAccountPlan(acc.email, "premium");
 
   // --- Als Premium über alle Free-Caps hinaus aufbauen ----------------------
 
@@ -117,7 +117,7 @@ test.beforeAll(async () => {
   }
 
   // --- Rückstufung: Konto direkt in der Test-DB auf Free ---------------------
-  setAccountPlan(acc.email, "free");
+  await setAccountPlan(acc.email, "free");
 });
 
 test.afterAll(async () => {

@@ -78,7 +78,7 @@ test.beforeAll(async () => {
 
   // --- Arbeitgeber P (Premium) mit zwei Assistenten + Verträgen -------------
   employer = await registerFreeAccount("privat", "vacidor-p");
-  setAccountPlan(employer.email, "premium");
+  await setAccountPlan(employer.email, "premium");
 
   assistantAId = await createAssistant(employer, "a");
   const assistantBId = await createAssistant(employer, "b");
@@ -103,7 +103,7 @@ test.beforeAll(async () => {
 
   // --- Getrennter Arbeitgeber Q (Premium) = Außenseiter-Vertrag -------------
   outsider = await registerFreeAccount("privat", "vacidor-q");
-  setAccountPlan(outsider.email, "premium");
+  await setAccountPlan(outsider.email, "premium");
   const outsiderAssistantId = await createAssistant(outsider, "q");
   outsiderContractId = await createContract(outsider, outsiderAssistantId);
 });
@@ -152,7 +152,7 @@ test("Assistent bekommt 404 für einen Vertrag außerhalb seiner Teams", async (
 
 test("Nach Arbeitgeber-Downgrade auf Free → 403 plan_feature_required für den eigenen Vertrag", async () => {
   // Das Plan-Gate hängt am Team-Eigentümer (Arbeitgeber), nicht am Assistenten.
-  setAccountPlan(employer.email, "free");
+  await setAccountPlan(employer.email, "free");
   try {
     const res = await assistantCtx!.get(`/api/contracts/${ownContractId}/vacation-balance`);
     expect(
@@ -165,6 +165,6 @@ test("Nach Arbeitgeber-Downgrade auf Free → 403 plan_feature_required für den
   } finally {
     // Premium wiederherstellen, damit das Cleanup (deleteFreeAccount) und
     // etwaige Geschwister-Läufe nicht vom Downgrade beeinflusst werden.
-    setAccountPlan(employer.email, "premium");
+    await setAccountPlan(employer.email, "premium");
   }
 });

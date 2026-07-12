@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process";
 import pg from "pg";
-import { TEAM_BOUND_TABLES } from "./lib/account-tree.js";
+import { TEAM_BOUND_TABLES } from "@workspace/test-fixtures";
 import { deriveTestDbUrl } from "./lib/test-db-url.js";
 
 /**
@@ -10,7 +10,7 @@ import { deriveTestDbUrl } from "./lib/test-db-url.js";
  * Ablauf:
  *   1. FK-Wächter: Alle Tabellen mit nicht-kaskadierendem FK auf `teams.id`
  *      werden aus dem Katalog (pg_constraint) gelesen und MÜSSEN exakt der
- *      Liste `TEAM_BOUND_TABLES` in `lib/account-tree.ts` entsprechen. Kommt
+ *      Liste `TEAM_BOUND_TABLES` in `lib/test-fixtures/src/account-tree.ts` entsprechen. Kommt
  *      eine neue team-gebundene Tabelle ohne Cleanup-Zweig hinzu, schlägt der
  *      Check hier sofort fehl — bevor die Test-DB still Leichen ansammelt.
  *   2. Abbruch-Simulation: Ein Zombie-Konto (`e2e.zombie…@dienstplan.test`)
@@ -86,14 +86,14 @@ async function main(): Promise<void> {
     if (missingInCleanup.length > 0) {
       throw new CheckError(
         `Neue team-gebundene Tabelle(n) OHNE Cleanup-Zweig entdeckt: ${missingInCleanup.join(", ")}. ` +
-          `Bitte in TEAM_BOUND_TABLES (scripts/src/lib/account-tree.ts) ergänzen — ` +
+          `Bitte in TEAM_BOUND_TABLES (lib/test-fixtures/src/account-tree.ts) ergänzen — ` +
           `sonst scheitert das Team-Löschen mit FK-Fehler und die Test-DB sammelt Konten-Leichen an.`,
       );
     }
     if (staleInCleanup.length > 0) {
       throw new CheckError(
         `TEAM_BOUND_TABLES enthält Tabelle(n) ohne nicht-kaskadierenden FK auf teams.id: ` +
-          `${staleInCleanup.join(", ")}. Liste in scripts/src/lib/account-tree.ts bereinigen ` +
+          `${staleInCleanup.join(", ")}. Liste in lib/test-fixtures/src/account-tree.ts bereinigen ` +
           `(oder Test-DB-Schema ist veraltet — setup-test-db ausführen).`,
       );
     }

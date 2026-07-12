@@ -124,7 +124,7 @@ test("Premium-Freischaltung hebt maxShiftModels und bulkEdit sofort auf", async 
   expect(swapFreeBody.feature).toBe("bulkEdit");
 
   // --- Upgrade: manuelle Premium-Freischaltung direkt in der Test-DB -----
-  setAccountPlan(acc.email, "premium");
+  await setAccountPlan(acc.email, "premium");
 
   // --- Premium-Phase: dieselbe Session, dieselben Aktionen -> jetzt erlaubt -
 

@@ -100,7 +100,7 @@ test.describe("Suche im Plan-Änderungsprotokoll", () => {
 
   test.afterAll(async () => {
     try {
-      deleteAccountByEmail(superEmail);
+      await deleteAccountByEmail(superEmail);
     } catch {
       /* Best effort — Cleanup darf den Lauf nicht kippen. */
     }

@@ -90,7 +90,7 @@ test.beforeAll(async () => {
   desktopOfferedShiftId = await createShift(14, "ANGEBOTEN");
 
   // Assistenten-Login über den Einladungsflow (siehe Spec-Kopf).
-  setAccountPlan(acc.email, "premium");
+  await setAccountPlan(acc.email, "premium");
   let token = "";
   try {
     const inviteRes = await acc.ctx.post(`/api/users/${assistantId}/invite`);
@@ -98,7 +98,7 @@ test.beforeAll(async () => {
     token = ((await inviteRes.json()) as { token: string }).token;
     expect(token, "Einladungs-Token muss geliefert werden").toBeTruthy();
   } finally {
-    setAccountPlan(acc.email, "free");
+    await setAccountPlan(acc.email, "free");
   }
 
   // Passwort setzen = direkter Login des Assistenten (eigener Session-Kontext).

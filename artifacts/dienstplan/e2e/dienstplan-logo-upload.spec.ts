@@ -84,7 +84,7 @@ test.afterAll(async () => {
   // Registriertes Konto samt Standard-Team per SQL-Bereinigung entfernen
   // (DELETE /api/users scheitert am Team-FK-Baum; Branding kaskadiert mit).
   try {
-    deleteAccountByEmail(accountEmail);
+    await deleteAccountByEmail(accountEmail);
   } catch {
     /* Best effort — Cleanup darf den Lauf nicht blockieren. */
   }

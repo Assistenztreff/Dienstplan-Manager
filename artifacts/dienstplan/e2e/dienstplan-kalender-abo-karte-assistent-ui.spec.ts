@@ -41,7 +41,7 @@ test.beforeAll(async () => {
   admin = await registerFreeAccount("privat", "kal-karte-assist");
   // Manuelle Premium-Freischaltung direkt in der Test-DB (wie im Operator-
   // Dashboard) — Einladen + Kalender-Token sind Premium-Features.
-  setAccountPlan(admin.email, "premium");
+  await setAccountPlan(admin.email, "premium");
 
   const unique = Date.now();
   const assistantRes = await admin.ctx.post("/api/users", {
@@ -99,7 +99,7 @@ test("Premium-Arbeitgeber: Assistent sieht die Kalender-Abo-Karte freigeschaltet
 }) => {
   test.setTimeout(60_000);
   // Arbeitgeber sicher auf Premium (unabhängig von der Reihenfolge der Tests).
-  setAccountPlan(admin.email, "premium");
+  await setAccountPlan(admin.email, "premium");
   await adoptAssistant(page);
 
   await page.goto("/einstellungen");
@@ -132,7 +132,7 @@ test("Free-Arbeitgeber: Karte bleibt für den Assistenten gesperrt (Gegentest)",
   test.setTimeout(60_000);
   // Arbeitgeber-Downgrade — die Assistenten-Session bleibt gültig (Bestands-
   // schutz), nur das calendarSync-Gate greift wieder (Plan pro Request frisch).
-  setAccountPlan(admin.email, "free");
+  await setAccountPlan(admin.email, "free");
   await adoptAssistant(page);
 
   await page.goto("/einstellungen");
@@ -154,5 +154,5 @@ test("Free-Arbeitgeber: Karte bleibt für den Assistenten gesperrt (Gegentest)",
   await expect(page.getByTestId("calendar-feed-rotate")).toHaveCount(0);
 
   // Premium wiederherstellen, damit Geschwister-Specs nicht beeinflusst werden.
-  setAccountPlan(admin.email, "premium");
+  await setAccountPlan(admin.email, "premium");
 });

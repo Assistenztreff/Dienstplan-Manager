@@ -1,9 +1,14 @@
-import { execSync } from "node:child_process";
 import {
   expect,
   request as playwrightRequest,
   type APIRequestContext,
 } from "@playwright/test";
+import {
+  dbAddTeamMember,
+  dbDeleteAccountByEmail,
+  dbSeedAdmin,
+  dbSetAccountPlan,
+} from "./db";
 
 /**
  * Wiederverwendbare Test-Hilfen für das Aufsetzen von Teams, Assistenten und
@@ -92,24 +97,14 @@ export async function registerFreeAccount(
  * Hebt ein bestehendes Konto direkt in der (Test-)DB auf einen Plan
  * (`premium` | `free`) — der einzige Weg, eine manuelle Premium-Freischaltung
  * im Test nachzustellen (in Produktion erfolgt sie im Operator-Dashboard, kein
- * Stripe). Nutzt dasselbe execSync-/DB-Targeting wie `seedForeignAdmin`: gegen
- * den isolierten Test-Stack muss in die `_test`-DB geschrieben werden
- * (`E2E_TEST_DATABASE_URL`), sonst landet das Update via Dev-`DATABASE_URL` in
- * der falschen DB.
+ * Stripe). Laeuft in-process gegen die Test-DB (`E2E_TEST_DATABASE_URL`,
+ * Fallback `DATABASE_URL`) — frueher ein ~3s teurer Skript-Spawn pro Aufruf.
  */
-export function setAccountPlan(email: string, plan: "premium" | "free"): void {
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    SET_PLAN_EMAIL: email,
-    SET_PLAN_VALUE: plan,
-  };
-  if (process.env.E2E_TEST_DATABASE_URL) {
-    env.DATABASE_URL = process.env.E2E_TEST_DATABASE_URL;
-  }
-  execSync("pnpm --filter @workspace/scripts run set-plan", {
-    env,
-    stdio: "pipe",
-  });
+export async function setAccountPlan(
+  email: string,
+  plan: "premium" | "free",
+): Promise<void> {
+  await dbSetAccountPlan(email, plan);
 }
 
 /**
@@ -119,22 +114,13 @@ export function setAccountPlan(email: string, plan: "premium" | "free"): void {
  * Teams desselben Eigentümers an (Schutz vor Annexion per ID-Enumeration),
  * historische/DB-seitige Fremd-Mitgliedschaften sind aber weiterhin ein
  * gültiger Zustand, den die Auswertungs-Routen korrekt behandeln müssen.
- * Idempotent; nutzt dasselbe execSync-/DB-Targeting wie `setAccountPlan`.
+ * Idempotent; nutzt dasselbe DB-Targeting wie `setAccountPlan` (in-process).
  */
-export function addTeamMemberViaDb(teamId: number, userId: number): void {
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    TEAM_MEMBER_TEAM_ID: String(teamId),
-    TEAM_MEMBER_USER_ID: String(userId),
-    TEAM_MEMBER_ACTION: "create",
-  };
-  if (process.env.E2E_TEST_DATABASE_URL) {
-    env.DATABASE_URL = process.env.E2E_TEST_DATABASE_URL;
-  }
-  execSync("pnpm --filter @workspace/scripts run add-team-member", {
-    env,
-    stdio: "pipe",
-  });
+export async function addTeamMemberViaDb(
+  teamId: number,
+  userId: number,
+): Promise<void> {
+  await dbAddTeamMember(teamId, userId);
 }
 
 /**
@@ -144,20 +130,10 @@ export function addTeamMemberViaDb(teamId: number, userId: number): void {
  * angelegten „Standard-Teams" (teams.owner_id kaskadiert zwar, aber
  * shift_models/shifts/contracts/time_tracking referenzieren teams.id OHNE
  * Cascade — allein die 4 geseedeten Schichtmodelle blockieren jedes Konto).
- * Nutzt dasselbe execSync-/DB-Targeting wie `setAccountPlan`. Idempotent.
+ * Nutzt dasselbe DB-Targeting wie `setAccountPlan` (in-process). Idempotent.
  */
-export function deleteAccountByEmail(email: string): void {
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    DELETE_ACCOUNT_EMAIL: email,
-  };
-  if (process.env.E2E_TEST_DATABASE_URL) {
-    env.DATABASE_URL = process.env.E2E_TEST_DATABASE_URL;
-  }
-  execSync("pnpm --filter @workspace/scripts run delete-account", {
-    env,
-    stdio: "pipe",
-  });
+export async function deleteAccountByEmail(email: string): Promise<void> {
+  await dbDeleteAccountByEmail(email);
 }
 
 /**
@@ -170,7 +146,7 @@ export function deleteAccountByEmail(email: string): void {
 export async function deleteFreeAccount(acc: FreeAccount | undefined): Promise<void> {
   if (!acc) return;
   try {
-    deleteAccountByEmail(acc.email);
+    await deleteAccountByEmail(acc.email);
   } catch {
     /* Best effort — Testlauf nicht am Cleanup scheitern lassen. */
   }
@@ -279,7 +255,7 @@ export class TeamTestHarness {
    */
   async becomeDienstleister(): Promise<void> {
     const acc = await registerFreeAccount("dienstleister", "harness");
-    setAccountPlan(acc.email, "premium");
+    await setAccountPlan(acc.email, "premium");
     this.dienstleisterEmail = acc.email;
     this.ctx = acc.ctx;
     this.adminId = acc.id;
@@ -375,11 +351,11 @@ export class TeamTestHarness {
   }
 
   /**
-   * Seedet einen zweiten echten Admin über das setup-admin-Skript und loggt ihn
+   * Seedet einen zweiten echten Admin direkt in der (Test-)DB und loggt ihn
    * in einem eigenen Request-Kontext ein. Da accountType + Rolle NICHT über die
    * öffentliche API gesetzt werden können, ist dies der einzige Weg an einen
-   * zweiten Admin. Das Skript ist idempotent und legt KEIN Team an, solange
-   * bereits Teams existieren -> der Admin ist Mitglied/Besitzer in keinem Team.
+   * zweiten Admin. Idempotent; legt KEIN Team an, solange bereits Teams
+   * existieren -> der Admin ist Mitglied/Besitzer in keinem Team.
    */
   async seedForeignAdmin(
     opts: { email?: string; password?: string; name?: string } = {},
@@ -393,19 +369,8 @@ export class TeamTestHarness {
     // Login gegen die Test-DB schlägt fehl). Die Config stellt die Test-DB-URL
     // als `E2E_TEST_DATABASE_URL` bereit; gegen einen externen Stack (Proxy/Dev)
     // ist sie nicht gesetzt und die vorhandene `DATABASE_URL` greift.
-    const seedEnv: NodeJS.ProcessEnv = {
-      ...process.env,
-      ADMIN_EMAIL: email,
-      ADMIN_PASSWORD: password,
-      ADMIN_NAME: name,
-    };
-    if (process.env.E2E_TEST_DATABASE_URL) {
-      seedEnv.DATABASE_URL = process.env.E2E_TEST_DATABASE_URL;
-    }
-    execSync("pnpm --filter @workspace/scripts run setup-admin", {
-      env: seedEnv,
-      stdio: "pipe",
-    });
+    // In-process (Verhalten identisch zum setup-admin-Skript, ohne Spawn-Kosten).
+    await dbSeedAdmin(email, password, name);
 
     const ctx = await playwrightRequest.newContext({ baseURL: BASE_URL });
     const loginRes = await ctx.post("/api/auth/login", {
@@ -466,7 +431,7 @@ export class TeamTestHarness {
     // FK-Baum des bei der Registrierung angelegten Teams).
     if (this.dienstleisterEmail) {
       try {
-        deleteAccountByEmail(this.dienstleisterEmail);
+        await deleteAccountByEmail(this.dienstleisterEmail);
       } catch {
         /* ignore */
       }

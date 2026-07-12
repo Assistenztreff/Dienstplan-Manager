@@ -52,7 +52,7 @@ let ownShiftId = 0;
 test.beforeAll(async () => {
   test.setTimeout(120_000);
   admin = await registerFreeAccount("privat", "kal-rotate");
-  setAccountPlan(admin.email, "premium");
+  await setAccountPlan(admin.email, "premium");
 
   publicCtx = await playwrightRequest.newContext({ baseURL: BASE_URL });
 
@@ -115,7 +115,7 @@ test("Link erneuern macht die alte Abo-URL ungueltig, die neue liefert dieselben
   page,
 }) => {
   test.setTimeout(90_000);
-  setAccountPlan(admin.email, "premium");
+  await setAccountPlan(admin.email, "premium");
   await adoptAssistant(page);
 
   await page.goto("/einstellungen");

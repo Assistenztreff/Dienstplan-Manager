@@ -161,7 +161,7 @@ test.describe("Fehler-Tracking im Operator-Dashboard", () => {
       /* Best effort — Cleanup darf den Lauf nicht kippen. */
     }
     try {
-      deleteAccountByEmail(superEmail);
+      await deleteAccountByEmail(superEmail);
     } catch {
       /* Best effort — Cleanup darf den Lauf nicht kippen. */
     }

@@ -113,7 +113,7 @@ interface BalanceRow {
  * Lesezugriff auf premium gehoben und im finally sofort wieder gesenkt.
  */
 async function readAssistantBalanceRow(): Promise<BalanceRow> {
-  setAccountPlan(acc.email, "premium");
+  await setAccountPlan(acc.email, "premium");
   try {
     const res = await acc.ctx.get(
       `/api/dashboard/hours-balance?month=${Number(MONTH)}&year=${YEAR}`,
@@ -127,7 +127,7 @@ async function readAssistantBalanceRow(): Promise<BalanceRow> {
     expect(row, "Auswertung muss eine Zeile für den Assistenten enthalten").toBeDefined();
     return row!;
   } finally {
-    setAccountPlan(acc.email, "free");
+    await setAccountPlan(acc.email, "free");
   }
 }
 

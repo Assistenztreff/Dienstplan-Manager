@@ -93,7 +93,7 @@ test.describe("Downgrade auf Free: Bestandsdaten bleiben im UI sichtbar", () => 
     for (const m of seeded) seededModelNames.push(m.name);
 
     // === Premium: ueber alle Free-Caps hinaus Bestandsdaten aufbauen ========
-    setAccountPlan(acc.email, "premium");
+    await setAccountPlan(acc.email, "premium");
 
     // 2. Team (Free-Limit maxTeams = 1 wird damit ueberschritten).
     const teamRes = await acc.ctx.post("/api/teams", {
@@ -144,7 +144,7 @@ test.describe("Downgrade auf Free: Bestandsdaten bleiben im UI sichtbar", () => 
     farShiftId = ((await shiftRes.json()) as { id: number }).id;
 
     // === Downgrade: ab hier ist das Konto wieder Free =======================
-    setAccountPlan(acc.email, "free");
+    await setAccountPlan(acc.email, "free");
 
     // Absicherung: der Server liefert den Free-Plan (frisch aus der DB) —
     // sonst wuerden die UI-Assertions gar keinen Downgrade-Zustand pruefen.

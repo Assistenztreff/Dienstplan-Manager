@@ -106,7 +106,7 @@ test.beforeAll(async () => {
   // hours-balance ist Premium-gegated (advancedAnalytics); der Angreifer muss
   // Premium sein, damit die Leerer-Scope-Tests 200 statt 403 (plan-Gate)
   // prüfen — sonst testet der 403 nicht die Datentrennung.
-  setAccountPlan(attacker.email, "premium");
+  await setAccountPlan(attacker.email, "premium");
   attackerCtx = attacker.ctx;
 });
 

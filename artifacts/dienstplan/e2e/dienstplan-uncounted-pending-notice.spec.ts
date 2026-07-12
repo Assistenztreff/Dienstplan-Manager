@@ -119,7 +119,7 @@ test("Free-Phase: pending zählt in den Ist-Stunden, kein Hinweis nötig", async
 test("Nach Upgrade: Stunden wandern nach uncountedPendingHours/Entries", async () => {
   test.setTimeout(60_000);
   // Manuelle Premium-Freischaltung direkt in der Test-DB (Operator-Dashboard-Weg).
-  setAccountPlan(acc.email, "premium");
+  await setAccountPlan(acc.email, "premium");
 
   const summary = await fetchSummary();
   // Strikt (Premium-Eigentümer): pending zählt NICHT mehr ...

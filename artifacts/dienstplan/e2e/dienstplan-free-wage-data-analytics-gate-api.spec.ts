@@ -91,14 +91,14 @@ test("PATCH /api/users/:id: Ändern eines Lohn-Felds im Free-Tarif 403; unverän
   // Bestandsdaten herstellen: Konto kurz auf Premium heben (manuelle
   // Freischaltung), iban speichern, dann wieder auf Free senken (Downgrade).
   const storedIban = "DE02120300000000202051";
-  setAccountPlan(acc.email, "premium");
+  await setAccountPlan(acc.email, "premium");
   try {
     const seedRes = await acc.ctx.patch(`/api/users/${assistantId}`, {
       data: { iban: storedIban },
     });
     expect(seedRes.status(), "Premium-Konto sollte iban setzen dürfen").toBe(200);
   } finally {
-    setAccountPlan(acc.email, "free");
+    await setAccountPlan(acc.email, "free");
   }
 
   // Verboten: echtes Ändern des gespeicherten Werts im Free-Tarif.
@@ -142,7 +142,7 @@ test("GET /api/dashboard/hours-balance: im Free-Tarif 403 (advancedAnalytics), s
 
 test("Premium-Pfad: dieselben Endpunkte bleiben nach manueller Freischaltung offen", async () => {
   const acc = await freeAccount("wage-premium");
-  setAccountPlan(acc.email, "premium");
+  await setAccountPlan(acc.email, "premium");
 
   // POST mit Lohn-Feld erlaubt.
   const createRes = await acc.ctx.post("/api/users", {

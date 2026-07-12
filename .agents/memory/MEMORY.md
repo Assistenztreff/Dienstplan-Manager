@@ -66,3 +66,4 @@
 - [Dialog-Mobil-Scroll](dialog-mobile-scroll.md) — ohne max-h+overflow auf DialogContent sind Footer-Buttons mobil unerreichbar, da der Body nicht mehr scrollt.
 - [View-toggle selectors after sticky-header move](e2e-view-toggle-sticky-header.md) — toggles live in the sticky header, not the mobile/desktop content containers; anchor e2e locators on view-toggles-mobile/desktop.
 - [Backdating audit rows for e2e](plan-change-backdate-e2e.md) — plan_changes.created_at is always server-set; time-window specs seed flips with unique notes, then backdate via script; UI preset tests need timezoneId UTC.
+- [E2E DB fixtures in-process](e2e-inprocess-db-helpers.md) — never execSync pnpm scripts per test (~3.2s/spawn ≈ minutes/run); run the SQL in-process; e2e/ isn't typechecked, so sync→async helper changes need an ad-hoc tsc pass.

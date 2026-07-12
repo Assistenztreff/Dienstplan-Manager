@@ -43,7 +43,7 @@ let assistantId = 0;
 test.beforeAll(async () => {
   test.setTimeout(120_000);
   admin = await registerFreeAccount("privat", "kal-revoke");
-  setAccountPlan(admin.email, "premium");
+  await setAccountPlan(admin.email, "premium");
 
   publicCtx = await playwrightRequest.newContext({ baseURL: BASE_URL });
 
@@ -91,7 +91,7 @@ async function adoptAssistant(page: Page): Promise<void> {
 
 test("Widerrufen sperrt die Feed-URL sofort und löscht den Token", async ({ page }) => {
   test.setTimeout(90_000);
-  setAccountPlan(admin.email, "premium");
+  await setAccountPlan(admin.email, "premium");
   await adoptAssistant(page);
 
   await page.goto("/einstellungen");
@@ -144,7 +144,7 @@ test("Widerrufen bleibt nach Downgrade auf Free möglich (204, ohne Plan-Gate)",
   test.setTimeout(90_000);
 
   // Als Premium erneut einen Token erstellen (rotate/create).
-  setAccountPlan(admin.email, "premium");
+  await setAccountPlan(admin.email, "premium");
   const create = await assistantCtx!.post("/api/calendar-token");
   expect(create.status(), "Token-Erstellung sollte 200 liefern").toBe(200);
   const created = (await create.json()) as { feedPath: string | null };
@@ -156,7 +156,7 @@ test("Widerrufen bleibt nach Downgrade auf Free möglich (204, ohne Plan-Gate)",
   expect(active.status(), "Feed sollte nach Erstellen 200 liefern").toBe(200);
 
   // Arbeitgeber auf Free herabstufen: Erstellen wäre jetzt plan-gesperrt ...
-  setAccountPlan(admin.email, "free");
+  await setAccountPlan(admin.email, "free");
   const gatedCreate = await assistantCtx!.post("/api/calendar-token");
   expect(
     gatedCreate.status(),
@@ -175,5 +175,5 @@ test("Widerrufen bleibt nach Downgrade auf Free möglich (204, ohne Plan-Gate)",
   expect(afterRevoke.status(), "Feed muss nach Widerruf 404 liefern").toBe(404);
 
   // Aufräumen: Arbeitgeber wieder auf Premium (afterAll löscht das Konto).
-  setAccountPlan(admin.email, "premium");
+  await setAccountPlan(admin.email, "premium");
 });

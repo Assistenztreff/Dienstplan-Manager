@@ -52,7 +52,7 @@ test.beforeAll(async () => {
   admin = await registerFreeAccount("privat", "kal-feed-scope");
   // Manuelle Premium-Freischaltung direkt in der Test-DB (wie im Operator-
   // Dashboard) — Einladen + Kalender-Token sind Premium-Features.
-  setAccountPlan(admin.email, "premium");
+  await setAccountPlan(admin.email, "premium");
 
   publicCtx = await playwrightRequest.newContext({ baseURL: BASE_URL });
 });
@@ -187,7 +187,7 @@ test("Assistenten-Feed enthält nur eigene FIX-Schichten, Admin-Feed alle im Tea
   // des Team-Eigentümers. Nach dessen Downgrade: reines Free-Umfeld → 403
   // plan_feature_required sowohl auf dem öffentlichen Feed (Token-Eigentümer-
   // Gate) als auch beim Erzeugen eines neuen Tokens (Session-Gate).
-  setAccountPlan(admin.email, "free");
+  await setAccountPlan(admin.email, "free");
 
   const feedAfterDowngrade = await publicCtx.get(assistantToken.feedPath);
   expect(
@@ -219,5 +219,5 @@ test("Assistenten-Feed enthält nur eigene FIX-Schichten, Admin-Feed alle im Tea
 
   // Premium wiederherstellen, damit spätere Assertions/Aufräumarbeiten in
   // Geschwister-Specs nicht von diesem Downgrade beeinflusst werden.
-  setAccountPlan(admin.email, "premium");
+  await setAccountPlan(admin.email, "premium");
 });

@@ -89,7 +89,7 @@ test.describe("ShiftDialog: Wochentags-/Vorlagen-Hinweis im Mehrfach-Modus", () 
     // Premium-Feature). Erst NACH dem Premium-Flip das Schichtmodell anlegen
     // (Registrierung seedet bereits 5 Modelle = Free-Limit).
     employer = await registerFreeAccount("privat", "mehrfach.hinweis");
-    setAccountPlan(employer.email, "premium");
+    await setAccountPlan(employer.email, "premium");
 
     // Assistent, damit der Dialog einen wählbaren Nutzer hat.
     const userRes = await employer.ctx.post("/api/users", {

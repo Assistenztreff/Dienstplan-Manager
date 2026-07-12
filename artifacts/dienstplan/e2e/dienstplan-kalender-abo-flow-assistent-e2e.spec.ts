@@ -58,7 +58,7 @@ test.beforeAll(async () => {
   admin = await registerFreeAccount("privat", "kal-flow-assist");
   // Manuelle Premium-Freischaltung direkt in der Test-DB (wie im Operator-
   // Dashboard) — Einladen + Kalender-Token sind Premium-Features.
-  setAccountPlan(admin.email, "premium");
+  await setAccountPlan(admin.email, "premium");
 
   publicCtx = await playwrightRequest.newContext({ baseURL: BASE_URL });
 
@@ -163,7 +163,7 @@ test("Assistent erstellt Abo-Link über die UI; Feed liefert nur eigene FIX-Schi
 }) => {
   test.setTimeout(90_000);
   // Arbeitgeber sicher auf Premium (unabhängig von der Reihenfolge der Tests).
-  setAccountPlan(admin.email, "premium");
+  await setAccountPlan(admin.email, "premium");
   await adoptAssistant(page);
 
   await page.goto("/einstellungen");
@@ -217,7 +217,7 @@ test("Assistent erstellt Abo-Link über die UI; Feed liefert nur eigene FIX-Schi
   // Team-Eigentümers (Arbeitgebers). Der bereits ausgegebene Token bleibt in der
   // DB, der Feed liefert aber 403 statt weiter Daten (Bestandsschutz betrifft
   // nur Login/Widerruf, nicht den Premium-Datenzugriff).
-  setAccountPlan(admin.email, "free");
+  await setAccountPlan(admin.email, "free");
 
   const feedAfterDowngrade = await publicCtx.get(feedPath);
   expect(
@@ -230,5 +230,5 @@ test("Assistent erstellt Abo-Link über die UI; Feed liefert nur eigene FIX-Schi
   );
 
   // Premium wiederherstellen, damit Geschwister-Specs nicht beeinflusst werden.
-  setAccountPlan(admin.email, "premium");
+  await setAccountPlan(admin.email, "premium");
 });

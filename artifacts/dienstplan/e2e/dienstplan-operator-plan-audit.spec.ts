@@ -101,7 +101,7 @@ test.describe("Plan-Änderungsprotokoll (Operator-Audit-Log)", () => {
 
   test.afterAll(async () => {
     try {
-      deleteAccountByEmail(superEmail);
+      await deleteAccountByEmail(superEmail);
     } catch {
       /* Best effort — Cleanup darf den Lauf nicht kippen. */
     }

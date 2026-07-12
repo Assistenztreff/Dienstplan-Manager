@@ -88,7 +88,7 @@ let sundayShiftId: number;
 let holidayShiftId: number;
 let foreignShiftId: number;
 let originalAllowance: Record<string, unknown> | null = null;
-let foreignAccount: FreeAccount | null = null;
+let foreignAccount: FreeAccount | undefined;
 
 async function fetchStoredMetrics(shiftId: number): Promise<StoredShiftMetrics> {
   const res = await h.ctx.get(`/api/shifts/${shiftId}`);
@@ -356,7 +356,7 @@ test.describe("hours-balance: Aggregation der Roh-Kennzahlen zu Zuschlägen", ()
       // Teams DESSELBEN Eigentümers an (Annexions-Schutz); der hier geprüfte
       // Kanten-Fall einer fremden Mitgliedschaft ist ein historischer/DB-
       // seitiger Zustand, den die Auswertung dennoch korrekt behandeln muss.
-      addTeamMemberViaDb(foreignTeam, h.adminId);
+      await addTeamMemberViaDb(foreignTeam, h.adminId);
 
       // Assistent + FIX-Sonntagsschicht (So 03.05.2026, 8h) im fremden Team —
       // vergangener Monat, damit das Free-historyMonths-Limit nicht greift.

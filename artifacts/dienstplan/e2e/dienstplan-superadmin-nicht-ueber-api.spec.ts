@@ -124,12 +124,12 @@ test.describe("Superadmin-Rechte: nicht über normale APIs vergeben/entziehen", 
     }
     // FK-sicheres Cleanup beider Konten aus der Test-DB (Best effort).
     try {
-      deleteAccountByEmail(attackerEmail);
+      await deleteAccountByEmail(attackerEmail);
     } catch {
       /* ignore */
     }
     try {
-      deleteAccountByEmail(superEmail);
+      await deleteAccountByEmail(superEmail);
     } catch {
       /* ignore */
     }

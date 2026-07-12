@@ -1,10 +1,10 @@
 import pg from "pg";
-import { deleteAccountTrees } from "./lib/account-tree.js";
+import { deleteAccountTrees } from "@workspace/test-fixtures";
 
 /**
  * Loescht ein (Test-)Konto samt seines kompletten Datenbaums direkt in der DB.
  *
- * Die eigentliche FK-sichere Loeschlogik lebt in `lib/account-tree.ts`
+ * Die eigentliche FK-sichere Loeschlogik lebt in `@workspace/test-fixtures` (account-tree)
  * (geteilt mit `cleanup-test-accounts.ts`, der Batch-Variante nach
  * E-Mail-Muster). Details zur Loesch-Reihenfolge siehe dort.
  *

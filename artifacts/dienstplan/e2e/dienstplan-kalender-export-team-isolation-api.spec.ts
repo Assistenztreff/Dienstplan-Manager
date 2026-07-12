@@ -63,7 +63,7 @@ let b: AccountSetup;
  */
 async function setupAccount(label: string, day: string): Promise<AccountSetup> {
   const account = await registerFreeAccount("dienstleister", label);
-  setAccountPlan(account.email, "premium");
+  await setAccountPlan(account.email, "premium");
 
   const teamsRes = await account.ctx.get("/api/teams");
   expect(teamsRes.status(), `GET /teams (${label}) sollte 200 liefern`).toBe(200);

@@ -84,7 +84,7 @@ test.describe("Lexware-Buchungs-Log nur für den Betreiber", () => {
     // Normaler Admin (Premium, damit er einen Assistenten einladen kann) —
     // darf den Lexware-Endpunkt trotzdem NICHT sehen (rein rollenbasiert).
     admin = await registerFreeAccount("privat", "lexware-admin");
-    setAccountPlan(admin.email, "premium");
+    await setAccountPlan(admin.email, "premium");
 
     // Assistent per Einladungsflow einloggen (Arbeitgeber ist Premium).
     const assistantRes = await admin.ctx.post("/api/users", {
@@ -116,7 +116,7 @@ test.describe("Lexware-Buchungs-Log nur für den Betreiber", () => {
 
   test.afterAll(async () => {
     try {
-      deleteAccountByEmail(superEmail);
+      await deleteAccountByEmail(superEmail);
     } catch {
       /* Best effort */
     }

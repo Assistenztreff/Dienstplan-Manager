@@ -60,7 +60,7 @@ test.describe("Team-Zuschläge greifen im Browser (UI)", () => {
   test.beforeAll(async () => {
     // Frisches Dienstleister-Konto (eigenes Standard-Team) und auf Premium heben.
     acc = await registerFreeAccount("dienstleister", "team.allowance.ui");
-    setAccountPlan(acc.email, "premium");
+    await setAccountPlan(acc.email, "premium");
 
     // Konto-Standard-Zuschläge auf bekannte, abweichende Werte setzen (die
     // GET-Anfrage legt die Konto-Zeile lazy mit Defaults an).

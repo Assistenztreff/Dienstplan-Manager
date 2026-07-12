@@ -1,5 +1,5 @@
 import pg from "pg";
-import { deleteAccountTrees } from "./lib/account-tree.js";
+import { deleteAccountTrees } from "@workspace/test-fixtures";
 
 /**
  * Entfernt ALLE liegengebliebenen E2E-Test-Konten (`e2e.*@dienstplan.test`)
@@ -17,7 +17,7 @@ import { deleteAccountTrees } from "./lib/account-tree.js";
  * `e2e.%@dienstplan.test` geloescht — der geseedete Test-Admin
  * (`admin@dienstplan.local`) und alle echten Konten sind nie betroffen.
  * Die FK-sichere Loeschlogik ist mit `delete-account.ts` geteilt
- * (`lib/account-tree.ts`). Idempotent: keine Treffer = Erfolg (Exit 0).
+ * (`@workspace/test-fixtures`, account-tree). Idempotent: keine Treffer = Erfolg (Exit 0).
  */
 async function main(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;

@@ -98,7 +98,7 @@ test.beforeAll(async () => {
   premium = await registerFreeAccount("privat", "kal-nurfix");
   // Manuelle Premium-Freischaltung direkt in der Test-DB (wie im Operator-
   // Dashboard) — calendarSync ist ein Premium-Feature.
-  setAccountPlan(premium.email, "premium");
+  await setAccountPlan(premium.email, "premium");
 
   publicCtx = await playwrightRequest.newContext({ baseURL: BASE_URL });
 

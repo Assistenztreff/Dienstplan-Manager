@@ -41,3 +41,10 @@ export const TEST_ERROR_CONTEXTS = [
   DEV_BOOM_ERROR_CONTEXT,
   RETENTION_SEED_CONTEXT,
 ] as const;
+
+export {
+  TEAM_BOUND_TABLES,
+  deleteAccountTrees,
+  type AccountTreeDbClient,
+  type DeleteAccountTreesResult,
+} from "./account-tree.js";

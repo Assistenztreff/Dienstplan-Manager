@@ -1,27 +1,47 @@
-import type pg from "pg";
-
 /**
  * FK-sichere Loeschlogik fuer (Test-)Konten samt ihres kompletten Datenbaums.
  *
  * Hintergrund: `DELETE /api/users/:id` scheitert fuer selbst-registrierte
  * Konten, weil die Registrierung ein "Standard-Team" (teams.owner_id) inkl.
- * 4 geseedeter Schichtmodelle anlegt. `teams.owner_id` kaskadiert zwar beim
+ * geseedeter Schichtmodelle anlegt. `teams.owner_id` kaskadiert zwar beim
  * User-Delete, aber die team-gebundenen Tabellen (shift_models, shifts,
- * contracts, time_tracking) referenzieren `teams.id` OHNE
- * Cascade — der Team-Cascade schlaegt also mit FK-Fehler fehl und die Test-DB
- * sammelt mit jedem E2E-Lauf tote Konten + Teams an.
+ * contracts, time_tracking) referenzieren `teams.id` OHNE Cascade — der
+ * Team-Cascade schlaegt also mit FK-Fehler fehl und die Test-DB sammelt mit
+ * jedem E2E-Lauf tote Konten + Teams an.
+ *
+ * Lebt bewusst in `@workspace/test-fixtures`, damit BEIDE Nutzer dieselbe
+ * Logik teilen, ohne dass Leaf-Pakete einander importieren:
+ *   - die Test-Skripte (`scripts/src/*`: delete-account, cleanup-test-accounts,
+ *     setup-test-accounts, verify-account-separation, verify-test-db-cleanup),
+ *   - die Playwright-E2E-Helfer (`artifacts/dienstplan/e2e/helpers`), die die
+ *     Bereinigung in-process ausfuehren statt pro Aufruf einen ~3s teuren
+ *     `pnpm --filter ... run <skript>`-Prozess zu spawnen.
  *
  * Reihenfolge (batch-faehig, eine Transaktion):
  *   1. team-gebundene Daten der besessenen Teams (Ist-Zeiten, Schichten,
- *      Vertraege, Vorlagen, Schichtmodelle),
+ *      Vertraege, Schichtmodelle),
  *   2. verwaiste Assistenten, die AUSSCHLIESSLICH Mitglied dieser Teams sind
  *      (und selbst keine Teams besitzen),
  *   3. die Teams selbst (team_members/branding kaskadieren),
- *   4. die Konten (allowance_settings kaskadiert; Restdaten in fremden Teams
+ *   4. plan_changes-Zeilen der Konten (append-only-Log ohne Cascade),
+ *   5. die Konten (allowance_settings kaskadiert; Restdaten in fremden Teams
  *      kaskadieren ueber user_id-FKs).
  *
  * Ausschliesslich fuer Test-Infrastruktur gedacht.
  */
+
+/**
+ * Minimaler struktureller Client-Typ, damit dieses Lib-Paket KEINE
+ * `pg`-Abhaengigkeit braucht: sowohl `pg.Client` als auch `pg.PoolClient`
+ * erfuellen diese Signatur strukturell.
+ */
+export interface AccountTreeDbClient {
+  query(
+    queryText: string,
+    values?: unknown[],
+  ): Promise<{ rows: unknown[]; rowCount: number | null }>;
+}
+
 /**
  * Team-gebundene Tabellen, die `teams.id` OHNE `ON DELETE CASCADE`
  * referenzieren und daher hier explizit VOR dem Team-Delete geleert werden
@@ -47,7 +67,7 @@ export interface DeleteAccountTreesResult {
 }
 
 export async function deleteAccountTrees(
-  client: pg.Client,
+  client: AccountTreeDbClient,
   userIds: number[],
 ): Promise<DeleteAccountTreesResult> {
   if (userIds.length === 0) {
@@ -56,11 +76,11 @@ export async function deleteAccountTrees(
 
   await client.query("BEGIN");
   try {
-    const teamsRes = await client.query<{ id: number }>(
+    const teamsRes = await client.query(
       "SELECT id FROM teams WHERE owner_id = ANY($1)",
       [userIds],
     );
-    const teamIds = teamsRes.rows.map((r) => r.id);
+    const teamIds = (teamsRes.rows as { id: number }[]).map((r) => r.id);
 
     let orphanCount = 0;
     if (teamIds.length > 0) {

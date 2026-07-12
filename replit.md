@@ -101,7 +101,7 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
 ## Tests & Dev-Testkonten
 
 - `pnpm --filter @workspace/dienstplan run test:e2e` — Playwright gegen **isolierten Test-Stack** (API 8099 + Vite 5199, DB `<dbname>_test`); Dev-DB unberührt. Beim Config-Load laufen automatisch `setup-test-db`, dann `verify-account-separation` (~20s) und `verify-test-db-cleanup` (Selbstheilungs-Nachweis); jeder Fehlschlag bricht ab. Skips: `E2E_SKIP_SEPARATION_CHECK=1`, `E2E_SKIP_CLEANUP_CHECK=1`, `E2E_SKIP_DB_SETUP=1`, `E2E_BASE_URL`. Test-Konten MÜSSEN dem Muster `e2e.*@dienstplan.test` folgen (`cleanup-test-accounts` räumt vor/nach jedem Lauf). Waisen-Prozesse abgebrochener Läufe (Ports 8099/5199) werden beim Config-Load automatisch erkannt und beendet (lsof + SIGTERM/SIGKILL) — kein manuelles `kill` mehr nötig.
-- Skripte: `setup-test-db` (Test-DB idempotent); `verify-account-separation` (Regressionscheck 7/5/5 aktive Assistenten, heilt Schema, räumt auf); `verify-test-db-cleanup` (Selbstheilungs-Beweis; FK-Wächter: neue team-gebundene Tabellen → `TEAM_BOUND_TABLES` in `scripts/src/lib/account-tree.ts`). Retention-Regressionstest `platform-errors.retention.test.ts` (provisioniert sich selbst) + Seed-Skript `seed-platform-errors`.
+- Skripte: `setup-test-db` (Test-DB idempotent); `verify-account-separation` (Regressionscheck 7/5/5 aktive Assistenten, heilt Schema, räumt auf); `verify-test-db-cleanup` (Selbstheilungs-Beweis; FK-Wächter: neue team-gebundene Tabellen → `TEAM_BOUND_TABLES` in `lib/test-fixtures/src/account-tree.ts`). Retention-Regressionstest `platform-errors.retention.test.ts` (provisioniert sich selbst) + Seed-Skript `seed-platform-errors`.
 
 ### Dev-Testkonten (nur Dev-DB)
 

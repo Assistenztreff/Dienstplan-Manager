@@ -198,7 +198,7 @@ test.describe("Premium-Feature-Gates: Plan-Flip (API)", () => {
 
     // === Phase 2: PREMIUM-Flip (manuelle Freischaltung) — dieselbe Session ==
 
-    setAccountPlan(acc.email, "premium");
+    await setAccountPlan(acc.email, "premium");
 
     // caregiverLogin: Einladungslink wird jetzt erzeugt.
     const inviteRes = await acc.ctx.post(`/api/users/${assistantId}/invite`);
@@ -252,7 +252,7 @@ test.describe("Premium-Feature-Gates: Plan-Flip (API)", () => {
     // === Phase 3: DOWNGRADE zurück auf Free — Gates sofort wieder aktiv, ===
     // === Bestandsdaten bleiben sichtbar/nutzbar (Bestandsschutz)         ===
 
-    setAccountPlan(acc.email, "free");
+    await setAccountPlan(acc.email, "free");
 
     // Die Gates greifen sofort wieder (Plan wird pro Request frisch gelesen).
     await expectFeatureGate(

@@ -109,7 +109,7 @@ test("Premium-Freischaltung hebt maxAssistants/maxTeams/historyMonths sofort auf
   expect(((await farShiftFree.json()) as LimitError).limit).toBe("historyMonths");
 
   // --- Upgrade: manuelle Premium-Freischaltung direkt in der Test-DB -----
-  setAccountPlan(acc.email, "premium");
+  await setAccountPlan(acc.email, "premium");
 
   // --- Premium-Phase: dieselbe Session, dieselben Aktionen -> jetzt erlaubt -
 

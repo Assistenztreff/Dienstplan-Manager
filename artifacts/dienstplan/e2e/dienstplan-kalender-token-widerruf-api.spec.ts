@@ -51,7 +51,7 @@ test.beforeAll(async () => {
   premium = await registerFreeAccount("privat", "kal-token");
   // Manuelle Premium-Freischaltung direkt in der Test-DB (wie im Operator-
   // Dashboard) — nur Premium darf Kalender-Token erzeugen.
-  setAccountPlan(premium.email, "premium");
+  await setAccountPlan(premium.email, "premium");
 
   free = await registerFreeAccount("privat", "kal-token-free");
 
@@ -153,7 +153,7 @@ test("Downgrade: Feed liefert 403, Rotation gesperrt, aber Widerruf (DELETE) ble
   const token = ((await createRes.json()) as TokenResponse).token;
 
   // … und wird dann auf Free zurückgestuft (manueller Downgrade in der DB).
-  setAccountPlan(premium.email, "free");
+  await setAccountPlan(premium.email, "free");
 
   // Der Feed liefert für Free-Eigentümer 403 (Plan-Gate über den Token-
   // EIGENTÜMER, keine Session) — keine Daten mehr, aber der Token existiert noch.

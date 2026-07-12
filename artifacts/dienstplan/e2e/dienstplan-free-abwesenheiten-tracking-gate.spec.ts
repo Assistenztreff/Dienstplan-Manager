@@ -177,7 +177,7 @@ test.describe("Abwesenheiten: Eintragen frei, Resturlaub-Tracking Premium", () =
   }) => {
     // Manuelle Freischaltung wie im Operator-Dashboard: Plan-Flip direkt in
     // der Test-DB; wirkt sofort, da der Plan pro Request frisch gelesen wird.
-    setAccountPlan(acc.email, "premium");
+    await setAccountPlan(acc.email, "premium");
 
     await adoptSession(page, acc);
     await page.goto("/abwesenheiten");

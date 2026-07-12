@@ -132,7 +132,7 @@ test("Free (UI): keine 'offene Zeiterfassungen'-Warnung auf dem Dashboard", asyn
 test("Premium (API): Flag true, Zähler unverändert", async () => {
   test.setTimeout(60_000);
   // Manuelle Premium-Freischaltung direkt in der Test-DB (Operator-Dashboard-Weg).
-  setAccountPlan(acc.email, "premium");
+  await setAccountPlan(acc.email, "premium");
 
   const summary = await fetchSummary();
   expect(

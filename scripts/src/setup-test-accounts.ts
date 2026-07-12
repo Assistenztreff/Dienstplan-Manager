@@ -1,5 +1,5 @@
 import pg from "pg";
-import { deleteAccountTrees } from "./lib/account-tree.js";
+import { deleteAccountTrees } from "@workspace/test-fixtures";
 
 /**
  * Trennt die Dev-Testkonten in eigenstaendige, sauber isolierte Datenbestaende

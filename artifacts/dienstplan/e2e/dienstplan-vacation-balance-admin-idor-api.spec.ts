@@ -72,13 +72,13 @@ test.beforeAll(async () => {
 
   // --- Arbeitgeber P (Premium) mit Assistent + Vertrag ----------------------
   employerP = await registerFreeAccount("privat", "adminvacidor-p");
-  setAccountPlan(employerP.email, "premium");
+  await setAccountPlan(employerP.email, "premium");
   const pAssistantId = await createAssistant(employerP, "p");
   pContractId = await createContract(employerP, pAssistantId);
 
   // --- Getrennter Arbeitgeber Q (Premium) mit eigenem Assistent + Vertrag ---
   employerQ = await registerFreeAccount("privat", "adminvacidor-q");
-  setAccountPlan(employerQ.email, "premium");
+  await setAccountPlan(employerQ.email, "premium");
   const qAssistantId = await createAssistant(employerQ, "q");
   qContractId = await createContract(employerQ, qAssistantId);
 });

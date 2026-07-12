@@ -105,7 +105,7 @@ test.beforeAll(async () => {
   // ist Premium-gegated (caregiverLogin) -> Owner kurz auf Premium heben, Token
   // ziehen, zurück auf Free. Bestandsschutz: der per Token gesetzte Login
   // bleibt auch unter Free gültig.
-  setAccountPlan(owner.email, "premium");
+  await setAccountPlan(owner.email, "premium");
   let token = "";
   try {
     const inviteRes = await owner.ctx.post(`/api/users/${assistantId}/invite`);
@@ -113,7 +113,7 @@ test.beforeAll(async () => {
     token = ((await inviteRes.json()) as { token: string }).token;
     expect(token, "Einladungs-Token muss geliefert werden").toBeTruthy();
   } finally {
-    setAccountPlan(owner.email, "free");
+    await setAccountPlan(owner.email, "free");
   }
 
   // Passwort setzen = direkter Login des Assistenten (eigener Session-Kontext).
@@ -148,7 +148,7 @@ test("Free-Phase: Assistent sieht seine offenen Stunden gezählt, nichts ungezä
 test("Nach Owner-Upgrade: Stunden wandern in uncountedPendingHours/Entries", async () => {
   test.setTimeout(60_000);
   // Manuelle Premium-Freischaltung des ARBEITGEBERS direkt in der Test-DB.
-  setAccountPlan(owner.email, "premium");
+  await setAccountPlan(owner.email, "premium");
 
   const summary = await fetchAssistantSummary();
   // Strikt (Premium-Owner): pending zählt NICHT mehr ...
