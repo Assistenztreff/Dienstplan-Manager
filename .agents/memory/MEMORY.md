@@ -61,4 +61,5 @@
 - [Freizeitausgleich absence classification](freizeitausgleich-absence-classification.md) — a new absence shift type must be added to EVERY inline work/absence predicate (multiple, not shared); shift-derived per-contract balances must be team-scoped.
 - [Allowance account-global vs team fields](allowance-account-global-fields.md) — team-scope PUT must whitelist only surcharge/state/billing; account-global ops (autoApprove, vacation*, ersatzruhetagEnabled) resolve from override-row defaults for teams WITH an override (pre-existing).
 - [Layout & Scroll-Modell](fullscreen-layout-scroll-model.md) — body scrollt nie; innerer Container scrollt. /dienstplan full-bleed + natürliches Scrollen (NICHT mehr viewport-fixiert); Kopfzeile sticky, Filter = Select.
+- [E2E run lock at config load](e2e-run-lock.md) — PID lockfile guards the port-orphan reaper from a parallel run; never import playwright.config from teardown (side effects re-run).
 - [Dialog-Mobil-Scroll](dialog-mobile-scroll.md) — ohne max-h+overflow auf DialogContent sind Footer-Buttons mobil unerreichbar, da der Body nicht mehr scrollt.

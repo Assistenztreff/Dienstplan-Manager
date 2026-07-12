@@ -216,6 +216,62 @@ function reapOrphansOnPort(port: string, label: string): void {
   );
 }
 
+// --- Lauf-Lock (Task: paralleler Zweitlauf darf laufenden Lauf nicht abschiessen) ---
+// Die Waisen-Bereinigung oben beendet ALLES auf den Test-Ports. Damit ein
+// versehentlich parallel gestarteter zweiter Lauf nicht still die Server des
+// ersten killt, haelt jeder verwaltete Lauf ein Lockfile mit seiner PID.
+// Unterscheidung beim Start:
+//   - Lock vorhanden + Inhaber-PID lebt  -> ABBRUCH mit klarer Meldung
+//     (bewusst VOR jeder Port-Bereinigung).
+//   - Lock vorhanden + Inhaber-PID tot   -> verwaister Lock eines hart
+//     abgebrochenen Laufs; Lock uebernehmen und Waisen reapen wie bisher.
+//   - Kein Lock                          -> Lock schreiben, Waisen reapen.
+// Freigabe: globalTeardown loescht den Lock, wenn er noch uns gehoert. Nach
+// hartem Abbruch bleibt der Lock liegen, zeigt aber auf eine tote PID und
+// blockiert den naechsten Lauf deshalb nicht (Selbstheilung bleibt erhalten).
+const runLockPath = path.join(
+  repoRoot,
+  "node_modules/.cache/dienstplan-e2e/run.lock",
+);
+
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    // EPERM = Prozess existiert, gehoert aber jemand anderem -> lebt.
+    return (err as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+function acquireRunLock(): void {
+  let ownerPid: number | null = null;
+  if (existsSync(runLockPath)) {
+    try {
+      const raw = readFileSync(runLockPath, "utf8").trim();
+      const parsed = Number.parseInt(raw, 10);
+      if (Number.isInteger(parsed) && parsed > 0) ownerPid = parsed;
+    } catch {
+      // Unlesbarer Lock: wie verwaist behandeln (unten ueberschreiben).
+    }
+    if (ownerPid !== null && ownerPid !== process.pid && isPidAlive(ownerPid)) {
+      throw new Error(
+        `Es laeuft bereits ein E2E-Lauf (PID ${ownerPid}, Lock ${runLockPath}). ` +
+          "Dieser Lauf bricht ab, um die Server des laufenden Laufs nicht zu beenden. " +
+          "Bitte den laufenden Lauf abwarten oder beenden. Ist der Lock faelschlich " +
+          "haengen geblieben, obwohl kein Lauf mehr aktiv ist: Lockdatei loeschen und erneut starten.",
+      );
+    }
+    if (ownerPid !== null && ownerPid !== process.pid) {
+      console.log(
+        `[e2e] Verwaister Lauf-Lock gefunden (PID ${ownerPid} lebt nicht mehr) — Lock wird uebernommen.`,
+      );
+    }
+  }
+  mkdirSync(path.dirname(runLockPath), { recursive: true });
+  writeFileSync(runLockPath, `${process.pid}\n`);
+}
+
 // Test-DB VOR jedem Lauf idempotent provisionieren — bewusst hier in der
 // Config statt im `test:e2e`-npm-Skript oder in einem globalSetup:
 //   - Einzel-Spec-Läufe via `pnpm exec playwright test <name>` umgehen das
@@ -231,10 +287,14 @@ function reapOrphansOnPort(port: string, label: string): void {
 // läufe ohne zwischenzeitliche Schema-Änderung.
 const isWorkerProcess = !!process.env.TEST_WORKER_INDEX;
 
+// Lauf-Lock ZUERST erwerben (bricht bei lebendem Inhaber ab, uebernimmt
+// verwaiste Locks), DANN Waisen reapen — so beendet ein versehentlich
+// parallel gestarteter Zweitlauf nie die Server eines aktiven Laufs.
 // Waisen-Bereinigung IMMER vor einem verwalteten Lauf (auch bei
 // E2E_SKIP_DB_SETUP=1 — gerade schnelle Wiederholungsläufe treffen sonst
 // auf die Reste des zuvor abgebrochenen Laufs).
 if (useManagedStack && !isWorkerProcess) {
+  acquireRunLock();
   reapOrphansOnPort(API_PORT, "Test-API");
   reapOrphansOnPort(WEB_PORT, "Test-Vite");
 }
