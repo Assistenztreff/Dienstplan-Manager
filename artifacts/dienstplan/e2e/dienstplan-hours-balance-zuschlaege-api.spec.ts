@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import {
   TeamTestHarness,
+  addTeamMemberViaDb,
   deleteFreeAccount,
   registerFreeAccount,
   type FreeAccount,
@@ -351,10 +352,11 @@ test.describe("hours-balance: Aggregation der Roh-Kennzahlen zu Zuschlägen", ()
       const foreignTeam = ownerTeams[0].id;
 
       // Test-Admin als Mitglied aufnehmen, damit er das Team auswerten darf.
-      const addRes = await owner.ctx.post(`/api/teams/${foreignTeam}/members`, {
-        data: { userId: h.adminId },
-      });
-      expect(addRes.ok(), `Mitglied aufnehmen fehlgeschlagen (${addRes.status()})`).toBe(true);
+      // DB-direkt: Die Members-API nimmt aus Sicherheitsgründen nur Nutzer aus
+      // Teams DESSELBEN Eigentümers an (Annexions-Schutz); der hier geprüfte
+      // Kanten-Fall einer fremden Mitgliedschaft ist ein historischer/DB-
+      // seitiger Zustand, den die Auswertung dennoch korrekt behandeln muss.
+      addTeamMemberViaDb(foreignTeam, h.adminId);
 
       // Assistent + FIX-Sonntagsschicht (So 03.05.2026, 8h) im fremden Team —
       // vergangener Monat, damit das Free-historyMonths-Limit nicht greift.

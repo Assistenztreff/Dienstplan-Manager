@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { TeamTestHarness, ADMIN_EMAIL, ADMIN_PASSWORD } from "./helpers/teams";
+import { TeamTestHarness } from "./helpers/teams";
 
 /**
  * E2E-Test für die Zähler-Kacheln des Dashboards:
@@ -13,8 +13,8 @@ import { TeamTestHarness, ADMIN_EMAIL, ADMIN_PASSWORD } from "./helpers/teams";
  * activeShiftsToday, pendingTimeEntries) früh auf.
  *
  * Aufbau:
- * - Der Setup-Admin wird zur Laufzeit auf accountType "dienstleister" geschaltet
- *   und bekommt ein frisches, isoliertes Team. So sind die team-gescopten
+ * - Ein frisch registriertes Dienstleister-Konto (TeamTestHarness)
+ *   bekommt ein frisches, isoliertes Team. So sind die team-gescopten
  *   Aggregate des Summary exakt die hier angelegten Fixture-Daten (keine
  *   Kollision mit Bestandsdaten).
  * - Genau ZWEI Assistenten werden dem Team zugeordnet -> "Aktive Assistenten" = 2.
@@ -58,8 +58,10 @@ async function loginAsAdmin(page: Page): Promise<void> {
   // Programmatische Anmeldung über die API: page.request teilt den Cookie-Jar
   // mit dem Browser, dadurch ist /api/auth/me beim ersten Laden sofort 200 und
   // der Vite-Dev-Auto-Login greift nie (dev- UND prod-tauglich).
+  // Login als das vom Harness registrierte Dienstleister-Konto (die Fixture-
+  // Daten und das Team gehören diesem Konto, nicht mehr dem Setup-Admin).
   const res = await page.request.post("/api/auth/login", {
-    data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
+    data: { email: h.email, password: h.password },
   });
   expect(res.ok(), `Admin-Login fehlgeschlagen (${res.status()})`).toBe(true);
   await page.goto("/");

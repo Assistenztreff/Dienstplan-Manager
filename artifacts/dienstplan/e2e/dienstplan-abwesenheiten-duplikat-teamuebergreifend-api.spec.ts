@@ -45,7 +45,7 @@ const DAY_Y = `${YEAR}-09-11`;
 const dayStart = (day: string) => new Date(`${day}T00:00:00`).toISOString();
 const dayEnd = (day: string) => new Date(`${day}T23:59:59`).toISOString();
 
-type Contract = { id: number; userId: number; vacationDays: number; vacationDaysUsed: number };
+type Contract = { id: number; userId: number; vacationDays: number; vacationHoursUsed: number };
 type Shift = { id: number; userId: number; type: string };
 
 let h: TeamTestHarness;
@@ -64,13 +64,16 @@ function vacationPayload(teamId: number) {
   };
 }
 
+// Urlaub wird stundengenau gebucht (contracts.vacationHoursUsed ist der
+// maßgebliche Zähler); Tage = Stunden / 8. Ein ganztägiger Urlaub ohne
+// bestätigte Arbeitshistorie bucht die Standard-Tagesstunden (8h) = 1,0 Tage.
 async function vacationDaysUsed(ctx: APIRequestContext): Promise<number> {
   const res = await ctx.get(`/api/contracts?userId=${assistant}`);
   expect(res.ok(), "GET /api/contracts fehlgeschlagen").toBe(true);
   const contracts = (await res.json()) as Contract[];
   const contract = contracts.find((c) => c.id === contractId);
   expect(contract, "Vertrag nicht gefunden").toBeTruthy();
-  return contract!.vacationDaysUsed;
+  return contract!.vacationHoursUsed / 8;
 }
 
 async function vacationShiftCount(ctx: APIRequestContext): Promise<number> {

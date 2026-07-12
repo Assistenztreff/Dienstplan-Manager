@@ -10,7 +10,8 @@ import {
  * Testdaten in den E2E-/API-Tests (Multi-Team, #44/#52).
  *
  * Kapselt das, was sonst in jedem Isolations-Test per Copy-Paste landet:
- * - Dienstleister-Login + accountType-Umschaltung (mit Rücksetzung im Cleanup),
+ * - Dienstleister-Kontext über ein FRISCH registriertes Dienstleister-Konto
+ *   (accountType ist seit dem Lockdown NICHT mehr per API änderbar),
  * - Team-/Nutzer-/Schicht-/Vertrags-/Ist-Zeit-Erstellung (mit Tracking),
  * - FK-sicheres Cleanup (erst Daten, dann Nutzer, dann Teams),
  * - das Seeden eines zweiten "fremden" Admins über das setup-admin-Skript
@@ -32,6 +33,9 @@ import {
 export const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "admin@dienstplan.local";
 export const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "admin1234";
 export const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
+
+/** Passwort aller über `registerFreeAccount` registrierten Test-Konten. */
+export const FREE_ACCOUNT_PASSWORD = "free12345";
 
 export type AccountType = "privat" | "dienstleister";
 
@@ -72,7 +76,7 @@ export async function registerFreeAccount(
     data: {
       name: `E2E ${label} ${stamp}`,
       email,
-      password: "free12345",
+      password: FREE_ACCOUNT_PASSWORD,
       accountType,
     },
   });
@@ -103,6 +107,31 @@ export function setAccountPlan(email: string, plan: "premium" | "free"): void {
     env.DATABASE_URL = process.env.E2E_TEST_DATABASE_URL;
   }
   execSync("pnpm --filter @workspace/scripts run set-plan", {
+    env,
+    stdio: "pipe",
+  });
+}
+
+/**
+ * Fügt eine Team-Mitgliedschaft direkt in der (Test-)DB ein. Nur für Specs,
+ * die den Kanten-Fall einer MANDANTENÜBERGREIFENDEN Mitgliedschaft brauchen:
+ * POST /api/teams/:id/members nimmt aus Sicherheitsgründen nur Nutzer aus
+ * Teams desselben Eigentümers an (Schutz vor Annexion per ID-Enumeration),
+ * historische/DB-seitige Fremd-Mitgliedschaften sind aber weiterhin ein
+ * gültiger Zustand, den die Auswertungs-Routen korrekt behandeln müssen.
+ * Idempotent; nutzt dasselbe execSync-/DB-Targeting wie `setAccountPlan`.
+ */
+export function addTeamMemberViaDb(teamId: number, userId: number): void {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    TEAM_MEMBER_TEAM_ID: String(teamId),
+    TEAM_MEMBER_USER_ID: String(userId),
+    TEAM_MEMBER_ACTION: "create",
+  };
+  if (process.env.E2E_TEST_DATABASE_URL) {
+    env.DATABASE_URL = process.env.E2E_TEST_DATABASE_URL;
+  }
+  execSync("pnpm --filter @workspace/scripts run add-team-member", {
     env,
     stdio: "pipe",
   });
@@ -192,10 +221,19 @@ export interface TimeEntryOptions {
 export class TeamTestHarness {
   /** Eindeutiger Suffix, damit parallele/wiederholte Läufe nicht kollidieren. */
   readonly run: number;
-  readonly ctx: APIRequestContext;
+  /**
+   * Aktiver Request-Kontext. Nach `becomeDienstleister()` ist dies der Kontext
+   * des frisch registrierten Dienstleister-Kontos (NICHT mehr der Setup-Admin).
+   */
+  ctx: APIRequestContext;
   adminId = 0;
+  /** Zugangsdaten des aktiven Kontos (z.B. für programmatische Browser-Logins). */
+  email: string = ADMIN_EMAIL;
+  password: string = ADMIN_PASSWORD;
 
-  private originalAccountType: AccountType = "privat";
+  /** Ursprünglicher Setup-Admin-Kontext (zum Freigeben im Cleanup). */
+  private baseCtx: APIRequestContext;
+  private dienstleisterEmail: string | null = null;
   private readonly teams: number[] = [];
   private readonly users: number[] = [];
   private readonly shifts: number[] = [];
@@ -205,12 +243,12 @@ export class TeamTestHarness {
 
   private constructor(ctx: APIRequestContext, run: number) {
     this.ctx = ctx;
+    this.baseCtx = ctx;
     this.run = run;
   }
 
   /**
-   * Loggt den Setup-Admin ein und merkt sich dessen ID + ursprünglichen
-   * Konto-Typ (für die Rücksetzung im Cleanup).
+   * Loggt den Setup-Admin ein und merkt sich dessen ID.
    */
   static async login(): Promise<TeamTestHarness> {
     const run = Date.now();
@@ -223,16 +261,30 @@ export class TeamTestHarness {
 
     const h = new TeamTestHarness(ctx, run);
     h.adminId = login.id;
-    h.originalAccountType = login.accountType;
     return h;
   }
 
-  /** Schaltet den eingeloggten Admin auf accountType "dienstleister". */
+  /**
+   * Stellt einen Dienstleister-Kontext bereit, indem ein FRISCHES
+   * Dienstleister-Konto registriert und (per set-plan-Skript direkt in der
+   * Test-DB) auf Premium gehoben wird. Der aktive Kontext des Harness
+   * (`ctx`, `adminId`, `email`, `password`) wechselt auf dieses Konto.
+   *
+   * Hintergrund: `accountType` ist seit dem Security-Lockdown über
+   * PATCH /api/users NICHT mehr änderbar (403) — der frühere Weg, den
+   * Setup-Admin umzuschalten, existiert nicht mehr. Premium ist nötig, damit
+   * die Specs (wie zuvor mit dem Premium-Setup-Admin) mehrere Teams,
+   * mehr als 6 Assistenten und Schichten in der Zukunft anlegen können.
+   * Das Konto samt Datenbaum wird im `cleanup()` wieder entfernt.
+   */
   async becomeDienstleister(): Promise<void> {
-    const res = await this.ctx.patch(`/api/users/${this.adminId}`, {
-      data: { accountType: "dienstleister" },
-    });
-    expect(res.ok(), "Konto-Typ-Wechsel fehlgeschlagen").toBe(true);
+    const acc = await registerFreeAccount("dienstleister", "harness");
+    setAccountPlan(acc.email, "premium");
+    this.dienstleisterEmail = acc.email;
+    this.ctx = acc.ctx;
+    this.adminId = acc.id;
+    this.email = acc.email;
+    this.password = FREE_ACCOUNT_PASSWORD;
   }
 
   async createTeam(name?: string): Promise<number> {
@@ -371,8 +423,9 @@ export class TeamTestHarness {
   /**
    * Best-effort-Cleanup in FK-sicherer Reihenfolge: erst Daten (Ist-Zeiten,
    * Verträge, Schichten), dann geseedete Fremd-Admins, dann Nutzer, dann Teams.
-   * Setzt anschließend den Konto-Typ des Admins zurück und gibt alle Kontexte
-   * frei. Fehlschläge einzelner Schritte blockieren die übrigen nicht.
+   * Entfernt anschließend das ggf. registrierte Dienstleister-Konto samt
+   * Datenbaum per SQL-Bereinigung und gibt alle Kontexte frei. Fehlschläge
+   * einzelner Schritte blockieren die übrigen nicht.
    */
   async cleanup(): Promise<void> {
     const tryDelete = async (path: string) => {
@@ -408,16 +461,24 @@ export class TeamTestHarness {
     for (const id of this.users) await tryDelete(`/api/users/${id}`);
     for (const id of this.teams) await tryDelete(`/api/teams/${id}`);
 
-    if (this.adminId && this.originalAccountType) {
+    // Das für den Dienstleister-Kontext registrierte Konto samt Standard-Team
+    // und restlichem Datenbaum entfernen (DELETE /api/users scheitert dort am
+    // FK-Baum des bei der Registrierung angelegten Teams).
+    if (this.dienstleisterEmail) {
       try {
-        await this.ctx.patch(`/api/users/${this.adminId}`, {
-          data: { accountType: this.originalAccountType },
-        });
+        deleteAccountByEmail(this.dienstleisterEmail);
       } catch {
         /* ignore */
       }
     }
 
-    await this.ctx.dispose();
+    if (this.ctx !== this.baseCtx) {
+      try {
+        await this.ctx.dispose();
+      } catch {
+        /* ignore */
+      }
+    }
+    await this.baseCtx.dispose();
   }
 }

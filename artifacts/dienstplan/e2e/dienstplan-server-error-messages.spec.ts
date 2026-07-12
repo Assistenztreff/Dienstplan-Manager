@@ -1,9 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import {
-  TeamTestHarness,
-  ADMIN_EMAIL,
-  ADMIN_PASSWORD,
-} from "./helpers/teams";
+import { TeamTestHarness } from "./helpers/teams";
 
 /**
  * E2E-Test: Speichern-/Aktions-Dialoge zeigen die KONKRETE Servermeldung
@@ -75,8 +71,10 @@ test.afterAll(async () => {
 async function loginBrowserAndOpenTeams(page: Page): Promise<void> {
   // Programmatischer Login im Browser-Kontext (page.request teilt sich den
   // Cookie-Jar mit der Seite), danach lädt die App die Session via /auth/me.
+  // Login als das vom Harness registrierte Dienstleister-Konto (die Teams
+  // dieses Specs gehören diesem Konto, nicht mehr dem Setup-Admin).
   const res = await page.request.post("/api/auth/login", {
-    data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
+    data: { email: harness.email, password: harness.password },
   });
   expect(res.ok(), `Browser-Login fehlgeschlagen (${res.status()})`).toBe(true);
 

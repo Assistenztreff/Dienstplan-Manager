@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
-import { TeamTestHarness, ADMIN_EMAIL, ADMIN_PASSWORD } from "./helpers/teams";
+import { TeamTestHarness } from "./helpers/teams";
 
 /**
  * E2E-Test für die Werte der KPI-Kachel "Stundenbilanz Monat" auf dem Dashboard.
@@ -11,8 +11,8 @@ import { TeamTestHarness, ADMIN_EMAIL, ADMIN_PASSWORD } from "./helpers/teams";
  * Dashboard-Summary früh auf.
  *
  * Aufbau:
- * - Der Setup-Admin wird zur Laufzeit auf accountType "dienstleister" geschaltet
- *   und bekommt ein frisches, isoliertes Team mit genau einem Assistenten. So
+ * - Ein frisch registriertes Dienstleister-Konto (TeamTestHarness) bekommt ein
+ *   frisches, isoliertes Team mit genau einem Assistenten. So
  *   sind die team-gescopten Aggregate des Summary exakt die hier angelegten
  *   Fixture-Daten (keine Kollision mit Bestandsdaten).
  * - Geplante Schichten im aktuellen Monat liefern die Soll-Stunden:
@@ -47,9 +47,10 @@ let teamId: number;
 let teamName: string;
 
 async function loginAsAdmin(page: Page): Promise<void> {
-  // Delegiert an den gemeinsamen Helper, der den Vite-Dev-Auto-Login
-  // toleriert (kein Login-Formular) und im Prod-Build das Formular ausfüllt.
-  await loginViaUi(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+  // Programmatischer Login als das vom Harness registrierte
+  // Dienstleister-Konto (Fixture-Daten und Team gehören diesem Konto,
+  // nicht mehr dem Setup-Admin).
+  await loginViaUi(page, h.email, h.password);
 }
 
 test.beforeAll(async () => {
