@@ -48,7 +48,7 @@ const VACATION_TO = `${YEAR}-06-22`;
 const EXPECTED_VACATION_DAYS = 3;
 
 type CreatedUser = { id: number; name: string; email: string };
-type Contract = { id: number; userId: number; vacationDays: number; vacationDaysUsed: number };
+type Contract = { id: number; userId: number; vacationDays: number; vacationHoursUsed: number };
 
 let adminCtx: APIRequestContext;
 let assistant: CreatedUser;
@@ -155,7 +155,8 @@ test("Entfernen eines Urlaubs-Zeitraums bucht den Resturlaub wieder gut", async 
   expect(midRes.ok(), "GET /api/contracts (Zwischenstand) fehlgeschlagen").toBe(true);
   const midContract = ((await midRes.json()) as Contract[]).find((c) => c.id === contractId);
   expect(midContract, "Vertrag nicht gefunden").toBeTruthy();
-  expect(midContract!.vacationDaysUsed).toBe(EXPECTED_VACATION_DAYS);
+  // Stundengenaue Buchung: Tage = vacationHoursUsed / 8 (vacationHoursPerDay).
+  expect(midContract!.vacationHoursUsed / 8).toBe(EXPECTED_VACATION_DAYS);
 
   // 2) Den Urlaubs-Zeitraum dieses Assistenten über die UI löschen. Die Liste
   // zeigt Zeiträume aller Assistenten — gezielt die Zeile dieses Assistenten
@@ -179,5 +180,5 @@ test("Entfernen eines Urlaubs-Zeitraums bucht den Resturlaub wieder gut", async 
   expect(afterRes.ok(), "GET /api/contracts (nach Löschen) fehlgeschlagen").toBe(true);
   const afterContract = ((await afterRes.json()) as Contract[]).find((c) => c.id === contractId);
   expect(afterContract, "Vertrag nicht gefunden").toBeTruthy();
-  expect(afterContract!.vacationDaysUsed).toBe(0);
+  expect(afterContract!.vacationHoursUsed / 8).toBe(0);
 });

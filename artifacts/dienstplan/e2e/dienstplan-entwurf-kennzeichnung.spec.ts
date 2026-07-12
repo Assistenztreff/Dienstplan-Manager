@@ -124,7 +124,9 @@ test("Dienstplan: Entwurf/Vorschlag sichtbar gekennzeichnet (Label, Status-Attri
   // Mobile-Container scopen — dieselben Badges existieren auch im per CSS
   // versteckten Desktop-Zweig (Strict-Mode-Verletzung).
   const mobile = page.getByTestId("dienstplan-mobile");
-  await mobile.getByRole("button", { name: "Liste" }).click();
+  // Der Ansicht-Umschalter lebt seit der adaptiven Kopfzeile AUSSERHALB des
+  // Mobile-Containers (sticky Header) — über die Header-Testids ansteuern.
+  await page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list").click();
 
   // Entwurf (VORLAEUFIG): Status-Attribut + sichtbares Label + gestrichelter Rand.
   const draftBadge = mobile.getByTestId(`shift-badge-${draftShiftId}`);

@@ -186,7 +186,9 @@ test("Kalender zeigt Entwurf-/Vorschlag-Badge (data-planning-status)", async ({ 
   // localStorage persistiert und kann auf "Monat" stehen; im Monatsgitter
   // sind die Badges erst nach Tagesauswahl sichtbar.
   const mobile = page.getByTestId("dienstplan-mobile");
-  await mobile.getByRole("button", { name: "Liste" }).click();
+  // Der Ansicht-Umschalter lebt seit der adaptiven Kopfzeile AUSSERHALB des
+  // Mobile-Containers (sticky Header) — über die Header-Testids ansteuern.
+  await page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list").click();
 
   // Die Listenansicht rendert ShiftBadge mit data-planning-status je Schicht.
   // WICHTIG: auf den Mobile-Container scopen — dieselben Badges existieren

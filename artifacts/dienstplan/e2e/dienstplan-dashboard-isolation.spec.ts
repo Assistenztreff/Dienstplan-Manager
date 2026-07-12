@@ -1,11 +1,5 @@
-import { execSync } from "node:child_process";
-import {
-  test,
-  expect,
-  request as playwrightRequest,
-  type APIRequestContext,
-} from "@playwright/test";
-import { setAccountPlan } from "./helpers/teams";
+import { test, expect, type APIRequestContext } from "@playwright/test";
+import { TeamTestHarness, setAccountPlan } from "./helpers/teams";
 
 /**
  * E2E-/API-Test für die strikte, backend-seitige Team-Datentrennung der
@@ -16,12 +10,13 @@ import { setAccountPlan } from "./helpers/teams";
  * würde, ohne dass ein anderer Test es bemerkt.
  *
  * Aufbau (rein über die API, identisch zum Isolations-Test):
- * - Dienstleister A = der Setup-Admin, zur Laufzeit auf accountType
- *   "dienstleister" geschaltet. Besitzt zwei frisch angelegte Teams (A und B)
- *   mit je einem Assistenten, einer Schicht und einer Ist-Zeit in einem
- *   dedizierten, weit in der Zukunft liegenden Monat (MONTH/YEAR), damit die
- *   pro Team gescopten Aggregate exakt den frisch angelegten Daten entsprechen
- *   und die Schichten zuverlässig als "anstehend" gelten.
+ * - Dienstleister A = ein über den TeamTestHarness FRISCH registriertes
+ *   Dienstleister-Konto (accountType ist seit dem Lockdown NICHT mehr per API
+ *   änderbar), per set-plan auf Premium gehoben. Besitzt zwei frisch angelegte
+ *   Teams (A und B) mit je einem Assistenten, einer Schicht und einer Ist-Zeit
+ *   in einem dedizierten zukünftigen Monat (MONTH/YEAR), damit die pro Team
+ *   gescopten Aggregate exakt den frisch angelegten Daten entsprechen und die
+ *   Schichten zuverlässig als "anstehend" gelten.
  * - Admin B = ein zweiter, per setup-admin-Skript geseedeter Admin OHNE Teams
  *   (reiner "Angreifer"). accountType + Rolle lassen sich nicht über die
  *   öffentliche API setzen, daher nur per Seed möglich.
@@ -34,13 +29,9 @@ import { setAccountPlan } from "./helpers/teams";
  * - Die ungescopte Antwort enthält beide Teams (Vereinigung), die scopten
  *   Antworten von Team A und Team B sind disjunkt.
  *
- * Alle Testdaten werden in afterAll wieder entfernt; der accountType von A wird
- * auf den Ausgangswert zurückgesetzt.
+ * Alle Testdaten werden in afterAll über harness.cleanup() wieder entfernt
+ * (inkl. des registrierten Dienstleister-Kontos samt Datenbaum).
  */
-
-const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "admin@dienstplan.local";
-const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "admin1234";
-const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
 
 const NONEXISTENT_TEAM_ID = 999999;
 
@@ -61,20 +52,9 @@ const DAY_SHIFT = `${YEAR}-${MM}-10`;
 const DAY_TIME = `${YEAR}-${MM}-11`;
 const SHIFT_HOURS = 8;
 
-// Eindeutiger Suffix, damit parallele/wiederholte Läufe nicht kollidieren.
-const RUN = Date.now();
-const ATTACKER_EMAIL = `e2e.dash.attacker.${RUN}@dienstplan.test`;
-const ATTACKER_PASSWORD = "attacker1234";
-
-type LoginResponse = { id: number; accountType: "privat" | "dienstleister" };
-type Entity = { id: number };
-
+let h: TeamTestHarness;
 let adminCtx: APIRequestContext; // Dienstleister A (Datenbesitzer)
 let attackerCtx: APIRequestContext; // Admin B (fremder Admin ohne Teams)
-
-let adminId: number;
-let originalAccountType: "privat" | "dienstleister";
-let attackerId: number;
 
 let teamA: number;
 let teamB: number;
@@ -86,152 +66,52 @@ let shiftB: number;
 let timeA: number;
 let timeB: number;
 
-async function createUser(data: Record<string, unknown>): Promise<number> {
-  const res = await adminCtx.post("/api/users", { data });
-  expect(res.ok(), `Nutzer anlegen fehlgeschlagen (${res.status()})`).toBe(true);
-  return ((await res.json()) as Entity).id;
-}
-
-async function createShift(teamId: number, userId: number, day: string): Promise<number> {
-  const res = await adminCtx.post("/api/shifts", {
-    data: {
-      userId,
-      teamId,
-      startTime: `${day}T08:00:00.000Z`,
-      endTime: `${day}T16:00:00.000Z`,
-      type: "active",
-    },
-  });
-  expect(res.ok(), `Schicht anlegen fehlgeschlagen (${res.status()})`).toBe(true);
-  return ((await res.json()) as Entity).id;
-}
-
-async function createTimeEntry(teamId: number, userId: number, day: string): Promise<number> {
-  const res = await adminCtx.post("/api/time-tracking", {
-    data: {
-      userId,
-      teamId,
-      actualStart: `${day}T08:00:00.000Z`,
-      actualEnd: `${day}T16:00:00.000Z`,
-    },
-  });
-  expect(res.ok(), `Ist-Zeit anlegen fehlgeschlagen (${res.status()})`).toBe(true);
-  return ((await res.json()) as Entity).id;
-}
-
 test.beforeAll(async () => {
-  // --- Dienstleister A einloggen und zum Dienstleister machen ---
-  adminCtx = await playwrightRequest.newContext({ baseURL: BASE_URL });
-  const loginRes = await adminCtx.post("/api/auth/login", {
-    data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
-  });
-  expect(loginRes.ok(), "Admin-Login fehlgeschlagen").toBe(true);
-  const login = (await loginRes.json()) as LoginResponse;
-  adminId = login.id;
-  originalAccountType = login.accountType;
+  // Registrierung + Datenaufbau + zwei execSync-Skripte (set-plan, setup-admin)
+  // können zusammen die Standard-Hook-Zeit sprengen (Cold-Start des Test-Stacks).
+  test.setTimeout(120_000);
 
-  const switchRes = await adminCtx.patch(`/api/users/${adminId}`, {
-    data: { accountType: "dienstleister" },
-  });
-  expect(switchRes.ok(), "Konto-Typ-Wechsel fehlgeschlagen").toBe(true);
+  // --- Dienstleister A: frisch registriertes Dienstleister-Konto (Premium) ---
+  h = await TeamTestHarness.login();
+  await h.becomeDienstleister();
+  adminCtx = h.ctx;
 
   // --- Zwei Teams + Mitglieder + Daten anlegen ---
-  const teamARes = await adminCtx.post("/api/teams", { data: { name: `E2E Dash Team A ${RUN}` } });
-  expect(teamARes.ok(), "Team A anlegen fehlgeschlagen").toBe(true);
-  teamA = ((await teamARes.json()) as Entity).id;
+  teamA = await h.createTeam(`E2E Dash Team A ${h.run}`);
+  teamB = await h.createTeam(`E2E Dash Team B ${h.run}`);
 
-  const teamBRes = await adminCtx.post("/api/teams", { data: { name: `E2E Dash Team B ${RUN}` } });
-  expect(teamBRes.ok(), "Team B anlegen fehlgeschlagen").toBe(true);
-  teamB = ((await teamBRes.json()) as Entity).id;
-
-  aliceId = await createUser({
-    name: `E2E Dash Alice ${RUN}`,
-    email: `e2e.dash.alice.${RUN}@dienstplan.test`,
+  aliceId = await h.createUser({
+    name: `E2E Dash Alice ${h.run}`,
+    email: `e2e.dash.alice.${h.run}@dienstplan.test`,
     role: "assistant",
     teamId: teamA,
   });
-  bobId = await createUser({
-    name: `E2E Dash Bob ${RUN}`,
-    email: `e2e.dash.bob.${RUN}@dienstplan.test`,
+  bobId = await h.createUser({
+    name: `E2E Dash Bob ${h.run}`,
+    email: `e2e.dash.bob.${h.run}@dienstplan.test`,
     role: "assistant",
     teamId: teamB,
   });
 
-  shiftA = await createShift(teamA, aliceId, DAY_SHIFT);
-  shiftB = await createShift(teamB, bobId, DAY_SHIFT);
-  timeA = await createTimeEntry(teamA, aliceId, DAY_TIME);
-  timeB = await createTimeEntry(teamB, bobId, DAY_TIME);
+  shiftA = await h.createShift(teamA, aliceId, DAY_SHIFT);
+  shiftB = await h.createShift(teamB, bobId, DAY_SHIFT);
+  timeA = await h.createTimeEntry(teamA, aliceId, DAY_TIME);
+  timeB = await h.createTimeEntry(teamB, bobId, DAY_TIME);
 
   // --- Admin B (fremder Admin ohne Teams) seeden ---
-  // WICHTIG: Gegen die isolierte Test-DB seeden (E2E_TEST_DATABASE_URL aus der
-  // playwright.config), sonst landet der Angreifer in der Dev-DB und der
-  // Login gegen den Test-Stack schlägt fehl (gleiches Muster wie
-  // harness.seedForeignAdmin in helpers/teams.ts).
-  const seedEnv: NodeJS.ProcessEnv = {
-    ...process.env,
-    ADMIN_EMAIL: ATTACKER_EMAIL,
-    ADMIN_PASSWORD: ATTACKER_PASSWORD,
-    ADMIN_NAME: `E2E Dash Attacker ${RUN}`,
-  };
-  if (process.env.E2E_TEST_DATABASE_URL) {
-    seedEnv.DATABASE_URL = process.env.E2E_TEST_DATABASE_URL;
-  }
-  execSync("pnpm --filter @workspace/scripts run setup-admin", {
-    env: seedEnv,
-    stdio: "pipe",
+  const attacker = await h.seedForeignAdmin({
+    email: `e2e.dash.attacker.${h.run}@dienstplan.test`,
+    name: `E2E Dash Attacker ${h.run}`,
   });
-
   // hours-balance ist Premium-gegated (advancedAnalytics); der Angreifer muss
   // Premium sein, damit die Leerer-Scope-Tests 200 statt 403 (plan-Gate)
   // prüfen — sonst testet der 403 nicht die Datentrennung.
-  setAccountPlan(ATTACKER_EMAIL, "premium");
-
-  attackerCtx = await playwrightRequest.newContext({ baseURL: BASE_URL });
-  const attackerLogin = await attackerCtx.post("/api/auth/login", {
-    data: { email: ATTACKER_EMAIL, password: ATTACKER_PASSWORD },
-  });
-  expect(attackerLogin.ok(), "Angreifer-Login fehlgeschlagen").toBe(true);
-  const me = await attackerCtx.get("/api/auth/me");
-  attackerId = ((await me.json()) as Entity).id;
+  setAccountPlan(attacker.email, "premium");
+  attackerCtx = attacker.ctx;
 });
 
 test.afterAll(async () => {
-  const tryDelete = async (path: string) => {
-    try {
-      await adminCtx.delete(path);
-    } catch {
-      /* ignore */
-    }
-  };
-
-  for (const id of [timeA, timeB]) if (id) await tryDelete(`/api/time-tracking/${id}`);
-  for (const id of [shiftA, shiftB]) if (id) await tryDelete(`/api/shifts/${id}`);
-
-  // Admin B kann nur gelöscht werden, wenn er in einem erlaubten Team liegt
-  // (IDOR-Schutz auf DELETE /users). Kurz Team A zuweisen, dann löschen.
-  if (attackerId && teamA) {
-    try {
-      await adminCtx.post(`/api/teams/${teamA}/members`, { data: { userId: attackerId } });
-    } catch {
-      /* ignore */
-    }
-    await tryDelete(`/api/users/${attackerId}`);
-  }
-  for (const id of [aliceId, bobId]) if (id) await tryDelete(`/api/users/${id}`);
-  for (const id of [teamA, teamB]) if (id) await tryDelete(`/api/teams/${id}`);
-
-  if (adminId && originalAccountType) {
-    try {
-      await adminCtx.patch(`/api/users/${adminId}`, {
-        data: { accountType: originalAccountType },
-      });
-    } catch {
-      /* ignore */
-    }
-  }
-
-  await adminCtx.dispose();
-  await attackerCtx?.dispose();
+  await h?.cleanup();
 });
 
 type SummaryResponse = {

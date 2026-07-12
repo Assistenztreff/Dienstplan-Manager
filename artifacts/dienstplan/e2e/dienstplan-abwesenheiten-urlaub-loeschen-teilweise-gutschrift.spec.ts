@@ -59,7 +59,7 @@ const TOTAL_DAYS = KEEP_DAYS + DELETE_DAYS;
 const DELETE_DATE_LABEL = "20.06.";
 
 type CreatedUser = { id: number; name: string; email: string };
-type Contract = { id: number; userId: number; vacationDays: number; vacationDaysUsed: number };
+type Contract = { id: number; userId: number; vacationDays: number; vacationHoursUsed: number };
 
 let adminCtx: APIRequestContext;
 let assistant: CreatedUser;
@@ -170,7 +170,8 @@ test("Löschen nur eines von zwei Urlaubs-Zeiträumen bucht exakt diesen gut", a
   expect(midRes.ok(), "GET /api/contracts (Zwischenstand) fehlgeschlagen").toBe(true);
   const midContract = ((await midRes.json()) as Contract[]).find((c) => c.id === contractId);
   expect(midContract, "Vertrag nicht gefunden").toBeTruthy();
-  expect(midContract!.vacationDaysUsed).toBe(TOTAL_DAYS);
+  // Stundengenaue Buchung: Tage = vacationHoursUsed / 8 (vacationHoursPerDay).
+  expect(midContract!.vacationHoursUsed / 8).toBe(TOTAL_DAYS);
 
   // 2) Gezielt NUR den 3-Tage-Zeitraum löschen: Zeile per Assistentenname UND
   // Startdatum filtern, damit der zu behaltende Zeitraum unberührt bleibt.
@@ -196,5 +197,5 @@ test("Löschen nur eines von zwei Urlaubs-Zeiträumen bucht exakt diesen gut", a
   expect(afterRes.ok(), "GET /api/contracts (nach Löschen) fehlgeschlagen").toBe(true);
   const afterContract = ((await afterRes.json()) as Contract[]).find((c) => c.id === contractId);
   expect(afterContract, "Vertrag nicht gefunden").toBeTruthy();
-  expect(afterContract!.vacationDaysUsed).toBe(KEEP_DAYS);
+  expect(afterContract!.vacationHoursUsed / 8).toBe(KEEP_DAYS);
 });

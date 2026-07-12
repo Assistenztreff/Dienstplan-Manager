@@ -39,7 +39,7 @@ const CONTRACT_START = `${YEAR}-01-01`;
 const VACATION_DAY = `${YEAR}-01-01`;
 
 type CreatedUser = { id: number; name: string; email: string };
-type Contract = { id: number; userId: number; vacationDays: number; vacationDaysUsed: number };
+type Contract = { id: number; userId: number; vacationDays: number; vacationHoursUsed: number };
 
 let adminCtx: APIRequestContext;
 let assistant: CreatedUser;
@@ -146,5 +146,6 @@ test("Urlaubsbuchung am 1. Januar / Vertragsbeginn zieht korrekt vom Resturlaub 
   const contracts = (await contractsRes.json()) as Contract[];
   const contract = contracts.find((c) => c.id === contractId);
   expect(contract, "Vertrag nicht gefunden").toBeTruthy();
-  expect(contract!.vacationDaysUsed).toBe(1);
+  // Stundengenaue Buchung: 1 ganztägiger Urlaubstag = 8h (Tage = Stunden / 8).
+  expect(contract!.vacationHoursUsed / 8).toBe(1);
 });

@@ -158,7 +158,8 @@ test("UI: Assistent sieht seinen Entwurf OHNE Bestätigen-Button (mobil + Deskto
       mobilePage.getByRole("heading", { name: "Dienstplan", exact: true }),
     ).toBeVisible();
     const mobile = mobilePage.getByTestId("dienstplan-mobile");
-    await mobile.getByRole("button", { name: "Liste" }).click();
+    // Ansicht-Umschalter lebt im sticky Header AUSSERHALB des Containers.
+    await mobilePage.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list").click();
 
     const draftBadge = mobile.getByTestId(`shift-badge-${assistantDraftShiftId}`);
     await expect(draftBadge, "Der eigene Entwurf muss für den Assistenten sichtbar sein").toBeVisible();
@@ -192,7 +193,8 @@ test("UI: Assistent sieht seinen Entwurf OHNE Bestätigen-Button (mobil + Deskto
     ).toBeVisible();
     const desktop = desktopPage.getByTestId("dienstplan-desktop");
     // Standard-Desktop-Ansicht ist die Tabelle; sicherheitshalber umschalten.
-    await desktop.getByRole("button", { name: "Tabelle" }).click();
+    // Ansicht-Umschalter lebt im sticky Header AUSSERHALB des Containers.
+    await desktopPage.getByTestId("view-toggles-desktop").getByTestId("view-toggle-table").click();
 
     const draftBadge = desktop.getByTestId(`shift-badge-${assistantDraftShiftId}`);
     await expect(draftBadge, "Der eigene Entwurf muss in der Tabelle sichtbar sein").toBeVisible();
@@ -227,7 +229,8 @@ test("Desktop-Tabelle: Admin bestätigt einen Vorschlag per Badge-Button → Sta
     // WICHTIG: auf `dienstplan-desktop` scopen — dieselben Badges existieren
     // auch im per CSS versteckten Mobile-Zweig (Strict-Mode-Verletzung).
     const desktop = page.getByTestId("dienstplan-desktop");
-    await desktop.getByRole("button", { name: "Tabelle" }).click();
+    // Ansicht-Umschalter lebt im sticky Header AUSSERHALB des Containers.
+    await page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-table").click();
 
     const offeredBadge = desktop.getByTestId(`shift-badge-${desktopOfferedShiftId}`);
     await expect(offeredBadge, "Vorschlag muss in der Tabelle sichtbar sein").toBeVisible();

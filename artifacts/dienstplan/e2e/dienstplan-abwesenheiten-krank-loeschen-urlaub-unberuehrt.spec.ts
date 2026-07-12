@@ -57,7 +57,7 @@ const SICK_TO = `${YEAR}-06-22`;
 const SICK_DATE_LABEL = "20.06.";
 
 type CreatedUser = { id: number; name: string; email: string };
-type Contract = { id: number; userId: number; vacationDays: number; vacationDaysUsed: number };
+type Contract = { id: number; userId: number; vacationDays: number; vacationHoursUsed: number };
 
 let adminCtx: APIRequestContext;
 let assistant: CreatedUser;
@@ -171,7 +171,8 @@ test("Löschen eines Krank-Zeitraums lässt den genommenen Urlaub unberührt", a
   expect(midRes.ok(), "GET /api/contracts (Zwischenstand) fehlgeschlagen").toBe(true);
   const midContract = ((await midRes.json()) as Contract[]).find((c) => c.id === contractId);
   expect(midContract, "Vertrag nicht gefunden").toBeTruthy();
-  expect(midContract!.vacationDaysUsed).toBe(VACATION_TAKEN);
+  // Stundengenaue Buchung: Tage = vacationHoursUsed / 8 (vacationHoursPerDay).
+  expect(midContract!.vacationHoursUsed / 8).toBe(VACATION_TAKEN);
 
   // 2) Gezielt NUR den Krank-Zeitraum löschen: Zeile per Assistentenname UND
   // Startdatum filtern, damit der Urlaubs-Zeitraum unberührt bleibt.
@@ -198,5 +199,5 @@ test("Löschen eines Krank-Zeitraums lässt den genommenen Urlaub unberührt", a
   expect(afterRes.ok(), "GET /api/contracts (nach Löschen) fehlgeschlagen").toBe(true);
   const afterContract = ((await afterRes.json()) as Contract[]).find((c) => c.id === contractId);
   expect(afterContract, "Vertrag nicht gefunden").toBeTruthy();
-  expect(afterContract!.vacationDaysUsed).toBe(VACATION_TAKEN);
+  expect(afterContract!.vacationHoursUsed / 8).toBe(VACATION_TAKEN);
 });

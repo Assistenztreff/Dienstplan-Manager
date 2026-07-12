@@ -43,7 +43,7 @@ const SECOND_FROM = `${YEAR}-02-11`;
 const SECOND_TO = `${YEAR}-02-13`;
 
 type CreatedUser = { id: number; name: string; email: string };
-type Contract = { id: number; userId: number; vacationDays: number; vacationDaysUsed: number };
+type Contract = { id: number; userId: number; vacationDays: number; vacationHoursUsed: number };
 
 let adminCtx: APIRequestContext;
 let assistant: CreatedUser;
@@ -92,7 +92,9 @@ async function vacationDaysUsed(ctx: APIRequestContext, userId: number, cId: num
   const contracts = (await res.json()) as Contract[];
   const contract = contracts.find((c) => c.id === cId);
   expect(contract, "Vertrag nicht gefunden").toBeTruthy();
-  return contract!.vacationDaysUsed;
+  // Urlaub wird stundengenau gebucht (contracts.vacationHoursUsed ist der
+  // maßgebliche Zähler); Tage = Stunden / 8 (vacationHoursPerDay-Default).
+  return contract!.vacationHoursUsed / 8;
 }
 
 test.beforeAll(async () => {

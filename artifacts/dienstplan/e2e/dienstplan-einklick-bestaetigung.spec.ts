@@ -105,7 +105,9 @@ async function openListView(page: import("@playwright/test").Page) {
   await page.goto("/dienstplan");
   await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible();
   const mobile = page.getByTestId("dienstplan-mobile");
-  await mobile.getByRole("button", { name: "Liste" }).click();
+  // Der Ansicht-Umschalter lebt seit der adaptiven Kopfzeile AUSSERHALB des
+  // Mobile-Containers (sticky Header) — über die Header-Testids ansteuern.
+  await page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list").click();
   return mobile;
 }
 
