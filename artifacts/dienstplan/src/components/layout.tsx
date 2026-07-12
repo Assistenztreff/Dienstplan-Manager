@@ -201,8 +201,9 @@ function AppSubNavigation() {
   return (
     <>
       {/* Mobile: schmale Toggle-Leiste mit "App-Menue"-Button (oeffnet Drawer).
-          Sticky, damit der Zugang zur Navigation beim Scrollen erhalten bleibt. */}
-      <div className="sticky top-0 z-30 border-b border-slate-200 bg-slate-100 px-4 py-3 md:hidden">
+          Scrollt mit der Seite mit; der Drawer selbst ist fixed und bleibt
+          damit unabhaengig von der Scroll-Position voll funktionsfaehig. */}
+      <div className="border-b border-slate-200 bg-slate-100 px-4 py-3 md:hidden">
         <button
           type="button"
           onClick={() => setIsAppMenuOpen(true)}
@@ -282,8 +283,9 @@ function AppSubNavigation() {
 
       {/* Desktop: kompakter, einzeiliger Pillen-Balken (text-xs, wenig
           vertikales Padding), damit die Navigation auf iPad/Desktop in einer
-          Zeile bleibt und maximal Hoehe fuer den Inhalt (Kalender) frei wird. */}
-      <div className="sticky top-0 z-30 hidden shrink-0 border-b border-slate-200 bg-slate-100 md:block">
+          Zeile bleibt und maximal Hoehe fuer den Inhalt (Kalender) frei wird.
+          Nicht sticky: scrollt mit der Seite nach oben weg. */}
+      <div className="hidden shrink-0 border-b border-slate-200 bg-slate-100 md:block">
         <div className="mx-auto max-w-7xl px-4 py-2">
           <nav className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
             {navItems.map((item) => (
@@ -325,8 +327,9 @@ function AppSubNavigation() {
 // App-Layout.
 // Der aeussere Wrapper ist exakt viewport-hoch (h-dvh, overflow-hidden) —
 // das Dokument selbst scrollt nie; gescrollt wird ein innerer Container.
-// Header + Sub-Navigation sind fixe Zeilen, der Hauptbereich nimmt den Rest
-// (flex-1) und scrollt natuerlich nach unten.
+// Plattform-Header und App-Sub-Navigation stehen IM Scroll-Container und
+// scrollen deshalb mit der Seite nach oben weg; nur seiteneigene sticky
+// Kopfzeilen (z. B. die Dienstplanleiste) bleiben beim Scrollen oben kleben.
 //
 // Zwei Modi:
 // - Dienstplan (/dienstplan): full-bleed — der Inhalt nutzt die VOLLE Breite
@@ -344,20 +347,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-dvh w-full flex-col overflow-hidden bg-brand-white font-sans text-foreground">
-      {/* Plattform-Header (Platzhalter) — im Embed-Modus ausgeblendet */}
-      {!embedded && <PlatformHeaderPlaceholder />}
-
-      {/* Dienstplan-App: Sub-Navigation */}
-      <AppSubNavigation />
-
-      {/* Inhalt + Footer scrollen gemeinsam in EINEM Scroll-Container. Die
-          gesamte Seite (inkl. Dienstplan) laesst sich als Ganzes scrollen: die
-          sticky Kopfzeile bleibt oben kleben, nach dem Inhalt wird der Footer
-          sichtbar. min-h-full + flex-1 auf main druecken den Footer bei kurzen
-          Seiten an den unteren Viewport-Rand. Dienstplan nutzt zusaetzlich die
-          volle Breite (kein zentrierter max-w-Container). */}
+      {/* Kopf-Leisten + Inhalt + Footer scrollen gemeinsam in EINEM
+          Scroll-Container. Beim Runterscrollen verschwinden Plattform-Header
+          und Menueleiste nach oben; sticky Kopfzeilen der Seiten (Dienstplan)
+          kleben am oberen Rand dieses Containers. min-h-full + flex-1 auf
+          main druecken den Footer bei kurzen Seiten an den unteren
+          Viewport-Rand. Dienstplan nutzt zusaetzlich die volle Breite (kein
+          zentrierter max-w-Container). */}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex min-h-full flex-col">
+          {/* Plattform-Header (Platzhalter) — im Embed-Modus ausgeblendet */}
+          {!embedded && <PlatformHeaderPlaceholder />}
+
+          {/* Dienstplan-App: Sub-Navigation (scrollt mit) */}
+          <AppSubNavigation />
+
           <main
             className={`w-full flex-1 p-4 md:p-6 ${fullBleed ? "" : "mx-auto max-w-7xl"}`}
           >

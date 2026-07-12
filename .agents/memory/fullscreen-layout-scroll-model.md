@@ -3,7 +3,7 @@ name: Layout & Scroll-Modell
 description: Das Dokument scrollt nie (h-dvh overflow-hidden); ein innerer Container scrollt. /dienstplan ist full-bleed & scrollt natürlich mit der Seite (NICHT mehr viewport-fixiert).
 ---
 
-Das Master-Layout ist viewport-fixiert (`h-dvh overflow-hidden`); das Dokument/`body` scrollt NIE. Gescrollt wird stets ein innerer Container im Layout.
+Das Master-Layout ist viewport-fixiert (`h-dvh overflow-hidden`); das Dokument/`body` scrollt NIE. Gescrollt wird stets ein innerer Container im Layout. Plattform-Header UND App-Sub-Navigation stehen IM Scroll-Container (nicht davor) und scrollen mit der Seite nach oben weg — die Nav-Leisten sind bewusst NICHT sticky; nur seiteneigene Kopfzeilen (Dienstplanleiste) kleben via `sticky top-0`. Der mobile App-Menü-Drawer bleibt `fixed` und funktioniert unabhängig von der Scroll-Position.
 
 **Regel:** Jede Route (inkl. `/dienstplan`) rendert ihren Inhalt in einem inneren Scroll-Container (`min-h-0 flex-1 overflow-y-auto`) und wächst natürlich nach unten. Es gibt KEINEN viewport-fixierten „Full-Screen"-Modus mehr, in dem nur der Kalender autark scrollt.
 
