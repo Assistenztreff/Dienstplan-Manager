@@ -411,7 +411,7 @@ export function ShiftDialog({
           startTime: startIso,
           endTime: endIso,
           type,
-          planningStatus: form.planningStatus,
+          planningStatus: isAbsence ? "FIX" : form.planningStatus,
           shiftModelId,
           notes: form.notes || null,
         };
@@ -425,7 +425,7 @@ export function ShiftDialog({
           startTime: startIso,
           endTime: endIso,
           type,
-          planningStatus: form.planningStatus,
+          planningStatus: isAbsence ? "FIX" : form.planningStatus,
           shiftModelId,
           notes: form.notes || undefined,
         };
@@ -489,7 +489,7 @@ export function ShiftDialog({
           startTime: startIso,
           endTime: endIso,
           type,
-          planningStatus: form.planningStatus,
+          planningStatus: isAbsence ? "FIX" : form.planningStatus,
           shiftModelId,
           notes: form.notes || undefined,
         };

@@ -6,6 +6,10 @@ pnpm --filter @workspace/scripts run migrate-teams
 # migrieren (idempotent, VOR db push — sonst fragt push interaktiv nach
 # NOT NULL/UNIQUE auf der befüllten Tabelle und bricht ohne TTY ab).
 pnpm --filter @workspace/scripts run migrate-allowance-settings
+# Bestands-Abwesenheiten (Urlaub/Krankheit) einmalig auf verbindlichen Status FIX
+# korrigieren, damit sie in den Auswertungen erscheinen. Reine Daten-Migration
+# (kein Schema-Prompt), idempotent — Reihenfolge unkritisch.
+pnpm --filter @workspace/scripts run migrate-absences-fix
 # calendar_token (Kalender-Abo-Feed) idempotent VOR db push anlegen: drizzle-kit
 # push fragt bei neuen UNIQUE-Constraints interaktiv nach (kein TTY im
 # Post-Merge => Abbruch). Vorab angelegt erkennt push "no changes".
@@ -38,6 +42,33 @@ END $$;
 ALTER TABLE allowance_settings DROP CONSTRAINT IF EXISTS allowance_settings_owner_id_unique;
 CREATE UNIQUE INDEX IF NOT EXISTS allowance_settings_owner_account_unique
   ON allowance_settings (owner_id) WHERE team_id IS NULL;
+SQL
+# Branding-Tabellen: Die Surrogat-Spalte `id` (serial PK) wurde aus dem Drizzle-
+# Schema entfernt (owner_id bzw. team_id ist jetzt PK). Auf Dev-DBs mit dem
+# alten Zustand fragt db push interaktiv wegen des Spalten-Drops (Data-Loss-
+# Warnung) und bricht ohne TTY ab. Idempotenter Vorab-Umbau: id-Spalte + alte
+# PK/UNIQUE-Constraints entfernen, PK auf die fachliche Spalte legen.
+psql "$DATABASE_URL" <<'SQL'
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_name = 'branding_settings' AND column_name = 'id') THEN
+    ALTER TABLE branding_settings DROP CONSTRAINT IF EXISTS branding_settings_pkey;
+    ALTER TABLE branding_settings DROP COLUMN id;
+    ALTER TABLE branding_settings DROP CONSTRAINT IF EXISTS branding_settings_owner_id_unique;
+    ALTER TABLE branding_settings ADD CONSTRAINT branding_settings_pkey PRIMARY KEY (owner_id);
+  END IF;
+END $$;
+DROP SEQUENCE IF EXISTS branding_settings_id_seq;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_name = 'team_branding_settings' AND column_name = 'id') THEN
+    ALTER TABLE team_branding_settings DROP CONSTRAINT IF EXISTS team_branding_settings_pkey;
+    ALTER TABLE team_branding_settings DROP COLUMN id;
+    ALTER TABLE team_branding_settings DROP CONSTRAINT IF EXISTS team_branding_settings_team_id_unique;
+    ALTER TABLE team_branding_settings ADD CONSTRAINT team_branding_settings_pkey PRIMARY KEY (team_id);
+  END IF;
+END $$;
+DROP SEQUENCE IF EXISTS team_branding_settings_id_seq;
 SQL
 # WICHTIG (verifiziert): Nach diesem Skript laeuft die Plattform-
 # "Workflow-Reconciliation" und startet bereits laufende Workflows neu —

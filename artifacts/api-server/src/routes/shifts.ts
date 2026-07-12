@@ -663,7 +663,17 @@ router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
     }
   }
 
-  const insertValues = { ...body.data, teamId: write.teamId };
+  // Abwesenheiten (Urlaub/Krankheit) sind produktseitig IMMER verbindlich: Der
+  // Planungsstatus wird serverseitig autoritativ auf FIX gesetzt, unabhängig vom
+  // Client und vom Erstellungsweg (Abwesenheiten-Seite ODER Kalender-Schicht-
+  // Dialog). Sonst entstünde eine VORLAEUFIG-Abwesenheit als Sackgasse: Sie
+  // zählt nicht in den Auswertungen und lässt sich über die Kalender-
+  // Sammelbestätigung (die Abwesenheiten bewusst ausschließt) nie bestätigen.
+  const insertValues = {
+    ...body.data,
+    teamId: write.teamId,
+    ...(isAbsenceType(body.data.type) ? { planningStatus: "FIX" as const } : {}),
+  };
 
   // Abwesenheits-Zeiten auflösen (Lohnausfallprinzip, Punkt 2 & 3):
   //  • Primary: existiert am Tag bereits ein geplanter Dienst, "überschreibt" die
@@ -874,9 +884,16 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
     }
   }
 
+  // Abwesenheiten bleiben verbindlich: Wird eine Schicht zu Urlaub/Krankheit
+  // (oder bleibt sie es), setzt der Server den Planungsstatus autoritativ auf
+  // FIX — analog zum POST, damit kein Weg eine vorläufige Abwesenheit erzeugt.
+  const updateValues = {
+    ...body.data,
+    ...(isAbsenceType(effectiveType) ? { planningStatus: "FIX" as const } : {}),
+  };
   const [updated] = await db
     .update(shiftsTable)
-    .set(body.data)
+    .set(updateValues)
     .where(eq(shiftsTable.id, params.data.id))
     .returning();
   if (!updated) {
