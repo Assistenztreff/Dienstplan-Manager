@@ -1806,10 +1806,13 @@ export default function Dienstplan() {
           Viewports bzw. wuerde vom overflow-hidden-Wrapper abgeschnitten. */}
       {isAdmin && isSelectionMode && selectedDates.length > 0 && createPortal(
         <div
-          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2.5 shadow-lg"
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex w-max max-w-[calc(100vw-1rem)] flex-wrap items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 py-2.5 shadow-lg md:rounded-full"
           data-testid="bulk-action-bar"
         >
-          <span className="text-sm font-medium" data-testid="bulk-selected-count">
+          <span
+            className="w-full text-center text-sm font-medium sm:w-auto sm:text-left"
+            data-testid="bulk-selected-count"
+          >
             {selectedDates.length} {selectedDates.length === 1 ? "Tag" : "Tage"} ausgewählt
           </span>
           <Button

@@ -229,6 +229,62 @@ test("Massen-Eintragen und Massen-Löschen über mehrere Tage funktioniert", asy
   }
 });
 
+test.describe("Aktionsleiste auf schmalem Handy-Viewport", () => {
+  // Schmaler Handy-Viewport (360px): Die Floating-Action-Bar muss umbrechen
+  // duerfen, statt seitlich aus dem Bildschirm zu ragen.
+  test.use({ viewport: { width: 360, height: 740 } });
+
+  test("Alle vier Aktionen und der Zaehler sind auf 360px erreichbar", async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.goto("/dienstplan");
+    await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible();
+    await expect(page.getByTestId("dienstplan-mobile")).toBeVisible();
+
+    const { year, month } = parseMonthLabel(
+      await page.getByTestId("month-label").innerText(),
+    );
+
+    // In die Listenansicht wechseln (Mobil-Default ist das Monatsgitter) —
+    // dort sind die agenda-day-Zellen im Auswahl-Modus anklickbar.
+    await page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list").click();
+
+    // Auswahl-Modus an, drei Tage in der Listenansicht waehlen (nur Auswahl,
+    // keine Schreiboperation — daher kollisionsfrei zu anderen Specs).
+    await page.getByTestId("toggle-selection-mode").click();
+    for (const d of [6, 7, 8]) {
+      const cell = page.getByTestId(`agenda-day-${dateKey(year, month, d)}`);
+      await cell.scrollIntoViewIfNeeded();
+      await cell.getByRole("button").first().click();
+      await expect(cell).toHaveAttribute("data-selected", "true");
+    }
+
+    const bar = page.getByTestId("bulk-action-bar");
+    await expect(bar).toBeVisible();
+    await expect(page.getByTestId("bulk-selected-count")).toHaveText("3 Tage ausgewählt");
+
+    // Die Leiste selbst passt vollstaendig in den Viewport.
+    const viewportWidth = 360;
+    const barBox = await bar.boundingBox();
+    expect(barBox, "bulk-action-bar hat keine BoundingBox").not.toBeNull();
+    expect(barBox!.x).toBeGreaterThanOrEqual(0);
+    expect(barBox!.x + barBox!.width).toBeLessThanOrEqual(viewportWidth + 0.5);
+
+    // Jede der vier Aktionen ist sichtbar und liegt horizontal im Viewport.
+    for (const testId of ["bulk-create-open", "bulk-edit-open", "bulk-delete-open", "bulk-cancel"]) {
+      const btn = page.getByTestId(testId);
+      await expect(btn).toBeVisible();
+      const box = await btn.boundingBox();
+      expect(box, `${testId} hat keine BoundingBox`).not.toBeNull();
+      expect(box!.x, `${testId} ragt links hinaus`).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width, `${testId} ragt rechts hinaus`).toBeLessThanOrEqual(viewportWidth + 0.5);
+    }
+
+    // Abbrechen funktioniert und raeumt die Auswahl auf.
+    await page.getByTestId("bulk-cancel").click();
+    await expect(bar).toHaveCount(0);
+  });
+});
+
 test("Monatswechsel im Auswahl-Modus leert die Auswahl", async ({ page }) => {
   await loginAsAdmin(page);
   await openDesktopCalendar(page);
