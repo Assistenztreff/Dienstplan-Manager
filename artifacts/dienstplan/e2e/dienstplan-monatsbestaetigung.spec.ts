@@ -3,6 +3,7 @@ import { loginViaUi } from "./helpers/auth";
 import {
   registerFreeAccount,
   deleteFreeAccount,
+  setAccountPlan,
   type FreeAccount,
 } from "./helpers/teams";
 
@@ -25,6 +26,18 @@ import {
  * - Kontrollen: eine bereits verbindliche (FIX) Schicht und eine Abwesenheit
  *   (Urlaub) sind NICHT Teil der Sammelaktion und bleiben unverändert.
  * - Der Sammel-Button verschwindet danach (nichts mehr zu bestätigen).
+ * - AUSWERTUNGS-BEWEIS (#380): Das Produktversprechen "nur FIX zählt" wird
+ *   nicht nur am Status, sondern an den Kennzahlen selbst geprüft. VOR der
+ *   Sammelbestätigung zählen weder `GET /dashboard/summary`
+ *   (monthlyPlannedHours) noch `GET /dashboard/hours-balance` (plannedHours/
+ *   valuedHours) die Entwürfe/Vorschläge mit; DANACH enthalten beide die
+ *   bestätigten Dienste. Da hours-balance auf den per `storeShiftMetrics`
+ *   gespeicherten Roh-Kennzahlen (valuedHours) basiert, fällt eine Regression
+ *   auf, die den Status setzt, ohne dass die Kennzahlen (mehr) stimmen.
+ *   hours-balance ist Premium-gegated (advancedAnalytics) — der Plan wird nur
+ *   für die beiden Lese-Zugriffe kurz auf premium gehoben und sofort wieder
+ *   auf free gesenkt, damit der Sammelbestätigungs-Flow selbst weiterhin auf
+ *   dem Free-Plan bewiesen bleibt (getUserPlan liest frisch aus der DB).
  *
  * Setup: frisches Free-Konto über den Self-Service (eigenes Standard-Team,
  * keine Kollisionen mit parallelen Specs). Die Sammelbestätigung ist
@@ -79,6 +92,45 @@ async function planningStatusOf(id: number): Promise<string> {
   return ((await res.json()) as { planningStatus: string }).planningStatus;
 }
 
+/** Geplante Soll-Stunden des Monats aus der Dashboard-Übersicht (nur FIX). */
+async function readMonthlyPlannedHours(): Promise<number> {
+  const res = await acc.ctx.get(
+    `/api/dashboard/summary?month=${Number(MONTH)}&year=${YEAR}`,
+  );
+  expect(res.ok(), `GET /dashboard/summary fehlgeschlagen (${res.status()})`).toBe(true);
+  return ((await res.json()) as { monthlyPlannedHours: number }).monthlyPlannedHours;
+}
+
+interface BalanceRow {
+  userId: number;
+  plannedHours: number;
+  valuedHours: number;
+}
+
+/**
+ * Liest die Soll/Ist-Zeile des Assistenten aus der Premium-Lohnauswertung.
+ * hours-balance ist Premium-gegated — der Plan wird nur für diesen einen
+ * Lesezugriff auf premium gehoben und im finally sofort wieder gesenkt.
+ */
+async function readAssistantBalanceRow(): Promise<BalanceRow> {
+  setAccountPlan(acc.email, "premium");
+  try {
+    const res = await acc.ctx.get(
+      `/api/dashboard/hours-balance?month=${Number(MONTH)}&year=${YEAR}`,
+    );
+    expect(
+      res.ok(),
+      `GET /dashboard/hours-balance fehlgeschlagen (${res.status()})`,
+    ).toBe(true);
+    const rows = (await res.json()) as BalanceRow[];
+    const row = rows.find((r) => r.userId === assistantId);
+    expect(row, "Auswertung muss eine Zeile für den Assistenten enthalten").toBeDefined();
+    return row!;
+  } finally {
+    setAccountPlan(acc.email, "free");
+  }
+}
+
 test.beforeAll(async () => {
   // Registrierung + Datenaufbau können beim Cold-Start des Test-Stacks die
   // Standard-Hook-Zeit sprengen.
@@ -116,6 +168,25 @@ test("Monatsweise Sammelbestätigung setzt alle Entwürfe & Vorschläge auf FIX"
   page,
 }) => {
   test.setTimeout(120_000);
+
+  // --- Auswertungen VOR der Sammelbestätigung: Entwürfe zählen NICHT ---
+  // Verbindlich (FIX) sind nur die Kontroll-Schicht (8 h Arbeit) und der
+  // Urlaub (8 h, echte Schichtzeiten → zählt zum Soll). Die 3 Entwürfe + der
+  // Vorschlag (zusammen 32 h) dürfen in KEINER Kennzahl auftauchen.
+  expect(
+    await readMonthlyPlannedHours(),
+    "summary: vor der Bestätigung zählen nur FIX-Schicht (8h) + Urlaub (8h)",
+  ).toBeCloseTo(16, 2);
+  const balanceBefore = await readAssistantBalanceRow();
+  expect(
+    balanceBefore.plannedHours,
+    "hours-balance: Soll vor der Bestätigung = FIX-Schicht (8h) + Urlaub (8h)",
+  ).toBeCloseTo(16, 2);
+  expect(
+    balanceBefore.valuedHours,
+    "hours-balance: gewertete Stunden vor der Bestätigung = nur die FIX-Arbeitsschicht (8h)",
+  ).toBeCloseTo(8, 2);
+
   await loginViaUi(page, acc.email, PASSWORD);
 
   await page.goto("/dienstplan");
@@ -164,4 +235,25 @@ test("Monatsweise Sammelbestätigung setzt alle Entwürfe & Vorschläge auf FIX"
     ((await vacationRes.json()) as { type: string }).type,
     "Abwesenheit (Urlaub) darf durch die Sammelaktion nicht verändert werden",
   ).toBe("vacation");
+
+  // --- Auswertungen NACH der Sammelbestätigung: bestätigte Dienste zählen ---
+  // Die 4 bestätigten Dienste (32 h) müssen jetzt in den Kennzahlen stecken:
+  // summary 16 h → 48 h; hours-balance Soll 16 h → 48 h, gewertete Stunden
+  // 8 h → 40 h (5 Arbeitsschichten à 8 h aus den per storeShiftMetrics
+  // gespeicherten Roh-Kennzahlen). Bliebe eine Kennzahl auf dem alten Stand,
+  // wäre der Status nur kosmetisch gesetzt — genau die Regression, die dieser
+  // Spec abfangen soll.
+  expect(
+    await readMonthlyPlannedHours(),
+    "summary: nach der Bestätigung zählen alle 6 Dienste (5 Arbeit + Urlaub = 48h)",
+  ).toBeCloseTo(48, 2);
+  const balanceAfter = await readAssistantBalanceRow();
+  expect(
+    balanceAfter.plannedHours,
+    "hours-balance: Soll nach der Bestätigung = 5 Arbeitsschichten (40h) + Urlaub (8h)",
+  ).toBeCloseTo(48, 2);
+  expect(
+    balanceAfter.valuedHours,
+    "hours-balance: gewertete Stunden nach der Bestätigung = 5 Arbeitsschichten (40h)",
+  ).toBeCloseTo(40, 2);
 });
