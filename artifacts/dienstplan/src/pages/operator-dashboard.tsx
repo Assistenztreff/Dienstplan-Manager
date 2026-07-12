@@ -138,6 +138,33 @@ export default function OperatorDashboard() {
   // Einträge kurz nach Mitternacht lokaler Zeit dem falschen Tag zuordnen.
   const [planFrom, setPlanFrom] = useState("");
   const [planTo, setPlanTo] = useState("");
+
+  // Schnellauswahl-Presets für den Zeitraum-Filter: befüllen von/bis in einem
+  // Klick. Berechnung auf Basis des lokalen Datums (wie die Datums-Eingaben
+  // selbst, die ebenfalls lokale YYYY-MM-DD-Werte liefern).
+  function toDateInputValue(date: Date): string {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  function applyPlanRangePreset(preset: "thisMonth" | "lastMonth" | "last30Days") {
+    const today = new Date();
+    let from: Date;
+    let to: Date;
+    if (preset === "thisMonth") {
+      from = new Date(today.getFullYear(), today.getMonth(), 1);
+      to = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    } else if (preset === "lastMonth") {
+      from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      to = new Date(today.getFullYear(), today.getMonth(), 0);
+    } else {
+      from = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 29);
+      to = today;
+    }
+    setPlanFrom(toDateInputValue(from));
+    setPlanTo(toDateInputValue(to));
+  }
   const planChangesParams = useMemo(() => {
     const params: { search?: string; from?: string; to?: string } = {};
     if (planSearch) params.search = planSearch;
@@ -432,6 +459,36 @@ export default function OperatorDashboard() {
               className="pl-9"
               data-testid="input-plan-change-search"
             />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">Schnellauswahl:</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => applyPlanRangePreset("thisMonth")}
+              data-testid="button-plan-change-preset-this-month"
+            >
+              Dieser Monat
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => applyPlanRangePreset("lastMonth")}
+              data-testid="button-plan-change-preset-last-month"
+            >
+              Letzter Monat
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => applyPlanRangePreset("last30Days")}
+              data-testid="button-plan-change-preset-last-30-days"
+            >
+              Letzte 30 Tage
+            </Button>
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1">
