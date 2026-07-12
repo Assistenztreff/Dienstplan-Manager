@@ -111,8 +111,15 @@ test("Widerrufen sperrt die Feed-URL sofort und löscht den Token", async ({ pag
   const before = await publicCtx.get(feedPath);
   expect(before.status(), "Feed sollte vor dem Widerruf 200 liefern").toBe(200);
 
-  // „Widerrufen" klicken → der Erstellen-Button erscheint wieder (Token weg).
+  // „Widerrufen" klicken → Bestätigungsdialog (Task #407) → der Erstellen-
+  // Button erscheint wieder (Token weg).
   await page.getByTestId("calendar-feed-revoke").click();
+  const confirmRevoke = page.getByTestId("calendar-feed-confirm-action");
+  await expect(
+    confirmRevoke,
+    "Widerrufen muss erst einen Bestätigungsdialog öffnen",
+  ).toBeVisible();
+  await confirmRevoke.click();
   await expect(
     page.getByTestId("calendar-feed-create"),
     "Nach dem Widerruf muss wieder der Erstellen-Button erscheinen",

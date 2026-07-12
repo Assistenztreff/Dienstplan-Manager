@@ -171,9 +171,38 @@ test("Link erneuern macht die alte Abo-URL sofort ungültig; neue URL liefert di
   ).toContain(`UID:shift-${ownShiftId}@dienstplan-app`);
 
   // --- 3. Link erneuern über die UI (echter Frontend-Pfad) -------------------
+  // Task #407: Der Klick feuert NICHT mehr direkt, sondern öffnet erst einen
+  // Bestätigungsdialog (destruktive Aktion — alte URL wird sofort ungültig).
   const rotateButton = page.getByTestId("calendar-feed-rotate");
   await expect(rotateButton, "Der Erneuern-Button muss sichtbar sein").toBeVisible();
   await rotateButton.click();
+
+  // 3a. Erst ABBRECHEN: Der Token darf unangetastet bleiben.
+  const cancelButton = page.getByTestId("calendar-feed-confirm-cancel");
+  await expect(
+    cancelButton,
+    "Der Bestätigungsdialog muss nach dem Klick erscheinen",
+  ).toBeVisible();
+  await cancelButton.click();
+  await expect(cancelButton).not.toBeVisible();
+  expect(
+    await feedUrlInput.inputValue(),
+    "Abbrechen darf den Abo-Link NICHT verändern",
+  ).toBe(oldFeedUrl);
+  const oldFeedAfterCancel = await publicCtx.get(oldFeedPath);
+  expect(
+    oldFeedAfterCancel.status(),
+    "Nach Abbrechen muss die alte URL weiterhin funktionieren",
+  ).toBe(200);
+
+  // 3b. Jetzt wirklich erneuern: Klick + Bestätigen.
+  await rotateButton.click();
+  const confirmButton = page.getByTestId("calendar-feed-confirm-action");
+  await expect(
+    confirmButton,
+    "Der Bestätigungsdialog muss erneut erscheinen",
+  ).toBeVisible();
+  await confirmButton.click();
 
   // Warten, bis die UI die NEUE URL zeigt (der Token muss sich ändern).
   await expect

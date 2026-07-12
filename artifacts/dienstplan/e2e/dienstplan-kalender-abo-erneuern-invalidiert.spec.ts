@@ -138,8 +138,14 @@ test("Link erneuern macht die alte Abo-URL ungueltig, die neue liefert dieselben
   const beforeIcs = await before.text();
   expect(beforeIcs).toContain(`UID:shift-${ownShiftId}@dienstplan-app`);
 
-  // „Link erneuern" klicken und auf die neue URL warten.
+  // „Link erneuern" klicken, bestätigen (Task #407) und auf die neue URL warten.
   await page.getByTestId("calendar-feed-rotate").click();
+  const confirmRotate = page.getByTestId("calendar-feed-confirm-action");
+  await expect(
+    confirmRotate,
+    "Erneuern muss erst einen Bestätigungsdialog öffnen",
+  ).toBeVisible();
+  await confirmRotate.click();
   await expect
     .poll(async () => feedUrlInput.inputValue(), {
       message: "Nach dem Erneuern muss sich die Abo-URL ändern",

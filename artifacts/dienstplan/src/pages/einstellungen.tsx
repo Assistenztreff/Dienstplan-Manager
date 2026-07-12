@@ -28,6 +28,16 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -829,6 +839,12 @@ function CalendarExportCard() {
   const rotateToken = useRotateCalendarToken();
   const revokeToken = useRevokeCalendarToken();
 
+  // Bestätigungsdialog für destruktive Token-Aktionen: Erneuern/Widerrufen
+  // macht die bisherige Abo-URL SOFORT und unwiderruflich ungültig — alle
+  // abonnierten Kalender-Apps verlieren still die Verbindung. Deshalb nie
+  // ohne Rückfrage feuern (das ERSTELLEN ohne bestehende URL bleibt direkt).
+  const [confirmAction, setConfirmAction] = useState<"rotate" | "revoke" | null>(null);
+
   const feedUrl =
     tokenData?.feedPath != null
       ? `${window.location.origin}${tokenData.feedPath}`
@@ -972,7 +988,7 @@ function CalendarExportCard() {
                     <Button
                       variant="outline"
                       className="gap-2"
-                      onClick={handleRotate}
+                      onClick={() => setConfirmAction("rotate")}
                       disabled={rotateToken.isPending}
                       data-testid="calendar-feed-rotate"
                     >
@@ -982,7 +998,7 @@ function CalendarExportCard() {
                     <Button
                       variant="ghost"
                       className="gap-2 text-destructive hover:text-destructive"
-                      onClick={handleRevoke}
+                      onClick={() => setConfirmAction("revoke")}
                       disabled={revokeToken.isPending}
                       data-testid="calendar-feed-revoke"
                     >
@@ -1026,6 +1042,44 @@ function CalendarExportCard() {
             </p>
           </>
         )}
+
+        <AlertDialog
+          open={confirmAction !== null}
+          onOpenChange={(open) => {
+            if (!open) setConfirmAction(null);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {confirmAction === "revoke"
+                  ? "Abo-Link widerrufen?"
+                  : "Abo-Link erneuern?"}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {confirmAction === "revoke"
+                  ? "Die bisherige Abo-URL wird sofort und unwiderruflich ungültig. Alle Kalender-Apps, die den Link abonniert haben, erhalten keine Aktualisierungen mehr."
+                  : "Die bisherige Abo-URL wird sofort und unwiderruflich ungültig. Alle Kalender-Apps, die den alten Link abonniert haben, verlieren die Verbindung — die neue URL muss dort neu hinterlegt werden."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel data-testid="calendar-feed-confirm-cancel">
+                Abbrechen
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  const action = confirmAction;
+                  setConfirmAction(null);
+                  if (action === "rotate") void handleRotate();
+                  if (action === "revoke") void handleRevoke();
+                }}
+                data-testid="calendar-feed-confirm-action"
+              >
+                {confirmAction === "revoke" ? "Widerrufen" : "Link erneuern"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   );
