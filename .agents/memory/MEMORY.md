@@ -69,3 +69,4 @@
 - [E2E DB fixtures in-process](e2e-inprocess-db-helpers.md) — never execSync pnpm scripts per test (~3.2s/spawn ≈ minutes/run); run the SQL in-process; e2e/ isn't typechecked, so sync→async helper changes need an ad-hoc tsc pass.
 - [Merge validation e2e-api](merge-validation-e2e-api.md) — registered validations typecheck + e2e-api (~3 min, all *-api.spec.ts) run on every merge; name API-only specs with that suffix to join the gate.
 - [Stale generated client on main](stale-generated-client-on-main.md) — openapi.yaml can outrun committed Orval output; red typecheck on generated types = run codegen, not debug pages.
+- [Embed sticky viewport height](embed-sticky-viewport-height.md) — ?embed=1 removes header+footer, so scroll-based specs lose scroll room; embed variants need shorter viewports (400x460 mobile).
