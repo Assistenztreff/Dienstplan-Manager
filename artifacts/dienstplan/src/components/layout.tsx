@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
@@ -13,6 +13,7 @@ import {
   X,
   ShieldCheck,
   LogOut,
+  ArrowUp,
 } from "lucide-react";
 import logoUrl from "@assets/Arbeitgebermodell oder Assistenzdienst.png";
 import { useAuth } from "@/context/auth";
@@ -340,11 +341,32 @@ function AppSubNavigation() {
 // - Alle anderen Seiten: zentrierter Inhalt (max-w-7xl) + Footer am Ende.
 // Im Embed-Modus werden die Plattform-Platzhalter ausgeblendet.
 // ---------------------------------------------------------------------------
+// Ab dieser Scrolltiefe (px) erscheint mobil der "Nach oben"-Button.
+const SCROLL_TOP_THRESHOLD = 300;
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const embedded = isEmbedded();
   const [location] = useLocation();
   // Dienstplan nutzt die volle Bildschirmbreite (kein zentrierter Container).
   const fullBleed = location === "/dienstplan";
+
+  // Mobil scrollt die App-Menue-Leiste mit der Seite weg. Damit man das Menue
+  // nicht muehsam zurueckscrollen muss, blenden wir nach ~300px Scrolltiefe
+  // einen kleinen schwebenden "Nach oben"-Button ein (nur < md). Gescrollt
+  // wird der INNERE Container (das Dokument selbst scrollt nie), daher haengt
+  // der Listener direkt am Scroll-Container.
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    setShowScrollTop(el.scrollTop > SCROLL_TOP_THRESHOLD);
+  }, []);
+
+  const scrollToTop = useCallback(() => {
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
 
   return (
     <div className="flex h-dvh w-full flex-col overflow-hidden bg-brand-white font-sans text-foreground">
@@ -355,7 +377,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
           main druecken den Footer bei kurzen Seiten an den unteren
           Viewport-Rand. Dienstplan nutzt zusaetzlich die volle Breite (kein
           zentrierter max-w-Container). */}
-      <div className="min-h-0 flex-1 overflow-y-auto" data-testid="layout-scroll-container">
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="min-h-0 flex-1 overflow-y-auto"
+        data-testid="layout-scroll-container"
+      >
         <div className="flex min-h-full flex-col">
           {/* Plattform-Header (Platzhalter) — im Embed-Modus ausgeblendet */}
           {!embedded && <PlatformHeaderPlaceholder />}
@@ -373,6 +400,25 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {!embedded && <PlatformFooterPlaceholder />}
         </div>
       </div>
+
+      {/* Mobile: schwebender "Nach oben"-Button (nur < md). Erscheint erst
+          nach SCROLL_TOP_THRESHOLD Scrolltiefe und verschwindet oben wieder.
+          z-30 liegt bewusst UNTER Drawer-Backdrop (z-40) und Drawer/Dialogen
+          (z-50), damit er nichts ueberdeckt; klein und halbtransparent, um
+          Aktions-Buttons am Seitenende nicht zu verstellen. */}
+      <button
+        type="button"
+        onClick={scrollToTop}
+        aria-label="Nach oben scrollen"
+        data-testid="scroll-to-top"
+        className={`fixed bottom-4 right-4 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-brand-dark/70 text-brand-white shadow-lg backdrop-blur-sm transition-all duration-200 hover:bg-brand-dark md:hidden ${
+          showScrollTop
+            ? "translate-y-0 opacity-100"
+            : "pointer-events-none translate-y-2 opacity-0"
+        }`}
+      >
+        <ArrowUp className="h-5 w-5" />
+      </button>
     </div>
   );
 }
