@@ -11,7 +11,10 @@ import logoUrl from "@assets/20260626_094418_0000_1782459883949.png";
 export default function Login() {
   const { login } = useAuth();
   const [, navigate] = useLocation();
-  const [email, setEmail] = useState("");
+  // Vorbefüllung z. B. aus der Registrierung („E-Mail bereits verwendet" → Zur Anmeldung).
+  const [email, setEmail] = useState(
+    () => new URLSearchParams(window.location.search).get("email") ?? "",
+  );
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);

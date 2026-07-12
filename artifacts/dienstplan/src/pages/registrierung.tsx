@@ -95,9 +95,36 @@ export default function Registrierung() {
                   aria-invalid={emailError ? true : undefined}
                 />
                 {emailError && (
-                  <p className="text-sm text-destructive" data-testid="registrierung-email-error">
-                    {emailError}
-                  </p>
+                  <div className="space-y-1">
+                    <p className="text-sm text-destructive" data-testid="registrierung-email-error">
+                      {emailError}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Sie haben vermutlich schon ein Konto.{" "}
+                      <button
+                        type="button"
+                        data-testid="registrierung-zur-anmeldung"
+                        onClick={() =>
+                          navigate(
+                            email.trim()
+                              ? `/login?email=${encodeURIComponent(email.trim())}`
+                              : "/login",
+                          )
+                        }
+                        className="text-foreground font-medium underline underline-offset-2"
+                      >
+                        Zur Anmeldung
+                      </button>{" "}
+                      — oder{" "}
+                      <button
+                        type="button"
+                        onClick={() => navigate("/passwort-vergessen")}
+                        className="text-foreground underline underline-offset-2"
+                      >
+                        Passwort vergessen?
+                      </button>
+                    </p>
+                  </div>
                 )}
               </div>
               <div className="space-y-1.5">

@@ -81,4 +81,25 @@ test("Registrierung mit bereits vergebener E-Mail zeigt den Fehler am E-Mail-Fel
   await expect(page, "Bei Fehler darf nicht weitergeleitet werden").toHaveURL(
     /\/registrierung$/,
   );
+
+  // Task #406: Direkt unter dem Fehler gibt es einen Link zur Anmeldung.
+  const loginLink = page.getByTestId("registrierung-zur-anmeldung");
+  await expect(
+    loginLink,
+    "Unter dem Doppelte-E-Mail-Fehler muss ein Link zur Anmeldung stehen",
+  ).toBeVisible();
+  await loginLink.click();
+
+  // Der Link fuehrt nach /login und befuellt die eingegebene E-Mail vor.
+  await expect(page, "Der Link muss zur Anmeldeseite navigieren").toHaveURL(
+    /\/login\?email=/,
+  );
+  await expect(
+    page.getByRole("button", { name: "Anmelden" }),
+    "Die Anmeldeseite muss sichtbar sein",
+  ).toBeVisible();
+  await expect(
+    page.locator("#email"),
+    "Die E-Mail muss auf der Anmeldeseite vorbefuellt sein",
+  ).toHaveValue(existing.email);
 });
