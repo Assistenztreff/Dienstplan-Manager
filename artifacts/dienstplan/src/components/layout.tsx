@@ -58,7 +58,7 @@ const PLATFORM_PILLS: { label: string; active: boolean }[] = [
 
 function PlatformHeaderPlaceholder() {
   return (
-    <header className="shrink-0 bg-brand-cyan text-brand-white">
+    <header className="shrink-0 bg-brand-cyan text-brand-white" data-testid="platform-header">
       {/* Obere Zeile: Logo + externe Plattform-Links (Platzhalter).
           HINWEIS: Beim Server-Umzug wird hier spaeter Conditional Rendering
           fuer Dienstleister-Logos ergaenzt (z. B. eigenes Logo des Mandanten
@@ -203,7 +203,7 @@ function AppSubNavigation() {
       {/* Mobile: schmale Toggle-Leiste mit "App-Menue"-Button (oeffnet Drawer).
           Scrollt mit der Seite mit; der Drawer selbst ist fixed und bleibt
           damit unabhaengig von der Scroll-Position voll funktionsfaehig. */}
-      <div className="border-b border-slate-200 bg-slate-100 px-4 py-3 md:hidden">
+      <div className="border-b border-slate-200 bg-slate-100 px-4 py-3 md:hidden" data-testid="app-menu-bar">
         <button
           type="button"
           onClick={() => setIsAppMenuOpen(true)}
@@ -229,6 +229,7 @@ function AppSubNavigation() {
         className={`fixed inset-y-0 left-0 z-50 flex w-64 transform flex-col bg-slate-100 shadow-xl transition-transform duration-300 md:hidden ${
           isAppMenuOpen ? "translate-x-0" : "-translate-x-full"
         }`}
+        data-testid="app-menu-drawer"
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <span className="text-sm font-semibold text-slate-700">Menü</span>
@@ -285,7 +286,7 @@ function AppSubNavigation() {
           vertikales Padding), damit die Navigation auf iPad/Desktop in einer
           Zeile bleibt und maximal Hoehe fuer den Inhalt (Kalender) frei wird.
           Nicht sticky: scrollt mit der Seite nach oben weg. */}
-      <div className="hidden shrink-0 border-b border-slate-200 bg-slate-100 md:block">
+      <div className="hidden shrink-0 border-b border-slate-200 bg-slate-100 md:block" data-testid="app-subnav-desktop">
         <div className="mx-auto max-w-7xl px-4 py-2">
           <nav className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
             {navItems.map((item) => (
@@ -354,7 +355,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           main druecken den Footer bei kurzen Seiten an den unteren
           Viewport-Rand. Dienstplan nutzt zusaetzlich die volle Breite (kein
           zentrierter max-w-Container). */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto" data-testid="layout-scroll-container">
         <div className="flex min-h-full flex-col">
           {/* Plattform-Header (Platzhalter) — im Embed-Modus ausgeblendet */}
           {!embedded && <PlatformHeaderPlaceholder />}

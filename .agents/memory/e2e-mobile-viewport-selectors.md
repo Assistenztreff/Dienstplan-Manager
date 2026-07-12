@@ -25,3 +25,9 @@ Two more strict-mode pitfalls from the downgrade-bestandsschutz spec:
   (e.g. `getByTestId("agenda-day-…").getByTestId("shift-badge-…")`).
 - `locator.getByDisplayValue` does not exist in the pinned Playwright
   version; assert input contents with `getByPlaceholder(...).toHaveValue()`.
+
+Scroll-behavior specs: at 400x874 the mobile month grid overflows the layout
+scroll container by only ~97px — not enough for the platform header + app
+menu bar (~110px) to leave the viewport, so "scrolled away" assertions fail
+spuriously. Use a shorter phone viewport (e.g. 400x700) and force the grid
+view via localStorage so scrollable height never depends on seeded shifts.
