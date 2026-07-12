@@ -242,4 +242,52 @@ test.describe("Zeitraum-Filter im Plan-Änderungsprotokoll", () => {
       page.getByTestId("text-operator-plan-changes-empty"),
     ).toBeVisible();
   });
+
+  test("UI: Tagesgrenzen folgen der lokalen Zeitzone (Europe/Berlin), nicht UTC", async ({
+    browser,
+  }) => {
+    // Eigener Browser-Kontext mit deutscher Zeitzone: die Datums-Eingaben
+    // muessen als LOKALE Tagesgrenzen (Berlin) an die API gehen, nicht als
+    // fixe UTC-Grenzen (T00:00:00.000Z). Ein Eintrag von 00:30 Uhr deutscher
+    // Zeit gehoert sonst zum falschen Tag.
+    const context = await browser.newContext({
+      baseURL: BASE_URL,
+      timezoneId: "Europe/Berlin",
+    });
+    try {
+      const page = await context.newPage();
+      const loginRes = await page.request.post("/api/auth/login", {
+        data: { email: superEmail, password: superPassword },
+      });
+      expect(loginRes.ok(), "UI-Login als superadmin fehlgeschlagen").toBe(true);
+
+      await page.goto("/operator-dashboard");
+      await expect(page.getByTestId("input-plan-change-from")).toBeVisible();
+
+      // Fester Beispiel-Tag; auf den naechsten Request mit BEIDEN Parametern
+      // (from UND to) warten und die gesendeten Grenzen pruefen. Das Fuellen
+      // des ersten Feldes feuert bereits einen Request nur mit from.
+      const day = "2026-06-15";
+      const requestPromise = page.waitForRequest(
+        (req) =>
+          req.url().includes("/api/operator/plan-changes") &&
+          req.url().includes("from=") &&
+          req.url().includes("to="),
+      );
+      await page.getByTestId("input-plan-change-from").fill(day);
+      await page.getByTestId("input-plan-change-to").fill(day);
+      const req = await requestPromise;
+      const url = new URL(req.url());
+      const from = url.searchParams.get("from");
+      const to = url.searchParams.get("to");
+      expect(from, "from-Parameter muss gesetzt sein").toBeTruthy();
+
+      // Berlin-Mitternacht am 15.06. (Sommerzeit, UTC+2) = 14.06. 22:00 UTC.
+      // Die alte UTC-Variante haette 2026-06-15T00:00:00.000Z gesendet.
+      expect(from).toBe("2026-06-14T22:00:00.000Z");
+      expect(to).toBe("2026-06-15T21:59:59.999Z");
+    } finally {
+      await context.close();
+    }
+  });
 });

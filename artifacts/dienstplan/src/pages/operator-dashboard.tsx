@@ -81,6 +81,33 @@ function planBadge(plan: "free" | "premium") {
   );
 }
 
+// Wandelt einen YYYY-MM-DD-Wert der Datums-Eingabe in ein Date-Objekt am
+// LOKALEN Tagesbeginn (00:00:00.000 Ortszeit) um. Rückgabe null bei
+// unbrauchbarem Eingabewert.
+function parseLocalDayStart(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  const date = new Date(Number(year), Number(month) - 1, Number(day), 0, 0, 0, 0);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+// Wie parseLocalDayStart, aber für das LOKALE Tagesende (23:59:59.999
+// Ortszeit), damit der gewählte Tag einschließlich gefiltert wird.
+function parseLocalDayEnd(value: string): Date | null {
+  const start = parseLocalDayStart(value);
+  if (!start) return null;
+  return new Date(
+    start.getFullYear(),
+    start.getMonth(),
+    start.getDate(),
+    23,
+    59,
+    59,
+    999,
+  );
+}
+
 export default function OperatorDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -104,16 +131,24 @@ export default function OperatorDashboard() {
   }, [planSearchInput]);
 
   // Zeitraum-Filter (von/bis) im Plan-Änderungsprotokoll. Die Datums-Eingaben
-  // liefern YYYY-MM-DD; daraus werden ISO-Zeitstempel für den Tagesbeginn (von)
-  // bzw. das Tagesende (bis, einschließlich) gebaut, damit ein ganzer Tag
-  // vollständig im Zeitraum liegt.
+  // liefern YYYY-MM-DD; daraus werden ISO-Zeitstempel für den LOKALEN
+  // Tagesbeginn (von) bzw. das LOKALE Tagesende (bis, einschließlich) gebaut,
+  // damit ein ganzer Tag aus Sicht des Betreibers (z. B. deutsche Zeitzone)
+  // vollständig im Zeitraum liegt. Ein fixes Z-Suffix (UTC-Tagesgrenzen) würde
+  // Einträge kurz nach Mitternacht lokaler Zeit dem falschen Tag zuordnen.
   const [planFrom, setPlanFrom] = useState("");
   const [planTo, setPlanTo] = useState("");
   const planChangesParams = useMemo(() => {
     const params: { search?: string; from?: string; to?: string } = {};
     if (planSearch) params.search = planSearch;
-    if (planFrom) params.from = `${planFrom}T00:00:00.000Z`;
-    if (planTo) params.to = `${planTo}T23:59:59.999Z`;
+    if (planFrom) {
+      const from = parseLocalDayStart(planFrom);
+      if (from) params.from = from.toISOString();
+    }
+    if (planTo) {
+      const to = parseLocalDayEnd(planTo);
+      if (to) params.to = to.toISOString();
+    }
     return Object.keys(params).length > 0 ? params : undefined;
   }, [planSearch, planFrom, planTo]);
   const hasPlanFilter = Boolean(planSearch || planFrom || planTo);
