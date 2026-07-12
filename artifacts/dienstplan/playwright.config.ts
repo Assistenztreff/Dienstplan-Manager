@@ -138,6 +138,84 @@ if (useManagedStack) {
   }
 }
 
+// --- Waisen-Prozess-Bereinigung (Task: abgebrochene Läufe blockieren Folgeläufe) ---
+// Wird ein Lauf hart abgebrochen (Ctrl-C, `timeout`-Kill, SIGKILL), überleben
+// die von Playwright gestarteten webServer-Kinder (API auf 8099, Vite auf
+// 5199). Der nächste Lauf scheitert dann sofort, weil `reuseExistingServer:
+// false` belegte Ports ablehnt ("...is already used"). Deshalb: VOR dem Start
+// belegte Test-Ports erkennen und die Waisen beenden (TERM, notfalls KILL).
+// Nur für den verwalteten Stack und nur im Hauptprozess — und nur auf den
+// dedizierten E2E-Ports, die Dev-Workflows (8080/5000 etc.) nie benutzen.
+
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+// PIDs aller Prozesse, die auf dem Port LAUSCHEN (lsof: exit 1 = keine Treffer).
+function listListenerPids(port: string): number[] {
+  const res = spawnSync("lsof", ["-ti", `tcp:${port}`, "-sTCP:LISTEN"], {
+    encoding: "utf8",
+    timeout: 10_000,
+  });
+  if (res.error != null) {
+    // lsof nicht verfügbar o.ä. — dann keine Bereinigung möglich; Playwright
+    // meldet einen belegten Port später selbst.
+    console.warn(`[e2e] lsof für Port ${port} nicht ausführbar:`, res.error.message);
+    return [];
+  }
+  if (!res.stdout) return [];
+  return res.stdout
+    .split("\n")
+    .map((line) => Number.parseInt(line.trim(), 10))
+    .filter((pid) => Number.isInteger(pid) && pid > 0 && pid !== process.pid);
+}
+
+function reapOrphansOnPort(port: string, label: string): void {
+  let pids = listListenerPids(port);
+  if (pids.length === 0) return;
+  console.log(
+    `[e2e] Port ${port} (${label}) ist belegt — vermutlich Waisen eines abgebrochenen Laufs. Beende PID(s) ${pids.join(", ")}...`,
+  );
+  for (const pid of pids) {
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {
+      /* Prozess evtl. schon weg */
+    }
+  }
+  // Bis zu 5s auf sauberes Beenden warten, dann hart nachfassen.
+  const termDeadline = Date.now() + 5_000;
+  while (Date.now() < termDeadline) {
+    pids = listListenerPids(port);
+    if (pids.length === 0) {
+      console.log(`[e2e] Port ${port} (${label}) ist wieder frei.`);
+      return;
+    }
+    sleepSync(250);
+  }
+  console.log(
+    `[e2e] Port ${port} (${label}) nach SIGTERM weiter belegt — SIGKILL für PID(s) ${pids.join(", ")}.`,
+  );
+  for (const pid of pids) {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      /* Prozess evtl. schon weg */
+    }
+  }
+  const killDeadline = Date.now() + 5_000;
+  while (Date.now() < killDeadline) {
+    if (listListenerPids(port).length === 0) {
+      console.log(`[e2e] Port ${port} (${label}) ist wieder frei.`);
+      return;
+    }
+    sleepSync(250);
+  }
+  throw new Error(
+    `Port ${port} (${label}) ist weiterhin belegt und konnte nicht freigeräumt werden — bitte manuell prüfen (lsof -ti tcp:${port} -sTCP:LISTEN).`,
+  );
+}
+
 // Test-DB VOR jedem Lauf idempotent provisionieren — bewusst hier in der
 // Config statt im `test:e2e`-npm-Skript oder in einem globalSetup:
 //   - Einzel-Spec-Läufe via `pnpm exec playwright test <name>` umgehen das
@@ -152,6 +230,15 @@ if (useManagedStack) {
 // `E2E_SKIP_DB_SETUP=1` als bewusste Abkürzung für schnelle Wiederholungs-
 // läufe ohne zwischenzeitliche Schema-Änderung.
 const isWorkerProcess = !!process.env.TEST_WORKER_INDEX;
+
+// Waisen-Bereinigung IMMER vor einem verwalteten Lauf (auch bei
+// E2E_SKIP_DB_SETUP=1 — gerade schnelle Wiederholungsläufe treffen sonst
+// auf die Reste des zuvor abgebrochenen Laufs).
+if (useManagedStack && !isWorkerProcess) {
+  reapOrphansOnPort(API_PORT, "Test-API");
+  reapOrphansOnPort(WEB_PORT, "Test-Vite");
+}
+
 if (useManagedStack && !isWorkerProcess && !process.env.E2E_SKIP_DB_SETUP) {
   if (schemaUnchanged) {
     // Schema (+ Setup/Seed-Skripte) seit dem letzten erfolgreichen Lauf
