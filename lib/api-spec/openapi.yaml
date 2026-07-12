@@ -1439,6 +1439,26 @@ paths:
             minimum: 1
             maximum: 200
             default: 50
+        - name: from
+          in: query
+          required: false
+          description: >
+            Optionaler Zeitraum-Anfang als ISO-8601-Zeitstempel. Es werden nur
+            Fehler zurückgegeben, deren LETZTES Auftreten (lastSeenAt) ab
+            diesem Zeitpunkt (einschließlich) liegt. Kombinierbar mit to.
+          schema:
+            type: string
+            maxLength: 40
+        - name: to
+          in: query
+          required: false
+          description: >
+            Optionales Zeitraum-Ende als ISO-8601-Zeitstempel. Es werden nur
+            Fehler zurückgegeben, deren LETZTES Auftreten (lastSeenAt) bis zu
+            diesem Zeitpunkt (einschließlich) liegt. Kombinierbar mit from.
+          schema:
+            type: string
+            maxLength: 40
       responses:
         "200":
           description: Liste der Plattform-Fehler (neueste zuerst) samt Aufbewahrungs-Metadaten

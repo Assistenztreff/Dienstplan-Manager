@@ -1521,10 +1521,16 @@ export const ListOperatorPlanChangesResponse = zod.array(ListOperatorPlanChanges
 export const listOperatorErrorsQueryLimitDefault = 50;
 export const listOperatorErrorsQueryLimitMax = 200;
 
+export const listOperatorErrorsQueryFromMax = 40;
+
+export const listOperatorErrorsQueryToMax = 40;
+
 
 
 export const ListOperatorErrorsQueryParams = zod.object({
-  "limit": zod.coerce.number().min(1).max(listOperatorErrorsQueryLimitMax).default(listOperatorErrorsQueryLimitDefault)
+  "limit": zod.coerce.number().min(1).max(listOperatorErrorsQueryLimitMax).default(listOperatorErrorsQueryLimitDefault),
+  "from": zod.coerce.string().max(listOperatorErrorsQueryFromMax).optional().describe('Optionaler Zeitraum-Anfang als ISO-8601-Zeitstempel. Es werden nur Fehler zurückgegeben, deren LETZTES Auftreten (lastSeenAt) ab diesem Zeitpunkt (einschließlich) liegt. Kombinierbar mit to.\n'),
+  "to": zod.coerce.string().max(listOperatorErrorsQueryToMax).optional().describe('Optionales Zeitraum-Ende als ISO-8601-Zeitstempel. Es werden nur Fehler zurückgegeben, deren LETZTES Auftreten (lastSeenAt) bis zu diesem Zeitpunkt (einschließlich) liegt. Kombinierbar mit from.\n')
 })
 
 export const ListOperatorErrorsResponse = zod.object({

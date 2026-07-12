@@ -1359,5 +1359,17 @@ export type ListOperatorErrorsParams = {
  * @maximum 200
  */
 limit?: number;
+/**
+ * Optionaler Zeitraum-Anfang als ISO-8601-Zeitstempel. Es werden nur Fehler zurückgegeben, deren LETZTES Auftreten (lastSeenAt) ab diesem Zeitpunkt (einschließlich) liegt. Kombinierbar mit to.
+
+ * @maxLength 40
+ */
+from?: string;
+/**
+ * Optionales Zeitraum-Ende als ISO-8601-Zeitstempel. Es werden nur Fehler zurückgegeben, deren LETZTES Auftreten (lastSeenAt) bis zu diesem Zeitpunkt (einschließlich) liegt. Kombinierbar mit from.
+
+ * @maxLength 40
+ */
+to?: string;
 };
 

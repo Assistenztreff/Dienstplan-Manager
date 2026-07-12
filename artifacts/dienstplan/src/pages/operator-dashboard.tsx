@@ -180,9 +180,29 @@ export default function OperatorDashboard() {
   }, [planSearch, planFrom, planTo]);
   const hasPlanFilter = Boolean(planSearch || planFrom || planTo);
 
+  // Zeitraum-Filter (von/bis) der Fehlerliste, analog zum Plan-Protokoll:
+  // Datums-Eingaben liefern lokale YYYY-MM-DD-Werte, daraus werden ISO-
+  // Zeitstempel für den LOKALEN Tagesbeginn/-ende gebaut. Serverseitig wird
+  // nach dem LETZTEN Auftreten (lastSeenAt) gefiltert.
+  const [errorFrom, setErrorFrom] = useState("");
+  const [errorTo, setErrorTo] = useState("");
+  const errorsParams = useMemo(() => {
+    const params: { from?: string; to?: string } = {};
+    if (errorFrom) {
+      const from = parseLocalDayStart(errorFrom);
+      if (from) params.from = from.toISOString();
+    }
+    if (errorTo) {
+      const to = parseLocalDayEnd(errorTo);
+      if (to) params.to = to.toISOString();
+    }
+    return Object.keys(params).length > 0 ? params : undefined;
+  }, [errorFrom, errorTo]);
+  const hasErrorRangeFilter = Boolean(errorFrom || errorTo);
+
   const accountsQuery = useListOperatorAccounts();
   const planChangesQuery = useListOperatorPlanChanges(planChangesParams);
-  const errorsQuery = useListOperatorErrors();
+  const errorsQuery = useListOperatorErrors(errorsParams);
   const lexwareQuery = useListOperatorLexwareBookings();
   const updatePlan = useUpdateOperatorAccountPlan();
   const updateError = useUpdateOperatorError();
@@ -750,6 +770,53 @@ export default function OperatorDashboard() {
               </div>
             </div>
           </div>
+          {/* Zeitraum von/bis (lokale Tagesgrenzen): grenzt die Liste nach dem
+              LETZTEN Auftreten (lastSeenAt) ein — z. B. "welche Fehler traten
+              am 12.07. auf?". Filterung serverseitig. */}
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="error-range-from" className="text-xs text-muted-foreground">
+                Zeitraum von
+              </Label>
+              <Input
+                id="error-range-from"
+                type="date"
+                value={errorFrom}
+                max={errorTo || undefined}
+                onChange={(e) => setErrorFrom(e.target.value)}
+                className="w-auto"
+                data-testid="input-error-range-from"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="error-range-to" className="text-xs text-muted-foreground">
+                Zeitraum bis
+              </Label>
+              <Input
+                id="error-range-to"
+                type="date"
+                value={errorTo}
+                min={errorFrom || undefined}
+                onChange={(e) => setErrorTo(e.target.value)}
+                className="w-auto"
+                data-testid="input-error-range-to"
+              />
+            </div>
+            {hasErrorRangeFilter && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setErrorFrom("");
+                  setErrorTo("");
+                }}
+                data-testid="button-error-range-clear"
+              >
+                Zeitraum zurücksetzen
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
           {errorsQuery.isLoading ? (
@@ -791,7 +858,9 @@ export default function OperatorDashboard() {
                   {retentionNotice}
                   <p className="text-sm text-muted-foreground" data-testid="text-operator-errors-empty">
                     {allErrors.length === 0
-                      ? "Keine Fehler im Betrieb — alles läuft rund."
+                      ? hasErrorRangeFilter
+                        ? "Keine Fehler im gewählten Zeitraum gefunden."
+                        : "Keine Fehler im Betrieb — alles läuft rund."
                       : "Keine offenen Fehler — alle Einträge sind erledigt."}
                   </p>
                 </>

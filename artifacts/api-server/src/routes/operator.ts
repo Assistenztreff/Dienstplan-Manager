@@ -218,6 +218,31 @@ router.get(
     }
     const limit = queryResult.data.limit ?? 50;
 
+    // Optionaler Zeitraum (from/to, ISO-8601): filtert nach dem LETZTEN
+    // Auftreten (lastSeenAt) — bewusste Entscheidung, denn die Liste ist
+    // ebenfalls nach lastSeenAt sortiert und die Frage des Betreibers ist
+    // "welche Fehler traten an Tag X auf?" (gebuendelte Eintraege werden bei
+    // Wiederauftreten mit lastSeenAt aktualisiert; firstSeenAt/createdAt
+    // wuerde alte Dauerbrenner dem falschen Tag zuordnen).
+    const from = queryResult.data.from?.trim();
+    const to = queryResult.data.to?.trim();
+    const fromDate = from ? new Date(from) : undefined;
+    const toDate = to ? new Date(to) : undefined;
+    if (
+      (fromDate && Number.isNaN(fromDate.getTime())) ||
+      (toDate && Number.isNaN(toDate.getTime()))
+    ) {
+      res.status(400).json({ error: "Ungültige Parameter" });
+      return;
+    }
+    const fromFilter = fromDate
+      ? gte(platformErrorsTable.lastSeenAt, fromDate)
+      : undefined;
+    const toFilter = toDate
+      ? lte(platformErrorsTable.lastSeenAt, toDate)
+      : undefined;
+    const whereFilter = and(fromFilter, toFilter);
+
     const errors = await db
       .select({
         id: platformErrorsTable.id,
@@ -231,6 +256,7 @@ router.get(
         createdAt: platformErrorsTable.createdAt,
       })
       .from(platformErrorsTable)
+      .where(whereFilter)
       .orderBy(desc(platformErrorsTable.lastSeenAt), desc(platformErrorsTable.id))
       .limit(limit);
 
