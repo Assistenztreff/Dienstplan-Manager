@@ -11,5 +11,5 @@ description: Why e2e helpers must run their SQL in-process instead of execSync-i
 - Shared deletion logic (`deleteAccountTrees`, `TEAM_BOUND_TABLES`) lives in `@workspace/test-fixtures` (`lib/test-fixtures/src/account-tree.ts`) with a structural client type so the lib needs no `pg` dependency; both the scripts package and the e2e helpers import it from there. Leaf packages must not import each other.
 - DB targeting stays `E2E_TEST_DATABASE_URL ?? DATABASE_URL` — same semantics the spawn path had.
 - Use a short-lived `pg.Client` per call, no long-lived pool: Playwright workers can exit anytime and open pool handles delay process exit.
-- The e2e folder is NOT covered by the artifact's tsconfig (`include: src/**/*`), so turning a sync helper async will NOT be caught by `pnpm run typecheck` — missing `await`s become silent floating promises. Verify with an ad-hoc `tsc -p` config that includes `e2e/**/*` (extends the artifact tsconfig, noEmit, incremental off).
+- The e2e folder is now typechecked via `tsconfig.e2e.json` (part of the artifact's `typecheck` script, hence `pnpm run typecheck`) — type errors in helpers/specs fail CI-style checks; no ad-hoc tsc pass needed anymore.
 - One-off spawns that run once per suite (global-teardown cleanups, config-load checks) are not worth converting.
