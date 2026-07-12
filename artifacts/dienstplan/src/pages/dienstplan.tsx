@@ -830,7 +830,7 @@ function ViewToggle({
             onClick={() => onChange(opt.value)}
             title={opt.label}
             aria-label={opt.label}
-            className={`flex items-center gap-1.5 rounded-md h-11 px-4 text-base font-medium transition-colors ${
+            className={`flex items-center gap-1.5 rounded-md px-2.5 md:px-3 py-1.5 text-sm font-medium transition-colors ${
               active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
             }`}
           >
@@ -853,10 +853,6 @@ function monthsAhead(target: Date, now: Date): number {
     (target.getMonth() - now.getMonth())
   );
 }
-
-// Vergrößerte Steuerbuttons der Dienstplan-Kopfzeile (leicht zurückdrehbar:
-// diese Klassen entfernen → Standard-Button-Größe size="sm").
-const CONTROL_BTN = "h-11 px-4 text-base font-medium rounded-md";
 
 export default function Dienstplan() {
   const { currentUser } = useAuth();
@@ -1195,7 +1191,7 @@ export default function Dienstplan() {
           <Button
             variant="outline"
             size="sm"
-            className={`gap-1.5 ${CONTROL_BTN}`}
+            className="gap-1.5"
             onClick={() => setDialog({ mode: "confirm-all" })}
             disabled={isBulkConfirming}
             title="Alle Entwürfe bestätigen"
@@ -1217,7 +1213,7 @@ export default function Dienstplan() {
           <Button
             variant="outline"
             size="sm"
-            className={`gap-1.5 ${CONTROL_BTN}`}
+            className="gap-1.5"
             onClick={handleSimpleExport}
             disabled={isExporting}
             title="Monatsübersicht als PDF: bestätigte Dienste und Abwesenheiten, ohne Zeiterfassung."
@@ -1238,7 +1234,7 @@ export default function Dienstplan() {
             <Button
               variant={isSelectionMode ? "default" : "outline"}
               size="sm"
-              className={`gap-1.5 ${CONTROL_BTN}`}
+              className="gap-1.5"
               onClick={toggleSelectionMode}
               title={isSelectionMode ? "Auswahl beenden" : "Mehrfachauswahl"}
               aria-label={isSelectionMode ? "Auswahl beenden" : "Mehrfachauswahl"}
@@ -1253,7 +1249,7 @@ export default function Dienstplan() {
             <Button
               variant="outline"
               size="sm"
-              className={`gap-1.5 ${CONTROL_BTN}`}
+              className="gap-1.5"
               disabled
               title="Massenbearbeitung ist in Premium enthalten."
               aria-label="Mehrfachauswahl (Premium)"

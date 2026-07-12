@@ -350,27 +350,24 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Dienstplan-App: Sub-Navigation */}
       <AppSubNavigation />
 
-      {fullBleed ? (
-        /* Dienstplan: volle Breite, natuerliches Scrollen (der innere
-           Container scrollt, das Dokument bleibt fix). Kein Footer, damit die
-           Kalenderansicht durchgehend bis zum unteren Rand reicht. */
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <main className="w-full p-4 md:p-6">{children}</main>
-        </div>
-      ) : (
-        /* Standard-Modus: Inhalt + Footer scrollen gemeinsam in einem
-           eigenen Scroll-Container (ersetzt das fruehere Dokument-Scrollen).
-           min-h-full + flex-1 auf main druecken den Footer bei kurzen Seiten
-           wie zuvor an den unteren Viewport-Rand. */
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="flex min-h-full flex-col">
-            <main className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-6">{children}</main>
+      {/* Inhalt + Footer scrollen gemeinsam in EINEM Scroll-Container. Die
+          gesamte Seite (inkl. Dienstplan) laesst sich als Ganzes scrollen: die
+          sticky Kopfzeile bleibt oben kleben, nach dem Inhalt wird der Footer
+          sichtbar. min-h-full + flex-1 auf main druecken den Footer bei kurzen
+          Seiten an den unteren Viewport-Rand. Dienstplan nutzt zusaetzlich die
+          volle Breite (kein zentrierter max-w-Container). */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="flex min-h-full flex-col">
+          <main
+            className={`w-full flex-1 p-4 md:p-6 ${fullBleed ? "" : "mx-auto max-w-7xl"}`}
+          >
+            {children}
+          </main>
 
-            {/* Plattform-Footer (Platzhalter) — im Embed-Modus ausgeblendet */}
-            {!embedded && <PlatformFooterPlaceholder />}
-          </div>
+          {/* Plattform-Footer (Platzhalter) — im Embed-Modus ausgeblendet */}
+          {!embedded && <PlatformFooterPlaceholder />}
         </div>
-      )}
+      </div>
     </div>
   );
 }
