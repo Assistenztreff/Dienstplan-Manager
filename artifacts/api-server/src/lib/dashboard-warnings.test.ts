@@ -20,10 +20,10 @@ function local(y: number, m: number, d: number, h = 0, min = 0): Date {
 describe("computeLowVacationAssistants — Resturlaub-Schwelle", () => {
   it("listet nur Assistenten <= Schwelle, aufsteigend nach Resttagen", () => {
     const candidates: VacationCandidate[] = [
-      { userId: 1, userName: "Anna", vacationDays: 30, vacationDaysUsed: 28 }, // 2 -> warn
-      { userId: 2, userName: "Bea", vacationDays: 30, vacationDaysUsed: 20 }, // 10 -> ok
-      { userId: 3, userName: "Cem", vacationDays: 30, vacationDaysUsed: 25 }, // 5 -> warn (Grenze)
-      { userId: 4, userName: "Dan", vacationDays: 30, vacationDaysUsed: 24 }, // 6 -> ok
+      { userId: 1, userName: "Anna", vacationDays: 30, vacationHoursUsed: 224, hoursPerDay: 8 }, // 28 Tage -> 2 -> warn
+      { userId: 2, userName: "Bea", vacationDays: 30, vacationHoursUsed: 160, hoursPerDay: 8 }, // 20 Tage -> 10 -> ok
+      { userId: 3, userName: "Cem", vacationDays: 30, vacationHoursUsed: 200, hoursPerDay: 8 }, // 25 Tage -> 5 -> warn (Grenze)
+      { userId: 4, userName: "Dan", vacationDays: 30, vacationHoursUsed: 192, hoursPerDay: 8 }, // 24 Tage -> 6 -> ok
     ];
     const result = computeLowVacationAssistants(candidates);
     expect(result.map((r) => r.userId)).toEqual([1, 3]);
@@ -32,8 +32,8 @@ describe("computeLowVacationAssistants — Resturlaub-Schwelle", () => {
 
   it("schließt genau die Schwelle (<=) ein und behandelt negativen Resturlaub", () => {
     const candidates: VacationCandidate[] = [
-      { userId: 1, userName: "Über", vacationDays: 30, vacationDaysUsed: 33 }, // -3
-      { userId: 2, userName: "Genau", vacationDays: 30, vacationDaysUsed: 25 }, // 5
+      { userId: 1, userName: "Über", vacationDays: 30, vacationHoursUsed: 264, hoursPerDay: 8 }, // 33 Tage -> -3
+      { userId: 2, userName: "Genau", vacationDays: 30, vacationHoursUsed: 200, hoursPerDay: 8 }, // 25 Tage -> 5
     ];
     const result = computeLowVacationAssistants(candidates);
     expect(result.map((r) => r.vacationDaysRemaining)).toEqual([-3, 5]);
@@ -42,16 +42,27 @@ describe("computeLowVacationAssistants — Resturlaub-Schwelle", () => {
 
   it("behandelt null-Felder als 0", () => {
     const candidates: VacationCandidate[] = [
-      { userId: 1, userName: "Leer", vacationDays: null, vacationDaysUsed: null },
+      { userId: 1, userName: "Leer", vacationDays: null, vacationHoursUsed: null, hoursPerDay: 8 },
     ];
     const result = computeLowVacationAssistants(candidates);
     expect(result).toEqual([{ userId: 1, userName: "Leer", vacationDaysRemaining: 0 }]);
   });
 
+  it("leitet Resttage über vacationHoursPerDay ab (Bruchteile, ungültiger Faktor -> 8)", () => {
+    const candidates: VacationCandidate[] = [
+      // 30 - 210/7,5 = 2 Tage -> warn
+      { userId: 1, userName: "Sieben5", vacationDays: 30, vacationHoursUsed: 210, hoursPerDay: 7.5 },
+      // hoursPerDay 0 fällt auf 8 zurück: 30 - 220/8 = 2,5 Tage -> warn
+      { userId: 2, userName: "NullFaktor", vacationDays: 30, vacationHoursUsed: 220, hoursPerDay: 0 },
+    ];
+    const result = computeLowVacationAssistants(candidates);
+    expect(result.map((r) => r.vacationDaysRemaining)).toEqual([2, 2.5]);
+  });
+
   it("liefert eine leere Liste, wenn niemand die Schwelle erreicht (ruhiger Zustand)", () => {
     const candidates: VacationCandidate[] = [
-      { userId: 1, userName: "Anna", vacationDays: 30, vacationDaysUsed: 0 },
-      { userId: 2, userName: "Bea", vacationDays: 30, vacationDaysUsed: 10 },
+      { userId: 1, userName: "Anna", vacationDays: 30, vacationHoursUsed: 0, hoursPerDay: 8 },
+      { userId: 2, userName: "Bea", vacationDays: 30, vacationHoursUsed: 80, hoursPerDay: 8 },
     ];
     expect(computeLowVacationAssistants(candidates)).toEqual([]);
   });

@@ -366,7 +366,6 @@ export interface Contract {
   userId: number;
   weeklyHours: number;
   vacationDays: number;
-  vacationDaysUsed: number;
   /** Stundengenau verbrauchter Urlaub (Point 7). Pool = vacationDays * vacationHoursPerDay. */
   vacationHoursUsed?: number;
   startDate: string;
@@ -430,8 +429,6 @@ export interface ContractUpdate {
   weeklyHours?: number;
   /** @minimum 0 */
   vacationDays?: number;
-  /** @minimum 0 */
-  vacationDaysUsed?: number;
   /** @nullable */
   endDate?: string | null;
   /** @nullable */
@@ -988,6 +985,7 @@ export interface InviteResult {
 export interface LowVacationAssistant {
   userId: number;
   userName: string;
+  /** Resturlaub in Tagen, abgeleitet aus vacationHoursUsed / hoursPerDay (kann Nachkommastellen haben). */
   vacationDaysRemaining: number;
 }
 
@@ -1042,8 +1040,9 @@ export interface HoursBalance {
   sickHours: number;
   /** Genommene Urlaubstage des gewählten Monats (Anzahl der Urlaubs-Schichten in diesem Monat). */
   vacationDaysTaken: number;
-  /** Im Vertrag gespeicherter Jahres-Zähler der genommenen Urlaubstage. */
+  /** Abgeleiteter Jahres-Verbrauch in Tagen (vacationHoursUsed / hoursPerDay des Team-Kontos, gerundet auf 0,1). */
   vacationDaysUsed: number;
+  /** Resturlaub in Tagen (vacationDays - vacationDaysUsed), abgeleitet aus der Stunden-Buchhaltung. */
   vacationDaysRemaining: number;
   valuedHours: number;
   vacationFulfilledHours: number;

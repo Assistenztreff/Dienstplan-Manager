@@ -27,7 +27,8 @@ function row(overrides: {
   shifts?: BalanceShift[];
   timeEntries?: BalanceTimeEntry[];
   allowance?: AllowancePercents;
-  contract?: { vacationDays?: number | null; vacationDaysUsed?: number | null } | null;
+  contract?: { vacationDays?: number | null; vacationHoursUsed?: number | null } | null;
+  vacationHoursPerDay?: number | null;
 }) {
   return computeHoursBalanceRow({
     userId: 1,
@@ -36,6 +37,7 @@ function row(overrides: {
     timeEntries: overrides.timeEntries ?? [],
     allowance: overrides.allowance ?? STD_ALLOWANCE,
     contract: overrides.contract ?? null,
+    vacationHoursPerDay: overrides.vacationHoursPerDay,
   });
 }
 
@@ -214,20 +216,35 @@ describe("computeHoursBalanceRow — Zählung der Urlaubstage pro Monat", () => 
       { type: "vacation", startTime: local(2026, 6, 2, 0), endTime: local(2026, 6, 2, 23, 59), valuedHours: 8 },
       { type: "vacation", startTime: local(2026, 6, 3, 0), endTime: local(2026, 6, 3, 23, 59), valuedHours: 8 },
     ];
-    const result = row({ shifts, contract: { vacationDays: 30, vacationDaysUsed: 12 } });
+    // 96 Urlaubsstunden / 8 h/Tag = 12 Tage Jahresverbrauch (abgeleitet).
+    const result = row({ shifts, contract: { vacationDays: 30, vacationHoursUsed: 96 } });
     expect(result.vacationDaysTaken).toBe(3);
-    expect(result.vacationDaysUsed).toBe(12); // Jahreszähler unverändert
+    expect(result.vacationDaysUsed).toBe(12); // Jahreszähler aus Stunden abgeleitet
     expect(result.vacationDaysRemaining).toBe(18);
   });
 
   it("nutzt Vertragswerte für Resturlaub und Default ohne Vertrag", () => {
-    const withContract = row({ contract: { vacationDays: 28, vacationDaysUsed: 10 } });
+    const withContract = row({ contract: { vacationDays: 28, vacationHoursUsed: 80 } });
     expect(withContract.vacationDaysRemaining).toBe(18);
 
     const noContract = row({});
     expect(noContract.vacationDaysUsed).toBe(0);
     expect(noContract.vacationDaysRemaining).toBe(DEFAULT_VACATION_DAYS);
     expect(DEFAULT_VACATION_DAYS).toBe(30);
+  });
+
+  it("leitet Tage über vacationHoursPerDay ab und rundet auf 0,1", () => {
+    // 24h-Urlaubsdienst bei 8 h/Tag = 3,0 Tage; 12h bei 7,5 h/Tag = 1,6 Tage.
+    const std = row({ contract: { vacationDays: 30, vacationHoursUsed: 24 } });
+    expect(std.vacationDaysUsed).toBe(3);
+    expect(std.vacationDaysRemaining).toBe(27);
+
+    const custom = row({
+      contract: { vacationDays: 30, vacationHoursUsed: 12 },
+      vacationHoursPerDay: 7.5,
+    });
+    expect(custom.vacationDaysUsed).toBe(1.6);
+    expect(custom.vacationDaysRemaining).toBe(28.4);
   });
 });
 

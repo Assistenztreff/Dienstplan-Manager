@@ -12,8 +12,6 @@ export interface ContractUpdate {
   weeklyHours?: number;
   /** @minimum 0 */
   vacationDays?: number;
-  /** @minimum 0 */
-  vacationDaysUsed?: number;
   /** @nullable */
   endDate?: string | null;
   /** @nullable */

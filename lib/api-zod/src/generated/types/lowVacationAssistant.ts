@@ -9,5 +9,6 @@
 export interface LowVacationAssistant {
   userId: number;
   userName: string;
+  /** Resturlaub in Tagen, abgeleitet aus vacationHoursUsed / hoursPerDay (kann Nachkommastellen haben). */
   vacationDaysRemaining: number;
 }

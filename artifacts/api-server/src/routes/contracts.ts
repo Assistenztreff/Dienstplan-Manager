@@ -36,7 +36,6 @@ const CONTRACT_SELECT = {
   userId: contractsTable.userId,
   weeklyHours: contractsTable.weeklyHours,
   vacationDays: contractsTable.vacationDays,
-  vacationDaysUsed: contractsTable.vacationDaysUsed,
   vacationHoursUsed: contractsTable.vacationHoursUsed,
   startDate: contractsTable.startDate,
   endDate: contractsTable.endDate,
@@ -199,7 +198,7 @@ router.delete("/contracts/:id", requireAdmin, async (req, res): Promise<void> =>
 // Resturlaub-Bilanz ist Teil des Premium-Features "absenceTracking":
 // Das Frontend-Gate in abwesenheiten.tsx ist reine UX — hier wird das Feature
 // serverseitig autoritativ durchgesetzt (403 plan_feature_required fuer Free).
-// Die Rohdaten (contracts.vacationDays/vacationDaysUsed) bleiben ueber
+// Die Rohdaten (contracts.vacationDays/vacationHoursUsed) bleiben ueber
 // GET /contracts fuer alle Plaene zugaenglich (Buchhaltung laeuft plan-
 // unabhaengig weiter, Bestandsschutz).
 //

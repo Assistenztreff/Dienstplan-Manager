@@ -6,6 +6,7 @@ import { eq, and, sql, count, or, isNull, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { requireAuth, requireAdmin, isAdminLikeRole } from "../middleware/auth";
 import { requirePlanFeature, getLenientTimeTrackingTeamIds } from "../lib/plan";
+import { resolveAllowanceOps, type ResolvedAllowanceOps } from "../lib/allowance-resolve";
 import { resolveReadTeamScope, parseTeamIdParam, getAllowedTeamIds } from "../lib/teams";
 import {
   LOW_VACATION_THRESHOLD,
@@ -231,14 +232,24 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       : [];
 
     const vacationCandidates: VacationCandidate[] = [];
+    // Umrechnungsfaktor (vacationHoursPerDay) je Vertrags-Team einmalig
+    // auflösen — die Resttage werden aus der stundengenauen Buchhaltung
+    // abgeleitet (vacation_days_used existiert nicht mehr).
+    const opsByTeam = new Map<number, ResolvedAllowanceOps>();
     for (const assistant of assistants) {
       const contract = await activeContractFor(assistant.id, todayStart);
       if (!contract) continue;
+      let ops = opsByTeam.get(contract.teamId);
+      if (!ops) {
+        ops = await resolveAllowanceOps(contract.teamId);
+        opsByTeam.set(contract.teamId, ops);
+      }
       vacationCandidates.push({
         userId: assistant.id,
         userName: assistant.name,
         vacationDays: contract.vacationDays,
-        vacationDaysUsed: contract.vacationDaysUsed,
+        vacationHoursUsed: contract.vacationHoursUsed,
+        hoursPerDay: ops.vacationHoursPerDay,
       });
     }
     const lowVacationAssistants = computeLowVacationAssistants(vacationCandidates);
@@ -563,6 +574,20 @@ router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advance
     holidayPercent: ownAllowance?.holidayPercent ?? DEFAULT_HOLIDAY_PERCENT,
   };
 
+  // Umrechnungsfaktor Stunden je Urlaubstag (vacationHoursPerDay) je
+  // Vertrags-Team — die Urlaubstage-Spalten der Auswertung sind aus der
+  // stundengenauen Buchhaltung abgeleitet (vacation_days_used existiert
+  // nicht mehr). Cache je Team, um N+1-Lookups zu vermeiden.
+  const vacationOpsByTeam = new Map<number, ResolvedAllowanceOps>();
+  const vacationOpsForTeam = async (teamId: number): Promise<ResolvedAllowanceOps> => {
+    let ops = vacationOpsByTeam.get(teamId);
+    if (!ops) {
+      ops = await resolveAllowanceOps(teamId);
+      vacationOpsByTeam.set(teamId, ops);
+    }
+    return ops;
+  };
+
   const result = await Promise.all(
     assistants.map(async (assistant) => {
       const shifts = await db
@@ -669,6 +694,8 @@ router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advance
         };
       });
 
+      const vacationOps = contract ? await vacationOpsForTeam(contract.teamId) : null;
+
       return computeHoursBalanceRow({
         userId: assistant.id,
         userName: assistant.name,
@@ -679,6 +706,7 @@ router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advance
         contract,
         billingMethod,
         hourlyWage: assistant.hourlyWage,
+        vacationHoursPerDay: vacationOps?.vacationHoursPerDay,
       });
     })
   );

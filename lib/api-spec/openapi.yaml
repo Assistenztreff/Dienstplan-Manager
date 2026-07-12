@@ -1917,7 +1917,7 @@ components:
 
     Contract:
       type: object
-      required: [id, userId, weeklyHours, vacationDays, vacationDaysUsed, startDate, createdAt]
+      required: [id, userId, weeklyHours, vacationDays, startDate, createdAt]
       properties:
         id:
           type: integer
@@ -1926,8 +1926,6 @@ components:
         weeklyHours:
           type: number
         vacationDays:
-          type: integer
-        vacationDaysUsed:
           type: integer
         vacationHoursUsed:
           type: number
@@ -1984,9 +1982,6 @@ components:
           type: number
           minimum: 0
         vacationDays:
-          type: integer
-          minimum: 0
-        vacationDaysUsed:
           type: integer
           minimum: 0
         endDate:
@@ -2586,7 +2581,8 @@ components:
         userName:
           type: string
         vacationDaysRemaining:
-          type: integer
+          type: number
+          description: Resturlaub in Tagen, abgeleitet aus vacationHoursUsed / hoursPerDay (kann Nachkommastellen haben).
 
     HoursBalance:
       type: object
@@ -2610,10 +2606,11 @@ components:
           type: integer
           description: Genommene Urlaubstage des gewählten Monats (Anzahl der Urlaubs-Schichten in diesem Monat).
         vacationDaysUsed:
-          type: integer
-          description: Im Vertrag gespeicherter Jahres-Zähler der genommenen Urlaubstage.
+          type: number
+          description: Abgeleiteter Jahres-Verbrauch in Tagen (vacationHoursUsed / hoursPerDay des Team-Kontos, gerundet auf 0,1).
         vacationDaysRemaining:
-          type: integer
+          type: number
+          description: Resturlaub in Tagen (vacationDays - vacationDaysUsed), abgeleitet aus der Stunden-Buchhaltung.
         valuedHours:
           type: number
         vacationFulfilledHours:

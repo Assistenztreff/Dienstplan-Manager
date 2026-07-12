@@ -155,6 +155,13 @@ async function main() {
       `);
     }
 
+    // Alt-Zaehler der Urlaubstage entfernen: Urlaub wird stundengenau in
+    // vacation_hours_used gefuehrt (Tage = Stunden / vacationHoursPerDay).
+    // Die Spalte wurde nicht mehr beschrieben und lieferte veraltete Werte.
+    // Drop hier (VOR drizzle push), damit push keine interaktive
+    // Datenverlust-Rueckfrage stellt. Idempotent via IF EXISTS.
+    await client.query(`ALTER TABLE "contracts" DROP COLUMN IF EXISTS "vacation_days_used";`);
+
     await client.query("COMMIT");
     console.log("Multi-Team-Migration abgeschlossen.");
   } catch (err) {

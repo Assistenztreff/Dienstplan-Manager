@@ -66,7 +66,10 @@ export interface VacationCandidate {
   userId: number;
   userName: string;
   vacationDays: number | null;
-  vacationDaysUsed: number | null;
+  /** Stundengenau verbrauchter Urlaub (maßgeblicher Zähler). */
+  vacationHoursUsed: number | null;
+  /** Umrechnungsfaktor Stunden je Urlaubstag (vacationHoursPerDay des Team-Kontos). */
+  hoursPerDay: number;
 }
 
 export interface LowVacationAssistant {
@@ -86,7 +89,11 @@ export function computeLowVacationAssistants(
 ): LowVacationAssistant[] {
   const result: LowVacationAssistant[] = [];
   for (const c of candidates) {
-    const remaining = (c.vacationDays ?? 0) - (c.vacationDaysUsed ?? 0);
+    // Resttage aus der stundengenauen Urlaubsbuchhaltung ableiten (der
+    // Alt-Zähler vacation_days_used existiert nicht mehr), gerundet auf 0,1.
+    const hoursPerDay = c.hoursPerDay > 0 ? c.hoursPerDay : 8;
+    const daysUsed = Math.round(((c.vacationHoursUsed ?? 0) / hoursPerDay) * 10) / 10;
+    const remaining = Math.round(((c.vacationDays ?? 0) - daysUsed) * 10) / 10;
     if (remaining <= threshold) {
       result.push({ userId: c.userId, userName: c.userName, vacationDaysRemaining: remaining });
     }

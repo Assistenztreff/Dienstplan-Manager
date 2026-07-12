@@ -66,7 +66,8 @@ export interface AllowancePercents {
 
 export interface AssistantContractInfo {
   vacationDays?: number | null;
-  vacationDaysUsed?: number | null;
+  /** Stundengenau verbrauchter Urlaub (maßgeblicher Zähler, Point 7). */
+  vacationHoursUsed?: number | null;
 }
 
 export interface HoursBalanceRow {
@@ -161,6 +162,13 @@ export function computeHoursBalanceRow(params: {
    * Geldwerte (alle *Pay-Felder null). Die Geldrechnung ist IMMER IST-basiert.
    */
   hourlyWage?: number | null;
+  /**
+   * Umrechnungsfaktor Stunden je Urlaubstag (vacationHoursPerDay des
+   * Team-Kontos); ohne Angabe 8. Tage sind IMMER aus der Stunden-Buchhaltung
+   * abgeleitet (vacationHoursUsed / hoursPerDay) — der Alt-Zähler
+   * vacation_days_used existiert nicht mehr.
+   */
+  vacationHoursPerDay?: number | null;
 }): HoursBalanceRow {
   const { userId, userName, shifts, timeEntries, allowance, allowanceByTeam, contract } = params;
   const { nightPercent, sundayPercent, holidayPercent } = allowance;
@@ -285,7 +293,11 @@ export function computeHoursBalanceRow(params: {
 
   const sickHours = sickFulfilledHours;
   const vacationDays = contract?.vacationDays ?? DEFAULT_VACATION_DAYS;
-  const vacationDaysUsed = contract?.vacationDaysUsed ?? 0;
+  // Urlaubstage IMMER aus der stundengenauen Buchhaltung ableiten (gerundet
+  // auf 0,1 Tage, identisch zur Resturlaub-Bilanz in contracts.ts).
+  const hoursPerDay = params.vacationHoursPerDay ?? 8;
+  const vacationDaysUsed =
+    Math.round(((contract?.vacationHoursUsed ?? 0) / hoursPerDay) * 10) / 10;
 
   // Premium-Lohnauswertung (Point 6): Geld = Stundenlohn * bestätigte IST-Stunden
   // je Dienst (regulär/prozentual) + Festbeträge, plus dynamische Zuschläge auf
@@ -338,7 +350,7 @@ export function computeHoursBalanceRow(params: {
     sickHours: round2(sickHours),
     vacationDaysTaken,
     vacationDaysUsed,
-    vacationDaysRemaining: vacationDays - vacationDaysUsed,
+    vacationDaysRemaining: Math.round((vacationDays - vacationDaysUsed) * 10) / 10,
     valuedHours: round2(valuedHours),
     vacationFulfilledHours: round2(vacationFulfilledHours),
     totalFulfilledHours: round2(totalFulfilledHours),

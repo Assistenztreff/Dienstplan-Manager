@@ -167,7 +167,6 @@ export const ListContractsResponseItem = zod.object({
   "userId": zod.number(),
   "weeklyHours": zod.number(),
   "vacationDays": zod.number(),
-  "vacationDaysUsed": zod.number(),
   "vacationHoursUsed": zod.number().optional().describe('Stundengenau verbrauchter Urlaub (Point 7). Pool = vacationDays \* vacationHoursPerDay.'),
   "startDate": zod.coerce.date(),
   "endDate": zod.string().nullish(),
@@ -230,7 +229,6 @@ export const GetContractResponse = zod.object({
   "userId": zod.number(),
   "weeklyHours": zod.number(),
   "vacationDays": zod.number(),
-  "vacationDaysUsed": zod.number(),
   "vacationHoursUsed": zod.number().optional().describe('Stundengenau verbrauchter Urlaub (Point 7). Pool = vacationDays \* vacationHoursPerDay.'),
   "startDate": zod.coerce.date(),
   "endDate": zod.string().nullish(),
@@ -270,14 +268,11 @@ export const updateContractBodyWeeklyHoursMin = 0;
 
 export const updateContractBodyVacationDaysMin = 0;
 
-export const updateContractBodyVacationDaysUsedMin = 0;
-
 
 
 export const UpdateContractBody = zod.object({
   "weeklyHours": zod.number().min(updateContractBodyWeeklyHoursMin).optional(),
   "vacationDays": zod.number().min(updateContractBodyVacationDaysMin).optional(),
-  "vacationDaysUsed": zod.number().min(updateContractBodyVacationDaysUsedMin).optional(),
   "endDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "billingMethod": zod.union([zod.literal('SOLL'),zod.literal('IST'),zod.literal(null)]).nullish().describe('Abrechnungsart pro Assistenzkraft; null = erbt von Team\/Konto.')
@@ -288,7 +283,6 @@ export const UpdateContractResponse = zod.object({
   "userId": zod.number(),
   "weeklyHours": zod.number(),
   "vacationDays": zod.number(),
-  "vacationDaysUsed": zod.number(),
   "vacationHoursUsed": zod.number().optional().describe('Stundengenau verbrauchter Urlaub (Point 7). Pool = vacationDays \* vacationHoursPerDay.'),
   "startDate": zod.coerce.date(),
   "endDate": zod.string().nullish(),
@@ -1269,7 +1263,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "lowVacationAssistants": zod.array(zod.object({
   "userId": zod.number(),
   "userName": zod.string(),
-  "vacationDaysRemaining": zod.number()
+  "vacationDaysRemaining": zod.number().describe('Resturlaub in Tagen, abgeleitet aus vacationHoursUsed \/ hoursPerDay (kann Nachkommastellen haben).')
 })),
   "uncoveredDays": zod.array(zod.coerce.date()).describe('Kommende Tage ohne geplante Schicht (ISO-Datum)'),
   "lowVacationThreshold": zod.number().describe('Schwelle (Resturlaubstage), ab der gewarnt wird'),
@@ -1296,8 +1290,8 @@ export const GetHoursBalanceResponseItem = zod.object({
   "workedHours": zod.number(),
   "sickHours": zod.number(),
   "vacationDaysTaken": zod.number().describe('Genommene Urlaubstage des gewählten Monats (Anzahl der Urlaubs-Schichten in diesem Monat).'),
-  "vacationDaysUsed": zod.number().describe('Im Vertrag gespeicherter Jahres-Zähler der genommenen Urlaubstage.'),
-  "vacationDaysRemaining": zod.number(),
+  "vacationDaysUsed": zod.number().describe('Abgeleiteter Jahres-Verbrauch in Tagen (vacationHoursUsed \/ hoursPerDay des Team-Kontos, gerundet auf 0,1).'),
+  "vacationDaysRemaining": zod.number().describe('Resturlaub in Tagen (vacationDays - vacationDaysUsed), abgeleitet aus der Stunden-Buchhaltung.'),
   "valuedHours": zod.number(),
   "vacationFulfilledHours": zod.number(),
   "totalFulfilledHours": zod.number(),
