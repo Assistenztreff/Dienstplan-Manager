@@ -94,6 +94,7 @@ export * from './team';
 export * from './teamInput';
 export * from './teamMember';
 export * from './teamMemberInput';
+export * from './teamMemberMoveInput';
 export * from './teamMemberRole';
 export * from './teamUpdate';
 export * from './timeEntry';

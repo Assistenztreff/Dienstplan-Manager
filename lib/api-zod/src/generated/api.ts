@@ -704,6 +704,31 @@ export const RemoveTeamMemberParams = zod.object({
 
 
 /**
+ * Entfernt die Mitgliedschaft im Quell-Team und legt sie im Ziel-Team an — atomar in EINER Transaktion (kein Zwischenzustand ohne Mitgliedschaft). Quell- und Ziel-Team müssen dem Aufrufer gehören.
+ * @summary Mitglied atomar in ein anderes Team überführen
+ */
+export const MoveTeamMemberParams = zod.object({
+  "id": zod.coerce.number(),
+  "userId": zod.coerce.number()
+})
+
+export const MoveTeamMemberBody = zod.object({
+  "targetTeamId": zod.number()
+})
+
+export const MoveTeamMemberResponse = zod.object({
+  "id": zod.number(),
+  "teamId": zod.number(),
+  "userId": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "role": zod.enum(['admin', 'assistant']),
+  "teamCount": zod.number().describe('Anzahl der Teams dieses Dienstleisters, in denen der Nutzer Mitglied ist'),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Zuschlags-Einstellungen lesen
  */
 export const GetAllowanceSettingsQueryParams = zod.object({

@@ -17,6 +17,7 @@ import {
   UpdateTeamBody,
   DeleteTeamParams,
   AddTeamMemberBody,
+  MoveTeamMemberBody,
 } from "@workspace/api-zod";
 import { requireDienstleister } from "../middleware/auth";
 import { userWithinLimit, getUserLimit } from "../lib/plan";
@@ -261,6 +262,79 @@ router.delete(
       return;
     }
     res.status(204).send();
+  },
+);
+
+/**
+ * Überführt eine Mitgliedschaft atomar vom Quell- ins Ziel-Team (Task #462):
+ * Entfernen + Anlegen laufen in EINER Transaktion, damit die Person nie
+ * "zwischen den Teams" ohne Mitgliedschaft hängt (und damit aus allen
+ * team-gescopten Listen verschwindet), falls ein Teilschritt fehlschlägt.
+ * Beide Teams müssen dem Aufrufer gehören (IDOR → 404 wie überall).
+ */
+router.post(
+  "/teams/:id/members/:userId/move",
+  requireDienstleister,
+  async (req, res): Promise<void> => {
+    const teamId = Number(req.params["id"]);
+    const userId = Number(req.params["userId"]);
+    const body = MoveTeamMemberBody.safeParse(req.body);
+    if (!Number.isInteger(teamId) || !Number.isInteger(userId) || !body.success) {
+      res.status(400).json({ error: "Invalid request" });
+      return;
+    }
+    const targetTeamId = body.data.targetTeamId;
+    const ownerId = req.session.userId!;
+
+    // Quell- UND Ziel-Team müssen dem Aufrufer gehören (fremde Teams → 404,
+    // keine Existenz-Preisgabe). assertTeamOwnership antwortet selbst.
+    if (!(await assertTeamOwnership(teamId, ownerId, res))) return;
+    if (!(await assertTeamOwnership(targetTeamId, ownerId, res))) return;
+
+    if (targetTeamId === teamId) {
+      res.status(409).json({ error: "Benutzer ist bereits Mitglied dieses Teams." });
+      return;
+    }
+
+    const [membership] = await db
+      .select({ id: teamMembersTable.id })
+      .from(teamMembersTable)
+      .where(and(eq(teamMembersTable.teamId, teamId), eq(teamMembersTable.userId, userId)));
+    if (!membership) {
+      res.status(404).json({ error: "Mitgliedschaft nicht gefunden" });
+      return;
+    }
+
+    const [already] = await db
+      .select({ id: teamMembersTable.id })
+      .from(teamMembersTable)
+      .where(
+        and(eq(teamMembersTable.teamId, targetTeamId), eq(teamMembersTable.userId, userId)),
+      );
+    if (already) {
+      res.status(409).json({ error: "Benutzer ist bereits Mitglied des Ziel-Teams." });
+      return;
+    }
+
+    // Atomar: alte Mitgliedschaft löschen + neue anlegen in einer Transaktion.
+    const insertedId = await db.transaction(async (tx) => {
+      const deleted = await tx
+        .delete(teamMembersTable)
+        .where(and(eq(teamMembersTable.teamId, teamId), eq(teamMembersTable.userId, userId)))
+        .returning({ id: teamMembersTable.id });
+      if (deleted.length === 0) {
+        // Rennen mit parallelem Entfernen — Transaktion abbrechen.
+        tx.rollback();
+      }
+      const [inserted] = await tx
+        .insert(teamMembersTable)
+        .values({ teamId: targetTeamId, userId })
+        .returning({ id: teamMembersTable.id });
+      return inserted!.id;
+    });
+
+    const [member] = await selectMembers(ownerId, eq(teamMembersTable.id, insertedId));
+    res.json(member);
   },
 );
 

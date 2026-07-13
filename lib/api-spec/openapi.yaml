@@ -595,6 +595,44 @@ paths:
         "404":
           description: Nicht gefunden
 
+  /teams/{id}/members/{userId}/move:
+    post:
+      operationId: moveTeamMember
+      tags: [teams]
+      summary: Mitglied atomar in ein anderes Team überführen
+      description: >-
+        Entfernt die Mitgliedschaft im Quell-Team und legt sie im Ziel-Team an —
+        atomar in EINER Transaktion (kein Zwischenzustand ohne Mitgliedschaft).
+        Quell- und Ziel-Team müssen dem Aufrufer gehören.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamMemberMoveInput"
+      responses:
+        "200":
+          description: Überführt (neue Mitgliedschaft im Ziel-Team)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamMember"
+        "404":
+          description: Team, Ziel-Team oder Mitgliedschaft nicht gefunden
+        "409":
+          description: Benutzer ist bereits Mitglied des Ziel-Teams
+
   /allowance-settings:
     get:
       operationId: getAllowanceSettings
@@ -1913,6 +1951,13 @@ components:
       required: [userId]
       properties:
         userId:
+          type: integer
+
+    TeamMemberMoveInput:
+      type: object
+      required: [targetTeamId]
+      properties:
+        targetTeamId:
           type: integer
 
     Contract:

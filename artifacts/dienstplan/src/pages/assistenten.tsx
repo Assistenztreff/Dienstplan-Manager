@@ -9,11 +9,16 @@ import {
   useCreateContract,
   useUpdateContract,
   useInviteUser,
+  useListTeamMembers,
+  useAddTeamMember,
+  useRemoveTeamMember,
   getHoursBalance,
   getListUsersQueryKey,
   getListContractsQueryKey,
+  getListTeamMembersQueryKey,
 } from "@workspace/api-client-react";
 import { useTeam } from "@/context/team";
+import { TeamSwitcher } from "@/components/team-switcher";
 import { useAuth } from "@/context/auth";
 import { isWithinLimit, getLimit, hasAccess } from "@/lib/entitlements";
 import { readableApiError, planUpgradeMessage, planFeatureMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
@@ -42,7 +47,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Mail, Phone, MapPin, Calendar, Pencil, UserPlus, Send, Copy, Check, Download, ChevronLeft, ChevronRight, Trash2, Lock } from "lucide-react";
+import { Plus, Mail, Phone, MapPin, Calendar, Pencil, UserPlus, UserMinus, Send, Copy, Check, Download, ChevronLeft, ChevronRight, Trash2, Lock } from "lucide-react";
 import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
@@ -942,8 +947,86 @@ function ExportDialog({ open, onClose, userId, userName }: ExportDialogProps) {
 
 export default function Assistenten() {
   const { currentUser } = useAuth();
-  const { data: users, isLoading: usersLoading } = useListUsers({ role: "assistant" });
+  const queryClient = useQueryClient();
+  const { isDienstleister, selectedTeamId } = useTeam();
+
+  // Dienstleister sehen die Liste team-gescoped (globaler Team-Kontext aus dem
+  // TeamSwitcher); fuer alle anderen bleibt die Abfrage unveraendert ungefiltert.
+  const teamScope = isDienstleister && selectedTeamId != null;
+  const { data: users, isLoading: usersLoading } = useListUsers(
+    teamScope ? { role: "assistant", teamId: selectedTeamId } : { role: "assistant" },
+  );
   const { data: contracts, isLoading: contractsLoading } = useListContracts();
+
+  // Team-Zuordnung direkt auf dieser Seite (nur Dienstleister): Kandidaten sind
+  // alle eigenen Assistenten (ungescoped) minus die bereits im gewaehlten Team.
+  const { data: allAssistants } = useListUsers({ role: "assistant" }, {
+    query: { enabled: teamScope },
+  } as Parameters<typeof useListUsers>[1]) as { data?: User[] };
+  // Mitgliederliste des gewaehlten Teams: liefert teamCount je Nutzer, damit wir
+  // vor dem Entfernen der LETZTEN Mitgliedschaft warnen koennen.
+  const { data: teamMembers } = useListTeamMembers(selectedTeamId ?? 0, {
+    query: { enabled: teamScope },
+  } as Parameters<typeof useListTeamMembers>[1]) as {
+    data?: { userId: number; teamCount: number }[];
+  };
+  const addMember = useAddTeamMember();
+  const removeMember = useRemoveTeamMember();
+
+  const [assignUserId, setAssignUserId] = useState<string>("");
+  const [removeUser, setRemoveUser] = useState<User | undefined>();
+  const [memberBusy, setMemberBusy] = useState(false);
+
+  const currentIds = new Set((users ?? []).map((u) => u.id));
+  const assignCandidates = teamScope
+    ? (allAssistants ?? []).filter((u) => !currentIds.has(u.id))
+    : [];
+  const teamCountByUserId = new Map(
+    (teamMembers ?? []).map((m) => [m.userId, m.teamCount]),
+  );
+
+  async function invalidateMemberQueries() {
+    await queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+    await queryClient.invalidateQueries({ queryKey: getListContractsQueryKey() });
+    if (selectedTeamId != null) {
+      await queryClient.invalidateQueries({
+        queryKey: getListTeamMembersQueryKey(selectedTeamId),
+      });
+    }
+  }
+
+  async function handleAssign() {
+    if (!assignUserId || selectedTeamId == null) return;
+    setMemberBusy(true);
+    try {
+      await addMember.mutateAsync({
+        id: selectedTeamId,
+        data: { userId: Number(assignUserId) },
+      });
+      setAssignUserId("");
+      await invalidateMemberQueries();
+      toast.success("Assistenzkraft dem Team zugeordnet.");
+    } catch (err) {
+      toast.error(readableApiError(err, "Zuordnen fehlgeschlagen. Bitte erneut versuchen."));
+    } finally {
+      setMemberBusy(false);
+    }
+  }
+
+  async function handleRemoveFromTeam() {
+    if (!removeUser || selectedTeamId == null) return;
+    setMemberBusy(true);
+    try {
+      await removeMember.mutateAsync({ id: selectedTeamId, userId: removeUser.id });
+      setRemoveUser(undefined);
+      await invalidateMemberQueries();
+      toast.success("Assistenzkraft aus dem Team entfernt.");
+    } catch (err) {
+      toast.error(readableApiError(err, "Entfernen fehlgeschlagen. Bitte erneut versuchen."));
+    } finally {
+      setMemberBusy(false);
+    }
+  }
 
   // Free-Plan begrenzt die Anzahl der Assistenten (Free = 6). Ist das Limit
   // erreicht, wird das Anlegen gesperrt (Durchsetzung zusaetzlich serverseitig).
@@ -1005,11 +1088,15 @@ export default function Assistenten() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Assistenten</h2>
           <p className="text-muted-foreground mt-1 text-sm">Verwaltung der Mitarbeiter und Verträge</p>
         </div>
+        <div className="flex items-center gap-2">
+          {/* Team-Auswahl (rendert nur fuer Dienstleister mit Teams) — die Liste
+              unten ist auf das hier gewaehlte Team gefiltert. */}
+          <TeamSwitcher />
         {canAddAssistant ? (
           <Button onClick={openCreate} className="gap-2">
             <UserPlus className="h-4 w-4" />
@@ -1027,7 +1114,45 @@ export default function Assistenten() {
             <span className="sm:hidden">Neu</span>
           </Button>
         )}
+        </div>
       </div>
+
+      {/* Bestehende Assistenzkraft dem gewaehlten Team zuordnen (nur
+          Dienstleister): Kandidaten = eigene Assistenten anderer Teams. */}
+      {teamScope && (
+        <div
+          className="flex flex-col gap-2 sm:flex-row sm:items-center rounded-lg border border-border/50 bg-card p-3"
+          data-testid="assign-member-section"
+        >
+          <Select value={assignUserId} onValueChange={setAssignUserId}>
+            <SelectTrigger className="sm:max-w-xs" data-testid="assign-member-select">
+              <SelectValue
+                placeholder={
+                  assignCandidates.length === 0
+                    ? "Keine weiteren Assistenzkräfte"
+                    : "Assistenzkraft dem Team zuordnen"
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {assignCandidates.map((u) => (
+                <SelectItem key={u.id} value={String(u.id)}>
+                  {u.name} ({u.email})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            onClick={handleAssign}
+            disabled={!assignUserId || memberBusy}
+            className="gap-2"
+            data-testid="assign-member-button"
+          >
+            <UserPlus className="h-4 w-4" />
+            Zuordnen
+          </Button>
+        </div>
+      )}
 
       {/* Limit-Hinweis (Free-Plan). Bei Premium ist assistantLimit null. */}
       {!canAddAssistant && assistantLimit !== null && (
@@ -1166,6 +1291,19 @@ export default function Assistenten() {
                       <Pencil className="h-3.5 w-3.5" />
                       Bearbeiten
                     </Button>
+                    {teamScope && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1.5 text-muted-foreground hover:text-destructive"
+                        onClick={() => setRemoveUser(user as User)}
+                        title="Aus dem gewählten Team entfernen"
+                        data-testid={`remove-member-${user.id}`}
+                      >
+                        <UserMinus className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Aus Team entfernen</span>
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -1205,6 +1343,45 @@ export default function Assistenten() {
           userName={exportUser.name}
         />
       )}
+      {/* Bestaetigung vor dem Entfernen aus dem Team; bei der LETZTEN
+          Team-Zuordnung zusaetzliche Warnung (Person verschwindet aus allen
+          team-gescopten Listen, Daten bleiben erhalten). */}
+      <AlertDialog open={!!removeUser} onOpenChange={(v) => !v && setRemoveUser(undefined)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Aus dem Team entfernen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {removeUser && (
+                <>
+                  {removeUser.name} wird aus dem aktuell gewählten Team entfernt.{" "}
+                  {(teamCountByUserId.get(removeUser.id) ?? 0) <= 1 ? (
+                    <span className="font-medium text-destructive">
+                      Das ist die letzte Team-Zuordnung dieser Person — sie erscheint danach in
+                      keiner Team-Liste mehr, bis sie wieder einem Team zugeordnet wird. Daten
+                      (Verträge, Dienste, Zeiten) bleiben erhalten.
+                    </span>
+                  ) : (
+                    "Andere Team-Mitgliedschaften bleiben unberührt."
+                  )}
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={memberBusy}>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void handleRemoveFromTeam();
+              }}
+              disabled={memberBusy}
+              data-testid="confirm-remove-member"
+            >
+              {memberBusy ? "Entfernen..." : "Entfernen"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

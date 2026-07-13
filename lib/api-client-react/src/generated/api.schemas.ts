@@ -349,6 +349,10 @@ export interface TeamMemberInput {
   userId: number;
 }
 
+export interface TeamMemberMoveInput {
+  targetTeamId: number;
+}
+
 /**
  * Abrechnungsart pro Assistenzkraft; null = erbt von Team/Konto.
  * @nullable

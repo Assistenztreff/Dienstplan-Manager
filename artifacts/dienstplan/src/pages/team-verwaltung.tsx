@@ -5,11 +5,10 @@ import {
   useUpdateTeam,
   useDeleteTeam,
   useListTeamMembers,
-  useAddTeamMember,
-  useRemoveTeamMember,
-  useListUsers,
+  useMoveTeamMember,
   getListTeamsQueryKey,
   getListTeamMembersQueryKey,
+  getListUsersQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, Building2, Users, UserPlus, X, Lock } from "lucide-react";
+import { Plus, Pencil, Trash2, Building2, ArrowRightLeft, Lock } from "lucide-react";
 import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/auth";
@@ -49,13 +48,6 @@ type Member = {
   role: "admin" | "assistant";
   teamCount: number;
   createdAt: string;
-};
-
-type AppUser = {
-  id: number;
-  name: string;
-  email: string;
-  role: "admin" | "assistant";
 };
 
 function roleLabel(role: "admin" | "assistant"): string {
@@ -140,147 +132,133 @@ function TeamDialog({ open, onClose, editTeam }: TeamDialogProps) {
   );
 }
 
-type MembersDialogProps = {
+type TransferDialogProps = {
   team: Team;
+  teams: Team[];
   onClose: () => void;
 };
 
-function MembersDialog({ team, onClose }: MembersDialogProps) {
+/**
+ * "Assistenzkraft überführen": verschiebt eine Mitgliedschaft atomar vom
+ * Quell-Team (Zeile, aus der der Dialog geöffnet wurde) in ein Ziel-Team über
+ * den dedizierten Move-Endpunkt — kein Zwischenzustand aus Entfernen+Anlegen.
+ */
+function TransferDialog({ team, teams, onClose }: TransferDialogProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: membersData, isLoading } = useListTeamMembers(team.id);
-  const { data: usersData } = useListUsers();
-  const addMember = useAddTeamMember();
-  const removeMember = useRemoveTeamMember();
+  const moveMember = useMoveTeamMember();
 
   const [selectedUser, setSelectedUser] = useState<string>("");
+  const [targetTeam, setTargetTeam] = useState<string>("");
+  const [moving, setMoving] = useState(false);
 
   const members = (membersData ?? []) as Member[];
-  const allUsers = (usersData ?? []) as AppUser[];
-  const memberIds = new Set(members.map((m) => m.userId));
-  const available = allUsers.filter((u) => !memberIds.has(u.id));
+  const targetTeams = teams.filter((t) => t.id !== team.id);
 
-  async function invalidate() {
-    await queryClient.invalidateQueries({ queryKey: getListTeamMembersQueryKey(team.id) });
-  }
-
-  async function handleAdd() {
-    if (!selectedUser) return;
+  async function handleMove() {
+    if (!selectedUser || !targetTeam) return;
+    setMoving(true);
     try {
-      await addMember.mutateAsync({ id: team.id, data: { userId: Number(selectedUser) } });
-      setSelectedUser("");
-      await invalidate();
+      await moveMember.mutateAsync({
+        id: team.id,
+        userId: Number(selectedUser),
+        data: { targetTeamId: Number(targetTeam) },
+      });
+      await queryClient.invalidateQueries({ queryKey: getListTeamMembersQueryKey(team.id) });
+      await queryClient.invalidateQueries({
+        queryKey: getListTeamMembersQueryKey(Number(targetTeam)),
+      });
+      // Team-gescopte Nutzerlisten (Assistenten-Seite) neu laden.
+      await queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+      toast({
+        title: "Assistenzkraft überführt",
+        description: "Die Team-Zuordnung wurde in das Ziel-Team verschoben.",
+      });
+      onClose();
     } catch (err) {
       toast({
-        title: "Hinzufügen fehlgeschlagen",
+        title: "Überführen fehlgeschlagen",
         description: readableApiError(err, "Bitte erneut versuchen."),
         variant: "destructive",
       });
-    }
-  }
-
-  async function handleRemove(userId: number) {
-    try {
-      await removeMember.mutateAsync({ id: team.id, userId });
-      await invalidate();
-    } catch (err) {
-      toast({
-        title: "Entfernen fehlgeschlagen",
-        description: readableApiError(err, "Bitte erneut versuchen."),
-        variant: "destructive",
-      });
+    } finally {
+      setMoving(false);
     }
   }
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-serif text-xl">Mitglieder: {team.name}</DialogTitle>
+          <DialogTitle className="font-serif text-xl">
+            Assistenzkraft überführen: {team.name}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Select value={selectedUser} onValueChange={setSelectedUser}>
-              <SelectTrigger className="flex-1">
+          <div className="space-y-1.5">
+            <Label>Assistenzkraft *</Label>
+            {isLoading ? (
+              <Skeleton className="h-9 w-full rounded-md" />
+            ) : (
+              <Select value={selectedUser} onValueChange={setSelectedUser}>
+                <SelectTrigger data-testid="transfer-member-select">
+                  <SelectValue
+                    placeholder={
+                      members.length === 0 ? "Keine Mitglieder in diesem Team" : "Person auswählen"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {members.map((m) => (
+                    <SelectItem key={m.userId} value={String(m.userId)}>
+                      {m.name} ({roleLabel(m.role)})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Ziel-Team *</Label>
+            <Select value={targetTeam} onValueChange={setTargetTeam}>
+              <SelectTrigger data-testid="transfer-target-select">
                 <SelectValue
                   placeholder={
-                    available.length === 0 ? "Keine weiteren Personen" : "Person auswählen"
+                    targetTeams.length === 0 ? "Kein weiteres Team vorhanden" : "Team auswählen"
                   }
                 />
               </SelectTrigger>
               <SelectContent>
-                {available.map((u) => (
-                  <SelectItem key={u.id} value={String(u.id)}>
-                    {u.name} ({roleLabel(u.role)})
+                {targetTeams.map((t) => (
+                  <SelectItem key={t.id} value={String(t.id)}>
+                    {t.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Button
-              onClick={handleAdd}
-              disabled={!selectedUser || addMember.isPending}
-              className="gap-2"
-            >
-              <UserPlus className="h-4 w-4" />
-              Hinzufügen
-            </Button>
-          </div>
-
-          <div className="rounded-lg border border-border/50">
-            {isLoading ? (
-              <div className="space-y-2 p-3">
-                {[1, 2].map((i) => (
-                  <Skeleton key={i} className="h-10 w-full rounded-md" />
-                ))}
-              </div>
-            ) : members.length === 0 ? (
-              <p className="p-6 text-center text-sm text-muted-foreground">
-                Diesem Team sind noch keine Personen zugeordnet.
-              </p>
-            ) : (
-              <ul className="divide-y divide-border/50">
-                {members.map((m) => (
-                  <li key={m.id} className="flex items-center gap-3 px-3 py-2.5">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium truncate">{m.name}</span>
-                        <Badge variant="outline" className="text-xs font-normal">
-                          {roleLabel(m.role)}
-                        </Badge>
-                        {m.teamCount > 1 && (
-                          <Badge variant="secondary" className="text-xs font-normal">
-                            in {m.teamCount} Teams
-                          </Badge>
-                        )}
-                      </div>
-                      <span className="text-xs text-muted-foreground truncate">{m.email}</span>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1.5 text-muted-foreground hover:text-destructive"
-                      onClick={() => handleRemove(m.userId)}
-                      disabled={removeMember.isPending}
-                    >
-                      <X className="h-4 w-4" />
-                      <span className="hidden sm:inline">Entfernen</span>
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Eine Person kann mehreren Teams angehören. Das Entfernen aus diesem Team lässt andere
-            Mitgliedschaften unberührt.
+            Die Mitgliedschaft wird in einem Schritt aus diesem Team entfernt und im Ziel-Team
+            angelegt. Bestehende Daten (Verträge, Dienste, Zeiten) behalten ihr bisheriges Team.
           </p>
         </div>
 
-        <DialogFooter className="pt-2">
-          <Button variant="outline" onClick={onClose}>
-            Schließen
+        <DialogFooter className="gap-2 pt-2">
+          <Button variant="outline" onClick={onClose} disabled={moving}>
+            Abbrechen
+          </Button>
+          <Button
+            onClick={handleMove}
+            disabled={!selectedUser || !targetTeam || moving}
+            className="gap-2"
+            data-testid="transfer-submit"
+          >
+            <ArrowRightLeft className="h-4 w-4" />
+            {moving ? "Überführen..." : "Überführen"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -297,7 +275,7 @@ export default function TeamVerwaltung() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTeam, setEditTeam] = useState<Team | undefined>();
-  const [membersTeam, setMembersTeam] = useState<Team | undefined>();
+  const [transferTeam, setTransferTeam] = useState<Team | undefined>();
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
   const teams: Team[] = (data ?? []) as Team[];
@@ -410,10 +388,11 @@ export default function TeamVerwaltung() {
                     variant="outline"
                     size="sm"
                     className="gap-1.5"
-                    onClick={() => setMembersTeam(team)}
+                    onClick={() => setTransferTeam(team)}
+                    data-testid={`transfer-team-${team.id}`}
                   >
-                    <Users className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Mitglieder</span>
+                    <ArrowRightLeft className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Überführen</span>
                   </Button>
                   <Button
                     variant="outline"
@@ -452,8 +431,12 @@ export default function TeamVerwaltung() {
         <TeamDialog open={dialogOpen} onClose={closeDialog} editTeam={editTeam} />
       )}
 
-      {membersTeam && (
-        <MembersDialog team={membersTeam} onClose={() => setMembersTeam(undefined)} />
+      {transferTeam && (
+        <TransferDialog
+          team={transferTeam}
+          teams={teams}
+          onClose={() => setTransferTeam(undefined)}
+        />
       )}
     </div>
   );

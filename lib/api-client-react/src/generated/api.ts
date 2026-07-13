@@ -70,6 +70,7 @@ import type {
   TeamInput,
   TeamMember,
   TeamMemberInput,
+  TeamMemberMoveInput,
   TeamUpdate,
   TimeEntry,
   TimeEntryConfirm,
@@ -2105,6 +2106,81 @@ export const useRemoveTeamMember = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getRemoveTeamMemberMutationOptions(options));
+    }
+
+export const getMoveTeamMemberUrl = (id: number,
+    userId: number,) => {
+
+
+
+
+  return `/api/teams/${id}/members/${userId}/move`
+}
+
+/**
+ * Entfernt die Mitgliedschaft im Quell-Team und legt sie im Ziel-Team an — atomar in EINER Transaktion (kein Zwischenzustand ohne Mitgliedschaft). Quell- und Ziel-Team müssen dem Aufrufer gehören.
+ * @summary Mitglied atomar in ein anderes Team überführen
+ */
+export const moveTeamMember = async (id: number,
+    userId: number,
+    teamMemberMoveInput: TeamMemberMoveInput, options?: RequestInit): Promise<TeamMember> => {
+
+  return customFetch<TeamMember>(getMoveTeamMemberUrl(id,userId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      teamMemberMoveInput,)
+  }
+);}
+
+
+
+
+export const getMoveTeamMemberMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof moveTeamMember>>, TError,{id: number;userId: number;data: BodyType<TeamMemberMoveInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof moveTeamMember>>, TError,{id: number;userId: number;data: BodyType<TeamMemberMoveInput>}, TContext> => {
+
+const mutationKey = ['moveTeamMember'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof moveTeamMember>>, {id: number;userId: number;data: BodyType<TeamMemberMoveInput>}> = (props) => {
+          const {id,userId,data} = props ?? {};
+
+          return  moveTeamMember(id,userId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MoveTeamMemberMutationResult = NonNullable<Awaited<ReturnType<typeof moveTeamMember>>>
+    export type MoveTeamMemberMutationBody = BodyType<TeamMemberMoveInput>
+    export type MoveTeamMemberMutationError = ErrorType<void>
+
+    /**
+ * @summary Mitglied atomar in ein anderes Team überführen
+ */
+export const useMoveTeamMember = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof moveTeamMember>>, TError,{id: number;userId: number;data: BodyType<TeamMemberMoveInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof moveTeamMember>>,
+        TError,
+        {id: number;userId: number;data: BodyType<TeamMemberMoveInput>},
+        TContext
+      > => {
+      return useMutation(getMoveTeamMemberMutationOptions(options));
     }
 
 export const getGetAllowanceSettingsUrl = (params?: GetAllowanceSettingsParams,) => {
