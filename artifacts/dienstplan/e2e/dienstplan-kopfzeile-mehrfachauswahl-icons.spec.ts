@@ -23,6 +23,10 @@ import { TeamTestHarness } from "./helpers/teams";
  *   (boundingBox), weder vor noch waehrend noch nach der Auswahl.
  * - Labels-Stufe (breiter Viewport): Beschriftungen bleiben beim Umschalten
  *   erhalten — keine Regression durch den geaenderten Mess-Schluessel.
+ * - Monats-PDF-Klick in der Icon-Stufe: `isExporting` haengt (wie
+ *   `isSelectionMode`) am remeasureKey statt am contentKey — die Buttons
+ *   springen waehrend des Exports nicht mehr kurz auf Beschriftungen
+ *   (MutationObserver faengt auch nur wenige Frames sichtbare Label-Blitzer).
  */
 
 let h: TeamTestHarness;
@@ -98,6 +102,61 @@ test.describe("Icon-Stufe bei ~1024px (Fall aus dem Screenshot)", () => {
     await expect(toggle).toHaveText("");
     await expect(exportBtn).toHaveText("");
     await expectNoSelectOverlap(page, "nach dem Beenden");
+
+    // --- Monats-PDF-Klick: kein kurzes Aufspringen auf Labels -------------
+    // Ein MutationObserver auf der Kopfzeile protokolliert JEDE
+    // Textaenderung der beiden Buttons — auch ein nur wenige Frames
+    // sichtbares Label-Flackern (der alte Bug: isExporting im contentKey
+    // setzte die Mess-Stufe hart auf "labels" zurueck) wird so erkannt.
+    await page.evaluate(() => {
+      const w = window as unknown as {
+        __labelFlashes: string[];
+        __labelObserver?: MutationObserver;
+      };
+      w.__labelFlashes = [];
+      const record = () => {
+        for (const id of ["toggle-selection-mode", "simple-month-export"]) {
+          const text =
+            document
+              .querySelector(`[data-testid="${id}"]`)
+              ?.textContent?.trim() ?? "";
+          if (text !== "") w.__labelFlashes.push(`${id}: ${text}`);
+        }
+      };
+      const observer = new MutationObserver(record);
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
+      w.__labelObserver = observer;
+    });
+
+    // Der Export laeuft ins Leere (frisches Konto ohne Dienste → Toast statt
+    // Download) — fuer den Bug zaehlt nur der isExporting-Zustandswechsel.
+    // Der Toast markiert zuverlaessig das ENDE des Export-Laufs (erst danach
+    // den Observer auslesen, sonst wird zu frueh abgeklemmt).
+    await exportBtn.click();
+    await expect(
+      page.getByText("Keine bestätigten Dienste oder Abwesenheiten in diesem Monat."),
+    ).toBeVisible();
+    await expect(exportBtn).toBeEnabled();
+
+    const flashes = await page.evaluate(() => {
+      const w = window as unknown as {
+        __labelFlashes: string[];
+        __labelObserver?: MutationObserver;
+      };
+      w.__labelObserver?.disconnect();
+      return w.__labelFlashes;
+    });
+    expect(
+      flashes,
+      `Buttons sprangen waehrend des Exports kurz auf Labels: ${flashes.join(", ")}`,
+    ).toEqual([]);
+    await expect(toggle).toHaveText("");
+    await expect(exportBtn).toHaveText("");
+    await expectNoSelectOverlap(page, "nach dem Export");
   });
 });
 

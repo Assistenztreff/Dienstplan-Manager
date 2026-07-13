@@ -983,17 +983,22 @@ function DienstplanHeader({
     String(selectedAssistant),
     selectedTeamId ?? "none",
     confirmableCount,
-    isExporting,
     canBasicExport,
     canBulkEdit,
     monthLabel,
   ].join("|");
-  // isSelectionMode ist bewusst KEIN Teil des contentKey: Der Klick auf
-  // "Mehrfachauswahl" wuerde sonst die Stufe hart auf "labels" zuruecksetzen
-  // (Buttons springen sichtbar, Selects ueberlappen waehrend der Neumessung).
-  // Der aktive X-Button ist schmaler als der beschriftete Button, daher
-  // reicht eine Neumessung von der aktuellen Stufe aus (remeasureKey).
-  const { measureRef, tier } = useHeaderTier(contentKey, String(isSelectionMode));
+  // isSelectionMode und isExporting sind bewusst KEIN Teil des contentKey:
+  // Der Klick auf "Mehrfachauswahl" bzw. "Monats-PDF" wuerde sonst die Stufe
+  // hart auf "labels" zuruecksetzen (Buttons springen sichtbar auf
+  // Beschriftungen, Selects ueberlappen waehrend der Neumessung).
+  // Der aktive X-Button ist schmaler als der beschriftete Button, und der
+  // Export-Text ("Exportiere...") aendert die Breite nur in der Labels-Stufe —
+  // daher reicht jeweils eine Neumessung von der aktuellen Stufe aus
+  // (remeasureKey).
+  const { measureRef, tier } = useHeaderTier(
+    contentKey,
+    [isSelectionMode, isExporting].join("|"),
+  );
   const showLabels = tier === "labels";
   const stacked = tier === "stack";
 

@@ -26,5 +26,8 @@ filter instead of overflowing.
 
 **How to apply:** when adding buttons/selects to the Dienstplan header, decide per
 state: does it change required width upward-unknown (contentKey) or is it a narrower
-toggle variant (remeasureKey)? Never wrap a min-width select in a `min-w-0` div in a
-measured row. Regression spec: `dienstplan-kopfzeile-mehrfachauswahl-icons.spec.ts`.
+toggle variant (remeasureKey)? Transient busy states whose text only changes in the
+labels tier (e.g. export "Exportiere...") also belong in the remeasureKey. Never wrap
+a min-width select in a `min-w-0` div in a measured row. Regression spec:
+`dienstplan-kopfzeile-mehrfachauswahl-icons.spec.ts` (uses a MutationObserver to catch
+even few-frame label flashes).
