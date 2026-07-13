@@ -71,3 +71,4 @@
 - [Stale generated client on main](stale-generated-client-on-main.md) — openapi.yaml can outrun committed Orval output; red typecheck on generated types = run codegen, not debug pages.
 - [Embed sticky viewport height](embed-sticky-viewport-height.md) — ?embed=1 removes header+footer, so scroll-based specs lose scroll room; embed variants need shorter viewports (400x460 mobile).
 - [E2E scroll-threshold & opacity](e2e-scroll-threshold-opacity.md) — test-DB content scrolls <300px (inject spacer into main); opacity-hidden elements need getComputedStyle checks, not toBeVisible.
+- [TeamSwitcher auto-select](team-switcher-auto-select.md) — no "Alle Teams"; dienstleister e2e fixtures must live in the FIRST team or specs switch explicitly; first load fires one unscoped fetch.

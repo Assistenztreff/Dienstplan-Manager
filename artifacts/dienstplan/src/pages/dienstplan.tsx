@@ -1002,7 +1002,11 @@ function DienstplanHeader({
       onValueChange={(v) => onSelectAssistant(v === "all" ? "all" : Number(v))}
     >
       <SelectTrigger
-        className={stacked ? "h-9 w-full min-w-0 gap-1.5 truncate" : "h-9 w-auto min-w-[170px] gap-2"}
+        className={
+          stacked
+            ? "h-9 w-full min-w-0 gap-1.5 truncate"
+            : "h-9 w-auto min-w-[7.5rem] max-w-[190px] shrink gap-2 truncate"
+        }
         data-testid="assistant-select"
         aria-label="Assistent filtern"
       >
@@ -1111,18 +1115,35 @@ function DienstplanHeader({
   const selectionButton =
     isAdmin &&
     (canBulkEdit ? (
-      <Button
-        variant={isSelectionMode ? "default" : "outline"}
-        size="sm"
-        className={showLabels ? "gap-1.5" : `h-9 shrink-0 px-0 ${stacked ? "w-8" : "w-9"}`}
-        onClick={onToggleSelection}
-        title={isSelectionMode ? "Auswahl beenden" : "Mehrfachauswahl"}
-        aria-label={isSelectionMode ? "Auswahl beenden" : "Mehrfachauswahl"}
-        data-testid="toggle-selection-mode"
-      >
-        {isSelectionMode ? <X className="h-4 w-4" /> : <CheckSquare className="h-4 w-4" />}
-        {showLabels && <span>{isSelectionMode ? "Auswahl beenden" : "Mehrfachauswahl"}</span>}
-      </Button>
+      isSelectionMode ? (
+        /* Aktive Mehrfachauswahl: in ALLEN Stufen ein echter Icon-Button —
+           gelb hervorgehoben, NUR das X. size="icon" unterdrückt zugleich den
+           automatischen Pfeil der Button-Komponente an gelben Default-Buttons. */
+        <Button
+          variant="default"
+          size="icon"
+          className={`h-9 shrink-0 ${stacked ? "w-8" : "w-9"}`}
+          onClick={onToggleSelection}
+          title="Auswahl beenden"
+          aria-label="Auswahl beenden"
+          data-testid="toggle-selection-mode"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      ) : (
+        <Button
+          variant="outline"
+          size="sm"
+          className={showLabels ? "gap-1.5" : `h-9 shrink-0 px-0 ${stacked ? "w-8" : "w-9"}`}
+          onClick={onToggleSelection}
+          title="Mehrfachauswahl"
+          aria-label="Mehrfachauswahl"
+          data-testid="toggle-selection-mode"
+        >
+          <CheckSquare className="h-4 w-4" />
+          {showLabels && <span>Mehrfachauswahl</span>}
+        </Button>
+      )
     ) : (
       <Button
         variant="outline"

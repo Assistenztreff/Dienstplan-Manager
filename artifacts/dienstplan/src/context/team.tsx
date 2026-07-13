@@ -49,18 +49,21 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
     else localStorage.setItem(STORAGE_KEY, String(id));
   };
 
-  // Auswahl bereinigen, wenn das gespeicherte Team nicht mehr existiert oder der
-  // Nutzer kein Dienstleister (mehr) ist.
+  // Auswahl bereinigen: kein Dienstleister (mehr) → keine Team-Auswahl.
+  // Für Dienstleister mit Teams gibt es KEINEN "Alle Teams"-Zustand mehr —
+  // fehlt eine (gültige) Auswahl (Erstnutzung, gewähltes Team gelöscht),
+  // wird automatisch das erste eigene Team gewählt.
   useEffect(() => {
     if (!isDienstleister) {
       if (selectedTeamId !== null) setSelectedTeamId(null);
       return;
     }
-    if (selectedTeamId !== null && teams.length > 0 && !teams.some((t) => t.id === selectedTeamId)) {
-      setSelectedTeamId(null);
+    if (teams.length === 0) return;
+    if (selectedTeamId === null || !teams.some((t) => t.id === selectedTeamId)) {
+      setSelectedTeamId(teams[0].id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDienstleister, teams]);
+  }, [isDienstleister, teams, selectedTeamId]);
 
   return (
     <TeamContext.Provider

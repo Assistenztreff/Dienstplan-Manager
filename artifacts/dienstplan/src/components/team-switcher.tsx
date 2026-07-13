@@ -10,8 +10,6 @@ import type { BrandingSettings } from "@workspace/api-client-react";
 import { useTeam } from "@/context/team";
 import { logoSrcFromPath } from "@/lib/logo";
 
-const ALL_VALUE = "__all__";
-
 function TeamLogo() {
   const { selectedTeamId } = useTeam();
 
@@ -32,7 +30,7 @@ function TeamLogo() {
     <img
       src={logoSrc}
       alt="Team-Logo"
-      className="h-8 w-auto max-w-[120px] shrink-0 rounded object-contain"
+      className="h-8 w-auto min-w-0 max-w-[120px] shrink rounded object-contain"
     />
   );
 }
@@ -43,17 +41,23 @@ export function TeamSwitcher() {
   if (!isDienstleister || !hasTeams) return null;
 
   return (
-    <div className="flex items-center gap-2">
+    /* Kein "Alle Teams"-Eintrag mehr: es ist immer genau ein Team gewählt
+       (Auto-Auswahl im Team-Context). Breite flexibel: der Switcher darf in
+       engen Kopfzeilen schrumpfen (truncate), statt fest 224px zu belegen —
+       so bleibt die Label-Stufe der Dienstplanleiste länger erhalten. */
+    <div className="flex min-w-0 shrink items-center gap-2">
       <TeamLogo />
       <Select
-        value={selectedTeamId == null ? ALL_VALUE : String(selectedTeamId)}
-        onValueChange={(v) => setSelectedTeamId(v === ALL_VALUE ? null : Number(v))}
+        value={selectedTeamId == null ? undefined : String(selectedTeamId)}
+        onValueChange={(v) => setSelectedTeamId(Number(v))}
       >
-        <SelectTrigger className="w-full sm:w-56" aria-label="Team auswählen">
+        <SelectTrigger
+          className="w-full min-w-[7.5rem] truncate sm:w-auto sm:max-w-56"
+          aria-label="Team auswählen"
+        >
           <SelectValue placeholder="Team auswählen" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={ALL_VALUE}>Alle Teams</SelectItem>
           {teams.map((t) => (
             <SelectItem key={t.id} value={String(t.id)}>
               {t.name}

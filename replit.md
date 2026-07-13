@@ -51,7 +51,7 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
   - `GET /users` strikt gescoped, kein globaler Pool. Einzige Ausnahme: `privat`-Konto ohne jedes Team + ohne `teamId` (Erst-Einrichtung); `dienstleister` NIE. `POST /users` legt via `teamId` eine Mitgliedschaft an (keine `users`-Spalte → vor Insert strippen).
   - Dashboard-Admin-Branch team-gescoped (optionaler `teamId`); Assistant-Branch rein userId-personal.
 - **`teamId` NOT NULL** auf shifts/contracts/shift_models/time_tracking — JEDER Insert (inkl. Abwesenheits-Auto-Booking) muss es liefern.
-- Frontend: `context/team.tsx` (Teams nur für Dienstleister, `selectedTeamId` in localStorage) + Team-Switcher.
+- Frontend: `context/team.tsx` (Teams nur für Dienstleister, `selectedTeamId` in localStorage) + Team-Switcher. **Kein „Alle Teams"**: Dienstleister haben IMMER genau ein Team gewählt — bei leerem/ungültigem `selectedTeamId` wird automatisch das erste Team gesetzt; Nicht-Dienstleister bleiben ohne Auswahl.
 
 ## Free/Premium (Entitlements)
 
