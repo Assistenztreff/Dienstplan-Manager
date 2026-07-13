@@ -880,7 +880,7 @@ function useIsMobileViewport() {
   return isMobile;
 }
 
-function useHeaderTier(contentKey: string) {
+function useHeaderTier(contentKey: string, remeasureKey = "") {
   const measureRef = useRef<HTMLDivElement | null>(null);
   const isMobile = useIsMobileViewport();
   const [tier, setTier] = useState<HeaderTier>("labels");
@@ -923,7 +923,10 @@ function useHeaderTier(contentKey: string) {
     const ro = new ResizeObserver(check);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [tier, contentKey, isMobile]);
+    // remeasureKey: Zustaende wie die aktive Mehrfachauswahl aendern die
+    // Button-Breiten, duerfen die Stufe aber NICHT auf "labels" zuruecksetzen
+    // — nur von der aktuellen Stufe aus neu pruefen (Eskalation bei Ueberlauf).
+  }, [tier, contentKey, remeasureKey, isMobile]);
 
   return { measureRef, tier: isMobile ? ("stack" as const) : tier };
 }
@@ -981,12 +984,16 @@ function DienstplanHeader({
     selectedTeamId ?? "none",
     confirmableCount,
     isExporting,
-    isSelectionMode,
     canBasicExport,
     canBulkEdit,
     monthLabel,
   ].join("|");
-  const { measureRef, tier } = useHeaderTier(contentKey);
+  // isSelectionMode ist bewusst KEIN Teil des contentKey: Der Klick auf
+  // "Mehrfachauswahl" wuerde sonst die Stufe hart auf "labels" zuruecksetzen
+  // (Buttons springen sichtbar, Selects ueberlappen waehrend der Neumessung).
+  // Der aktive X-Button ist schmaler als der beschriftete Button, daher
+  // reicht eine Neumessung von der aktuellen Stufe aus (remeasureKey).
+  const { measureRef, tier } = useHeaderTier(contentKey, String(isSelectionMode));
   const showLabels = tier === "labels";
   const stacked = tier === "stack";
 
@@ -1206,7 +1213,10 @@ function DienstplanHeader({
         <div ref={measureRef} className="flex w-full flex-col gap-2.5">
           <div className="flex w-full flex-nowrap items-center gap-2">
             {title}
-            <div className="min-w-0 shrink">
+            {/* KEIN min-w-0: Der Wrapper darf nicht unter die Mindestbreite des
+                Team-Selects schrumpfen, sonst ueberlappt dieses den
+                Assistenten-Filter, statt messbar ueberzulaufen. */}
+            <div className="shrink">
               <TeamSwitcher />
             </div>
             {assistantFilter && (

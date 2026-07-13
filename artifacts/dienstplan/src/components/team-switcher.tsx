@@ -45,7 +45,11 @@ export function TeamSwitcher() {
        (Auto-Auswahl im Team-Context). Breite flexibel: der Switcher darf in
        engen Kopfzeilen schrumpfen (truncate), statt fest 224px zu belegen —
        so bleibt die Label-Stufe der Dienstplanleiste länger erhalten. */
-    <div className="flex min-w-0 shrink items-center gap-2">
+    /* Bewusst KEIN min-w-0 auf dem Wrapper: Er darf nur bis zur Mindestbreite
+       des Select-Triggers (7.5rem) schrumpfen. Mit min-w-0 wuerde der Trigger
+       den Wrapper ueberragen und Nachbarn (Assistenten-Filter) ueberlappen,
+       ohne dass die Ueberlauf-Messung der Kopfzeile anschlaegt. */
+    <div className="flex shrink items-center gap-2">
       <TeamLogo />
       <Select
         value={selectedTeamId == null ? undefined : String(selectedTeamId)}
