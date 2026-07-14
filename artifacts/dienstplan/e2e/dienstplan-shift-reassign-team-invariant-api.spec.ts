@@ -8,10 +8,11 @@ import { TeamTestHarness } from "./helpers/teams";
  * Hintergrund: PATCH /api/shifts/:id akzeptiert als bisher EINZIGER PATCH-Body
  * ein optionales `userId` (Assistenten-Tausch der Massenbearbeitung "Einträge
  * ändern"). Weil das Umbuchen einer Schicht die per User-Join zurückgegebene PII
- * des neuen Assistenten offenlegt, MUSS der Handler dieselbe Member-of-Team-
- * Invariante wie POST erzwingen: `isUserMemberOfTeam(body.userId, oldShift.teamId)`
- * → 403, sonst ließe sich eine Schicht einem teamfremden Nutzer zuordnen und
- * dessen Daten teamübergreifend auslesen. Zusätzlich muss die Überschneidungs-
+ * des neuen Assistenten offenlegt, MUSS der Handler dieselbe Invariante wie POST
+ * erzwingen. Seit dem Aushilfe-Fix (#469) gilt: Mitgliedschaft in irgendeinem
+ * ERLAUBTEN Team des Anfragers genügt (`isUserInAllowedTeams`) — ein Assistent
+ * aus einem anderen eigenen Team ist ein gültiges Umbuchungsziel; Nutzer aus
+ * komplett FREMDEN Konten bleiben 403. Zusätzlich muss die Überschneidungs-
  * prüfung gegen den NEUEN Assistenten laufen. Dieser Test sichert beide Grenzen
  * gegen ein späteres Refactor ab.
  *
@@ -22,7 +23,9 @@ import { TeamTestHarness } from "./helpers/teams";
  * Aufbau:
  * - Team A und Team B desselben Dienstleisters.
  * - `insider` ist Mitglied von Team A (gültiges Umbuchungs-Ziel).
- * - `outsider` ist NUR Mitglied von Team B (teamfremd bzgl. Team A).
+ * - `outsider` ist NUR Mitglied von Team B — seit #469 als Aushilfe ERLAUBT.
+ * - `foreignAdmin` ist ein komplett fremdes Konto (kein Team des Anfragers) —
+ *   weiterhin 403.
  */
 
 const YEAR = new Date().getFullYear();
@@ -40,6 +43,7 @@ let teamB: number;
 let owner: number;
 let insider: number;
 let outsider: number;
+let foreignAdminId: number;
 
 test.beforeAll(async () => {
   h = await TeamTestHarness.login();
@@ -51,28 +55,40 @@ test.beforeAll(async () => {
   // Ursprünglicher Assistent der Schicht + gültiges Team-A-Umbuchungsziel.
   owner = await h.createUser({ role: "assistant", teamId: teamA });
   insider = await h.createUser({ role: "assistant", teamId: teamA });
-  // Teamfremd: nur Mitglied in Team B.
+  // Teamfremd bzgl. Team A: nur Mitglied in Team B (seit #469 gültige Aushilfe).
   outsider = await h.createUser({ role: "assistant", teamId: teamB });
+  // Komplett fremdes Konto: in KEINEM Team des Anfragers.
+  const foreign = await h.seedForeignAdmin();
+  foreignAdminId = foreign.id;
 });
 
 test.afterAll(async () => {
   await h.cleanup();
 });
 
-test("PATCH /api/shifts lehnt Umbuchung auf teamfremden Assistenten mit 403 ab", async () => {
+test("PATCH /api/shifts lehnt Umbuchung auf Nutzer aus fremdem Konto mit 403 ab, erlaubt Aushilfe aus eigenem Team B", async () => {
   const shiftId = await h.createShift(teamA, owner, DAY);
 
+  // Komplett fremder Nutzer (kein Team des Anfragers) -> weiterhin 403.
   const res = await h.ctx.patch(`/api/shifts/${shiftId}`, {
-    data: { userId: outsider },
+    data: { userId: foreignAdminId },
   });
-  expect(res.status(), "Umbuchung auf teamfremden Nutzer sollte 403 liefern").toBe(403);
+  expect(res.status(), "Umbuchung auf kontofremden Nutzer sollte 403 liefern").toBe(403);
 
   // Die Schicht bleibt beim ursprünglichen Assistenten (PATCH nicht angewandt) —
-  // die PII des Team-B-Nutzers wird nicht über die Team-A-Schicht offengelegt.
+  // die PII des fremden Nutzers wird nicht über die Team-A-Schicht offengelegt.
   const check = await h.ctx.get(`/api/shifts/${shiftId}`);
   expect(check.ok(), "GET der Schicht fehlgeschlagen").toBe(true);
   const shift = (await check.json()) as Shift;
   expect(shift.userId).toBe(owner);
+
+  // Aushilfe aus dem eigenen Team B ist seit #469 ein GÜLTIGES Umbuchungsziel.
+  const okRes = await h.ctx.patch(`/api/shifts/${shiftId}`, {
+    data: { userId: outsider },
+  });
+  expect(okRes.status(), "Umbuchung auf Aushilfe aus Team B sollte 200 liefern").toBe(200);
+  const updated = (await okRes.json()) as Shift;
+  expect(updated.userId).toBe(outsider);
 });
 
 test("PATCH /api/shifts bucht auf ein gültiges Team-Mitglied um (200)", async () => {

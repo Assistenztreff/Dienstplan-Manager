@@ -27,7 +27,7 @@ import {
   resolveWriteTeamId,
   getAllowedTeamIds,
   parseTeamIdParam,
-  isUserMemberOfTeam,
+  isUserInAllowedTeams,
   isShiftModelInTeam,
 } from "../lib/teams";
 import {
@@ -641,9 +641,11 @@ router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
     return;
   }
 
-  // Der zugeordnete Nutzer muss Mitglied des Ziel-Teams sein, sonst ließe sich
-  // ein fremder userId ins Team verknüpfen (Cross-Team-PII-Leak).
-  if (!(await isUserMemberOfTeam(body.data.userId, write.teamId))) {
+  // Der zugeordnete Nutzer muss Mitglied mindestens EINES erlaubten Teams des
+  // Anfragers sein (Aushilfe aus einem anderen eigenen Team ist erlaubt; die
+  // Schicht landet trotzdem im Ziel-Team). Nutzer aus komplett fremden Konten
+  // bleiben gesperrt (Cross-Tenant-PII-Leak).
+  if (!(await isUserInAllowedTeams(req.session.userId!, body.data.userId))) {
     res.status(403).json({ error: "Nutzer gehört nicht zu diesem Team" });
     return;
   }
@@ -819,7 +821,9 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
       });
       return;
     }
-    if (!(await isUserMemberOfTeam(body.data.userId, oldShift.teamId))) {
+    // Auch beim Assistenten-Wechsel genügt Mitgliedschaft in irgendeinem
+    // erlaubten Team des Anfragers (Aushilfe aus anderem eigenen Team).
+    if (!(await isUserInAllowedTeams(req.session.userId!, body.data.userId))) {
       res.status(403).json({ error: "Nutzer gehört nicht zu diesem Team" });
       return;
     }
