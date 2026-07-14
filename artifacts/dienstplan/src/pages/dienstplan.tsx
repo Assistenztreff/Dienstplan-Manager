@@ -7,6 +7,7 @@ import {
   useListUsers,
   useListShiftModels,
   useUpdateShift,
+  useListTeams, // NEU: Importiert, um alle Teams des Dienstleisters zu laden
   getListShiftsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -59,8 +60,6 @@ type Shift = {
   user?: { name: string } | null;
 };
 
-// Planungsstatus: Entwurf (intern) → Vorschlag (angeboten) → Bestätigt (fix).
-// Bestätigte Dienste sind der Normalfall und brauchen kein Extra-Label.
 const PLANNING_STATUS_LABELS: Record<string, string> = {
   VORLAEUFIG: "Entwurf",
   ANGEBOTEN: "Vorschlag",
@@ -71,11 +70,6 @@ const PLANNING_STATUS_BADGE_CLASSES: Record<string, string> = {
   ANGEBOTEN: "bg-sky-200 text-sky-900",
 };
 
-// Nicht-bestätigte Dienste werden mit gestricheltem Rand + reduzierter Deckkraft
-// dargestellt, damit Entwürfe/Vorschläge auf einen Blick von verbindlichen
-// Diensten unterscheidbar sind.
-// Entwürfe (VORLAEUFIG) und Vorschläge (ANGEBOTEN) lassen sich mit einem Klick
-// auf FIX (verbindlich) setzen; verbindliche Dienste und Abwesenheiten nicht.
 function isConfirmableShift(shift: Shift): boolean {
   if (shift.type === "vacation" || shift.type === "sick") return false;
   return shift.planningStatus === "VORLAEUFIG" || shift.planningStatus === "ANGEBOTEN";
@@ -117,16 +111,11 @@ function shiftLabel(shift: Shift, modelMap: Map<number, ShiftModelInfo>): string
 }
 
 function shiftBadgeClasses(shift: Shift): string {
-  // Abwesenheiten (Urlaub = Gelb, Krankheit = Grau) behalten bewusst ihre
-  // semantische Farbe, damit sie auf einen Blick als Abwesenheit erkennbar
-  // bleiben und nicht mit Arbeitsschichten verwechselt werden.
   if (isAbsenceShift(shift)) {
     return (
       SHIFT_TYPE_CLASSES[shift.type] ?? "bg-primary/10 text-primary border-primary/25 hover:bg-primary/20"
     );
   }
-  // Alle übrigen Dienste: Farbe ist fest an die Assistenzkraft (userId) gebunden,
-  // nicht an die Schichtart — so erkennt man im Plan sofort, wer arbeitet.
   return userBadgeClass(shift.userId);
 }
 
@@ -136,7 +125,6 @@ function usePersistentState<T extends string>(key: string, fallback: T, allowed:
       const stored = localStorage.getItem(key);
       if (stored != null && (allowed as readonly string[]).includes(stored)) return stored as T;
     } catch {
-      // localStorage nicht verfügbar (z. B. privater Modus) — Fallback nutzen
     }
     return fallback;
   });
@@ -145,7 +133,6 @@ function usePersistentState<T extends string>(key: string, fallback: T, allowed:
     try {
       localStorage.setItem(key, value);
     } catch {
-      // Schreiben fehlgeschlagen — Auswahl gilt nur für diese Sitzung
     }
   }, [key, value]);
 
@@ -164,33 +151,21 @@ const SHIFT_TYPE_DOTS: Record<string, string> = {
   freizeitausgleich: "bg-emerald-500",
 };
 
-// Unverbindliche Dienste (Entwurf/Vorschlag) erscheinen im Monatsgitter als
-// abgeschwächte Punkte — analog zur reduzierten Deckkraft der Badges. So ist
-// auch in der kompaktesten Ansicht erkennbar, dass diese Dienste (noch) nicht
-// in Auswertungen und Stundennachweis zählen.
 function shiftDotStatusClass(shift: Shift): string {
   if (isAbsenceShift(shift)) return "";
   const status = shift.planningStatus ?? "FIX";
   return status === "FIX" ? "" : "opacity-40";
 }
 
-// Abwesenheiten (Urlaub/Krank) werden als ganztägige Tagesblöcke gespeichert —
-// ein Datensatz pro Tag. Mehrtägige Abwesenheiten bestehen aus mehreren
-// aufeinanderfolgenden Datensätzen desselben Typs.
 const ABSENCE_TYPES = new Set(["vacation", "sick", "freizeitausgleich"]);
 function isAbsenceShift(shift: Shift): boolean {
   return ABSENCE_TYPES.has(shift.type);
 }
 
-// Lokaler Datumsschlüssel (yyyy-MM-dd). Wichtig: aus dem ISO-String NICHT per
-// slice extrahieren — die gespeicherte Startzeit ist UTC und kann lokal auf
-// einen anderen Tag fallen. Daher über die lokale Date-Repräsentation.
 function dayKey(date: Date): string {
   return format(date, "yyyy-MM-dd");
 }
 
-// Indexiert Abwesenheiten nach lokalem Tagesschlüssel (für eine bereits auf
-// einen Assistenten gefilterte Schichtmenge).
 function absenceMapFor(shifts: Shift[]): Map<string, Shift> {
   const m = new Map<string, Shift>();
   for (const s of shifts) {
@@ -199,9 +174,6 @@ function absenceMapFor(shifts: Shift[]): Map<string, Shift> {
   return m;
 }
 
-// Zusammenhängende Abwesenheit (durchgehender Block) eines Assistenten. Jeder
-// Tag ist ein eigener Datensatz; hier werden aufeinanderfolgende Tage gleicher
-// Art und Person zu einem Zeitraum zusammengefasst.
 type AbsenceRange = {
   userId: number;
   userName: string;
@@ -213,8 +185,6 @@ type AbsenceRange = {
 };
 
 function buildAbsenceRanges(shifts: Shift[], nameById: Map<number, string>): AbsenceRange[] {
-  // Pro Assistent + Abwesenheitsart gruppieren, dann nach Tag sortieren und
-  // lückenlos aufeinanderfolgende Tage zu einem Zeitraum verschmelzen.
   const byKey = new Map<string, Shift[]>();
   for (const s of shifts) {
     if (!isAbsenceShift(s)) continue;
@@ -234,8 +204,6 @@ function buildAbsenceRanges(shifts: Shift[], nameById: Map<number, string>): Abs
     for (let i = 1; i <= sorted.length; i++) {
       const prev = sorted[i - 1];
       const cur = i < sorted.length ? sorted[i] : undefined;
-      // <= 1 fasst aufeinanderfolgende Tage zusammen und ignoriert
-      // versehentliche Doppel-Datensätze am selben Tag (Differenz 0).
       const consecutive = cur != null && differenceInCalendarDays(cur.d, prev.d) <= 1;
       if (!consecutive) {
         const first = sorted[runStartIdx];
@@ -268,10 +236,6 @@ function absenceRangeLabel(r: AbsenceRange): string {
   return `${format(r.start, "d. MMM", { locale: de })} – ${format(r.end, "d. MMM", { locale: de })}`;
 }
 
-// Kompakte Übersicht „wer ist gerade / demnächst abwesend?" über das ganze
-// (team-gescopte) Team. Datenquelle: alle Schichten des angezeigten Monats,
-// gefiltert auf Abwesenheiten und auf aktuell laufende bzw. anstehende
-// Zeiträume (Ende heute oder später). Gruppiert nach Kalenderwoche.
 function TeamAbsenceOverview({
   shifts,
   assistants,
@@ -283,8 +247,6 @@ function TeamAbsenceOverview({
   onShiftClick: (shift: Shift) => void;
   canEdit: boolean;
 }) {
-  // Standardmaessig eingeklappt, damit im Full-Screen-Layout maximale Hoehe
-  // fuer den Kalender bleibt; bei Bedarf per Klick aufklappbar.
   const [open, setOpen] = useState(false);
   const today = startOfDay(new Date());
   const nameById = new Map(assistants.map((a) => [a.id, a.name]));
@@ -414,24 +376,17 @@ function ShiftBadge({
   showName?: boolean;
   modelMap: Map<number, ShiftModelInfo>;
   onClick?: (e: React.MouseEvent) => void;
-  // Ein-Klick-Bestätigung (Entwurf/Vorschlag → verbindlich), nur für Admins.
   onConfirm?: (shift: Shift) => void;
 }) {
   const classes = shiftBadgeClasses(shift);
-  // Abwesenheiten (Urlaub/Krank) haben keine Uhrzeiten → als ganztägiger Block ohne Zeit.
   const isAbsence = shift.type === "vacation" || shift.type === "sick";
   const start = new Date(shift.startTime);
   const end = new Date(shift.endTime);
   const startLabel = format(start, "HH:mm");
   const endLabel = format(end, "HH:mm");
-  // 24-Stunden-Dienst: Start- und Enduhrzeit sind identisch (z. B. 08:00–08:00),
-  // die Schicht läuft aber volle 24 Stunden (Ende am Folgetag, daher
-  // unterschiedliche Zeitpunkte). Der Legacy-Typ "full_day" zählt explizit dazu.
   const is24h =
     shift.type === "full_day" || (startLabel === endLabel && start.getTime() !== end.getTime());
   const label = shiftLabel(shift, modelMap);
-  // Abwesenheiten (Urlaub/Krank) sind sofort verbindlich; ein Planungs-Label
-  // gilt nur für reguläre Dienste mit Entwurf-/Vorschlag-Status.
   const statusLabel = !isAbsence ? PLANNING_STATUS_LABELS[shift.planningStatus ?? ""] : undefined;
   return (
     <div
@@ -459,20 +414,14 @@ function ShiftBadge({
             {startLabel}–{endLabel}
             {!isSameDay(start, end) && <span className="opacity-70"> (+1)</span>}
           </div>
-          {/* Gut sichtbarer Hinweis direkt unter der Endzeit, damit ein 24h-Dienst
-              nicht mit einer 0-Stunden- oder normalen Schicht verwechselt wird. */}
           {is24h && (
             <div className="mt-0.5 inline-flex items-center rounded bg-foreground/15 px-1 py-px text-[10px] font-semibold uppercase tracking-wide">
               24h-Dienst
             </div>
           )}
-          {/* Schichtname: standardmäßig ausgeschrieben, bei Platzmangel (enge
-              Tabellen-/Gitterspalten) per truncate mit Ellipsis gekürzt. */}
           <div className="text-[11px] opacity-70 truncate">{label}</div>
         </>
       )}
-      {/* Ein-Klick-Bestätigung direkt am Badge: Entwurf/Vorschlag → verbindlich,
-          ohne den Dialog öffnen und den Status manuell umstellen zu müssen. */}
       {onConfirm && isConfirmableShift(shift) && (
         <button
           type="button"
@@ -492,10 +441,6 @@ function ShiftBadge({
   );
 }
 
-// Segment eines durchgehenden Abwesenheitsbalkens in der Desktop-Tabelle.
-// Jeder Tag einer mehrtägigen Abwesenheit ist ein eigener Datensatz; die
-// Segmente werden über negative Ränder visuell zu einem Balken verbunden.
-// Der Typ-Name erscheint nur am Anfang (isStart) des Balkens.
 function AbsenceTableBar({
   shift,
   isStart,
@@ -544,7 +489,6 @@ function AgendaView({
   onShiftClick: (shift: Shift) => void;
   onConfirmShift?: (shift: Shift) => void;
   canEdit: boolean;
-  // Auswahl-Modus (Massenbearbeitung): Klick auf einen Tag wählt ihn aus.
   selectionMode?: boolean;
   selectedDates?: string[];
   onToggleDate?: (day: Date) => void;
@@ -643,21 +587,15 @@ function MonthGrid({
   onShiftClick: (shift: Shift) => void;
   onConfirmShift?: (shift: Shift) => void;
   canEdit: boolean;
-  // Auswahl-Modus (Massenbearbeitung): Klick auf einen Tag wählt ihn aus,
-  // statt den Tag als Detail zu öffnen.
   selectionMode?: boolean;
   selectedDates?: string[];
   onToggleDate?: (day: Date) => void;
 }) {
   const selectedDateSet = new Set(selectedDates ?? []);
-  // Montag als erster Wochentag (date-fns: 0 = Sonntag).
   const offset = (getDay(monthStart) + 6) % 7;
   const blanks = Array.from({ length: offset });
   const selectedShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), selectedDay));
 
-  // Abwesenheits-Typen je Tag (über alle sichtbaren Assistenten aggregiert), um
-  // zusammenhängende Urlaubs-/Kranktage als durchgehenden Balken mit klar
-  // erkennbarem Anfang/Ende darzustellen.
   const absenceTypesByDay = new Map<string, Set<string>>();
   for (const s of shifts) {
     if (!isAbsenceShift(s)) continue;
@@ -670,7 +608,6 @@ function MonthGrid({
 
   return (
     <div className="space-y-3">
-      {/* Monatsgitter mit hellblauem Rahmen, weißen Kästchen */}
       <div className="rounded-2xl bg-sky-50 border border-sky-100 p-2">
         <div className="grid grid-cols-7 gap-1 mb-1">
           {WEEKDAY_LABELS.map((d) => (
@@ -687,7 +624,6 @@ function MonthGrid({
             const dayShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), day));
             const selected = isSameDay(day, selectedDay);
             const today = isToday(day);
-            // Reguläre Dienste als Punkte; Abwesenheiten als verbundener Balken.
             const dots = dayShifts.filter((s) => !isAbsenceShift(s)).slice(0, 3);
             const prevDay = dayIdx > 0 ? days[dayIdx - 1] : undefined;
             const nextDay = dayIdx < days.length - 1 ? days[dayIdx + 1] : undefined;
@@ -706,8 +642,6 @@ function MonthGrid({
                   />
                 );
               });
-            // Im Auswahl-Modus zählt die Mehrfach-Auswahl (selectedDates),
-            // sonst der einzelne Detail-Tag (selectedDay).
             const bulkSelected = selectionMode && selectedDateSet.has(format(day, "yyyy-MM-dd"));
             return (
               <button
@@ -720,9 +654,6 @@ function MonthGrid({
                     onToggleDate?.(day);
                     return;
                   }
-                  // Tag als Detail auswählen UND (für Admins) direkt den
-                  // Schicht-Dialog mit vorbelegtem Datum öffnen — wie in der
-                  // Tabellenansicht.
                   onSelectDay(day);
                   if (canEdit) onAddShift(day);
                 }}
@@ -765,7 +696,6 @@ function MonthGrid({
         </div>
       </div>
 
-      {/* Tagesdetails */}
       <div className="rounded-lg border border-border/40 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2.5 bg-muted/40">
           <div>
@@ -817,9 +747,6 @@ function ViewToggle({
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: string; icon: LucideIcon }[];
-  // Platzbasiert statt Breakpoint: Der Header entscheidet anhand des real
-  // verfuegbaren Platzes, ob die Beschriftungen sichtbar sind (Icon-only als
-  // Eskalationsstufe bei Platzmangel).
   showLabels: boolean;
 }) {
   return (
@@ -849,21 +776,8 @@ function ViewToggle({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Adaptive Kopfzeile: drei Eskalationsstufen je nach real verfuegbarem Platz.
-//   labels → einzeilig mit Text-Beschriftungen
-//   icons  → einzeilig, Aktionen als reine Icon-Buttons
-//   stack  → zweizeilig nach dem Smartphone-Mockup "Aktionen unten"
-//            (Zeile 1: Titel + Filter, Zeile 2: Ansicht/Aktionen/Monat)
-// Gemessen wird der tatsaechliche Ueberlauf des Zeilen-Containers (nicht ein
-// fester Breakpoint), damit auch lange Filter-Namen, der Team-Switcher oder
-// eine schmale iframe-Einbettung korrekt reagieren.
-// ---------------------------------------------------------------------------
 type HeaderTier = "labels" | "icons" | "stack";
 
-// Smartphone-Erkennung (Tailwind-sm-Grenze): Auf Handys gilt IMMER das feste
-// Zwei-Zeilen-Layout aus dem Mockup — auch wenn wenige Aktionen theoretisch in
-// eine Zeile passen wuerden. Die messbasierte Eskalation greift nur darueber.
 const MOBILE_STACK_QUERY = "(max-width: 639px)";
 
 function useIsMobileViewport() {
@@ -886,20 +800,15 @@ function useHeaderTier(contentKey: string, remeasureKey = "") {
   const [tier, setTier] = useState<HeaderTier>("labels");
   const tierRef = useRef<HeaderTier>(tier);
   tierRef.current = tier;
-  // Merkt sich, bei welcher Container-Breite eine Stufe zuletzt uebergelaufen
-  // ist — erst deutlich oberhalb davon wird die groessere Stufe erneut
-  // probiert (Hysterese gegen Flackern an der Kante).
   const failedAt = useRef<{ labels: number; icons: number }>({ labels: 0, icons: 0 });
 
-  // Inhalts-Aenderungen (Badge erscheint, Label wechselt, Filterwahl …)
-  // veraendern den Platzbedarf → von der groessten Stufe aus neu messen.
   useLayoutEffect(() => {
     failedAt.current = { labels: 0, icons: 0 };
     setTier("labels");
   }, [contentKey]);
 
   useLayoutEffect(() => {
-    if (isMobile) return; // Handy: Stufe ist fix "stack", nichts messen.
+    if (isMobile) return;
     const el = measureRef.current;
     if (!el) return;
     const check = () => {
@@ -911,8 +820,6 @@ function useHeaderTier(contentKey: string, remeasureKey = "") {
         setTier(t === "labels" ? "icons" : "stack");
         return;
       }
-      // Wieder mehr Platz? Eine Stufe zurueck (mit Puffer), der naechste
-      // Messdurchlauf eskaliert notfalls erneut.
       if (t === "stack" && width > failedAt.current.icons + 48) {
         setTier("icons");
       } else if (t === "icons" && failedAt.current.labels > 0 && width > failedAt.current.labels + 48) {
@@ -923,9 +830,6 @@ function useHeaderTier(contentKey: string, remeasureKey = "") {
     const ro = new ResizeObserver(check);
     ro.observe(el);
     return () => ro.disconnect();
-    // remeasureKey: Zustaende wie die aktive Mehrfachauswahl aendern die
-    // Button-Breiten, duerfen die Stufe aber NICHT auf "labels" zuruecksetzen
-    // — nur von der aktuellen Stufe aus neu pruefen (Eskalation bei Ueberlauf).
   }, [tier, contentKey, remeasureKey, isMobile]);
 
   return { measureRef, tier: isMobile ? ("stack" as const) : tier };
@@ -975,8 +879,6 @@ function DienstplanHeader({
   onNextMonth: () => void;
 }) {
   const { selectedTeamId } = useTeam();
-  // Alles, was die benoetigte Breite der Leiste veraendert, fliesst in den
-  // Mess-Schluessel ein → bei Aenderung wird von "labels" aus neu gemessen.
   const contentKey = [
     isAdmin,
     assistants.length,
@@ -987,14 +889,6 @@ function DienstplanHeader({
     canBulkEdit,
     monthLabel,
   ].join("|");
-  // isSelectionMode und isExporting sind bewusst KEIN Teil des contentKey:
-  // Der Klick auf "Mehrfachauswahl" bzw. "Monats-PDF" wuerde sonst die Stufe
-  // hart auf "labels" zuruecksetzen (Buttons springen sichtbar auf
-  // Beschriftungen, Selects ueberlappen waehrend der Neumessung).
-  // Der aktive X-Button ist schmaler als der beschriftete Button, und der
-  // Export-Text ("Exportiere...") aendert die Breite nur in der Labels-Stufe —
-  // daher reicht jeweils eine Neumessung von der aktuellen Stufe aus
-  // (remeasureKey).
   const { measureRef, tier } = useHeaderTier(
     contentKey,
     [isSelectionMode, isExporting].join("|"),
@@ -1045,8 +939,6 @@ function DienstplanHeader({
     </Select>
   );
 
-  // Ansicht-Umschalter: mobil Liste/Monat, ab md Tabelle/Monat (an den
-  // darunter gerenderten Inhalt gekoppelt); Beschriftung platzbasiert.
   const viewToggles = (
     <>
       <div className="md:hidden" data-testid="view-toggles-mobile">
@@ -1074,9 +966,6 @@ function DienstplanHeader({
     </>
   );
 
-  // Sammelaktion: alle Entwürfe/Vorschläge des sichtbaren Monats mit einem
-  // Klick verbindlich machen. Nur sichtbar, solange es etwas zu bestätigen
-  // gibt. Im Icon-Modus wandert der Zähler als Badge an die Button-Ecke.
   const confirmAllButton = isAdmin && confirmableCount > 0 && (
     <Button
       variant="outline"
@@ -1104,8 +993,6 @@ function DienstplanHeader({
     </Button>
   );
 
-  // Einfacher Monats-Export (basicExport, auch im Free-Plan): PDF des
-  // sichtbaren Monats mit bestätigten Diensten und Abwesenheiten.
   const exportButton = canBasicExport && (
     <Button
       variant="outline"
@@ -1122,15 +1009,10 @@ function DienstplanHeader({
     </Button>
   );
 
-  // Massenbearbeitung ist ein Premium-Feature. Free-Konten sehen den Button
-  // deaktiviert mit Upgrade-Hinweis (Durchsetzung zusaetzlich serverseitig).
   const selectionButton =
     isAdmin &&
     (canBulkEdit ? (
       isSelectionMode ? (
-        /* Aktive Mehrfachauswahl: in ALLEN Stufen ein echter Icon-Button —
-           gelb hervorgehoben, NUR das X. size="icon" unterdrückt zugleich den
-           automatischen Pfeil der Button-Komponente an gelben Default-Buttons. */
         <Button
           variant="default"
           size="icon"
@@ -1171,8 +1053,6 @@ function DienstplanHeader({
       </Button>
     ));
 
-  // Monatswechsler: Pfeile direkt am Monatstext. In der Zwei-Zeilen-Ansicht
-  // waechst das Monatslabel auf Ueberschrift-Groesse (nicht fett) mit.
   const monthSwitcher = (
     <div className={`flex items-center gap-0.5 ${stacked ? "min-w-0" : "shrink-0"}`}>
       <Button
@@ -1211,16 +1091,9 @@ function DienstplanHeader({
   return (
     <div className="sticky top-0 z-40 -mx-4 -mt-4 mb-1 border-b border-border/40 bg-white/95 px-4 py-3 backdrop-blur md:-mx-6 md:-mt-6 md:px-6">
       {stacked ? (
-        /* Zwei-Zeilen-Struktur nach dem gewaehlten Mockup "Aktionen unten":
-           Zeile 1: Titel (+ Team-Switcher) links, Assistenten-Filter rechts.
-           Zeile 2: Ansicht-Umschalter, Aktions-Icons, Monatswechsler rechts.
-           Beide Zeilen sind nowrap — mehr als zwei Zeilen gibt es nie. */
         <div ref={measureRef} className="flex w-full flex-col gap-2.5">
           <div className="flex w-full flex-nowrap items-center gap-2">
             {title}
-            {/* KEIN min-w-0: Der Wrapper darf nicht unter die Mindestbreite des
-                Team-Selects schrumpfen, sonst ueberlappt dieses den
-                Assistenten-Filter, statt messbar ueberzulaufen. */}
             <div className="shrink">
               <TeamSwitcher />
             </div>
@@ -1237,9 +1110,6 @@ function DienstplanHeader({
           </div>
         </div>
       ) : (
-        /* Einzeilig (Desktop/Tablet bzw. genug Platz): alles in EINER Zeile.
-           flex-nowrap, damit Platzmangel als Ueberlauf messbar ist und die
-           Leiste kontrolliert eskaliert statt frei umzubrechen. */
         <div ref={measureRef} className="flex w-full flex-nowrap items-center gap-2">
           {title}
           <TeamSwitcher />
@@ -1257,9 +1127,6 @@ function DienstplanHeader({
   );
 }
 
-// Anzahl Kalendermonate, die `target` nach `now` liegt (0 = selber Monat,
-// negativ = Vergangenheit). Spiegelt die serverseitige historyMonths-Pruefung
-// (monthsAhead) fuer das Free-Vorausplanungs-Limit.
 function monthsAhead(target: Date, now: Date): number {
   return (
     (target.getFullYear() - now.getFullYear()) * 12 +
@@ -1270,16 +1137,9 @@ function monthsAhead(target: Date, now: Date): number {
 export default function Dienstplan() {
   const { currentUser } = useAuth();
   const isAdmin = isAdminRole(currentUser?.role);
-  // Massenbearbeitung ("Mehrfachauswahl") nur im Premium-Plan.
   const canBulkEdit = hasAccess(currentUser, "bulkEdit");
-  // Free-Plan begrenzt die Vorausplanung (historyMonths, Free = 1 → aktueller
-  // und naechster Monat). `null` = unbegrenzt (Premium). Bestandsschutz:
-  // vergangene/aktuelle Monate bleiben uneingeschraenkt; nur das NEUE Planen in
-  // zu weit entfernten Zukunfts-Monaten wird gesperrt (Durchsetzung zusaetzlich
-  // serverseitig).
   const forwardLimit = getLimit(currentUser, "historyMonths");
 
-  // Optionales Zieldatum (z.B. vom Dashboard-Hinweis "Tage ohne geplante Schicht").
   const [searchParams] = useSearchParams();
   const [, navigate] = useLocation();
   const initialDate = (() => {
@@ -1305,7 +1165,6 @@ export default function Dienstplan() {
   );
   const [selectedDay, setSelectedDay] = useState<Date>(() => initialDate);
 
-  // Auswahl-Modus (Massenbearbeitung mehrerer Tage). Tage als "yyyy-MM-dd".
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
 
@@ -1318,25 +1177,24 @@ export default function Dienstplan() {
   const { data: shifts, isLoading: shiftsLoading } = useListShifts({ month, year, ...teamParam });
   const queryClient = useQueryClient();
   const updateShift = useUpdateShift();
-  // Verhindert Doppelklicks während eine Bestätigung läuft.
   const [confirmingShiftId, setConfirmingShiftId] = useState<number | null>(null);
-  // Läuft gerade die Sammelbestätigung aller Entwürfe/Vorschläge des Monats?
   const [isBulkConfirming, setIsBulkConfirming] = useState(false);
   const { data: users, isLoading: usersLoading } = useListUsers(
     selectedTeamId != null ? { teamId: selectedTeamId } : undefined
   );
 
+  // NEU: Alle eigenen Teams des Dienstleisters abfragen für den Aushilfen-Zweck
+  const { data: rawTeams } = useListTeams();
+  const teamsData = (rawTeams ?? []).map((t) => ({ id: t.id, name: t.name }));
+
   const goToMonth = (newDate: Date) => {
     setCurrentDate(newDate);
     setSelectedDay(startOfMonth(newDate));
-    // Auswahl gilt nur für den aktuell sichtbaren Monat — beim Monatswechsel
-    // verwerfen, damit Massenaktionen nie auf unsichtbare Tage wirken.
     clearSelection();
   };
   const prevMonth = () => goToMonth(new Date(year, month - 2, 1));
   const nextMonth = () => goToMonth(new Date(year, month, 1));
 
-  // Team-Wechsel zeigt andere Daten — bestehende Auswahl verwerfen.
   useEffect(() => {
     setSelectedDates([]);
     setIsSelectionMode(false);
@@ -1352,7 +1210,6 @@ export default function Dienstplan() {
     ? [{ id: currentUser.id, name: currentUser.name }]
     : [];
 
-  // Erst prüfen, wenn die Assistentenliste geladen ist (sonst fälschlich zurücksetzen)
   const [selectedAssistant, setSelectedAssistant] = useSelectedAssistant(
     assistants,
     !(isAdmin && usersLoading),
@@ -1376,13 +1233,10 @@ export default function Dienstplan() {
 
   function openCreate(date: Date, userId?: number) {
     if (!isAdmin) return;
-    // Free-Plan: Vorausplanung in zu weit entfernte Zukunfts-Monate sperren
-    // (freundlicher Hinweis statt rohem 403 beim Speichern).
     if (forwardLimit !== null && monthsAhead(date, new Date()) > forwardLimit) {
       toast.error(
         "Im Free-Tarif nur bis nächsten Monat planbar. Für eine längere Vorausplanung auf Premium upgraden.",
         {
-          // Kein Dead-End: direkt zur Preise-/Upgrade-Seite fuehren.
           action: { label: "Zu Premium", onClick: () => navigate("/preise") },
         },
       );
@@ -1396,10 +1250,6 @@ export default function Dienstplan() {
     setDialog({ mode: "edit", shift });
   }
 
-  // Ein-Klick-Bestätigung aus dem Kalender: setzt einen Entwurf/Vorschlag per
-  // PATCH auf FIX (verbindlich), ohne den Dialog zu öffnen. `force: true`, weil
-  // sich Zeiten/Zuordnung nicht ändern — eine ggf. bewusst angelegte
-  // Überschneidung darf die reine Status-Bestätigung nicht blockieren.
   async function confirmShift(shift: Shift) {
     if (!isAdmin || confirmingShiftId !== null) return;
     setConfirmingShiftId(shift.id);
@@ -1417,15 +1267,8 @@ export default function Dienstplan() {
     }
   }
 
-  // Alle offenen Entwürfe (VORLAEUFIG) und Vorschläge (ANGEBOTEN) des sichtbaren
-  // Monats im aktuellen Team-Scope — Abwesenheiten sind nie betroffen
-  // (isConfirmableShift filtert sie aus). Bewusst allShifts statt visibleShifts:
-  // Die Sammelaktion gilt für den ganzen Monat, unabhängig vom Assistenten-Filter.
   const confirmableShifts = allShifts.filter(isConfirmableShift);
 
-  // Sammelbestätigung: setzt alle Entwürfe/Vorschläge des Monats nacheinander
-  // per PATCH auf FIX. Wie bei der Einzel-Bestätigung mit `force: true`, weil
-  // sich Zeiten/Zuordnung nicht ändern. Teilfehler werden gezählt und gemeldet.
   async function confirmAllDrafts() {
     if (!isAdmin || isBulkConfirming) return;
     const targets = allShifts.filter(isConfirmableShift);
@@ -1474,7 +1317,6 @@ export default function Dienstplan() {
 
   function toggleSelectionMode() {
     setIsSelectionMode((prev) => {
-      // Beim Verlassen die Auswahl leeren.
       if (prev) setSelectedDates([]);
       return !prev;
     });
@@ -1492,11 +1334,6 @@ export default function Dienstplan() {
     setIsSelectionMode(false);
   }
 
-  // Einfacher Monats-Export (Free-Feature "basicExport"): PDF direkt aus der
-  // Schichtliste des sichtbaren Monats — bestätigte Dienste UND Abwesenheiten
-  // (Urlaub/Krank), ohne Zeiterfassung/Soll-Ist (das bleibt der Premium-
-  // Stundennachweis). Für Admins (gefiltert bzw. alle Assistenten) und für
-  // Assistenzkräfte (eigene Dienste, serverseitig gescoped).
   const canBasicExport = hasAccess(currentUser, "basicExport");
   const [isExporting, setIsExporting] = useState(false);
 
@@ -1532,9 +1369,6 @@ export default function Dienstplan() {
     }
   }
 
-  // Adaptive Steuerleiste (eigene Komponente DienstplanHeader): einzeilig mit
-  // Beschriftungen, solange der Platz reicht; bei Platzmangel erst Icon-only,
-  // dann die Zwei-Zeilen-Struktur des Smartphone-Mockups. Bleibt sticky oben.
   const header = (
     <DienstplanHeader
       isAdmin={isAdmin}
@@ -1562,8 +1396,6 @@ export default function Dienstplan() {
 
   if (isLoading) {
     return (
-      /* Gleiches Geruest wie der geladene Zustand: natuerlich fliessender
-         Inhalt, der mit der Seite scrollt (kein viewport-fixes Grid mehr). */
       <div className="flex flex-col gap-3 animate-in fade-in duration-300">
         {header}
         <div className="space-y-3">
@@ -1579,15 +1411,9 @@ export default function Dienstplan() {
     isAdmin && forwardLimit !== null && monthsAhead(currentDate, new Date()) > forwardLimit;
 
   return (
-    /* Natuerlich fliessendes Layout: der Inhalt waechst mit seiner Hoehe und
-       scrollt mit der Seite (der aeussere Scroll-Container liegt im Layout).
-       Volle Breite; die Kopfzeile bleibt beim Scrollen sticky oben. */
     <div className="flex flex-col gap-3 animate-in fade-in duration-300">
       {header}
 
-      {/* Free-Plan: Hinweis, wenn der angezeigte Monat ausserhalb des erlaubten
-          Vorausplanungs-Fensters liegt. Bestehende Schichten bleiben sichtbar;
-          nur das Anlegen neuer Schichten ist gesperrt. */}
       {forwardPlanningBlocked && (
         <PlanLimitBanner>
           Im Free-Tarif nur bis nächsten Monat planbar. Für eine längere Vorausplanung ist ein
@@ -1595,11 +1421,6 @@ export default function Dienstplan() {
         </PlanLimitBanner>
       )}
 
-      {/* Mobile: umschaltbare Ansicht (Liste / Monatsgitter). Der Kalender
-          nutzt die volle Breite und waechst mit seiner Hoehe (kein interner
-          Scrollbalken mehr) — gescrollt wird die ganze Seite. Der Umschalter
-          selbst sitzt in der Header-Zeile. Der Assistenten-Filter liegt jetzt
-          als kompaktes Select neben dem Titel. */}
       <div className="flex flex-col md:hidden" data-testid="dienstplan-mobile">
         <div className="w-full">
         {mobileView === "list" ? (
@@ -1635,10 +1456,6 @@ export default function Dienstplan() {
         </div>
       </div>
 
-      {/* Desktop: umschaltbare Ansicht (Tabelle / Monatsgitter). Kalender in
-          voller Breite; der Inhalt waechst mit seiner Hoehe und scrollt mit
-          der Seite (keine starren inneren Scrollbalken). Der Umschalter selbst
-          sitzt in der Header-Zeile. */}
       <div className="hidden flex-col md:flex" data-testid="dienstplan-desktop">
         <div className="w-full">
         {desktopView === "grid" ? (
@@ -1658,173 +1475,159 @@ export default function Dienstplan() {
             onToggleDate={toggleDate}
           />
         ) : (
-      /* Tabelle in voller Breite: waechst mit ihrer natuerlichen Hoehe und
-         scrollt mit der Seite (kein starrer interner Vertikal-Scroll).
-         Horizontal bleibt die Tabelle bei Bedarf wischbar (overflow-x-auto). */
-      <Card className="w-full overflow-x-auto border-border/50 shadow-sm">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="h-px border-b bg-muted/50">
-              <th className="p-3 text-left font-medium sticky left-0 bg-muted/50 backdrop-blur-sm z-10 w-48">
-                {isAdmin ? "Assistent" : "Schicht"}
-              </th>
-              {days.map((day) => {
-                const colSelected =
-                  isSelectionMode && selectedDates.includes(format(day, "yyyy-MM-dd"));
-                return (
-                <th
-                  key={day.toISOString()}
-                  data-testid={isSelectionMode ? `col-header-${format(day, "yyyy-MM-dd")}` : undefined}
-                  data-selected={colSelected ? "true" : "false"}
-                  onClick={isSelectionMode && isAdmin ? () => toggleDate(day) : undefined}
-                  className={`p-2 font-medium text-center min-w-[56px] ${
-                    colSelected
-                      ? "bg-primary/10 ring-1 ring-inset ring-primary"
-                      : isToday(day)
-                        ? "bg-primary/10"
-                        : ""
-                  } ${isSelectionMode && isAdmin ? "cursor-pointer hover:bg-primary/5" : ""}`}
-                >
-                  <div className="text-xs text-muted-foreground">{format(day, "E", { locale: de })}</div>
-                  <div
-                    className={`text-sm ${
-                      isToday(day)
-                        ? "bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center mx-auto"
-                        : ""
-                    }`}
-                  >
-                    {format(day, "d")}
-                  </div>
-                </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {tableAssistants.length === 0 ? (
-              <tr>
-                <td colSpan={days.length + 1} className="p-8 text-center text-muted-foreground">
-                  Keine Einträge gefunden.
-                </td>
-              </tr>
-            ) : (
-              tableAssistants.map((assistant) => {
-                const assistantShifts = allShifts.filter((s) => s.userId === assistant.id);
-                const absMap = absenceMapFor(assistantShifts);
-                // Keine feste Zeilenhoehe: die Zeilen strecken sich ueber die
-                // Tabellenhoehe und teilen den Platz gleichmaessig auf.
-                return (
-                <tr
-                  key={assistant.id}
-                  className="border-b last:border-0 hover:bg-muted/20 transition-colors"
-                >
-                  <td className="px-3 py-1.5 font-medium sticky left-0 bg-card hover:bg-muted/20 transition-colors z-10 shadow-[1px_0_0_0_hsl(var(--border))]">
-                    {isAdmin ? (
-                      <span className="inline-flex items-center gap-2">
-                        {/* Farb-Punkt als Legende: gleiche Personenfarbe wie die
-                            Dienst-Kacheln dieser Zeile. */}
-                        <span className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${userDotClass(assistant.id)}`} />
-                        {assistant.name}
-                      </span>
-                    ) : (
-                      "Meine Schichten"
-                    )}
-                  </td>
-                  {days.map((day, dayIdx) => {
-                    const dayShifts = assistantShifts.filter(
-                      (s) => isSameDay(new Date(s.startTime), day)
-                    );
-                    const regular = dayShifts.filter((s) => !isAbsenceShift(s));
-                    const absence = absMap.get(dayKey(day));
-                    // Anfang/Ende eines durchgehenden Balkens: Vortag bzw. Folgetag
-                    // ohne gleichartige Abwesenheit (oder Monatsrand).
-                    let isStart = true;
-                    let isEnd = true;
-                    if (absence) {
-                      const prev = dayIdx > 0 ? absMap.get(dayKey(days[dayIdx - 1])) : undefined;
-                      const next =
-                        dayIdx < days.length - 1 ? absMap.get(dayKey(days[dayIdx + 1])) : undefined;
-                      isStart = !prev || prev.type !== absence.type;
-                      isEnd = !next || next.type !== absence.type;
-                    }
+          <Card className="w-full overflow-x-auto border-border/50 shadow-sm">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="h-px border-b bg-muted/50">
+                  <th className="p-3 text-left font-medium sticky left-0 bg-muted/50 backdrop-blur-sm z-10 w-48">
+                    {isAdmin ? "Assistent" : "Schicht"}
+                  </th>
+                  {days.map((day) => {
                     const colSelected =
                       isSelectionMode && selectedDates.includes(format(day, "yyyy-MM-dd"));
-                    // Im Auswahl-Modus toggelt ein Klick die Spalte; sonst
-                    // legt er eine Schicht für diese Person/diesen Tag an.
-                    const cellClickable = isAdmin;
                     return (
-                      <td
-                        key={day.toISOString()}
-                        className={`p-1 border-l border-border/30 align-top ${
-                          cellClickable ? "cursor-pointer group" : ""
-                        } ${
-                          colSelected
-                            ? "bg-primary/5"
-                            : isToday(day)
-                              ? "bg-primary/5"
-                              : isAdmin && !isSelectionMode
-                                ? "hover:bg-muted/30"
-                                : ""
+                    <th
+                      key={day.toISOString()}
+                      data-testid={isSelectionMode ? `col-header-${format(day, "yyyy-MM-dd")}` : undefined}
+                      data-selected={colSelected ? "true" : "false"}
+                      onClick={isSelectionMode && isAdmin ? () => toggleDate(day) : undefined}
+                      className={`p-2 font-medium text-center min-w-[56px] ${
+                        colSelected
+                          ? "bg-primary/10 ring-1 ring-inset ring-primary"
+                          : isToday(day)
+                            ? "bg-primary/10"
+                            : ""
+                      } ${isSelectionMode && isAdmin ? "cursor-pointer hover:bg-primary/5" : ""}`}
+                    >
+                      <div className="text-xs text-muted-foreground">{format(day, "E", { locale: de })}</div>
+                      <div
+                        className={`text-sm ${
+                          isToday(day)
+                            ? "bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center mx-auto"
+                            : ""
                         }`}
-                        onClick={
-                          isAdmin
-                            ? isSelectionMode
-                              ? () => toggleDate(day)
-                              : () => openCreate(day, assistant.id)
-                            : undefined
-                        }
-                        title={
-                          isAdmin && !isSelectionMode
-                            ? "Klicken zum Anlegen einer Schicht"
-                            : undefined
-                        }
                       >
-                        <div className="space-y-1 min-h-[26px]">
-                          {absence && (
-                            <AbsenceTableBar
-                              shift={absence}
-                              isStart={isStart}
-                              isEnd={isEnd}
-                              modelMap={modelMap}
-                              onClick={
-                                isAdmin && !isSelectionMode
-                                  ? (e) => { e.stopPropagation(); openEdit(absence); }
-                                  : undefined
-                              }
-                            />
-                          )}
-                          {regular.map((s) => (
-                            <ShiftBadge
-                              key={s.id}
-                              shift={s}
-                              modelMap={modelMap}
-                              onClick={isAdmin && !isSelectionMode ? (e) => { e.stopPropagation(); openEdit(s); } : undefined}
-                              onConfirm={isAdmin && !isSelectionMode ? confirmShift : undefined}
-                            />
-                          ))}
-                          {dayShifts.length === 0 && isAdmin && (
-                            <div className="hidden group-hover:flex items-center justify-center h-8 text-muted-foreground/40">
-                              <Plus className="h-3.5 w-3.5" />
-                            </div>
-                          )}
-                        </div>
-                      </td>
+                        {format(day, "d")}
+                      </div>
+                    </th>
                     );
                   })}
                 </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </Card>
+              </thead>
+              <tbody>
+                {tableAssistants.length === 0 ? (
+                  <tr>
+                    <td colSpan={days.length + 1} className="p-8 text-center text-muted-foreground">
+                      Keine Einträge gefunden.
+                    </td>
+                  </tr>
+                ) : (
+                  tableAssistants.map((assistant) => {
+                    const assistantShifts = allShifts.filter((s) => s.userId === assistant.id);
+                    const absMap = absenceMapFor(assistantShifts);
+                    return (
+                    <tr
+                      key={assistant.id}
+                      className="border-b last:border-0 hover:bg-muted/20 transition-colors"
+                    >
+                      <td className="px-3 py-1.5 font-medium sticky left-0 bg-card hover:bg-muted/20 transition-colors z-10 shadow-[1px_0_0_0_hsl(var(--border))]">
+                        {isAdmin ? (
+                          <span className="inline-flex items-center gap-2">
+                            <span className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${userDotClass(assistant.id)}`} />
+                            {assistant.name}
+                          </span>
+                        ) : (
+                          "Meine Schichten"
+                        )}
+                      </td>
+                      {days.map((day, dayIdx) => {
+                        const dayShifts = assistantShifts.filter(
+                          (s) => isSameDay(new Date(s.startTime), day)
+                        );
+                        const regular = dayShifts.filter((s) => !isAbsenceShift(s));
+                        const absence = absMap.get(dayKey(day));
+                        let isStart = true;
+                        let isEnd = true;
+                        if (absence) {
+                          const prev = dayIdx > 0 ? absMap.get(dayKey(days[dayIdx - 1])) : undefined;
+                          const next =
+                            dayIdx < days.length - 1 ? absMap.get(dayKey(days[dayIdx + 1])) : undefined;
+                          isStart = !prev || prev.type !== absence.type;
+                          isEnd = !next || next.type !== absence.type;
+                        }
+                        const colSelected =
+                          isSelectionMode && selectedDates.includes(format(day, "yyyy-MM-dd"));
+                        const cellClickable = isAdmin;
+                        return (
+                          <td
+                            key={day.toISOString()}
+                            className={`p-1 border-l border-border/30 align-top ${
+                              cellClickable ? "cursor-pointer group" : ""
+                            } ${
+                              colSelected
+                                ? "bg-primary/5"
+                                : isToday(day)
+                                  ? "bg-primary/5"
+                                  : isAdmin && !isSelectionMode
+                                    ? "hover:bg-muted/30"
+                                    : ""
+                            }`}
+                            onClick={
+                              isAdmin
+                                ? isSelectionMode
+                                  ? () => toggleDate(day)
+                                  : () => openCreate(day, assistant.id)
+                                : undefined
+                            }
+                            title={
+                              isAdmin && !isSelectionMode
+                                ? "Klicken zum Anlegen einer Schicht"
+                                : undefined
+                            }
+                          >
+                            <div className="space-y-1 min-h-[26px]">
+                              {absence && (
+                                <AbsenceTableBar
+                                  shift={absence}
+                                  isStart={isStart}
+                                  isEnd={isEnd}
+                                  modelMap={modelMap}
+                                  onClick={
+                                    isAdmin && !isSelectionMode
+                                      ? (e) => { e.stopPropagation(); openEdit(absence); }
+                                      : undefined
+                                  }
+                                />
+                              )}
+                              {regular.map((s) => (
+                                <ShiftBadge
+                                  key={s.id}
+                                  shift={s}
+                                  modelMap={modelMap}
+                                  onClick={isAdmin && !isSelectionMode ? (e) => { e.stopPropagation(); openEdit(s); } : undefined}
+                                  onConfirm={isAdmin && !isSelectionMode ? confirmShift : undefined}
+                                />
+                              ))}
+                              {dayShifts.length === 0 && isAdmin && (
+                                <div className="hidden group-hover:flex items-center justify-center h-8 text-muted-foreground/40">
+                                  <Plus className="h-3.5 w-3.5" />
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </Card>
         )}
         </div>
       </div>
 
-      {/* Team-Abwesenheits-Übersicht (nur Admin): jetzt UNTER dem Kalender als
-          einklappbares Accordion. Zeigt team-weit, wer gerade/demnächst
-          abwesend ist — unabhängig vom Assistenten-Filter. */}
       {isAdmin && assistants.length > 0 && (
         <TeamAbsenceOverview
           shifts={allShifts}
@@ -1834,12 +1637,6 @@ export default function Dienstplan() {
         />
       )}
 
-      {/* Floating Action Bar im Auswahl-Modus mit mindestens einem Tag.
-          Per Portal in document.body gerendert: innerhalb des inneren
-          overflow-y-auto-Scroll-Containers behandeln Safari/iOS und manche
-          Chrome-Versionen den Container als Containing Block fuer
-          position:fixed — die Leiste laege dann ausserhalb des sichtbaren
-          Viewports bzw. wuerde vom overflow-hidden-Wrapper abgeschnitten. */}
       {isAdmin && isSelectionMode && selectedDates.length > 0 && createPortal(
         <div
           className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex w-max max-w-[calc(100vw-1rem)] flex-wrap items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 py-2.5 shadow-lg md:rounded-full"
@@ -1907,6 +1704,8 @@ export default function Dienstplan() {
             closeDialog();
           }}
           assistants={assistants}
+          allTeams={teamsData}            // NEU: Übergibt die geladene Team-Liste des Kontos
+          currentTeamId={selectedTeamId}  // NEU: Das aktuell im Kalender ausgewählte Team
           month={month}
           year={year}
           teamId={selectedTeamId}
@@ -1930,8 +1729,6 @@ export default function Dienstplan() {
         />
       )}
 
-      {/* Bestätigungsdialog der Sammelaktion: zeigt die Anzahl der betroffenen
-          Entwürfe/Vorschläge, bevor sie verbindlich werden. */}
       {isAdmin && (
         <AlertDialog
           open={dialog.mode === "confirm-all"}
@@ -1956,8 +1753,6 @@ export default function Dienstplan() {
               <AlertDialogAction
                 disabled={isBulkConfirming}
                 onClick={(e) => {
-                  // Dialog offen halten, bis alle PATCH-Aufrufe durch sind —
-                  // confirmAllDrafts schließt ihn selbst am Ende.
                   e.preventDefault();
                   void confirmAllDrafts();
                 }}
