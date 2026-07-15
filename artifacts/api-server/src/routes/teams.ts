@@ -316,8 +316,18 @@ router.post(
       return;
     }
 
-    // Atomar: alte Mitgliedschaft löschen + neue anlegen in einer Transaktion.
-    const insertedId = await db.transaction(async (tx) => {
+    // Race-Absicherung: Bei parallelen Moves kann der Insert trotz Vorabprüfung
+    // am UNIQUE-Constraint scheitern — das wird unten auf 409 gemappt statt 500.
+    // Atomar: alte Mitgliedschaft löschen + neue anlegen + die PERSÖNLICHEN
+    // Daten der Person (Verträge, Schichten inkl. Abwesenheiten, Ist-Zeiten)
+    // aus dem Quell-Team ins Ziel-Team umhängen — alles in EINER Transaktion.
+    // Team-Einstellungen (Schichtmodelle, Zuschlags-Sätze) bleiben unberührt.
+    // Schichten verlieren dabei ihre shift_model_id, weil das Modell zum
+    // Quell-Team gehört; die gewerteten Stunden (valuedHours/night/sunday/
+    // holiday) sind bereits auf der Schicht gespeichert und bleiben korrekt.
+    let insertedId: number;
+    try {
+      insertedId = await db.transaction(async (tx) => {
       const deleted = await tx
         .delete(teamMembersTable)
         .where(and(eq(teamMembersTable.teamId, teamId), eq(teamMembersTable.userId, userId)))
@@ -330,8 +340,34 @@ router.post(
         .insert(teamMembersTable)
         .values({ teamId: targetTeamId, userId })
         .returning({ id: teamMembersTable.id });
+
+      await tx
+        .update(contractsTable)
+        .set({ teamId: targetTeamId })
+        .where(and(eq(contractsTable.teamId, teamId), eq(contractsTable.userId, userId)));
+      await tx
+        .update(shiftsTable)
+        .set({ teamId: targetTeamId, shiftModelId: null })
+        .where(and(eq(shiftsTable.teamId, teamId), eq(shiftsTable.userId, userId)));
+      await tx
+        .update(timeTrackingTable)
+        .set({ teamId: targetTeamId })
+        .where(and(eq(timeTrackingTable.teamId, teamId), eq(timeTrackingTable.userId, userId)));
+
       return inserted!.id;
-    });
+      });
+    } catch (err) {
+      // 23505 = unique_violation: paralleler Move hat die Ziel-Mitgliedschaft
+      // bereits angelegt — kontrolliert als Konflikt melden statt 500.
+      const pgCode =
+        (err as { code?: string } | null)?.code ??
+        ((err as { cause?: { code?: string } } | null)?.cause?.code);
+      if (pgCode === "23505") {
+        res.status(409).json({ error: "Benutzer ist bereits Mitglied des Ziel-Teams." });
+        return;
+      }
+      throw err;
+    }
 
     const [member] = await selectMembers(ownerId, eq(teamMembersTable.id, insertedId));
     res.json(member);

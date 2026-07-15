@@ -171,9 +171,23 @@ function TransferDialog({ team, teams, onClose }: TransferDialogProps) {
       });
       // Team-gescopte Nutzerlisten (Assistenten-Seite) neu laden.
       await queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+      // Auch Dienstplan, Verträge, Zeiterfassung und Auswertung sind betroffen,
+      // weil die persönlichen Daten mitwandern.
+      await queryClient.invalidateQueries({
+        predicate: (q) => {
+          const key = String(q.queryKey[0] ?? "");
+          return (
+            key.includes("/shifts") ||
+            key.includes("/contracts") ||
+            key.includes("/time-tracking") ||
+            key.includes("/dashboard")
+          );
+        },
+      });
       toast({
         title: "Assistenzkraft überführt",
-        description: "Die Team-Zuordnung wurde in das Ziel-Team verschoben.",
+        description:
+          "Die Assistenzkraft und ihre Daten wurden in das Ziel-Team verschoben.",
       });
       onClose();
     } catch (err) {
@@ -242,8 +256,10 @@ function TransferDialog({ team, teams, onClose }: TransferDialogProps) {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Die Mitgliedschaft wird in einem Schritt aus diesem Team entfernt und im Ziel-Team
-            angelegt. Bestehende Daten (Verträge, Dienste, Zeiten) behalten ihr bisheriges Team.
+            Die Mitgliedschaft und alle persönlichen Daten der Assistenzkraft (Verträge, Dienste,
+            Zeiteinträge) werden in einem Schritt in das Ziel-Team übernommen — auch vergangene
+            Monate zählen danach dort. Team-Einstellungen (Dienste-Vorlagen, Zuschläge) bleiben
+            unberührt.
           </p>
         </div>
 

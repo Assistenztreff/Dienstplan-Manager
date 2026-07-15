@@ -704,7 +704,7 @@ export const RemoveTeamMemberParams = zod.object({
 
 
 /**
- * Entfernt die Mitgliedschaft im Quell-Team und legt sie im Ziel-Team an — atomar in EINER Transaktion (kein Zwischenzustand ohne Mitgliedschaft). Quell- und Ziel-Team müssen dem Aufrufer gehören.
+ * Entfernt die Mitgliedschaft im Quell-Team, legt sie im Ziel-Team an und verschiebt die persönlichen Daten der Person (Verträge, Schichten, Zeiteinträge) aus dem Quell- ins Ziel-Team mit — atomar in EINER Transaktion. Schichten verlieren dabei ihre Schichtmodell-Zuordnung (Modelle gehören zum Quell-Team). Quell- und Ziel-Team müssen dem Aufrufer gehören.
  * @summary Mitglied atomar in ein anderes Team überführen
  */
 export const MoveTeamMemberParams = zod.object({
