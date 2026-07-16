@@ -9,12 +9,13 @@ import { TeamTestHarness } from "./helpers/teams";
  * ein optionales `userId` (Assistenten-Tausch der Massenbearbeitung "Einträge
  * ändern"). Weil das Umbuchen einer Schicht die per User-Join zurückgegebene PII
  * des neuen Assistenten offenlegt, MUSS der Handler dieselbe Invariante wie POST
- * erzwingen. Seit dem Aushilfe-Fix (#469) gilt: Mitgliedschaft in irgendeinem
- * ERLAUBTEN Team des Anfragers genügt (`isUserInAllowedTeams`) — ein Assistent
- * aus einem anderen eigenen Team ist ein gültiges Umbuchungsziel; Nutzer aus
- * komplett FREMDEN Konten bleiben 403. Zusätzlich muss die Überschneidungs-
- * prüfung gegen den NEUEN Assistenten laufen. Dieser Test sichert beide Grenzen
- * gegen ein späteres Refactor ab.
+ * erzwingen: Der neue Nutzer muss Mitglied des TEAMS DER SCHICHT sein
+ * (Member-of-Team-Invariante; die frühere Aushilfen-Ausnahme aus #469 wurde mit
+ * #478 zurückgebaut). Ein Assistent aus einem anderen eigenen Team ist damit
+ * KEIN gültiges Umbuchungsziel mehr; Nutzer aus komplett FREMDEN Konten bleiben
+ * ebenso 403. Zusätzlich muss die Überschneidungsprüfung gegen den NEUEN
+ * Assistenten laufen. Dieser Test sichert beide Grenzen gegen ein späteres
+ * Refactor ab.
  *
  * Der Setup-Admin ist in der Test-DB auf `plan = 'premium'` gehoben, daher greift
  * das vorgelagerte `bulkEdit`-Feature-Gate hier nicht — getestet wird gezielt die
@@ -23,9 +24,9 @@ import { TeamTestHarness } from "./helpers/teams";
  * Aufbau:
  * - Team A und Team B desselben Dienstleisters.
  * - `insider` ist Mitglied von Team A (gültiges Umbuchungs-Ziel).
- * - `outsider` ist NUR Mitglied von Team B — seit #469 als Aushilfe ERLAUBT.
+ * - `outsider` ist NUR Mitglied von Team B — teamfremd bzgl. Team A → 403.
  * - `foreignAdmin` ist ein komplett fremdes Konto (kein Team des Anfragers) —
- *   weiterhin 403.
+ *   ebenso 403.
  */
 
 const YEAR = new Date().getFullYear();
@@ -55,7 +56,7 @@ test.beforeAll(async () => {
   // Ursprünglicher Assistent der Schicht + gültiges Team-A-Umbuchungsziel.
   owner = await h.createUser({ role: "assistant", teamId: teamA });
   insider = await h.createUser({ role: "assistant", teamId: teamA });
-  // Teamfremd bzgl. Team A: nur Mitglied in Team B (seit #469 gültige Aushilfe).
+  // Teamfremd bzgl. Team A: nur Mitglied in Team B (kein gültiges Ziel mehr).
   outsider = await h.createUser({ role: "assistant", teamId: teamB });
   // Komplett fremdes Konto: in KEINEM Team des Anfragers.
   const foreign = await h.seedForeignAdmin();
@@ -66,29 +67,31 @@ test.afterAll(async () => {
   await h.cleanup();
 });
 
-test("PATCH /api/shifts lehnt Umbuchung auf Nutzer aus fremdem Konto mit 403 ab, erlaubt Aushilfe aus eigenem Team B", async () => {
+test("PATCH /api/shifts lehnt Umbuchung auf teamfremde Nutzer mit 403 ab (fremdes Konto UND eigenes anderes Team)", async () => {
   const shiftId = await h.createShift(teamA, owner, DAY);
 
-  // Komplett fremder Nutzer (kein Team des Anfragers) -> weiterhin 403.
+  // Komplett fremder Nutzer (kein Team des Anfragers) -> 403.
   const res = await h.ctx.patch(`/api/shifts/${shiftId}`, {
     data: { userId: foreignAdminId },
   });
   expect(res.status(), "Umbuchung auf kontofremden Nutzer sollte 403 liefern").toBe(403);
 
+  // Nutzer aus einem ANDEREN eigenen Team (Team B) ist ebenfalls kein gültiges
+  // Ziel mehr — die Aushilfen-Ausnahme wurde zurückgebaut (#478).
+  const outsiderRes = await h.ctx.patch(`/api/shifts/${shiftId}`, {
+    data: { userId: outsider },
+  });
+  expect(
+    outsiderRes.status(),
+    "Umbuchung auf Nutzer aus eigenem Team B sollte 403 liefern",
+  ).toBe(403);
+
   // Die Schicht bleibt beim ursprünglichen Assistenten (PATCH nicht angewandt) —
-  // die PII des fremden Nutzers wird nicht über die Team-A-Schicht offengelegt.
+  // keine PII teamfremder Nutzer über die Team-A-Schicht offengelegt.
   const check = await h.ctx.get(`/api/shifts/${shiftId}`);
   expect(check.ok(), "GET der Schicht fehlgeschlagen").toBe(true);
   const shift = (await check.json()) as Shift;
   expect(shift.userId).toBe(owner);
-
-  // Aushilfe aus dem eigenen Team B ist seit #469 ein GÜLTIGES Umbuchungsziel.
-  const okRes = await h.ctx.patch(`/api/shifts/${shiftId}`, {
-    data: { userId: outsider },
-  });
-  expect(okRes.status(), "Umbuchung auf Aushilfe aus Team B sollte 200 liefern").toBe(200);
-  const updated = (await okRes.json()) as Shift;
-  expect(updated.userId).toBe(outsider);
 });
 
 test("PATCH /api/shifts bucht auf ein gültiges Team-Mitglied um (200)", async () => {

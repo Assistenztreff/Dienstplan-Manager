@@ -457,32 +457,17 @@ router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advance
     res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
     return;
   }
-  // Aushilfen-Regel: Die Stunden einer Kraft zählen IMMER zu ihrem STAMMTEAM,
-  // nicht zum Team der Schicht. Stammteam = früheste Mitgliedschaft (kleinste
-  // team_members.id) innerhalb der erlaubten Teams des Anfragers —
-  // deterministisch, damit jede Stunde genau EINEM Team zugerechnet wird.
-  // Beim Team-Filter erscheinen daher nur Kräfte mit Stammteam im Scope,
-  // deren Schichten/Ist-Zeiten aber aus ALLEN eigenen Teams gezogen werden
-  // (Aushilfe-Dienst in Team A zählt zur Auswertung von Stammteam B).
-  const allTeamIds = await getAllowedTeamIds(req.session.userId!);
-  const memberships = allTeamIds.length
-    ? await db
-        .select({
-          id: teamMembersTable.id,
-          userId: teamMembersTable.userId,
-          teamId: teamMembersTable.teamId,
-        })
-        .from(teamMembersTable)
-        .where(inArray(teamMembersTable.teamId, allTeamIds))
-        .orderBy(teamMembersTable.id)
+  // Rein team-gescoped: gezählt werden ausschließlich Mitglieder und
+  // Schichten/Ist-Zeiten der Teams im aktuellen Scope (Team-Filter bzw. alle
+  // erlaubten Teams).
+  const teamMemberIds = teamScope.length
+    ? (
+        await db
+          .select({ userId: teamMembersTable.userId })
+          .from(teamMembersTable)
+          .where(inArray(teamMembersTable.teamId, teamScope))
+      ).map((m) => m.userId)
     : [];
-  const homeTeamByUser = new Map<number, number>();
-  for (const m of memberships) {
-    if (!homeTeamByUser.has(m.userId)) homeTeamByUser.set(m.userId, m.teamId);
-  }
-  const teamMemberIds = [...homeTeamByUser.entries()]
-    .filter(([, homeTeamId]) => teamScope.includes(homeTeamId))
-    .map(([memberId]) => memberId);
 
   const assistants = teamMemberIds.length
     ? await db
@@ -504,11 +489,8 @@ router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advance
   // je Team im Scope: TEAM-OVERRIDE (team_id gesetzt) → Konto-Zeile des
   // Team-EIGENTÜMERS (team_id NULL) → Defaults. Nie die Prozente eines
   // fremden Kontos.
-  // Über ALLE eigenen Teams aufbauen (nicht nur den Filter-Scope): auch ein
-  // Aushilfe-Dienst in einem anderen eigenen Team braucht die dort geltenden
-  // Zuschlags-Sätze/Nachtfenster.
   const overrideSettings = alias(allowanceSettingsTable, "override_settings");
-  const teamAllowanceRows = allTeamIds.length
+  const teamAllowanceRows = teamScope.length
     ? await db
         .select({
           teamId: teamsTable.id,
@@ -540,7 +522,7 @@ router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advance
             isNull(allowanceSettingsTable.teamId)
           )
         )
-        .where(inArray(teamsTable.id, allTeamIds))
+        .where(inArray(teamsTable.id, teamScope))
     : [];
   const allowanceByTeam = new Map(
     teamAllowanceRows.map((r) => [
@@ -617,9 +599,7 @@ router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advance
         .where(
           and(
             eq(shiftsTable.userId, assistant.id),
-            // ALLE eigenen Teams: Aushilfe-Dienste in fremden eigenen Teams
-            // zählen zum Stammteam der Kraft (genau einmal, s. o.).
-            inArray(shiftsTable.teamId, allTeamIds),
+            inArray(shiftsTable.teamId, teamScope),
             // Nur verbindlich bestätigte Schichten fließen in den offiziellen
             // Soll/Ist-Nachweis ein; Entwürfe/Vorschläge bleiben unverbindlich.
             eq(shiftsTable.planningStatus, "FIX"),
@@ -645,7 +625,7 @@ router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advance
         .where(
           and(
             eq(timeTrackingTable.userId, assistant.id),
-            inArray(timeTrackingTable.teamId, allTeamIds),
+            inArray(timeTrackingTable.teamId, teamScope),
             sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${month}`,
             sql`EXTRACT(YEAR FROM ${timeTrackingTable.actualStart}) = ${year}`,
             eq(timeTrackingTable.status, "confirmed"),

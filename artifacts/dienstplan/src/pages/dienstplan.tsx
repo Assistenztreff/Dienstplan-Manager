@@ -7,7 +7,6 @@ import {
   useListUsers,
   useListShiftModels,
   useUpdateShift,
-  useListTeams, // NEU: Importiert, um alle Teams des Dienstleisters zu laden
   getListShiftsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1183,10 +1182,6 @@ export default function Dienstplan() {
     selectedTeamId != null ? { teamId: selectedTeamId } : undefined
   );
 
-  // NEU: Alle eigenen Teams des Dienstleisters abfragen für den Aushilfen-Zweck
-  const { data: rawTeams } = useListTeams();
-  const teamsData = (rawTeams ?? []).map((t) => ({ id: t.id, name: t.name }));
-
   const goToMonth = (newDate: Date) => {
     setCurrentDate(newDate);
     setSelectedDay(startOfMonth(newDate));
@@ -1704,8 +1699,6 @@ export default function Dienstplan() {
             closeDialog();
           }}
           assistants={assistants}
-          allTeams={teamsData}            // NEU: Übergibt die geladene Team-Liste des Kontos
-          currentTeamId={selectedTeamId}  // NEU: Das aktuell im Kalender ausgewählte Team
           month={month}
           year={year}
           teamId={selectedTeamId}

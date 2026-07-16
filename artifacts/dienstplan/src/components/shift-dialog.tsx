@@ -1,11 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import {
   useCreateShift,
   useUpdateShift,
   useDeleteShift,
   useListShiftModels,
-  useListUsers,
   getListShiftsQueryKey,
   ApiError,
   type ShiftInputType,
@@ -39,12 +38,11 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Check, ChevronsUpDown, Info, Trash2 } from "lucide-react";
+import { Check, ChevronsUpDown, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { readableApiError, planUpgradeMessage } from "@/lib/api-error";
 
 type Assistant = { id: number; name: string };
-type TeamInfo = { id: number; name: string };
 
 type ShiftForEdit = {
   id: number;
@@ -100,10 +98,6 @@ type ShiftDialogProps = {
   bulkDates?: string[];
   /** Wird nach erfolgreichem Speichern aufgerufen (z. B. Auswahl zurücksetzen). */
   onSaved?: () => void;
-  /** Alle Teams des Kontos (nur Dienstleister mit mehreren Teams relevant). */
-  allTeams?: TeamInfo[];
-  /** Das aktuell im Kalender geplante Team — dort landet die Schicht IMMER. */
-  currentTeamId?: number | null;
 };
 
 const LEGACY_TYPE_LABELS: Record<string, string> = {
@@ -199,8 +193,6 @@ export function ShiftDialog({
   teamId,
   bulkDates,
   onSaved,
-  allTeams = [],
-  currentTeamId,
 }: ShiftDialogProps) {
   const queryClient = useQueryClient();
   const createShift = useCreateShift();
@@ -212,32 +204,6 @@ export function ShiftDialog({
   const activeModels = allModels.filter((m) => m.isActive);
   const firstModel = activeModels[0];
   const firstModelId = firstModel?.id;
-
-  // Aushilfen (Task #473): Bei Dienstleistern mit mehreren Teams werden
-  // zusätzlich die Mitglieder der ANDEREN eigenen Teams geladen (Endpunkt ohne
-  // teamId liefert die Vereinigung aller erlaubten Teams). Die Schicht selbst
-  // bleibt IMMER im aktuellen Plan-Team — nur die Personen-Auswahl wächst.
-  const hasMultipleTeams = allTeams.length > 1;
-  const { data: allUsers, isLoading: allUsersLoading } = useListUsers(
-    undefined,
-    {
-      query: { enabled: open && hasMultipleTeams && !editShift },
-    } as Parameters<typeof useListUsers>[1],
-  ) as unknown as {
-    data: Array<{ id: number; name: string; role: string }> | undefined;
-    isLoading: boolean;
-  };
-
-  const currentTeamName =
-    allTeams.find((t) => t.id === currentTeamId)?.name ?? "";
-
-  const helperAssistants: Assistant[] = useMemo(() => {
-    if (!hasMultipleTeams) return [];
-    const teamIds = new Set(assistants.map((a) => a.id));
-    return (allUsers ?? [])
-      .filter((u) => u.role !== "admin" && !teamIds.has(u.id))
-      .map((u) => ({ id: u.id, name: u.name }));
-  }, [hasMultipleTeams, allUsers, assistants]);
 
   const [assistantOpen, setAssistantOpen] = useState(false);
 
@@ -354,12 +320,8 @@ export function ShiftDialog({
     form.selection === "freizeitausgleich";
   const is24h = form.selection === "legacy:full_day";
 
-  // Auswahl-Anzeige des Assistenten-Pickers (Team-Assistenten + Aushilfen).
-  const selectedAssistant =
-    assistants.find((a) => String(a.id) === form.userId) ??
-    helperAssistants.find((a) => String(a.id) === form.userId);
-  const isHelperSelected =
-    !!form.userId && helperAssistants.some((a) => String(a.id) === form.userId);
+  // Auswahl-Anzeige des Assistenten-Pickers (nur Mitglieder des aktuellen Teams).
+  const selectedAssistant = assistants.find((a) => String(a.id) === form.userId);
 
   const renderAssistantItem = (a: Assistant) => (
     <CommandItem
@@ -509,11 +471,7 @@ export function ShiftDialog({
           data: {
             ...data,
             ...(force ? { force: true } : {}),
-            ...(currentTeamId != null
-              ? { teamId: currentTeamId }
-              : teamId != null
-                ? { teamId }
-                : {}),
+            ...(teamId != null ? { teamId } : {}),
           } as typeof data,
         });
       }
@@ -578,11 +536,7 @@ export function ShiftDialog({
             data: {
               ...data,
               ...(force ? { force: true } : {}),
-              ...(currentTeamId != null
-              ? { teamId: currentTeamId }
-              : teamId != null
-                ? { teamId }
-                : {}),
+              ...(teamId != null ? { teamId } : {}),
             } as typeof data,
           });
           created.add(dateStr);
@@ -754,39 +708,15 @@ export function ShiftDialog({
                     <CommandInput placeholder="Name suchen..." />
                     <CommandList>
                       <CommandEmpty>Keine Assistenten gefunden.</CommandEmpty>
-                      <CommandGroup
-                        heading={hasMultipleTeams ? currentTeamName || "Team" : undefined}
-                      >
+                      <CommandGroup>
                         {assistants.map(renderAssistantItem)}
                       </CommandGroup>
-                      {hasMultipleTeams &&
-                        (helperAssistants.length > 0 || allUsersLoading) && (
-                          <CommandGroup heading="Aushilfen aus anderen Teams">
-                            {allUsersLoading ? (
-                              <CommandItem disabled value="__loading">
-                                Wird geladen...
-                              </CommandItem>
-                            ) : (
-                              helperAssistants.map(renderAssistantItem)
-                            )}
-                          </CommandGroup>
-                        )}
                     </CommandList>
                   </Command>
                 </PopoverContent>
               </Popover>
             )}
             {errors.userId && <p className="text-xs text-destructive">{errors.userId}</p>}
-            {isHelperSelected && (
-              <div className="flex items-start gap-2 rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-sm text-sky-900">
-                <Info className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>
-                  Aushilfe aus einem anderen Team — die Schicht wird
-                  {currentTeamName ? ` in „${currentTeamName}"` : " im aktuellen Team"} geplant;
-                  die Stunden zählen in der Auswertung zum Stammteam.
-                </span>
-              </div>
-            )}
           </div>
 
           {/* Datum: im Mehrfach-Modus stehen die Tage fest (Auswahl) und werden
