@@ -1,25 +1,31 @@
+import {
+  ASSISTENZ_PAARUNGEN,
+  getBarrierefreieFarbe,
+  type AssistenzPaarung,
+} from "@/lib/barrierefreie-farben";
+
 export type ShiftModelColor = {
   value: string;
   label: string;
   badge: string;
   dot: string;
-  // Initialen-Kreis (Legende): dunklerer Hintergrund als der Dot, damit die
-  // weiße Beschriftung (2 Buchstaben) einen hohen Kontrast hat (WCAG).
+  // Initialen-Kreis (Legende): dunklerer Hintergrund als die helle Fläche,
+  // damit die weiße Beschriftung (2 Buchstaben) hohen Kontrast hat (WCAG AA).
   initials: string;
 };
 
-export const SHIFT_MODEL_COLORS: ShiftModelColor[] = [
-  { value: "primary", label: "Primär", badge: "bg-primary/10 text-primary border-primary/25 hover:bg-primary/20", dot: "bg-primary", initials: "bg-primary text-primary-foreground" },
-  { value: "amber", label: "Bernstein", badge: "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100", dot: "bg-amber-500", initials: "bg-amber-700 text-white" },
-  { value: "blue", label: "Blau", badge: "bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100", dot: "bg-blue-500", initials: "bg-blue-600 text-white" },
-  { value: "indigo", label: "Indigo", badge: "bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100", dot: "bg-indigo-500", initials: "bg-indigo-600 text-white" },
-  { value: "purple", label: "Violett", badge: "bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100", dot: "bg-purple-500", initials: "bg-purple-600 text-white" },
-  { value: "teal", label: "Türkis", badge: "bg-teal-50 text-teal-800 border-teal-200 hover:bg-teal-100", dot: "bg-teal-500", initials: "bg-teal-700 text-white" },
-  { value: "green", label: "Grün", badge: "bg-green-50 text-green-800 border-green-200 hover:bg-green-100", dot: "bg-green-500", initials: "bg-green-700 text-white" },
-  { value: "rose", label: "Rosé", badge: "bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100", dot: "bg-rose-500", initials: "bg-rose-600 text-white" },
-  { value: "orange", label: "Orange", badge: "bg-orange-50 text-orange-800 border-orange-200 hover:bg-orange-100", dot: "bg-orange-500", initials: "bg-orange-700 text-white" },
-  { value: "slate", label: "Grau", badge: "bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200", dot: "bg-slate-500", initials: "bg-slate-600 text-white" },
-];
+// Personen-Palette = die 8 barrierefreien "assistenz"-Paarungen (WCAG AA).
+// Jede helle Fläche ist fest mit ihrem dunklen Text-/Rahmenton gekoppelt;
+// Dots/Initialen nutzen die dunklere, kontrastgeprüfte Variante je Farbe.
+export const SHIFT_MODEL_COLORS: ShiftModelColor[] = ASSISTENZ_PAARUNGEN.map(
+  (p: AssistenzPaarung): ShiftModelColor => ({
+    value: p.key,
+    label: p.label,
+    badge: p.badge,
+    dot: p.dot,
+    initials: p.initials,
+  }),
+);
 
 // --- Farbzuordnung pro Assistenzkraft -------------------------------------
 // Jede Assistenzkraft (userId) erhält deterministisch eine feste Farbe aus der
@@ -36,7 +42,9 @@ export function userColor(userId: number): ShiftModelColor {
 }
 
 export function userBadgeClass(userId: number): string {
-  return userColor(userId).badge;
+  // Zentrale Quelle: der Farb-Koppler liefert das barrierefreie Klassen-Paar
+  // (Fläche + gekoppelter Text-/Rahmenton) für den Farb-Key der Person.
+  return getBarrierefreieFarbe(userColor(userId).value);
 }
 
 export function userDotClass(userId: number): string {

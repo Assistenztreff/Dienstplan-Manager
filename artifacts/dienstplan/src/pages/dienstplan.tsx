@@ -96,13 +96,15 @@ const SHIFT_TYPE_LABELS: Record<string, string> = {
 };
 
 const SHIFT_TYPE_CLASSES: Record<string, string> = {
-  active: "bg-primary/10 text-primary border-primary/25 hover:bg-primary/20",
+  active: "bg-primary/20 text-assistenz-brand border-assistenz-brand/20 hover:bg-primary/30",
   standby: "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100",
   night: "bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100",
   full_day: "bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100",
-  vacation: "bg-yellow-100 text-yellow-900 border-yellow-400 hover:bg-yellow-200",
-  sick: "bg-slate-200 text-slate-700 border-slate-400 hover:bg-slate-300",
-  freizeitausgleich: "bg-emerald-100 text-emerald-900 border-emerald-400 hover:bg-emerald-200",
+  // Abwesenheiten: eigene semantische Farben, bewusst KEINE der 8 hellen
+  // Personenfarben (sattere Flaechen + kraeftige Rahmen, WCAG AA).
+  vacation: "bg-amber-200 text-amber-950 border-amber-600 hover:bg-amber-300",
+  sick: "bg-slate-200 text-slate-800 border-slate-500 hover:bg-slate-300",
+  freizeitausgleich: "bg-emerald-200 text-emerald-950 border-emerald-600 hover:bg-emerald-300",
 };
 
 function shiftLabel(shift: Shift, modelMap: Map<number, ShiftModelInfo>): string {
@@ -115,7 +117,7 @@ function shiftLabel(shift: Shift, modelMap: Map<number, ShiftModelInfo>): string
 function shiftBadgeClasses(shift: Shift): string {
   if (isAbsenceShift(shift)) {
     return (
-      SHIFT_TYPE_CLASSES[shift.type] ?? "bg-primary/10 text-primary border-primary/25 hover:bg-primary/20"
+      SHIFT_TYPE_CLASSES[shift.type] ?? "bg-primary/20 text-assistenz-brand border-assistenz-brand/20 hover:bg-primary/30"
     );
   }
   return userBadgeClass(shift.userId);
@@ -148,9 +150,9 @@ const SHIFT_TYPE_DOTS: Record<string, string> = {
   standby: "bg-amber-500",
   night: "bg-blue-500",
   full_day: "bg-purple-500",
-  vacation: "bg-yellow-400",
-  sick: "bg-slate-400",
-  freizeitausgleich: "bg-emerald-500",
+  vacation: "bg-amber-500",
+  sick: "bg-slate-500",
+  freizeitausgleich: "bg-emerald-600",
 };
 
 function shiftDotStatusClass(shift: Shift): string {
@@ -339,7 +341,7 @@ function TeamAbsenceOverview({
                             ({r.days} {r.days === 1 ? "Tag" : "Tage"})
                           </span>
                           {ongoing && (
-                            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                            <span className="rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-assistenz-brand">
                               läuft
                             </span>
                           )}
@@ -1012,12 +1014,12 @@ function DienstplanHeader({
       {showLabels ? (
         <>
           <span>Alle bestätigen</span>
-          <span className="rounded-full bg-primary/10 px-1.5 text-xs font-semibold text-primary">
+          <span className="rounded-full bg-primary/20 px-1.5 text-xs font-semibold text-assistenz-brand">
             {confirmableCount}
           </span>
         </>
       ) : (
-        <span className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary/10 px-1 text-[10px] font-semibold text-primary ring-1 ring-primary/20 backdrop-blur-sm">
+        <span className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary/20 px-1 text-[10px] font-semibold text-assistenz-brand ring-1 ring-assistenz-brand/20 backdrop-blur-sm">
           {confirmableCount}
         </span>
       )}

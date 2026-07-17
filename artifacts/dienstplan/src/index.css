@@ -65,6 +65,30 @@
   --color-brand-yellow: #ebf18b;
   --color-brand-white: #ffffff;
 
+  /* Barrierefreie "assistenz"-Palette (WCAG AA): App-interner Kontraston
+     (#05305B) + Kontrast-Dunkellila (#26092E) + 8 helle Flaechenfarben mit
+     fest gekoppelten dunklen Text-/Rahmentoenen. Die *-dark-Varianten sind
+     kontrastgeprueft fuer weisse Schrift (Initialen-Kreise, Punkte). */
+  --color-assistenz-brand: #05305b;
+  --color-assistenz-darkText: #26092e;
+  --color-assistenz-bg: #f9f9f9;
+  --color-assistenz-mint: #d4f0f0;
+  --color-assistenz-yellow: #ebf18b;
+  --color-assistenz-green: #cae677;
+  --color-assistenz-peach: #fed4b1;
+  --color-assistenz-purple: #e2d4f0;
+  --color-assistenz-pink: #f0d4e2;
+  --color-assistenz-terracotta: #f5c7a9;
+  --color-assistenz-sage: #c6e2c6;
+  --color-assistenz-mint-dark: #0f6b6b;
+  --color-assistenz-yellow-dark: #55600a;
+  --color-assistenz-green-dark: #3f6212;
+  --color-assistenz-peach-dark: #9a3412;
+  --color-assistenz-purple-dark: #6b21a8;
+  --color-assistenz-pink-dark: #9d174d;
+  --color-assistenz-terracotta-dark: #7c2d12;
+  --color-assistenz-sage-dark: #166534;
+
   --font-sans: var(--app-font-sans);
   --font-serif: var(--app-font-serif);
   --font-mono: var(--app-font-mono);
@@ -115,12 +139,12 @@
   --elevate-2: rgba(0,0,0, .08);
 
   --background: 0 0% 100%; /* AssistenzTreff weiß */
-  --foreground: 210 78% 16%; /* Dunkelblau text */
+  --foreground: 210 90% 19%; /* Dunkelblau text */
 
   --border: 0 0% 90%;
 
   --card: 0 0% 98%; /* Off-white #f9f9f9 */
-  --card-foreground: 210 78% 16%;
+  --card-foreground: 210 90% 19%;
   --card-border: 0 0% 90%;
 
   --sidebar: 210 78% 16%; /* Dunkelblau #092948 */
@@ -133,26 +157,26 @@
   --sidebar-ring: 66 79% 75%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 210 78% 16%;
+  --popover-foreground: 210 90% 19%;
   --popover-border: 0 0% 90%;
 
   --primary: 66 79% 75%; /* AssistenzTreff Hellgelb #ebf18b */
-  --primary-foreground: 210 78% 16%; /* Dunkelblau text */
+  --primary-foreground: 210 90% 19%; /* Dunkelblau text */
 
   --secondary: 0 0% 96%; /* Helles Grau */
-  --secondary-foreground: 210 78% 16%;
+  --secondary-foreground: 210 90% 19%;
 
   --muted: 0 0% 96%;
   --muted-foreground: 210 15% 40%;
 
   --accent: 66 79% 75%; /* AssistenzTreff Hellgelb #ebf18b */
-  --accent-foreground: 210 78% 16%;
+  --accent-foreground: 210 90% 19%;
 
   --destructive: 0 60% 50%;
   --destructive-foreground: 0 0% 100%;
 
   --input: 0 0% 90%;
-  --ring: 210 78% 16%;
+  --ring: 210 90% 19%;
   
   --chart-1: 210 78% 16%;
   --chart-2: 170 50% 45%;

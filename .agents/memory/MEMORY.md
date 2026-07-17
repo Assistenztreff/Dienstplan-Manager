@@ -73,3 +73,4 @@
 - [E2E scroll-threshold & opacity](e2e-scroll-threshold-opacity.md) — test-DB content scrolls <300px (inject spacer into main); opacity-hidden elements need getComputedStyle checks, not toBeVisible.
 - [TeamSwitcher auto-select](team-switcher-auto-select.md) — no "Alle Teams"; dienstleister e2e fixtures must live in the FIRST team or specs switch explicitly; first load fires one unscoped fetch.
 - [Header tier measurement](header-tier-measurement.md) — narrower toggle states use a remeasureKey (never reset to labels); no min-w-0 wrapper around min-width selects or overlap replaces measurable overflow.
+- [Barrierefreies Farbsystem](accessible-color-system.md) — assistenz-Palette/getBarrierefreieFarbe sind die zentrale Farbquelle; text-primary (Hellgelb) nie als Textfarbe; Abwesenheiten nicht aus Personen-Palette.

@@ -403,10 +403,10 @@ export default function Auswertungen() {
                             <span
                               className={
                                 isOvertime
-                                  ? "text-primary font-medium"
+                                  ? "text-green-700 font-medium"
                                   : balance.valuedHours < balance.plannedHours
-                                  ? "text-amber-600 font-medium"
-                                  : "text-green-600 font-medium"
+                                  ? "text-amber-700 font-medium"
+                                  : "text-green-700 font-medium"
                               }
                             >
                               {balance.balance > 0 ? "+" : ""}
@@ -420,7 +420,7 @@ export default function Auswertungen() {
                       {/* Erfüllt gesamt inkl. Urlaub/Krank */}
                       <div className="flex items-center justify-between text-sm py-2.5 px-3 bg-primary/5 rounded-lg border border-primary/20">
                         <span className="text-muted-foreground">Erfüllt gesamt (inkl. Urlaub/Krank)</span>
-                        <span className="font-semibold text-primary">{balance.totalFulfilledHours} h</span>
+                        <span className="font-semibold text-assistenz-brand">{balance.totalFulfilledHours} h</span>
                       </div>
 
                       {/* Krankheitsstunden */}
@@ -446,7 +446,7 @@ export default function Auswertungen() {
                             </span>
                             <span className="font-medium">
                               {balance.nightHours} h
-                              <span className="text-primary"> (+{balance.nightSurchargeHours} h)</span>
+                              <span className="text-emerald-700"> (+{balance.nightSurchargeHours} h)</span>
                             </span>
                           </div>
                         )}
@@ -457,7 +457,7 @@ export default function Auswertungen() {
                             </span>
                             <span className="font-medium">
                               {balance.sundayHours} h
-                              <span className="text-primary"> (+{balance.sundaySurchargeHours} h)</span>
+                              <span className="text-emerald-700"> (+{balance.sundaySurchargeHours} h)</span>
                             </span>
                           </div>
                         )}
@@ -468,7 +468,7 @@ export default function Auswertungen() {
                             </span>
                             <span className="font-medium">
                               {balance.holidayHours} h
-                              <span className="text-primary"> (+{balance.holidaySurchargeHours} h)</span>
+                              <span className="text-emerald-700"> (+{balance.holidaySurchargeHours} h)</span>
                             </span>
                           </div>
                         )}
@@ -513,19 +513,19 @@ export default function Auswertungen() {
 
                     {/* Urlaubs-Seite */}
                     <div className="space-y-3">
-                      <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                        <div className="text-xs text-yellow-700 mb-1 font-medium uppercase tracking-wide">
+                      <div className="p-4 bg-amber-100 rounded-lg border border-amber-400">
+                        <div className="text-xs text-amber-950 mb-1 font-medium uppercase tracking-wide">
                           Urlaubstage
                         </div>
                         <div className="flex items-end gap-2">
-                          <span className="text-3xl font-bold text-yellow-800">
+                          <span className="text-3xl font-bold text-amber-950">
                             {balance.vacationDaysTaken}
                           </span>
-                          <span className="text-sm text-yellow-700 mb-0.5">
+                          <span className="text-sm text-amber-950 mb-0.5">
                             genommen (Monat)
                           </span>
                         </div>
-                        <div className="mt-2 text-sm text-yellow-700">
+                        <div className="mt-2 text-sm text-amber-950">
                           <span className="font-medium">{balance.vacationDaysRemaining}</span> von{" "}
                           {balance.vacationDaysRemaining + balance.vacationDaysUsed} verbleibend (Jahr)
                         </div>
@@ -536,7 +536,7 @@ export default function Auswertungen() {
                                 (balance.vacationDaysRemaining + balance.vacationDaysUsed)) *
                                 100
                             )}
-                            className="h-1.5 mt-2 bg-yellow-200 [&>div]:bg-yellow-500"
+                            className="h-1.5 mt-2 bg-amber-200 [&>div]:bg-amber-600"
                           />
                         )}
                       </div>

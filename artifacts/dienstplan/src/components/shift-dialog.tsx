@@ -818,19 +818,19 @@ export function ShiftDialog({
                   <SelectLabel>Abwesenheit</SelectLabel>
                   <SelectItem value="vacation">
                     <span className="flex items-center gap-2">
-                      <span className="inline-block h-2.5 w-2.5 rounded-full bg-yellow-400" />
+                      <span className="inline-block h-2.5 w-2.5 rounded-full bg-amber-500" />
                       Urlaub
                     </span>
                   </SelectItem>
                   <SelectItem value="sick">
                     <span className="flex items-center gap-2">
-                      <span className="inline-block h-2.5 w-2.5 rounded-full bg-slate-400" />
+                      <span className="inline-block h-2.5 w-2.5 rounded-full bg-slate-500" />
                       Krank
                     </span>
                   </SelectItem>
                   <SelectItem value="freizeitausgleich">
                     <span className="flex items-center gap-2">
-                      <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                      <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-600" />
                       Freizeitausgleich (Ersatzruhetag)
                     </span>
                   </SelectItem>

@@ -431,8 +431,8 @@ export default function Abwesenheiten() {
                           <span
                             className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${
                               range.type === "vacation"
-                                ? "bg-yellow-100 text-yellow-700"
-                                : "bg-slate-100 text-slate-600"
+                                ? "bg-amber-200 text-amber-950"
+                                : "bg-slate-200 text-slate-800"
                             }`}
                           >
                             {range.type === "vacation" ? (

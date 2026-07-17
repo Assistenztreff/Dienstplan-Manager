@@ -65,7 +65,7 @@ function formatLimit(plan: Plan, key: PlanLimit): string {
 
 function FeatureCell({ enabled }: { enabled: boolean }) {
   return enabled ? (
-    <Check className="h-4 w-4 text-primary mx-auto" aria-label="enthalten" />
+    <Check className="h-4 w-4 text-assistenz-brand mx-auto" aria-label="enthalten" />
   ) : (
     <Minus className="h-4 w-4 text-muted-foreground/50 mx-auto" aria-label="nicht enthalten" />
   );

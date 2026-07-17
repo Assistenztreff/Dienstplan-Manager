@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { getBarrierefreieFarbe } from "@/lib/barrierefreie-farben";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -212,9 +213,9 @@ export default function Zeiterfassung() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "pending":
-        return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">Offen</Badge>;
+        return <Badge variant="secondary" className={getBarrierefreieFarbe("pending")}>Offen</Badge>;
       case "confirmed":
-        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100 text-green-800 border-0">Bestätigt</Badge>;
+        return <Badge variant="secondary" className={getBarrierefreieFarbe("confirmed")}>Bestätigt</Badge>;
       case "rejected":
         return <Badge variant="destructive">Abgelehnt</Badge>;
       default:
