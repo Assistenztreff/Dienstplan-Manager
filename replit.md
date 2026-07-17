@@ -43,7 +43,7 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
 
 - **Erlaubte Teams** = besessene (`teams.owner_id`) ∪ Mitgliedschaften (`team_members`); Helfer in `lib/teams.ts`.
 - **Team-CRUD** `/api/teams`: nur `requireDienstleister`, owner-scoped; DELETE 409 solange Daten/Mitglieder hängen; Member-Endpunkte mit IDOR-Check `assertTeamOwnership`.
-- **Mitglieder-Verwaltung UI**: auf der Assistenten-Seite (TeamSwitcher im Kopf, Liste team-gefiltert, Zuordnen-Sektion + „Aus Team entfernen" mit Letzte-Mitgliedschaft-Warnung); Team-Verwaltung hat KEINEN Mitglieder-Dialog mehr, stattdessen „Überführen"-Dialog.
+- **Mitglieder-Verwaltung UI**: auf der Assistenten-Seite (TeamSwitcher im Kopf, Liste team-gefiltert, „Aus Team entfernen" mit Letzte-Mitgliedschaft-Warnung; KEINE Zuordnen-Sektion mehr — Team-Wechsel ausschließlich über „Überführen"); Team-Verwaltung hat KEINEN Mitglieder-Dialog mehr, stattdessen „Überführen"-Dialog.
 - **Überführen** `POST /teams/:id/members/:userId/move` (`{targetTeamId}`): atomarer Team-Wechsel in EINER Transaktion (Quelle entfernen + Ziel anlegen). Ownership auf Quell- UND Ziel-Team (fremd → 404), Mitglied nicht im Quell-Team → 404, Quelle=Ziel oder bereits im Ziel → 409. Bestehende Daten (Verträge/Dienste/Zeiten) behalten ihr bisheriges Team.
 - **Backend-Scoping-Invarianten** (alle Domänen-Routen):
   - GET-Listen: nur Teams im Scope; 403 bei fremdem `teamId`, `[]` bei leerem Scope.

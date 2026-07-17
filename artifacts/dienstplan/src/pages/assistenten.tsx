@@ -10,7 +10,6 @@ import {
   useUpdateContract,
   useInviteUser,
   useListTeamMembers,
-  useAddTeamMember,
   useRemoveTeamMember,
   getHoursBalance,
   getListUsersQueryKey,
@@ -958,11 +957,6 @@ export default function Assistenten() {
   );
   const { data: contracts, isLoading: contractsLoading } = useListContracts();
 
-  // Team-Zuordnung direkt auf dieser Seite (nur Dienstleister): Kandidaten sind
-  // alle eigenen Assistenten (ungescoped) minus die bereits im gewaehlten Team.
-  const { data: allAssistants } = useListUsers({ role: "assistant" }, {
-    query: { enabled: teamScope },
-  } as Parameters<typeof useListUsers>[1]) as { data?: User[] };
   // Mitgliederliste des gewaehlten Teams: liefert teamCount je Nutzer, damit wir
   // vor dem Entfernen der LETZTEN Mitgliedschaft warnen koennen.
   const { data: teamMembers } = useListTeamMembers(selectedTeamId ?? 0, {
@@ -970,17 +964,11 @@ export default function Assistenten() {
   } as Parameters<typeof useListTeamMembers>[1]) as {
     data?: { userId: number; teamCount: number }[];
   };
-  const addMember = useAddTeamMember();
   const removeMember = useRemoveTeamMember();
 
-  const [assignUserId, setAssignUserId] = useState<string>("");
   const [removeUser, setRemoveUser] = useState<User | undefined>();
   const [memberBusy, setMemberBusy] = useState(false);
 
-  const currentIds = new Set((users ?? []).map((u) => u.id));
-  const assignCandidates = teamScope
-    ? (allAssistants ?? []).filter((u) => !currentIds.has(u.id))
-    : [];
   const teamCountByUserId = new Map(
     (teamMembers ?? []).map((m) => [m.userId, m.teamCount]),
   );
@@ -992,24 +980,6 @@ export default function Assistenten() {
       await queryClient.invalidateQueries({
         queryKey: getListTeamMembersQueryKey(selectedTeamId),
       });
-    }
-  }
-
-  async function handleAssign() {
-    if (!assignUserId || selectedTeamId == null) return;
-    setMemberBusy(true);
-    try {
-      await addMember.mutateAsync({
-        id: selectedTeamId,
-        data: { userId: Number(assignUserId) },
-      });
-      setAssignUserId("");
-      await invalidateMemberQueries();
-      toast.success("Assistenzkraft dem Team zugeordnet.");
-    } catch (err) {
-      toast.error(readableApiError(err, "Zuordnen fehlgeschlagen. Bitte erneut versuchen."));
-    } finally {
-      setMemberBusy(false);
     }
   }
 
@@ -1116,43 +1086,6 @@ export default function Assistenten() {
         )}
         </div>
       </div>
-
-      {/* Bestehende Assistenzkraft dem gewaehlten Team zuordnen (nur
-          Dienstleister): Kandidaten = eigene Assistenten anderer Teams. */}
-      {teamScope && (
-        <div
-          className="flex flex-col gap-2 sm:flex-row sm:items-center rounded-lg border border-border/50 bg-card p-3"
-          data-testid="assign-member-section"
-        >
-          <Select value={assignUserId} onValueChange={setAssignUserId}>
-            <SelectTrigger className="sm:max-w-xs" data-testid="assign-member-select">
-              <SelectValue
-                placeholder={
-                  assignCandidates.length === 0
-                    ? "Keine weiteren Assistenzkräfte"
-                    : "Assistenzkraft dem Team zuordnen"
-                }
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {assignCandidates.map((u) => (
-                <SelectItem key={u.id} value={String(u.id)}>
-                  {u.name} ({u.email})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            onClick={handleAssign}
-            disabled={!assignUserId || memberBusy}
-            className="gap-2"
-            data-testid="assign-member-button"
-          >
-            <UserPlus className="h-4 w-4" />
-            Zuordnen
-          </Button>
-        </div>
-      )}
 
       {/* Limit-Hinweis (Free-Plan). Bei Premium ist assistantLimit null. */}
       {!canAddAssistant && assistantLimit !== null && (

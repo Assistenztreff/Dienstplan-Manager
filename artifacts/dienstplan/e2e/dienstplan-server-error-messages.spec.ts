@@ -16,7 +16,8 @@ import { TeamTestHarness } from "./helpers/teams";
  *
  * Hinweis: Der frühere zweite Test (doppelte Mitgliedschaft im
  * Mitglieder-Dialog) wurde entfernt — der Mitglieder-Dialog existiert nicht
- * mehr; Zuordnen/Entfernen läuft jetzt über die Assistenten-Seite.
+ * mehr; das Entfernen läuft über die Assistenten-Seite, Team-Wechsel
+ * ausschließlich über den „Überführen"-Dialog (Zuordnen-Sektion entfernt).
  *
  * Setup (Dienstleister + Teams + Nutzer) läuft über die `TeamTestHarness`
  * (eigener API-Kontext). Der Browser meldet sich separat programmatisch an
