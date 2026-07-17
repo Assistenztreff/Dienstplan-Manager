@@ -1170,13 +1170,6 @@ export default function Einstellungen() {
               : "Profil und Kalender-Abo verwalten"}
           </p>
         </div>
-        {isAdmin && (
-          <Button onClick={openCreate} className="gap-2">
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Neuen Dienst</span>
-            <span className="sm:hidden">Neu</span>
-          </Button>
-        )}
       </div>
 
       <ProfileCard />
@@ -1185,33 +1178,42 @@ export default function Einstellungen() {
 
       {isAdmin && (
       <>
-      {showTeamFilter && (
-        <div className="flex items-center gap-2">
-          <Label htmlFor="model-team-filter" className="text-sm text-muted-foreground shrink-0">
-            Dienste für Team
-          </Label>
-          <Select
-            value={modelTeamId == null ? undefined : String(modelTeamId)}
-            onValueChange={(v) => setModelTeamOverride(Number(v))}
-          >
-            <SelectTrigger
-              id="model-team-filter"
-              className="w-full sm:w-64"
-              data-testid="model-team-filter"
-              aria-label="Team für Dienste auswählen"
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {showTeamFilter ? (
+          <div className="flex items-center gap-2 min-w-0">
+            <Label htmlFor="model-team-filter" className="text-sm text-muted-foreground shrink-0">
+              Dienste für Team
+            </Label>
+            <Select
+              value={modelTeamId == null ? undefined : String(modelTeamId)}
+              onValueChange={(v) => setModelTeamOverride(Number(v))}
             >
-              <SelectValue placeholder="Team auswählen" />
-            </SelectTrigger>
-            <SelectContent>
-              {teams.map((t) => (
-                <SelectItem key={t.id} value={String(t.id)}>
-                  {t.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
+              <SelectTrigger
+                id="model-team-filter"
+                className="w-40 sm:w-64"
+                data-testid="model-team-filter"
+                aria-label="Team für Dienste auswählen"
+              >
+                <SelectValue placeholder="Team auswählen" />
+              </SelectTrigger>
+              <SelectContent>
+                {teams.map((t) => (
+                  <SelectItem key={t.id} value={String(t.id)}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : (
+          <div />
+        )}
+        <Button onClick={openCreate} className="gap-2">
+          <Plus className="h-4 w-4" />
+          <span className="hidden sm:inline">Neuen Dienst</span>
+          <span className="sm:hidden">Neu</span>
+        </Button>
+      </div>
       <Card className="border-border/50 shadow-sm">
         <CardContent className="p-0">
           {isLoading ? (
