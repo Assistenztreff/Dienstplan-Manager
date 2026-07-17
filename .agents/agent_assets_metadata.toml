@@ -17,3 +17,9 @@ id = "_ib_V9K-s8YLdQOMB4Tmt"
 uri = "file://attached_assets/screenshots/922735a5-eeff-47b8-b213-a02dee6dfad5-00-3fm42gtaa3b4q_kirk_replit_dev_mockup_preview_menu-nav_Vorschlag.png"
 type = "image"
 title = "Menü – Vorschlag (gruppiert)"
+
+[[outputs]]
+id = "K9rp504CwAm3tCEH9MTYE"
+uri = "file://exports/dienstplan-app-quellcode.zip"
+type = "unspecified"
+title = "Dienstplan-App Quellcode (ZIP für die Agentur)"
