@@ -57,6 +57,9 @@ type Shift = {
   shiftModelId?: number | null;
   notes?: string | null;
   user?: { name: string } | null;
+  einsatzTeamId?: number | null;
+  einsatzTeamName?: string | null;
+  homeTeamName?: string | null;
 };
 
 const PLANNING_STATUS_LABELS: Record<string, string> = {
@@ -364,6 +367,13 @@ type DialogState =
   | { mode: "confirm-all" };
 
 
+// Aushilfe-Spiegel: Die Schicht gehört einem ANDEREN eigenen Team und ist nur
+// als "Einsatz für" das aktuell angezeigte Team markiert — dort ist sie
+// schreibgeschützt (bearbeitet wird im Stammteam).
+function isMirrorShift(shift: Shift, selectedTeamId: number | null): boolean {
+  return shift.einsatzTeamId != null && shift.einsatzTeamId === selectedTeamId;
+}
+
 function ShiftBadge({
   shift,
   showName,
@@ -377,6 +387,14 @@ function ShiftBadge({
   onClick?: (e: React.MouseEvent) => void;
   onConfirm?: (shift: Shift) => void;
 }) {
+  const { selectedTeamId } = useTeam();
+  const mirror = isMirrorShift(shift, selectedTeamId);
+  const einsatzLabel =
+    shift.einsatzTeamId != null
+      ? mirror
+        ? `Aushilfe aus ${shift.homeTeamName ?? "anderem Team"}`
+        : `Aushilfe für ${shift.einsatzTeamName ?? "anderes Team"}`
+      : null;
   const classes = shiftBadgeClasses(shift);
   const isAbsence = shift.type === "vacation" || shift.type === "sick";
   const start = new Date(shift.startTime);
@@ -391,12 +409,26 @@ function ShiftBadge({
     <div
       data-testid={`shift-badge-${shift.id}`}
       data-planning-status={shift.planningStatus ?? "FIX"}
-      className={`w-full text-xs rounded border px-2 py-1 leading-snug cursor-pointer transition-colors ${classes} ${planningStatusBadgeOutline(shift)}`}
-      onClick={onClick}
-      title={statusLabel ? `${label} · ${statusLabel}` : label}
+      className={`w-full text-xs rounded border px-2 py-1 leading-snug ${mirror ? "cursor-default opacity-90" : "cursor-pointer"} transition-colors ${classes} ${planningStatusBadgeOutline(shift)}`}
+      onClick={mirror ? undefined : onClick}
+      title={
+        mirror && einsatzLabel
+          ? `${label} · ${einsatzLabel} (wird im Stammteam bearbeitet)`
+          : statusLabel
+            ? `${label} · ${statusLabel}`
+            : label
+      }
     >
       {showName && shift.user && (
         <div className="font-medium truncate">{shift.user.name}</div>
+      )}
+      {einsatzLabel && (
+        <div
+          data-testid={`shift-einsatz-badge-${shift.id}`}
+          className="mb-0.5 inline-flex items-center rounded bg-foreground/15 px-1 py-px text-[10px] font-semibold uppercase tracking-wide"
+        >
+          {einsatzLabel}
+        </div>
       )}
       {statusLabel && (
         <div
@@ -421,7 +453,7 @@ function ShiftBadge({
           <div className="text-[11px] opacity-70 truncate">{label}</div>
         </>
       )}
-      {onConfirm && isConfirmableShift(shift) && (
+      {onConfirm && !mirror && isConfirmableShift(shift) && (
         <button
           type="button"
           data-testid={`shift-confirm-${shift.id}`}
@@ -1242,6 +1274,13 @@ export default function Dienstplan() {
 
   function openEdit(shift: Shift) {
     if (!isAdmin) return;
+    // Aushilfe-Spiegel ist im Ziel-Team schreibgeschützt.
+    if (isMirrorShift(shift, selectedTeamId)) {
+      toast.info(
+        `Aushilfe-Einsatz aus ${shift.homeTeamName ?? "einem anderen Team"} — bearbeiten im Stammteam.`,
+      );
+      return;
+    }
     setDialog({ mode: "edit", shift });
   }
 
@@ -1262,11 +1301,15 @@ export default function Dienstplan() {
     }
   }
 
-  const confirmableShifts = allShifts.filter(isConfirmableShift);
+  // Aushilfe-Spiegel werden im Ziel-Team NICHT mitbestätigt — das macht das
+  // Stammteam (dort liegt die Schicht).
+  const confirmableShifts = allShifts.filter(
+    (s) => isConfirmableShift(s) && !isMirrorShift(s, selectedTeamId),
+  );
 
   async function confirmAllDrafts() {
     if (!isAdmin || isBulkConfirming) return;
-    const targets = allShifts.filter(isConfirmableShift);
+    const targets = confirmableShifts;
     if (targets.length === 0) {
       closeDialog();
       return;
@@ -1345,7 +1388,9 @@ export default function Dienstplan() {
           ? exportUsers[0].name.replace(/[^\p{L}\p{N}]+/gu, "_").replace(/^_+|_+$/g, "")
           : "Alle";
       const exported = await exportSimpleMonthPdf({
-        shifts: visibleShifts,
+        // Aushilfe-Spiegel nicht mitexportieren: die Stunden gehören ins
+        // Monats-PDF des Stammteams (sonst doppelt).
+        shifts: visibleShifts.filter((s) => !isMirrorShift(s, selectedTeamId)),
         users: exportUsers,
         month,
         year,
@@ -1710,7 +1755,7 @@ export default function Dienstplan() {
           open={dialog.mode === "bulk-edit"}
           onClose={closeDialog}
           dates={dialog.mode === "bulk-edit" ? dialog.dates : []}
-          shifts={allShifts}
+          shifts={allShifts.filter((s) => !isMirrorShift(s, selectedTeamId))}
           assistants={assistants}
           shiftModels={shiftModels ?? []}
           month={month}
@@ -1763,7 +1808,7 @@ export default function Dienstplan() {
           open={dialog.mode === "bulk-delete"}
           onClose={closeDialog}
           dates={dialog.mode === "bulk-delete" ? dialog.dates : []}
-          shifts={allShifts}
+          shifts={allShifts.filter((s) => !isMirrorShift(s, selectedTeamId))}
           assistants={assistants}
           month={month}
           year={year}

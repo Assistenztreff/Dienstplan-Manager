@@ -38,6 +38,7 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
 - **Regionale Feiertage**: wählbares Bundesland (Einstellungen); ohne Bundesland nur bundesweite. Keine rückwirkende Neuberechnung.
 - **Farbkodierung nach `userId`** (deterministischer Hash, `lib/shift-model-colors.ts`), nicht nach Schichtart. Abwesenheiten behalten semantische Farben (Urlaub Gelb, Krankheit Grau). `shift_models.color` bleibt in der DB (Default `slate`), Frontend sendet sie nicht.
 - **24h-Dienst**: identische Start-/Enduhrzeit über Tagesgrenze oder Legacy `full_day` → `ShiftBadge` zeigt „24h-Dienst".
+- **Aushilfe-Einsatz** (`shifts.einsatz_team_id`, nullable FK teams, ON DELETE SET NULL): Schicht bleibt im Stammteam (Stunden/Auswertung/PDF zählen NUR dort), optional als „Einsatz für Team" ein ANDERES eigenes Team. Server: gleiches Team → 400, fremdes Team → 403 (getAllowedTeamIds), Abwesenheiten → 400; Typwechsel zu Abwesenheit nullt den Einsatz. GET-Liste liefert Schichten mit `einsatzTeamId ∈ Scope` zusätzlich mit (Spiegel) inkl. `einsatzTeamName`/`homeTeamName` (korrelierte Subselects). Frontend: Dialog-Select (nur Nicht-Abwesenheit, nur wenn weitere eigene Teams), Badge „Aushilfe für {Team}" im Stammteam bzw. „Aushilfe aus {Team}" im Ziel-Team; Spiegel ist im Ziel-Team schreibgeschützt (kein Edit/Bestätigen, nicht in Sammelbestätigung, nicht im Monats-PDF). Kein fester Dienst „Aushilfe". Spec: `einsatz-team-api.spec.ts`.
 
 ## Multi-Team & Datentrennung
 

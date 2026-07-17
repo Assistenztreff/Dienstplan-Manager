@@ -482,6 +482,21 @@ export interface Shift {
   shiftModelId?: number | null;
   /** @nullable */
   notes?: string | null;
+  /**
+     * Aushilfe-Einsatz: ID des anderen eigenen Teams, für das dieser Einsatz erfolgt. Die Schicht (und ihre Stunden) bleiben beim Stammteam; das Ziel-Team sieht nur einen schreibgeschützten Spiegel-Eintrag.
+     * @nullable
+     */
+  einsatzTeamId?: number | null;
+  /**
+     * Name des Einsatz-Teams (nur gesetzt, wenn einsatzTeamId gesetzt ist).
+     * @nullable
+     */
+  einsatzTeamName?: string | null;
+  /**
+     * Name des Stammteams der Schicht (nur gesetzt, wenn einsatzTeamId gesetzt ist) — für den Badge "Aushilfe aus …" im Ziel-Team-Kalender.
+     * @nullable
+     */
+  homeTeamName?: string | null;
   valuedHours?: number;
   nightHours?: number;
   sundayHours?: number;
@@ -528,6 +543,11 @@ export interface ShiftInput {
   /** @nullable */
   shiftModelId?: number | null;
   notes?: string;
+  /**
+     * Aushilfe-Einsatz: ID eines anderen eigenen Teams, für das der Einsatz erfolgt. Muss ein erlaubtes Team des Aufrufers sein und darf nicht das Team der Schicht selbst sein; bei Abwesenheiten nicht erlaubt.
+     * @nullable
+     */
+  einsatzTeamId?: number | null;
 }
 
 export type ShiftUpdateType = typeof ShiftUpdateType[keyof typeof ShiftUpdateType];
@@ -568,6 +588,11 @@ export interface ShiftUpdate {
   shiftModelId?: number | null;
   /** @nullable */
   notes?: string | null;
+  /**
+     * Aushilfe-Einsatz setzen oder mit null entfernen. Gleiche Regeln wie beim Anlegen (eigenes anderes Team, keine Abwesenheiten).
+     * @nullable
+     */
+  einsatzTeamId?: number | null;
 }
 
 /**

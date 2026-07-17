@@ -20,4 +20,9 @@ export interface ShiftUpdate {
   shiftModelId?: number | null;
   /** @nullable */
   notes?: string | null;
+  /**
+     * Aushilfe-Einsatz setzen oder mit null entfernen. Gleiche Regeln wie beim Anlegen (eigenes anderes Team, keine Abwesenheiten).
+     * @nullable
+     */
+  einsatzTeamId?: number | null;
 }

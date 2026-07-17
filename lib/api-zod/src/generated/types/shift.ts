@@ -21,6 +21,21 @@ export interface Shift {
   shiftModelId?: number | null;
   /** @nullable */
   notes?: string | null;
+  /**
+     * Aushilfe-Einsatz: ID des anderen eigenen Teams, für das dieser Einsatz erfolgt. Die Schicht (und ihre Stunden) bleiben beim Stammteam; das Ziel-Team sieht nur einen schreibgeschützten Spiegel-Eintrag.
+     * @nullable
+     */
+  einsatzTeamId?: number | null;
+  /**
+     * Name des Einsatz-Teams (nur gesetzt, wenn einsatzTeamId gesetzt ist).
+     * @nullable
+     */
+  einsatzTeamName?: string | null;
+  /**
+     * Name des Stammteams der Schicht (nur gesetzt, wenn einsatzTeamId gesetzt ist) — für den Badge "Aushilfe aus …" im Ziel-Team-Kalender.
+     * @nullable
+     */
+  homeTeamName?: string | null;
   valuedHours?: number;
   nightHours?: number;
   sundayHours?: number;

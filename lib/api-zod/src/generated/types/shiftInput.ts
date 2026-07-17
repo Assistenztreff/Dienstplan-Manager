@@ -20,4 +20,9 @@ export interface ShiftInput {
   /** @nullable */
   shiftModelId?: number | null;
   notes?: string;
+  /**
+     * Aushilfe-Einsatz: ID eines anderen eigenen Teams, für das der Einsatz erfolgt. Muss ein erlaubtes Team des Aufrufers sein und darf nicht das Team der Schicht selbst sein; bei Abwesenheiten nicht erlaubt.
+     * @nullable
+     */
+  einsatzTeamId?: number | null;
 }

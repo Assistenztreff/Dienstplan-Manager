@@ -23,6 +23,11 @@ export const shiftsTable = pgTable("shifts", {
   type: shiftTypeEnum("type").notNull().default("active"),
   planningStatus: shiftPlanningStatusEnum("planning_status").notNull().default("FIX"),
   shiftModelId: integer("shift_model_id").references(() => shiftModelsTable.id, { onDelete: "set null" }),
+  // Aushilfe-Einsatz: Die Schicht liegt IMMER im Stammteam (team_id); dieses
+  // optionale Feld markiert, FUER welches andere eigene Team der Einsatz
+  // erfolgt. Auswertung/Stunden bleiben beim Stammteam; das Ziel-Team sieht
+  // die Schicht nur als schreibgeschuetzten Spiegel-Eintrag im Kalender.
+  einsatzTeamId: integer("einsatz_team_id").references(() => teamsTable.id, { onDelete: "set null" }),
   notes: text("notes"),
   // Berechnete Roh-Kennzahlen (beim Speichern ermittelt, Zuschlags-% erst bei Auswertung).
   valuedHours: real("valued_hours").notNull().default(0),

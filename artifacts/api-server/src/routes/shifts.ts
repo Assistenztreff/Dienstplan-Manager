@@ -55,6 +55,11 @@ const SHIFT_SELECT = {
   sundayHours: shiftsTable.sundayHours,
   holidayHours: shiftsTable.holidayHours,
   createdAt: shiftsTable.createdAt,
+  // Aushilfe-Einsatz: Team-Namen als korrelierte Subselects (explizit
+  // qualifizierte Spalten, s. Drizzle-Eigenheit bei sql`` in Projektionen).
+  einsatzTeamId: shiftsTable.einsatzTeamId,
+  einsatzTeamName: sql<string | null>`(SELECT t.name FROM teams t WHERE t.id = shifts.einsatz_team_id)`,
+  homeTeamName: sql<string | null>`(CASE WHEN shifts.einsatz_team_id IS NOT NULL THEN (SELECT t.name FROM teams t WHERE t.id = shifts.team_id) END)`,
   user: {
     id: usersTable.id,
     name: usersTable.name,
@@ -466,7 +471,15 @@ router.get("/shifts", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const conditions = [inArray(shiftsTable.teamId, teamScope)];
+  // Aushilfe-Spiegel: Schichten anderer (eigener) Teams, die als "Einsatz für"
+  // ein Team im Scope markiert sind, erscheinen zusätzlich in dessen Kalender
+  // (dort schreibgeschützt; Stunden zählen weiterhin nur im Stammteam).
+  const conditions = [
+    or(
+      inArray(shiftsTable.teamId, teamScope),
+      inArray(shiftsTable.einsatzTeamId, teamScope)
+    )!,
+  ];
   if (effectiveUserId) conditions.push(eq(shiftsTable.userId, effectiveUserId));
   if (query.data.type) conditions.push(eq(shiftsTable.type, query.data.type as "active" | "standby" | "night" | "full_day" | "vacation" | "sick" | "work"));
   if (query.data.month && query.data.year) {
@@ -654,6 +667,25 @@ router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
   // Monate sperren (Plan des Team-Eigentuemers maßgeblich, Bestandsschutz).
   if (await forwardPlanningBlocked(write.teamId, req.session.userId!, body.data.startTime, res)) {
     return;
+  }
+
+  // Aushilfe-Einsatz: Ziel muss ein ANDERES erlaubtes Team des Aufrufers sein;
+  // Abwesenheiten können kein Einsatz sein (Urlaub/Krankheit "für" ein anderes
+  // Team ergibt keinen Sinn und würde den Spiegel-Eintrag verfälschen).
+  if (body.data.einsatzTeamId != null) {
+    if (isAbsenceType(body.data.type)) {
+      res.status(400).json({ error: "Abwesenheiten können kein Aushilfe-Einsatz sein" });
+      return;
+    }
+    if (body.data.einsatzTeamId === write.teamId) {
+      res.status(400).json({ error: "Einsatz-Team muss ein anderes Team sein" });
+      return;
+    }
+    const allowedForEinsatz = await getAllowedTeamIds(req.session.userId!);
+    if (!allowedForEinsatz.includes(body.data.einsatzTeamId)) {
+      res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
+      return;
+    }
   }
 
   // Das verknüpfte Schichtmodell muss zum Ziel-Team gehören, sonst flössen die
@@ -878,6 +910,23 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
     }
   }
 
+  // Aushilfe-Einsatz setzen/ändern: gleiche Regeln wie beim Anlegen — anderes
+  // eigenes Team, keine Abwesenheit. Entfernen (null) ist immer erlaubt.
+  if (body.data.einsatzTeamId != null) {
+    if (isAbsenceType(effectiveType)) {
+      res.status(400).json({ error: "Abwesenheiten können kein Aushilfe-Einsatz sein" });
+      return;
+    }
+    if (body.data.einsatzTeamId === oldShift.teamId) {
+      res.status(400).json({ error: "Einsatz-Team muss ein anderes Team sein" });
+      return;
+    }
+    if (!allowedTeams.includes(body.data.einsatzTeamId)) {
+      res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
+      return;
+    }
+  }
+
   // Wird das Schichtmodell geändert, muss das neue Modell zum Team der Schicht
   // gehören (oldShift.teamId, das Team bleibt bei PATCH unverändert), sonst
   // flössen fremde Wertungs-/Zuschlagsparameter in die Auswertung ein.
@@ -893,7 +942,11 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
   // FIX — analog zum POST, damit kein Weg eine vorläufige Abwesenheit erzeugt.
   const updateValues = {
     ...body.data,
-    ...(isAbsenceType(effectiveType) ? { planningStatus: "FIX" as const } : {}),
+    // Wird die Schicht zur Abwesenheit, verliert sie einen etwaigen
+    // Aushilfe-Einsatz (Spiegel-Eintrag im Ziel-Team wäre irreführend).
+    ...(isAbsenceType(effectiveType)
+      ? { planningStatus: "FIX" as const, einsatzTeamId: null }
+      : {}),
   };
   const [updated] = await db
     .update(shiftsTable)

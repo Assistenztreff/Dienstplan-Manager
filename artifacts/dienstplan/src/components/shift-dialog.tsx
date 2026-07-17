@@ -41,6 +41,7 @@ import {
 import { Check, ChevronsUpDown, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { readableApiError, planUpgradeMessage } from "@/lib/api-error";
+import { useTeam } from "@/context/team";
 
 type Assistant = { id: number; name: string };
 
@@ -53,6 +54,7 @@ type ShiftForEdit = {
   planningStatus?: string | null;
   shiftModelId?: number | null;
   notes?: string | null;
+  einsatzTeamId?: number | null;
 };
 
 // Planungsstatus: Entwurf (intern) → Vorschlag (angeboten) → Bestätigt (fix).
@@ -132,6 +134,8 @@ type FormState = {
   selection: string;
   planningStatus: PlanningStatus;
   notes: string;
+  // Aushilfe-Einsatz: ID eines anderen eigenen Teams als String, "" = keiner.
+  einsatzTeamId: string;
 };
 
 function toTimeString(isoString: string): string {
@@ -199,6 +203,10 @@ export function ShiftDialog({
   const updateShift = useUpdateShift();
   const deleteShift = useDeleteShift();
   const { data: models } = useListShiftModels();
+  // Aushilfe-Einsatz: nur für Dienstleister mit mehreren Teams relevant —
+  // wählbar sind alle EIGENEN Teams außer dem aktuell angezeigten (teamId).
+  const { teams } = useTeam();
+  const einsatzTeams = teams.filter((t) => t.id !== teamId);
 
   const allModels = models ?? [];
   const activeModels = allModels.filter((m) => m.isActive);
@@ -243,6 +251,7 @@ export function ShiftDialog({
           ? "FIX"
           : "VORLAEUFIG",
       notes: editShift?.notes ?? "",
+      einsatzTeamId: editShift?.einsatzTeamId != null ? String(editShift.einsatzTeamId) : "",
     };
   }
 
@@ -452,6 +461,8 @@ export function ShiftDialog({
           planningStatus: isAbsence ? "FIX" : form.planningStatus,
           shiftModelId,
           notes: form.notes || null,
+          einsatzTeamId:
+            !isAbsence && form.einsatzTeamId ? Number(form.einsatzTeamId) : null,
         };
         await updateShift.mutateAsync({
           id: editShift.id,
@@ -466,6 +477,9 @@ export function ShiftDialog({
           planningStatus: isAbsence ? "FIX" : form.planningStatus,
           shiftModelId,
           notes: form.notes || undefined,
+          ...(!isAbsence && form.einsatzTeamId
+            ? { einsatzTeamId: Number(form.einsatzTeamId) }
+            : {}),
         };
         await createShift.mutateAsync({
           data: {
@@ -530,6 +544,9 @@ export function ShiftDialog({
           planningStatus: isAbsence ? "FIX" : form.planningStatus,
           shiftModelId,
           notes: form.notes || undefined,
+          ...(!isAbsence && form.einsatzTeamId
+            ? { einsatzTeamId: Number(form.einsatzTeamId) }
+            : {}),
         };
         try {
           await createShift.mutateAsync({
@@ -835,6 +852,37 @@ export function ShiftDialog({
               <p className="text-xs text-muted-foreground">
                 {PLANNING_STATUS_OPTIONS.find((o) => o.value === form.planningStatus)?.hint}
               </p>
+            </div>
+          )}
+
+          {/* Aushilfe-Einsatz: nur für Dienstleister mit mehreren Teams. Die
+              Schicht bleibt im aktuellen Team (Stunden zählen hier); das
+              gewählte Team sieht sie als schreibgeschützten Aushilfe-Eintrag. */}
+          {!isAbsence && teamId != null && einsatzTeams.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Aushilfe-Einsatz für Team</Label>
+              <Select
+                value={form.einsatzTeamId || "none"}
+                onValueChange={(v) => set("einsatzTeamId", v === "none" ? "" : v)}
+              >
+                <SelectTrigger data-testid="shift-dialog-einsatz-team">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Kein Aushilfe-Einsatz</SelectItem>
+                  {einsatzTeams.map((t) => (
+                    <SelectItem key={t.id} value={String(t.id)}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {form.einsatzTeamId && (
+                <p className="text-xs text-muted-foreground">
+                  Die Stunden zählen weiterhin in diesem Team; das gewählte Team
+                  sieht den Dienst als Aushilfe-Eintrag im Kalender.
+                </p>
+              )}
             </div>
           )}
 
