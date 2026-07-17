@@ -202,7 +202,10 @@ export function ShiftDialog({
   const createShift = useCreateShift();
   const updateShift = useUpdateShift();
   const deleteShift = useDeleteShift();
-  const { data: models } = useListShiftModels();
+  // Dienste STRIKT team-bezogen laden: ohne Filter kämen Schichtmodelle
+  // fremder eigener Teams in die Auswahl, deren Speichern der Server korrekt
+  // mit 403 ablehnt ("Schichtmodell gehört nicht zu diesem Team").
+  const { data: models } = useListShiftModels(teamId != null ? { teamId } : {});
   // Aushilfe-Einsatz: nur für Dienstleister mit mehreren Teams relevant —
   // wählbar sind alle EIGENEN Teams außer dem aktuell angezeigten (teamId).
   const { teams } = useTeam();
@@ -498,7 +501,9 @@ export function ShiftDialog({
       } else if (planMsg) {
         setErrors({ notes: planMsg });
       } else if (err instanceof ApiError && err.status === 403) {
-        setErrors({ notes: "Keine Berechtigung zum Speichern." });
+        // Konkrete Server-Meldung durchreichen (z. B. "Schichtmodell gehört
+        // nicht zu diesem Team") statt eines generischen Berechtigungs-Texts.
+        setErrors({ notes: readableApiError(err, "Keine Berechtigung zum Speichern.") });
       } else if (
         err instanceof ApiError &&
         err.status === 409 &&
@@ -530,6 +535,7 @@ export function ShiftDialog({
       const conflicts: string[] = [];
       let sessionExpired = false;
       let otherError = false;
+      let forbiddenMessage: string | null = null;
       let planLimitError: string | null = null;
 
       for (const dateStr of bulkDates) {
@@ -565,6 +571,11 @@ export function ShiftDialog({
           } else if (planMsg) {
             planLimitError = planMsg;
             break;
+          } else if (err instanceof ApiError && err.status === 403) {
+            // Konkrete Server-Meldung (z. B. team-fremdes Schichtmodell)
+            // durchreichen — betrifft alle Tage gleichermaßen, daher Abbruch.
+            forbiddenMessage = readableApiError(err, "Keine Berechtigung zum Speichern.");
+            break;
           } else if (
             err instanceof ApiError &&
             err.status === 409 &&
@@ -586,6 +597,10 @@ export function ShiftDialog({
       }
       if (planLimitError) {
         setErrors({ notes: planLimitError });
+        return;
+      }
+      if (forbiddenMessage) {
+        setErrors({ notes: forbiddenMessage });
         return;
       }
       if (otherError) {
@@ -824,7 +839,8 @@ export function ShiftDialog({
             </Select>
             {activeModels.length === 0 && !isAbsence && !legacyEditOption && !is24h && (
               <p className="text-xs text-muted-foreground">
-                Noch keine Schichtmodelle angelegt. Lege sie unter Einstellungen an.
+                In diesem Team sind noch keine Dienste angelegt. Lege sie unter
+                Einstellungen („+ Neuen Dienst") an.
               </p>
             )}
           </div>

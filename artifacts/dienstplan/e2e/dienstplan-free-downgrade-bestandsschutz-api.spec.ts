@@ -152,11 +152,13 @@ test("Bestandsschutz: alle über den Free-Caps angelegten Zeilen bleiben nach de
     "Weit voraus geplante Schicht sollte nach Downgrade sichtbar bleiben",
   ).toBe(true);
 
-  // Schichtmodelle: alle 7 (über maxShiftModels = 5) bleiben sichtbar.
-  const modelsRes = await acc.ctx.get("/api/shift-models");
+  // Schichtmodelle: alle 7 des Standard-Teams (über maxShiftModels = 5)
+  // bleiben sichtbar. Team-gescoped abfragen, weil das 2. Team beim Anlegen
+  // inzwischen ebenfalls 5 Standard-Dienste geseedet bekommt.
+  const modelsRes = await acc.ctx.get(`/api/shift-models?teamId=${teamIds[0]}`);
   expect(modelsRes.ok(), "GET /api/shift-models fehlgeschlagen").toBe(true);
   const models = (await modelsRes.json()) as Entity[];
-  expect(models.length, "Alle 7 Schichtmodelle sollten nach Downgrade sichtbar bleiben").toBe(7);
+  expect(models.length, "Alle 7 Schichtmodelle des Standard-Teams sollten nach Downgrade sichtbar bleiben").toBe(7);
   for (const id of shiftModelIds) {
     expect(models.some((m) => m.id === id), `Modell ${id} sollte nach Downgrade sichtbar bleiben`).toBe(true);
   }

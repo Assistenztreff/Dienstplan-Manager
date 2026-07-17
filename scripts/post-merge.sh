@@ -10,6 +10,10 @@ pnpm --filter @workspace/scripts run migrate-allowance-settings
 # korrigieren, damit sie in den Auswertungen erscheinen. Reine Daten-Migration
 # (kein Schema-Prompt), idempotent — Reihenfolge unkritisch.
 pnpm --filter @workspace/scripts run migrate-absences-fix
+# Bestehende Teams OHNE ein einziges Schichtmodell bekommen die 5 Standard-
+# Dienste nachgezogen (neue Teams werden seit dem Schicht-Dialog-Fix direkt
+# beim Anlegen geseedet). Reine Daten-Migration, idempotent.
+pnpm --filter @workspace/scripts run backfill-team-shift-models
 # calendar_token (Kalender-Abo-Feed) idempotent VOR db push anlegen: drizzle-kit
 # push fragt bei neuen UNIQUE-Constraints interaktiv nach (kein TTY im
 # Post-Merge => Abbruch). Vorab angelegt erkennt push "no changes".

@@ -1,4 +1,5 @@
 import { db, shiftModelsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 // Standard-Dienste, die jedem neu registrierten Nutzer (genauer: dessen erstem,
 // automatisch angelegten "Standard-Team") vorinstalliert werden. Damit startet
@@ -62,8 +63,16 @@ export const DEFAULT_SHIFT_MODELS = [
 ] as const;
 
 // Legt die Standard-Dienste für ein frisch erstelltes Team an. Wird beim
-// Registrieren und beim ersten Dev-Login (Anlage des Standard-Teams) aufgerufen.
+// Registrieren, beim ersten Dev-Login (Anlage des Standard-Teams) und beim
+// Anlegen weiterer Teams (POST /teams) aufgerufen. Idempotent: Hat das Team
+// bereits Schichtmodelle, wird nichts angelegt (kein Doppel-Seeding).
 export async function seedDefaultShiftModels(teamId: number): Promise<void> {
+  const [existing] = await db
+    .select({ id: shiftModelsTable.id })
+    .from(shiftModelsTable)
+    .where(eq(shiftModelsTable.teamId, teamId))
+    .limit(1);
+  if (existing) return;
   await db
     .insert(shiftModelsTable)
     .values(DEFAULT_SHIFT_MODELS.map((m) => ({ ...m, defaultWeekdays: [...m.defaultWeekdays], teamId })));

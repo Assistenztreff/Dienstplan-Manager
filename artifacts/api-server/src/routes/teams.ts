@@ -21,6 +21,7 @@ import {
 } from "@workspace/api-zod";
 import { requireDienstleister } from "../middleware/auth";
 import { userWithinLimit, getUserLimit } from "../lib/plan";
+import { seedDefaultShiftModels } from "../lib/default-shift-models";
 
 const router = Router();
 
@@ -122,6 +123,13 @@ router.post("/teams", requireDienstleister, async (req, res): Promise<void> => {
     .insert(teamsTable)
     .values({ name: body.data.name, ownerId })
     .returning(TEAM_SELECT);
+
+  // Neue Teams starten mit den 5 Standard-Diensten (wie bei der Registrierung),
+  // damit der Schicht-Dialog nicht mit leerer Dienste-Liste beginnt. Das
+  // Free-Limit maxShiftModels zählt pro Team und greift unverändert erst beim
+  // Anlegen WEITERER Modelle.
+  await seedDefaultShiftModels(team!.id);
+
   res.status(201).json(team);
 });
 
