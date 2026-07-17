@@ -118,11 +118,13 @@ type ModelDialogProps = {
   onClose: () => void;
   editModel?: ShiftModel;
   nextSortOrder: number;
+  // Ziel-Team fuer Neuanlagen: entspricht dem im Dienste-Bereich gewaehlten
+  // Team-Filter, damit ein neuer Dienst genau dort landet, wo die Liste ihn zeigt.
+  targetTeamId: number | null;
 };
 
-function ModelDialog({ open, onClose, editModel, nextSortOrder }: ModelDialogProps) {
+function ModelDialog({ open, onClose, editModel, nextSortOrder, targetTeamId }: ModelDialogProps) {
   const queryClient = useQueryClient();
-  const { selectedTeamId } = useTeam();
   const createModel = useCreateShiftModel();
   const updateModel = useUpdateShiftModel();
 
@@ -201,7 +203,7 @@ function ModelDialog({ open, onClose, editModel, nextSortOrder }: ModelDialogPro
         await updateModel.mutateAsync({ id: editModel.id, data: payload });
       } else {
         await createModel.mutateAsync({
-          data: { ...payload, ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}) },
+          data: { ...payload, ...(targetTeamId != null ? { teamId: targetTeamId } : {}) },
         });
       }
       await queryClient.invalidateQueries({ queryKey: getListShiftModelsQueryKey() });
@@ -1089,7 +1091,22 @@ export default function Einstellungen() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { currentUser } = useAuth();
-  const { data: models, isLoading } = useListShiftModels();
+  const { teams, isDienstleister: isTeamDienstleister, selectedTeamId } = useTeam();
+
+  // Team-Filter fuer den Dienste-Bereich (nur Dienstleister mit Teams):
+  // initial dem globalen Team-Switcher folgen; eine lokale Auswahl im Dropdown
+  // uebersteuert nur diese Seite, nicht den globalen Switcher.
+  const [modelTeamOverride, setModelTeamOverride] = useState<number | null>(null);
+  const showTeamFilter = isTeamDienstleister && teams.length > 0;
+  const modelTeamId = showTeamFilter
+    ? (modelTeamOverride != null && teams.some((t) => t.id === modelTeamOverride)
+        ? modelTeamOverride
+        : selectedTeamId)
+    : null;
+
+  const { data: models, isLoading } = useListShiftModels(
+    modelTeamId != null ? { teamId: modelTeamId } : undefined,
+  );
   const deleteModel = useDeleteShiftModel();
 
   const isDienstleister = currentUser?.accountType === "dienstleister";
@@ -1168,6 +1185,33 @@ export default function Einstellungen() {
 
       {isAdmin && (
       <>
+      {showTeamFilter && (
+        <div className="flex items-center gap-2">
+          <Label htmlFor="model-team-filter" className="text-sm text-muted-foreground shrink-0">
+            Dienste für Team
+          </Label>
+          <Select
+            value={modelTeamId == null ? undefined : String(modelTeamId)}
+            onValueChange={(v) => setModelTeamOverride(Number(v))}
+          >
+            <SelectTrigger
+              id="model-team-filter"
+              className="w-full sm:w-64"
+              data-testid="model-team-filter"
+              aria-label="Team für Dienste auswählen"
+            >
+              <SelectValue placeholder="Team auswählen" />
+            </SelectTrigger>
+            <SelectContent>
+              {teams.map((t) => (
+                <SelectItem key={t.id} value={String(t.id)}>
+                  {t.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       <Card className="border-border/50 shadow-sm">
         <CardContent className="p-0">
           {isLoading ? (
@@ -1259,6 +1303,7 @@ export default function Einstellungen() {
           onClose={closeDialog}
           editModel={editModel}
           nextSortOrder={nextSortOrder}
+          targetTeamId={modelTeamId}
         />
       )}
     </div>
