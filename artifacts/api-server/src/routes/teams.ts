@@ -349,6 +349,15 @@ router.post(
         .update(shiftsTable)
         .set({ teamId: targetTeamId, shiftModelId: null })
         .where(and(eq(shiftsTable.teamId, teamId), eq(shiftsTable.userId, userId)));
+      // Aushilfe-Einsätze der Person auf das ZIEL-Team werden sinnlos, sobald
+      // die Schicht selbst im Ziel-Team liegt (einsatzTeamId === teamId wäre
+      // ungültig) — daher normalisieren: Einsatz auf das Ziel-Team nullen.
+      await tx
+        .update(shiftsTable)
+        .set({ einsatzTeamId: null })
+        .where(
+          and(eq(shiftsTable.userId, userId), eq(shiftsTable.einsatzTeamId, targetTeamId)),
+        );
       await tx
         .update(timeTrackingTable)
         .set({ teamId: targetTeamId })
