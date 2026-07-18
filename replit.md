@@ -91,7 +91,7 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
 ## Tests
 
 - `pnpm run typecheck` prüft auch `e2e/**/*` + `playwright.config.ts` (`tsconfig.e2e.json`) — Typfehler in Specs fallen sofort auf.
-- **Merge-Validierung** bei jedem Task-Abschluss: `typecheck` + `e2e-api` (`test:e2e:api` = alle `*-api.spec.ts`, ~3 min). Rote API-Specs blockieren den Merge.
+- **Merge-Validierung** bei jedem Task-Abschluss: `typecheck` + `e2e-api` (`test:e2e:api` = alle `*-api.spec.ts`, ~3 min) + `unit` (Vitest `@workspace/dienstplan`, u. a. WCAG-Kontrast-Test der assistenz-Paarungen in `barrierefreie-farben.test.ts`). Rote API-Specs/Unit-Tests blockieren den Merge.
 - `pnpm --filter @workspace/dienstplan run test:e2e` — Playwright gegen isolierten Test-Stack (API 8099 + Vite 5199, DB `<dbname>_test`); Dev-DB unberührt. Config-Load: `setup-test-db` + Regressionschecks automatisch, Waisen-Prozesse werden erkannt/beendet. Skips: `E2E_SKIP_SEPARATION_CHECK=1`, `E2E_SKIP_CLEANUP_CHECK=1`, `E2E_SKIP_DB_SETUP=1`, `E2E_BASE_URL`. Test-Konten MÜSSEN dem Muster `e2e.*@dienstplan.test` folgen.
 - Neue team-gebundene Tabellen → `TEAM_BOUND_TABLES` in `lib/test-fixtures/src/account-tree.ts` (FK-Wächter der Cleanup-Checks).
 

@@ -24,6 +24,10 @@ args = "typecheck"
 task = "workflow.run"
 args = "e2e-api"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "unit"
+
 [[workflows.workflow]]
 name = "typecheck"
 author = "agent"
@@ -42,6 +46,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm --filter @workspace/dienstplan run test:e2e:api"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "unit"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/dienstplan run test"
 
 [workflows.workflow.metadata]
 isValidation = true
