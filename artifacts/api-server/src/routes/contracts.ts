@@ -18,7 +18,7 @@ import {
   DeleteContractParams,
 } from "@workspace/api-zod";
 import { requireAdmin, requireAuth, isAdminLikeRole } from "../middleware/auth";
-import { recalcVacationHoursUsed } from "../lib/vacation-hours";
+import { recalcVacationHoursUsed, resolveDailyRateInfo } from "../lib/vacation-hours";
 import { requirePlanFeatureViaTeamOwner } from "../lib/plan";
 import { resolveAllowanceOps } from "../lib/allowance-resolve";
 import { round2 } from "../lib/dashboard-hours-balance";
@@ -338,6 +338,18 @@ router.get(
     const restDaysRedeemed = Number(redeemedRow?.count ?? 0);
     const restDaysBalance = restDaysEarned - restDaysRedeemed;
 
+    // Bewertungsquelle eines (hypothetischen) ganztägigen Urlaubstags HEUTE:
+    // bwavg-Schnitt, Vertragsdaten (Wochenstunden ÷ Arbeitstage/Woche) oder
+    // Standardwert. Die UI zeigt bei "contract" einen Datenpflege-Hinweis —
+    // Bestandsverträge stehen nach der Migration oft pauschal auf 5 Arbeits-
+    // tage/Woche, was 7-Tage-Modelle in der Assistenz falsch bewertet.
+    const rateInfo = await resolveDailyRateInfo(
+      contract.userId,
+      contract.teamId,
+      new Date(),
+      hoursPerDay,
+    );
+
     res.json({
       contractId: contract.id,
       userId: contract.userId,
@@ -353,6 +365,10 @@ router.get(
       restDaysRedeemed,
       restDaysBalance,
       ersatzruhetagEnabled: ops.ersatzruhetagEnabled,
+      dailyHoursSource: rateInfo.source,
+      dailyHours: round2(rateInfo.dailyHours),
+      contractWorkdaysPerWeek: rateInfo.workdaysPerWeek,
+      contractWeeklyHours: rateInfo.weeklyHours,
     });
   },
 );

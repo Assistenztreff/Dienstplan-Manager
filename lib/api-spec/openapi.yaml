@@ -2818,6 +2818,24 @@ components:
           description: >-
             Ist das Ersatzruhetag-Konto für dieses Team aktiv? Bei false wird
             keine Feiertagsarbeit gutgeschrieben (restDaysEarned = 0).
+        dailyHoursSource:
+          type: string
+          enum: [bwavg, contract, default]
+          description: >-
+            Quelle der Tages-Stunden-Bewertung eines ganztägigen Urlaubstags
+            zum heutigen Stichtag: 13-Wochen-Schnitt (bwavg), Vertragsdaten
+            (Wochenstunden ÷ Arbeitstage/Woche) oder Standardwert. Bei
+            "contract" sollte die UI auf die Datenpflege der Arbeitstage/Woche
+            hinweisen (Migrations-Default 5).
+        dailyHours:
+          type: number
+          description: Verwendete Stunden je Urlaubstag zum heutigen Stichtag.
+        contractWorkdaysPerWeek:
+          type: ["integer", "null"]
+          description: Arbeitstage/Woche des aktiven Vertrags (null ohne Vertrag).
+        contractWeeklyHours:
+          type: ["number", "null"]
+          description: Wochenstunden des aktiven Vertrags (null ohne Vertrag).
 
     AuthUser:
       type: object

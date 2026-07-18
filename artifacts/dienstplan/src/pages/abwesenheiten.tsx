@@ -6,8 +6,12 @@ import {
   useListShiftModels,
   useCreateShift,
   useDeleteShift,
+  useUpdateContract,
+  useGetVacationBalance,
   ApiError,
   type ShiftInputType,
+  type VacationBalance,
+  type Contract,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,7 +27,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Plane, Stethoscope } from "lucide-react";
+import { Plus, Trash2, Plane, Stethoscope, Info } from "lucide-react";
 import { eachDayOfInterval, format } from "date-fns";
 import { de } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
@@ -42,6 +46,111 @@ const TYPE_LABEL: Record<AbsenceType, string> = {
   vacation: "Urlaub",
   sick: "Krank",
 };
+
+// Datenpflege-Hinweis: Zeigt an, wenn ein Urlaubstag aktuell aus VERTRAGSDATEN
+// (Wochenstunden ÷ Arbeitstage/Woche) bewertet wird, weil (noch) kein
+// 13-Wochen-Schnitt vorliegt. Bestandsverträge stehen nach der Migration oft
+// pauschal auf 5 Arbeitstage/Woche — in der persönlichen Assistenz sind aber
+// 7-Tage-Modelle häufig. Der Wert lässt sich direkt aus dem Hinweis heraus
+// korrigieren (PATCH auf den Vertrag).
+function WorkdaysHint({ contract }: { contract: Contract }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const updateContract = useUpdateContract();
+  const [value, setValue] = useState<string>("");
+  const [saving, setSaving] = useState(false);
+
+  const { data: balance } = useGetVacationBalance(contract.id, {
+    query: { retry: false },
+  } as Parameters<typeof useGetVacationBalance>[1]) as {
+    data?: VacationBalance;
+  };
+
+  if (!balance || balance.dailyHoursSource !== "contract") return null;
+
+  const workdays = balance.contractWorkdaysPerWeek ?? 5;
+  const weekly = balance.contractWeeklyHours;
+  const selected = value || String(workdays);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await updateContract.mutateAsync({
+        id: contract.id,
+        data: { workdaysPerWeek: Number(selected) },
+      });
+      await queryClient.invalidateQueries({
+        predicate: (q) => {
+          const k = q.queryKey[0];
+          return (
+            k === "/api/contracts" ||
+            k === `/api/contracts/${contract.id}/vacation-balance`
+          );
+        },
+      });
+      toast({
+        title: "Arbeitstage aktualisiert",
+        description: `Der Vertrag rechnet jetzt mit ${selected} Arbeitstagen pro Woche.`,
+      });
+      setValue("");
+    } catch {
+      toast({ title: "Speichern fehlgeschlagen", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div
+      className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+      data-testid={`workdays-hint-${contract.id}`}
+    >
+      <span className="flex items-start gap-1.5">
+        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <span>
+          Urlaubstage werden derzeit aus den Vertragsdaten bewertet
+          {weekly != null && (
+            <>
+              {" "}
+              ({weekly} Wochenstunden ÷ {workdays}{" "}
+              {workdays === 1 ? "Arbeitstag" : "Arbeitstage"}/Woche ={" "}
+              {balance.dailyHours} h/Tag)
+            </>
+          )}
+          , da noch kein 13-Wochen-Schnitt vorliegt. Bitte prüfen, ob die
+          Arbeitstage pro Woche stimmen (Migrations-Standard: 5).
+        </span>
+      </span>
+      <span className="flex items-center gap-2">
+        <Select value={selected} onValueChange={setValue}>
+          <SelectTrigger
+            className="h-7 w-[72px] text-xs"
+            data-testid={`workdays-select-${contract.id}`}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+              <SelectItem key={n} value={String(n)}>
+                {n}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 px-2 text-xs"
+          disabled={saving || Number(selected) === workdays}
+          onClick={handleSave}
+          data-testid={`workdays-save-${contract.id}`}
+        >
+          {saving ? "Speichern..." : "Übernehmen"}
+        </Button>
+      </span>
+    </div>
+  );
+}
 
 export default function Abwesenheiten() {
   const { toast } = useToast();
@@ -361,8 +470,8 @@ export default function Abwesenheiten() {
                     const remaining =
                       entitlement !== null ? Math.round((entitlement - taken) * 10) / 10 : null;
                     return (
+                      <div key={u.id}>
                       <div
-                        key={u.id}
                         className="flex items-center justify-between text-sm py-2 px-3 rounded-lg bg-muted/30 border border-border/40"
                         data-testid={`vacation-balance-row-${u.id}`}
                       >
@@ -396,6 +505,8 @@ export default function Abwesenheiten() {
                             genommen)
                           </span>
                         )}
+                      </div>
+                      {contract && <WorkdaysHint contract={contract} />}
                       </div>
                     );
                   })}

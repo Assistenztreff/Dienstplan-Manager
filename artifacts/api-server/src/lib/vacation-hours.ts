@@ -114,28 +114,64 @@ export async function absenceHoursFor(
   if (!isPlainFullDay(start, end)) {
     return vacationHoursForShift(start, end, fallbackPerDay);
   }
+  const info = await resolveDailyRateInfo(userId, teamId, start, fallbackPerDay);
+  return vacationHoursForShift(start, end, info.dailyHours);
+}
+
+// Löst die Tages-Stunden-Kette (bwavg → Vertrag → Standard) für einen Stichtag
+// auf und benennt zusätzlich die verwendete Quelle — damit die UI anzeigen
+// kann, WENN ein Urlaubstag aus Vertragsdaten (statt 13-Wochen-Schnitt)
+// bewertet wurde, inkl. der verwendeten Arbeitstage/Woche (Datenpflege-Hinweis:
+// Bestandsverträge stehen nach der Migration oft pauschal auf 5).
+export type DailyRateSource = "bwavg" | "contract" | "default";
+export interface DailyRateInfo {
+  dailyHours: number;
+  source: DailyRateSource;
+  // Vertragsdaten, sofern ein aktiver team-gescopter Vertrag existiert
+  // (unabhängig davon, ob er die Quelle war — die UI zeigt die Werte im
+  // Hinweis an).
+  workdaysPerWeek: number | null;
+  weeklyHours: number | null;
+}
+
+export async function resolveDailyRateInfo(
+  userId: number,
+  teamId: number | null,
+  refDate: Date,
+  fallbackPerDay: number
+): Promise<DailyRateInfo> {
   const ops = await resolveAllowanceOps(teamId);
-  let perDay = fallbackPerDay;
-  if (ops.vacationMethod === "bwavg") {
-    const contract =
-      teamId != null ? await activeTeamContractFor(userId, teamId, start) : null;
-    if (contract) {
-      const avg = contractOlderThan13Weeks(contract.startDate, start)
-        ? await bwavgDailyHours(userId, start)
-        : null;
-      if (avg != null) {
-        perDay = avg;
-      } else if (contract.weeklyHours > 0 && contract.workdaysPerWeek > 0) {
-        perDay =
-          Math.round((contract.weeklyHours / contract.workdaysPerWeek) * 100) / 100;
-      }
-    } else {
-      // Ohne Vertrag: bisheriges Verhalten (Schnitt, falls Historie; sonst
-      // Standardwert) — kein Verhaltensbruch für vertragslose Nutzer.
-      perDay = (await bwavgDailyHours(userId, start)) ?? fallbackPerDay;
+  const contract =
+    teamId != null ? await activeTeamContractFor(userId, teamId, refDate) : null;
+  const info: DailyRateInfo = {
+    dailyHours: fallbackPerDay,
+    source: "default",
+    workdaysPerWeek: contract?.workdaysPerWeek ?? null,
+    weeklyHours: contract?.weeklyHours ?? null,
+  };
+  if (ops.vacationMethod !== "bwavg") return info;
+  if (contract) {
+    const avg = contractOlderThan13Weeks(contract.startDate, refDate)
+      ? await bwavgDailyHours(userId, refDate)
+      : null;
+    if (avg != null) {
+      info.dailyHours = avg;
+      info.source = "bwavg";
+    } else if (contract.weeklyHours > 0 && contract.workdaysPerWeek > 0) {
+      info.dailyHours =
+        Math.round((contract.weeklyHours / contract.workdaysPerWeek) * 100) / 100;
+      info.source = "contract";
+    }
+  } else {
+    // Ohne Vertrag: bisheriges Verhalten (Schnitt, falls Historie; sonst
+    // Standardwert) — kein Verhaltensbruch für vertragslose Nutzer.
+    const avg = await bwavgDailyHours(userId, refDate);
+    if (avg != null) {
+      info.dailyHours = avg;
+      info.source = "bwavg";
     }
   }
-  return vacationHoursForShift(start, end, perDay);
+  return info;
 }
 
 // Löst die Urlaubs-Stunden eines Abwesenheits-Datums über die Einstellungen des

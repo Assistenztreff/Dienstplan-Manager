@@ -1142,6 +1142,18 @@ export const VacationBalanceMethod = {
   factor: 'factor',
 } as const;
 
+/**
+ * Quelle der Tages-Stunden-Bewertung eines ganztägigen Urlaubstags zum heutigen Stichtag: 13-Wochen-Schnitt (bwavg), Vertragsdaten (Wochenstunden ÷ Arbeitstage/Woche) oder Standardwert. Bei "contract" sollte die UI auf die Datenpflege der Arbeitstage/Woche hinweisen (Migrations-Default 5).
+ */
+export type VacationBalanceDailyHoursSource = typeof VacationBalanceDailyHoursSource[keyof typeof VacationBalanceDailyHoursSource];
+
+
+export const VacationBalanceDailyHoursSource = {
+  bwavg: 'bwavg',
+  contract: 'contract',
+  default: 'default',
+} as const;
+
 export interface VacationBalance {
   contractId: number;
   userId: number;
@@ -1166,6 +1178,20 @@ export interface VacationBalance {
   restDaysBalance?: number;
   /** Ist das Ersatzruhetag-Konto für dieses Team aktiv? Bei false wird keine Feiertagsarbeit gutgeschrieben (restDaysEarned = 0). */
   ersatzruhetagEnabled?: boolean;
+  /** Quelle der Tages-Stunden-Bewertung eines ganztägigen Urlaubstags zum heutigen Stichtag: 13-Wochen-Schnitt (bwavg), Vertragsdaten (Wochenstunden ÷ Arbeitstage/Woche) oder Standardwert. Bei "contract" sollte die UI auf die Datenpflege der Arbeitstage/Woche hinweisen (Migrations-Default 5). */
+  dailyHoursSource?: VacationBalanceDailyHoursSource;
+  /** Verwendete Stunden je Urlaubstag zum heutigen Stichtag. */
+  dailyHours?: number;
+  /**
+     * Arbeitstage/Woche des aktiven Vertrags (null ohne Vertrag).
+     * @nullable
+     */
+  contractWorkdaysPerWeek?: number | null;
+  /**
+     * Wochenstunden des aktiven Vertrags (null ohne Vertrag).
+     * @nullable
+     */
+  contractWeeklyHours?: number | null;
 }
 
 export type AuthUserRole = typeof AuthUserRole[keyof typeof AuthUserRole];

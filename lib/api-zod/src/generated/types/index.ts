@@ -118,4 +118,5 @@ export * from './userRole';
 export * from './userUpdate';
 export * from './userUpdateAccountType';
 export * from './vacationBalance';
+export * from './vacationBalanceDailyHoursSource';
 export * from './vacationBalanceMethod';

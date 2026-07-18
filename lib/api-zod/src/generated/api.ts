@@ -1215,7 +1215,11 @@ export const GetVacationBalanceResponse = zod.object({
   "restDaysEarned": zod.number().optional().describe('Ersatzruhetage (§ 11 Abs. 3 ArbZG): Anzahl Feiertage mit bestaetigter Arbeit.'),
   "restDaysRedeemed": zod.number().optional().describe('Eingeloeste Ersatzruhetage (Anzahl Freizeitausgleich-Tage).'),
   "restDaysBalance": zod.number().optional().describe('Verbleibendes Ersatzruhetag-Guthaben (verdient − eingeloest).'),
-  "ersatzruhetagEnabled": zod.boolean().optional().describe('Ist das Ersatzruhetag-Konto für dieses Team aktiv? Bei false wird keine Feiertagsarbeit gutgeschrieben (restDaysEarned = 0).')
+  "ersatzruhetagEnabled": zod.boolean().optional().describe('Ist das Ersatzruhetag-Konto für dieses Team aktiv? Bei false wird keine Feiertagsarbeit gutgeschrieben (restDaysEarned = 0).'),
+  "dailyHoursSource": zod.enum(['bwavg', 'contract', 'default']).optional().describe('Quelle der Tages-Stunden-Bewertung eines ganztägigen Urlaubstags zum heutigen Stichtag: 13-Wochen-Schnitt (bwavg), Vertragsdaten (Wochenstunden ÷ Arbeitstage\/Woche) oder Standardwert. Bei \"contract\" sollte die UI auf die Datenpflege der Arbeitstage\/Woche hinweisen (Migrations-Default 5).'),
+  "dailyHours": zod.number().optional().describe('Verwendete Stunden je Urlaubstag zum heutigen Stichtag.'),
+  "contractWorkdaysPerWeek": zod.number().nullish().describe('Arbeitstage\/Woche des aktiven Vertrags (null ohne Vertrag).'),
+  "contractWeeklyHours": zod.number().nullish().describe('Wochenstunden des aktiven Vertrags (null ohne Vertrag).')
 })
 
 
