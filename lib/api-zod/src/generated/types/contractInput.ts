@@ -13,6 +13,12 @@ export interface ContractInput {
   teamId?: number;
   /** @minimum 0 */
   weeklyHours: number;
+  /**
+     * Arbeitstage pro Woche (1–7), Default 5.
+     * @minimum 1
+     * @maximum 7
+     */
+  workdaysPerWeek?: number;
   /** @minimum 0 */
   vacationDays: number;
   startDate: Date;

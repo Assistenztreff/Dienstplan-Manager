@@ -369,6 +369,8 @@ export interface Contract {
   id: number;
   userId: number;
   weeklyHours: number;
+  /** Arbeitstage pro Woche (1–7); Basis für den Vertrags-Fallback der bwavg-Urlaubsbewertung. */
+  workdaysPerWeek?: number;
   vacationDays: number;
   /** Stundengenau verbrauchter Urlaub (Point 7). Pool = vacationDays * vacationHoursPerDay. */
   vacationHoursUsed?: number;
@@ -404,6 +406,12 @@ export interface ContractInput {
   teamId?: number;
   /** @minimum 0 */
   weeklyHours: number;
+  /**
+     * Arbeitstage pro Woche (1–7), Default 5.
+     * @minimum 1
+     * @maximum 7
+     */
+  workdaysPerWeek?: number;
   /** @minimum 0 */
   vacationDays: number;
   startDate: string;
@@ -431,6 +439,12 @@ export const ContractUpdateBillingMethod = {
 export interface ContractUpdate {
   /** @minimum 0 */
   weeklyHours?: number;
+  /**
+     * Arbeitstage pro Woche (1–7).
+     * @minimum 1
+     * @maximum 7
+     */
+  workdaysPerWeek?: number;
   /** @minimum 0 */
   vacationDays?: number;
   startDate?: string;

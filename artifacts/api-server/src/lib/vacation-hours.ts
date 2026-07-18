@@ -53,10 +53,52 @@ export async function bwavgDailyHours(userId: number, refDate: Date): Promise<nu
   return averageDailyHours(Number(row?.total ?? 0), Number(row?.days ?? 0));
 }
 
+// Aktiver Vertrag des Nutzers IM TEAM der Schicht zum Stichtag (jüngster
+// Beginn gewinnt). Team-gescoped, damit kein Vertrag eines fremden Teams die
+// Urlaubsbewertung hier beeinflusst (Team-Scoping-Invariante).
+async function activeTeamContractFor(
+  userId: number,
+  teamId: number,
+  date: Date
+): Promise<{ weeklyHours: number; workdaysPerWeek: number; startDate: string } | null> {
+  const dateStr = date.toISOString().split("T")[0]!;
+  const [contract] = await db
+    .select({
+      weeklyHours: contractsTable.weeklyHours,
+      workdaysPerWeek: contractsTable.workdaysPerWeek,
+      startDate: contractsTable.startDate,
+    })
+    .from(contractsTable)
+    .where(
+      and(
+        eq(contractsTable.userId, userId),
+        eq(contractsTable.teamId, teamId),
+        sql`${contractsTable.startDate} <= ${dateStr}`,
+        sql`(${contractsTable.endDate} IS NULL OR ${contractsTable.endDate} >= ${dateStr})`
+      )
+    )
+    .orderBy(sql`${contractsTable.startDate} DESC`)
+    .limit(1);
+  return contract ?? null;
+}
+
+// Liegt der Vertragsbeginn mindestens 13 Wochen (91 Tage) vor dem Stichtag?
+// Erst dann kann das 13-Wochen-Fenster überhaupt vollständig gefüllt sein.
+function contractOlderThan13Weeks(startDate: string, refDate: Date): boolean {
+  const start = new Date(`${startDate}T00:00:00Z`);
+  return refDate.getTime() - start.getTime() >= 91 * 24 * 3_600_000;
+}
+
 // Effektive Tages-Stunden einer GANZTÄGIGEN Abwesenheit (kein zugrundeliegender
 // Dienst), abhängig von der aktiven Urlaubsmethode des Team-Eigentümers:
-//   bwavg  → §11-BUrlG-Durchschnitt der letzten 13 Wochen (Fallback = übergebener
-//            Standardwert, wenn keine bestätigte Arbeitshistorie existiert);
+//   bwavg  → Kette:
+//            1. Vertragsbeginn ≥ 13 Wochen vor dem Stichtag UND bestätigte
+//               Arbeits-IST-Historie im Fenster → §11-BUrlG-Durchschnitt.
+//            2. Sonst, aktiver team-gescopter Vertrag mit Wochenstunden und
+//               Arbeitstagen → Wochenstunden ÷ Arbeitstage pro Woche.
+//            3. Sonst → übergebener Standardwert („Stunden pro Urlaubstag");
+//               ganz ohne Vertrag zählt eine vorhandene Historie weiter wie
+//               bisher (Bestandsschutz).
 //   factor → Standardwert (der Anspruch baut sich stundenweise auf).
 // Ersetzt die Abwesenheit einen konkreten Dienst (echte Zeiten), zählt immer
 // dessen tatsächliche Dauer — unabhängig von der Methode.
@@ -75,7 +117,23 @@ export async function absenceHoursFor(
   const ops = await resolveAllowanceOps(teamId);
   let perDay = fallbackPerDay;
   if (ops.vacationMethod === "bwavg") {
-    perDay = (await bwavgDailyHours(userId, start)) ?? fallbackPerDay;
+    const contract =
+      teamId != null ? await activeTeamContractFor(userId, teamId, start) : null;
+    if (contract) {
+      const avg = contractOlderThan13Weeks(contract.startDate, start)
+        ? await bwavgDailyHours(userId, start)
+        : null;
+      if (avg != null) {
+        perDay = avg;
+      } else if (contract.weeklyHours > 0 && contract.workdaysPerWeek > 0) {
+        perDay =
+          Math.round((contract.weeklyHours / contract.workdaysPerWeek) * 100) / 100;
+      }
+    } else {
+      // Ohne Vertrag: bisheriges Verhalten (Schnitt, falls Historie; sonst
+      // Standardwert) — kein Verhaltensbruch für vertragslose Nutzer.
+      perDay = (await bwavgDailyHours(userId, start)) ?? fallbackPerDay;
+    }
   }
   return vacationHoursForShift(start, end, perDay);
 }

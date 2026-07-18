@@ -166,6 +166,7 @@ export const ListContractsResponseItem = zod.object({
   "id": zod.number(),
   "userId": zod.number(),
   "weeklyHours": zod.number(),
+  "workdaysPerWeek": zod.number().optional().describe('Arbeitstage pro Woche (1–7); Basis für den Vertrags-Fallback der bwavg-Urlaubsbewertung.'),
   "vacationDays": zod.number(),
   "vacationHoursUsed": zod.number().optional().describe('Stundengenau verbrauchter Urlaub (Point 7). Pool = vacationDays \* vacationHoursPerDay.'),
   "startDate": zod.coerce.date(),
@@ -201,6 +202,8 @@ export const ListContractsResponse = zod.array(ListContractsResponseItem)
  */
 export const createContractBodyWeeklyHoursMin = 0;
 
+export const createContractBodyWorkdaysPerWeekMax = 7;
+
 export const createContractBodyVacationDaysMin = 0;
 
 
@@ -209,6 +212,7 @@ export const CreateContractBody = zod.object({
   "userId": zod.number(),
   "teamId": zod.number().optional().describe('Optionaler Team-Kontext; muss ein erlaubtes Team sein.'),
   "weeklyHours": zod.number().min(createContractBodyWeeklyHoursMin),
+  "workdaysPerWeek": zod.number().min(1).max(createContractBodyWorkdaysPerWeekMax).optional().describe('Arbeitstage pro Woche (1–7), Default 5.'),
   "vacationDays": zod.number().min(createContractBodyVacationDaysMin),
   "startDate": zod.coerce.date(),
   "endDate": zod.coerce.date().optional(),
@@ -228,6 +232,7 @@ export const GetContractResponse = zod.object({
   "id": zod.number(),
   "userId": zod.number(),
   "weeklyHours": zod.number(),
+  "workdaysPerWeek": zod.number().optional().describe('Arbeitstage pro Woche (1–7); Basis für den Vertrags-Fallback der bwavg-Urlaubsbewertung.'),
   "vacationDays": zod.number(),
   "vacationHoursUsed": zod.number().optional().describe('Stundengenau verbrauchter Urlaub (Point 7). Pool = vacationDays \* vacationHoursPerDay.'),
   "startDate": zod.coerce.date(),
@@ -266,12 +271,15 @@ export const UpdateContractParams = zod.object({
 
 export const updateContractBodyWeeklyHoursMin = 0;
 
+export const updateContractBodyWorkdaysPerWeekMax = 7;
+
 export const updateContractBodyVacationDaysMin = 0;
 
 
 
 export const UpdateContractBody = zod.object({
   "weeklyHours": zod.number().min(updateContractBodyWeeklyHoursMin).optional(),
+  "workdaysPerWeek": zod.number().min(1).max(updateContractBodyWorkdaysPerWeekMax).optional().describe('Arbeitstage pro Woche (1–7).'),
   "vacationDays": zod.number().min(updateContractBodyVacationDaysMin).optional(),
   "startDate": zod.coerce.date().optional(),
   "endDate": zod.string().nullish(),
@@ -283,6 +291,7 @@ export const UpdateContractResponse = zod.object({
   "id": zod.number(),
   "userId": zod.number(),
   "weeklyHours": zod.number(),
+  "workdaysPerWeek": zod.number().optional().describe('Arbeitstage pro Woche (1–7); Basis für den Vertrags-Fallback der bwavg-Urlaubsbewertung.'),
   "vacationDays": zod.number(),
   "vacationHoursUsed": zod.number().optional().describe('Stundengenau verbrauchter Urlaub (Point 7). Pool = vacationDays \* vacationHoursPerDay.'),
   "startDate": zod.coerce.date(),

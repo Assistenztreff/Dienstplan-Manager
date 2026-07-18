@@ -10,6 +10,12 @@ import type { ContractUpdateBillingMethod } from './contractUpdateBillingMethod'
 export interface ContractUpdate {
   /** @minimum 0 */
   weeklyHours?: number;
+  /**
+     * Arbeitstage pro Woche (1–7).
+     * @minimum 1
+     * @maximum 7
+     */
+  workdaysPerWeek?: number;
   /** @minimum 0 */
   vacationDays?: number;
   startDate?: Date;

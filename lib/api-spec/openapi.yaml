@@ -1984,6 +1984,9 @@ components:
           type: integer
         weeklyHours:
           type: number
+        workdaysPerWeek:
+          type: integer
+          description: Arbeitstage pro Woche (1–7); Basis für den Vertrags-Fallback der bwavg-Urlaubsbewertung.
         vacationDays:
           type: integer
         vacationHoursUsed:
@@ -2018,6 +2021,11 @@ components:
         weeklyHours:
           type: number
           minimum: 0
+        workdaysPerWeek:
+          type: integer
+          minimum: 1
+          maximum: 7
+          description: Arbeitstage pro Woche (1–7), Default 5.
         vacationDays:
           type: integer
           minimum: 0
@@ -2040,6 +2048,11 @@ components:
         weeklyHours:
           type: number
           minimum: 0
+        workdaysPerWeek:
+          type: integer
+          minimum: 1
+          maximum: 7
+          description: Arbeitstage pro Woche (1–7).
         vacationDays:
           type: integer
           minimum: 0

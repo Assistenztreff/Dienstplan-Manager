@@ -74,6 +74,7 @@ type Contract = {
   id: number;
   userId: number;
   weeklyHours: number;
+  workdaysPerWeek?: number;
   vacationDays: number;
   startDate: string;
   endDate?: string | null;
@@ -95,6 +96,7 @@ type FormState = {
   iban: string;
   hourlyWage: string;
   weeklyHours: string;
+  workdaysPerWeek: string;
   vacationDays: string;
   startDate: string;
   notes: string;
@@ -119,6 +121,7 @@ const EMPTY_FORM: FormState = {
   iban: "",
   hourlyWage: "",
   weeklyHours: "20",
+  workdaysPerWeek: "5",
   vacationDays: "30",
   startDate: format(new Date(), "yyyy-MM-dd"),
   notes: "",
@@ -306,6 +309,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
         iban: editUser.iban ?? "",
         hourlyWage: editUser.hourlyWage != null ? String(editUser.hourlyWage) : "",
         weeklyHours: editContract ? String(editContract.weeklyHours) : "20",
+        workdaysPerWeek: editContract?.workdaysPerWeek != null ? String(editContract.workdaysPerWeek) : "5",
         vacationDays: editContract ? String(editContract.vacationDays) : "30",
         startDate: editContract ? editContract.startDate : format(new Date(), "yyyy-MM-dd"),
         notes: editContract?.notes ?? "",
@@ -333,6 +337,13 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = "Ungueltige E-Mail-Adresse";
     if (!form.address.trim()) errs.address = "Pflichtfeld";
     if (!form.weeklyHours || Number(form.weeklyHours) <= 0) errs.weeklyHours = "Muss groesser als 0 sein";
+    if (
+      !form.workdaysPerWeek ||
+      !Number.isInteger(Number(form.workdaysPerWeek)) ||
+      Number(form.workdaysPerWeek) < 1 ||
+      Number(form.workdaysPerWeek) > 7
+    )
+      errs.workdaysPerWeek = "Ganze Zahl zwischen 1 und 7";
     if (!form.vacationDays || Number(form.vacationDays) < 0) errs.vacationDays = "Muss mindestens 0 sein";
     if (!form.startDate) errs.startDate = "Pflichtfeld";
     setErrors(errs);
@@ -376,6 +387,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
             id: editContract.id,
             data: {
               weeklyHours: Number(form.weeklyHours),
+              workdaysPerWeek: Number(form.workdaysPerWeek),
               vacationDays: Number(form.vacationDays),
               startDate: form.startDate,
               notes: form.notes || null,
@@ -389,6 +401,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
             data: {
               userId: editUser.id,
               weeklyHours: Number(form.weeklyHours),
+              workdaysPerWeek: Number(form.workdaysPerWeek),
               vacationDays: Number(form.vacationDays),
               startDate: form.startDate,
               notes: form.notes || undefined,
@@ -426,6 +439,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
           data: {
             userId: newUser.id,
             weeklyHours: Number(form.weeklyHours),
+            workdaysPerWeek: Number(form.workdaysPerWeek),
             vacationDays: Number(form.vacationDays),
             startDate: form.startDate,
             notes: form.notes || undefined,
@@ -677,6 +691,23 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
                   </div>
                 </FieldRow>
               </div>
+
+              <FieldRow label="Arbeitstage pro Woche *" error={errors.workdaysPerWeek}>
+                <div className="relative">
+                  <Input
+                    className="bg-card"
+                    type="number"
+                    min="1"
+                    max="7"
+                    step="1"
+                    value={form.workdaysPerWeek}
+                    onChange={(e) => set("workdaysPerWeek", e.target.value)}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                    Tage
+                  </span>
+                </div>
+              </FieldRow>
 
               <FieldRow label="Vertragsbeginn *" error={errors.startDate}>
                 <Input
@@ -1158,6 +1189,10 @@ export default function Assistenten() {
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">Wochenstunden</span>
                         <span className="font-medium">{activeContract.weeklyHours} h</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Arbeitstage/Woche</span>
+                        <span className="font-medium">{activeContract.workdaysPerWeek ?? 5} Tage</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">Urlaubsanspruch</span>

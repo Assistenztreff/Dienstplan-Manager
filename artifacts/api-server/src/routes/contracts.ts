@@ -36,6 +36,7 @@ const CONTRACT_SELECT = {
   id: contractsTable.id,
   userId: contractsTable.userId,
   weeklyHours: contractsTable.weeklyHours,
+  workdaysPerWeek: contractsTable.workdaysPerWeek,
   vacationDays: contractsTable.vacationDays,
   vacationHoursUsed: contractsTable.vacationHoursUsed,
   startDate: contractsTable.startDate,

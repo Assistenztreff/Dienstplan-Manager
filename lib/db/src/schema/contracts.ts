@@ -16,6 +16,10 @@ export const contractsTable = pgTable("contracts", {
   teamId: integer("team_id").notNull().references(() => teamsTable.id),
   userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   weeklyHours: real("weekly_hours").notNull(),
+  // Arbeitstage pro Woche (1–7): Basis für den Vertrags-Fallback bei der
+  // bwavg-Urlaubsbewertung (Tageswert = weeklyHours / workdaysPerWeek), solange
+  // noch kein 13-Wochen-Schnitt existiert. Default 5 (klassische 5-Tage-Woche).
+  workdaysPerWeek: integer("workdays_per_week").notNull().default(5),
   vacationDays: integer("vacation_days").notNull().default(30),
   // Stundengenaue Urlaubsbuchhaltung (Point 7): verbrauchte Urlaubsstunden.
   // Pool = vacationDays * vacationHoursPerDay; Anzeige in Tagen = Stunden / 8.
