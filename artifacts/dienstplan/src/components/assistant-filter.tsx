@@ -1,5 +1,10 @@
-import { useEffect, useState } from "react";
-import { userBadgeClass, userInitialsClass, nameInitials } from "@/lib/shift-model-colors";
+import { useEffect, useMemo, useState } from "react";
+import {
+  buildPersonColorAssignment,
+  userBadgeClass,
+  userInitialsClass,
+  nameInitials,
+} from "@/lib/shift-model-colors";
 
 export type Assistant = { id: number; name: string };
 
@@ -58,6 +63,12 @@ export function AssistantFilter({
   selected: number | "all";
   onSelect: (val: number | "all") => void;
 }) {
+  // Kollisionsarme Team-Farbzuordnung: die ersten 8 Personen des Teams
+  // bekommen garantiert 8 verschiedene Farben (statt reinem ID-Hash).
+  const personColors = useMemo(
+    () => buildPersonColorAssignment(assistants.map((a) => a.id)),
+    [assistants],
+  );
   return (
     /* Horizontale, platzsparende Legende: eine schmale Zeile, bei Überlauf
        seitlich wischbar (Scrollbalken ausgeblendet). */
@@ -88,7 +99,7 @@ export function AssistantFilter({
           className={`shrink-0 rounded-full border pl-1 pr-3 py-1 text-xs transition-colors inline-flex items-center gap-1.5 ${
             selected === a.id
               ? "bg-primary text-primary-foreground border-primary"
-              : userBadgeClass(a.id)
+              : userBadgeClass(a.id, personColors)
           }`}
         >
           {/* Initialen-Kreis in der Personenfarbe (dunkler Ton, weiße Schrift
@@ -96,7 +107,7 @@ export function AssistantFilter({
               und dient als Legende zu den gleichfarbigen Dienst-Kacheln. */}
           <span
             aria-hidden="true"
-            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none ${userInitialsClass(a.id)}`}
+            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none ${userInitialsClass(a.id, personColors)}`}
           >
             {nameInitials(a.name)}
           </span>

@@ -30,10 +30,39 @@ export const SHIFT_MODEL_COLORS: ShiftModelColor[] = ASSISTENZ_PAARUNGEN.map(
 // --- Farbzuordnung pro Assistenzkraft -------------------------------------
 // Jede Assistenzkraft (userId) erhält deterministisch eine feste Farbe aus der
 // Palette. Dieselbe Person ist dadurch überall (Badges, Punkte) an derselben
-// Farbe erkennbar — unabhängig von Schichtart oder Schichtmodell. Stabiler
-// Integer-Hash der ID + Modulo über die Palette, damit dieselbe ID immer
-// dieselbe Farbe ergibt und benachbarte IDs unterschiedliche Farben bekommen.
-export function userColor(userId: number): ShiftModelColor {
+// Farbe erkennbar — unabhängig von Schichtart oder Schichtmodell.
+//
+// Kollisionsarme Team-Zuordnung: Wenn die Team-Mitgliederliste bekannt ist,
+// wird sie zu einer Zuordnung "userId → Palettenfarbe" verrechnet
+// (buildPersonColorAssignment). Die IDs werden dedupliziert und aufsteigend
+// sortiert (= Beitrittsreihenfolge, da IDs fortlaufend vergeben werden) und
+// der Reihe nach den 8 Farben zugewiesen. Dadurch bekommen die ersten 8
+// Personen eines Teams garantiert 8 VERSCHIEDENE Farben, und die Zuordnung
+// ist unabhängig von Lade-/Anzeigereihenfolge über Seiten und Sitzungen
+// stabil. Neue Mitglieder (höhere IDs) hängen sich hinten an, ohne die
+// Farben der bestehenden zu verschieben.
+export type PersonColorAssignment = Map<number, ShiftModelColor>;
+
+export function buildPersonColorAssignment(userIds: number[]): PersonColorAssignment {
+  const sorted = [...new Set(userIds.filter((id) => Number.isFinite(id)))].sort(
+    (a, b) => a - b,
+  );
+  const assignment: PersonColorAssignment = new Map();
+  sorted.forEach((id, index) => {
+    assignment.set(id, SHIFT_MODEL_COLORS[index % SHIFT_MODEL_COLORS.length]!);
+  });
+  return assignment;
+}
+
+// Fallback ohne Team-Kontext (z. B. Aushilfe-Spiegel aus fremden Teams):
+// stabiler Integer-Hash der ID + Modulo über die Palette, damit dieselbe ID
+// immer dieselbe Farbe ergibt und benachbarte IDs verschieden ausfallen.
+export function userColor(
+  userId: number,
+  assignment?: PersonColorAssignment,
+): ShiftModelColor {
+  const assigned = assignment?.get(userId);
+  if (assigned) return assigned;
   if (!Number.isFinite(userId)) return SHIFT_MODEL_COLORS[0]!;
   // Multiplikator (Knuth-artig) streut aufeinanderfolgende IDs über die Palette,
   // statt sie streng der Reihe nach durchzunummerieren.
@@ -41,18 +70,27 @@ export function userColor(userId: number): ShiftModelColor {
   return SHIFT_MODEL_COLORS[hash % SHIFT_MODEL_COLORS.length]!;
 }
 
-export function userBadgeClass(userId: number): string {
+export function userBadgeClass(
+  userId: number,
+  assignment?: PersonColorAssignment,
+): string {
   // Zentrale Quelle: der Farb-Koppler liefert das barrierefreie Klassen-Paar
   // (Fläche + gekoppelter Text-/Rahmenton) für den Farb-Key der Person.
-  return getBarrierefreieFarbe(userColor(userId).value);
+  return getBarrierefreieFarbe(userColor(userId, assignment).value);
 }
 
-export function userDotClass(userId: number): string {
-  return userColor(userId).dot;
+export function userDotClass(
+  userId: number,
+  assignment?: PersonColorAssignment,
+): string {
+  return userColor(userId, assignment).dot;
 }
 
-export function userInitialsClass(userId: number): string {
-  return userColor(userId).initials;
+export function userInitialsClass(
+  userId: number,
+  assignment?: PersonColorAssignment,
+): string {
+  return userColor(userId, assignment).initials;
 }
 
 // Zwei-Buchstaben-Initialen (z. B. "CN" für "Camillo Neubert"): erste

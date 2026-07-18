@@ -1,5 +1,5 @@
 import { isAdminRole } from "@/lib/roles";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams, useLocation } from "wouter";
 import {
@@ -23,7 +23,14 @@ import { BulkEditDialog } from "@/components/bulk-edit-dialog";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
-import { userBadgeClass, userDotClass, userInitialsClass, nameInitials } from "@/lib/shift-model-colors";
+import {
+  buildPersonColorAssignment,
+  userBadgeClass,
+  userDotClass,
+  userInitialsClass,
+  nameInitials,
+  type PersonColorAssignment,
+} from "@/lib/shift-model-colors";
 import { hasAccess, getLimit } from "@/lib/entitlements";
 import { toast } from "sonner";
 import { useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
@@ -114,13 +121,22 @@ function shiftLabel(shift: Shift, modelMap: Map<number, ShiftModelInfo>): string
   return SHIFT_TYPE_LABELS[shift.type] ?? shift.type;
 }
 
-function shiftBadgeClasses(shift: Shift): string {
+// Kollisionsarme Team-Farbzuordnung (userId → Palettenfarbe), von der Seite
+// aus der Team-Mitgliederliste berechnet. Ohne Provider (oder für IDs
+// außerhalb des Teams, z. B. Aushilfe-Spiegel) greift der Hash-Fallback.
+const PersonColorsContext = createContext<PersonColorAssignment | undefined>(undefined);
+
+function usePersonColors(): PersonColorAssignment | undefined {
+  return useContext(PersonColorsContext);
+}
+
+function shiftBadgeClasses(shift: Shift, personColors?: PersonColorAssignment): string {
   if (isAbsenceShift(shift)) {
     return (
       SHIFT_TYPE_CLASSES[shift.type] ?? "bg-primary/20 text-assistenz-brand border-assistenz-brand/20 hover:bg-primary/30"
     );
   }
-  return userBadgeClass(shift.userId);
+  return userBadgeClass(shift.userId, personColors);
 }
 
 function usePersistentState<T extends string>(key: string, fallback: T, allowed: readonly T[]): [T, (value: T) => void] {
@@ -390,6 +406,7 @@ function ShiftBadge({
   onConfirm?: (shift: Shift) => void;
 }) {
   const { selectedTeamId } = useTeam();
+  const personColors = usePersonColors();
   const mirror = isMirrorShift(shift, selectedTeamId);
   const einsatzLabel =
     shift.einsatzTeamId != null
@@ -397,7 +414,7 @@ function ShiftBadge({
         ? `Aushilfe aus ${shift.homeTeamName ?? "anderem Team"}`
         : `Aushilfe für ${shift.einsatzTeamName ?? "anderes Team"}`
       : null;
-  const classes = shiftBadgeClasses(shift);
+  const classes = shiftBadgeClasses(shift, personColors);
   const isAbsence = shift.type === "vacation" || shift.type === "sick";
   const start = new Date(shift.startTime);
   const end = new Date(shift.endTime);
@@ -487,7 +504,8 @@ function AbsenceTableBar({
   modelMap: Map<number, ShiftModelInfo>;
   onClick?: (e: React.MouseEvent) => void;
 }) {
-  const classes = shiftBadgeClasses(shift);
+  const personColors = usePersonColors();
+  const classes = shiftBadgeClasses(shift, personColors);
   const cap = `${isStart ? "rounded-l" : "border-l-0 -ml-[5px]"} ${
     isEnd ? "rounded-r" : "border-r-0 -mr-1"
   }`;
@@ -624,6 +642,7 @@ function MonthGrid({
   selectedDates?: string[];
   onToggleDate?: (day: Date) => void;
 }) {
+  const personColors = usePersonColors();
   const selectedDateSet = new Set(selectedDates ?? []);
   const offset = (getDay(monthStart) + 6) % 7;
   const blanks = Array.from({ length: offset });
@@ -715,7 +734,7 @@ function MonthGrid({
                         <span
                           key={s.id}
                           title={s.user?.name}
-                          className={`flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-bold leading-none text-white ${userInitialsClass(s.userId)} ${shiftDotStatusClass(s)}`}
+                          className={`flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-bold leading-none text-white ${userInitialsClass(s.userId, personColors)} ${shiftDotStatusClass(s)}`}
                         >
                           {s.user?.name ? nameInitials(s.user.name) : ""}
                         </span>
@@ -912,6 +931,7 @@ function DienstplanHeader({
   onNextMonth: () => void;
 }) {
   const { selectedTeamId } = useTeam();
+  const personColors = usePersonColors();
   const contentKey = [
     isAdmin,
     assistants.length,
@@ -960,7 +980,7 @@ function DienstplanHeader({
             <span className="inline-flex items-center gap-2">
               <span
                 aria-hidden="true"
-                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none ${userInitialsClass(a.id)}`}
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none ${userInitialsClass(a.id, personColors)}`}
               >
                 {nameInitials(a.name)}
               </span>
@@ -1244,6 +1264,18 @@ export default function Dienstplan() {
     !(isAdmin && usersLoading),
   );
 
+  // Kollisionsarme Farbzuordnung fürs ganze Team: die ersten 8 Personen
+  // bekommen garantiert 8 verschiedene Farben (statt reinem ID-Hash).
+  // Memo über die ID-Liste, damit der Provider-Wert referenzstabil bleibt.
+  const assistantIdsKey = assistants.map((a) => a.id).join(",");
+  const personColors = useMemo(
+    () =>
+      buildPersonColorAssignment(
+        assistantIdsKey === "" ? [] : assistantIdsKey.split(",").map(Number),
+      ),
+    [assistantIdsKey],
+  );
+
   const { data: shiftModels } = useListShiftModels(teamParam);
   const modelMap = new Map<number, ShiftModelInfo>(
     (shiftModels ?? []).map((m) => [m.id, { name: m.name }])
@@ -1438,14 +1470,16 @@ export default function Dienstplan() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-3 animate-in fade-in duration-300">
-        {header}
-        <div className="space-y-3">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-lg" />
-          ))}
+      <PersonColorsContext.Provider value={personColors}>
+        <div className="flex flex-col gap-3 animate-in fade-in duration-300">
+          {header}
+          <div className="space-y-3">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Skeleton key={i} className="h-16 w-full rounded-lg" />
+            ))}
+          </div>
         </div>
-      </div>
+      </PersonColorsContext.Provider>
     );
   }
 
@@ -1453,6 +1487,7 @@ export default function Dienstplan() {
     isAdmin && forwardLimit !== null && monthsAhead(currentDate, new Date()) > forwardLimit;
 
   return (
+    <PersonColorsContext.Provider value={personColors}>
     <div className="flex flex-col gap-3 animate-in fade-in duration-300">
       {header}
 
@@ -1575,7 +1610,7 @@ export default function Dienstplan() {
                       <td className="px-3 py-1.5 font-medium sticky left-0 bg-card hover:bg-muted/20 transition-colors z-10 shadow-[1px_0_0_0_hsl(var(--border))]">
                         {isAdmin ? (
                           <span className="inline-flex items-center gap-2">
-                            <span className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${userDotClass(assistant.id)}`} />
+                            <span className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${userDotClass(assistant.id, personColors)}`} />
                             {assistant.name}
                           </span>
                         ) : (
@@ -1821,5 +1856,6 @@ export default function Dienstplan() {
         />
       )}
     </div>
+    </PersonColorsContext.Provider>
   );
 }
