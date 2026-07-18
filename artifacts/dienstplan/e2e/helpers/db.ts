@@ -164,6 +164,46 @@ export async function dbBackdatePlanChange(
 }
 
 /**
+ * Fuegt einen platform_errors-Eintrag direkt in der (Test-)DB ein — fuer
+ * Fehlerlisten-Specs, die volle Kontrolle ueber message/context/lastSeenAt
+ * brauchen (z. B. Zeitraum-Presets und Suche). Gibt die neue Zeilen-ID
+ * zurueck.
+ */
+export async function dbInsertPlatformError(opts: {
+  level?: "error" | "warning";
+  message: string;
+  context: string;
+  lastSeenAt?: Date;
+}): Promise<number> {
+  return withDbClient(async (client) => {
+    const level = opts.level ?? "error";
+    const lastSeenAt = (opts.lastSeenAt ?? new Date()).toISOString();
+    const res = await client.query(
+      `INSERT INTO platform_errors (level, message, context, last_seen_at, created_at)
+       VALUES ($1, $2, $3, $4, $4)
+       RETURNING id`,
+      [level, opts.message, opts.context, lastSeenAt],
+    );
+    return (res.rows[0] as { id: number }).id;
+  });
+}
+
+/**
+ * Loescht platform_errors-Eintraege, deren Kontext mit dem angegebenen
+ * Praefix beginnt — gezielte Cleanup-Hilfe fuer Fehlerlisten-Specs
+ * (idempotent).
+ */
+export async function dbDeletePlatformErrorsByContextPrefix(
+  prefix: string,
+): Promise<void> {
+  await withDbClient(async (client) => {
+    await client.query("DELETE FROM platform_errors WHERE context LIKE $1", [
+      `${prefix}%`,
+    ]);
+  });
+}
+
+/**
  * Seedet einen Admin direkt in der (Test-)DB — Verhalten identisch zum
  * setup-admin-Skript: idempotent (bestehende E-Mail = No-Op), legt NUR dann
  * ein "Standard-Team" an, wenn noch GAR KEIN Team existiert (Bootstrap-

@@ -186,8 +186,38 @@ export default function OperatorDashboard() {
   // nach dem LETZTEN Auftreten (lastSeenAt) gefiltert.
   const [errorFrom, setErrorFrom] = useState("");
   const [errorTo, setErrorTo] = useState("");
+  // Schnellauswahl-Presets für den Zeitraum-Filter der Fehlerliste: befüllen
+  // von/bis in einem Klick (analog zum Plan-Protokoll).
+  function applyErrorRangePreset(preset: "thisMonth" | "lastMonth" | "last30Days") {
+    const today = new Date();
+    let from: Date;
+    let to: Date;
+    if (preset === "thisMonth") {
+      from = new Date(today.getFullYear(), today.getMonth(), 1);
+      to = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    } else if (preset === "lastMonth") {
+      from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      to = new Date(today.getFullYear(), today.getMonth(), 0);
+    } else {
+      from = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 29);
+      to = today;
+    }
+    setErrorFrom(toDateInputValue(from));
+    setErrorTo(toDateInputValue(to));
+  }
+  // Textsuche in der Fehlerliste (nach Meldung oder Route/Kontext). Der
+  // Eingabewert wird entkoppelt (debounced) an die Query übergeben, damit nicht
+  // bei jedem Tastendruck ein Request feuert (wie beim Plan-Protokoll).
+  const [errorSearchInput, setErrorSearchInput] = useState("");
+  const [errorSearch, setErrorSearch] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setErrorSearch(errorSearchInput.trim());
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [errorSearchInput]);
   const errorsParams = useMemo(() => {
-    const params: { from?: string; to?: string } = {};
+    const params: { from?: string; to?: string; search?: string } = {};
     if (errorFrom) {
       const from = parseLocalDayStart(errorFrom);
       if (from) params.from = from.toISOString();
@@ -196,9 +226,11 @@ export default function OperatorDashboard() {
       const to = parseLocalDayEnd(errorTo);
       if (to) params.to = to.toISOString();
     }
+    if (errorSearch) params.search = errorSearch;
     return Object.keys(params).length > 0 ? params : undefined;
-  }, [errorFrom, errorTo]);
+  }, [errorFrom, errorTo, errorSearch]);
   const hasErrorRangeFilter = Boolean(errorFrom || errorTo);
+  const hasErrorFilter = Boolean(errorFrom || errorTo || errorSearch);
 
   const accountsQuery = useListOperatorAccounts();
   const planChangesQuery = useListOperatorPlanChanges(planChangesParams);
@@ -725,7 +757,7 @@ export default function OperatorDashboard() {
       {/* befuellt vom zentralen Express-Error-Handler. Bei Level "error"     */}
       {/* geht zusaetzlich eine gedrosselte Warn-E-Mail an den Betreiber.     */}
       <Card className="border-border/50 shadow-sm">
-        <CardHeader>
+        <CardHeader className="gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle className="flex items-center gap-2 text-lg">
               <AlertTriangle className="h-5 w-5 text-brand-cyan" />
@@ -769,6 +801,52 @@ export default function OperatorDashboard() {
                 </Button>
               </div>
             </div>
+          </div>
+          {/* Textsuche (debounced): filtert serverseitig case-insensitiv über
+              Meldung und Kontext/Route. Kombinierbar mit Zeitraum + Filter. */}
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              value={errorSearchInput}
+              onChange={(e) => setErrorSearchInput(e.target.value)}
+              maxLength={200}
+              placeholder="Nach Meldung oder Route suchen…"
+              className="pl-9"
+              data-testid="input-error-search"
+            />
+          </div>
+          {/* Schnellauswahl-Presets für den Zeitraum (befüllen von/bis in einem
+              Klick), identisch zum Plan-Protokoll. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">Schnellauswahl:</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => applyErrorRangePreset("thisMonth")}
+              data-testid="button-error-preset-this-month"
+            >
+              Dieser Monat
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => applyErrorRangePreset("lastMonth")}
+              data-testid="button-error-preset-last-month"
+            >
+              Letzter Monat
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => applyErrorRangePreset("last30Days")}
+              data-testid="button-error-preset-last-30-days"
+            >
+              Letzte 30 Tage
+            </Button>
           </div>
           {/* Zeitraum von/bis (lokale Tagesgrenzen): grenzt die Liste nach dem
               LETZTEN Auftreten (lastSeenAt) ein — z. B. "welche Fehler traten
@@ -858,8 +936,8 @@ export default function OperatorDashboard() {
                   {retentionNotice}
                   <p className="text-sm text-muted-foreground" data-testid="text-operator-errors-empty">
                     {allErrors.length === 0
-                      ? hasErrorRangeFilter
-                        ? "Keine Fehler im gewählten Zeitraum gefunden."
+                      ? hasErrorFilter
+                        ? "Keine Fehler für die aktuelle Filterung gefunden."
                         : "Keine Fehler im Betrieb — alles läuft rund."
                       : "Keine offenen Fehler — alle Einträge sind erledigt."}
                   </p>

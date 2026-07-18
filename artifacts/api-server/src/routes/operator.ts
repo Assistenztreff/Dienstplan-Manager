@@ -241,7 +241,21 @@ router.get(
     const toFilter = toDate
       ? lte(platformErrorsTable.lastSeenAt, toDate)
       : undefined;
-    const whereFilter = and(fromFilter, toFilter);
+
+    // Optionaler Suchbegriff: filtert case-insensitiv (ILIKE) über die Meldung
+    // (message) und den Kontext/Route (context). Wildcards im Begriff werden
+    // escaped, damit % und _ als Literale gesucht werden. Kombinierbar mit
+    // dem Zeitraum-Filter (and() ignoriert undefined-Bedingungen).
+    const search = queryResult.data.search?.trim();
+    const searchFilter =
+      search && search.length > 0
+        ? or(
+            ilike(platformErrorsTable.message, `%${escapeLike(search)}%`),
+            ilike(platformErrorsTable.context, `%${escapeLike(search)}%`),
+          )
+        : undefined;
+
+    const whereFilter = and(fromFilter, toFilter, searchFilter);
 
     const errors = await db
       .select({

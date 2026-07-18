@@ -16,6 +16,7 @@ import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
 import { DienstStatus, type SchichtVorlage } from "@/types/dienstplan";
+import { formatDays, formatDaysWithUnit, formatHours } from "@/lib/utils";
 
 // Beispielhafte Einbindung der zentralen Planungstypen (siehe @/types/dienstplan):
 // belegt die Importierbarkeit aus der Dashboard-Ansicht, ohne bestehendes
@@ -106,7 +107,7 @@ function WarningsSection({ warnings }: { warnings: DashboardWarnings }) {
                       className="group flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 -mx-2 text-left text-sm text-muted-foreground transition-colors hover:bg-amber-100/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                     >
                       <span>
-                        {a.userName}: {a.vacationDaysRemaining} {a.vacationDaysRemaining === 1 ? "Tag" : "Tage"} Resturlaub
+                        {a.userName}: {formatDaysWithUnit(a.vacationDaysRemaining)} Resturlaub
                       </span>
                       <ChevronRight className="h-4 w-4 shrink-0 text-amber-600/70 transition-transform group-hover:translate-x-0.5" />
                     </button>
@@ -304,22 +305,38 @@ function AssistantVacationCard() {
         </CardHeader>
         <CardContent>
           <div className="text-3xl font-bold" data-testid="assistant-vacation-remaining">
-            {balance.vacationDaysRemaining}{" "}
+            {formatDays(balance.vacationDaysRemaining)}{" "}
             <span className="text-lg text-muted-foreground font-normal">
-              von {balance.vacationDays} {balance.vacationDays === 1 ? "Tag" : "Tagen"}
+              von {formatDays(balance.vacationDays)}{" "}
+              {balance.vacationDays === 1 ? "Tag" : "Tagen"}
             </span>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            {balance.vacationDaysUsed}{" "}
-            {balance.vacationDaysUsed === 1 ? "Tag" : "Tage"} bereits genommen
+            {formatDaysWithUnit(balance.vacationDaysUsed)} bereits genommen
           </p>
+          {/* Transparenz (#498): zeigt, mit wie vielen Stunden ein Urlaubstag
+              aktuell bewertet wird (dailyHours/dailyHoursSource aus der Bilanz).
+              Reine Info, keine Korrektur-Möglichkeit. */}
+          {balance.dailyHours != null && (
+            <p
+              className="mt-1 text-xs text-muted-foreground"
+              data-testid="assistant-vacation-daily-hours"
+            >
+              1 Urlaubstag = {formatHours(balance.dailyHours)} h
+              {balance.dailyHoursSource === "bwavg"
+                ? " (13-Wochen-Schnitt)"
+                : balance.dailyHoursSource === "contract"
+                ? " (Vertragsdaten)"
+                : ""}
+            </p>
+          )}
           {balance.ersatzruhetagEnabled !== false && (balance.restDaysBalance ?? 0) !== 0 && (
             <p
               className="mt-2 text-sm text-emerald-700"
               data-testid="assistant-rest-days"
             >
-              Ersatzruhetage (Feiertagsarbeit): {balance.restDaysBalance}{" "}
-              {balance.restDaysBalance === 1 ? "Tag" : "Tage"} verfügbar
+              Ersatzruhetage (Feiertagsarbeit):{" "}
+              {formatDaysWithUnit(balance.restDaysBalance ?? 0)} verfügbar
             </p>
           )}
         </CardContent>

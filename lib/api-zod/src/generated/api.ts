@@ -1572,12 +1572,15 @@ export const listOperatorErrorsQueryFromMax = 40;
 
 export const listOperatorErrorsQueryToMax = 40;
 
+export const listOperatorErrorsQuerySearchMax = 200;
+
 
 
 export const ListOperatorErrorsQueryParams = zod.object({
   "limit": zod.coerce.number().min(1).max(listOperatorErrorsQueryLimitMax).default(listOperatorErrorsQueryLimitDefault),
   "from": zod.coerce.string().max(listOperatorErrorsQueryFromMax).optional().describe('Optionaler Zeitraum-Anfang als ISO-8601-Zeitstempel. Es werden nur Fehler zurückgegeben, deren LETZTES Auftreten (lastSeenAt) ab diesem Zeitpunkt (einschließlich) liegt. Kombinierbar mit to.\n'),
-  "to": zod.coerce.string().max(listOperatorErrorsQueryToMax).optional().describe('Optionales Zeitraum-Ende als ISO-8601-Zeitstempel. Es werden nur Fehler zurückgegeben, deren LETZTES Auftreten (lastSeenAt) bis zu diesem Zeitpunkt (einschließlich) liegt. Kombinierbar mit from.\n')
+  "to": zod.coerce.string().max(listOperatorErrorsQueryToMax).optional().describe('Optionales Zeitraum-Ende als ISO-8601-Zeitstempel. Es werden nur Fehler zurückgegeben, deren LETZTES Auftreten (lastSeenAt) bis zu diesem Zeitpunkt (einschließlich) liegt. Kombinierbar mit from.\n'),
+  "search": zod.coerce.string().max(listOperatorErrorsQuerySearchMax).optional().describe('Optionaler Suchbegriff. Filtert serverseitig case-insensitiv über die Meldung (message) und den Kontext\/Route (context). Kombinierbar mit from\/to.\n')
 })
 
 export const ListOperatorErrorsResponse = zod.object({

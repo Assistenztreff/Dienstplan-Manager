@@ -99,6 +99,14 @@ function computeSchemaFingerprint(repoRoot: string, testDbName: string): string 
   for (const rel of [
     "lib/db/drizzle.config.ts",
     "scripts/src/setup-test-db.ts",
+    // Auch die Seed-/Migrations-Skripte, die setup-test-db aufruft, bestimmen
+    // den Zustand der _test-DB. Aendert sich eines davon (z. B. neue Migration,
+    // anderes Seeding), MUSS der Marker invalidieren, sonst laeuft die Suite
+    // gegen eine veraltete _test-DB und muss wieder manuell repariert werden
+    // (Task #499: Testdatenbank haelt automatisch mit Schema-Aenderungen Schritt).
+    "scripts/src/setup-admin.ts",
+    "scripts/src/migrate-teams.ts",
+    "scripts/src/migrate-allowance-settings.ts",
   ]) {
     const abs = path.join(repoRoot, rel);
     if (existsSync(abs)) files.push(abs);

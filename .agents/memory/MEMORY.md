@@ -75,3 +75,4 @@
 - [Header tier measurement](header-tier-measurement.md) — narrower toggle states use a remeasureKey (never reset to labels); no min-w-0 wrapper around min-width selects or overlap replaces measurable overflow.
 - [Barrierefreies Farbsystem](accessible-color-system.md) — assistenz-Palette/getBarrierefreieFarbe sind die zentrale Farbquelle; text-primary (Hellgelb) nie als Textfarbe; Abwesenheiten nicht aus Personen-Palette.
 - [Vacation guard vs. multi-team contracts](vacation-contract-team-scope.md) — vacation coverage is team-scoped, but booking picks the latest-startDate contract user-globally; fixtures need in-team contracts.
+- [Codegen-Drift-Guard per Fingerprint](codegen-drift-guard-fingerprint.md) — Guards über generierte Verzeichnisse via Vorher/Nachher-Hash, nie git diff (uncommitted ≠ Drift; index.lock killt git).

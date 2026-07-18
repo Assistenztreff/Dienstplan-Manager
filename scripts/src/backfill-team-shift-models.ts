@@ -1,3 +1,4 @@
+import { DEFAULT_SHIFT_MODELS } from "@workspace/shift-defaults";
 import pg from "pg";
 
 /**
@@ -13,17 +14,10 @@ import pg from "pg";
  * leeren Teams nach.
  *
  * Idempotent: nur Teams mit 0 Modellen werden befüllt — mehrfaches Ausführen
- * ändert nichts. Die Liste MUSS mit DEFAULT_SHIFT_MODELS in
- * artifacts/api-server/src/lib/default-shift-models.ts übereinstimmen.
+ * ändert nichts. Die Liste kommt aus `@workspace/shift-defaults` (Single Source
+ * of Truth) — dieselbe, die der API-Server beim Seeding nutzt. So koennen
+ * Seeding und Backfill nicht mehr auseinanderlaufen.
  */
-
-const DEFAULT_MODELS = [
-  { name: "Frühdienst", color: "amber", sortOrder: 0, start: "08:00", end: "16:00", weekdays: [1, 2, 3, 4, 5] },
-  { name: "Spätdienst", color: "indigo", sortOrder: 1, start: "16:00", end: "23:00", weekdays: [1, 2, 3, 4, 5] },
-  { name: "Nachtdienst", color: "slate", sortOrder: 2, start: "23:00", end: "08:00", weekdays: [1, 2, 3, 4, 5] },
-  { name: "Bereitschaft", color: "teal", sortOrder: 3, start: "08:00", end: "14:00", weekdays: [6, 7] },
-  { name: "24h Dienst", color: "purple", sortOrder: 4, start: "09:00", end: "09:00", weekdays: [1, 2, 3, 4, 5, 6, 7] },
-] as const;
 
 async function main() {
   const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
@@ -39,13 +33,23 @@ async function main() {
       return;
     }
     for (const team of teams) {
-      for (const m of DEFAULT_MODELS) {
+      for (const m of DEFAULT_SHIFT_MODELS) {
         await client.query(
           `INSERT INTO shift_models
              (team_id, name, color, valuation_percent, sort_order,
               default_start_time, default_end_time, default_weekdays, compensation_type)
-           VALUES ($1, $2, $3, 100, $4, $5, $6, $7, 'regular')`,
-          [team.id, m.name, m.color, m.sortOrder, m.start, m.end, [...m.weekdays]],
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [
+            team.id,
+            m.name,
+            m.color,
+            m.valuationPercent,
+            m.sortOrder,
+            m.defaultStartTime,
+            m.defaultEndTime,
+            [...m.defaultWeekdays],
+            m.compensationType,
+          ],
         );
       }
       console.log(`Team ${team.id} („${team.name}"): 5 Standard-Dienste angelegt.`);

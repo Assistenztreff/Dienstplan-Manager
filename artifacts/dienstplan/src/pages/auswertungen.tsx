@@ -18,6 +18,7 @@ import { hasAccess } from "@/lib/entitlements";
 import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 import { exportStatementSectionsPdf } from "@/lib/pdf-export";
 import { PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
+import { formatDays } from "@/lib/utils";
 
 function monthIndex(date: Date): number {
   return date.getFullYear() * 12 + date.getMonth();
@@ -519,15 +520,15 @@ export default function Auswertungen() {
                         </div>
                         <div className="flex items-end gap-2">
                           <span className="text-3xl font-bold text-amber-950">
-                            {balance.vacationDaysTaken}
+                            {formatDays(balance.vacationDaysTaken)}
                           </span>
                           <span className="text-sm text-amber-950 mb-0.5">
                             genommen (Monat)
                           </span>
                         </div>
                         <div className="mt-2 text-sm text-amber-950">
-                          <span className="font-medium">{balance.vacationDaysRemaining}</span> von{" "}
-                          {balance.vacationDaysRemaining + balance.vacationDaysUsed} verbleibend (Jahr)
+                          <span className="font-medium">{formatDays(balance.vacationDaysRemaining)}</span> von{" "}
+                          {formatDays(balance.vacationDaysRemaining + balance.vacationDaysUsed)} verbleibend (Jahr)
                         </div>
                         {balance.vacationDaysRemaining + balance.vacationDaysUsed > 0 && (
                           <Progress

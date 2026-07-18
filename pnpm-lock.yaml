@@ -175,6 +175,9 @@ importers:
       '@workspace/entitlements':
         specifier: workspace:*
         version: link:../../lib/entitlements
+      '@workspace/shift-defaults':
+        specifier: workspace:*
+        version: link:../../lib/shift-defaults
       '@workspace/test-fixtures':
         specifier: workspace:*
         version: link:../../lib/test-fixtures
@@ -238,7 +241,7 @@ importers:
         version: 3.1.0
       vitest:
         specifier: ^4.1.8
-        version: 4.1.8(@types/node@25.6.2)(vite@7.3.6(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4))
+        version: 4.1.8(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4)
 
   artifacts/dienstplan:
     dependencies:
@@ -449,7 +452,7 @@ importers:
         version: 7.3.6(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4)
       vitest:
         specifier: ^4.1.8
-        version: 4.1.8(@types/node@25.6.2)(vite@7.3.6(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4))
+        version: 4.1.8(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4)
       wouter:
         specifier: ^3.3.5
         version: 3.10.0(react@19.1.0)
@@ -684,7 +687,7 @@ importers:
         version: 0.31.10
       vitest:
         specifier: ^4.1.8
-        version: 4.1.8(@types/node@25.6.2)(vite@7.3.6(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4))
+        version: 4.1.8(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4)
 
   lib/entitlements:
     devDependencies:
@@ -693,7 +696,9 @@ importers:
         version: 25.6.2
       vitest:
         specifier: ^4.1.8
-        version: 4.1.8(@types/node@25.6.2)(vite@7.3.6(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4))
+        version: 4.1.8(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4)
+
+  lib/shift-defaults: {}
 
   lib/test-fixtures:
     devDependencies:
@@ -703,6 +708,9 @@ importers:
 
   scripts:
     dependencies:
+      '@workspace/shift-defaults':
+        specifier: workspace:*
+        version: link:../lib/shift-defaults
       '@workspace/test-fixtures':
         specifier: workspace:*
         version: link:../lib/test-fixtures
@@ -3715,7 +3723,6 @@ packages:
       '@vitest/ui': 4.1.8
       happy-dom: '*'
       jsdom: '*'
-      vite: ^7.3.5
     peerDependenciesMeta:
       '@edge-runtime/vm':
         optional: true
@@ -6880,7 +6887,7 @@ snapshots:
       tsx: 4.21.0
       yaml: 2.8.4
 
-  vitest@4.1.8(@types/node@25.6.2)(vite@7.3.6(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4)):
+  vitest@4.1.8(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4):
     dependencies:
       '@vitest/expect': 4.1.8
       '@vitest/mocker': 4.1.8(vite@7.3.6(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4))
@@ -6905,7 +6912,17 @@ snapshots:
     optionalDependencies:
       '@types/node': 25.6.2
     transitivePeerDependencies:
+      - jiti
+      - less
+      - lightningcss
       - msw
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - terser
+      - tsx
+      - yaml
 
   web-streams-polyfill@3.3.3: {}
 

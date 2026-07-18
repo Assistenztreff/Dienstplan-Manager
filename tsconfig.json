@@ -10,6 +10,9 @@
       "path": "./lib/entitlements"
     },
     {
+      "path": "./lib/shift-defaults"
+    },
+    {
       "path": "./lib/api-client-react"
     },
     {

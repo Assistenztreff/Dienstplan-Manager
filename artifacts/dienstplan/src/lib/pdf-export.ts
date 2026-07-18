@@ -3,6 +3,7 @@ import { format, differenceInMinutes } from "date-fns";
 import { de } from "date-fns/locale";
 import logoUrl from "@assets/20260626_094418_0000_1782459883949.png";
 import { logoSrcFromPath } from "@/lib/logo";
+import { formatDays } from "@/lib/utils";
 
 const DEFAULT_LOGO_ASPECT = 3973 / 848;
 
@@ -128,11 +129,11 @@ async function renderStatementPage(
     ["Krankheitsstunden", `${balance.sickHours} h`],
     [
       "Urlaubstage (genommen)",
-      `${balance.vacationDaysTaken} Tage`,
+      `${formatDays(balance.vacationDaysTaken)} Tage`,
     ],
     [
       "Urlaubstage (verbleibend)",
-      `${balance.vacationDaysRemaining} Tage`,
+      `${formatDays(balance.vacationDaysRemaining)} Tage`,
     ],
   ];
 

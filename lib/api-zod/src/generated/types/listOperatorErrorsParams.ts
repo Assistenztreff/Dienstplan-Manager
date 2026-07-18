@@ -24,4 +24,10 @@ from?: string;
  * @maxLength 40
  */
 to?: string;
+/**
+ * Optionaler Suchbegriff. Filtert serverseitig case-insensitiv über die Meldung (message) und den Kontext/Route (context). Kombinierbar mit from/to.
+
+ * @maxLength 200
+ */
+search?: string;
 };

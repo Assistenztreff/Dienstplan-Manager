@@ -1511,6 +1511,16 @@ paths:
           schema:
             type: string
             maxLength: 40
+        - name: search
+          in: query
+          required: false
+          description: >
+            Optionaler Suchbegriff. Filtert serverseitig case-insensitiv über
+            die Meldung (message) und den Kontext/Route (context). Kombinierbar
+            mit from/to.
+          schema:
+            type: string
+            maxLength: 200
       responses:
         "200":
           description: Liste der Plattform-Fehler (neueste zuerst) samt Aufbewahrungs-Metadaten

@@ -34,6 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 import { planUpgradeMessage, readableApiError, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
 import { useAuth } from "@/context/auth";
 import { hasAccess } from "@/lib/entitlements";
+import { formatDays, formatHours } from "@/lib/utils";
 import {
   buildRanges,
   dayKey,
@@ -112,9 +113,9 @@ function WorkdaysHint({ contract }: { contract: Contract }) {
           {weekly != null && (
             <>
               {" "}
-              ({weekly} Wochenstunden ÷ {workdays}{" "}
+              ({formatHours(weekly)} Wochenstunden ÷ {workdays}{" "}
               {workdays === 1 ? "Arbeitstag" : "Arbeitstage"}/Woche ={" "}
-              {balance.dailyHours} h/Tag)
+              {balance.dailyHours != null ? formatHours(balance.dailyHours) : balance.dailyHours} h/Tag)
             </>
           )}
           , da noch kein 13-Wochen-Schnitt vorliegt. Bitte prüfen, ob die
@@ -482,7 +483,7 @@ export default function Abwesenheiten() {
                             {taken > 0 && (
                               <>
                                 {" · "}
-                                <span data-testid={`vacation-taken-${u.id}`}>{taken}</span>{" "}
+                                <span data-testid={`vacation-taken-${u.id}`}>{formatDays(taken)}</span>{" "}
                                 {taken === 1 ? "Tag" : "Tage"} geplant
                               </>
                             )}
@@ -497,11 +498,11 @@ export default function Abwesenheiten() {
                               }
                               data-testid={`vacation-remaining-${u.id}`}
                             >
-                              {remaining}
+                              {remaining !== null ? formatDays(remaining) : remaining}
                             </span>{" "}
                             von{" "}
-                            <span data-testid={`vacation-entitlement-${u.id}`}>{entitlement}</span>{" "}
-                            Tagen (<span data-testid={`vacation-taken-${u.id}`}>{taken}</span>{" "}
+                            <span data-testid={`vacation-entitlement-${u.id}`}>{formatDays(entitlement)}</span>{" "}
+                            Tagen (<span data-testid={`vacation-taken-${u.id}`}>{formatDays(taken)}</span>{" "}
                             genommen)
                           </span>
                         )}

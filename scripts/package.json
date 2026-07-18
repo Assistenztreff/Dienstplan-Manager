@@ -21,6 +21,7 @@
     "migrate-allowance-settings": "tsx ./src/migrate-allowance-settings.ts",
     "migrate-absences-fix": "tsx ./src/migrate-absences-fix.ts",
     "backfill-team-shift-models": "tsx ./src/backfill-team-shift-models.ts",
+    "check-codegen-drift": "tsx ./src/check-codegen-drift.ts",
     "setup-test-db": "tsx ./src/setup-test-db.ts",
     "verify-test-db-cleanup": "tsx ./src/verify-test-db-cleanup.ts",
     "verify-test-platform-errors-cleanup": "tsx ./src/verify-test-platform-errors-cleanup.ts",
@@ -28,6 +29,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@workspace/shift-defaults": "workspace:*",
     "@workspace/test-fixtures": "workspace:*",
     "pg": "^8.20.0"
   },
