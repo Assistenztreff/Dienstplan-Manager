@@ -103,10 +103,14 @@ type AbsenceShift = {
   endTime: Date;
 };
 
-// Vertragliche Soll-Stunden des Tages (Wochenstunden / 5). Fallback 8h ohne Vertrag.
+// Vertragliche Soll-Stunden des Tages (Wochenstunden / Arbeitstage pro Woche,
+// Fallback 5 Arbeitstage). Fallback 8h ohne Vertrag.
 async function dailyTargetHours(userId: number, date: Date): Promise<number> {
   const contract = await activeContractFor(userId, date);
-  return contract ? Math.round((contract.weeklyHours / 5) * 100) / 100 : 8;
+  if (!contract) return 8;
+  const workdays =
+    contract.workdaysPerWeek > 0 ? contract.workdaysPerWeek : 5;
+  return Math.round((contract.weeklyHours / workdays) * 100) / 100;
 }
 
 // Bucht die geplanten Stunden der Abwesenheit als bestätigte Zeiterfassung
