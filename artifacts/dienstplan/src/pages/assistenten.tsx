@@ -377,6 +377,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
             data: {
               weeklyHours: Number(form.weeklyHours),
               vacationDays: Number(form.vacationDays),
+              startDate: form.startDate,
               notes: form.notes || null,
               billingMethod: (form.billingMethod === INHERIT_BILLING
                 ? null

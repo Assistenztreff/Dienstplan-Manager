@@ -2043,6 +2043,9 @@ components:
         vacationDays:
           type: integer
           minimum: 0
+        startDate:
+          type: string
+          format: date
         endDate:
           type: ["string", "null"]
         notes:

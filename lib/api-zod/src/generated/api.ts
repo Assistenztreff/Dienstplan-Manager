@@ -273,6 +273,7 @@ export const updateContractBodyVacationDaysMin = 0;
 export const UpdateContractBody = zod.object({
   "weeklyHours": zod.number().min(updateContractBodyWeeklyHoursMin).optional(),
   "vacationDays": zod.number().min(updateContractBodyVacationDaysMin).optional(),
+  "startDate": zod.coerce.date().optional(),
   "endDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "billingMethod": zod.union([zod.literal('SOLL'),zod.literal('IST'),zod.literal(null)]).nullish().describe('Abrechnungsart pro Assistenzkraft; null = erbt von Team\/Konto.')

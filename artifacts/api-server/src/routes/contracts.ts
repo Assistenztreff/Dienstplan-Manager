@@ -18,6 +18,7 @@ import {
   DeleteContractParams,
 } from "@workspace/api-zod";
 import { requireAdmin, requireAuth, isAdminLikeRole } from "../middleware/auth";
+import { recalcVacationHoursUsed } from "../lib/vacation-hours";
 import { requirePlanFeatureViaTeamOwner } from "../lib/plan";
 import { resolveAllowanceOps } from "../lib/allowance-resolve";
 import { round2 } from "../lib/dashboard-hours-balance";
@@ -123,6 +124,9 @@ router.post("/contracts", requireAdmin, async (req, res): Promise<void> => {
       endDate: body.data.endDate ? toDateString(body.data.endDate) : undefined,
     })
     .returning();
+  // Urlaubszähler aus den tatsächlich vorhandenen Urlaubs-Schichten aufbauen:
+  // erfasst auch Alt-Urlaube, die vor der Vertragsanlage nie verbucht wurden.
+  await recalcVacationHoursUsed(contract);
   const [withUser] = await db
     .select(CONTRACT_SELECT)
     .from(contractsTable)
@@ -158,8 +162,42 @@ router.patch("/contracts/:id", requireAdmin, async (req, res): Promise<void> => 
     return;
   }
   const updateValues: Record<string, unknown> = { ...body.data };
+  if (body.data.startDate !== undefined) {
+    updateValues["startDate"] = toDateString(body.data.startDate);
+  }
+  if (body.data.endDate !== undefined && body.data.endDate !== null) {
+    updateValues["endDate"] = toDateString(body.data.endDate);
+  }
 
   const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+
+  // Bestehenden Vertrag laden (team-gescoped, IDOR-sicher), um Beginn/Ende
+  // kombiniert validieren zu können — auch wenn nur eines der Felder kommt.
+  const [existing] = await db
+    .select()
+    .from(contractsTable)
+    .where(and(eq(contractsTable.id, params.data.id), inArray(contractsTable.teamId, allowedTeams)))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const effectiveStart =
+    updateValues["startDate"] !== undefined
+      ? String(updateValues["startDate"])
+      : existing.startDate;
+  const effectiveEnd =
+    body.data.endDate !== undefined
+      ? (updateValues["endDate"] as string | null | undefined) ?? null
+      : existing.endDate;
+  if (effectiveEnd != null && effectiveStart > effectiveEnd) {
+    res.status(400).json({
+      error: "Das Beginndatum darf nicht nach dem Enddatum liegen.",
+    });
+    return;
+  }
+
   const [updated] = await db
     .update(contractsTable)
     .set(updateValues)
@@ -169,6 +207,11 @@ router.patch("/contracts/:id", requireAdmin, async (req, res): Promise<void> => 
     res.status(404).json({ error: "Not found" });
     return;
   }
+  // Nach JEDER Vertragsänderung den Urlaubszähler aus den tatsächlich
+  // vorhandenen Urlaubs-Schichten im (ggf. neuen) Vertragszeitraum neu
+  // aufbauen — ein vorgezogener Beginn erfasst bereits eingetragene Urlaube,
+  // ein zurückgeschobener entlastet den Zähler. Schichten bleiben unberührt.
+  await recalcVacationHoursUsed(updated);
   const [withUser] = await db
     .select(CONTRACT_SELECT)
     .from(contractsTable)
