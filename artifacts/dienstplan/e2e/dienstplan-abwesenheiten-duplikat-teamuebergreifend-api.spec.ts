@@ -103,6 +103,19 @@ test.beforeAll(async () => {
     weeklyHours: 40,
     vacationDays: 30,
   });
+
+  // Seit dem Vertragszeitraum-Guard (#493) muss Urlaub durch einen Vertrag des
+  // SCHICHT-TEAMS gedeckt sein — sonst würde der Urlaub über Team B mit 400
+  // "vacation_outside_contract" abgelehnt, bevor der Duplikat-Schutz greift.
+  // Der Team-B-Vertrag startet bewusst FRÜHER als der Team-A-Vertrag:
+  // activeContractFor wählt den Vertrag mit dem SPÄTESTEN Startdatum, sodass
+  // die vacationDaysUsed-Buchung weiterhin auf dem Team-A-Vertrag landet und
+  // die Zähler-Assertions dieses Specs unverändert gelten.
+  await h.createContract(teamB, assistant, {
+    startDate: `${YEAR - 1}-12-01`,
+    weeklyHours: 40,
+    vacationDays: 30,
+  });
 });
 
 test.afterAll(async () => {

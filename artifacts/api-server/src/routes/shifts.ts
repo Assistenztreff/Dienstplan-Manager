@@ -259,6 +259,66 @@ async function adjustVacationHours(
   await applyVacationDelta(contract, deltaHours);
 }
 
+// Vertragszeitraum-Guard für URLAUB: Hat die Assistenzkraft mindestens einen
+// Vertrag, muss der Urlaub (Start- UND End-Tag) komplett in EINEM Vertrags-
+// zeitraum liegen — sonst würde adjustVacationHours keinen aktiven Vertrag
+// finden und der Urlaubszähler (vacationHoursUsed) bliebe still falsch.
+// Nutzer GANZ OHNE Vertrag (in keinem Team) bleiben ungeblockt (UI-Fallback
+// zählt geplante Urlaubs-Schichten). Die DECKUNG zählt nur über Verträge des
+// Schicht-Teams (teamId): ein Vertrag in einem ANDEREN Team erlaubt keinen
+// Urlaub hier, und die „Vertrag ab/bis"-Hinweise leaken keine teamfremden
+// Vertragsdaten. Liefert die deutsche Fehlermeldung oder null (= erlaubt).
+async function vacationOutsideContractError(
+  userId: number,
+  teamId: number,
+  startTime: Date | string,
+  endTime: Date | string
+): Promise<string | null> {
+  const allContracts = await db
+    .select({
+      startDate: contractsTable.startDate,
+      endDate: contractsTable.endDate,
+      teamId: contractsTable.teamId,
+    })
+    .from(contractsTable)
+    .where(eq(contractsTable.userId, userId));
+  if (allContracts.length === 0) return null;
+  const contracts = allContracts.filter((c) => c.teamId === teamId);
+
+  const startDay = new Date(startTime).toISOString().split("T")[0]!;
+  // End-Tag über den letzten enthaltenen Moment bestimmen (Ende 00:00 des
+  // Folgetags zählt nicht als zusätzlicher Urlaubstag).
+  const endDay = new Date(new Date(endTime).getTime() - 1)
+    .toISOString()
+    .split("T")[0]!;
+  const covered = contracts.some(
+    (c) => c.startDate <= startDay && (c.endDate == null || c.endDate >= endDay)
+  );
+  if (covered) return null;
+
+  const formatDe = (iso: string) => {
+    const [y, m, d] = iso.split("-");
+    return `${d}.${m}.${y}`;
+  };
+  // Sprechender Hinweis: nächster Vertragsbeginn nach dem Urlaub bzw. letztes
+  // Vertragsende davor.
+  const futureStarts = contracts
+    .map((c) => c.startDate)
+    .filter((s) => s > startDay)
+    .sort();
+  if (futureStarts.length > 0) {
+    return `Urlaub liegt außerhalb des Vertragszeitraums (Vertrag ab ${formatDe(futureStarts[0]!)}).`;
+  }
+  const pastEnds = contracts
+    .map((c) => c.endDate)
+    .filter((e): e is string => e != null && e < endDay)
+    .sort();
+  if (pastEnds.length > 0) {
+    return `Urlaub liegt außerhalb des Vertragszeitraums (Vertrag bis ${formatDe(pastEnds[pastEnds.length - 1]!)}).`;
+  }
+  return "Urlaub liegt außerhalb des Vertragszeitraums.";
+}
+
 // Prüft, ob für denselben Nutzer, Abwesenheitstyp und Kalendertag bereits eine
 // Schicht existiert. Verhindert doppelte Urlaubs-/Krank-Einträge (und damit
 // doppelte vacationDaysUsed-Abzüge), auch wenn der Frontend-Schutz umgangen wird.
@@ -669,6 +729,21 @@ router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
     return;
   }
 
+  // URLAUB außerhalb des Vertragszeitraums blockieren (VOR allen Seiteneffekten
+  // wie dem Löschen ersetzter Dienste): sonst zählt der Urlaubszähler still falsch.
+  if (body.data.type === "vacation") {
+    const msg = await vacationOutsideContractError(
+      body.data.userId,
+      write.teamId,
+      body.data.startTime,
+      body.data.endTime
+    );
+    if (msg) {
+      res.status(400).json({ error: msg, code: "vacation_outside_contract" });
+      return;
+    }
+  }
+
   // Aushilfe-Einsatz: Ziel muss ein ANDERES erlaubtes Team des Aufrufers sein;
   // Abwesenheiten können kein Einsatz sein (Urlaub/Krankheit "für" ein anderes
   // Team ergibt keinen Sinn und würde den Spiegel-Eintrag verfälschen).
@@ -906,6 +981,29 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
     );
     if (duplicate) {
       res.status(409).json(duplicateAbsenceResponseBody(duplicate.id, effectiveType));
+      return;
+    }
+  }
+
+  // URLAUB außerhalb des Vertragszeitraums blockieren — nur wenn die Änderung
+  // die Deckung berühren kann (Datum/Zeit, Typwechsel zu Urlaub oder
+  // Assistenten-Wechsel). Reine Notiz-/Status-Edits bestehender Urlaube bleiben
+  // erlaubt (Bestandsschutz für Alt-Einträge außerhalb von Verträgen).
+  if (
+    effectiveType === "vacation" &&
+    (body.data.startTime != null ||
+      body.data.endTime != null ||
+      (body.data.type === "vacation" && oldShift.type !== "vacation") ||
+      (body.data.userId != null && body.data.userId !== oldShift.userId))
+  ) {
+    const msg = await vacationOutsideContractError(
+      effectiveUserId,
+      oldShift.teamId,
+      effectiveStart,
+      effectiveEnd
+    );
+    if (msg) {
+      res.status(400).json({ error: msg, code: "vacation_outside_contract" });
       return;
     }
   }

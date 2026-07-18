@@ -298,6 +298,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Shift"
+        "400":
+          description: >-
+            Ungültige Anfrage. U. a. wenn ein Urlaub außerhalb jedes
+            Vertragszeitraums der Assistenzkraft liegt (code
+            "vacation_outside_contract") — Nutzer ganz ohne Vertrag bleiben
+            unbeschränkt.
         "409":
           description: >-
             Konflikt. Entweder überschneidet sich die Schicht mit einer
@@ -349,6 +355,11 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Shift"
+        "400":
+          description: >-
+            Ungültige Anfrage. U. a. wenn ein Urlaub per Datums-Änderung aus
+            jedem Vertragszeitraum der Assistenzkraft herausgeschoben würde
+            (code "vacation_outside_contract").
     delete:
       operationId: deleteShift
       tags: [shifts]

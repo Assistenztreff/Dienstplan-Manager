@@ -1185,7 +1185,7 @@ export const updateShift = async (id: number,
 
 
 
-export const getUpdateShiftMutationOptions = <TError = ErrorType<unknown>,
+export const getUpdateShiftMutationOptions = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateShift>>, TError,{id: number;data: BodyType<ShiftUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateShift>>, TError,{id: number;data: BodyType<ShiftUpdate>}, TContext> => {
 
@@ -1214,12 +1214,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type UpdateShiftMutationResult = NonNullable<Awaited<ReturnType<typeof updateShift>>>
     export type UpdateShiftMutationBody = BodyType<ShiftUpdate>
-    export type UpdateShiftMutationError = ErrorType<unknown>
+    export type UpdateShiftMutationError = ErrorType<void>
 
     /**
  * @summary Schicht aktualisieren
  */
-export const useUpdateShift = <TError = ErrorType<unknown>,
+export const useUpdateShift = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateShift>>, TError,{id: number;data: BodyType<ShiftUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof updateShift>>,

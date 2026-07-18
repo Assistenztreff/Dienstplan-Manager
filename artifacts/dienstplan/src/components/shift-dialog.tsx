@@ -576,6 +576,11 @@ export function ShiftDialog({
             // durchreichen — betrifft alle Tage gleichermaßen, daher Abbruch.
             forbiddenMessage = readableApiError(err, "Keine Berechtigung zum Speichern.");
             break;
+          } else if (err instanceof ApiError && err.status === 400) {
+            // Konkrete Server-Meldung (z. B. Urlaub außerhalb des Vertrags-
+            // zeitraums) durchreichen — betrifft alle Tage, daher Abbruch.
+            forbiddenMessage = readableApiError(err, "Speichern fehlgeschlagen. Bitte erneut versuchen.");
+            break;
           } else if (
             err instanceof ApiError &&
             err.status === 409 &&

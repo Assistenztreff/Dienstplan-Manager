@@ -27,7 +27,7 @@ import { Plus, Trash2, Plane, Stethoscope } from "lucide-react";
 import { eachDayOfInterval, format } from "date-fns";
 import { de } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
-import { planUpgradeMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
+import { planUpgradeMessage, readableApiError, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
 import { useAuth } from "@/context/auth";
 import { hasAccess } from "@/lib/entitlements";
 import {
@@ -188,6 +188,10 @@ export default function Abwesenheiten() {
         setError(planMsg);
       } else if (err instanceof ApiError && err.status === 403) {
         setError("Keine Berechtigung zum Eintragen von Abwesenheiten.");
+      } else if (err instanceof ApiError && err.status === 400) {
+        // Konkrete Server-Meldung durchreichen (z. B. "Urlaub liegt außerhalb
+        // des Vertragszeitraums (Vertrag ab 15.07.2026).").
+        setError(readableApiError(err, "Eintragen fehlgeschlagen. Bitte erneut versuchen."));
       } else {
         setError("Eintragen fehlgeschlagen. Bitte erneut versuchen.");
       }
