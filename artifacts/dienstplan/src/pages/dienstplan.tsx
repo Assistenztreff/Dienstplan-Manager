@@ -625,6 +625,9 @@ function MonthGrid({
   selectionMode = false,
   selectedDates,
   onToggleDate,
+  onNavigateMonth,
+  focusDate,
+  onFocusDateHandled,
 }: {
   days: Date[];
   monthStart: Date;
@@ -639,6 +642,9 @@ function MonthGrid({
   selectionMode?: boolean;
   selectedDates?: string[];
   onToggleDate?: (day: Date) => void;
+  onNavigateMonth?: (targetDate: Date) => void;
+  focusDate?: Date | null;
+  onFocusDateHandled?: () => void;
 }) {
   const personColors = usePersonColors();
   const selectedDateSet = new Set(selectedDates ?? []);
@@ -654,6 +660,20 @@ function MonthGrid({
   useEffect(() => {
     setFocusedIdx(null);
   }, [monthStart.getTime()]);
+  // Zieltag nach Tastatur-Wechsel über die Monatsgrenze fokussieren. Der
+  // Merker lebt im Eltern-State (focusDate), weil MonthGrid während des
+  // Ladens des neuen Monats kurz unmountet. Nur die sichtbare Instanz
+  // (mobil ODER Desktop) übernimmt den Fokus und räumt den Merker ab.
+  useEffect(() => {
+    if (!focusDate) return;
+    const idx = days.findIndex((d) => isSameDay(d, focusDate));
+    if (idx < 0) return;
+    const el = cellRefs.current[idx];
+    if (!el || el.offsetParent === null) return;
+    setFocusedIdx(idx);
+    el.focus();
+    onFocusDateHandled?.();
+  }, [focusDate, days]);
   const selectedIdx = days.findIndex((d) => isSameDay(d, selectedDay));
   const tabbableIdx = focusedIdx ?? (selectedIdx >= 0 ? selectedIdx : 0);
   const moveFocus = (idx: number) => {
@@ -664,18 +684,25 @@ function MonthGrid({
   const handleCellKeyDown = (e: React.KeyboardEvent, idx: number) => {
     const col = (offset + idx) % 7;
     let target: number | null = null;
+    // Pfeiltasten dürfen über die Monatsgrenze in den Vor-/Folgemonat
+    // wechseln (WAI-ARIA-Grid-Pattern); Home/End bleiben in der Woche.
+    let crossesBoundary = false;
     switch (e.key) {
       case "ArrowRight":
         target = idx + 1;
+        crossesBoundary = true;
         break;
       case "ArrowLeft":
         target = idx - 1;
+        crossesBoundary = true;
         break;
       case "ArrowDown":
         target = idx + 7;
+        crossesBoundary = true;
         break;
       case "ArrowUp":
         target = idx - 7;
+        crossesBoundary = true;
         break;
       case "Home":
         target = idx - col;
@@ -687,6 +714,10 @@ function MonthGrid({
         return;
     }
     e.preventDefault();
+    if (crossesBoundary && (target < 0 || target > days.length - 1) && onNavigateMonth) {
+      onNavigateMonth(addDays(days[idx], target - idx));
+      return;
+    }
     moveFocus(target);
   };
 
@@ -1362,6 +1393,14 @@ export default function Dienstplan() {
     setSelectedDay(startOfMonth(newDate));
     clearSelection();
   };
+  // Tastatur-Wechsel über die Monatsgrenze (MonthGrid): Zieltag, der nach dem
+  // Monatswechsel fokussiert werden soll. Lebt hier, weil MonthGrid während
+  // des Ladens des neuen Monats kurz unmountet (Skeleton-Zweig).
+  const [monthGridFocusDate, setMonthGridFocusDate] = useState<Date | null>(null);
+  const navigateMonthWithFocus = (targetDate: Date) => {
+    setMonthGridFocusDate(targetDate);
+    goToMonth(targetDate);
+  };
   const prevMonth = () => goToMonth(new Date(year, month - 2, 1));
   const nextMonth = () => goToMonth(new Date(year, month, 1));
 
@@ -1649,6 +1688,9 @@ export default function Dienstplan() {
             selectionMode={isSelectionMode}
             selectedDates={selectedDates}
             onToggleDate={toggleDate}
+            onNavigateMonth={navigateMonthWithFocus}
+            focusDate={monthGridFocusDate}
+            onFocusDateHandled={() => setMonthGridFocusDate(null)}
           />
         )}
         </div>
@@ -1671,6 +1713,9 @@ export default function Dienstplan() {
             selectionMode={isSelectionMode}
             selectedDates={selectedDates}
             onToggleDate={toggleDate}
+            onNavigateMonth={navigateMonthWithFocus}
+            focusDate={monthGridFocusDate}
+            onFocusDateHandled={() => setMonthGridFocusDate(null)}
           />
         ) : (
           <Card className="w-full overflow-x-auto border-border/50 shadow-sm">

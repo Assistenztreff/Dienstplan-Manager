@@ -76,3 +76,4 @@
 - [Barrierefreies Farbsystem](accessible-color-system.md) — assistenz-Palette/getBarrierefreieFarbe sind die zentrale Farbquelle; text-primary (Hellgelb) nie als Textfarbe; Abwesenheiten nicht aus Personen-Palette.
 - [Vacation guard vs. multi-team contracts](vacation-contract-team-scope.md) — vacation coverage is team-scoped, but booking picks the latest-startDate contract user-globally; fixtures need in-team contracts.
 - [Codegen-Drift-Guard per Fingerprint](codegen-drift-guard-fingerprint.md) — Guards über generierte Verzeichnisse via Vorher/Nachher-Hash, nie git diff (uncommitted ≠ Drift; index.lock killt git).
+- [MonthGrid unmount on month change](monthgrid-unmount-focus.md) — /dienstplan swaps to a skeleton while the new month's shifts load, unmounting both grids; focus/keyboard continuity state must live in the parent, and effects must target only the visible (offsetParent) instance.

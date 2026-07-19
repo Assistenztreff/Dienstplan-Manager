@@ -106,3 +106,76 @@ test("Monatskalender: Pfeiltasten/Home/End bewegen den Fokus, Enter waehlt und o
     await context.close();
   }
 });
+
+test("Monatskalender: Pfeiltasten wechseln ueber die Monatsgrenze in Vor-/Folgemonat", async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+
+  const context = await browser.newContext({ viewport: DESKTOP_VIEWPORT });
+  const page = await context.newPage();
+  try {
+    await loginViaUi(page, acc.email, PASSWORD);
+    await page.goto("/dienstplan");
+    await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible();
+
+    await page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-grid").click();
+    const desktop = page.getByTestId("dienstplan-desktop");
+    await expect(desktop.getByTestId("month-grid")).toBeVisible();
+
+    const cells = desktop.locator('[data-testid^="day-cell-"]');
+    const monthLabel = page.getByTestId("month-label");
+    const startMonth = (await monthLabel.textContent())!.trim();
+
+    const activeTestId = () =>
+      page.evaluate(() => document.activeElement?.getAttribute("data-testid") ?? "");
+
+    // Pfeil links auf dem 1. des Monats: Vormonat, Fokus auf dessen letztem Tag.
+    await cells.first().focus();
+    const firstId = (await activeTestId())!;
+    await page.keyboard.press("ArrowLeft");
+    await expect(monthLabel, "Pfeil links am Monatsanfang wechselt in den Vormonat").not.toHaveText(
+      startMonth,
+    );
+    const prevCells = desktop.locator('[data-testid^="day-cell-"]');
+    const prevLastId = (await prevCells.last().getAttribute("data-testid"))!;
+    await expect
+      .poll(activeTestId, {
+        message: "Fokus muss auf dem letzten Tag des Vormonats landen",
+      })
+      .toBe(prevLastId);
+
+    // Roving Tabindex bleibt konsistent: genau EINE Zelle tabbable.
+    await expect(
+      desktop.locator('[data-testid^="day-cell-"][tabindex="0"]'),
+      "Auch nach dem Monatswechsel darf nur eine Zelle tabindex=0 tragen",
+    ).toHaveCount(1);
+
+    // Pfeil rechts auf dem letzten Tag: zurueck in den Folgemonat, Fokus auf dem 1.
+    await page.keyboard.press("ArrowRight");
+    await expect(monthLabel, "Pfeil rechts am Monatsende wechselt in den Folgemonat").toHaveText(
+      startMonth,
+    );
+    await expect
+      .poll(activeTestId, {
+        message: "Fokus muss auf dem ersten Tag des Folgemonats landen",
+      })
+      .toBe(firstId);
+
+    // Pfeil hoch in der ersten Woche: Vormonat, Fokus 7 Tage zurueck.
+    await desktop.getByTestId(firstId).focus();
+    await page.keyboard.press("ArrowUp");
+    await expect(monthLabel, "Pfeil hoch am Monatsanfang wechselt in den Vormonat").not.toHaveText(
+      startMonth,
+    );
+    const upId = await activeTestId();
+    expect(upId, "Pfeil hoch muss eine Zelle im Vormonat fokussieren").toContain("day-cell-");
+    expect(upId).not.toBe(firstId);
+    await expect(
+      desktop.locator('[data-testid^="day-cell-"][tabindex="0"]'),
+      "Roving Tabindex bleibt auch nach Pfeil hoch ueber die Grenze konsistent",
+    ).toHaveCount(1);
+  } finally {
+    await context.close();
+  }
+});
