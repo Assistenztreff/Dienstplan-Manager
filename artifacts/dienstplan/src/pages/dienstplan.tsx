@@ -802,12 +802,40 @@ function MonthGrid({
                   )}
                   {dots.length > 0 && (
                     <span className="hidden md:flex flex-col items-stretch gap-0.5 px-0.5">
-                      {dots.map((s) => (
+                      {dots.map((s) => {
+                        const chipClickable = canEdit && !selectionMode;
+                        return (
                         <span
                           key={s.id}
                           data-testid={`day-chip-${s.id}`}
                           title={`${s.user?.name ?? ""} · ${format(new Date(s.startTime), "HH:mm")}`.trim()}
-                          className={`flex items-center justify-center gap-1 rounded border px-1 py-px text-[9px] leading-tight truncate ${userBadgeClass(s.userId, personColors)} ${planningStatusBadgeOutline(s)}`}
+                          role={chipClickable ? "button" : undefined}
+                          tabIndex={chipClickable ? 0 : undefined}
+                          aria-label={
+                            chipClickable
+                              ? `Schicht bearbeiten: ${s.user?.name ?? ""} ${format(new Date(s.startTime), "HH:mm")}`.trim()
+                              : undefined
+                          }
+                          onClick={
+                            chipClickable
+                              ? (e) => {
+                                  e.stopPropagation();
+                                  onShiftClick(s);
+                                }
+                              : undefined
+                          }
+                          onKeyDown={
+                            chipClickable
+                              ? (e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    onShiftClick(s);
+                                  }
+                                }
+                              : undefined
+                          }
+                          className={`flex items-center justify-center gap-1 rounded border px-1 py-px text-[9px] leading-tight truncate ${userBadgeClass(s.userId, personColors)} ${planningStatusBadgeOutline(s)} ${chipClickable ? "cursor-pointer hover:ring-1 hover:ring-primary/60" : ""}`}
                         >
                           <span className="font-bold">
                             {s.user?.name ? nameInitials(s.user.name) : ""}
@@ -816,7 +844,8 @@ function MonthGrid({
                             {format(new Date(s.startTime), "HH:mm")}
                           </span>
                         </span>
-                      ))}
+                        );
+                      })}
                     </span>
                   )}
                   {hiddenCount > 0 && (
