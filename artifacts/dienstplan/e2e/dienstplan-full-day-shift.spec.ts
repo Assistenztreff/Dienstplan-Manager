@@ -17,8 +17,8 @@ import { selectDayCell } from "./helpers/shifts";
  * - Assistent wählen, Dienst "24h Dienst" auswählen.
  * - Start- und Endzeit identisch setzen (08:00–08:00) und speichern → endIso =
  *   startIso + 24h (Folgetag).
- * - Prüfen, dass die Schicht nur am Starttag erscheint und das Zeit-Label den
- *   Folgetag-Hinweis "(+1)" trägt.
+ * - Prüfen, dass die Schicht nur am Starttag erscheint und das Zeit-Label
+ *   keinen (+1)-Zusatz mehr trägt.
  *
  * Zusätzlich ein API-Round-Trip (Legacy-Typ full_day), der eine Dauer von
  * exakt 24 Stunden bestätigt.
@@ -164,7 +164,7 @@ async function openCalendar(page: Page): Promise<Locator> {
 }
 
 test.describe("24h-Dienst über den Folgetag (Admin, mobile)", () => {
-  test("speichert 24h-Schicht: Endzeit = Start + 24h, nur am Starttag mit (+1)", async ({ page }) => {
+  test("speichert 24h-Schicht: Endzeit = Start + 24h, nur am Starttag ohne (+1)", async ({ page }) => {
     await loginAsAdmin(page);
     const assistant = await ensureAssistant(page);
     const model = await ensure24hModel(page);
@@ -247,12 +247,12 @@ test.describe("24h-Dienst über den Folgetag (Admin, mobile)", () => {
     expect(end.getTime(), "endTime muss nach startTime liegen").toBeGreaterThan(start.getTime());
     expect(end.getDate(), "endTime muss am Folgetag liegen").toBe(day + 1);
 
-    // --- Schicht erscheint nur am Starttag, mit (+1)-Hinweis ---------------
+    // --- Schicht erscheint nur am Starttag -----------------------------------
     const badge = mobile.getByTestId(`shift-badge-${shiftId}`);
     await expect(badge).toBeVisible();
-    // 24h-Schicht: Start- und Endzeit identisch (08:00–08:00) + Folgetag-Hinweis.
+    // 24h-Schicht: Start- und Endzeit identisch (08:00–08:00), ohne "(+1)"-Zusatz.
     await expect(badge).toContainText(`${startTime}–${startTime}`);
-    await expect(badge).toContainText("(+1)");
+    await expect(badge).not.toContainText("(+1)");
 
     // Folgetag auswählen → die Schicht darf dort NICHT erscheinen.
     const nextCell = mobile.getByTestId(dayCellId(year, month, day + 1));

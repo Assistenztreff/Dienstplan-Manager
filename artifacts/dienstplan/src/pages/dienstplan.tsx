@@ -465,7 +465,6 @@ function ShiftBadge({
         <>
           <div className="truncate">
             {startLabel}–{endLabel}
-            {!isSameDay(start, end) && <span className="opacity-70"> (+1)</span>}
           </div>
           <div className="text-[11px] opacity-70 truncate">{label}</div>
         </>
@@ -1719,7 +1718,7 @@ export default function Dienstplan() {
           />
         ) : (
           <Card className="w-full overflow-x-auto border-border/50 shadow-sm">
-            <table className="w-full text-sm">
+            <table className="min-w-full table-fixed text-sm">
               <thead>
                 <tr className="h-px border-b bg-muted/50">
                   <th className="p-3 text-left font-medium sticky left-0 bg-muted/50 backdrop-blur-sm z-10 w-48">
@@ -1734,7 +1733,7 @@ export default function Dienstplan() {
                       data-testid={isSelectionMode ? `col-header-${format(day, "yyyy-MM-dd")}` : undefined}
                       data-selected={colSelected ? "true" : "false"}
                       onClick={isSelectionMode && isAdmin ? () => toggleDate(day) : undefined}
-                      className={`p-2 font-medium text-center min-w-[56px] ${
+                      className={`p-2 font-medium text-center w-[88px] min-w-[88px] ${
                         colSelected
                           ? "bg-primary/10 ring-1 ring-inset ring-primary"
                           : isToday(day)

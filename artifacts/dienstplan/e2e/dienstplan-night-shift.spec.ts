@@ -11,7 +11,7 @@ import { clearUserShiftsAroundDay, selectDayCell } from "./helpers/shifts";
  *   ohne dass eine Fehlermeldung erscheint
  * - Prüfen, dass die Schicht nur am Starttag im Kalender erscheint und der
  *   Folgetag nicht fälschlich belegt ist
- * - Prüfen, dass das Zeit-Label den Folgetag-Hinweis "(+1)" enthält
+ * - Prüfen, dass das Zeit-Label die Spanne ohne (+1)-Zusatz zeigt
  *
  * Zusätzlich ein API-Integrationstest, der bestätigt, dass der gespeicherte
  * endTime am Folgetag liegt, wenn die Endzeit kleiner/gleich der Startzeit ist.
@@ -121,7 +121,7 @@ async function openCalendar(page: Page): Promise<Locator> {
 }
 
 test.describe("Nachtdienst über Mitternacht (Admin, mobile)", () => {
-  test("legt 16:00–08:00 an: nur am Starttag, mit (+1)-Hinweis", async ({ page }) => {
+  test("legt 16:00–08:00 an: nur am Starttag, ohne (+1)-Zusatz", async ({ page }) => {
     await loginAsAdmin(page);
     const assistant = await ensureAssistant(page);
     await ensureShiftModel(page);
@@ -188,9 +188,9 @@ test.describe("Nachtdienst über Mitternacht (Admin, mobile)", () => {
     // --- Schicht erscheint nur am Starttag --------------------------------
     const badge = mobile.getByTestId(`shift-badge-${shiftId}`);
     await expect(badge).toBeVisible();
-    // Zeit-Label enthält die Spanne und den Folgetag-Hinweis "(+1)".
+    // Zeit-Label enthält die Spanne (kein "(+1)"-Zusatz mehr auf der Kachel).
     await expect(badge).toContainText(`${startTime}–${endTime}`);
-    await expect(badge).toContainText("(+1)");
+    await expect(badge).not.toContainText("(+1)");
 
     // Folgetag auswählen → die Schicht darf dort NICHT erscheinen.
     const nextCell = mobile.getByTestId(dayCellId(year, month, day + 1));
