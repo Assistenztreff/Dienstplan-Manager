@@ -308,11 +308,42 @@ if (useManagedStack && !isWorkerProcess) {
 }
 
 if (useManagedStack && !isWorkerProcess && !process.env.E2E_SKIP_DB_SETUP) {
+  // Marker-Treffer allein genügt NICHT (Task #499): der Hash beweist nur
+  // "setup-test-db lief mit diesen Quelldateien", nicht dass die _test-DB
+  // wirklich auf dem Stand ist (Drift durch stillen Push-Fehlschlag, Marker
+  // aus anderem Kontext, manuelle Eingriffe). Deshalb bei Marker-Treffer
+  // zusätzlich der schnelle IST-Check: alle Drizzle-Tabellen/-Spalten in der
+  // _test-DB vorhanden? Schlägt er fehl (auch: DB fehlt/nicht erreichbar),
+  // wird ganz normal provisioniert — setup-test-db heilt sich notfalls per
+  // Drop + Recreate selbst.
+  let skipProvisioning = false;
   if (schemaUnchanged) {
-    // Schema (+ Setup/Seed-Skripte) seit dem letzten erfolgreichen Lauf
-    // unverändert -> teure Provisionierung sicher überspringen.
     console.log(
-      "[e2e] Schema unverändert (Marker-Treffer) — setup-test-db wird übersprungen. Erzwingen: node_modules/.cache/dienstplan-e2e löschen oder E2E ohne Marker laufen lassen.",
+      "[e2e] Schema unverändert (Marker-Treffer) — prüfe IST-Zustand der Test-DB (verify-test-db-schema)...",
+    );
+    const verify = spawnSync(
+      "pnpm",
+      ["--filter", "@workspace/scripts", "run", "verify-test-db-schema"],
+      {
+        stdio: "inherit",
+        timeout: 120_000,
+        env: { ...process.env, DATABASE_URL: testDatabaseUrl },
+      },
+    );
+    if (verify.status === 0 && verify.error == null) {
+      skipProvisioning = true;
+    } else {
+      console.log(
+        "[e2e] Test-DB weicht trotz Marker-Treffer vom Schema ab — setup-test-db läuft erneut.",
+      );
+    }
+  }
+
+  if (skipProvisioning) {
+    // Schema (+ Setup/Seed-Skripte) unverändert UND IST-Zustand der Test-DB
+    // verifiziert -> teure Provisionierung sicher überspringen.
+    console.log(
+      "[e2e] Test-DB verifiziert aktuell — setup-test-db wird übersprungen. Erzwingen: node_modules/.cache/dienstplan-e2e löschen oder E2E ohne Marker laufen lassen.",
     );
   } else {
     console.log("[e2e] Test-Datenbank wird provisioniert (setup-test-db)...");

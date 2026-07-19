@@ -23,13 +23,16 @@
     "backfill-team-shift-models": "tsx ./src/backfill-team-shift-models.ts",
     "check-codegen-drift": "tsx ./src/check-codegen-drift.ts",
     "setup-test-db": "tsx ./src/setup-test-db.ts",
+    "verify-test-db-schema": "tsx ./src/verify-test-db-schema.ts",
     "verify-test-db-cleanup": "tsx ./src/verify-test-db-cleanup.ts",
     "verify-test-platform-errors-cleanup": "tsx ./src/verify-test-platform-errors-cleanup.ts",
     "verify-account-separation": "tsx ./src/verify-account-separation.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@workspace/db": "workspace:*",
     "@workspace/shift-defaults": "workspace:*",
+    "drizzle-orm": "catalog:",
     "@workspace/test-fixtures": "workspace:*",
     "pg": "^8.20.0"
   },

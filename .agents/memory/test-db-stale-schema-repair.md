@@ -21,6 +21,11 @@ empty, push passes and setup is idempotent again. Derive the test DB URL from
 Note: single-spec runs via `pnpm exec playwright test <name>` no longer skip setup —
 the playwright config runs setup-test-db at load time (managed stack, main process only),
 and setup-test-db self-heals a blocked push by drop+recreate of the throwaway test DB.
+A schema-marker hit alone must never skip setup blindly: the fingerprint proves the
+sources were seen, not that the DB matches. The durable pattern is to verify the
+actual DB structure (information_schema vs. Drizzle tables/columns) on every marker
+hit and after every push, and to re-provision on any missing table/column — drift
+then self-heals regardless of why the marker and the DB disagreed.
 Manual guarded-SQL repair is only needed if the DEV DB (not the `_test` one) drifts.
 Purely additive drift (new nullable/defaulted columns) pushes cleanly without prompts.
 

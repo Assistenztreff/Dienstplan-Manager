@@ -708,12 +708,18 @@ importers:
 
   scripts:
     dependencies:
+      '@workspace/db':
+        specifier: workspace:*
+        version: link:../lib/db
       '@workspace/shift-defaults':
         specifier: workspace:*
         version: link:../lib/shift-defaults
       '@workspace/test-fixtures':
         specifier: workspace:*
         version: link:../lib/test-fixtures
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.2(@types/pg@8.20.0)(pg@8.20.0)
       pg:
         specifier: ^8.20.0
         version: 8.20.0

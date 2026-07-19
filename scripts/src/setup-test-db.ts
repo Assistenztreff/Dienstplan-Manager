@@ -86,8 +86,18 @@ async function main(): Promise<void> {
     }
   };
 
-  try {
+  // Nach dem Push den IST-Zustand der Test-DB gegen das Drizzle-Schema
+  // verifizieren (Task #499): drizzle-kit push kann in Randfällen "erfolgreich"
+  // durchlaufen, ohne alle Änderungen anzuwenden (z. B. verschluckte Prompts).
+  // Fehlen danach Tabellen/Spalten, greift dieselbe Selbstheilung wie beim
+  // Push-Fehlschlag: Drop + Recreate + erneuter Push.
+  const pushAndVerify = (): void => {
     pushSchema();
+    run("pnpm --filter @workspace/scripts run verify-test-db-schema");
+  };
+
+  try {
+    pushAndVerify();
   } catch {
     // Push gescheitert (typisch: veraltete Test-DB + Schema-Änderung, die eine
     // interaktive Bestätigung bräuchte). Die Test-DB ist wegwerfbar: komplett
@@ -101,7 +111,7 @@ async function main(): Promise<void> {
     await rebuild.query(`CREATE DATABASE "${testDbName}"`);
     await rebuild.end();
     console.log(`Test-Datenbank "${testDbName}" frisch angelegt.`);
-    pushSchema();
+    pushAndVerify();
   }
   run("pnpm --filter @workspace/scripts run setup-admin");
   run("pnpm --filter @workspace/scripts run migrate-teams");
