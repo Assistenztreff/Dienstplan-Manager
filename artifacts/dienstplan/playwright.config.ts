@@ -382,6 +382,29 @@ if (useManagedStack && !isWorkerProcess && !process.env.E2E_SKIP_DB_SETUP) {
     }
   }
 
+  // Die drei Vorlauf-Checks unten laufen in-process (Top-Level-await, gleiche
+  // Funktionen wie die CLI-Wrapper in scripts/src/verify-*.ts via
+  // `@workspace/test-fixtures/verify-checks`) statt als pnpm/tsx-Kindprozesse —
+  // spart ~2-4s Prozess-Startkosten PRO Check und Lauf. Die geprueften Skripte
+  // selbst (setup-test-accounts, migrate-teams, cleanup-*) starten die Checks
+  // weiterhin als echte pnpm-Prozesse: genau diese CLI-Einstiege sind der
+  // Pruefgegenstand.
+  const runInProcessCheck = async (
+    label: string,
+    check: () => Promise<void>,
+    failureMessage: string,
+  ): Promise<void> => {
+    console.log(`[e2e] ${label}...`);
+    try {
+      await check();
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : err);
+      throw new Error(failureMessage);
+    }
+  };
+
+  const verifyChecks = await import("@workspace/test-fixtures/verify-checks");
+
   // Regressionscheck Testkonten-Trennung: beweist VOR jedem E2E-Lauf, dass
   // setup-test-accounts + migrate-teams die Team-Belegung der Dev-Testkonten
   // nicht zerstoeren. Laeuft bewusst HIER (Config-Load, vor dem Start der
@@ -391,17 +414,11 @@ if (useManagedStack && !isWorkerProcess && !process.env.E2E_SKIP_DB_SETUP) {
   // Skip via `E2E_SKIP_SEPARATION_CHECK=1` fuer schnelle Wiederholungslaeufe
   // (analog E2E_SKIP_DB_SETUP, das den Check ebenfalls ueberspringt).
   if (!process.env.E2E_SKIP_SEPARATION_CHECK) {
-    console.log("[e2e] Testkonten-Trennungs-Check (verify-account-separation)...");
-    const separation = spawnSync(
-      "pnpm",
-      ["--filter", "@workspace/scripts", "run", "verify-account-separation"],
-      { stdio: "inherit", timeout: 600_000 },
+    await runInProcessCheck(
+      "Testkonten-Trennungs-Check (verify-account-separation, in-process)",
+      () => verifyChecks.runAccountSeparationCheck(databaseUrl),
+      "verify-account-separation fehlgeschlagen — die Testkonten-Trennung ist beschaedigt oder der Check konnte nicht laufen (siehe Ausgabe oben). Kein E2E-Lauf gegen einen unklaren Zustand.",
     );
-    if (separation.status !== 0 || separation.error != null) {
-      throw new Error(
-        "verify-account-separation fehlgeschlagen — die Testkonten-Trennung ist beschaedigt oder der Check konnte nicht laufen (siehe Ausgabe oben). Kein E2E-Lauf gegen einen unklaren Zustand.",
-      );
-    }
   }
 
   // Selbstheilungs-Nachweis (verify-test-db-cleanup): beweist VOR jedem E2E-Lauf,
@@ -414,17 +431,11 @@ if (useManagedStack && !isWorkerProcess && !process.env.E2E_SKIP_DB_SETUP) {
   // laufen. Skip via `E2E_SKIP_CLEANUP_CHECK=1` fuer schnelle Wiederholungslaeufe
   // (analog E2E_SKIP_SEPARATION_CHECK).
   if (!process.env.E2E_SKIP_CLEANUP_CHECK) {
-    console.log("[e2e] Selbstheilungs-Check (verify-test-db-cleanup)...");
-    const cleanup = spawnSync(
-      "pnpm",
-      ["--filter", "@workspace/scripts", "run", "verify-test-db-cleanup"],
-      { stdio: "inherit", timeout: 600_000 },
+    await runInProcessCheck(
+      "Selbstheilungs-Check (verify-test-db-cleanup, in-process)",
+      () => verifyChecks.runTestDbCleanupCheck(databaseUrl),
+      "verify-test-db-cleanup fehlgeschlagen — die Test-DB-Selbstheilung ist beschaedigt oder der Check konnte nicht laufen (siehe Ausgabe oben). Kein E2E-Lauf gegen einen unklaren Zustand.",
     );
-    if (cleanup.status !== 0 || cleanup.error != null) {
-      throw new Error(
-        "verify-test-db-cleanup fehlgeschlagen — die Test-DB-Selbstheilung ist beschaedigt oder der Check konnte nicht laufen (siehe Ausgabe oben). Kein E2E-Lauf gegen einen unklaren Zustand.",
-      );
-    }
   }
 
   // Fehlerzeilen-Cleanup-Nachweis (verify-test-platform-errors-cleanup): beweist
@@ -436,19 +447,11 @@ if (useManagedStack && !isWorkerProcess && !process.env.E2E_SKIP_DB_SETUP) {
   // entfernt Zeilen in der `_test`-DB und darf nie parallel zu Specs laufen.
   // Skip via `E2E_SKIP_CLEANUP_CHECK=1` (analog verify-test-db-cleanup).
   if (!process.env.E2E_SKIP_CLEANUP_CHECK) {
-    console.log(
-      "[e2e] Fehlerzeilen-Cleanup-Check (verify-test-platform-errors-cleanup)...",
+    await runInProcessCheck(
+      "Fehlerzeilen-Cleanup-Check (verify-test-platform-errors-cleanup, in-process)",
+      () => verifyChecks.runPlatformErrorsCleanupCheck(databaseUrl),
+      "verify-test-platform-errors-cleanup fehlgeschlagen — der platform_errors-Cleanup ist beschaedigt oder der Check konnte nicht laufen (siehe Ausgabe oben). Kein E2E-Lauf gegen einen unklaren Zustand.",
     );
-    const errorsCleanup = spawnSync(
-      "pnpm",
-      ["--filter", "@workspace/scripts", "run", "verify-test-platform-errors-cleanup"],
-      { stdio: "inherit", timeout: 600_000 },
-    );
-    if (errorsCleanup.status !== 0 || errorsCleanup.error != null) {
-      throw new Error(
-        "verify-test-platform-errors-cleanup fehlgeschlagen — der platform_errors-Cleanup ist beschaedigt oder der Check konnte nicht laufen (siehe Ausgabe oben). Kein E2E-Lauf gegen einen unklaren Zustand.",
-      );
-    }
   }
 }
 

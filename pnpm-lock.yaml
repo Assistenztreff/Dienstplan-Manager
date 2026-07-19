@@ -704,10 +704,17 @@ importers:
   lib/shift-defaults: {}
 
   lib/test-fixtures:
+    dependencies:
+      pg:
+        specifier: ^8.20.0
+        version: 8.20.0
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
         version: 25.6.2
+      '@types/pg':
+        specifier: ^8.20.0
+        version: 8.20.0
 
   scripts:
     dependencies:

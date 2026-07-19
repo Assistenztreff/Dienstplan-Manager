@@ -4,9 +4,14 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./verify-checks": "./src/verify-checks.ts"
+  },
+  "dependencies": {
+    "pg": "^8.20.0"
   },
   "devDependencies": {
-    "@types/node": "catalog:"
+    "@types/node": "catalog:",
+    "@types/pg": "^8.20.0"
   }
 }
