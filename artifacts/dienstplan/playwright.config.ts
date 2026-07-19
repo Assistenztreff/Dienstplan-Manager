@@ -316,25 +316,35 @@ if (useManagedStack && !isWorkerProcess && !process.env.E2E_SKIP_DB_SETUP) {
   // _test-DB vorhanden? Schlägt er fehl (auch: DB fehlt/nicht erreichbar),
   // wird ganz normal provisioniert — setup-test-db heilt sich notfalls per
   // Drop + Recreate selbst.
+  // Der Check läuft in-process (Top-Level-await, ESM-Config) statt als
+  // pnpm/tsx-Kindprozess — spart ~2-4s Prozess-Startkosten pro Lauf. Die
+  // Vergleichslogik teilt sich die Config mit dem manuellen CLI-Skript
+  // `verify-test-db-schema` über `@workspace/db/verify-schema` (bewusst
+  // eigener Export-Pfad ohne den Pool-Seiteneffekt des Haupt-Index).
   let skipProvisioning = false;
   if (schemaUnchanged) {
     console.log(
-      "[e2e] Schema unverändert (Marker-Treffer) — prüfe IST-Zustand der Test-DB (verify-test-db-schema)...",
+      "[e2e] Schema unverändert (Marker-Treffer) — prüfe IST-Zustand der Test-DB (in-process Schema-Check)...",
     );
-    const verify = spawnSync(
-      "pnpm",
-      ["--filter", "@workspace/scripts", "run", "verify-test-db-schema"],
-      {
-        stdio: "inherit",
-        timeout: 120_000,
-        env: { ...process.env, DATABASE_URL: testDatabaseUrl },
-      },
-    );
-    if (verify.status === 0 && verify.error == null) {
-      skipProvisioning = true;
-    } else {
+    try {
+      const { findMissingSchemaObjects } = await import(
+        "@workspace/db/verify-schema"
+      );
+      const problems = await findMissingSchemaObjects(testDatabaseUrl);
+      if (problems.length === 0) {
+        skipProvisioning = true;
+      } else {
+        console.log(
+          `[e2e] Test-DB weicht trotz Marker-Treffer vom Schema ab (${problems.length} Abweichung(en)) — setup-test-db läuft erneut.`,
+        );
+        for (const p of problems) console.log(`[e2e]   - ${p}`);
+      }
+    } catch (err) {
+      // Auch "DB fehlt / nicht erreichbar" ist ein "bitte provisionieren"-
+      // Signal — setup-test-db heilt sich per Drop + Recreate selbst.
       console.log(
-        "[e2e] Test-DB weicht trotz Marker-Treffer vom Schema ab — setup-test-db läuft erneut.",
+        "[e2e] Test-DB-Schema-Check fehlgeschlagen (DB fehlt/nicht erreichbar?) — setup-test-db läuft erneut.",
+        err,
       );
     }
   }

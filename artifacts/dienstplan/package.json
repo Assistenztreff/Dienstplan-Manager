@@ -54,6 +54,7 @@
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
     "@workspace/api-client-react": "workspace:*",
+    "@workspace/db": "workspace:*",
     "@workspace/entitlements": "workspace:*",
     "@workspace/test-fixtures": "workspace:*",
     "class-variance-authority": "catalog:",

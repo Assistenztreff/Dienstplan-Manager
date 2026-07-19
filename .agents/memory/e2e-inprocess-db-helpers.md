@@ -12,4 +12,4 @@ description: Why e2e helpers must run their SQL in-process instead of execSync-i
 - DB targeting stays `E2E_TEST_DATABASE_URL ?? DATABASE_URL` — same semantics the spawn path had.
 - Use a short-lived `pg.Client` per call, no long-lived pool: Playwright workers can exit anytime and open pool handles delay process exit.
 - The e2e folder is now typechecked via `tsconfig.e2e.json` (part of the artifact's `typecheck` script, hence `pnpm run typecheck`) — type errors in helpers/specs fail CI-style checks; no ad-hoc tsc pass needed anymore.
-- One-off spawns that run once per suite (global-teardown cleanups, config-load checks) are not worth converting.
+- One-off spawns that run once per suite (global-teardown cleanups, heavy config-load checks) are usually not worth converting — EXCEPT checks on the hot path of every run: the marker-hit schema check now runs in-process. The ESM playwright.config supports top-level `await import(...)`, so async DB checks CAN run at config load; shared logic lives in `@workspace/db/verify-schema` (own export path WITHOUT the pool side effect of the main `@workspace/db` index, which would throw/open a pool against the dev DB).
