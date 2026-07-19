@@ -646,6 +646,50 @@ function MonthGrid({
   const blanks = Array.from({ length: offset });
   const selectedShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), selectedDay));
 
+  // Roving Tabindex (WAI-ARIA-Grid-Pattern): genau EINE Tageszelle ist in der
+  // Tab-Reihenfolge; Pfeiltasten bewegen den Fokus, Home/End springen zum
+  // Wochenanfang/-ende. Enter/Space feuern den nativen Button-Klick.
+  const cellRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [focusedIdx, setFocusedIdx] = useState<number | null>(null);
+  useEffect(() => {
+    setFocusedIdx(null);
+  }, [monthStart.getTime()]);
+  const selectedIdx = days.findIndex((d) => isSameDay(d, selectedDay));
+  const tabbableIdx = focusedIdx ?? (selectedIdx >= 0 ? selectedIdx : 0);
+  const moveFocus = (idx: number) => {
+    const clamped = Math.max(0, Math.min(days.length - 1, idx));
+    setFocusedIdx(clamped);
+    cellRefs.current[clamped]?.focus();
+  };
+  const handleCellKeyDown = (e: React.KeyboardEvent, idx: number) => {
+    const col = (offset + idx) % 7;
+    let target: number | null = null;
+    switch (e.key) {
+      case "ArrowRight":
+        target = idx + 1;
+        break;
+      case "ArrowLeft":
+        target = idx - 1;
+        break;
+      case "ArrowDown":
+        target = idx + 7;
+        break;
+      case "ArrowUp":
+        target = idx - 7;
+        break;
+      case "Home":
+        target = idx - col;
+        break;
+      case "End":
+        target = idx + (6 - col);
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    moveFocus(target);
+  };
+
   const absenceTypesByDay = new Map<string, Set<string>>();
   for (const s of shifts) {
     if (!isAbsenceShift(s)) continue;
@@ -699,6 +743,12 @@ function MonthGrid({
               <button
                 key={day.toISOString()}
                 type="button"
+                ref={(el) => {
+                  cellRefs.current[dayIdx] = el;
+                }}
+                tabIndex={dayIdx === tabbableIdx ? 0 : -1}
+                onKeyDown={(e) => handleCellKeyDown(e, dayIdx)}
+                onFocus={() => setFocusedIdx(dayIdx)}
                 data-testid={`day-cell-${format(day, "yyyy-MM-dd")}`}
                 data-selected={(selectionMode ? bulkSelected : selected) ? "true" : "false"}
                 aria-selected={selectionMode ? bulkSelected : selected}
