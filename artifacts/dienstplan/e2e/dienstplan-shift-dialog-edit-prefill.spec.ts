@@ -182,7 +182,7 @@ test.describe("ShiftDialog: Bearbeiten belegt Datum/Zeit korrekt vor (Admin, mob
     await expect(
       editDialog.getByTestId("shift-dialog-date"),
       "Datum muss aus der Schicht vorbelegt sein",
-    ).toHaveValue(expectedDate);
+    ).toHaveAttribute("data-value", expectedDate);
     await expect(
       editDialog.getByTestId("shift-dialog-start"),
       "Startzeit muss aus der Schicht vorbelegt sein",

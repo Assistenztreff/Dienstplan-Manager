@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { addMonths, format } from "date-fns";
 import { deleteFreeAccount, registerFreeAccount, type FreeAccount } from "./helpers/teams";
+import { pickShiftDialogDate } from "./helpers/shifts";
 
 /**
  * UI-Test (#239): Die beiden verbleibenden serverseitig durchgesetzten
@@ -195,7 +196,7 @@ test.describe("Free-Limit Vorausplanung (UI)", () => {
 
     // Datum auf 2 Monate voraus setzen und speichern -> Server lehnt mit
     // plan_limit_reached (historyMonths) ab.
-    await dialog.getByTestId("shift-dialog-date").fill(farDateKey);
+    await pickShiftDialogDate(page, dialog, farDateKey);
     await dialog.getByTestId("shift-dialog-save").click();
 
     // Klarer Upgrade-Hinweis im Dialog statt stillem Fehlschlag.
@@ -226,7 +227,7 @@ test.describe("Free-Limit Vorausplanung (UI)", () => {
     await dialog.getByTestId("shift-dialog-type").click();
     await page.getByRole("option", { name: "Urlaub" }).click();
 
-    await dialog.getByTestId("shift-dialog-date").fill(farDateKey);
+    await pickShiftDialogDate(page, dialog, farDateKey);
     await dialog.getByTestId("shift-dialog-save").click();
 
     // Die gemappte historyMonths-Meldung, NICHT der generische 403-Text.

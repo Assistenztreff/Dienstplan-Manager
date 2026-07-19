@@ -217,7 +217,8 @@ test("Mehrtägige Abwesenheiten bilden einen durchgehenden, einmal beschrifteten
     const editDialog = page.getByTestId("shift-dialog");
     await expect(editDialog).toBeVisible();
     await expect(editDialog.getByText("Schicht bearbeiten")).toBeVisible();
-    await expect(editDialog.getByTestId("shift-dialog-date")).toHaveValue(
+    await expect(editDialog.getByTestId("shift-dialog-date")).toHaveAttribute(
+      "data-value",
       dateKey(year, month, vacationDays[1]),
     );
 
@@ -228,7 +229,8 @@ test("Mehrtägige Abwesenheiten bilden einen durchgehenden, einmal beschrifteten
     await badge(sEnd.id).click();
     const editDialog2 = page.getByTestId("shift-dialog");
     await expect(editDialog2).toBeVisible();
-    await expect(editDialog2.getByTestId("shift-dialog-date")).toHaveValue(
+    await expect(editDialog2.getByTestId("shift-dialog-date")).toHaveAttribute(
+      "data-value",
       dateKey(year, month, sickDays[1]),
     );
   } finally {

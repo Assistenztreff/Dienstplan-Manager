@@ -38,7 +38,9 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Check, ChevronsUpDown, Trash2 } from "lucide-react";
+import { CalendarIcon, Check, ChevronsUpDown, Trash2 } from "lucide-react";
+import { de } from "date-fns/locale";
+import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { readableApiError, planUpgradeMessage } from "@/lib/api-error";
 import { useTeam } from "@/context/team";
@@ -217,6 +219,10 @@ export function ShiftDialog({
   const firstModelId = firstModel?.id;
 
   const [assistantOpen, setAssistantOpen] = useState(false);
+  // Eigener Kalender-Picker (zentriertes Overlay statt nativem Date-Input),
+  // damit iOS/Safari beim Öffnen des Dialogs keinen eigenen Kalender aufpoppt
+  // und die Position vorhersehbar bleibt.
+  const [dateOpen, setDateOpen] = useState(false);
 
   function modelFromSelection(sel: string) {
     if (!sel.startsWith("model:")) return undefined;
@@ -278,6 +284,7 @@ export function ShiftDialog({
       setOverlapConflicts(null);
       setBulkCreated(new Set());
       setBulkConflicts(null);
+      setDateOpen(false);
       setForm(buildInitialForm());
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -674,7 +681,13 @@ export function ShiftDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-md" data-testid="shift-dialog">
+      <DialogContent
+        className="sm:max-w-md"
+        data-testid="shift-dialog"
+        // Kein Auto-Fokus beim Öffnen: sonst fokussiert iOS/Safari das erste
+        // Feld und poppt ggf. sofort einen Picker auf.
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle className="font-serif text-xl">
             {isEditing
@@ -779,13 +792,57 @@ export function ShiftDialog({
           ) : (
             <div className="space-y-1.5">
               <Label>Datum *</Label>
-              <Input
-                type="date"
+              <Button
+                type="button"
+                variant="outline"
                 data-testid="shift-dialog-date"
-                value={form.date}
-                onChange={(e) => set("date", e.target.value)}
-                className={errors.date ? "border-destructive" : ""}
-              />
+                data-value={form.date}
+                onClick={() => setDateOpen(true)}
+                className={cn(
+                  "w-full justify-start font-normal",
+                  !form.date && "text-muted-foreground",
+                  errors.date && "border-destructive",
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                {form.date
+                  ? format(new Date(`${form.date}T00:00:00`), "dd.MM.yyyy")
+                  : "Datum wählen..."}
+              </Button>
+              {/* Zentriertes Kalender-Overlay statt ankerbasiertem Popover:
+                  auf iPad/Mobil bleibt die Position damit immer vorhersehbar
+                  (mittig über der Dialog-Karte). */}
+              <Dialog open={dateOpen} onOpenChange={setDateOpen}>
+                <DialogContent
+                  className="w-auto max-w-[calc(100vw-2rem)] p-4"
+                  data-testid="shift-dialog-date-picker"
+                  onOpenAutoFocus={(e) => e.preventDefault()}
+                >
+                  <DialogHeader>
+                    <DialogTitle className="text-base">Datum wählen</DialogTitle>
+                  </DialogHeader>
+                  <Calendar
+                    mode="single"
+                    locale={de}
+                    showOutsideDays={false}
+                    captionLayout="dropdown"
+                    startMonth={new Date(new Date().getFullYear() - 3, 0)}
+                    endMonth={new Date(new Date().getFullYear() + 3, 11)}
+                    selected={form.date ? new Date(`${form.date}T00:00:00`) : undefined}
+                    defaultMonth={
+                      form.date
+                        ? new Date(`${form.date}T00:00:00`)
+                        : new Date(year, month - 1, 1)
+                    }
+                    onSelect={(d) => {
+                      if (!d) return;
+                      set("date", format(d, "yyyy-MM-dd"));
+                      setDateOpen(false);
+                    }}
+                    className="mx-auto"
+                  />
+                </DialogContent>
+              </Dialog>
               {errors.date && <p className="text-xs text-destructive">{errors.date}</p>}
             </div>
           )}

@@ -199,7 +199,7 @@ test.describe("ShiftDialog: Bearbeiten belegt Nachtschicht über Mitternacht kor
     await expect(
       editDialog.getByTestId("shift-dialog-date"),
       "Datum muss der Starttag der Nachtschicht sein (nicht der Folgetag des Endes)",
-    ).toHaveValue(expectedDate);
+    ).toHaveAttribute("data-value", expectedDate);
     await expect(
       editDialog.getByTestId("shift-dialog-start"),
       "Startzeit muss aus der Schicht vorbelegt sein",

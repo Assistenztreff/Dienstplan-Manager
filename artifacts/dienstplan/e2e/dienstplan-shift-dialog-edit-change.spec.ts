@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
-import { clearUserShiftsAroundDay, selectDayCell } from "./helpers/shifts";
+import { clearUserShiftsAroundDay, pickShiftDialogDate, selectDayCell } from "./helpers/shifts";
 
 /**
  * E2E-Test: Beim Bearbeiten einer bestehenden Schicht werden geänderte Werte
@@ -180,12 +180,12 @@ test.describe("ShiftDialog: Bearbeiten speichert geändertes Datum/Zeit korrekt 
     const newStart = "11:15";
     const newEnd = "17:20";
 
-    await editDialog.getByTestId("shift-dialog-date").fill(newDate);
+    await pickShiftDialogDate(page, editDialog, newDate);
     await editDialog.getByTestId("shift-dialog-start").fill(newStart);
     await editDialog.getByTestId("shift-dialog-end").fill(newEnd);
 
     // Zur Sicherheit: die geänderten Werte sind im Formular gesetzt.
-    await expect(editDialog.getByTestId("shift-dialog-date")).toHaveValue(newDate);
+    await expect(editDialog.getByTestId("shift-dialog-date")).toHaveAttribute("data-value", newDate);
     await expect(editDialog.getByTestId("shift-dialog-start")).toHaveValue(newStart);
     await expect(editDialog.getByTestId("shift-dialog-end")).toHaveValue(newEnd);
 

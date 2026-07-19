@@ -30,6 +30,42 @@ export async function selectDayCell(page: Page, cell: Locator): Promise<void> {
 }
 
 /**
+ * Wählt ein Datum im app-eigenen Kalender-Picker des Schicht-Dialogs.
+ *
+ * Das frühere native `<input type="date">` wurde durch einen Button
+ * (`shift-dialog-date`, ISO-Wert im Attribut `data-value`) + zentriertes
+ * Kalender-Overlay (`shift-dialog-date-picker`) ersetzt. Der Kalender nutzt
+ * Monats-/Jahres-Dropdowns (native Selects), daher ist jede Zieldatums-Wahl
+ * ohne Chevron-Klickerei deterministisch möglich.
+ */
+export async function pickShiftDialogDate(
+  page: Page,
+  dialog: Locator,
+  isoDate: string,
+): Promise<void> {
+  const target = new Date(`${isoDate}T00:00:00`);
+  const picker = page.getByTestId("shift-dialog-date-picker");
+  // Kein Auto-Öffnen: Der Kalender darf erst nach dem Klick erscheinen.
+  await expect(picker).toHaveCount(0);
+  await dialog.getByTestId("shift-dialog-date").click();
+  await expect(picker).toBeVisible();
+  const dropdowns = picker.locator("select");
+  // react-day-picker rendert (locale de): erst Monat (Werte 0-11), dann Jahr.
+  await dropdowns.nth(0).selectOption(String(target.getMonth()));
+  await dropdowns.nth(1).selectOption(String(target.getFullYear()));
+  // Ohne Outside-Days ist die Tageszahl im Monat eindeutig.
+  await picker
+    .locator("button[data-day]")
+    .filter({ hasText: new RegExp(`^${target.getDate()}$`) })
+    .click();
+  await expect(picker).toHaveCount(0);
+  await expect(dialog.getByTestId("shift-dialog-date")).toHaveAttribute(
+    "data-value",
+    isoDate,
+  );
+}
+
+/**
  * Entfernt alle Schichten des Nutzers, die an den Tagen day-1..day+1 des
  * angegebenen Monats beginnen (deckt auch Übernacht-/24h-Dienste ab).
  *
