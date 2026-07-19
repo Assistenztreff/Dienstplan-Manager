@@ -420,8 +420,6 @@ function ShiftBadge({
   const end = new Date(shift.endTime);
   const startLabel = format(start, "HH:mm");
   const endLabel = format(end, "HH:mm");
-  const is24h =
-    shift.type === "full_day" || (startLabel === endLabel && start.getTime() !== end.getTime());
   const label = shiftLabel(shift, modelMap);
   const statusLabel = !isAbsence ? PLANNING_STATUS_LABELS[shift.planningStatus ?? ""] : undefined;
   return (
@@ -464,11 +462,6 @@ function ShiftBadge({
             {startLabel}–{endLabel}
             {!isSameDay(start, end) && <span className="opacity-70"> (+1)</span>}
           </div>
-          {is24h && (
-            <div className="mt-0.5 inline-flex items-center rounded bg-foreground/15 px-1 py-px text-[10px] font-semibold uppercase tracking-wide">
-              24h-Dienst
-            </div>
-          )}
           <div className="text-[11px] opacity-70 truncate">{label}</div>
         </>
       )}
