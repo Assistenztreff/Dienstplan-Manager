@@ -3,27 +3,30 @@ import { expect, type Locator, type Page } from "@playwright/test";
 type ApiShift = { id: number; userId: number; startTime: string };
 
 /**
- * Wählt eine Tageszelle im Monatsgitter aus, ohne den seit dem UI-Refresh
- * automatisch geöffneten Schicht-Dialog offen zu lassen.
+ * Wählt eine Tageszelle im Monatsgitter aus (Zwei-Stufen-Klick-Modell).
  *
- * Hintergrund: Für Admins öffnet ein Klick auf eine Monatszelle jetzt
- * zusätzlich zur Tagesauswahl direkt den Schicht-Dialog mit vorbelegtem
- * Datum. Specs, die nur den Tag auswählen wollen (um z. B. das Tagesdetail
- * zu prüfen oder anschließend gezielt "+ Schicht" zu klicken), schließen den
- * Dialog hier wieder per Escape. Bei Rollen ohne Bearbeitungsrecht oder im
- * Auswahlmodus öffnet sich kein Dialog — dann ist das Schließen ein No-Op.
+ * Hintergrund: Der erste Klick auf einen Tag markiert ihn nur (Tagesdetail
+ * erscheint unter dem Kalender); erst ein ZWEITER Klick auf den bereits
+ * markierten Tag öffnet als Admin den Schicht-Dialog. Dieser Helper stellt
+ * die reine Auswahl sicher: Ist der Tag bereits markiert, wird NICHT erneut
+ * geklickt (sonst würde der Dialog aufgehen). Öffnet sich dennoch ein Dialog
+ * (defensive Absicherung), wird er per Escape geschlossen.
  */
 export async function selectDayCell(page: Page, cell: Locator): Promise<void> {
-  await cell.click();
+  const already = (await cell.getAttribute("data-selected")) === "true";
+  if (!already) {
+    await cell.click();
+  }
   const dialog = page.getByTestId("shift-dialog");
   const opened = await dialog
-    .waitFor({ state: "visible", timeout: 1500 })
+    .waitFor({ state: "visible", timeout: 750 })
     .then(() => true)
     .catch(() => false);
   if (opened) {
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
   }
+  await expect(cell).toHaveAttribute("data-selected", "true");
 }
 
 /**

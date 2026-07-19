@@ -171,10 +171,15 @@ const SHIFT_TYPE_DOTS: Record<string, string> = {
   freizeitausgleich: "bg-emerald-600",
 };
 
+// Planungsstatus in den Tageszellen: VORLAEUFIG = gestrichelter Rand + reduzierte
+// Deckkraft (nicht nur Transparenz), ANGEBOTEN = durchgezogener Rand (erkennbar
+// unterscheidbar), FIX = ohne Zusatz.
 function shiftDotStatusClass(shift: Shift): string {
   if (isAbsenceShift(shift)) return "";
   const status = shift.planningStatus ?? "FIX";
-  return status === "FIX" ? "" : "opacity-40";
+  if (status === "VORLAEUFIG") return "opacity-60 border-2 border-dashed border-foreground";
+  if (status === "ANGEBOTEN") return "border-2 border-foreground/70";
+  return "";
 }
 
 const ABSENCE_TYPES = new Set(["vacation", "sick", "freizeitausgleich"]);
@@ -669,7 +674,9 @@ function MonthGrid({
             const dayShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), day));
             const selected = isSameDay(day, selectedDay);
             const today = isToday(day);
-            const dots = dayShifts.filter((s) => !isAbsenceShift(s)).slice(0, 3);
+            const nonAbsence = dayShifts.filter((s) => !isAbsenceShift(s));
+            const dots = nonAbsence.slice(0, 3);
+            const hiddenCount = nonAbsence.length - dots.length;
             const prevDay = dayIdx > 0 ? days[dayIdx - 1] : undefined;
             const nextDay = dayIdx < days.length - 1 ? days[dayIdx + 1] : undefined;
             const absenceBars = (["vacation", "sick"] as const)
@@ -694,20 +701,29 @@ function MonthGrid({
                 type="button"
                 data-testid={`day-cell-${format(day, "yyyy-MM-dd")}`}
                 data-selected={(selectionMode ? bulkSelected : selected) ? "true" : "false"}
+                aria-selected={selectionMode ? bulkSelected : selected}
+                aria-label={format(day, "EEEE, d. MMMM yyyy", { locale: de })}
                 onClick={() => {
                   if (selectionMode) {
                     onToggleDate?.(day);
                     return;
                   }
+                  // Zwei-Stufen-Klick: 1. Klick markiert den Tag (Tagesdetail
+                  // erscheint), erst der 2. Klick auf den bereits markierten
+                  // Tag öffnet den Schicht-Dialog (nur Admin) — identisch für
+                  // alle Tage, auch leere.
+                  if (selected) {
+                    if (canEdit) onAddShift(day);
+                    return;
+                  }
                   onSelectDay(day);
-                  if (canEdit) onAddShift(day);
                 }}
-                className={`aspect-square rounded-lg bg-card flex flex-col items-center justify-start pt-1.5 gap-1 border transition-colors ${
+                className={`aspect-square rounded-lg flex flex-col items-center justify-start pt-1.5 gap-1 border transition-colors ${
                   bulkSelected
                     ? "border-primary ring-2 ring-primary bg-primary/5"
                     : selected && !selectionMode
-                      ? "border-primary ring-1 ring-primary"
-                      : "border-transparent hover:bg-muted/40"
+                      ? "border-primary ring-2 ring-primary bg-primary/15"
+                      : "bg-card border-transparent hover:bg-muted/40"
                 }`}
               >
                 <span
@@ -719,10 +735,10 @@ function MonthGrid({
                 >
                   {format(day, "d")}
                 </span>
-                <span className="flex flex-col items-stretch gap-0.5 w-full">
+                <span className="flex flex-col items-stretch gap-0.5 w-full min-w-0">
                   {absenceBars}
                   {dots.length > 0 && (
-                    <span className="flex flex-wrap items-center justify-center gap-0.5">
+                    <span className="flex md:hidden flex-wrap items-center justify-center gap-0.5">
                       {dots.map((s) => (
                         <span
                           key={s.id}
@@ -734,6 +750,35 @@ function MonthGrid({
                       ))}
                     </span>
                   )}
+                  {dots.length > 0 && (
+                    <span className="hidden md:flex flex-col items-stretch gap-0.5 px-0.5">
+                      {dots.map((s) => (
+                        <span
+                          key={s.id}
+                          data-testid={`day-chip-${s.id}`}
+                          title={`${s.user?.name ?? ""} · ${format(new Date(s.startTime), "HH:mm")}`.trim()}
+                          className={`flex items-center justify-center gap-1 rounded border px-1 py-px text-[9px] leading-tight truncate ${userBadgeClass(s.userId, personColors)} ${planningStatusBadgeOutline(s)}`}
+                        >
+                          <span className="font-bold">
+                            {s.user?.name ? nameInitials(s.user.name) : ""}
+                          </span>
+                          <span className="font-medium">
+                            {format(new Date(s.startTime), "HH:mm")}
+                          </span>
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                  {hiddenCount > 0 && (
+                    <span
+                      data-testid={`day-more-${format(day, "yyyy-MM-dd")}`}
+                      className="text-[9px] font-semibold leading-none text-foreground/70 text-center"
+                    >
+                      +{hiddenCount}
+                      <span className="sr-only md:hidden"> weitere</span>
+                      <span className="hidden md:inline"> weitere</span>
+                    </span>
+                  )}
                 </span>
               </button>
             );
@@ -741,26 +786,32 @@ function MonthGrid({
         </div>
       </div>
 
-      <div className="rounded-lg border border-border/40 overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-2.5 bg-muted/40">
-          <div>
+      <div
+        className="rounded-lg border border-border/40 overflow-hidden"
+        role="region"
+        aria-live="polite"
+        aria-label={`Tagesdetails ${format(selectedDay, "EEEE, d. MMMM", { locale: de })}`}
+        data-testid="day-detail-panel"
+      >
+        <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-muted/40">
+          <div className="min-w-0">
             <p className="text-sm font-semibold" data-testid="day-detail-header">
               {format(selectedDay, "EEEE, d. MMMM", { locale: de })}
             </p>
             <p className="text-xs text-muted-foreground">
               {selectedShifts.length === 0
-                ? "Keine Schichten"
+                ? "Keine Dienste geplant"
                 : `${selectedShifts.length} ${selectedShifts.length === 1 ? "Schicht" : "Schichten"}`}
             </p>
           </div>
           {canEdit && !selectionMode && (
-            <Button size="sm" variant="outline" className="gap-1" data-testid="add-shift" onClick={() => onAddShift(selectedDay)}>
+            <Button size="sm" variant="outline" className="gap-1 shrink-0" data-testid="add-shift" onClick={() => onAddShift(selectedDay)}>
               <Plus className="h-3.5 w-3.5" />
-              Schicht
+              Schicht erstellen
             </Button>
           )}
         </div>
-        <div className="bg-card px-3 py-2 space-y-1.5">
+        <div className="bg-card px-3 py-2 space-y-1.5 max-h-48 overflow-y-auto overscroll-contain">
           {selectedShifts.length > 0 ? (
             selectedShifts.map((shift) => (
               <ShiftBadge
@@ -773,9 +824,7 @@ function MonthGrid({
               />
             ))
           ) : (
-            <p className="text-xs text-muted-foreground">
-              {canEdit ? "Keine Schichten — tippen zum Hinzufügen" : "Keine Schichten"}
-            </p>
+            <p className="text-xs text-muted-foreground">Keine Dienste geplant</p>
           )}
         </div>
       </div>

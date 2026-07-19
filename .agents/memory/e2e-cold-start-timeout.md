@@ -38,3 +38,5 @@ calls** — they produce empty output files. So:
   ~5-6 tests (incl. any earlier test that sets shared state like recordedErrorId).
   ~6 tests + stack boot ≈ 35-45s. The code_execution notebook also gets reset
   between calls, so spawning long runs there fails the same way as nohup.
+
+Update (Jul 2026): background/detached (`setsid nohup … &`) Playwright runs still get reaped mid-run in this environment. Reliable pattern: run spec files in foreground batches of 2–4 that each fit the 120s bash limit, with `E2E_SKIP_DB_SETUP=1 E2E_SKIP_SEPARATION_CHECK=1 E2E_SKIP_CLEANUP_CHECK=1` after the first full-setup batch. A killed run leaves e2e.* accounts in the _test DB (setup then fails "Ziel-Belegung nicht erreicht") — clean via cleanup-test-accounts with DATABASE_URL rewritten to the `_test` DB, and remove the stale run.lock only if its PID is dead. Beware: `pkill -f chrome-linux` matches your own bash -c command line (exit 143) — use a bracket pattern like `chrome-linu[x]`.

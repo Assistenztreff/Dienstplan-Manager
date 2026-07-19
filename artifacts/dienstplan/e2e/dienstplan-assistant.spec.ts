@@ -191,7 +191,7 @@ test.describe("Dienstplan-Sicht als Assistent (eingeschränkte Rechte)", () => {
     await desktop.getByTestId(dayCellId(FOREIGN_DAY)).click();
     await expect(desktop.getByTestId("day-detail-header")).toContainText(`${FOREIGN_DAY}.`);
     await expect(desktop.getByText("12:00–20:00")).toHaveCount(0);
-    await expect(desktop.getByText("Keine Schichten").first()).toBeVisible();
+    await expect(desktop.getByText("Keine Dienste geplant").first()).toBeVisible();
   });
 
   test("zeigt keinen Assistenten-Filter", async ({ page }) => {
