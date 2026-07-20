@@ -32,6 +32,7 @@ import { eachDayOfInterval, format } from "date-fns";
 import { de } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { planUpgradeMessage, readableApiError, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
+import { warnIfMonthClosed } from "@/lib/month-closing-warning";
 import { useAuth } from "@/context/auth";
 import { hasAccess } from "@/lib/entitlements";
 import { formatDays, formatHours } from "@/lib/utils";
@@ -278,6 +279,10 @@ export default function Abwesenheiten() {
         });
       }
       await invalidate();
+      // Soft-Close-Hinweis: Abwesenheit in bereits abgeschlossenem Monat.
+      for (const day of toCreate) {
+        void warnIfMonthClosed(day, null);
+      }
       const skipped = days.length - toCreate.length;
       toast({
         title: `${TYPE_LABEL[type]} eingetragen`,
@@ -317,6 +322,8 @@ export default function Abwesenheiten() {
         await deleteShift.mutateAsync({ id });
       }
       await invalidate();
+      void warnIfMonthClosed(range.startDate, null);
+      void warnIfMonthClosed(range.endDate, null);
       toast({ title: "Abwesenheit entfernt" });
     } catch {
       toast({ title: "Entfernen fehlgeschlagen", variant: "destructive" });

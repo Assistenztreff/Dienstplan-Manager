@@ -1134,6 +1134,98 @@ export interface HoursBalance {
   totalPay?: number | null;
 }
 
+export type MonthClosingEntryBillingMethod = typeof MonthClosingEntryBillingMethod[keyof typeof MonthClosingEntryBillingMethod];
+
+
+export const MonthClosingEntryBillingMethod = {
+  SOLL: 'SOLL',
+  IST: 'IST',
+} as const;
+
+/**
+ * Eingefrorene Auswertungszeile einer Assistenzkraft zum Zeitpunkt des Abschlusses.
+ */
+export interface MonthClosingEntry {
+  userId: number;
+  userName: string;
+  plannedHours: number;
+  totalFulfilledHours: number;
+  billingMethod: MonthClosingEntryBillingMethod;
+  /** @nullable */
+  hourlyWage?: number | null;
+  /** @nullable */
+  basePay?: number | null;
+  /** @nullable */
+  nightSurchargePay?: number | null;
+  /** @nullable */
+  sundaySurchargePay?: number | null;
+  /** @nullable */
+  holidaySurchargePay?: number | null;
+  /** @nullable */
+  totalPay?: number | null;
+}
+
+export interface MonthClosingMeta {
+  id: number;
+  teamId: number;
+  month: number;
+  year: number;
+  closedBy: number;
+  closedByName: string;
+  closedAt: string;
+}
+
+export interface MonthClosingStatus {
+  closed: boolean;
+  latest?: MonthClosingMeta;
+  /** Alle Abschlüsse des Monats, neueste zuerst (Append-only-Historie). */
+  history: MonthClosingMeta[];
+  /** Anzahl offener (unbestätigter) IST-Einträge im Monat — Plausibilitätswarnung vor dem Abschluss. */
+  pendingTimeEntries: number;
+}
+
+export interface CreateMonthClosingInput {
+  /**
+     * @minimum 1
+     * @maximum 12
+     */
+  month: number;
+  year: number;
+  /** Optionaler Team-Kontext für die Datentrennung. */
+  teamId?: number;
+}
+
+/**
+ * Nachberechnungs-Zeile — gemeldet (eingefroren) vs. aktuell je Assistenzkraft.
+ */
+export interface MonthClosingDiffRow {
+  userId: number;
+  userName: string;
+  /** Erfüllte Gesamtstunden laut Abschluss. */
+  reportedHours: number;
+  /** Erfüllte Gesamtstunden nach aktuellem Stand. */
+  currentHours: number;
+  diffHours: number;
+  /**
+     * Gesamtvergütung (EUR) laut Abschluss; null ohne Stundenlohn.
+     * @nullable
+     */
+  reportedPay?: number | null;
+  /** @nullable */
+  currentPay?: number | null;
+  /** @nullable */
+  diffPay?: number | null;
+}
+
+export interface MonthClosingDiff {
+  /** false = Monat (noch) nicht abgeschlossen, keine Nachberechnung. */
+  closed: boolean;
+  /** Zeitpunkt des maßgeblichen (jüngsten) Abschlusses. */
+  closedAt?: string;
+  /** Nur Assistenzkräfte mit tatsächlicher Abweichung (Stunden oder Geld). */
+  rows: MonthClosingDiffRow[];
+}
+
 export type VacationBalanceMethod = typeof VacationBalanceMethod[keyof typeof VacationBalanceMethod];
 
 
@@ -1386,6 +1478,24 @@ teamId?: number;
 export type GetHoursBalanceParams = {
 month?: number;
 year?: number;
+/**
+ * Optionaler Team-Kontext für die Datentrennung.
+ */
+teamId?: number;
+};
+
+export type GetMonthClosingsParams = {
+month: number;
+year: number;
+/**
+ * Optionaler Team-Kontext für die Datentrennung.
+ */
+teamId?: number;
+};
+
+export type GetMonthClosingDiffParams = {
+month: number;
+year: number;
 /**
  * Optionaler Team-Kontext für die Datentrennung.
  */

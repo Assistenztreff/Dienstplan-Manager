@@ -54,6 +54,7 @@ export interface AccountTreeDbClient {
  * Skript `verify-test-db-cleanup` prueft genau diese Invariante automatisch.
  */
 export const TEAM_BOUND_TABLES = [
+  "month_closings",
   "time_tracking",
   "shifts",
   "contracts",

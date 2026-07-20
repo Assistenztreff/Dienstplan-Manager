@@ -1369,6 +1369,78 @@ export const GetHoursBalanceResponse = zod.array(GetHoursBalanceResponseItem)
 
 
 /**
+ * @summary Abschluss-Status eines Monats (inkl. Historie und offenen IST-Einträgen)
+ */
+export const GetMonthClosingsQueryParams = zod.object({
+  "month": zod.coerce.number(),
+  "year": zod.coerce.number(),
+  "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext für die Datentrennung.')
+})
+
+export const GetMonthClosingsResponse = zod.object({
+  "closed": zod.boolean(),
+  "latest": zod.object({
+  "id": zod.number(),
+  "teamId": zod.number(),
+  "month": zod.number(),
+  "year": zod.number(),
+  "closedBy": zod.number(),
+  "closedByName": zod.string(),
+  "closedAt": zod.string()
+}).optional(),
+  "history": zod.array(zod.object({
+  "id": zod.number(),
+  "teamId": zod.number(),
+  "month": zod.number(),
+  "year": zod.number(),
+  "closedBy": zod.number(),
+  "closedByName": zod.string(),
+  "closedAt": zod.string()
+})).describe('Alle Abschlüsse des Monats, neueste zuerst (Append-only-Historie).'),
+  "pendingTimeEntries": zod.number().describe('Anzahl offener (unbestätigter) IST-Einträge im Monat — Plausibilitätswarnung vor dem Abschluss.')
+})
+
+
+/**
+ * @summary Monat abschließen (Lohnauswertung als Referenz einfrieren)
+ */
+export const createMonthClosingBodyMonthMax = 12;
+
+
+
+export const CreateMonthClosingBody = zod.object({
+  "month": zod.number().min(1).max(createMonthClosingBodyMonthMax),
+  "year": zod.number(),
+  "teamId": zod.number().optional().describe('Optionaler Team-Kontext für die Datentrennung.')
+})
+
+
+/**
+ * @summary Nachberechnung — Differenz zwischen eingefrorener und aktueller Auswertung
+ */
+export const GetMonthClosingDiffQueryParams = zod.object({
+  "month": zod.coerce.number(),
+  "year": zod.coerce.number(),
+  "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext für die Datentrennung.')
+})
+
+export const GetMonthClosingDiffResponse = zod.object({
+  "closed": zod.boolean().describe('false = Monat (noch) nicht abgeschlossen, keine Nachberechnung.'),
+  "closedAt": zod.string().optional().describe('Zeitpunkt des maßgeblichen (jüngsten) Abschlusses.'),
+  "rows": zod.array(zod.object({
+  "userId": zod.number(),
+  "userName": zod.string(),
+  "reportedHours": zod.number().describe('Erfüllte Gesamtstunden laut Abschluss.'),
+  "currentHours": zod.number().describe('Erfüllte Gesamtstunden nach aktuellem Stand.'),
+  "diffHours": zod.number(),
+  "reportedPay": zod.number().nullish().describe('Gesamtvergütung (EUR) laut Abschluss; null ohne Stundenlohn.'),
+  "currentPay": zod.number().nullish(),
+  "diffPay": zod.number().nullish()
+}).describe('Nachberechnungs-Zeile — gemeldet (eingefroren) vs. aktuell je Assistenzkraft.')).describe('Nur Assistenzkräfte mit tatsächlicher Abweichung (Stunden oder Geld).')
+})
+
+
+/**
  * @summary Anmelden
  */
 export const LoginBody = zod.object({

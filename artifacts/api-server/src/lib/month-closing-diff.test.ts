@@ -1,0 +1,114 @@
+// ---------------------------------------------------------------------------
+// Unit-Tests für die Nachberechnungs-Differenz (Monatsabschluss).
+// ---------------------------------------------------------------------------
+
+import { describe, it, expect } from "vitest";
+import { computeMonthClosingDiff, type DiffSourceRow } from "./month-closing-diff";
+import type { MonthClosingEntry } from "@workspace/db";
+
+const entry = (
+  userId: number,
+  userName: string,
+  totalFulfilledHours: number,
+  totalPay: number | null = null,
+): MonthClosingEntry => ({
+  userId,
+  userName,
+  plannedHours: 0,
+  totalFulfilledHours,
+  billingMethod: "IST",
+  hourlyWage: null,
+  basePay: null,
+  nightSurchargePay: null,
+  sundaySurchargePay: null,
+  holidaySurchargePay: null,
+  totalPay,
+});
+
+const cur = (
+  userId: number,
+  userName: string,
+  totalFulfilledHours: number,
+  totalPay: number | null = null,
+): DiffSourceRow => ({ userId, userName, totalFulfilledHours, totalPay });
+
+describe("computeMonthClosingDiff", () => {
+  it("liefert leere Liste, wenn nichts abweicht", () => {
+    const rows = computeMonthClosingDiff(
+      [entry(1, "Anna", 40, 60000)],
+      [cur(1, "Anna", 40, 60000)],
+    );
+    expect(rows).toEqual([]);
+  });
+
+  it("ignoriert Fließkomma-Rauschen unterhalb der Toleranz", () => {
+    const rows = computeMonthClosingDiff(
+      [entry(1, "Anna", 40.001)],
+      [cur(1, "Anna", 40.0)],
+    );
+    expect(rows).toEqual([]);
+  });
+
+  it("meldet Stunden-Differenz mit gerundeten Werten", () => {
+    const rows = computeMonthClosingDiff(
+      [entry(1, "Anna", 40)],
+      [cur(1, "Anna", 42.5)],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      userId: 1,
+      reportedHours: 40,
+      currentHours: 42.5,
+      diffHours: 2.5,
+      diffPay: null,
+    });
+  });
+
+  it("meldet reine Geld-Differenz auch bei gleichen Stunden", () => {
+    const rows = computeMonthClosingDiff(
+      [entry(1, "Anna", 40, 600)],
+      [cur(1, "Anna", 40, 650.5)],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].diffHours).toBe(0);
+    expect(rows[0].diffPay).toBeCloseTo(50.5, 2);
+  });
+
+  it("fehlende Seite zählt als 0 (neu hinzugekommen / entfernt)", () => {
+    const rows = computeMonthClosingDiff(
+      [entry(1, "Entfernt", 10, 100)],
+      [cur(2, "Neu", 8, 80)],
+    );
+    expect(rows).toHaveLength(2);
+    const removed = rows.find((r) => r.userId === 1)!;
+    expect(removed).toMatchObject({ reportedHours: 10, currentHours: 0, diffHours: -10 });
+    expect(removed.diffPay).toBeCloseTo(-100, 2);
+    const added = rows.find((r) => r.userId === 2)!;
+    expect(added).toMatchObject({ reportedHours: 0, currentHours: 8, diffHours: 8 });
+    expect(added.diffPay).toBeCloseTo(80, 2);
+  });
+
+  it("diffPay bleibt null, wenn keine Seite Geldwerte hat", () => {
+    const rows = computeMonthClosingDiff([entry(1, "Anna", 40)], [cur(1, "Anna", 41)]);
+    expect(rows[0].reportedPay).toBeNull();
+    expect(rows[0].currentPay).toBeNull();
+    expect(rows[0].diffPay).toBeNull();
+  });
+
+  it("einseitiger Geldwert: fehlende Seite zählt als 0", () => {
+    const rows = computeMonthClosingDiff(
+      [entry(1, "Anna", 40, null)],
+      [cur(1, "Anna", 40, 600)],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].diffPay).toBeCloseTo(600, 2);
+  });
+
+  it("sortiert nach Name (deutsch)", () => {
+    const rows = computeMonthClosingDiff(
+      [],
+      [cur(1, "Zoe", 1), cur(2, "Ärger", 2), cur(3, "Anna", 3)],
+    );
+    expect(rows.map((r) => r.userName)).toEqual(["Anna", "Ärger", "Zoe"]);
+  });
+});

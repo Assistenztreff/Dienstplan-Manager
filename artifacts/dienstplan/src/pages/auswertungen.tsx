@@ -19,6 +19,7 @@ import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/compone
 import { exportStatementSectionsPdf } from "@/lib/pdf-export";
 import { PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
 import { formatDays } from "@/lib/utils";
+import { MonthClosingCard, RecalculationSection } from "@/components/month-closing";
 
 function monthIndex(date: Date): number {
   return date.getFullYear() * 12 + date.getMonth();
@@ -348,6 +349,15 @@ export default function Auswertungen() {
           selected={selectedAssistant}
           onSelect={setSelectedAssistant}
         />
+      )}
+
+      {/* Monatsabschluss (Soft-Close) + Nachberechnung des Vormonats — nur
+          Admin & Premium (die Endpunkte sind advancedAnalytics-gegated). */}
+      {isAdmin && !analyticsLocked && (
+        <div className="space-y-6">
+          <MonthClosingCard month={month} year={year} teamId={selectedTeamId} />
+          <RecalculationSection month={month} year={year} teamId={selectedTeamId} />
+        </div>
       )}
 
       <div className="grid grid-cols-1 gap-6">

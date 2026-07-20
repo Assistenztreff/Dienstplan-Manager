@@ -31,6 +31,7 @@ import type {
   Contract,
   ContractInput,
   ContractUpdate,
+  CreateMonthClosingInput,
   DashboardSummary,
   DeleteAllowanceSettingsOverrideParams,
   ErrorEnvelope,
@@ -39,6 +40,8 @@ import type {
   GetBrandingSettingsParams,
   GetDashboardSummaryParams,
   GetHoursBalanceParams,
+  GetMonthClosingDiffParams,
+  GetMonthClosingsParams,
   HealthStatus,
   HoursBalance,
   InviteResult,
@@ -51,6 +54,9 @@ import type {
   ListTimeEntriesParams,
   ListUsersParams,
   LoginInput,
+  MonthClosingDiff,
+  MonthClosingMeta,
+  MonthClosingStatus,
   OperatorAccount,
   OperatorError,
   OperatorErrorList,
@@ -4011,6 +4017,245 @@ export function useGetHoursBalance<TData = Awaited<ReturnType<typeof getHoursBal
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetHoursBalanceQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetMonthClosingsUrl = (params: GetMonthClosingsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/month-closings?${stringifiedParams}` : `/api/month-closings`
+}
+
+/**
+ * @summary Abschluss-Status eines Monats (inkl. Historie und offenen IST-Einträgen)
+ */
+export const getMonthClosings = async (params: GetMonthClosingsParams, options?: RequestInit): Promise<MonthClosingStatus> => {
+
+  return customFetch<MonthClosingStatus>(getGetMonthClosingsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMonthClosingsQueryKey = (params?: GetMonthClosingsParams,) => {
+    return [
+    `/api/month-closings`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetMonthClosingsQueryOptions = <TData = Awaited<ReturnType<typeof getMonthClosings>>, TError = ErrorType<unknown>>(params: GetMonthClosingsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMonthClosings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMonthClosingsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMonthClosings>>> = ({ signal }) => getMonthClosings(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMonthClosings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMonthClosingsQueryResult = NonNullable<Awaited<ReturnType<typeof getMonthClosings>>>
+export type GetMonthClosingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Abschluss-Status eines Monats (inkl. Historie und offenen IST-Einträgen)
+ */
+
+export function useGetMonthClosings<TData = Awaited<ReturnType<typeof getMonthClosings>>, TError = ErrorType<unknown>>(
+ params: GetMonthClosingsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMonthClosings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMonthClosingsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateMonthClosingUrl = () => {
+
+
+
+
+  return `/api/month-closings`
+}
+
+/**
+ * @summary Monat abschließen (Lohnauswertung als Referenz einfrieren)
+ */
+export const createMonthClosing = async (createMonthClosingInput: CreateMonthClosingInput, options?: RequestInit): Promise<MonthClosingMeta> => {
+
+  return customFetch<MonthClosingMeta>(getCreateMonthClosingUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createMonthClosingInput,)
+  }
+);}
+
+
+
+
+export const getCreateMonthClosingMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMonthClosing>>, TError,{data: BodyType<CreateMonthClosingInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createMonthClosing>>, TError,{data: BodyType<CreateMonthClosingInput>}, TContext> => {
+
+const mutationKey = ['createMonthClosing'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createMonthClosing>>, {data: BodyType<CreateMonthClosingInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createMonthClosing(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateMonthClosingMutationResult = NonNullable<Awaited<ReturnType<typeof createMonthClosing>>>
+    export type CreateMonthClosingMutationBody = BodyType<CreateMonthClosingInput>
+    export type CreateMonthClosingMutationError = ErrorType<void>
+
+    /**
+ * @summary Monat abschließen (Lohnauswertung als Referenz einfrieren)
+ */
+export const useCreateMonthClosing = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMonthClosing>>, TError,{data: BodyType<CreateMonthClosingInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createMonthClosing>>,
+        TError,
+        {data: BodyType<CreateMonthClosingInput>},
+        TContext
+      > => {
+      return useMutation(getCreateMonthClosingMutationOptions(options));
+    }
+
+export const getGetMonthClosingDiffUrl = (params: GetMonthClosingDiffParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/month-closings/diff?${stringifiedParams}` : `/api/month-closings/diff`
+}
+
+/**
+ * @summary Nachberechnung — Differenz zwischen eingefrorener und aktueller Auswertung
+ */
+export const getMonthClosingDiff = async (params: GetMonthClosingDiffParams, options?: RequestInit): Promise<MonthClosingDiff> => {
+
+  return customFetch<MonthClosingDiff>(getGetMonthClosingDiffUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMonthClosingDiffQueryKey = (params?: GetMonthClosingDiffParams,) => {
+    return [
+    `/api/month-closings/diff`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetMonthClosingDiffQueryOptions = <TData = Awaited<ReturnType<typeof getMonthClosingDiff>>, TError = ErrorType<unknown>>(params: GetMonthClosingDiffParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMonthClosingDiff>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMonthClosingDiffQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMonthClosingDiff>>> = ({ signal }) => getMonthClosingDiff(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMonthClosingDiff>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMonthClosingDiffQueryResult = NonNullable<Awaited<ReturnType<typeof getMonthClosingDiff>>>
+export type GetMonthClosingDiffQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Nachberechnung — Differenz zwischen eingefrorener und aktueller Auswertung
+ */
+
+export function useGetMonthClosingDiff<TData = Awaited<ReturnType<typeof getMonthClosingDiff>>, TError = ErrorType<unknown>>(
+ params: GetMonthClosingDiffParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMonthClosingDiff>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMonthClosingDiffQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

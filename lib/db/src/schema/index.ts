@@ -9,4 +9,5 @@ export * from "./branding";
 export * from "./plan_changes";
 export * from "./platform_errors";
 export * from "./time_tracking";
+export * from "./month_closings";
 export * from "./session";

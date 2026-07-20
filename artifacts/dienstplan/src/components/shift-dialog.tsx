@@ -43,6 +43,7 @@ import { de } from "date-fns/locale";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { readableApiError, planUpgradeMessage } from "@/lib/api-error";
+import { warnIfMonthClosed } from "@/lib/month-closing-warning";
 import { useTeam } from "@/context/team";
 
 type Assistant = { id: number; name: string };
@@ -500,6 +501,8 @@ export function ShiftDialog({
         });
       }
       await invalidate();
+      // Soft-Close-Hinweis: Änderung in bereits abgeschlossenem Monat.
+      void warnIfMonthClosed(new Date(form.date), teamId ?? null);
       onClose();
     } catch (err) {
       const planMsg = planUpgradeMessage(err);
@@ -627,7 +630,11 @@ export function ShiftDialog({
         return;
       }
 
-      // Alles angelegt.
+      // Alles angelegt. Soft-Close-Hinweis für den ersten betroffenen Tag
+      // (der Toast erscheint pro Monat ohnehin nur einmal).
+      for (const dateStr of bulkDates) {
+        void warnIfMonthClosed(new Date(dateStr), teamId ?? null);
+      }
       onSaved?.();
       onClose();
     } finally {
@@ -653,6 +660,7 @@ export function ShiftDialog({
         data: { planningStatus: "FIX", force: true } as { planningStatus: "FIX" },
       });
       await invalidate();
+      void warnIfMonthClosed(new Date(editShift.startTime), teamId ?? null);
       onClose();
     } catch (err) {
       setErrors({
@@ -673,6 +681,7 @@ export function ShiftDialog({
     try {
       await deleteShift.mutateAsync({ id: editShift.id });
       await invalidate();
+      void warnIfMonthClosed(new Date(editShift.startTime), teamId ?? null);
       onClose();
     } finally {
       setSaving(false);

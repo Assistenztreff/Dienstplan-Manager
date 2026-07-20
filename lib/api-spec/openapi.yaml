@@ -30,6 +30,8 @@ tags:
     description: Object storage upload and serving endpoints.
   - name: operator
     description: Betreiber-Konsole (nur superadmin)
+  - name: month-closings
+    description: Monatsabschluss der Lohnauswertung mit Nachberechnung
 paths:
   /healthz:
     get:
@@ -1212,6 +1214,83 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/HoursBalance"
+
+  /month-closings:
+    get:
+      operationId: getMonthClosings
+      tags: [month-closings]
+      summary: Abschluss-Status eines Monats (inkl. Historie und offenen IST-Einträgen)
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: teamId
+          in: query
+          description: Optionaler Team-Kontext für die Datentrennung.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Abschluss-Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthClosingStatus"
+    post:
+      operationId: createMonthClosing
+      tags: [month-closings]
+      summary: Monat abschließen (Lohnauswertung als Referenz einfrieren)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMonthClosingInput"
+      responses:
+        "201":
+          description: Monat abgeschlossen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthClosingMeta"
+        "400":
+          description: Monat noch nicht abschließbar (erst ab dem 1. des Folgemonats)
+
+  /month-closings/diff:
+    get:
+      operationId: getMonthClosingDiff
+      tags: [month-closings]
+      summary: Nachberechnung — Differenz zwischen eingefrorener und aktueller Auswertung
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: teamId
+          in: query
+          description: Optionaler Team-Kontext für die Datentrennung.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Nachberechnungs-Differenzen (leer, wenn Monat nicht abgeschlossen oder unverändert)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthClosingDiff"
 
   /auth/login:
     post:
@@ -2769,6 +2848,126 @@ components:
         totalPay:
           type: ["number", "null"]
           description: Gesamtvergütung = basePay + Zuschläge. Nur Premium.
+
+    MonthClosingEntry:
+      type: object
+      description: Eingefrorene Auswertungszeile einer Assistenzkraft zum Zeitpunkt des Abschlusses.
+      required: [userId, userName, plannedHours, totalFulfilledHours, billingMethod]
+      properties:
+        userId:
+          type: integer
+        userName:
+          type: string
+        plannedHours:
+          type: number
+        totalFulfilledHours:
+          type: number
+        billingMethod:
+          type: string
+          enum: [SOLL, IST]
+        hourlyWage:
+          type: ["number", "null"]
+        basePay:
+          type: ["number", "null"]
+        nightSurchargePay:
+          type: ["number", "null"]
+        sundaySurchargePay:
+          type: ["number", "null"]
+        holidaySurchargePay:
+          type: ["number", "null"]
+        totalPay:
+          type: ["number", "null"]
+
+    MonthClosingMeta:
+      type: object
+      required: [id, teamId, month, year, closedBy, closedByName, closedAt]
+      properties:
+        id:
+          type: integer
+        teamId:
+          type: integer
+        month:
+          type: integer
+        year:
+          type: integer
+        closedBy:
+          type: integer
+        closedByName:
+          type: string
+        closedAt:
+          type: string
+
+    MonthClosingStatus:
+      type: object
+      required: [closed, history, pendingTimeEntries]
+      properties:
+        closed:
+          type: boolean
+        latest:
+          $ref: "#/components/schemas/MonthClosingMeta"
+        history:
+          type: array
+          description: Alle Abschlüsse des Monats, neueste zuerst (Append-only-Historie).
+          items:
+            $ref: "#/components/schemas/MonthClosingMeta"
+        pendingTimeEntries:
+          type: integer
+          description: Anzahl offener (unbestätigter) IST-Einträge im Monat — Plausibilitätswarnung vor dem Abschluss.
+
+    CreateMonthClosingInput:
+      type: object
+      required: [month, year]
+      properties:
+        month:
+          type: integer
+          minimum: 1
+          maximum: 12
+        year:
+          type: integer
+        teamId:
+          type: integer
+          description: Optionaler Team-Kontext für die Datentrennung.
+
+    MonthClosingDiffRow:
+      type: object
+      description: Nachberechnungs-Zeile — gemeldet (eingefroren) vs. aktuell je Assistenzkraft.
+      required: [userId, userName, reportedHours, currentHours, diffHours]
+      properties:
+        userId:
+          type: integer
+        userName:
+          type: string
+        reportedHours:
+          type: number
+          description: Erfüllte Gesamtstunden laut Abschluss.
+        currentHours:
+          type: number
+          description: Erfüllte Gesamtstunden nach aktuellem Stand.
+        diffHours:
+          type: number
+        reportedPay:
+          type: ["number", "null"]
+          description: Gesamtvergütung (EUR) laut Abschluss; null ohne Stundenlohn.
+        currentPay:
+          type: ["number", "null"]
+        diffPay:
+          type: ["number", "null"]
+
+    MonthClosingDiff:
+      type: object
+      required: [closed, rows]
+      properties:
+        closed:
+          type: boolean
+          description: false = Monat (noch) nicht abgeschlossen, keine Nachberechnung.
+        closedAt:
+          type: string
+          description: Zeitpunkt des maßgeblichen (jüngsten) Abschlusses.
+        rows:
+          type: array
+          description: Nur Assistenzkräfte mit tatsächlicher Abweichung (Stunden oder Geld).
+          items:
+            $ref: "#/components/schemas/MonthClosingDiffRow"
 
     VacationBalance:
       type: object

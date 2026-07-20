@@ -4,7 +4,10 @@ import {
   useGetDashboardSummary,
   useListContracts,
   useGetVacationBalance,
+  useGetMonthClosings,
 } from "@workspace/api-client-react";
+import type { MonthClosingStatus } from "@workspace/api-client-react";
+import { hasAccess } from "@/lib/entitlements";
 import type { DashboardWarnings, VacationBalance } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -345,6 +348,51 @@ function AssistantVacationCard() {
   );
 }
 
+// Erinnerung an den Monatsabschluss: erscheint für Admins mit Premium
+// (advancedAnalytics), solange der Vormonat noch nicht abgeschlossen ist.
+// Fehler (z. B. 403 nach Downgrade) blenden die Karte einfach aus.
+function MonthClosingReminder({ teamId }: { teamId: number | null }) {
+  const [, navigate] = useLocation();
+  const now = new Date();
+  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const { data, isError } = useGetMonthClosings(
+    {
+      month: prev.getMonth() + 1,
+      year: prev.getFullYear(),
+      ...(teamId != null ? { teamId } : {}),
+    },
+    { query: { retry: false } } as any,
+  ) as { data: MonthClosingStatus | undefined; isError: boolean };
+
+  if (isError || !data || data.closed) return null;
+
+  const label = format(prev, "MMMM yyyy", { locale: de });
+  return (
+    <button
+      type="button"
+      onClick={() => navigate("/auswertungen")}
+      className="w-full text-left"
+      data-testid="month-closing-reminder"
+    >
+      <Card className="border-amber-200 bg-amber-50/40 shadow-sm transition-colors hover:border-amber-300">
+        <CardContent className="flex items-center gap-3 py-4">
+          <AlertTriangle className="h-5 w-5 text-amber-700 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-amber-900">
+              Monatsabschluss {label} steht noch aus
+            </p>
+            <p className="text-xs text-amber-800/80 mt-0.5">
+              Die Lohnauswertung für {label} kann jetzt abgeschlossen werden — spätere
+              Änderungen erscheinen dann als Nachberechnung.
+            </p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-amber-700 shrink-0" />
+        </CardContent>
+      </Card>
+    </button>
+  );
+}
+
 export default function Dashboard() {
   const now = new Date();
   const month = now.getMonth() + 1;
@@ -406,6 +454,10 @@ export default function Dashboard() {
               </div>
             </KpiCard>
           </div>
+
+          {isAdmin && hasAccess(currentUser, "advancedAnalytics") && (
+            <MonthClosingReminder teamId={selectedTeamId} />
+          )}
 
           {!isAdmin && <AssistantVacationCard />}
 

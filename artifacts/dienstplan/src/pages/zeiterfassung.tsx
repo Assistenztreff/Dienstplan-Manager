@@ -44,6 +44,7 @@ import { TeamSwitcher } from "@/components/team-switcher";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { readableApiError, planFeatureMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
+import { warnIfMonthClosed } from "@/lib/month-closing-warning";
 import { hasAccess } from "@/lib/entitlements";
 import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 
@@ -366,6 +367,8 @@ export default function Zeiterfassung() {
         },
       });
       toast({ title: "Zeit erfasst", description: "Der Eintrag wartet auf Bestätigung." });
+      // Soft-Close-Hinweis: Ist-Zeit in bereits abgeschlossenem Monat.
+      void warnIfMonthClosed(start, isAdmin ? (selectedTeamId ?? null) : null);
       setManualOpen(false);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -413,6 +416,7 @@ export default function Zeiterfassung() {
         },
       });
       toast({ title: "Zeit übernommen", description: "Der Eintrag wartet auf Bestätigung." });
+      void warnIfMonthClosed(start, null);
       closeDialog();
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
