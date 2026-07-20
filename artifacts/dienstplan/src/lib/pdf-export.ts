@@ -158,11 +158,12 @@ async function renderStatementPage(
   }
 
   // Lohnauswertung (Premium): nur wenn ein Stundenlohn hinterlegt ist. Geld
-  // ist stets IST-basiert (bestaetigte Ist-Zeiten). 0%-Zuschlaege werden nicht
-  // aufgelistet.
+  // folgt der Abrechnungsart (SOLL/IST) — gleiche Basis wie die Stunden-
+  // Spalten. 0%-Zuschlaege werden nicht aufgelistet.
   if (balance.hourlyWage != null) {
+    const basisLabel = balance.billingMethod === "IST" ? "Ist" : "Soll";
     summaryRows.push(["Stundenlohn", eur(balance.hourlyWage)]);
-    summaryRows.push(["Grundlohn (Ist)", eur(balance.basePay ?? 0)]);
+    summaryRows.push([`Grundlohn (${basisLabel})`, eur(balance.basePay ?? 0)]);
     if (balance.nightPercent > 0 && (balance.nightSurchargePay ?? 0) !== 0) {
       summaryRows.push(["Nachtzuschlag", eur(balance.nightSurchargePay ?? 0)]);
     }

@@ -30,6 +30,12 @@ export interface BalanceShift {
   holidayHours?: number | null;
   /** Team der Schicht — bestimmt, wessen Zuschlags-Prozente gelten (Team-Eigentümer). */
   teamId?: number | null;
+  // Vergütung (Geld) des zugrundeliegenden Dienstmodells — für die
+  // Premium-Lohnauswertung im SOLL-Modus. compensationPercent nur bei
+  // "percentage", compensationFlatCents (Cent, dauerunabhängig) nur bei "flat".
+  compensationType?: CompensationType | null;
+  compensationPercent?: number | null;
+  compensationFlatCents?: number | null;
 }
 
 /** Abrechnungsart: SOLL = nach Plan, IST = nach erfassten Ist-Zeiten. */
@@ -95,8 +101,10 @@ export interface HoursBalanceRow {
   holidayPercent: number;
   /** Angewandte Abrechnungsart dieser Zeile. */
   billingMethod: BillingMethod;
-  // Premium-Lohnauswertung (Point 6). null, wenn kein Stundenlohn hinterlegt
-  // ist (dann keine Geldwerte). Immer IST-basiert (bestätigte Ist-Zeiten).
+  // Premium-Lohnauswertung. null, wenn kein Stundenlohn hinterlegt ist (dann
+  // keine Geldwerte). Geldwerte folgen der Abrechnungsart (billingMethod) —
+  // dieselbe Basis wie die Stunden-Spalten — plus Lohnfortzahlung (Urlaub/Krank
+  // im Grundlohn, Abwesenheits-Zuschläge fortgezahlt).
   hourlyWage: number | null;
   basePay: number | null;
   nightSurchargePay: number | null;
@@ -158,8 +166,9 @@ export function computeHoursBalanceRow(params: {
   /** Abrechnungsart dieses Assistenten; ohne Angabe SOLL (Bestandsschutz). */
   billingMethod?: BillingMethod;
   /**
-   * Bruttostundenlohn (Premium-Lohnauswertung, Point 6). null/undefined ⇒ keine
-   * Geldwerte (alle *Pay-Felder null). Die Geldrechnung ist IMMER IST-basiert.
+   * Bruttostundenlohn (Premium-Lohnauswertung). null/undefined ⇒ keine
+   * Geldwerte (alle *Pay-Felder null). Die Geldrechnung folgt der
+   * Abrechnungsart (billingMethod) — gleiche Basis wie die Stunden-Spalten.
    */
   hourlyWage?: number | null;
   /**
@@ -299,10 +308,14 @@ export function computeHoursBalanceRow(params: {
   const vacationDaysUsed =
     Math.round(((contract?.vacationHoursUsed ?? 0) / hoursPerDay) * 10) / 10;
 
-  // Premium-Lohnauswertung (Point 6): Geld = Stundenlohn * bestätigte IST-Stunden
-  // je Dienst (regulär/prozentual) + Festbeträge, plus dynamische Zuschläge auf
-  // IST-Basis. Immer aus den bestätigten Ist-Zeiten (workEntries), unabhängig von
-  // der Abrechnungsart der Stunden-Spalten. Ohne hinterlegten Stundenlohn (null)
+  // Premium-Lohnauswertung: Geldwerte folgen der Abrechnungsart (billingMethod)
+  // — dieselbe Basis wie die Stunden-Spalten, damit Stunden und Geld auf einer
+  // Seite nie widersprüchlich sind. SOLL: geplante FIX-Arbeitsdienste (Vergütungs-
+  // typ aus dem Schichtmodell der Schicht); IST: bestätigte Ist-Zeiten. Zusätzlich
+  // Lohnfortzahlung: Urlaub/Krank fließen mit Stundenlohn × valuedHours in den
+  // Grundlohn ein (Grundlohn deckt „Erfüllt gesamt" ab). Die Zuschlags-Vergütung
+  // nutzt die bereits nach Abrechnungsart berechneten Zuschlagsstunden inklusive
+  // der Abwesenheits-Zuschlagsfortzahlung. Ohne hinterlegten Stundenlohn (null)
   // gibt es keine Geldwerte.
   const wage = params.hourlyWage ?? null;
   let basePay: number | null = null;
@@ -312,31 +325,39 @@ export function computeHoursBalanceRow(params: {
   let totalPay: number | null = null;
   if (wage != null) {
     let base = 0;
-    let istNightSurcharge = 0;
-    let istSundaySurcharge = 0;
-    let istHolidaySurcharge = 0;
-    for (const e of workEntries) {
-      const hours = e.valuedHours ?? e.actualHours ?? 0;
-      const compType = e.compensationType ?? "regular";
+    const addBase = (entry: {
+      hours: number;
+      compensationType?: CompensationType | null;
+      compensationPercent?: number | null;
+      compensationFlatCents?: number | null;
+    }) => {
+      const compType = entry.compensationType ?? "regular";
       if (compType === "flat") {
         // Festbetrag pro Schicht (dauerunabhängig).
-        base += (e.compensationFlatCents ?? 0) / 100;
+        base += (entry.compensationFlatCents ?? 0) / 100;
       } else if (compType === "percentage") {
-        base += wage * hours * ((e.compensationPercent ?? 100) / 100);
+        base += wage * entry.hours * ((entry.compensationPercent ?? 100) / 100);
       } else {
-        base += wage * hours;
+        base += wage * entry.hours;
       }
-      const p = percentsForTeam(e.teamId);
-      istNightSurcharge += ((e.nightHours ?? 0) * p.nightPercent) / 100;
-      istSundaySurcharge += ((e.sundayHours ?? 0) * p.sundayPercent) / 100;
-      istHolidaySurcharge += ((e.holidayHours ?? 0) * p.holidayPercent) / 100;
+    };
+    if (billingMethod === "IST") {
+      for (const e of workEntries) {
+        addBase({ ...e, hours: e.valuedHours ?? e.actualHours ?? 0 });
+      }
+    } else {
+      for (const s of workShifts) {
+        addBase({ ...s, hours: s.valuedHours ?? 0 });
+      }
     }
+    // Lohnfortzahlung: Urlaub/Krank zählen zum Grundlohn (immer regulär).
+    base += wage * (vacationFulfilledHours + sickFulfilledHours);
     basePay = round2(base);
-    // Zuschlagsfortzahlung (Punkt 3): Abwesenheits-Zuschläge (plan-basiert)
-    // kommen zu den IST-Zuschlägen der Arbeitsschichten hinzu.
-    nightSurchargePay = round2((istNightSurcharge + absenceNightSurchargeHours) * wage);
-    sundaySurchargePay = round2((istSundaySurcharge + absenceSundaySurchargeHours) * wage);
-    holidaySurchargePay = round2((istHolidaySurcharge + absenceHolidaySurchargeHours) * wage);
+    // Zuschlags-Vergütung = Zuschlagsstunden (nach Abrechnungsart, inkl.
+    // Abwesenheits-Fortzahlung) × Stundenlohn.
+    nightSurchargePay = round2(nightSurchargeHours * wage);
+    sundaySurchargePay = round2(sundaySurchargeHours * wage);
+    holidaySurchargePay = round2(holidaySurchargeHours * wage);
     totalPay = round2(basePay + nightSurchargePay + sundaySurchargePay + holidaySurchargePay);
   }
 

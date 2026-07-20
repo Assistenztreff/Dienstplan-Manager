@@ -593,9 +593,25 @@ router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advance
 
   const result = await Promise.all(
     assistants.map(async (assistant) => {
+      // Schichten inkl. Vergütungsfeldern des Schichtmodells — im SOLL-Modus
+      // rechnet die Premium-Geldrechnung den Grundlohn je geplanter Schicht
+      // nach deren Vergütungstyp (regular/percentage/flat).
       const shifts = await db
-        .select()
+        .select({
+          type: shiftsTable.type,
+          startTime: shiftsTable.startTime,
+          endTime: shiftsTable.endTime,
+          valuedHours: shiftsTable.valuedHours,
+          nightHours: shiftsTable.nightHours,
+          sundayHours: shiftsTable.sundayHours,
+          holidayHours: shiftsTable.holidayHours,
+          teamId: shiftsTable.teamId,
+          compensationType: shiftModelsTable.compensationType,
+          compensationPercent: shiftModelsTable.compensationPercent,
+          compensationFlatCents: shiftModelsTable.compensationFlatCents,
+        })
         .from(shiftsTable)
+        .leftJoin(shiftModelsTable, eq(shiftsTable.shiftModelId, shiftModelsTable.id))
         .where(
           and(
             eq(shiftsTable.userId, assistant.id),
@@ -658,10 +674,10 @@ router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advance
       // erfassten Zeiten je Eintrag berechnet (Nachtfenster/Bundesland des
       // jeweiligen Team-Kontos). Im SOLL-Modus bleiben die Roh-Kennzahlen der
       // Schicht maßgeblich — die Ist-Metriken werden dann nicht angesetzt.
-      // Ist-Metriken je Eintrag werden IMMER berechnet: die Stunden-Spalten
-      // nutzen sie nur im IST-Modus, aber die Premium-Geldrechnung (Point 6) ist
-      // stets IST-basiert und braucht valuedHours/Zuschlagsstunden unabhängig von
-      // der Abrechnungsart. Ohne erfasste Ist-Zeiten bleibt es bei actualHours.
+      // Ist-Metriken je Eintrag werden IMMER berechnet: Stunden-Spalten UND
+      // Geldrechnung nutzen sie im IST-Modus (im SOLL-Modus sind stattdessen
+      // die Roh-Kennzahlen der Schichten maßgeblich — auch fürs Geld). Ohne
+      // erfasste Ist-Zeiten bleibt es bei actualHours.
       const timeEntries = timeEntriesWithShift.map((e) => {
         const comp = {
           compensationType: e.compensationType,

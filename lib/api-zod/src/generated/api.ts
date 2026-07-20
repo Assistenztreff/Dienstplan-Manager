@@ -1359,10 +1359,10 @@ export const GetHoursBalanceResponseItem = zod.object({
   "holidayPercent": zod.number(),
   "billingMethod": zod.enum(['SOLL', 'IST']).describe('Angewandte Abrechnungsart dieser Zeile (SOLL = Plan, IST = Ist-Zeiten).'),
   "hourlyWage": zod.number().nullish().describe('Stundenlohn der Assistenzkraft (Premium-Lohnauswertung); null wenn nicht gesetzt\/kein Zugriff.'),
-  "basePay": zod.number().nullish().describe('Grundvergütung = Summe(Stundenlohn \* bewertete IST-Stunden je Dienst, ggf. prozentual) + Festbeträge. Nur Premium.'),
-  "nightSurchargePay": zod.number().nullish().describe('Geldwert des Nachtzuschlags auf IST-Basis. Nur Premium.'),
-  "sundaySurchargePay": zod.number().nullish().describe('Geldwert des Sonntagszuschlags auf IST-Basis. Nur Premium.'),
-  "holidaySurchargePay": zod.number().nullish().describe('Geldwert des Feiertagszuschlags auf IST-Basis. Nur Premium.'),
+  "basePay": zod.number().nullish().describe('Grundvergütung nach Abrechnungsart (billingMethod) = Summe(Stundenlohn \* bewertete Stunden je Dienst, ggf. prozentual) + Festbeträge, plus Lohnfortzahlung (Stundenlohn \* erfüllte Urlaubs-\/Krankstunden). Nur Premium.'),
+  "nightSurchargePay": zod.number().nullish().describe('Geldwert des Nachtzuschlags (Zuschlagsstunden nach Abrechnungsart inkl. Abwesenheits-Fortzahlung \* Stundenlohn). Nur Premium.'),
+  "sundaySurchargePay": zod.number().nullish().describe('Geldwert des Sonntagszuschlags (Zuschlagsstunden nach Abrechnungsart inkl. Abwesenheits-Fortzahlung \* Stundenlohn). Nur Premium.'),
+  "holidaySurchargePay": zod.number().nullish().describe('Geldwert des Feiertagszuschlags (Zuschlagsstunden nach Abrechnungsart inkl. Abwesenheits-Fortzahlung \* Stundenlohn). Nur Premium.'),
   "totalPay": zod.number().nullish().describe('Gesamtvergütung = basePay + Zuschläge. Nur Premium.')
 })
 export const GetHoursBalanceResponse = zod.array(GetHoursBalanceResponseItem)

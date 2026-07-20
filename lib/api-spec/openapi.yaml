@@ -2756,16 +2756,16 @@ components:
           description: Stundenlohn der Assistenzkraft (Premium-Lohnauswertung); null wenn nicht gesetzt/kein Zugriff.
         basePay:
           type: ["number", "null"]
-          description: Grundvergütung = Summe(Stundenlohn * bewertete IST-Stunden je Dienst, ggf. prozentual) + Festbeträge. Nur Premium.
+          description: Grundvergütung nach Abrechnungsart (billingMethod) = Summe(Stundenlohn * bewertete Stunden je Dienst, ggf. prozentual) + Festbeträge, plus Lohnfortzahlung (Stundenlohn * erfüllte Urlaubs-/Krankstunden). Nur Premium.
         nightSurchargePay:
           type: ["number", "null"]
-          description: Geldwert des Nachtzuschlags auf IST-Basis. Nur Premium.
+          description: Geldwert des Nachtzuschlags (Zuschlagsstunden nach Abrechnungsart inkl. Abwesenheits-Fortzahlung * Stundenlohn). Nur Premium.
         sundaySurchargePay:
           type: ["number", "null"]
-          description: Geldwert des Sonntagszuschlags auf IST-Basis. Nur Premium.
+          description: Geldwert des Sonntagszuschlags (Zuschlagsstunden nach Abrechnungsart inkl. Abwesenheits-Fortzahlung * Stundenlohn). Nur Premium.
         holidaySurchargePay:
           type: ["number", "null"]
-          description: Geldwert des Feiertagszuschlags auf IST-Basis. Nur Premium.
+          description: Geldwert des Feiertagszuschlags (Zuschlagsstunden nach Abrechnungsart inkl. Abwesenheits-Fortzahlung * Stundenlohn). Nur Premium.
         totalPay:
           type: ["number", "null"]
           description: Gesamtvergütung = basePay + Zuschläge. Nur Premium.

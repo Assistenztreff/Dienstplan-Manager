@@ -41,22 +41,22 @@ export interface HoursBalance {
      */
   hourlyWage?: number | null;
   /**
-     * Grundvergütung = Summe(Stundenlohn * bewertete IST-Stunden je Dienst, ggf. prozentual) + Festbeträge. Nur Premium.
+     * Grundvergütung nach Abrechnungsart (billingMethod) = Summe(Stundenlohn * bewertete Stunden je Dienst, ggf. prozentual) + Festbeträge, plus Lohnfortzahlung (Stundenlohn * erfüllte Urlaubs-/Krankstunden). Nur Premium.
      * @nullable
      */
   basePay?: number | null;
   /**
-     * Geldwert des Nachtzuschlags auf IST-Basis. Nur Premium.
+     * Geldwert des Nachtzuschlags (Zuschlagsstunden nach Abrechnungsart inkl. Abwesenheits-Fortzahlung * Stundenlohn). Nur Premium.
      * @nullable
      */
   nightSurchargePay?: number | null;
   /**
-     * Geldwert des Sonntagszuschlags auf IST-Basis. Nur Premium.
+     * Geldwert des Sonntagszuschlags (Zuschlagsstunden nach Abrechnungsart inkl. Abwesenheits-Fortzahlung * Stundenlohn). Nur Premium.
      * @nullable
      */
   sundaySurchargePay?: number | null;
   /**
-     * Geldwert des Feiertagszuschlags auf IST-Basis. Nur Premium.
+     * Geldwert des Feiertagszuschlags (Zuschlagsstunden nach Abrechnungsart inkl. Abwesenheits-Fortzahlung * Stundenlohn). Nur Premium.
      * @nullable
      */
   holidaySurchargePay?: number | null;

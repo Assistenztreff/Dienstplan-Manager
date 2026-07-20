@@ -476,11 +476,12 @@ export default function Auswertungen() {
                       </div>
 
                       {/* Lohnauswertung (Premium): nur wenn ein Stundenlohn
-                          hinterlegt ist. Geld ist stets IST-basiert. */}
+                          hinterlegt ist. Geld folgt der Abrechnungsart
+                          (SOLL/IST) — gleiche Basis wie die Stunden-Spalten. */}
                       {balance.hourlyWage != null && (
                         <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 space-y-2">
                           <div className="text-xs font-medium uppercase tracking-wide text-emerald-700">
-                            Lohnauswertung (Ist)
+                            Lohnauswertung ({balance.billingMethod === "IST" ? "Ist" : "Soll"})
                           </div>
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground">Grundlohn</span>

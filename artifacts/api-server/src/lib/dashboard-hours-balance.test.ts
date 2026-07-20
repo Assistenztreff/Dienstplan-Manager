@@ -147,7 +147,8 @@ describe("computeHoursBalanceRow — Zuschlagsberechnung (Prozentsätze)", () =>
 
   it("zahlt Zuschläge einer 24h-Dienst-Abwesenheit fort (Geldwert), auch ohne Ist-Zeit", () => {
     // 24h-Urlaubsdienst mit 7 Nacht- und 9 Sonntagsstunden, Stundenlohn 20.
-    // Keine erfassten Ist-Zeiten -> Grundvergütung 0, nur Zuschlagsfortzahlung.
+    // Keine erfassten Ist-Zeiten -> Grundlohn = Lohnfortzahlung (24h Urlaub),
+    // dazu die Zuschlagsfortzahlung der Abwesenheit.
     const result = computeHoursBalanceRow({
       userId: 1,
       userName: "Anna",
@@ -159,12 +160,83 @@ describe("computeHoursBalanceRow — Zuschlagsberechnung (Prozentsätze)", () =>
       contract: null,
       hourlyWage: 20,
     });
+    // Lohnfortzahlung: 24h * 20 = 480.
     // Nacht 25% von 7 = 1.75 -> 1.75*20 = 35; Sonntag 50% von 9 = 4.5 -> 4.5*20 = 90
-    expect(result.basePay).toBe(0);
+    expect(result.basePay).toBe(480);
     expect(result.nightSurchargePay).toBe(35);
     expect(result.sundaySurchargePay).toBe(90);
     expect(result.holidaySurchargePay).toBe(0);
-    expect(result.totalPay).toBe(125);
+    expect(result.totalPay).toBe(605);
+  });
+
+  it("rechnet Geldwerte im SOLL-Modus aus geplanten Schichten inkl. Vergütungstypen", () => {
+    // Drei geplante Dienste mit unterschiedlichen Vergütungstypen, keine
+    // Ist-Zeiten. Stundenlohn 20:
+    // - regular: 8h * 20 = 160
+    // - percentage 50%: 10h * 20 * 0.5 = 100
+    // - flat 5000 Cent = 50 (dauerunabhängig)
+    const result = computeHoursBalanceRow({
+      userId: 1,
+      userName: "Anna",
+      shifts: [
+        { type: "active", startTime: local(2026, 6, 1, 8), endTime: local(2026, 6, 1, 16), valuedHours: 8, compensationType: "regular" },
+        { type: "active", startTime: local(2026, 6, 2, 8), endTime: local(2026, 6, 2, 18), valuedHours: 10, compensationType: "percentage", compensationPercent: 50 },
+        { type: "active", startTime: local(2026, 6, 3, 8), endTime: local(2026, 6, 3, 20), valuedHours: 12, compensationType: "flat", compensationFlatCents: 5000 },
+      ],
+      timeEntries: [],
+      allowance: STD_ALLOWANCE,
+      contract: null,
+      billingMethod: "SOLL",
+      hourlyWage: 20,
+    });
+    expect(result.billingMethod).toBe("SOLL");
+    expect(result.basePay).toBe(310);
+    expect(result.nightSurchargePay).toBe(0);
+    expect(result.totalPay).toBe(310);
+  });
+
+  it("Camillo-Beispiel: SOLL-Nachtzuschlag 63 h * 25 % * 20,40 € = 321,30 €", () => {
+    const result = computeHoursBalanceRow({
+      userId: 1,
+      userName: "Camillo",
+      shifts: [
+        { type: "active", startTime: local(2026, 6, 1, 20), endTime: local(2026, 6, 2, 6), valuedHours: 90, nightHours: 63, compensationType: "regular" },
+      ],
+      timeEntries: [],
+      allowance: STD_ALLOWANCE,
+      contract: null,
+      billingMethod: "SOLL",
+      hourlyWage: 20.4,
+    });
+    // Grundlohn: 90h * 20.40 = 1836; Nachtzuschlag: 63 * 25% = 15.75h * 20.40 = 321.30
+    expect(result.nightSurchargePay).toBe(321.3);
+    expect(result.basePay).toBe(1836);
+    expect(result.totalPay).toBe(2157.3);
+  });
+
+  it("rechnet Geldwerte im IST-Modus aus bestätigten Ist-Zeiten plus Lohnfortzahlung", () => {
+    // Geplante Schicht 10h, bestätigte Ist-Zeit nur 8h (2 Nachtstunden), dazu
+    // ein Urlaubstag mit 8 gewerteten Stunden. Stundenlohn 20, IST-Modus:
+    // Grundlohn = 8*20 (Ist) + 8*20 (Urlaub) = 320; Nacht 25% von 2 = 0.5h -> 10.
+    const result = computeHoursBalanceRow({
+      userId: 1,
+      userName: "Anna",
+      shifts: [
+        { type: "active", startTime: local(2026, 6, 1, 20), endTime: local(2026, 6, 2, 6), valuedHours: 10, nightHours: 7, compensationType: "regular" },
+        { type: "vacation", startTime: local(2026, 6, 3, 0), endTime: local(2026, 6, 3, 23), valuedHours: 8 },
+      ],
+      timeEntries: [
+        { actualHours: 8, valuedHours: 8, nightHours: 2, sundayHours: 0, holidayHours: 0, compensationType: "regular" },
+      ],
+      allowance: STD_ALLOWANCE,
+      contract: null,
+      billingMethod: "IST",
+      hourlyWage: 20,
+    });
+    expect(result.billingMethod).toBe("IST");
+    expect(result.basePay).toBe(320);
+    expect(result.nightSurchargePay).toBe(10);
+    expect(result.totalPay).toBe(330);
   });
 
   it("behandelt fehlende (null/undefined) Roh-Stunden als 0", () => {
