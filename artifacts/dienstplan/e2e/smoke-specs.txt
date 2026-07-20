@@ -19,3 +19,5 @@ dienstplan-einklick-bestaetigung.spec.ts
 dienstplan-nachweis-export.spec.ts
 # - Team-Switcher/Team-Filter (Dienstleister, team-gefilterte Listen + Neuanlage)
 dienstplan-dienste-team-filter.spec.ts
+# - Assistenten-Dashboard: Urlaubstag-Bewertung in der Resturlaub-Karte
+dienstplan-dashboard-urlaubstag-bewertung-assistent-ui.spec.ts
