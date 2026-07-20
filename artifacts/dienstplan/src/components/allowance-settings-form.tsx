@@ -4,6 +4,7 @@ import {
   useUpdateAllowanceSettings,
   useDeleteAllowanceSettingsOverride,
   getGetAllowanceSettingsQueryKey,
+  getGetTimeTrackingStatusQueryKey,
   type AllowanceSettingsInputState,
   type AllowanceSettingsInputBillingMethod,
   type AllowanceSettingsInputVacationMethod,
@@ -218,6 +219,9 @@ export function AllowanceSettingsForm() {
   async function invalidateAll() {
     // Prefix-Match: trifft die Konto-Abfrage UND alle Team-Abfragen.
     await queryClient.invalidateQueries({ queryKey: getGetAllowanceSettingsQueryKey() });
+    // Zeiterfassungs-Schalter wirkt sofort auf Menüpunkt/Seite/Dashboard
+    // (ohne Neuladen): effektiven Status neu laden.
+    await queryClient.invalidateQueries({ queryKey: getGetTimeTrackingStatusQueryKey() });
   }
 
   async function handleSave(overrides: Partial<FormState> = {}) {

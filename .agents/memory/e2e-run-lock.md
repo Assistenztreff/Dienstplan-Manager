@@ -14,3 +14,5 @@ The managed E2E stack holds a PID lockfile (`node_modules/.cache/dienstplan-e2e/
 - A run killed by shell `timeout` leaves a stale lock whose PID may still look alive briefly (or the message names a dead PID); verify with `ps -p <pid>` and delete `run.lock` manually before retrying.
 - Aborted runs can also leave zombie `e2e.*@dienstplan.test` accounts that break the separation check ("migrate-teams hat eine Mitgliedschaft HINZUGEFUEGT"): run `cleanup-test-accounts` with `DATABASE_URL` pointed at the `_test` DB, then retry.
 - Don't run the full suite from an agent bash call (2-min timeout kills it; nohup-detached runs get reaped mid-suite). Use the registered `e2e-api` workflow via restart_workflow and poll logs instead.
+
+- Killing a `pnpm exec playwright test` shell (timeout/SIGKILL of the pipe) leaves the actual Playwright node process ALIVE and holding the run lock; wait for that PID to exit (check `head -1 run.lock` + `kill -0`) instead of deleting the lock.

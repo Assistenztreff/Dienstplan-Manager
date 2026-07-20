@@ -20,6 +20,7 @@ import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
 import { DienstStatus, type SchichtVorlage } from "@/types/dienstplan";
 import { formatDays, formatDaysWithUnit, formatHours } from "@/lib/utils";
+import { useTimeTrackingEnabled } from "@/hooks/use-time-tracking-enabled";
 
 // Beispielhafte Einbindung der zentralen Planungstypen (siehe @/types/dienstplan):
 // belegt die Importierbarkeit aus der Dashboard-Ansicht, ohne bestehendes
@@ -36,7 +37,13 @@ export const DIENST_STATUS_LABELS: Record<DienstStatus, string> = {
 
 export const STANDARD_SCHICHT_VORLAGEN: SchichtVorlage[] = [];
 
-function WarningsSection({ warnings }: { warnings: DashboardWarnings }) {
+function WarningsSection({
+  warnings,
+  timeTrackingEnabled,
+}: {
+  warnings: DashboardWarnings;
+  timeTrackingEnabled: boolean;
+}) {
   const { pendingTimeEntries, timeTrackingConfirmable, lowVacationAssistants, uncoveredDays, lowVacationThreshold, horizonDays } = warnings;
   const [, navigate] = useLocation();
   // Produktentscheidung: Für Free-Konten (kein Freigabe-Workflow im Team-Scope,
@@ -44,7 +51,10 @@ function WarningsSection({ warnings }: { warnings: DashboardWarnings }) {
   // die Einträge zählen bereits als Ist-Stunden. Die Warnung wäre ein To-do,
   // das Free gar nicht erledigen kann (Bestätigen ist Premium), daher wird sie
   // ausgeblendet. Premium-Verhalten unverändert.
-  const showPendingWarning = timeTrackingConfirmable && pendingTimeEntries > 0;
+  // Bei deaktivierter Zeiterfassung entfällt die Warnung komplett — die App
+  // soll sich anfühlen, als gäbe es das Feature nicht.
+  const showPendingWarning =
+    timeTrackingEnabled && timeTrackingConfirmable && pendingTimeEntries > 0;
   const hasWarnings =
     showPendingWarning || lowVacationAssistants.length > 0 || uncoveredDays.length > 0;
 
@@ -406,6 +416,10 @@ export default function Dashboard() {
     { month, year, ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}) }
   );
 
+  // Konto-Schalter „Zeiterfassung": bei AUS verschwinden alle Querverweise
+  // (KPI-Kachel, offene-Einträge-Warnung, Nachbestätigungs-Hinweis).
+  const { enabled: timeTrackingEnabled } = useTimeTrackingEnabled();
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -478,7 +492,7 @@ export default function Dashboard() {
 
           {!isAdmin && <AssistantVacationCard />}
 
-          {(summary.uncountedPendingHours ?? 0) > 0 && (
+          {timeTrackingEnabled && (summary.uncountedPendingHours ?? 0) > 0 && (
             <UncountedPendingNotice
               hours={summary.uncountedPendingHours ?? 0}
               count={summary.uncountedPendingEntries ?? 0}
@@ -486,7 +500,12 @@ export default function Dashboard() {
             />
           )}
 
-          {summary.warnings && <WarningsSection warnings={summary.warnings} />}
+          {summary.warnings && (
+            <WarningsSection
+              warnings={summary.warnings}
+              timeTrackingEnabled={timeTrackingEnabled}
+            />
+          )}
         </>
       ) : (
         <div className="p-8 text-center border rounded-xl bg-card">

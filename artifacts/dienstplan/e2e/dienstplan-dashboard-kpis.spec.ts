@@ -1,5 +1,6 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, request as playwrightRequest, type Page } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
+import { BASE_URL, enableTimeTracking } from "./helpers/teams";
 
 /**
  * E2E-Test für die Dashboard-Kennzahlen-Kacheln.
@@ -39,6 +40,18 @@ async function openDashboard(page: Page): Promise<void> {
 }
 
 test.describe("Dashboard-Kacheln (Admin)", () => {
+  test.beforeAll(async () => {
+    // Konto-Schalter "Zeiterfassung" (Standard AUS) einschalten, sonst wird
+    // die Kachel kpi-pending-time-entries gar nicht gerendert.
+    const ctx = await playwrightRequest.newContext({ baseURL: BASE_URL });
+    const res = await ctx.post("/api/auth/login", {
+      data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
+    });
+    expect(res.ok(), "Admin-Login (API) fehlgeschlagen").toBe(true);
+    await enableTimeTracking(ctx);
+    await ctx.dispose();
+  });
+
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page);
   });

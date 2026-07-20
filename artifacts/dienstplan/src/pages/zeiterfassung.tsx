@@ -46,6 +46,7 @@ import { useToast } from "@/hooks/use-toast";
 import { readableApiError, planFeatureMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
 import { warnIfMonthClosed } from "@/lib/month-closing-warning";
 import { hasAccess } from "@/lib/entitlements";
+import { useTimeTrackingEnabled } from "@/hooks/use-time-tracking-enabled";
 import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 
 const SHIFT_TYPE_LABEL: Record<string, string> = {
@@ -91,9 +92,34 @@ function addOneDay(date: string): string {
   return format(d, "yyyy-MM-dd");
 }
 
+// Hinweis-Platzhalter bei deaktivierter Zeiterfassung (Direktaufruf der URL).
+// Bestehende IST-Zeiten bleiben unangetastet — nach dem Wieder-Einschalten in
+// den Einstellungen ist alles wieder sichtbar. Assistenzkräfte sehen den
+// Hinweis OHNE Einstellungs-Verweis (sie können den Schalter nicht ändern).
+function ZeiterfassungDeaktiviert({ isAdmin }: { isAdmin: boolean }) {
+  return (
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <Card className="mx-auto mt-8 max-w-xl p-8 text-center" data-testid="time-tracking-disabled-notice">
+        <CalendarClock className="mx-auto h-10 w-10 text-muted-foreground/50" />
+        <h2 className="mt-4 text-xl font-serif font-bold text-foreground">
+          Zeiterfassung ist deaktiviert
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {isAdmin
+            ? "Die Zeiterfassung ist für dieses Konto ausgeschaltet. Sie können sie in den Einstellungen unter „Zuschläge & Abrechnung“ aktivieren — vorhandene Einträge bleiben erhalten und sind danach wieder sichtbar."
+            : "Die Zeiterfassung ist derzeit ausgeschaltet. Der Dienstplan ist die Grundlage — vorhandene Einträge bleiben erhalten und sind wieder sichtbar, sobald die Zeiterfassung aktiviert wird."}
+        </p>
+      </Card>
+    </div>
+  );
+}
+
 export default function Zeiterfassung() {
   const { currentUser } = useAuth();
   const isAdmin = isAdminRole(currentUser?.role);
+  // Konto-Schalter „Zeiterfassung": bei AUS zeigt die Seite nur den Hinweis.
+  const { enabled: timeTrackingEnabled, isLoading: statusLoading } =
+    useTimeTrackingEnabled();
   const isAssistant = currentUser?.role === "assistant";
   // Premium-Feature strictTimeTracking: Bestätigen/Ablehnen von Ist-Zeiten.
   // UX-Gate — die autoritative Durchsetzung liegt beim Server (403).
@@ -427,6 +453,20 @@ export default function Zeiterfassung() {
     } finally {
       setSaving(false);
     }
+  }
+
+  // Schalter AUS (oder Zustand lädt noch, Standard AUS): nur Hinweis rendern.
+  // Alle Hooks oben sind bereits gelaufen (stabile Hook-Reihenfolge).
+  if (statusLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-40 w-full rounded-xl" />
+      </div>
+    );
+  }
+  if (!timeTrackingEnabled) {
+    return <ZeiterfassungDeaktiviert isAdmin={isAdmin} />;
   }
 
   return (

@@ -20,6 +20,7 @@ import { useAuth } from "@/context/auth";
 import { useToast } from "@/hooks/use-toast";
 import { isEmbedded } from "@/lib/embed";
 import { isAdminRole } from "@/lib/roles";
+import { useTimeTrackingEnabled } from "@/hooks/use-time-tracking-enabled";
 import { DevUserSwitcher } from "./dev-user-switcher";
 
 // Interne Navigationspunkte der Dienstplan-App. Rollen-/Konto-Typ-Sichtbarkeit
@@ -178,10 +179,16 @@ function AppSubNavigation() {
   const [isAppMenuOpen, setIsAppMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
+  // Zeiterfassung nur anzeigen, wenn der Konto-Schalter (bzw. der des
+  // Arbeitgebers bei Assistenzkräften) eingeschaltet ist. Standard AUS —
+  // während des Ladens bleibt der Punkt verborgen (kein Aufblitzen).
+  const { enabled: timeTrackingEnabled } = useTimeTrackingEnabled();
+
   const navItems = ALL_NAV_ITEMS.filter(
     (item) =>
       (!item.adminOnly || isAdminRole(currentUser?.role)) &&
-      (!item.dienstleisterOnly || currentUser?.accountType === "dienstleister"),
+      (!item.dienstleisterOnly || currentUser?.accountType === "dienstleister") &&
+      (item.href !== "/zeiterfassung" || timeTrackingEnabled),
   );
 
   async function handleLogout() {
