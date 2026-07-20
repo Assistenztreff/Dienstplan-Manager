@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { TeamTestHarness } from "./helpers/teams";
+import { TeamTestHarness, enableTimeTracking } from "./helpers/teams";
 
 /**
  * API-E2E-Beweis: Urlaubs-Fallback ueber Vertragsstunden (bwavg-Methode).
@@ -114,6 +114,9 @@ test.beforeAll(async () => {
   // Standard-Einstellungen (bwavg, 8h/Urlaubstag), Premium fuer das
   // Bestaetigen der IST-Historie.
   await h.becomeDienstleister();
+  // Konto-Schalter „Zeiterfassung aktivieren" (Standard AUS) für die direkten
+  // POST /api/time-tracking-Aufrufe dieses Specs einschalten.
+  await enableTimeTracking(h.ctx);
   teamId = await h.createTeam(`E2E UrlaubFallback ${h.run}`);
 });
 

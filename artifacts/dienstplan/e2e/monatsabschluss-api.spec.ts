@@ -3,6 +3,7 @@ import {
   registerFreeAccount,
   setAccountPlan,
   deleteFreeAccount,
+  enableTimeTracking,
   type FreeAccount,
 } from "./helpers/teams";
 
@@ -72,6 +73,7 @@ test.describe.configure({ mode: "serial" });
 test.beforeAll(async () => {
   acc = await registerFreeAccount("privat", "monatsabschluss");
   await setAccountPlan(acc.email, "premium");
+  await enableTimeTracking(acc.ctx);
 
   const userRes = await acc.ctx.post("/api/users", {
     data: {

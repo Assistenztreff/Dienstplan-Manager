@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import {
+  enableTimeTracking,
   deleteFreeAccount,
   registerFreeAccount,
   setAccountPlan,
@@ -94,6 +95,7 @@ test.describe("Sammelbestätigung: API (confirm-batch)", () => {
 
   test.beforeAll(async () => {
     acc = await registerFreeAccount("privat", "batch-api");
+    await enableTimeTracking(acc.ctx);
     assistantId = await createAssistant(acc, "api");
     const day = currentMonthDay(10);
     pendingIds.push(await createPendingEntry(acc, assistantId, day, 8, 4));
@@ -176,6 +178,7 @@ test.describe("Sammelbestätigung: UI (Zeiterfassung)", () => {
 
   test.beforeAll(async () => {
     acc = await registerFreeAccount("privat", "batch-ui");
+    await enableTimeTracking(acc.ctx);
     assistantId = await createAssistant(acc, "ui");
     // Zwei offene Einträge à 8h und 4h → Vorschau: 2 Einträge, 12 h.
     entryIds.push(await createPendingEntry(acc, assistantId, currentMonthDay(16), 8, 8));

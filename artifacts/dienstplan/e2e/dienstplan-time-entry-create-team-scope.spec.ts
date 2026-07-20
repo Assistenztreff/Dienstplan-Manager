@@ -3,7 +3,7 @@ import {
   expect,
   type APIRequestContext,
 } from "@playwright/test";
-import { TeamTestHarness, type SeededAdmin } from "./helpers/teams";
+import { TeamTestHarness, enableTimeTracking, type SeededAdmin } from "./helpers/teams";
 
 /**
  * E2E-/API-Test für das Write-Scoping beim Anlegen von Ist-Zeiten
@@ -60,6 +60,10 @@ test.beforeAll(async () => {
   harness = await TeamTestHarness.login();
   await harness.becomeDienstleister();
   adminCtx = harness.ctx;
+  // Konto-Schalter „Zeiterfassung aktivieren" (Standard AUS) einschalten,
+  // damit der Sanity-201-Fall nicht am neuen Gate scheitert. Der Angriffs-Fall
+  // bleibt 403 (Team-Scope-Check greift vor dem Gate).
+  await enableTimeTracking(adminCtx);
 
   // --- Ein Team für A anlegen + einen Mitglieds-Assistenten + Schichten ---
   teamA = await harness.createTeam(`E2E TT-Create Team A ${harness.run}`);

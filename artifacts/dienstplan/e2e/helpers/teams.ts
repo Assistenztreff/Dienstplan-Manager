@@ -108,6 +108,38 @@ export async function setAccountPlan(
 }
 
 /**
+ * Aktiviert den konto-weiten Schalter „Zeiterfassung aktivieren" für das
+ * eingeloggte Admin-Konto des übergebenen Kontexts (Standard ist AUS, alle
+ * Schreibrouten der Zeiterfassung antworten sonst 403 `time_tracking_disabled`).
+ *
+ * Liest zuerst die aktuellen Einstellungen und schreibt sie unverändert mit
+ * `timeTrackingEnabled: true` zurück, damit keine Zuschlags-Werte des Specs
+ * überschrieben werden.
+ */
+export async function enableTimeTracking(ctx: APIRequestContext): Promise<void> {
+  const getRes = await ctx.get("/api/allowance-settings");
+  expect(getRes.ok(), `Zuschlags-Einstellungen lesen fehlgeschlagen (${getRes.status()})`).toBe(true);
+  const s = (await getRes.json()) as {
+    nightPercent: number;
+    nightStart: string;
+    nightEnd: string;
+    sundayPercent: number;
+    holidayPercent: number;
+  };
+  const putRes = await ctx.put("/api/allowance-settings", {
+    data: {
+      nightPercent: s.nightPercent,
+      nightStart: s.nightStart,
+      nightEnd: s.nightEnd,
+      sundayPercent: s.sundayPercent,
+      holidayPercent: s.holidayPercent,
+      timeTrackingEnabled: true,
+    },
+  });
+  expect(putRes.ok(), `Zeiterfassung aktivieren fehlgeschlagen (${putRes.status()})`).toBe(true);
+}
+
+/**
  * Fügt eine Team-Mitgliedschaft direkt in der (Test-)DB ein. Nur für Specs,
  * die den Kanten-Fall einer MANDANTENÜBERGREIFENDEN Mitgliedschaft brauchen:
  * POST /api/teams/:id/members nimmt aus Sicherheitsgründen nur Nutzer aus
@@ -216,6 +248,8 @@ export class TeamTestHarness {
   private readonly contracts: number[] = [];
   private readonly timeEntries: number[] = [];
   private readonly seededAdmins: SeededAdmin[] = [];
+  /** Zeiterfassung ist konto-weit standardmäßig AUS — pro aktivem Konto einmal aktivieren. */
+  private timeTrackingEnabled = false;
 
   private constructor(ctx: APIRequestContext, run: number) {
     this.ctx = ctx;
@@ -261,6 +295,8 @@ export class TeamTestHarness {
     this.adminId = acc.id;
     this.email = acc.email;
     this.password = FREE_ACCOUNT_PASSWORD;
+    // Kontextwechsel = anderes Konto → Zeiterfassung dort ggf. neu aktivieren.
+    this.timeTrackingEnabled = false;
   }
 
   async createTeam(name?: string): Promise<number> {
@@ -336,6 +372,12 @@ export class TeamTestHarness {
     day: string,
     opts: TimeEntryOptions = {},
   ): Promise<number> {
+    // Konto-Schalter „Zeiterfassung aktivieren" (Standard AUS) einmal pro
+    // aktivem Konto einschalten, sonst 403 `time_tracking_disabled`.
+    if (!this.timeTrackingEnabled) {
+      await enableTimeTracking(this.ctx);
+      this.timeTrackingEnabled = true;
+    }
     const res = await this.ctx.post("/api/time-tracking", {
       data: {
         userId,

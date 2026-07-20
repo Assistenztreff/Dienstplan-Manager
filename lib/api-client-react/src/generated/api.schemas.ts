@@ -792,6 +792,8 @@ export interface AllowanceSettings {
   billingMethod?: AllowanceSettingsBillingMethod;
   /** Eingereichte Zeiteinträge automatisch genehmigen. */
   autoApproveTimesheets: boolean;
+  /** Zeiterfassung (IST-Zeiten) aktiv? Konto-global (kein Team-Override); Standard AUS. Bei AUS blocken die Zeiterfassungs-Schreibrouten mit 403 (code time_tracking_disabled), Lesen bleibt erlaubt. */
+  timeTrackingEnabled: boolean;
   /** Urlaubs-Berechnung — bwavg = §11 BUrlG 13-Wochen-Schnitt, factor = prozentualer Stunden-Faktor. */
   vacationMethod: AllowanceSettingsVacationMethod;
   /** Stunden je Urlaubstag (Anzeige Tage = Stunden / diesem Wert). */
@@ -876,6 +878,8 @@ export interface AllowanceSettingsInput {
      */
   billingMethod?: AllowanceSettingsInputBillingMethod;
   autoApproveTimesheets?: boolean;
+  /** Zeiterfassung aktivieren/deaktivieren (konto-global, kein Team-Override). */
+  timeTrackingEnabled?: boolean;
   vacationMethod?: AllowanceSettingsInputVacationMethod;
   /** @minimum 0.1 */
   vacationHoursPerDay?: number;
@@ -883,6 +887,11 @@ export interface AllowanceSettingsInput {
   vacationFactor?: number;
   /** Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktivieren/deaktivieren. */
   ersatzruhetagEnabled?: boolean;
+}
+
+export interface TimeTrackingStatus {
+  /** true, wenn die Zeiterfassung für den angemeldeten Nutzer effektiv aktiv ist (Admin = eigene Konto-Einstellung, Assistenzkraft = mindestens ein Team-Eigentümer hat sie aktiviert). */
+  enabled: boolean;
 }
 
 export interface BrandingSettings {

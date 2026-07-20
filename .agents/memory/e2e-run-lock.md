@@ -12,3 +12,5 @@ The managed E2E stack holds a PID lockfile (`node_modules/.cache/dienstplan-e2e/
 - `globalTeardown` releases the lock with its own duplicated logic — do NOT `import` playwright.config from teardown: re-evaluating the module in a fresh loader would re-run all side effects (reap, db setup) mid-teardown.
 - Lock release only happens when the file still contains this process's PID; hard-aborted runs self-heal via the dead-PID check on the next start.
 - A run killed by shell `timeout` leaves a stale lock whose PID may still look alive briefly (or the message names a dead PID); verify with `ps -p <pid>` and delete `run.lock` manually before retrying.
+- Aborted runs can also leave zombie `e2e.*@dienstplan.test` accounts that break the separation check ("migrate-teams hat eine Mitgliedschaft HINZUGEFUEGT"): run `cleanup-test-accounts` with `DATABASE_URL` pointed at the `_test` DB, then retry.
+- Don't run the full suite from an agent bash call (2-min timeout kills it; nohup-detached runs get reaped mid-suite). Use the registered `e2e-api` workflow via restart_workflow and poll logs instead.

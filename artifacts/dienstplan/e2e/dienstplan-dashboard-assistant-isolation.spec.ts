@@ -4,6 +4,7 @@ import {
   request as playwrightRequest,
   type APIRequestContext,
 } from "@playwright/test";
+import { enableTimeTracking } from "./helpers/teams";
 
 /**
  * API-Test für die userId-personale Datensicht des Dashboards aus Sicht eines
@@ -115,6 +116,10 @@ test.beforeAll(async () => {
     data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
   });
   expect(loginRes.ok(), "Admin-Login fehlgeschlagen").toBe(true);
+
+  // Konto-Schalter „Zeiterfassung aktivieren" (Standard AUS) einschalten,
+  // sonst blocken alle Zeiterfassungs-Schreibrouten mit 403.
+  await enableTimeTracking(adminCtx);
 
   myId = await createUser({
     name: `E2E Dash Me ${RUN}`,

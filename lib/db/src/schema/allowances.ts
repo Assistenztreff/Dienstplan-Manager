@@ -47,6 +47,11 @@ export const allowanceSettingsTable = pgTable(
     // Stundenzettel automatisch genehmigen: eingereichte Zeiteinträge werden
     // sofort auf "confirmed" gesetzt (Fallback-Kette wie oben).
     autoApproveTimesheets: boolean("auto_approve_timesheets").notNull().default(false),
+    // Zeiterfassung (IST-Zeiten) pro Konto ein-/ausschaltbar; Standard AUS.
+    // KONTO-GLOBAL (nur die Konto-Zeile team_id NULL ist maßgeblich, kein
+    // Team-Override). Bei AUS blocken die Zeiterfassungs-Schreibrouten mit 403;
+    // GET bleibt erlaubt, Bestandsdaten bleiben unangetastet.
+    timeTrackingEnabled: boolean("time_tracking_enabled").notNull().default(false),
     // Urlaubs-Berechnung (Point 7).
     vacationMethod: vacationMethodEnum("vacation_method").notNull().default("bwavg"),
     vacationHoursPerDay: real("vacation_hours_per_day").notNull().default(8),

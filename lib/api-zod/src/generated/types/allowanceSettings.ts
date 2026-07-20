@@ -32,6 +32,8 @@ export interface AllowanceSettings {
   billingMethod?: AllowanceSettingsBillingMethod;
   /** Eingereichte Zeiteinträge automatisch genehmigen. */
   autoApproveTimesheets: boolean;
+  /** Zeiterfassung (IST-Zeiten) aktiv? Konto-global (kein Team-Override); Standard AUS. Bei AUS blocken die Zeiterfassungs-Schreibrouten mit 403 (code time_tracking_disabled), Lesen bleibt erlaubt. */
+  timeTrackingEnabled: boolean;
   /** Urlaubs-Berechnung — bwavg = §11 BUrlG 13-Wochen-Schnitt, factor = prozentualer Stunden-Faktor. */
   vacationMethod: AllowanceSettingsVacationMethod;
   /** Stunden je Urlaubstag (Anzeige Tage = Stunden / diesem Wert). */

@@ -23,6 +23,12 @@ import {
   isUserMemberOfTeam,
 } from "../lib/teams";
 import { resolveAllowanceOps } from "../lib/allowance-resolve";
+import {
+  isTimeTrackingEnabledForTeam,
+  isTimeTrackingEnabledForUser,
+  getTimeTrackingEnabledTeamIds,
+  respondTimeTrackingDisabled,
+} from "../lib/time-tracking-enabled";
 
 const router = Router();
 
@@ -163,6 +169,12 @@ router.post("/time-tracking", requireAuth, async (req, res): Promise<void> => {
     res.status(403).json({ error: "Nutzer gehört nicht zu diesem Team" });
     return;
   }
+  // Konto-Schalter „Zeiterfassung aktivieren" (Standard AUS): neue Ist-Zeiten
+  // nur, wenn der Eigentümer des Ziel-Teams die Zeiterfassung aktiviert hat.
+  if (!(await isTimeTrackingEnabledForTeam(teamId))) {
+    respondTimeTrackingDisabled(res);
+    return;
+  }
 
   const actualStart = new Date(body.data.actualStart as unknown as string);
   const actualEnd = new Date(body.data.actualEnd as unknown as string);
@@ -237,6 +249,22 @@ router.patch("/time-tracking/:id", requireAdmin, async (req, res): Promise<void>
     );
   }
   const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+  // Zeile zuerst team-gescoped laden (404 bei fremd/fehlend), dann den
+  // Konto-Schalter des Team-Eigentümers prüfen (403 bei deaktivierter
+  // Zeiterfassung) — Bestandsdaten bleiben sichtbar, nur Änderungen blocken.
+  const [existingRow] = await db
+    .select({ teamId: timeTrackingTable.teamId })
+    .from(timeTrackingTable)
+    .where(and(eq(timeTrackingTable.id, params.data.id), inArray(timeTrackingTable.teamId, allowedTeams)))
+    .limit(1);
+  if (!existingRow) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (!(await isTimeTrackingEnabledForTeam(existingRow.teamId))) {
+    respondTimeTrackingDisabled(res);
+    return;
+  }
   const [updated] = await db
     .update(timeTrackingTable)
     .set(updateData)
@@ -261,6 +289,20 @@ router.delete("/time-tracking/:id", requireAdmin, async (req, res): Promise<void
     return;
   }
   const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+  // Erst team-gescoped laden (404), dann Konto-Schalter prüfen (403).
+  const [existingRow] = await db
+    .select({ teamId: timeTrackingTable.teamId })
+    .from(timeTrackingTable)
+    .where(and(eq(timeTrackingTable.id, params.data.id), inArray(timeTrackingTable.teamId, allowedTeams)))
+    .limit(1);
+  if (!existingRow) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (!(await isTimeTrackingEnabledForTeam(existingRow.teamId))) {
+    respondTimeTrackingDisabled(res);
+    return;
+  }
   const deleted = await db
     .delete(timeTrackingTable)
     .where(and(eq(timeTrackingTable.id, params.data.id), inArray(timeTrackingTable.teamId, allowedTeams)))
@@ -286,6 +328,22 @@ router.patch("/time-tracking/:id/confirm", requireAdmin, requirePlanFeature("str
     return;
   }
   const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+  // Erst team-gescoped laden (404), dann Konto-Schalter prüfen (403) —
+  // die Freigabe ist eine Schreibaktion und bei deaktivierter Zeiterfassung
+  // gesperrt; bereits bestätigte Bestandsdaten bleiben unangetastet.
+  const [existingRow] = await db
+    .select({ teamId: timeTrackingTable.teamId })
+    .from(timeTrackingTable)
+    .where(and(eq(timeTrackingTable.id, params.data.id), inArray(timeTrackingTable.teamId, allowedTeams)))
+    .limit(1);
+  if (!existingRow) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (!(await isTimeTrackingEnabledForTeam(existingRow.teamId))) {
+    respondTimeTrackingDisabled(res);
+    return;
+  }
   const [updated] = await db
     .update(timeTrackingTable)
     .set({
@@ -325,6 +383,14 @@ router.post("/time-tracking/confirm-batch", requireAdmin, requirePlanFeature("st
     res.json({ confirmedCount: 0 });
     return;
   }
+  // Konto-Schalter: nur Teams, deren Eigentümer die Zeiterfassung aktiviert
+  // hat, dürfen bestätigt werden. Ist sie nirgends aktiv → 403; Teams mit
+  // deaktivierter Zeiterfassung werden (wie fremde IDs) still übersprungen.
+  const enabledTeams = await getTimeTrackingEnabledTeamIds(allowedTeams);
+  if (enabledTeams.length === 0) {
+    respondTimeTrackingDisabled(res);
+    return;
+  }
   const updated = await db
     .update(timeTrackingTable)
     .set({
@@ -335,12 +401,21 @@ router.post("/time-tracking/confirm-batch", requireAdmin, requirePlanFeature("st
     .where(
       and(
         inArray(timeTrackingTable.id, body.data.ids),
-        inArray(timeTrackingTable.teamId, allowedTeams),
+        inArray(timeTrackingTable.teamId, enabledTeams),
         eq(timeTrackingTable.status, "pending"),
       ),
     )
     .returning({ id: timeTrackingTable.id });
   res.json({ confirmedCount: updated.length });
+});
+
+// Effektiver Zeiterfassungs-Zustand für den ANGEMELDETEN Nutzer: Admin-artige
+// Rollen sehen die eigene Konto-Einstellung, Assistenzkräfte den Zustand ihres
+// Arbeitgebers (aktiv, sobald EIN Team-Eigentümer eingeschaltet hat). Bewusst
+// requireAuth — Assistenten haben keinen Zugriff auf /allowance-settings.
+router.get("/time-tracking-status", requireAuth, async (req, res): Promise<void> => {
+  const enabled = await isTimeTrackingEnabledForUser(req.session.userId!);
+  res.json({ enabled });
 });
 
 export default router;

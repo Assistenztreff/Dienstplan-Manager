@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
+  enableTimeTracking,
   deleteFreeAccount,
   registerFreeAccount,
   setAccountPlan,
@@ -93,6 +94,7 @@ test.beforeAll(async () => {
 
   // --- Arbeitgeber P mit Assistent + Schicht + Ist-Zeit ---------------------
   employerP = await registerFreeAccount("privat", "ttwriteidor-p");
+  await enableTimeTracking(employerP.ctx);
   const pAssistantId = await createAssistant(employerP, "p");
   // Schicht anlegen (Done-Kriterium: P legt Assistent + Schicht + Ist-Zeit an);
   // die Ist-Zeit selbst bleibt bewusst OHNE shiftId, damit PATCH/DELETE die
@@ -110,6 +112,7 @@ test.beforeAll(async () => {
 
   // --- Getrennter Arbeitgeber Q mit eigenem Assistent + Ist-Zeit ------------
   employerQ = await registerFreeAccount("privat", "ttwriteidor-q");
+  await enableTimeTracking(employerQ.ctx);
   const qAssistantId = await createAssistant(employerQ, "q");
   qEntryId = await createTimeEntry(
     employerQ,

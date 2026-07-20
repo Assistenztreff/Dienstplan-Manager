@@ -5,6 +5,7 @@ import {
   type Page,
   type APIRequestContext,
 } from "@playwright/test";
+import { enableTimeTracking } from "./helpers/teams";
 
 /**
  * E2E-Test für den manuellen Zeiteintrag ohne Schichtbezug in der Web-App,
@@ -102,6 +103,10 @@ test.beforeAll(async () => {
     data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
   });
   expect(loginRes.ok(), "Admin-Login für Setup fehlgeschlagen").toBe(true);
+
+  // Konto-Schalter „Zeiterfassung aktivieren" (Standard AUS) einschalten,
+  // sonst blocken alle Zeiterfassungs-Schreibrouten mit 403.
+  await enableTimeTracking(adminCtx);
 
   const me = await createAssistant(adminCtx, `${unique}`);
   const password = `Pw${unique}!secure`;

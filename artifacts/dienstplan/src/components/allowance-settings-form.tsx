@@ -16,6 +16,16 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { readableApiError } from "@/lib/api-error";
 import { useTeam } from "@/context/team";
 
@@ -28,6 +38,7 @@ type FormState = {
   state: string;
   billingMethod: string;
   autoApproveTimesheets: boolean;
+  timeTrackingEnabled: boolean;
   vacationMethod: string;
   vacationHoursPerDay: string;
   vacationFactor: string;
@@ -125,6 +136,7 @@ export function AllowanceSettingsForm() {
     state: NO_STATE,
     billingMethod: INHERIT_BILLING,
     autoApproveTimesheets: false,
+    timeTrackingEnabled: false,
     vacationMethod: "bwavg",
     vacationHoursPerDay: "8",
     vacationFactor: "0.0941",
@@ -133,6 +145,8 @@ export function AllowanceSettingsForm() {
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  // Bestätigungs-Dialog vor dem AKTIVIEREN der Zeiterfassung (Ausschalten ohne Dialog).
+  const [confirmTimeTracking, setConfirmTimeTracking] = useState(false);
   // Pro Bereich nur einmal mit den geladenen Werten befüllen, damit ein Refetch
   // (z.B. bei Fensterfokus) keine ungespeicherten Eingaben überschreibt. Ein
   // Bereichswechsel lädt bewusst neu.
@@ -150,6 +164,7 @@ export function AllowanceSettingsForm() {
         state: settings.state ?? NO_STATE,
         billingMethod: settings.billingMethod ?? INHERIT_BILLING,
         autoApproveTimesheets: settings.autoApproveTimesheets ?? false,
+        timeTrackingEnabled: settings.timeTrackingEnabled ?? false,
         vacationMethod: settings.vacationMethod ?? "bwavg",
         vacationHoursPerDay: String(settings.vacationHoursPerDay ?? 8),
         vacationFactor: String(settings.vacationFactor ?? 0.0941),
@@ -205,30 +220,33 @@ export function AllowanceSettingsForm() {
     await queryClient.invalidateQueries({ queryKey: getGetAllowanceSettingsQueryKey() });
   }
 
-  async function handleSave() {
+  async function handleSave(overrides: Partial<FormState> = {}) {
     if (!validate()) return;
+    const f = { ...form, ...overrides };
     setSaving(true);
     try {
       await updateSettings.mutateAsync({
         data: {
-          nightPercent: Number(form.nightPercent),
-          nightStart: form.nightStart,
-          nightEnd: form.nightEnd,
-          sundayPercent: Number(form.sundayPercent),
-          holidayPercent: Number(form.holidayPercent),
-          state: (form.state === NO_STATE ? null : form.state) as AllowanceSettingsInputState,
-          billingMethod: (form.billingMethod === INHERIT_BILLING
+          nightPercent: Number(f.nightPercent),
+          nightStart: f.nightStart,
+          nightEnd: f.nightEnd,
+          sundayPercent: Number(f.sundayPercent),
+          holidayPercent: Number(f.holidayPercent),
+          state: (f.state === NO_STATE ? null : f.state) as AllowanceSettingsInputState,
+          billingMethod: (f.billingMethod === INHERIT_BILLING
             ? null
-            : form.billingMethod) as AllowanceSettingsInputBillingMethod,
-          // Konto-weite Regeln (Auto-Genehmigung + Urlaubsberechnung) gelten global
-          // und werden nur im Konto-Bereich mitgesendet, nicht bei Team-Overrides.
+            : f.billingMethod) as AllowanceSettingsInputBillingMethod,
+          // Konto-weite Regeln (Auto-Genehmigung, Zeiterfassung, Urlaubsberechnung)
+          // gelten global und werden nur im Konto-Bereich mitgesendet, nicht bei
+          // Team-Overrides.
           ...(scopeTeamId === undefined
             ? {
-                autoApproveTimesheets: form.autoApproveTimesheets,
-                vacationMethod: form.vacationMethod as AllowanceSettingsInputVacationMethod,
-                vacationHoursPerDay: Number(form.vacationHoursPerDay),
-                vacationFactor: Number(form.vacationFactor),
-                ersatzruhetagEnabled: form.ersatzruhetagEnabled,
+                autoApproveTimesheets: f.autoApproveTimesheets,
+                timeTrackingEnabled: f.timeTrackingEnabled,
+                vacationMethod: f.vacationMethod as AllowanceSettingsInputVacationMethod,
+                vacationHoursPerDay: Number(f.vacationHoursPerDay),
+                vacationFactor: Number(f.vacationFactor),
+                ersatzruhetagEnabled: f.ersatzruhetagEnabled,
               }
             : {}),
         },
@@ -241,6 +259,26 @@ export function AllowanceSettingsForm() {
     } finally {
       setSaving(false);
     }
+  }
+
+  /**
+   * Zeiterfassungs-Schalter: Einschalten nur nach Bestätigungs-Dialog,
+   * Ausschalten sofort. Gespeichert wird direkt (nicht erst über „Speichern"),
+   * damit der Konto-Schalter nie in einem ungespeicherten Zwischenzustand hängt.
+   */
+  function onTimeTrackingToggle(next: boolean) {
+    if (next) {
+      setConfirmTimeTracking(true);
+      return;
+    }
+    set("timeTrackingEnabled", false);
+    void handleSave({ timeTrackingEnabled: false });
+  }
+
+  function confirmEnableTimeTracking() {
+    setConfirmTimeTracking(false);
+    set("timeTrackingEnabled", true);
+    void handleSave({ timeTrackingEnabled: true });
   }
 
   async function handleRemoveOverride() {
@@ -428,6 +466,29 @@ export function AllowanceSettingsForm() {
                   <div className="border-t border-border/60 pt-5">
                     <div className="flex items-start justify-between gap-4">
                       <div className="space-y-0.5">
+                        <Label htmlFor="timeTrackingEnabled" className="text-sm font-semibold">
+                          Zeiterfassung aktivieren
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Erlaubt das Erfassen und Bearbeiten von Ist-Zeiten (Stundenzettel) für
+                          alle Teams dieses Kontos. Solange ausgeschaltet, können keine neuen
+                          Zeiteinträge angelegt oder bestätigt werden; bestehende Einträge bleiben
+                          sichtbar. Die Änderung wird sofort gespeichert.
+                        </p>
+                      </div>
+                      <Switch
+                        id="timeTrackingEnabled"
+                        data-testid="allowance-time-tracking-switch"
+                        checked={form.timeTrackingEnabled}
+                        disabled={saving}
+                        onCheckedChange={onTimeTrackingToggle}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="border-t border-border/60 pt-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-0.5">
                         <Label htmlFor="ersatzruhetagEnabled" className="text-sm font-semibold">
                           Ersatzruhetag-Konto für Feiertage
                         </Label>
@@ -521,7 +582,7 @@ export function AllowanceSettingsForm() {
               )}
 
               <div className="flex flex-wrap items-center gap-3 pt-1">
-                <Button onClick={handleSave} disabled={saving} data-testid="allowance-save-button">
+                <Button onClick={() => handleSave()} disabled={saving} data-testid="allowance-save-button">
                   {saving ? "Speichern..." : "Speichern"}
                 </Button>
                 {hasOverride && (
@@ -540,6 +601,29 @@ export function AllowanceSettingsForm() {
           )}
         </div>
       </CardContent>
+
+      <AlertDialog open={confirmTimeTracking} onOpenChange={setConfirmTimeTracking}>
+        <AlertDialogContent data-testid="time-tracking-confirm-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Zeiterfassung aktivieren?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Assistenzkräfte und Sie können dann Ist-Zeiten (Stundenzettel) erfassen, bearbeiten
+              und bestätigen. Die Einstellung gilt konto-weit für alle Teams und wird sofort
+              gespeichert. Sie können die Zeiterfassung jederzeit wieder ausschalten — bereits
+              erfasste Einträge bleiben dabei erhalten.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="time-tracking-confirm-cancel">Abbrechen</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="time-tracking-confirm-accept"
+              onClick={confirmEnableTimeTracking}
+            >
+              Aktivieren
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

@@ -1030,6 +1030,23 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
+  /time-tracking-status:
+    get:
+      operationId: getTimeTrackingStatus
+      tags: [time-tracking]
+      summary: Effektiver Zeiterfassungs-Zustand des Kontos bzw. Arbeitgebers
+      description: >-
+        Liefert, ob die Zeiterfassung aktiv ist. Für Admins zählt die eigene
+        Konto-Einstellung; für Assistenzkräfte der Zustand ihres Arbeitgebers
+        (aktiv, sobald EIN Team-Eigentümer die Zeiterfassung eingeschaltet hat).
+      responses:
+        "200":
+          description: Effektiver Zustand
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeTrackingStatus"
+
   /users/{id}/invite:
     post:
       operationId: inviteUser
@@ -2414,6 +2431,7 @@ components:
           sundayPercent,
           holidayPercent,
           autoApproveTimesheets,
+          timeTrackingEnabled,
           vacationMethod,
           vacationHoursPerDay,
           vacationFactor,
@@ -2449,6 +2467,12 @@ components:
         autoApproveTimesheets:
           type: boolean
           description: Eingereichte Zeiteinträge automatisch genehmigen.
+        timeTrackingEnabled:
+          type: boolean
+          description: >-
+            Zeiterfassung (IST-Zeiten) aktiv? Konto-global (kein Team-Override);
+            Standard AUS. Bei AUS blocken die Zeiterfassungs-Schreibrouten mit
+            403 (code time_tracking_disabled), Lesen bleibt erlaubt.
         vacationMethod:
           type: string
           enum: [bwavg, factor]
@@ -2499,6 +2523,9 @@ components:
           description: Abrechnungsart auf Team- bzw. Konto-Ebene; null = erbt.
         autoApproveTimesheets:
           type: boolean
+        timeTrackingEnabled:
+          type: boolean
+          description: Zeiterfassung aktivieren/deaktivieren (konto-global, kein Team-Override).
         vacationMethod:
           type: string
           enum: [bwavg, factor]
@@ -2511,6 +2538,17 @@ components:
         ersatzruhetagEnabled:
           type: boolean
           description: Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktivieren/deaktivieren.
+
+    TimeTrackingStatus:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+          description: >-
+            true, wenn die Zeiterfassung für den angemeldeten Nutzer effektiv
+            aktiv ist (Admin = eigene Konto-Einstellung, Assistenzkraft =
+            mindestens ein Team-Eigentümer hat sie aktiviert).
 
     BrandingSettings:
       type: object

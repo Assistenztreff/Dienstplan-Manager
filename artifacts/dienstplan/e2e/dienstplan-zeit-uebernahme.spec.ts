@@ -5,6 +5,7 @@ import {
   type Page,
   type APIRequestContext,
 } from "@playwright/test";
+import { enableTimeTracking } from "./helpers/teams";
 
 /**
  * E2E-/API-Test für die Funktion "Geplante Zeiten per Klick übernehmen".
@@ -137,6 +138,10 @@ test.beforeAll(async () => {
     data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
   });
   expect(loginRes.ok(), "Admin-Login für Setup fehlgeschlagen").toBe(true);
+
+  // Konto-Schalter „Zeiterfassung aktivieren" (Standard AUS) einschalten,
+  // sonst blocken alle Zeiterfassungs-Schreibrouten mit 403.
+  await enableTimeTracking(adminCtx);
 
   // POST /users ordnet den neuen Nutzer dem Standard-Team des Admins zu, daher
   // ist der Assistent Mitglied desselben Teams wie die unten erzeugten Schichten.

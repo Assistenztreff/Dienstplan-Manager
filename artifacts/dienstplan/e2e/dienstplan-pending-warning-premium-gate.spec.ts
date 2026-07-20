@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
+  enableTimeTracking,
   deleteFreeAccount,
   registerFreeAccount,
   setAccountPlan,
@@ -63,6 +64,7 @@ test.beforeAll(async () => {
   // Frisches Free-Konto (privat genügt): Registrierung legt das Standard-Team
   // an, resolveWriteTeamId greift ohne explizite teamId.
   acc = await registerFreeAccount("privat", "pendwarn");
+  await enableTimeTracking(acc.ctx);
 
   // Assistent im Standard-Team anlegen ...
   const userRes = await acc.ctx.post("/api/users", {

@@ -1,5 +1,6 @@
 import { test, expect, request as playwrightRequest, type APIRequestContext } from "@playwright/test";
 import {
+  enableTimeTracking,
   BASE_URL,
   deleteFreeAccount,
   registerFreeAccount,
@@ -75,6 +76,7 @@ test.beforeAll(async () => {
   // Frisches Free-Konto (privat genügt): Registrierung legt das Standard-Team
   // an, resolveWriteTeamId greift ohne explizite teamId.
   owner = await registerFreeAccount("privat", "asst-uncounted");
+  await enableTimeTracking(owner.ctx);
 
   // Assistent im Standard-Team anlegen ...
   const userRes = await owner.ctx.post("/api/users", {

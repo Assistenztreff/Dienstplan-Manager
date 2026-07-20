@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
+  enableTimeTracking,
   deleteFreeAccount,
   registerFreeAccount,
   setAccountPlan,
@@ -87,6 +88,7 @@ test.beforeAll(async () => {
 
   // --- Arbeitgeber P mit Assistent + zwei offenen Ist-Zeiten ----------------
   employerP = await registerFreeAccount("privat", "batchscope-p");
+  await enableTimeTracking(employerP.ctx);
   const pAssistantId = await createAssistant(employerP, "p");
   pEntry1 = await createTimeEntry(
     employerP,
@@ -103,6 +105,7 @@ test.beforeAll(async () => {
 
   // --- Getrennter Arbeitgeber Q mit eigenem Assistent + Ist-Zeit ------------
   employerQ = await registerFreeAccount("privat", "batchscope-q");
+  await enableTimeTracking(employerQ.ctx);
   const qAssistantId = await createAssistant(employerQ, "q");
   qEntry1 = await createTimeEntry(
     employerQ,

@@ -63,7 +63,14 @@ router.get("/allowance-settings", requireAdmin, async (req, res): Promise<void> 
       .from(allowanceSettingsTable)
       .where(eq(allowanceSettingsTable.teamId, teamId));
     if (override) {
-      res.json({ ...override, isOverride: true });
+      // timeTrackingEnabled ist KONTO-GLOBAL — die Override-Zeile trägt das
+      // Feld nur mit DB-Default. Immer den Konto-Wert ausliefern.
+      const account = await ensureAccountSettings(userId);
+      res.json({
+        ...override,
+        timeTrackingEnabled: account.timeTrackingEnabled,
+        isOverride: true,
+      });
       return;
     }
     const account = await ensureAccountSettings(userId);
@@ -107,7 +114,13 @@ router.put("/allowance-settings", requireAdmin, async (req, res): Promise<void> 
         set: { ...teamOverridable, updatedAt: new Date() },
       })
       .returning();
-    res.json({ ...saved, isOverride: true });
+    // Konto-globales timeTrackingEnabled auch in der Team-Antwort ausliefern.
+    const account = await ensureAccountSettings(ownerId);
+    res.json({
+      ...saved,
+      timeTrackingEnabled: account.timeTrackingEnabled,
+      isOverride: true,
+    });
     return;
   }
   await ensureAccountSettings(ownerId);

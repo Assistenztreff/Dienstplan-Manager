@@ -1,5 +1,6 @@
 import { test, expect, request as playwrightRequest, type Page } from "@playwright/test";
 import {
+  enableTimeTracking,
   deleteFreeAccount,
   registerFreeAccount,
   setAccountPlan,
@@ -84,6 +85,7 @@ test.describe("Premium-Feature-Gates: Plan-Flip (API)", () => {
     // Konto-Typ. Die Registrierung legt ein Standard-Team an, sodass POST
     // /users, /shifts und /time-tracking ohne explizite teamId funktionieren.
     acc = await registerFreeAccount("privat", "gates-flip");
+    await enableTimeTracking(acc.ctx);
     const unique = Date.now();
 
     // Assistent OHNE Lohn-/SV-Daten (die wären im Free-Tarif geblockt).
@@ -329,6 +331,7 @@ test.describe("Premium-Feature-Gates: Sperr-Hinweise im Frontend (UI)", () => {
 
   test.beforeAll(async () => {
     free = await registerFreeAccount("privat", "gates-ui");
+    await enableTimeTracking(free.ctx);
     const unique = Date.now();
 
     const userRes = await free.ctx.post("/api/users", {

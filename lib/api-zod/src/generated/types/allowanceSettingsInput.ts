@@ -37,6 +37,8 @@ export interface AllowanceSettingsInput {
      */
   billingMethod?: AllowanceSettingsInputBillingMethod;
   autoApproveTimesheets?: boolean;
+  /** Zeiterfassung aktivieren/deaktivieren (konto-global, kein Team-Override). */
+  timeTrackingEnabled?: boolean;
   vacationMethod?: AllowanceSettingsInputVacationMethod;
   /** @minimum 0.1 */
   vacationHoursPerDay?: number;

@@ -768,6 +768,7 @@ export const GetAllowanceSettingsResponse = zod.object({
   "state": zod.union([zod.literal('BW'),zod.literal('BY'),zod.literal('BE'),zod.literal('BB'),zod.literal('HB'),zod.literal('HH'),zod.literal('HE'),zod.literal('MV'),zod.literal('NI'),zod.literal('NW'),zod.literal('RP'),zod.literal('SL'),zod.literal('SN'),zod.literal('ST'),zod.literal('SH'),zod.literal('TH'),zod.literal(null)]).nullish(),
   "billingMethod": zod.union([zod.literal('SOLL'),zod.literal('IST'),zod.literal(null)]).nullish().describe('Abrechnungsart auf Team- bzw. Konto-Ebene; null = erbt.'),
   "autoApproveTimesheets": zod.boolean().describe('Eingereichte Zeiteinträge automatisch genehmigen.'),
+  "timeTrackingEnabled": zod.boolean().describe('Zeiterfassung (IST-Zeiten) aktiv? Konto-global (kein Team-Override); Standard AUS. Bei AUS blocken die Zeiterfassungs-Schreibrouten mit 403 (code time_tracking_disabled), Lesen bleibt erlaubt.'),
   "vacationMethod": zod.enum(['bwavg', 'factor']).describe('Urlaubs-Berechnung — bwavg = §11 BUrlG 13-Wochen-Schnitt, factor = prozentualer Stunden-Faktor.'),
   "vacationHoursPerDay": zod.number().describe('Stunden je Urlaubstag (Anzeige Tage = Stunden \/ diesem Wert).'),
   "vacationFactor": zod.number().describe('Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor.'),
@@ -809,6 +810,7 @@ export const UpdateAllowanceSettingsBody = zod.object({
   "state": zod.union([zod.literal('BW'),zod.literal('BY'),zod.literal('BE'),zod.literal('BB'),zod.literal('HB'),zod.literal('HH'),zod.literal('HE'),zod.literal('MV'),zod.literal('NI'),zod.literal('NW'),zod.literal('RP'),zod.literal('SL'),zod.literal('SN'),zod.literal('ST'),zod.literal('SH'),zod.literal('TH'),zod.literal(null)]).nullish(),
   "billingMethod": zod.union([zod.literal('SOLL'),zod.literal('IST'),zod.literal(null)]).nullish().describe('Abrechnungsart auf Team- bzw. Konto-Ebene; null = erbt.'),
   "autoApproveTimesheets": zod.boolean().optional(),
+  "timeTrackingEnabled": zod.boolean().optional().describe('Zeiterfassung aktivieren\/deaktivieren (konto-global, kein Team-Override).'),
   "vacationMethod": zod.enum(['bwavg', 'factor']).optional(),
   "vacationHoursPerDay": zod.number().min(updateAllowanceSettingsBodyVacationHoursPerDayMin).optional(),
   "vacationFactor": zod.number().min(updateAllowanceSettingsBodyVacationFactorMin).optional(),
@@ -827,6 +829,7 @@ export const UpdateAllowanceSettingsResponse = zod.object({
   "state": zod.union([zod.literal('BW'),zod.literal('BY'),zod.literal('BE'),zod.literal('BB'),zod.literal('HB'),zod.literal('HH'),zod.literal('HE'),zod.literal('MV'),zod.literal('NI'),zod.literal('NW'),zod.literal('RP'),zod.literal('SL'),zod.literal('SN'),zod.literal('ST'),zod.literal('SH'),zod.literal('TH'),zod.literal(null)]).nullish(),
   "billingMethod": zod.union([zod.literal('SOLL'),zod.literal('IST'),zod.literal(null)]).nullish().describe('Abrechnungsart auf Team- bzw. Konto-Ebene; null = erbt.'),
   "autoApproveTimesheets": zod.boolean().describe('Eingereichte Zeiteinträge automatisch genehmigen.'),
+  "timeTrackingEnabled": zod.boolean().describe('Zeiterfassung (IST-Zeiten) aktiv? Konto-global (kein Team-Override); Standard AUS. Bei AUS blocken die Zeiterfassungs-Schreibrouten mit 403 (code time_tracking_disabled), Lesen bleibt erlaubt.'),
   "vacationMethod": zod.enum(['bwavg', 'factor']).describe('Urlaubs-Berechnung — bwavg = §11 BUrlG 13-Wochen-Schnitt, factor = prozentualer Stunden-Faktor.'),
   "vacationHoursPerDay": zod.number().describe('Stunden je Urlaubstag (Anzeige Tage = Stunden \/ diesem Wert).'),
   "vacationFactor": zod.number().describe('Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor.'),
@@ -1139,6 +1142,15 @@ export const ConfirmTimeEntriesBatchBody = zod.object({
 
 export const ConfirmTimeEntriesBatchResponse = zod.object({
   "confirmedCount": zod.number().describe('Anzahl der tatsächlich bestätigten (zuvor offenen) Einträge.')
+})
+
+
+/**
+ * Liefert, ob die Zeiterfassung aktiv ist. Für Admins zählt die eigene Konto-Einstellung; für Assistenzkräfte der Zustand ihres Arbeitgebers (aktiv, sobald EIN Team-Eigentümer die Zeiterfassung eingeschaltet hat).
+ * @summary Effektiver Zeiterfassungs-Zustand des Kontos bzw. Arbeitgebers
+ */
+export const GetTimeTrackingStatusResponse = zod.object({
+  "enabled": zod.boolean().describe('true, wenn die Zeiterfassung für den angemeldeten Nutzer effektiv aktiv ist (Admin = eigene Konto-Einstellung, Assistenzkraft = mindestens ein Team-Eigentümer hat sie aktiviert).')
 })
 
 

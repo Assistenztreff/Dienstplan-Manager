@@ -84,6 +84,7 @@ import type {
   TimeEntryConfirmBatchResult,
   TimeEntryInput,
   TimeEntryUpdate,
+  TimeTrackingStatus,
   UpdateAllowanceSettingsParams,
   UpdateProfileInput,
   UploadUrlRequest,
@@ -3334,6 +3335,84 @@ export const useConfirmTimeEntriesBatch = <TError = ErrorType<ErrorEnvelope>,
       > => {
       return useMutation(getConfirmTimeEntriesBatchMutationOptions(options));
     }
+
+export const getGetTimeTrackingStatusUrl = () => {
+
+
+
+
+  return `/api/time-tracking-status`
+}
+
+/**
+ * Liefert, ob die Zeiterfassung aktiv ist. Für Admins zählt die eigene Konto-Einstellung; für Assistenzkräfte der Zustand ihres Arbeitgebers (aktiv, sobald EIN Team-Eigentümer die Zeiterfassung eingeschaltet hat).
+ * @summary Effektiver Zeiterfassungs-Zustand des Kontos bzw. Arbeitgebers
+ */
+export const getTimeTrackingStatus = async ( options?: RequestInit): Promise<TimeTrackingStatus> => {
+
+  return customFetch<TimeTrackingStatus>(getGetTimeTrackingStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTimeTrackingStatusQueryKey = () => {
+    return [
+    `/api/time-tracking-status`
+    ] as const;
+    }
+
+
+export const getGetTimeTrackingStatusQueryOptions = <TData = Awaited<ReturnType<typeof getTimeTrackingStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTimeTrackingStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTimeTrackingStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTimeTrackingStatus>>> = ({ signal }) => getTimeTrackingStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTimeTrackingStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTimeTrackingStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getTimeTrackingStatus>>>
+export type GetTimeTrackingStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Effektiver Zeiterfassungs-Zustand des Kontos bzw. Arbeitgebers
+ */
+
+export function useGetTimeTrackingStatus<TData = Awaited<ReturnType<typeof getTimeTrackingStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTimeTrackingStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTimeTrackingStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getInviteUserUrl = (id: number,) => {
 
