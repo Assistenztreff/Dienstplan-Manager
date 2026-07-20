@@ -1,0 +1,21 @@
+# UI-Smoke-Subset fuer den Merge-Check (Validierung "e2e-smoke").
+#
+# Kuratierte Auswahl der kritischsten UI-Flows — bewusst KLEIN gehalten
+# (Ziel: wenige Minuten), damit der Merge-Check nicht auf die volle
+# Browser-Suite (~15+ min) anwaechst. Die volle Suite laeuft weiterhin via
+# `pnpm --filter @workspace/dienstplan run test:e2e`.
+#
+# Erweitern: eine Spec-Datei pro Zeile (Dateiname relativ zu e2e/),
+# Zeilen mit # sind Kommentare. Der Lauf: `pnpm run test:e2e:smoke`.
+#
+# Abgedeckte Flows:
+# - Registrierung + Login-Formular (oeffentlicher Auth-Pfad)
+dienstplan-registrierung-doppelte-email.spec.ts
+# - Dienst anlegen ueber den Dialog (Kern-Flow Monatskalender)
+dienstplan-shift-dialog.spec.ts
+# - Dienst bestaetigen (VORLAEUFIG/ANGEBOTEN -> FIX, Badge + Dialog-Banner)
+dienstplan-einklick-bestaetigung.spec.ts
+# - Monats-/Nachweis-Export als PDF (Download-Flow inkl. jspdf-Dynamik-Import)
+dienstplan-nachweis-export.spec.ts
+# - Team-Switcher/Team-Filter (Dienstleister, team-gefilterte Listen + Neuanlage)
+dienstplan-dienste-team-filter.spec.ts

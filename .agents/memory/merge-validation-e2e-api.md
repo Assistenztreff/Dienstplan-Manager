@@ -1,17 +1,19 @@
 ---
-name: Merge validation runs API-only e2e subset
-description: Registered validation steps (typecheck, e2e-api) run on every merge; how the API-spec filter works.
+name: Merge validation structure (typecheck / unit / serial e2e chain)
+description: Which validation commands run on merge, why DB-bound runs are chained serially, and how the API filter + smoke list work.
 ---
 
-Two validation commands are registered via the validation skill and run on every `mark_task_complete`/merge:
+Three validation commands are registered via the validation skill and run on every `mark_task_complete`/merge. **They execute in PARALLEL** (total = max, not sum), so anything touching the shared `_test` DB must live in ONE serial chain:
 
 - `typecheck` — `pnpm run typecheck`
-- `e2e-api` — `pnpm --filter @workspace/dienstplan run test:e2e:api`
+- `unit` — dienstplan + lib/db vitest + api-server `test:unit` (vitest excluding the DB-bound `platform-errors.retention.test.ts`) — fully DB-free, parallel-safe (~11s)
+- `e2e` — serial chain: api-server `test:db` (retention test) && `test:e2e:api` && `test:e2e:smoke` (~6.5 min)
 
-**Why:** while 13 specs were red for weeks, two product changes silently invalidated their assertions. Running at least the fast API-only e2e subset on every merge surfaces red specs immediately.
+**Why:** while 13 specs were red for weeks, two product changes silently invalidated their assertions — merge gating surfaces red specs immediately. And a first attempt with separate `e2e-api`/`e2e-smoke` validations failed instantly: parallel Playwright config loads raced past the run lock and collided in the `_test` DB (duplicate seeded accounts, failed separation checks).
 
 **How to apply:**
-- The npm script `test:e2e:api` bakes the file filter into the script (`playwright test "api\.spec\.ts$"`) — passing filters through `pnpm run test:e2e -- <file>` does NOT work (extra `--` kills the filter).
-- The filter matches all `*-api.spec.ts` files; name new API-only specs with that suffix so they join the merge gate automatically.
-- Full run ≈ 3 min including test-DB provisioning checks; the playwright config self-manages the isolated stack, run lock, and orphan reaping, so a validation run aborts cleanly if a manual e2e run is in progress (and vice versa).
-- If a task legitimately leaves an API spec red, fix or adjust the spec in the same task — do not deregister the validation.
+- Never register two validation commands that both touch the `_test` DB; extend the `e2e` chain instead.
+- New DB-bound vitest files in api-server must be excluded from `test:unit` and added to `test:db`.
+- `test:e2e:api` bakes the filter into the script (`playwright test "api\.spec\.ts$"`); `pnpm run test:e2e -- <file>` does NOT filter. Name API-only specs `*-api.spec.ts` to join the gate automatically.
+- `test:e2e:smoke` reads `artifacts/dienstplan/e2e/smoke-specs.txt` (one spec filename per line, `#` comments) — curated critical UI flows; keep it small (few minutes).
+- If a task legitimately leaves a gated spec red, fix or adjust the spec in the same task — do not deregister the validation.

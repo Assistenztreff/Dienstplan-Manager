@@ -22,11 +22,11 @@ args = "typecheck"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "e2e-api"
+args = "unit"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "unit"
+args = "e2e"
 
 [[workflows.workflow]]
 name = "typecheck"
@@ -40,23 +40,23 @@ args = "pnpm run typecheck"
 isValidation = true
 
 [[workflows.workflow]]
-name = "e2e-api"
+name = "unit"
 author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm --filter @workspace/dienstplan run test:e2e:api"
 
 [workflows.workflow.metadata]
 isValidation = true
 
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/dienstplan run test && pnpm --filter @workspace/db run test && pnpm --filter @workspace/api-server run test:unit"
+
 [[workflows.workflow]]
-name = "unit"
+name = "e2e"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pnpm --filter @workspace/dienstplan run test"
+args = "pnpm --filter @workspace/api-server run test:db && pnpm --filter @workspace/dienstplan run test:e2e:api && pnpm --filter @workspace/dienstplan run test:e2e:smoke"
 
 [workflows.workflow.metadata]
 isValidation = true
