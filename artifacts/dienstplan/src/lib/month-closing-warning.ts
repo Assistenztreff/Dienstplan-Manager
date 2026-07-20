@@ -15,10 +15,15 @@ import { toast } from "sonner";
 // eine Statusabfrage feuern und der Toast nicht mehrfach erscheint.
 const closedCache = new Map<string, boolean>();
 const warnedThisSession = new Set<string>();
+// Laufende Statusabfragen je Schlüssel: Massen-Anlegen feuert warnIfMonthClosed
+// für alle Tage im SELBEN Tick — ohne In-Flight-Dedupe würde jeder Aufruf eine
+// eigene GET-Anfrage starten, bevor die erste den Boolean-Cache füllen kann.
+const inflight = new Map<string, Promise<boolean>>();
 
 export function clearMonthClosingWarningCache(): void {
   closedCache.clear();
   warnedThisSession.clear();
+  inflight.clear();
 }
 
 /**
@@ -32,13 +37,21 @@ export async function warnIfMonthClosed(date: Date, teamId: number | null): Prom
   try {
     let closed = closedCache.get(key);
     if (closed === undefined) {
-      const status = await getMonthClosings({
-        month,
-        year,
-        ...(teamId != null ? { teamId } : {}),
-      });
-      closed = status.closed;
-      closedCache.set(key, closed);
+      let pending = inflight.get(key);
+      if (!pending) {
+        pending = getMonthClosings({
+          month,
+          year,
+          ...(teamId != null ? { teamId } : {}),
+        }).then((status) => status.closed);
+        inflight.set(key, pending);
+      }
+      try {
+        closed = await pending;
+        closedCache.set(key, closed);
+      } finally {
+        inflight.delete(key);
+      }
     }
     if (!closed || warnedThisSession.has(key)) return;
     warnedThisSession.add(key);
