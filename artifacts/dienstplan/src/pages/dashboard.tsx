@@ -437,22 +437,39 @@ export default function Dashboard() {
             >
               <div className="text-3xl font-bold">{summary.activeShiftsToday}</div>
             </KpiCard>
-            <KpiCard
-              title="Offene Zeiteintraege"
-              to="/zeiterfassung?status=pending"
-              testId="kpi-pending-time-entries"
-            >
-              <div className="text-3xl font-bold">{summary.pendingTimeEntries}</div>
-            </KpiCard>
-            <KpiCard
-              title="Stundenbilanz Monat"
-              to="/auswertungen"
-              testId="kpi-hours-balance"
-            >
-              <div className="text-3xl font-bold">
-                {summary.monthlyActualHours} <span className="text-lg text-muted-foreground font-normal">/ {summary.monthlyPlannedHours} h</span>
-              </div>
-            </KpiCard>
+            {/* Konto-Schalter „Zeiterfassung aktivieren" (Standard AUS):
+                Bei AUS entfällt die Kachel „Offene Zeiteinträge" und statt der
+                Ist/Soll-Bilanz werden die geplanten FIX-Stunden gezeigt. */}
+            {summary.timeTrackingEnabled ? (
+              <>
+                <KpiCard
+                  title="Offene Zeiteintraege"
+                  to="/zeiterfassung?status=pending"
+                  testId="kpi-pending-time-entries"
+                >
+                  <div className="text-3xl font-bold">{summary.pendingTimeEntries}</div>
+                </KpiCard>
+                <KpiCard
+                  title="Stundenbilanz Monat"
+                  to="/auswertungen"
+                  testId="kpi-hours-balance"
+                >
+                  <div className="text-3xl font-bold">
+                    {summary.monthlyActualHours} <span className="text-lg text-muted-foreground font-normal">/ {summary.monthlyPlannedHours} h</span>
+                  </div>
+                </KpiCard>
+              </>
+            ) : (
+              <KpiCard
+                title="Geplante Stunden (Monat)"
+                to="/auswertungen"
+                testId="kpi-planned-hours"
+              >
+                <div className="text-3xl font-bold">
+                  {summary.monthlyPlannedHours} <span className="text-lg text-muted-foreground font-normal">h</span>
+                </div>
+              </KpiCard>
+            )}
           </div>
 
           {isAdmin && hasAccess(currentUser, "advancedAnalytics") && (

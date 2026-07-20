@@ -1245,6 +1245,7 @@ export const GetDashboardSummaryQueryParams = zod.object({
 })
 
 export const GetDashboardSummaryResponse = zod.object({
+  "timeTrackingEnabled": zod.boolean().describe('Effektiver Zustand des Konto-Schalters „Zeiterfassung aktivieren\" (Admin: eigener Team-Scope; Assistent: Zustand des Arbeitgebers). Bei false liefert das Dashboard KEINE Zeiterfassungs-Kennzahlen: pendingTimeEntries\/uncountedPending\* sind 0, recentTimeEntries ist leer und monthlyActualHours zeigt die geplanten FIX-Stunden (planbasiert).'),
   "totalAssistants": zod.number(),
   "activeShiftsToday": zod.number(),
   "pendingTimeEntries": zod.number(),

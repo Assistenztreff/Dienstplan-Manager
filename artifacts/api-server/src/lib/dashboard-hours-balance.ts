@@ -44,6 +44,23 @@ export type BillingMethod = "SOLL" | "IST";
 /** Vergütungstyp des zugrundeliegenden Dienstes (Geld-Berechnung, Point 4). */
 export type CompensationType = "regular" | "percentage" | "flat";
 
+/**
+ * Berechnungs-Weiche für die Abrechnungsart: Ist die Zeiterfassung des
+ * Team-Eigentümers DEAKTIVIERT (Konto-Schalter, Standard AUS), existieren
+ * keine (neuen) IST-Zeiten — die gesamte Lohnberechnung (Grundvergütung UND
+ * Zuschläge) muss dann aus den geplanten FIX-Schichten erfolgen. Der
+ * konfigurierte SOLL/IST-Toggle bleibt gespeichert, wird bei AUS aber
+ * effektiv SOLL. Bei aktivierter Zeiterfassung gilt der konfigurierte Wert
+ * unverändert (Default SOLL = Bestandsschutz).
+ */
+export function resolveEffectiveBillingMethod(
+  configured: BillingMethod | null | undefined,
+  timeTrackingEnabled: boolean,
+): BillingMethod {
+  if (!timeTrackingEnabled) return "SOLL";
+  return configured ?? "SOLL";
+}
+
 /** Bestätigter Zeiterfassungs-Eintrag inkl. Typ der verknüpften Schicht. */
 export interface BalanceTimeEntry {
   actualHours?: number | null;

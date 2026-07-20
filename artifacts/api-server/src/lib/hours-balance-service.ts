@@ -25,11 +25,13 @@ import { resolveAllowanceOps, type ResolvedAllowanceOps } from "./allowance-reso
 import { resolveReadTeamScope } from "./teams";
 import {
   computeHoursBalanceRow,
+  resolveEffectiveBillingMethod,
   DEFAULT_NIGHT_PERCENT,
   DEFAULT_SUNDAY_PERCENT,
   DEFAULT_HOLIDAY_PERCENT,
   type HoursBalanceRow,
 } from "./dashboard-hours-balance";
+import { getTimeTrackingEnabledTeamIds } from "./time-tracking-enabled";
 
 async function activeContractFor(userId: number, date: Date) {
   const dateStr = date.toISOString().split("T")[0];
@@ -91,6 +93,15 @@ export async function computeHoursBalances(
     : [];
 
   const referenceDate = new Date(year, month - 1, 1);
+
+  // Konto-Schalter „Zeiterfassung aktivieren" je Team (Eigentümer-Konto,
+  // Standard AUS): Ist die Zeiterfassung des maßgeblichen Teams deaktiviert,
+  // wird die Abrechnungsart effektiv SOLL — die gesamte Geldrechnung
+  // (Grundvergütung + Zuschläge) läuft dann aus den geplanten FIX-Schichten,
+  // da keine IST-Zeiten entstehen können.
+  const timeTrackingEnabledTeams = new Set(
+    await getTimeTrackingEnabledTeamIds(teamScope),
+  );
 
   // Aktuelle Zuschlags-Prozentsätze: werden erst hier (nicht beim Speichern der
   // Schicht) angewandt, damit Änderungen rückwirkend greifen. Fallback-Kette
@@ -275,8 +286,20 @@ export async function computeHoursBalances(
         contractTeamId ?? requestedTeamId ?? (teamScope.length === 1 ? teamScope[0] : undefined);
       const teamBilling =
         fallbackTeamId != null ? teamMetaByTeam.get(fallbackTeamId)?.billingMethod : null;
-      const billingMethod: "SOLL" | "IST" =
+      const configuredBillingMethod: "SOLL" | "IST" =
         contract?.billingMethod ?? teamBilling ?? "SOLL";
+      // Zeiterfassung deaktiviert (Konto-Schalter des Team-Eigentümers)?
+      // Dann effektiv SOLL: komplette Geldrechnung aus den FIX-Schichten.
+      // Ohne eindeutiges Team gilt der Schalter, wenn mindestens ein Team im
+      // Scope die Zeiterfassung aktiviert hat.
+      const timeTrackingEnabled =
+        fallbackTeamId != null
+          ? timeTrackingEnabledTeams.has(fallbackTeamId)
+          : timeTrackingEnabledTeams.size > 0;
+      const billingMethod = resolveEffectiveBillingMethod(
+        configuredBillingMethod,
+        timeTrackingEnabled,
+      );
 
       // Im IST-Modus werden gewertete Stunden UND Zuschläge aus den tatsächlich
       // erfassten Zeiten je Eintrag berechnet (Nachtfenster/Bundesland des

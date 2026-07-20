@@ -22,6 +22,11 @@ import {
   DEFAULT_HOLIDAY_PERCENT,
 } from "../lib/dashboard-hours-balance";
 import { computeHoursBalances } from "../lib/hours-balance-service";
+import {
+  getTimeTrackingEnabledTeamIds,
+  isTimeTrackingEnabledForOwner,
+  isTimeTrackingEnabledForUser,
+} from "../lib/time-tracking-enabled";
 
 const router = Router();
 
@@ -108,10 +113,20 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
         )
       );
 
-    const [{ pendingTimeEntries }] = await db
-      .select({ pendingTimeEntries: count() })
-      .from(timeTrackingTable)
-      .where(and(inArray(timeTrackingTable.teamId, teamScope), eq(timeTrackingTable.status, "pending")));
+    // Konto-Schalter „Zeiterfassung aktivieren" (Standard AUS): Bei AUS zeigt
+    // das Dashboard KEINE Zeiterfassungs-Kennzahlen (offene Stundenzettel,
+    // Ist-Stunden, ungezählte offene Einträge) — die Zahlen wären ohne
+    // Erfassung dauerhaft leer bzw. irreführende Bestandsdaten.
+    const timeTrackingEnabled = teamScope.length
+      ? (await getTimeTrackingEnabledTeamIds(teamScope)).length > 0
+      : await isTimeTrackingEnabledForOwner(userId);
+
+    const [{ pendingTimeEntries }] = timeTrackingEnabled
+      ? await db
+          .select({ pendingTimeEntries: count() })
+          .from(timeTrackingTable)
+          .where(and(inArray(timeTrackingTable.teamId, teamScope), eq(timeTrackingTable.status, "pending")))
+      : [{ pendingTimeEntries: 0 }];
 
     const monthShifts = await db
       .select({ startTime: shiftsTable.startTime, endTime: shiftsTable.endTime })
@@ -145,18 +160,25 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
           ),
         )
       : eq(timeTrackingTable.status, "confirmed");
-    const monthTimeEntries = await db
-      .select({ actualHours: timeTrackingTable.actualHours })
-      .from(timeTrackingTable)
-      .where(
-        and(
-          inArray(timeTrackingTable.teamId, teamScope),
-          sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${month}`,
-          sql`EXTRACT(YEAR FROM ${timeTrackingTable.actualStart}) = ${year}`,
-          statusCondition,
-        )
-      );
-    const monthlyActualHours = monthTimeEntries.reduce((acc, e) => acc + (e.actualHours ?? 0), 0);
+    const monthTimeEntries = timeTrackingEnabled
+      ? await db
+          .select({ actualHours: timeTrackingTable.actualHours })
+          .from(timeTrackingTable)
+          .where(
+            and(
+              inArray(timeTrackingTable.teamId, teamScope),
+              sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${month}`,
+              sql`EXTRACT(YEAR FROM ${timeTrackingTable.actualStart}) = ${year}`,
+              statusCondition,
+            )
+          )
+      : [];
+    // Bei deaktivierter Zeiterfassung gibt es keine Ist-Stunden — die
+    // Ist-Kennzahl zeigt dann die geplanten FIX-Stunden (planbasiert), damit
+    // die Kachel konsistent bleibt und keine Zeiterfassungs-Werte auftauchen.
+    const monthlyActualHours = timeTrackingEnabled
+      ? monthTimeEntries.reduce((acc, e) => acc + (e.actualHours ?? 0), 0)
+      : monthlyPlannedHours;
 
     // Offene Einträge in STRIKTEN Teams (Premium-Eigentümer) fließen nicht in
     // monthlyActualHours ein. Nach einem Upgrade Free→Premium würden zuvor
@@ -166,7 +188,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     const strictTeamIds = teamScope.filter((id) => !lenientTeamIds.includes(id));
     let uncountedPendingHours = 0;
     let uncountedPendingEntries = 0;
-    if (strictTeamIds.length) {
+    if (timeTrackingEnabled && strictTeamIds.length) {
       const uncounted = await db
         .select({ actualHours: timeTrackingTable.actualHours })
         .from(timeTrackingTable)
@@ -198,25 +220,27 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       .where(and(inArray(shiftsTable.teamId, teamScope), sql`${shiftsTable.startTime} >= ${today}`))
       .limit(5);
 
-    const recentTimeEntries = await db
-      .select({
-        id: timeTrackingTable.id,
-        userId: timeTrackingTable.userId,
-        shiftId: timeTrackingTable.shiftId,
-        actualStart: timeTrackingTable.actualStart,
-        actualEnd: timeTrackingTable.actualEnd,
-        actualHours: timeTrackingTable.actualHours,
-        status: timeTrackingTable.status,
-        notes: timeTrackingTable.notes,
-        confirmedBy: timeTrackingTable.confirmedBy,
-        confirmedAt: timeTrackingTable.confirmedAt,
-        createdAt: timeTrackingTable.createdAt,
-        user: SAFE_SHIFT_USER,
-      })
-      .from(timeTrackingTable)
-      .leftJoin(usersTable, eq(timeTrackingTable.userId, usersTable.id))
-      .where(inArray(timeTrackingTable.teamId, teamScope))
-      .limit(5);
+    const recentTimeEntries = timeTrackingEnabled
+      ? await db
+          .select({
+            id: timeTrackingTable.id,
+            userId: timeTrackingTable.userId,
+            shiftId: timeTrackingTable.shiftId,
+            actualStart: timeTrackingTable.actualStart,
+            actualEnd: timeTrackingTable.actualEnd,
+            actualHours: timeTrackingTable.actualHours,
+            status: timeTrackingTable.status,
+            notes: timeTrackingTable.notes,
+            confirmedBy: timeTrackingTable.confirmedBy,
+            confirmedAt: timeTrackingTable.confirmedAt,
+            createdAt: timeTrackingTable.createdAt,
+            user: SAFE_SHIFT_USER,
+          })
+          .from(timeTrackingTable)
+          .leftJoin(usersTable, eq(timeTrackingTable.userId, usersTable.id))
+          .where(inArray(timeTrackingTable.teamId, teamScope))
+          .limit(5)
+      : [];
 
     // --- Warnhinweise (nur Admin) ---
     const assistants = teamMemberIds.length
@@ -280,6 +304,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       hoursBalance: Math.round((monthlyActualHours - monthlyPlannedHours) * 100) / 100,
       uncountedPendingHours: Math.round(uncountedPendingHours * 100) / 100,
       uncountedPendingEntries,
+      timeTrackingEnabled,
       upcomingShifts,
       recentTimeEntries,
       warnings: {
@@ -289,7 +314,8 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
         // existiert. Sind ALLE Teams lenient (Free), ist "offen" der
         // Normalzustand — das Frontend blendet die Warnung dann aus.
         timeTrackingConfirmable:
-          teamScope.length === 0 || lenientTeamIds.length < teamScope.length,
+          timeTrackingEnabled &&
+          (teamScope.length === 0 || lenientTeamIds.length < teamScope.length),
         lowVacationAssistants,
         uncoveredDays,
         lowVacationThreshold: LOW_VACATION_THRESHOLD,
@@ -312,15 +338,22 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       )
     );
 
-  const [{ pendingTimeEntries }] = await db
-    .select({ pendingTimeEntries: count() })
-    .from(timeTrackingTable)
-    .where(
-      and(
-        eq(timeTrackingTable.userId, userId),
-        eq(timeTrackingTable.status, "pending")
-      )
-    );
+  // Effektiver Zeiterfassungs-Zustand des Assistenten = Zustand des
+  // Arbeitgebers (Konto-Schalter des Team-Eigentümers, Standard AUS). Bei AUS
+  // liefert das Dashboard keine Zeiterfassungs-Kennzahlen.
+  const timeTrackingEnabled = await isTimeTrackingEnabledForUser(userId);
+
+  const [{ pendingTimeEntries }] = timeTrackingEnabled
+    ? await db
+        .select({ pendingTimeEntries: count() })
+        .from(timeTrackingTable)
+        .where(
+          and(
+            eq(timeTrackingTable.userId, userId),
+            eq(timeTrackingTable.status, "pending")
+          )
+        )
+    : [{ pendingTimeEntries: 0 }];
 
   const monthShifts = await db
     .select({ startTime: shiftsTable.startTime, endTime: shiftsTable.endTime })
@@ -355,18 +388,24 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
         ),
       )
     : eq(timeTrackingTable.status, "confirmed");
-  const monthTimeEntries = await db
-    .select({ actualHours: timeTrackingTable.actualHours })
-    .from(timeTrackingTable)
-    .where(
-      and(
-        eq(timeTrackingTable.userId, userId),
-        sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${month}`,
-        sql`EXTRACT(YEAR FROM ${timeTrackingTable.actualStart}) = ${year}`,
-        statusCondition,
-      )
-    );
-  const monthlyActualHours = monthTimeEntries.reduce((acc, e) => acc + (e.actualHours ?? 0), 0);
+  const monthTimeEntries = timeTrackingEnabled
+    ? await db
+        .select({ actualHours: timeTrackingTable.actualHours })
+        .from(timeTrackingTable)
+        .where(
+          and(
+            eq(timeTrackingTable.userId, userId),
+            sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${month}`,
+            sql`EXTRACT(YEAR FROM ${timeTrackingTable.actualStart}) = ${year}`,
+            statusCondition,
+          )
+        )
+    : [];
+  // Bei deaktivierter Zeiterfassung: planbasierte Anzeige (FIX-Plan-Stunden)
+  // statt leerer Ist-Stunden — analog zum Admin-Branch.
+  const monthlyActualHours = timeTrackingEnabled
+    ? monthTimeEntries.reduce((acc, e) => acc + (e.actualHours ?? 0), 0)
+    : monthlyPlannedHours;
 
   // Analog zum Admin-Branch: offene Einträge des Assistenten in strikten
   // (Premium-)Teams zählen nicht — die Summe wird ausgewiesen, damit der
@@ -374,7 +413,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   const strictTeamIds = assistantTeamIds.filter((id) => !lenientTeamIds.includes(id));
   let uncountedPendingHours = 0;
   let uncountedPendingEntries = 0;
-  if (strictTeamIds.length) {
+  if (timeTrackingEnabled && strictTeamIds.length) {
     const uncounted = await db
       .select({ actualHours: timeTrackingTable.actualHours })
       .from(timeTrackingTable)
@@ -407,25 +446,27 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     .where(and(eq(shiftsTable.userId, userId), sql`${shiftsTable.startTime} >= ${today}`))
     .limit(5);
 
-  const recentTimeEntries = await db
-    .select({
-      id: timeTrackingTable.id,
-      userId: timeTrackingTable.userId,
-      shiftId: timeTrackingTable.shiftId,
-      actualStart: timeTrackingTable.actualStart,
-      actualEnd: timeTrackingTable.actualEnd,
-      actualHours: timeTrackingTable.actualHours,
-      status: timeTrackingTable.status,
-      notes: timeTrackingTable.notes,
-      confirmedBy: timeTrackingTable.confirmedBy,
-      confirmedAt: timeTrackingTable.confirmedAt,
-      createdAt: timeTrackingTable.createdAt,
-      user: SAFE_SHIFT_USER,
-    })
-    .from(timeTrackingTable)
-    .leftJoin(usersTable, eq(timeTrackingTable.userId, usersTable.id))
-    .where(eq(timeTrackingTable.userId, userId))
-    .limit(5);
+  const recentTimeEntries = timeTrackingEnabled
+    ? await db
+        .select({
+          id: timeTrackingTable.id,
+          userId: timeTrackingTable.userId,
+          shiftId: timeTrackingTable.shiftId,
+          actualStart: timeTrackingTable.actualStart,
+          actualEnd: timeTrackingTable.actualEnd,
+          actualHours: timeTrackingTable.actualHours,
+          status: timeTrackingTable.status,
+          notes: timeTrackingTable.notes,
+          confirmedBy: timeTrackingTable.confirmedBy,
+          confirmedAt: timeTrackingTable.confirmedAt,
+          createdAt: timeTrackingTable.createdAt,
+          user: SAFE_SHIFT_USER,
+        })
+        .from(timeTrackingTable)
+        .leftJoin(usersTable, eq(timeTrackingTable.userId, usersTable.id))
+        .where(eq(timeTrackingTable.userId, userId))
+        .limit(5)
+    : [];
 
   res.json({
     totalAssistants: null,
@@ -436,6 +477,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     hoursBalance: Math.round((monthlyActualHours - monthlyPlannedHours) * 100) / 100,
     uncountedPendingHours: Math.round(uncountedPendingHours * 100) / 100,
     uncountedPendingEntries,
+    timeTrackingEnabled,
     upcomingShifts,
     recentTimeEntries,
   });

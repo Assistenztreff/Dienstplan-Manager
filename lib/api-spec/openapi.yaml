@@ -2734,8 +2734,17 @@ components:
 
     DashboardSummary:
       type: object
-      required: [totalAssistants, activeShiftsToday, pendingTimeEntries, monthlyPlannedHours, monthlyActualHours]
+      required: [totalAssistants, activeShiftsToday, pendingTimeEntries, monthlyPlannedHours, monthlyActualHours, timeTrackingEnabled]
       properties:
+        timeTrackingEnabled:
+          type: boolean
+          description: >-
+            Effektiver Zustand des Konto-Schalters „Zeiterfassung aktivieren"
+            (Admin: eigener Team-Scope; Assistent: Zustand des Arbeitgebers).
+            Bei false liefert das Dashboard KEINE Zeiterfassungs-Kennzahlen:
+            pendingTimeEntries/uncountedPending* sind 0, recentTimeEntries ist
+            leer und monthlyActualHours zeigt die geplanten FIX-Stunden
+            (planbasiert).
         totalAssistants:
           type: integer
         activeShiftsToday:

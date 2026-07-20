@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   computeHoursBalanceRow,
+  resolveEffectiveBillingMethod,
   round2,
   DEFAULT_NIGHT_PERCENT,
   DEFAULT_SUNDAY_PERCENT,
@@ -348,5 +349,24 @@ describe("round2", () => {
     expect(round2(1.005)).toBe(1.0); // klassisches Float-Verhalten
     expect(round2(2.345)).toBe(2.35);
     expect(round2(8.333333)).toBe(8.33);
+  });
+});
+
+describe("resolveEffectiveBillingMethod — Berechnungs-Weiche Zeiterfassung", () => {
+  it("Zeiterfassung AUS erzwingt SOLL, unabhängig vom konfigurierten Toggle", () => {
+    expect(resolveEffectiveBillingMethod("IST", false)).toBe("SOLL");
+    expect(resolveEffectiveBillingMethod("SOLL", false)).toBe("SOLL");
+    expect(resolveEffectiveBillingMethod(null, false)).toBe("SOLL");
+    expect(resolveEffectiveBillingMethod(undefined, false)).toBe("SOLL");
+  });
+
+  it("Zeiterfassung EIN übernimmt den konfigurierten Wert unverändert", () => {
+    expect(resolveEffectiveBillingMethod("IST", true)).toBe("IST");
+    expect(resolveEffectiveBillingMethod("SOLL", true)).toBe("SOLL");
+  });
+
+  it("Zeiterfassung EIN ohne Konfiguration fällt auf SOLL zurück", () => {
+    expect(resolveEffectiveBillingMethod(null, true)).toBe("SOLL");
+    expect(resolveEffectiveBillingMethod(undefined, true)).toBe("SOLL");
   });
 });

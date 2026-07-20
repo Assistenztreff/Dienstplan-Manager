@@ -1057,6 +1057,8 @@ export interface DashboardWarnings {
 }
 
 export interface DashboardSummary {
+  /** Effektiver Zustand des Konto-Schalters „Zeiterfassung aktivieren" (Admin: eigener Team-Scope; Assistent: Zustand des Arbeitgebers). Bei false liefert das Dashboard KEINE Zeiterfassungs-Kennzahlen: pendingTimeEntries/uncountedPending* sind 0, recentTimeEntries ist leer und monthlyActualHours zeigt die geplanten FIX-Stunden (planbasiert). */
+  timeTrackingEnabled: boolean;
   totalAssistants: number;
   activeShiftsToday: number;
   pendingTimeEntries: number;
