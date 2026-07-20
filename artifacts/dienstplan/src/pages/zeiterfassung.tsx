@@ -1,6 +1,6 @@
 import { isAdminRole } from "@/lib/roles";
 import { useMemo, useState } from "react";
-import { useSearchParams } from "wouter";
+import { Link, useSearchParams } from "wouter";
 import {
   useListTimeEntries,
   useListUsers,
@@ -107,8 +107,16 @@ function ZeiterfassungDeaktiviert({ isAdmin }: { isAdmin: boolean }) {
         <p className="mt-2 text-sm text-muted-foreground">
           {isAdmin
             ? "Die Zeiterfassung ist für dieses Konto ausgeschaltet. Sie können sie in den Einstellungen unter „Zuschläge & Abrechnung“ aktivieren — vorhandene Einträge bleiben erhalten und sind danach wieder sichtbar."
-            : "Die Zeiterfassung ist derzeit ausgeschaltet. Der Dienstplan ist die Grundlage — vorhandene Einträge bleiben erhalten und sind wieder sichtbar, sobald die Zeiterfassung aktiviert wird."}
+            : "Die Zeiterfassung wurde vom Arbeitgeber deaktiviert. Der Dienstplan ist die Grundlage — vorhandene Einträge bleiben erhalten und sind wieder sichtbar, sobald die Zeiterfassung aktiviert wird."}
         </p>
+        {isAdmin && (
+          <Button asChild variant="outline" className="mt-6" data-testid="time-tracking-disabled-settings-link">
+            <Link href="/einstellungen#zuschlaege">
+              Zu den Einstellungen
+              <ArrowRight className="ml-1.5 h-4 w-4" />
+            </Link>
+          </Button>
+        )}
       </Card>
     </div>
   );

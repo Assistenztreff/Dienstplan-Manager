@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   useListShiftModels,
   useCreateShiftModel,
@@ -1119,6 +1119,25 @@ export default function Einstellungen() {
   const [editModel, setEditModel] = useState<ShiftModel | undefined>();
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
+  // Sprungziel-Anker (#zuschlaege): Verweise aus anderen Seiten (z. B. der
+  // Hinweis auf der Zeiterfassungs-Seite) scrollen zum Zuschläge-Bereich.
+  // Kurzes Polling, weil der Bereich erst nach dem Laden der Daten rendert.
+  useEffect(() => {
+    if (window.location.hash !== "#zuschlaege") return;
+    let attempts = 0;
+    const timer = window.setInterval(() => {
+      const el = document.getElementById("zuschlaege");
+      attempts += 1;
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        window.clearInterval(timer);
+      } else if (attempts > 20) {
+        window.clearInterval(timer);
+      }
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, []);
+
   // Soft-geloeschte Modelle (isActive=false) bleiben fuer die Historie in der DB,
   // sollen aber weder in der Verwaltung noch in den Auswahllisten auftauchen.
   const sortedModels: ShiftModel[] = ((models ?? []) as ShiftModel[]).filter((m) => m.isActive);
@@ -1290,7 +1309,11 @@ export default function Einstellungen() {
 
       {isDienstleister && <LogoSettingsCard />}
 
-      <AllowanceSettingsForm />
+      {/* Sprungziel für Verweise aus anderen Seiten (z. B. Hinweis auf der
+          Zeiterfassungs-Seite bei deaktivierter Zeiterfassung). */}
+      <div id="zuschlaege" className="scroll-mt-4">
+        <AllowanceSettingsForm />
+      </div>
 
       <p className="text-xs text-muted-foreground">
         Zuschläge gelten nur für Ihr Konto und werden bei der Auswertung angewandt. Änderungen wirken
