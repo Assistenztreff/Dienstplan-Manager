@@ -164,12 +164,20 @@ function truncate(text: string, maxLength = 300): string {
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
 }
 
+// HTML/XML-like bodies (e.g. a platform maintenance page served instead of
+// the API) must never leak raw markup into err.message — callers may show
+// or log the message directly.
+function looksLikeMarkup(text: string): boolean {
+  return text.trimStart().startsWith("<");
+}
+
 function buildErrorMessage(response: Response, data: unknown): string {
   const prefix = `HTTP ${response.status} ${response.statusText}`;
 
   if (typeof data === "string") {
     const text = data.trim();
-    return text ? `${prefix}: ${truncate(text)}` : prefix;
+    if (!text || looksLikeMarkup(text)) return prefix;
+    return `${prefix}: ${truncate(text)}`;
   }
 
   const title = getStringField(data, "title");

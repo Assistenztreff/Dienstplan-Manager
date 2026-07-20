@@ -31,6 +31,24 @@ function makeApiError(status: number, data: unknown): ApiError {
   });
 }
 
+describe("ApiError.message (buildErrorMessage im Fetch-Mutator)", () => {
+  it("lässt HTML-Bodies aus err.message weg (nur HTTP-Präfix)", () => {
+    const err = makeApiError(503, "<!DOCTYPE html><html><body>Wartung</body></html>");
+    expect(err.message.trim()).toBe("HTTP 503");
+    expect(err.message).not.toContain("<");
+  });
+
+  it("lässt auch XML-/Fragment-Bodies weg", () => {
+    const err = makeApiError(502, "  <div>Bad Gateway</div>");
+    expect(err.message).not.toContain("<div>");
+  });
+
+  it("behält kurze Klartext-Bodies bei", () => {
+    const err = makeApiError(400, "Ungültige Eingabe");
+    expect(err.message).toContain("Ungültige Eingabe");
+  });
+});
+
 describe("readableApiError", () => {
   it("liefert das `error`-Feld der Serverantwort statt des Fallbacks", () => {
     const err = makeApiError(409, { error: "Konkrete Servermeldung" });

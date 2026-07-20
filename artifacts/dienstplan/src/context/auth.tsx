@@ -46,6 +46,16 @@ async function apiFetch(path: string, init?: RequestInit) {
   return res;
 }
 
+// Defensive Aufbereitung von `error`-Strings aus Auth-Antworten: HTML-/XML-
+// artige oder überlange Texte (z. B. Fragmente der Plattform-Wartungsseite)
+// dürfen nie roh im UI landen — stattdessen den generischen Fallback zeigen.
+function safeErrorText(value: unknown, fallback: string): string {
+  if (typeof value !== "string") return fallback;
+  const text = value.trim();
+  if (!text || text.startsWith("<") || text.length > 300) return fallback;
+  return text;
+}
+
 // Dev-only Session-Cache. Speichert NUR das nicht-sensible Nutzerprofil
 // (id/name/email/role) zur sofortigen UI-Hydration nach Reload — KEINE
 // Passwörter oder Tokens. Die echte Authentifizierung bleibt die serverseitige
@@ -145,7 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     if (!r.ok) {
       const data = await r.json().catch(() => ({})) as { error?: string };
-      throw new Error(data.error ?? "Anmeldung fehlgeschlagen");
+      throw new Error(safeErrorText(data.error, "Anmeldung fehlgeschlagen"));
     }
     const user = (await r.json()) as AuthUser;
     setCurrentUser(user);
@@ -165,7 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     if (!r.ok) {
       const data = (await r.json().catch(() => ({}))) as { error?: string };
-      const err = new Error(data.error ?? "Registrierung fehlgeschlagen") as Error & {
+      const err = new Error(safeErrorText(data.error, "Registrierung fehlgeschlagen")) as Error & {
         status?: number;
       };
       err.status = r.status;
@@ -219,7 +229,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     if (!r.ok) {
       const data = (await r.json().catch(() => ({}))) as { error?: string };
-      throw new Error(data.error ?? "Nutzerwechsel fehlgeschlagen");
+      throw new Error(safeErrorText(data.error, "Nutzerwechsel fehlgeschlagen"));
     }
     const user = (await r.json()) as AuthUser;
     setCurrentUser(user);
@@ -234,7 +244,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     if (!r.ok) {
       const data = await r.json().catch(() => ({})) as { error?: string };
-      throw new Error(data.error ?? "Fehler beim Setzen des Passworts");
+      throw new Error(safeErrorText(data.error, "Fehler beim Setzen des Passworts"));
     }
     const user = (await r.json()) as AuthUser;
     setCurrentUser(user);
