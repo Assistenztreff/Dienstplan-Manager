@@ -1,5 +1,29 @@
 import { ApiError } from "@workspace/api-client-react";
 
+/**
+ * Klare deutsche Meldung, wenn statt unserer API eine fremde Antwort kommt
+ * (z. B. die HTML-Wartungsseite der Plattform während eines kurzen
+ * Server-Neustarts). Wird auch von Tests referenziert.
+ */
+export const SERVER_UNAVAILABLE_MESSAGE =
+  "Server ist gerade nicht erreichbar. Bitte in ein paar Sekunden erneut versuchen.";
+
+/**
+ * Erkennt HTML-/XML-artige Fehler-Bodies (z. B. „<!DOCTYPE html>…" der
+ * Plattform-Wartungsseite). Solche Antworten stammen nicht von unserer API
+ * und dürfen nie roh im UI landen.
+ */
+function looksLikeHtml(text: string): boolean {
+  return text.trimStart().startsWith("<");
+}
+
+/**
+ * Maximale Länge, die wir einem String-Body als „echte" Servermeldung noch
+ * zutrauen. Unsere API liefert kurze deutsche Sätze; alles deutlich Längere
+ * (ASCII-Grafiken, Stacktraces, Proxy-Seiten) ist kein anzeigbarer Text.
+ */
+const MAX_PLAIN_TEXT_LENGTH = 300;
+
 function pickString(value: unknown, key: string): string | undefined {
   if (!value || typeof value !== "object") return undefined;
   const candidate = (value as Record<string, unknown>)[key];
@@ -20,7 +44,14 @@ export function readableApiError(err: unknown, fallback: string): string {
     const data = err.data;
 
     if (typeof data === "string" && data.trim() !== "") {
-      return data.trim();
+      const text = data.trim();
+      // HTML-/XML-Seiten (z. B. Plattform-Wartungsseite bei kurzem
+      // Server-Neustart) und überlange Texte stammen nicht von unserer API —
+      // nie roh anzeigen, sondern klaren Hinweis liefern.
+      if (looksLikeHtml(text) || text.length > MAX_PLAIN_TEXT_LENGTH) {
+        return SERVER_UNAVAILABLE_MESSAGE;
+      }
+      return text;
     }
 
     const detail =
@@ -30,6 +61,14 @@ export function readableApiError(err: unknown, fallback: string): string {
       pickString(data, "title");
 
     if (detail) return detail;
+
+    return fallback;
+  }
+
+  // fetch wirft bei Netzwerkfehlern (Server kurz weg, Verbindungsabbruch)
+  // einen TypeError — auch hier klarer Hinweis statt generischem Fallback.
+  if (err instanceof TypeError) {
+    return SERVER_UNAVAILABLE_MESSAGE;
   }
 
   return fallback;

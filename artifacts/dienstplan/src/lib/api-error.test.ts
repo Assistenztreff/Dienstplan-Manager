@@ -5,6 +5,7 @@ import {
   planLimitMessage,
   planUpgradeMessage,
   readableApiError,
+  SERVER_UNAVAILABLE_MESSAGE,
 } from "./api-error";
 
 /**
@@ -58,9 +59,36 @@ describe("readableApiError", () => {
     expect(readableApiError(err, FALLBACK)).toBe("Bevorzugt");
   });
 
-  it("akzeptiert einen reinen String-Body als Servermeldung", () => {
+  it("akzeptiert einen kurzen reinen String-Body als Servermeldung", () => {
     const err = makeApiError(500, "Roher Text vom Server");
     expect(readableApiError(err, FALLBACK)).toBe("Roher Text vom Server");
+  });
+
+  it("zeigt HTML-Bodies (Plattform-Wartungsseite) NIE roh an", () => {
+    const maintenancePage =
+      "<!DOCTYPE html>\n<html>\n<head><title>Replit</title></head>\n" +
+      "<body>Run this app to see the results here.</body></html>";
+    expect(readableApiError(makeApiError(404, maintenancePage), FALLBACK)).toBe(
+      SERVER_UNAVAILABLE_MESSAGE,
+    );
+    expect(
+      readableApiError(makeApiError(502, "<html><body>Bad Gateway</body></html>"), FALLBACK),
+    ).toBe(SERVER_UNAVAILABLE_MESSAGE);
+    // Auch HTML-Fragmente ohne DOCTYPE (beginnen mit "<")
+    expect(readableApiError(makeApiError(503, "  <div>wartung</div>"), FALLBACK)).toBe(
+      SERVER_UNAVAILABLE_MESSAGE,
+    );
+  });
+
+  it("behandelt überlange Text-Bodies (ASCII-Grafik, Stacktrace) als nicht anzeigbar", () => {
+    const err = makeApiError(500, "x".repeat(1000));
+    expect(readableApiError(err, FALLBACK)).toBe(SERVER_UNAVAILABLE_MESSAGE);
+  });
+
+  it("liefert bei Netzwerkfehlern (fetch wirft TypeError) den Nicht-erreichbar-Hinweis", () => {
+    expect(readableApiError(new TypeError("Failed to fetch"), FALLBACK)).toBe(
+      SERVER_UNAVAILABLE_MESSAGE,
+    );
   });
 
   it("trimmt umgebende Leerzeichen der Servermeldung", () => {
