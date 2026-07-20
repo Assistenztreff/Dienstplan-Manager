@@ -158,11 +158,13 @@ test("Ganztags-Urlaub ohne Modell bleibt 00:00–23:59 und traegt keine Zuschlae
   expect(vacationStored.sundayHours ?? 0, "keine Sonntagsstunden").toBe(0);
   expect(vacationStored.holidayHours ?? 0, "keine Feiertagsstunden").toBe(0);
 
-  // Lohnfortzahlung: valuedHours = vertragliche Tages-Soll-Stunden (> 0).
+  // Lohnfortzahlung: valuedHours = vertragliche Tages-Soll-Stunden — exakt
+  // 8,0 h (Vertrag 40 h/Woche, 5-Tage-Woche). Der exakte Wert schuetzt vor
+  // einer Regression, die stattdessen ~24 h (ganztaegige Rohdauer) wertet.
   expect(
     round2(vacationStored.valuedHours ?? 0),
-    "valuedHours muessen die vertraglichen Tagesstunden tragen",
-  ).toBeGreaterThan(0);
+    "valuedHours muessen exakt die vertraglichen Tagesstunden (8) tragen",
+  ).toBe(8);
 });
 
 test("Lohnauswertung: kein Soll-Beitrag, Lohnfortzahlung aus valuedHours, keine Zuschlaege", async () => {
