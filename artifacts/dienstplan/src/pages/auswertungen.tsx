@@ -3,10 +3,12 @@ import { useState } from "react";
 import {
   useGetHoursBalance,
   useListUsers,
+  useGetMonthClosingDiff,
   getHoursBalance,
   getMonthClosingDiff,
   ApiError,
 } from "@workspace/api-client-react";
+import type { MonthClosingDiff } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -345,6 +347,32 @@ export default function Auswertungen() {
     !(isAdmin && usersLoading),
   );
 
+  // Nachberechnung des Vormonats (Soft-Close-Diff) — je Assistent im grünen
+  // Lohnauswertungs-Kasten unter den Zuschlägen ausgewiesen und zum
+  // Gesamtlohn addiert. Endpunkt ist admin- & advancedAnalytics-gegated.
+  const prevOfShown = new Date(year, month - 2, 1);
+  const prevOfShownLabel = format(prevOfShown, "MMMM yyyy", { locale: de });
+  const { data: prevDiff } = useGetMonthClosingDiff(
+    {
+      month: prevOfShown.getMonth() + 1,
+      year: prevOfShown.getFullYear(),
+      ...teamParam,
+    },
+    { query: { enabled: isAdmin && !analyticsLocked } } as any,
+  ) as { data: MonthClosingDiff | undefined };
+  const recalcByUser = new Map<number, { diffPay: number; diffBasePay: number; diffSurchargePay: number }>();
+  if (prevDiff?.closed) {
+    for (const r of prevDiff.rows) {
+      if (r.diffPay != null && r.diffPay !== 0) {
+        recalcByUser.set(r.userId, {
+          diffPay: r.diffPay,
+          diffBasePay: r.diffBasePay ?? 0,
+          diffSurchargePay: r.diffSurchargePay ?? 0,
+        });
+      }
+    }
+  }
+
   // Gemerkter Assistenten-Filter (nur Admin): zeigt nur die gewählte Person.
   const visibleBalances =
     isAdmin && selectedAssistant !== "all" && Array.isArray(balances)
@@ -598,10 +626,45 @@ export default function Auswertungen() {
                               <span className="font-medium">{formatEur(balance.holidaySurchargePay ?? 0)}</span>
                             </div>
                           )}
-                          <div className="flex items-center justify-between text-sm pt-1.5 border-t border-emerald-200">
-                            <span className="font-medium text-emerald-800">Gesamtlohn (brutto)</span>
-                            <span className="font-semibold text-emerald-800">{formatEur(balance.totalPay ?? 0)}</span>
-                          </div>
+                          {(() => {
+                            const recalc = recalcByUser.get(balance.userId);
+                            const signedEur = (n: number) => `${n > 0 ? "+" : ""}${formatEur(n)}`;
+                            if (!recalc) {
+                              return (
+                                <div className="flex items-center justify-between text-sm pt-1.5 border-t border-emerald-200">
+                                  <span className="font-medium text-emerald-800">Gesamtlohn (brutto)</span>
+                                  <span className="font-semibold text-emerald-800">{formatEur(balance.totalPay ?? 0)}</span>
+                                </div>
+                              );
+                            }
+                            return (
+                              <>
+                                <div
+                                  className="flex items-center justify-between text-sm pt-1.5 border-t border-emerald-200"
+                                  data-testid={`payroll-recalc-${balance.userId}`}
+                                >
+                                  <span className="text-muted-foreground">
+                                    Nachberechnung {prevOfShownLabel}
+                                    <span className="block text-xs">
+                                      Grundlohn {signedEur(recalc.diffBasePay)} · Zuschläge {signedEur(recalc.diffSurchargePay)}
+                                    </span>
+                                  </span>
+                                  <span className={`font-medium whitespace-nowrap ${recalc.diffPay < 0 ? "text-red-700" : "text-emerald-800"}`}>
+                                    {signedEur(recalc.diffPay)}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between text-sm pt-1.5 border-t border-emerald-200">
+                                  <span className="font-medium text-emerald-800">Gesamtlohn (brutto) inkl. Nachberechnung</span>
+                                  <span
+                                    className="font-semibold text-emerald-800"
+                                    data-testid={`payroll-total-with-recalc-${balance.userId}`}
+                                  >
+                                    {formatEur((balance.totalPay ?? 0) + recalc.diffPay)}
+                                  </span>
+                                </div>
+                              </>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>
