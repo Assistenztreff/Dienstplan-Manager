@@ -1,0 +1,17 @@
+2. Die konkreten Features & Workflow in der App
+A. Erster Stichtag: Der "Vorab-Lohn-Export" (Soll-Daten)
+ Wann? Ca. 5-7 Tage vor Monatsende (rechtzeitig vor dem 5.-letzten Bankarbeitstag).
+ Funktion der App: * Die App nimmt für den laufenden Monat die bereits vergangenen Tage (Ist) und kombiniert sie für die verbleibenden Tage des Monats mit dem geplanten Dienstplan (Soll).
+ Für Festangestellte werden die vereinbarten Grundgehälter exportiert; für Stundenlöhner wird eine Hochrechnung auf Basis des Plans gemacht.
+ Ziel: Generierung einer Exporterdatei (z. B. DATEV Lohn & Gehalt Schnittstelle), aus der das Abrechnungsprogramm die Beitragsnachweis-Schätzung speisen kann.
+B. Zweiter Stichtag: Der "Monatsabschluss & Korrektur-Export" (Ist-Daten)
+ Wann? Direkt nach Monatsende (z. B. am 1. oder 2. Tag des Folgemonats).
+ Funktion der App:
+ Echtzeit-Gegenüberstellung: Die App gleicht Geplantes mit Gestempeltem ab (Überstunden, Zuschläge für Nacht-/Feiertagsarbeit, Krankheitsausfälle, Spontanschichten).
+ Sperre ("Freeze"): Der Admin klickt auf "Monatsabschluss durchführen". Der Vormonat wird für Bearbeitungen gesperrt.
+ Differenzberechnung: Die App berechnet die finale Differenz zwischen dem geschätzten Soll und dem echten Ist.
+ Ziel: Übergabe der echten Lohnwerte an die Buchhaltung. Das Abrechnungsprogramm führt bei der Ist-Abrechnung den automatischen Ausgleich durch (überträgt ein Plus/Minus als Korrektur in den Beitragsnachweis des Folgemonats).
+3. Best Practices für die App-Entwicklung (UI/UX)
+ Rollen & Rechte: Nur Schichtplaner/HR dürfen Lohnexports ausführen oder abgeschlossene Monate nachbearbeiten.
+ Plausibilitäts-Checks: Vor dem Export warnt die App, wenn es noch "offene Stempelzeiten" gibt (z. B. Vergessen auszustempeln) oder ungeklärte Abwesenheiten vorliegen.
+ Stornologik/Historisierung: Ändert sich nach dem Monatsabschluss rückwirkend etwas (z. B. nachträglicher Krankenschein), darf der abgedeckte Monat nicht überschrieben werden. Die App muss eine Rollback- bzw. Nachberechnungs-Kennzeichnung für den nächsten Export generieren.
