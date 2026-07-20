@@ -11,8 +11,8 @@ import {
  * Monatsabschluss mit Nachberechnung (Soft-Close) — direkt gegen die API:
  *
  * - POST /month-closings friert die Lohnauswertung eines VERGANGENEN Monats
- *   als append-only Referenz ein; der laufende Monat ist nicht abschließbar
- *   (400 month_not_closable).
+ *   als append-only Referenz ein; auch der laufende Monat ist (vorzeitig)
+ *   abschließbar — nur ZUKÜNFTIGE Monate sind blockiert (400 month_not_closable).
  * - GET /month-closings liefert Status + Historie + Anzahl offener
  *   IST-Einträge (Plausibilitätswarnung).
  * - GET /month-closings/diff liefert die Nachberechnung: NUR Assistenzkräfte,
@@ -110,13 +110,27 @@ test("Free-Konto: Monatsabschluss ist Premium-gegated (403)", async () => {
   }
 });
 
-test("laufender Monat ist nicht abschließbar (400 month_not_closable)", async () => {
+test("zukünftiger Monat ist nicht abschließbar (400 month_not_closable)", async () => {
+  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const res = await acc.ctx.post("/api/month-closings", {
-    data: { month: now.getMonth() + 1, year: now.getFullYear() },
+    data: { month: next.getMonth() + 1, year: next.getFullYear() },
   });
   expect(res.status()).toBe(400);
   const body = (await res.json()) as { code?: string };
   expect(body.code).toBe("month_not_closable");
+});
+
+test("laufender Monat ist vorzeitig abschließbar (201)", async () => {
+  const res = await acc.ctx.post("/api/month-closings", {
+    data: { month: now.getMonth() + 1, year: now.getFullYear() },
+  });
+  expect(res.status(), `Vorzeitiger Abschluss (${res.status()})`).toBe(201);
+  const statusRes = await acc.ctx.get(
+    `/api/month-closings?month=${now.getMonth() + 1}&year=${now.getFullYear()}`,
+  );
+  expect(statusRes.ok()).toBe(true);
+  const status = (await statusRes.json()) as Status;
+  expect(status.closed).toBe(true);
 });
 
 test("Status vor Abschluss: offen, leere Historie", async () => {

@@ -1,6 +1,12 @@
 import { isAdminRole } from "@/lib/roles";
 import { useState } from "react";
-import { useGetHoursBalance, useListUsers, getHoursBalance } from "@workspace/api-client-react";
+import {
+  useGetHoursBalance,
+  useListUsers,
+  getHoursBalance,
+  getMonthClosingDiff,
+  ApiError,
+} from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -16,10 +22,10 @@ import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
 import { hasAccess } from "@/lib/entitlements";
 import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
-import { exportStatementSectionsPdf } from "@/lib/pdf-export";
+import { exportStatementSectionsPdf, type StatementRecalculation } from "@/lib/pdf-export";
 import { PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
 import { formatDays } from "@/lib/utils";
-import { MonthClosingCard, RecalculationSection } from "@/components/month-closing";
+import { MonthClosingCard, RecalculationSection, PayrollTotalsCard } from "@/components/month-closing";
 
 function monthIndex(date: Date): number {
   return date.getFullYear() * 12 + date.getMonth();
@@ -125,6 +131,72 @@ function ExportRangeDialog({
         return;
       }
 
+      // Nachberechnung: je exportiertem Monat die Differenzen des jeweiligen
+      // Vormonats laden (sofern dieser abgeschlossen wurde) und als eigene,
+      // klar beschriftete Position in den PDF-Nachweis aufnehmen.
+      const recalculations: StatementRecalculation[] = [];
+      let recalcFetchFailed = false;
+      for (const m of months) {
+        const prev = new Date(m.year, m.month - 2, 1);
+        try {
+          const diff = await getMonthClosingDiff({
+            month: prev.getMonth() + 1,
+            year: prev.getFullYear(),
+            ...(teamId != null ? { teamId } : {}),
+          });
+          if (!diff.closed || diff.rows.length === 0) continue;
+          const rows = (
+            assistantFilter !== "all"
+              ? diff.rows.filter((r) => r.userId === assistantFilter)
+              : diff.rows
+          ).map((r) => ({
+            userName: r.userName,
+            diffHours: r.diffHours,
+            diffPay: r.diffPay ?? null,
+            diffBasePay: r.diffBasePay ?? null,
+            diffSurchargePay: r.diffSurchargePay ?? null,
+          }));
+          if (rows.length === 0) continue;
+          const payBalances = m.balances.filter((b) => b.totalPay != null);
+          recalculations.push({
+            monthLabel: m.monthLabel,
+            prevLabel: format(prev, "MMMM yyyy", { locale: de }),
+            closedAt: diff.closedAt,
+            rows,
+            monthTotals:
+              payBalances.length > 0
+                ? {
+                    basePay: m.balances.reduce((s, b) => s + (b.basePay ?? 0), 0),
+                    surchargePay: m.balances.reduce(
+                      (s, b) =>
+                        s +
+                        (b.nightSurchargePay ?? 0) +
+                        (b.sundaySurchargePay ?? 0) +
+                        (b.holidaySurchargePay ?? 0),
+                      0,
+                    ),
+                    totalPay: m.balances.reduce((s, b) => s + (b.totalPay ?? 0), 0),
+                  }
+                : null,
+          });
+        } catch (err) {
+          // Kein Abschluss/kein Zugriff (403/404) → PDF ohne Nachberechnungs-
+          // Seite. Echte Fehler (Netz/Server) NICHT verschlucken: der Export
+          // läuft weiter, aber der Nutzer bekommt eine sichtbare Warnung,
+          // dass die Nachberechnung im PDF fehlen kann.
+          if (err instanceof ApiError && (err.status === 403 || err.status === 404)) {
+            continue;
+          }
+          recalcFetchFailed = true;
+          console.error(err);
+        }
+      }
+      if (recalcFetchFailed) {
+        toast.warning(
+          "Nachberechnung konnte nicht geladen werden — das PDF wird ohne Nachberechnungs-Seite erstellt.",
+        );
+      }
+
       const first = months[0];
       const last = months[months.length - 1];
       const rangePart =
@@ -139,6 +211,7 @@ function ExportRangeDialog({
         sections,
         teamId,
         filename: `Stundennachweis_${namePart}_${rangePart}.pdf`,
+        recalculations,
       });
       onClose();
     } catch (err) {
@@ -357,6 +430,16 @@ export default function Auswertungen() {
         <div className="space-y-6">
           <MonthClosingCard month={month} year={year} teamId={selectedTeamId} />
           <RecalculationSection month={month} year={year} teamId={selectedTeamId} />
+          {/* Gesamtsummen inkl. Nachberechnungs-Position des Vormonats. */}
+          {!isLoading && Array.isArray(visibleBalances) && (
+            <PayrollTotalsCard
+              month={month}
+              year={year}
+              teamId={selectedTeamId}
+              balances={visibleBalances}
+              assistantFilter={selectedAssistant}
+            />
+          )}
         </div>
       )}
 

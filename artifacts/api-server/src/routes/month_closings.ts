@@ -2,8 +2,9 @@
 // Monatsabschluss der Lohnauswertung mit Nachberechnung im Folgemonat.
 // ---------------------------------------------------------------------------
 // - POST /month-closings: friert die aktuelle Lohnauswertung (hours-balance)
-//   eines VERGANGENEN Monats als append-only Referenz ein. Ein erneuter
-//   Abschluss ersetzt die Referenz (neue Zeile), Historie bleibt.
+//   eines vergangenen ODER des laufenden Monats (vorzeitiger Abschluss für
+//   den Lohnlauf) als append-only Referenz ein; nur Zukunftsmonate sind
+//   blockiert. Ein erneuter Abschluss ersetzt die Referenz, Historie bleibt.
 // - GET /month-closings: Abschluss-Status + Historie + Plausibilitätszahl
 //   offener IST-Einträge des Monats.
 // - GET /month-closings/diff: Nachberechnung — Differenz zwischen der
@@ -63,10 +64,10 @@ function parseMonthYear(req: Request, res: Response): { month: number; year: num
   return { month, year };
 }
 
-/** Liegt (year, month) strikt VOR dem laufenden Monat? (Abschluss erst ab dem 1. des Folgemonats.) */
-function isPastMonth(month: number, year: number): boolean {
+/** Liegt (year, month) strikt NACH dem laufenden Monat? (Nur Zukunftsmonate sind nicht abschließbar.) */
+function isFutureMonth(month: number, year: number): boolean {
   const now = new Date();
-  return year < now.getFullYear() || (year === now.getFullYear() && month < now.getMonth() + 1);
+  return year > now.getFullYear() || (year === now.getFullYear() && month > now.getMonth() + 1);
 }
 
 type MetaRow = {
@@ -180,11 +181,13 @@ router.post(
     }
     const { month, year, teamId: requestedTeamId } = parsed.data;
 
-    // Abschluss erst ab dem 1. des Folgemonats — der laufende (oder ein
-    // zukünftiger) Monat kann sich noch ändern und wäre keine belastbare Referenz.
-    if (!isPastMonth(month, year)) {
+    // Vorzeitiger Abschluss erlaubt: auch der LAUFENDE Monat kann eingefroren
+    // werden (z. B. Lohnlauf 5–7 Werktage vor Monatsende). Spätere Änderungen
+    // erscheinen dann als Nachberechnung im Folgemonat. Nur ZUKÜNFTIGE Monate
+    // bleiben blockiert — dort gibt es noch keinen belastbaren Stand.
+    if (isFutureMonth(month, year)) {
       res.status(400).json({
-        error: "Der Monat kann erst ab dem 1. des Folgemonats abgeschlossen werden.",
+        error: "Ein zukünftiger Monat kann nicht abgeschlossen werden.",
         code: "month_not_closable",
       });
       return;
@@ -273,6 +276,11 @@ router.get(
         userName: r.userName,
         totalFulfilledHours: r.totalFulfilledHours,
         totalPay: r.totalPay ?? null,
+        basePay: r.basePay ?? null,
+        surchargePay:
+          r.nightSurchargePay != null || r.sundaySurchargePay != null || r.holidaySurchargePay != null
+            ? (r.nightSurchargePay ?? 0) + (r.sundaySurchargePay ?? 0) + (r.holidaySurchargePay ?? 0)
+            : null,
       })),
     );
 

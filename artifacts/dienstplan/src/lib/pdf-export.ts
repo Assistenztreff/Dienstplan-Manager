@@ -245,11 +245,101 @@ export type StatementSection = {
   monthLabel: string;
 };
 
+// Nachberechnungs-Anhang je exportiertem Monat: Differenzen des (abgeschlossenen)
+// Vormonats, die in die Abrechnung dieses Monats einfließen.
+export type StatementRecalculation = {
+  monthLabel: string; // Monat, in dessen Abrechnung die Nachberechnung einfließt
+  prevLabel: string; // abgeschlossener Vormonat
+  closedAt?: string;
+  rows: Array<{
+    userName: string;
+    diffHours: number;
+    diffPay: number | null;
+    diffBasePay: number | null;
+    diffSurchargePay: number | null;
+  }>;
+  // Geld-Summen des exportierten Monats (nur Balances mit Lohnwerten); null,
+  // wenn keine Lohnauswertung vorliegt.
+  monthTotals: { basePay: number; surchargePay: number; totalPay: number } | null;
+};
+
 export type ExportStatementSectionsOptions = {
   sections: StatementSection[];
   teamId?: number | null;
   filename: string;
+  recalculations?: StatementRecalculation[];
 };
+
+// Eigene Seite je Nachberechnung: Differenz-Tabelle des Vormonats + Summen
+// des exportierten Monats inkl. der Nachberechnung als eigene Position.
+function renderRecalculationPage(
+  doc: any,
+  autoTable: any,
+  recalc: StatementRecalculation,
+) {
+  const eur = (n: number) =>
+    n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+  const signedEur = (n: number) => `${n > 0 ? "+" : ""}${eur(n)}`;
+
+  doc.setFontSize(16);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Nachberechnung ${recalc.prevLabel}`, 14, 20);
+
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text(
+    `Der Monat ${recalc.prevLabel} wurde nach dem Abschluss geändert. Die Differenzen`,
+    14,
+    30,
+  );
+  doc.text(`sind in der Abrechnung ${recalc.monthLabel} zu berücksichtigen.`, 14, 36);
+
+  autoTable(doc, {
+    startY: 44,
+    head: [["Assistenzkraft", "Differenz Stunden", "Grundlohn", "Zuschläge", "Gesamt"]],
+    body: recalc.rows.map((r) => [
+      r.userName,
+      `${r.diffHours > 0 ? "+" : ""}${r.diffHours.toLocaleString("de-DE", { maximumFractionDigits: 2 })} h`,
+      r.diffBasePay != null ? signedEur(r.diffBasePay) : "—",
+      r.diffSurchargePay != null ? signedEur(r.diffSurchargePay) : "—",
+      r.diffPay != null ? signedEur(r.diffPay) : "—",
+    ]),
+    theme: "grid",
+    headStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
+    columnStyles: {
+      1: { halign: "right" },
+      2: { halign: "right" },
+      3: { halign: "right" },
+      4: { halign: "right" },
+    },
+    styles: { fontSize: 10 },
+    margin: { left: 14, right: 14 },
+  });
+
+  if (recalc.monthTotals) {
+    const recalcTotal = recalc.rows.reduce((s, r) => s + (r.diffPay ?? 0), 0);
+    const y = ((doc as any).lastAutoTable?.finalY ?? 80) + 10;
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Gesamtsummen ${recalc.monthLabel}`, 14, y);
+    autoTable(doc, {
+      startY: y + 5,
+      head: [["Position", "Betrag"]],
+      body: [
+        ["Grundlohn", eur(recalc.monthTotals.basePay)],
+        ["Zuschläge (Nacht/Sonntag/Feiertag)", eur(recalc.monthTotals.surchargePay)],
+        [`Gesamtlohn ${recalc.monthLabel}`, eur(recalc.monthTotals.totalPay)],
+        [`Nachberechnung ${recalc.prevLabel}`, signedEur(recalcTotal)],
+        ["Gesamt inkl. Nachberechnung", eur(recalc.monthTotals.totalPay + recalcTotal)],
+      ],
+      theme: "grid",
+      headStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
+      columnStyles: { 0: { fontStyle: "bold" }, 1: { halign: "right" } },
+      styles: { fontSize: 10 },
+      margin: { left: 14, right: 14 },
+    });
+  }
+}
 
 /**
  * Kern-Export: rendert pro Section eine eigene Seite (Kennzahlen + Schichtdetails).
@@ -259,6 +349,7 @@ export async function exportStatementSectionsPdf({
   sections,
   teamId,
   filename,
+  recalculations,
 }: ExportStatementSectionsOptions) {
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
@@ -283,6 +374,13 @@ export async function exportStatementSectionsPdf({
       section.monthLabel,
       teamId,
     );
+  }
+
+  for (const recalc of recalculations ?? []) {
+    if (recalc.rows.length === 0) continue;
+    if (!firstPage) doc.addPage();
+    firstPage = false;
+    renderRecalculationPage(doc, autoTable, recalc);
   }
 
   addSignatureFooter(doc, pageWidth);

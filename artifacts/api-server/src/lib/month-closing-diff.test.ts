@@ -104,6 +104,45 @@ describe("computeMonthClosingDiff", () => {
     expect(rows[0].diffPay).toBeCloseTo(600, 2);
   });
 
+  it("schlüsselt die Geld-Differenz in Grundlohn und Zuschläge auf", () => {
+    const frozen: MonthClosingEntry = {
+      userId: 1,
+      userName: "Anna",
+      plannedHours: 0,
+      totalFulfilledHours: 40,
+      billingMethod: "IST",
+      hourlyWage: 15,
+      basePay: 600,
+      nightSurchargePay: 30,
+      sundaySurchargePay: 20,
+      holidaySurchargePay: null,
+      totalPay: 650,
+    };
+    const rows = computeMonthClosingDiff(
+      [frozen],
+      [
+        {
+          userId: 1,
+          userName: "Anna",
+          totalFulfilledHours: 44,
+          totalPay: 730,
+          basePay: 660,
+          surchargePay: 70,
+        },
+      ],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].diffPay).toBeCloseTo(80, 2);
+    expect(rows[0].diffBasePay).toBeCloseTo(60, 2);
+    expect(rows[0].diffSurchargePay).toBeCloseTo(20, 2);
+  });
+
+  it("Aufschlüsselung bleibt null ohne Geldwerte", () => {
+    const rows = computeMonthClosingDiff([entry(1, "Anna", 40)], [cur(1, "Anna", 41)]);
+    expect(rows[0].diffBasePay).toBeNull();
+    expect(rows[0].diffSurchargePay).toBeNull();
+  });
+
   it("sortiert nach Name (deutsch)", () => {
     const rows = computeMonthClosingDiff(
       [],

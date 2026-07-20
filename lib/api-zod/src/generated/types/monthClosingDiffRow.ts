@@ -26,4 +26,14 @@ export interface MonthClosingDiffRow {
   currentPay?: number | null;
   /** @nullable */
   diffPay?: number | null;
+  /**
+     * Grundlohn-Anteil der Geld-Differenz (EUR); null ohne Geldwerte.
+     * @nullable
+     */
+  diffBasePay?: number | null;
+  /**
+     * Zuschlags-Anteil (Nacht/Sonntag/Feiertag) der Geld-Differenz (EUR); null ohne Geldwerte.
+     * @nullable
+     */
+  diffSurchargePay?: number | null;
 }

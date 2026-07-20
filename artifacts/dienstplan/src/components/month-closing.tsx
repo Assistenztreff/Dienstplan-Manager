@@ -1,9 +1,10 @@
 // ---------------------------------------------------------------------------
 // Monatsabschluss der Lohnauswertung (Soft-Close mit Nachberechnung).
 // ---------------------------------------------------------------------------
-// - Status-Karte: "Monat abgeschlossen am ..." + Abschluss-Knopf. Abschließen
-//   ist erst ab dem 1. des Folgemonats möglich (der Server setzt das
-//   autoritativ durch, der Knopf ist reine UX).
+// - Status-Karte: "Monat abgeschlossen am ..." + Abschluss-Knopf. Abschließbar
+//   sind vergangene Monate UND der laufende Monat (vorzeitig); nur zukünftige
+//   Monate lehnt der Server mit 400 month_not_closable ab (autoritativ,
+//   der Knopf ist reine UX).
 // - Bestätigungs-Dialog mit Plausibilitätswarnung bei offenen IST-Einträgen.
 // - Nachberechnungs-Sektion: Differenzen des VORMONATS (gemeldet vs. aktuell),
 //   sofern der Vormonat abgeschlossen wurde und sich danach etwas geändert hat.
@@ -70,12 +71,16 @@ export function MonthClosingCard({
 
   const createClosing = useCreateMonthClosing();
 
-  // Abschließbar erst ab dem 1. des Folgemonats (Monat liegt strikt in der
-  // Vergangenheit). Der Server prüft das zusätzlich autoritativ.
+  // Abschließbar sind vergangene UND der laufende Monat (vorzeitiger Abschluss
+  // für den Lohnlauf); nur Zukunftsmonate bleiben blockiert. Der Server prüft
+  // das zusätzlich autoritativ.
   const now = new Date();
-  const isPastMonth =
-    year < now.getFullYear() ||
-    (year === now.getFullYear() && month < now.getMonth() + 1);
+  const isFutureMonth =
+    year > now.getFullYear() ||
+    (year === now.getFullYear() && month > now.getMonth() + 1);
+  const isCurrentMonth =
+    year === now.getFullYear() && month === now.getMonth() + 1;
+  const closable = !isFutureMonth;
 
   const closed = data?.closed ?? false;
   const latest = data?.latest;
@@ -122,16 +127,18 @@ export function MonthClosingCard({
                 ? reCloses
                   ? "Erneuter Abschluss ersetzt die Referenz — frühere Abschlüsse bleiben in der Historie."
                   : "Spätere Änderungen erscheinen als Nachberechnung in der Auswertung des Folgemonats."
-                : isPastMonth
-                  ? "Der Abschluss friert die Lohnauswertung als Referenz ein. Spätere Änderungen werden im Folgemonat als Nachberechnung ausgewiesen."
-                  : "Der Abschluss ist erst ab dem 1. des Folgemonats möglich."}
+                : closable
+                  ? isCurrentMonth
+                    ? "Vorzeitiger Abschluss: friert den aktuellen Stand für die Lohnbuchhaltung ein. Änderungen danach erscheinen als Nachberechnung im Folgemonat."
+                    : "Der Abschluss friert die Lohnauswertung als Referenz ein. Spätere Änderungen werden im Folgemonat als Nachberechnung ausgewiesen."
+                  : "Ein zukünftiger Monat kann nicht abgeschlossen werden."}
             </p>
           </div>
         </div>
         <Button
           variant={closed ? "outline" : "default"}
           onClick={() => setConfirmOpen(true)}
-          disabled={!isPastMonth || createClosing.isPending}
+          disabled={!closable || createClosing.isPending}
           className="shrink-0"
           data-testid="month-closing-button"
         >
@@ -180,6 +187,116 @@ export function MonthClosingCard({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </Card>
+  );
+}
+
+/**
+ * Gesamtsummen der Lohnauswertung des angezeigten Monats (Grundlohn,
+ * Zuschläge, Gesamt) — inkl. der Nachberechnung des Vormonats als eigene,
+ * klar beschriftete Position. Nur rendern, wenn Admin & advancedAnalytics.
+ */
+export function PayrollTotalsCard({
+  month,
+  year,
+  teamId,
+  balances,
+  assistantFilter,
+}: {
+  month: number;
+  year: number;
+  teamId: number | null;
+  balances: Array<{
+    userId: number;
+    basePay?: number | null;
+    nightSurchargePay?: number | null;
+    sundaySurchargePay?: number | null;
+    holidaySurchargePay?: number | null;
+    totalPay?: number | null;
+  }>;
+  assistantFilter: number | "all";
+}) {
+  // Nachberechnung des Vormonats — dieselben Daten wie die Detail-Sektion
+  // (React Query dedupliziert die Anfrage).
+  const prev = new Date(year, month - 2, 1);
+  const prevLabel = format(prev, "MMMM yyyy", { locale: de });
+  const params = {
+    month: prev.getMonth() + 1,
+    year: prev.getFullYear(),
+    ...(teamId != null ? { teamId } : {}),
+  };
+  const { data } = useGetMonthClosingDiff(params, {
+    query: { enabled: true },
+  } as any) as { data: MonthClosingDiff | undefined };
+
+  const diffRows =
+    data?.closed && data.rows.length > 0
+      ? assistantFilter === "all"
+        ? data.rows
+        : data.rows.filter((r) => r.userId === assistantFilter)
+      : [];
+
+  const monthBase = balances.reduce((s, b) => s + (b.basePay ?? 0), 0);
+  const monthSurcharge = balances.reduce(
+    (s, b) =>
+      s + (b.nightSurchargePay ?? 0) + (b.sundaySurchargePay ?? 0) + (b.holidaySurchargePay ?? 0),
+    0,
+  );
+  const monthTotal = balances.reduce((s, b) => s + (b.totalPay ?? 0), 0);
+
+  const recalcBase = diffRows.reduce((s, r) => s + (r.diffBasePay ?? 0), 0);
+  const recalcSurcharge = diffRows.reduce((s, r) => s + (r.diffSurchargePay ?? 0), 0);
+  const recalcTotal = diffRows.reduce((s, r) => s + (r.diffPay ?? 0), 0);
+  const hasRecalc = diffRows.some((r) => r.diffPay != null && r.diffPay !== 0);
+
+  const hasMonthPay = balances.some((b) => b.totalPay != null);
+  if (!hasMonthPay && !hasRecalc) return null;
+
+  const signedEuro = (n: number) => `${n > 0 ? "+" : ""}${euro(n)}`;
+
+  return (
+    <Card className="border-border/50 shadow-sm" data-testid="payroll-totals-card">
+      <CardContent className="p-5 md:p-6">
+        <h3 className="text-lg font-semibold mb-3">
+          Gesamtsummen {format(new Date(year, month - 1, 1), "MMMM yyyy", { locale: de })}
+        </h3>
+        <div className="space-y-1.5 max-w-md">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Grundlohn</span>
+            <span className="font-medium" data-testid="totals-base">{euro(monthBase)}</span>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Zuschläge (Nacht/Sonntag/Feiertag)</span>
+            <span className="font-medium" data-testid="totals-surcharge">{euro(monthSurcharge)}</span>
+          </div>
+          <div className="flex items-center justify-between text-sm pt-1.5 border-t">
+            <span className="font-medium">Gesamtlohn (laufender Monat)</span>
+            <span className="font-semibold" data-testid="totals-month">{euro(monthTotal)}</span>
+          </div>
+          {hasRecalc && (
+            <>
+              <div
+                className="flex items-center justify-between text-sm text-amber-900"
+                data-testid="totals-recalc"
+              >
+                <span>
+                  Nachberechnung {prevLabel}
+                  <span className="block text-xs text-muted-foreground">
+                    Grundlohn {signedEuro(recalcBase)} · Zuschläge {signedEuro(recalcSurcharge)}
+                  </span>
+                </span>
+                <span className="font-medium whitespace-nowrap">{signedEuro(recalcTotal)}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm pt-1.5 border-t">
+                <span className="font-semibold">Gesamt inkl. Nachberechnung</span>
+                <span className="font-bold" data-testid="totals-including-recalc">
+                  {euro(monthTotal + recalcTotal)}
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+      </CardContent>
     </Card>
   );
 }

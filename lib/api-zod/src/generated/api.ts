@@ -1448,7 +1448,9 @@ export const GetMonthClosingDiffResponse = zod.object({
   "diffHours": zod.number(),
   "reportedPay": zod.number().nullish().describe('Gesamtvergütung (EUR) laut Abschluss; null ohne Stundenlohn.'),
   "currentPay": zod.number().nullish(),
-  "diffPay": zod.number().nullish()
+  "diffPay": zod.number().nullish(),
+  "diffBasePay": zod.number().nullish().describe('Grundlohn-Anteil der Geld-Differenz (EUR); null ohne Geldwerte.'),
+  "diffSurchargePay": zod.number().nullish().describe('Zuschlags-Anteil (Nacht\/Sonntag\/Feiertag) der Geld-Differenz (EUR); null ohne Geldwerte.')
 }).describe('Nachberechnungs-Zeile — gemeldet (eingefroren) vs. aktuell je Assistenzkraft.')).describe('Nur Assistenzkräfte mit tatsächlicher Abweichung (Stunden oder Geld).')
 })
 

@@ -1278,7 +1278,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/MonthClosingMeta"
         "400":
-          description: Monat noch nicht abschließbar (erst ab dem 1. des Folgemonats)
+          description: >-
+            Monat nicht abschließbar (code "month_not_closable") — nur
+            ZUKÜNFTIGE Monate sind blockiert; vergangene und der laufende
+            Monat (vorzeitiger Abschluss) können abgeschlossen werden.
 
   /month-closings/diff:
     get:
@@ -2999,6 +3002,12 @@ components:
           type: ["number", "null"]
         diffPay:
           type: ["number", "null"]
+        diffBasePay:
+          type: ["number", "null"]
+          description: Grundlohn-Anteil der Geld-Differenz (EUR); null ohne Geldwerte.
+        diffSurchargePay:
+          type: ["number", "null"]
+          description: Zuschlags-Anteil (Nacht/Sonntag/Feiertag) der Geld-Differenz (EUR); null ohne Geldwerte.
 
     MonthClosingDiff:
       type: object
