@@ -78,3 +78,4 @@
 - [Codegen-Drift-Guard per Fingerprint](codegen-drift-guard-fingerprint.md) — Guards über generierte Verzeichnisse via Vorher/Nachher-Hash, nie git diff (uncommitted ≠ Drift; index.lock killt git).
 - [drizzle push missing FKs](drizzle-push-missing-fks.md) — non-interactive push can create a table without its FK constraints (guard fails); repair via idempotent ALTER TABLE, re-push won't fix it.
 - [MonthGrid unmount on month change](monthgrid-unmount-focus.md) — /dienstplan swaps to a skeleton while the new month's shifts load, unmounting both grids; focus/keyboard continuity state must live in the parent, and effects must target only the visible (offsetParent) instance.
+- [Scope checks before content checks](scope-before-content-oracle.md) — run team/member 403 checks BEFORE overlap/duplicate 409 checks in write routes, or errors become a cross-tenant data oracle.

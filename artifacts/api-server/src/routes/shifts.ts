@@ -601,6 +601,28 @@ router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
     return;
   }
 
+  // Team-Scope + Member-Invariante MÜSSEN vor allen inhaltlichen Prüfungen
+  // stehen (Überschneidung/Doppel-Abwesenheit), sonst könnte ein fremder Admin
+  // per 409-Antwort Schichtzeiten/Abwesenheiten teamfremder Nutzer ausspähen.
+  const write = await resolveWriteTeamId(req.session.userId!, body.data.teamId ?? undefined);
+  if (!write.ok) {
+    if (write.reason === "forbidden") {
+      res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
+    } else {
+      res.status(400).json({ error: "Kein Team zugeordnet" });
+    }
+    return;
+  }
+
+  // Member-of-Team-Invariante (wie contracts/time_tracking): Der zugeordnete
+  // Nutzer muss Mitglied des ZIEL-Teams sein — sonst ließe sich ein teamfremder
+  // userId in ein erlaubtes Team verknüpfen und dessen PII über gescopte Listen
+  // auslesen.
+  if (!(await isUserMemberOfTeam(body.data.userId, write.teamId))) {
+    res.status(403).json({ error: "Nutzer gehört nicht zu diesem Team" });
+    return;
+  }
+
   // Kollisionsprüfung: nur für reguläre Schichten und nur, wenn der Admin nicht
   // bewusst überschreibt (force). force kommt aus dem Roh-Body, nicht aus dem
   // validierten Schema, damit die OpenAPI-Spec unverändert bleibt.
@@ -631,25 +653,6 @@ router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
       res.status(409).json(duplicateAbsenceResponseBody(duplicate.id, body.data.type));
       return;
     }
-  }
-
-  const write = await resolveWriteTeamId(req.session.userId!, body.data.teamId ?? undefined);
-  if (!write.ok) {
-    if (write.reason === "forbidden") {
-      res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
-    } else {
-      res.status(400).json({ error: "Kein Team zugeordnet" });
-    }
-    return;
-  }
-
-  // Member-of-Team-Invariante (wie contracts/time_tracking): Der zugeordnete
-  // Nutzer muss Mitglied des ZIEL-Teams sein — sonst ließe sich ein teamfremder
-  // userId in ein erlaubtes Team verknüpfen und dessen PII über gescopte Listen
-  // auslesen.
-  if (!(await isUserMemberOfTeam(body.data.userId, write.teamId))) {
-    res.status(403).json({ error: "Nutzer gehört nicht zu diesem Team" });
-    return;
   }
 
   // Free-Limit (historyMonths): Vorausplanung in zu weit entfernte Zukunfts-
