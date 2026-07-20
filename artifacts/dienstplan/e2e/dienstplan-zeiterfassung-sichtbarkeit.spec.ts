@@ -54,6 +54,38 @@ function navLink(page: Page) {
     .getByRole("link", { name: "Zeiterfassung", exact: true });
 }
 
+/**
+ * Öffnet eine Browser-Seite mit MOBILEM Viewport (Memory-Note
+ * e2e-mobile-viewport-selectors: 400px versteckt die Desktop-Nav; das
+ * App-Menü liegt im Off-Canvas-Drawer hinter dem "App-Menü öffnen"-Button).
+ */
+async function openMobilePageAs(
+  browser: import("@playwright/test").Browser,
+  ctx: APIRequestContext,
+): Promise<{ page: Page; close: () => Promise<void> }> {
+  const context = await browser.newContext({
+    storageState: await ctx.storageState(),
+    viewport: { width: 400, height: 874 },
+  });
+  const page = await context.newPage();
+  return { page, close: () => context.close() };
+}
+
+/** Der Navigations-Link "Zeiterfassung" im mobilen App-Menü-Drawer. */
+function drawerNavLink(page: Page) {
+  return page
+    .getByTestId("app-menu-drawer")
+    .getByRole("link", { name: "Zeiterfassung", exact: true });
+}
+
+/** Öffnet den mobilen Drawer und wartet, bis er gerendert ist (Anker: Dashboard-Link). */
+async function openDrawer(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "App-Menü öffnen" }).click();
+  await expect(
+    page.getByTestId("app-menu-drawer").getByRole("link", { name: "Dashboard", exact: true }),
+  ).toBeVisible({ timeout: 30_000 });
+}
+
 /** Wartet, bis die Navigation gerendert ist (Anker: Dashboard-Link). */
 async function waitForNav(page: Page): Promise<void> {
   await expect(
@@ -107,9 +139,11 @@ test("AUS (Admin): Menüpunkt und KPI-Kachel fehlen, Direktaufruf zeigt Hinweis 
     await waitForNav(page);
     await expect(navLink(page), "Menüpunkt darf bei AUS nicht existieren").toHaveCount(0);
 
-    // Dashboard geladen (andere KPI-Kachel sichtbar) — Zeiterfassungs-Kachel fehlt.
-    await expect(page.getByTestId("kpi-hours-balance")).toBeVisible({ timeout: 30_000 });
+    // Dashboard geladen: bei AUS ersetzt "Geplante Stunden (Monat)" die
+    // Ist/Soll-Bilanz; beide Zeiterfassungs-Kacheln fehlen.
+    await expect(page.getByTestId("kpi-planned-hours")).toBeVisible({ timeout: 30_000 });
     await expect(page.getByTestId("kpi-pending-time-entries")).toHaveCount(0);
+    await expect(page.getByTestId("kpi-hours-balance")).toHaveCount(0);
 
     // Direktaufruf der URL: freundlicher Hinweis statt Seite, mit
     // Einstellungs-Verweis für Admins.
@@ -145,6 +179,36 @@ test("AUS (Assistenzkraft): Menüpunkt fehlt, Hinweis ohne Einstellungs-Verweis"
     ).not.toContainText("Einstellungen");
   } finally {
     await close();
+  }
+});
+
+test("AUS (mobil): Menüpunkt fehlt im geöffneten App-Menü-Drawer (Admin + Assistenzkraft)", async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+
+  const admin = await openMobilePageAs(browser, acc.ctx);
+  try {
+    await admin.page.goto("/");
+    await openDrawer(admin.page);
+    await expect(
+      drawerNavLink(admin.page),
+      "Menüpunkt darf bei AUS auch mobil nicht existieren (Admin)",
+    ).toHaveCount(0);
+  } finally {
+    await admin.close();
+  }
+
+  const assistant = await openMobilePageAs(browser, assistantCtx!);
+  try {
+    await assistant.page.goto("/");
+    await openDrawer(assistant.page);
+    await expect(
+      drawerNavLink(assistant.page),
+      "Menüpunkt darf bei AUS auch mobil nicht existieren (Assistenzkraft)",
+    ).toHaveCount(0);
+  } finally {
+    await assistant.close();
   }
 });
 
@@ -197,6 +261,36 @@ test("AN: Menüpunkt sichtbar (Admin + Assistenzkraft), Seite rendert statt Hinw
     await expect(
       navLink(assistant.page),
       "Assistenzkraft sieht den Menüpunkt, sobald der Arbeitgeber einschaltet",
+    ).toBeVisible({ timeout: 30_000 });
+  } finally {
+    await assistant.close();
+  }
+});
+
+test("AN (mobil): Menüpunkt sichtbar im geöffneten App-Menü-Drawer (Admin + Assistenzkraft)", async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+
+  const admin = await openMobilePageAs(browser, acc.ctx);
+  try {
+    await admin.page.goto("/");
+    await openDrawer(admin.page);
+    await expect(
+      drawerNavLink(admin.page),
+      "Menüpunkt muss bei AN auch mobil sichtbar sein (Admin)",
+    ).toBeVisible({ timeout: 30_000 });
+  } finally {
+    await admin.close();
+  }
+
+  const assistant = await openMobilePageAs(browser, assistantCtx!);
+  try {
+    await assistant.page.goto("/");
+    await openDrawer(assistant.page);
+    await expect(
+      drawerNavLink(assistant.page),
+      "Menüpunkt muss bei AN auch mobil sichtbar sein (Assistenzkraft)",
     ).toBeVisible({ timeout: 30_000 });
   } finally {
     await assistant.close();
