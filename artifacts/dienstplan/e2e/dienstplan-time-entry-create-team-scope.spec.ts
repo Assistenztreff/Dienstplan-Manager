@@ -12,7 +12,10 @@ import { TeamTestHarness, enableTimeTracking, type SeededAdmin } from "./helpers
  * `POST /api/time-tracking` Daten in fremde Mandanten einschleusen. Die Ist-Zeit
  * erbt das `teamId` von der verknüpften Schicht; liegt dieses Team nicht im
  * Berechtigungsumfang des erfassenden Nutzers (`getAllowedTeamIds`), wird der
- * Schreibzugriff mit 403 abgelehnt.
+ * Schreibzugriff mit 404 abgelehnt — identisch zur Antwort für nicht
+ * existierende shiftIds, damit die Existenz teamfremder Schichten nicht per
+ * Statuscode ausspähbar ist (kein Fehler-Orakel, Task #547; Details:
+ * dienstplan-time-tracking-create-oracle-api.spec.ts).
  *
  * Analog zu `dienstplan-shift-contract-create-team-scope.spec.ts` (#97) schließt
  * dieser Test die verbleibende Lücke beim ANLEGEN von Ist-Zeiten: #97 deckte
@@ -25,15 +28,14 @@ import { TeamTestHarness, enableTimeTracking, type SeededAdmin } from "./helpers
  *   403-Angriff, eine für den Sanity-201-Fall).
  * - Admin B = ein zweiter, über das setup-admin-Skript geseedeter Admin OHNE
  *   Teams (reiner "Angreifer"). Für ihn ist Team A "fremd"; ein POST mit einer
- *   `shiftId` aus Team A muss mit 403 abgelehnt werden.
+ *   `shiftId` aus Team A muss mit 404 abgelehnt werden.
  *
- * Damit der 403 wirklich aus dem Team-Scope (und nicht aus dem vorgelagerten
- * Schicht-Eigentums-Check) stammt, erfasst der Angreifer die Ist-Zeit für den
- * legitimen Schicht-Inhaber (`userId = memberId`): so passiert der
- * `shift_not_owned`-Guard und der Request erreicht die Team-Prüfung.
+ * Der Angreifer erfasst die Ist-Zeit für den legitimen Schicht-Inhaber
+ * (`userId = memberId`): selbst mit korrektem Inhaber darf die Antwort nur
+ * 404 sein — der Team-Scope-Check läuft VOR dem `shift_not_owned`-Guard.
  *
  * Geprüft (Done-Kriterien der Aufgabe):
- * - POST /time-tracking mit fremder shiftId (Team A) als Admin B -> 403.
+ * - POST /time-tracking mit fremder shiftId (Team A) als Admin B -> 404.
  * - Sanity: POST /time-tracking für eine Schicht im eigenen Team -> 201.
  *
  * Alle Testdaten (Team, Mitglied, Schichten, angelegte Ist-Zeit, der geseedete
@@ -62,7 +64,7 @@ test.beforeAll(async () => {
   adminCtx = harness.ctx;
   // Konto-Schalter „Zeiterfassung aktivieren" (Standard AUS) einschalten,
   // damit der Sanity-201-Fall nicht am neuen Gate scheitert. Der Angriffs-Fall
-  // bleibt 403 (Team-Scope-Check greift vor dem Gate).
+  // bleibt 404 (Team-Scope-Check greift vor dem Gate).
   await enableTimeTracking(adminCtx);
 
   // --- Ein Team für A anlegen + einen Mitglieds-Assistenten + Schichten ---
@@ -91,7 +93,7 @@ test.afterAll(async () => {
 });
 
 test.describe("Ist-Zeit anlegen: fremdes Team ist nicht erlaubt", () => {
-  test("POST /time-tracking mit fremder shiftId (Team A) als Admin B -> 403", async () => {
+  test("POST /time-tracking mit fremder shiftId (Team A) als Admin B -> 404", async () => {
     const res = await attackerCtx.post("/api/time-tracking", {
       data: {
         userId: memberId,
@@ -100,7 +102,9 @@ test.describe("Ist-Zeit anlegen: fremdes Team ist nicht erlaubt", () => {
         actualEnd: "2026-07-01T16:00:00.000Z",
       },
     });
-    expect(res.status()).toBe(403);
+    // 404 statt 403: fremde shiftIds antworten wie nicht existierende, damit
+    // ein fremder Admin weder Existenz noch Buchungsstand ausspähen kann.
+    expect(res.status()).toBe(404);
   });
 
   test("Sanity: POST /time-tracking für eigene Schicht (Team A) als Dienstleister A -> 201", async () => {

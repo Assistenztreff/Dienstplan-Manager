@@ -110,20 +110,29 @@ router.post("/time-tracking", requireAuth, async (req, res): Promise<void> => {
   const userId =
     req.session.role === "assistant" ? req.session.userId! : body.data.userId;
 
+  // Team-Scope des Aufrufers VOR allen inhaltlichen Prüfungen auflösen: die
+  // Ownership- (403) und Duplikats-Antworten (409) unten dürfen keine
+  // Rückschlüsse auf teamfremde Schichten/Ist-Zeiten erlauben (Fehler-Oracle).
+  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+
   let teamId: number | null = null;
   if (body.data.shiftId != null) {
-    // Zugehörigkeit prüfen: die verknüpfte Schicht muss dem Benutzer gehören,
-    // für den die Ist-Zeit erfasst wird. Sonst könnte eine fremde Schicht
-    // verknüpft und (durch den 409-Guard) für den Berechtigten blockiert werden.
     const [shift] = await db
       .select({ id: shiftsTable.id, userId: shiftsTable.userId, teamId: shiftsTable.teamId })
       .from(shiftsTable)
       .where(eq(shiftsTable.id, body.data.shiftId))
       .limit(1);
-    if (!shift) {
+    // Teamfremde Schichten antworten identisch zu nicht existierenden (404) —
+    // BEVOR Ownership (403) oder Doppelbuchung (409) geprüft werden, damit ein
+    // fremder Admin per Statuscode weder Existenz noch Zuordnung noch
+    // Buchungsstand teamfremder Schichten ausspähen kann.
+    if (!shift || !allowedTeams.includes(shift.teamId)) {
       res.status(404).json({ error: "Schicht nicht gefunden." });
       return;
     }
+    // Zugehörigkeit prüfen: die verknüpfte Schicht muss dem Benutzer gehören,
+    // für den die Ist-Zeit erfasst wird. Sonst könnte eine fremde Schicht
+    // verknüpft und (durch den 409-Guard) für den Berechtigten blockiert werden.
     if (shift.userId !== userId) {
       res.status(403).json({
         error: "Die Schicht gehört nicht zu diesem Benutzer.",
@@ -158,7 +167,6 @@ router.post("/time-tracking", requireAuth, async (req, res): Promise<void> => {
   }
   // Sicherstellen, dass das (ggf. angeforderte oder von der Schicht geerbte)
   // Team im Berechtigungsumfang des erfassenden Nutzers liegt.
-  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
   if (!allowedTeams.includes(teamId)) {
     res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
     return;

@@ -8,7 +8,9 @@ description: Order and authz rules when a time entry links a planned shift (shif
 When a request links a planned shift via `shiftId`, validate in this order
 **before** inserting:
 
-1. Load the shift; 404 if it does not exist.
+1. Team scope: load the shift; answer 404 ("Schicht nicht gefunden.") if it
+   does not exist OR its `teamId` is outside the caller's `getAllowedTeamIds`.
+   Foreign and missing shifts must be indistinguishable (no error oracle).
 2. Ownership: reject (403) unless `shift.userId === effectiveUserId` (the user
    the entry is being created for; for assistants that is the session user).
 3. Duplicate guard: reject (409, code `shift_already_booked`) if a time entry
