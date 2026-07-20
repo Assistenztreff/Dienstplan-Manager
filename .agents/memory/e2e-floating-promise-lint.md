@@ -10,3 +10,5 @@ The e2e typecheck (tsconfig.e2e.json) cannot catch a missing `await` when a Prom
 **Why:** two real latent bugs were found on first run — unawaited async `deleteAccountByEmail` cleanup calls in afterAll hooks.
 
 **How to apply:** new e2e specs must await all Playwright assertions and async helpers; if a promise is intentionally fire-and-forget, mark it with `void`. Config lives in `artifacts/dienstplan/eslint.config.e2e.mjs`.
+
+**Scope extension (July 2026):** the same `no-floating-promises` rule now also covers api-server `src/**` (config `artifacts/api-server/eslint.config.mjs`, must ignore `dist/`), dienstplan unit tests (`src/**/*.test.ts(x)` block in the e2e config), and `lib/db` test files (own config + `tsconfig.eslint.json` since the composite tsconfig excludes tests — type-aware lint needs a project that includes them). All are chained into `typecheck` scripts; db lint is called explicitly from the root `typecheck` because libs have no leaf typecheck.

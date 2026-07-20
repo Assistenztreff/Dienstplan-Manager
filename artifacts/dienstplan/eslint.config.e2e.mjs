@@ -20,4 +20,20 @@ export default tseslint.config(
       "playwright/missing-playwright-await": "error",
     },
   },
+  {
+    files: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: {
+        project: "./tsconfig.json",
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    plugins: {
+      "@typescript-eslint": tseslint.plugin,
+    },
+    rules: {
+      "@typescript-eslint/no-floating-promises": "error",
+    },
+  },
 );
