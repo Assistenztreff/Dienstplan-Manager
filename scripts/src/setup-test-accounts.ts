@@ -1,4 +1,5 @@
 import pg from "pg";
+import { DEFAULT_SHIFT_MODELS } from "@workspace/shift-defaults";
 import { deleteAccountTrees } from "@workspace/test-fixtures";
 
 /**
@@ -11,8 +12,8 @@ import { deleteAccountTrees } from "@workspace/test-fixtures";
  *      der 7 realen Assistenzkraefte, aller Schichten und Vertraege. Kein
  *      anderes Admin-/Superadmin-Konto bleibt Mitglied.
  *   2. Betreiber (betreiber@dienstplan.local, superadmin) -> bleibt FREE.
- *      Eigenes "Betreiber-Team" mit 4 Dummys (Max Mustermann 1-4), 4
- *      Standard-Schichtmodellen, leerer Dienstplan.
+ *      Eigenes "Betreiber-Team" mit 4 Dummys (Max Mustermann 1-4), den
+ *      Standard-Schichtmodellen aus @workspace/shift-defaults, leerer Dienstplan.
  *   3. Test-Dienstleister (dienstleister@dienstplan.local) -> PREMIUM.
  *      Bestehendes "Dienstleister-Team" mit 5 Dummys (Max Mustermann 5-9),
  *      leerer Dienstplan.
@@ -33,15 +34,6 @@ const EMAIL_MARIA = "maria.hoffmann@example.de";
 const EMAIL_ALT_DIENST = "dienst@dienstplan.local";
 
 const BETREIBER_TEAM_NAME = "Betreiber-Team";
-
-// Muss inhaltlich mit artifacts/api-server/src/lib/default-shift-models.ts
-// uebereinstimmen (dort werden dieselben 4 Modelle bei Registrierung geseedet).
-const DEFAULT_SHIFT_MODELS = [
-  { name: "Frühdienst", color: "amber", sortOrder: 0 },
-  { name: "Spätdienst", color: "indigo", sortOrder: 1 },
-  { name: "24h Dienst", color: "purple", sortOrder: 2 },
-  { name: "Bereitschaft", color: "teal", sortOrder: 3 },
-];
 
 interface UserRow {
   id: number;
@@ -114,12 +106,26 @@ async function ensureShiftModels(client: pg.Client, teamId: number): Promise<voi
   if (existing.rows[0].n > 0) return;
   for (const m of DEFAULT_SHIFT_MODELS) {
     await client.query(
-      `INSERT INTO shift_models (team_id, name, color, valuation_percent, sort_order)
-       VALUES ($1, $2, $3, 100, $4)`,
-      [teamId, m.name, m.color, m.sortOrder],
+      `INSERT INTO shift_models
+         (team_id, name, color, valuation_percent, sort_order,
+          default_start_time, default_end_time, default_weekdays, compensation_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        teamId,
+        m.name,
+        m.color,
+        m.valuationPercent,
+        m.sortOrder,
+        m.defaultStartTime,
+        m.defaultEndTime,
+        [...m.defaultWeekdays],
+        m.compensationType,
+      ],
     );
   }
-  console.log(`  4 Standard-Schichtmodelle fuer Team ${teamId} angelegt.`);
+  console.log(
+    `  ${DEFAULT_SHIFT_MODELS.length} Standard-Schichtmodelle fuer Team ${teamId} angelegt.`,
+  );
 }
 
 async function main(): Promise<void> {
@@ -200,7 +206,8 @@ async function main(): Promise<void> {
     console.log("Oliver Straub -> premium.");
 
     // ------------------------------------------------------------------
-    // 2) Betreiber-Team (Free): eigenes Team, 4 Dummys, 4 Schichtmodelle,
+    // 2) Betreiber-Team (Free): eigenes Team, 4 Dummys, Standard-Schichtmodelle
+    //    (aus @workspace/shift-defaults),
     //    leerer Dienstplan. Betreiber bleibt free.
     // ------------------------------------------------------------------
     let betreiberTeamId: number;
