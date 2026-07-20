@@ -132,7 +132,7 @@ test.describe("Zeitraum-Filter in der Operator-Fehlerliste", () => {
 
   test.afterAll(async () => {
     try {
-      deleteAccountByEmail(superEmail);
+      await deleteAccountByEmail(superEmail);
     } catch {
       /* Best effort — Cleanup darf den Lauf nicht kippen. */
     }
