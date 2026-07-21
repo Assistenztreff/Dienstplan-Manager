@@ -257,6 +257,12 @@ export type StatementRecalculation = {
     diffPay: number | null;
     diffBasePay: number | null;
     diffSurchargePay: number | null;
+    // Abwesenheits-Anteil (Lohnfortzahlung) im aktuellen Stand des Vormonats —
+    // analog zur Infokarte („davon Urlaub / Krankheit").
+    vacationHours?: number;
+    vacationPay?: number | null;
+    sickHours?: number;
+    sickPay?: number | null;
   }>;
   // Geld-Summen des exportierten Monats (nur Balances mit Lohnwerten); null,
   // wenn keine Lohnauswertung vorliegt.
@@ -294,15 +300,47 @@ function renderRecalculationPage(
   );
   doc.text(`sind in der Abrechnung ${recalc.monthLabel} zu berücksichtigen.`, 14, 36);
 
+  const hoursDe = (n: number) =>
+    n.toLocaleString("de-DE", { maximumFractionDigits: 2 });
+  // Abwesenheits-Spalte („davon Urlaub / Krankheit") nur rendern, wenn
+  // mindestens eine Zeile einen Urlaubs-/Krankheitsanteil trägt.
+  const hasAbsence = recalc.rows.some(
+    (r) => (r.vacationHours ?? 0) > 0 || (r.sickHours ?? 0) > 0,
+  );
+  const absenceCell = (r: StatementRecalculation["rows"][number]) => {
+    const parts: string[] = [];
+    if ((r.vacationHours ?? 0) > 0) {
+      parts.push(
+        `Urlaub ${hoursDe(r.vacationHours ?? 0)} h${r.vacationPay != null ? ` (${eur(r.vacationPay)})` : ""}`,
+      );
+    }
+    if ((r.sickHours ?? 0) > 0) {
+      parts.push(
+        `Krankheit ${hoursDe(r.sickHours ?? 0)} h${r.sickPay != null ? ` (${eur(r.sickPay)})` : ""}`,
+      );
+    }
+    return parts.length > 0 ? parts.join("\n") : "—";
+  };
+
   autoTable(doc, {
     startY: 44,
-    head: [["Assistenzkraft", "Differenz Stunden", "Grundlohn", "Zuschläge", "Gesamt"]],
+    head: [
+      [
+        "Assistenzkraft",
+        "Differenz Stunden",
+        "Grundlohn",
+        "Zuschläge",
+        "Gesamt",
+        ...(hasAbsence ? ["davon Urlaub / Krankheit"] : []),
+      ],
+    ],
     body: recalc.rows.map((r) => [
       r.userName,
-      `${r.diffHours > 0 ? "+" : ""}${r.diffHours.toLocaleString("de-DE", { maximumFractionDigits: 2 })} h`,
+      `${r.diffHours > 0 ? "+" : ""}${hoursDe(r.diffHours)} h`,
       r.diffBasePay != null ? signedEur(r.diffBasePay) : "—",
       r.diffSurchargePay != null ? signedEur(r.diffSurchargePay) : "—",
       r.diffPay != null ? signedEur(r.diffPay) : "—",
+      ...(hasAbsence ? [absenceCell(r)] : []),
     ]),
     theme: "grid",
     headStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
@@ -311,6 +349,7 @@ function renderRecalculationPage(
       2: { halign: "right" },
       3: { halign: "right" },
       4: { halign: "right" },
+      ...(hasAbsence ? { 5: { halign: "right" } } : {}),
     },
     styles: { fontSize: 10 },
     margin: { left: 14, right: 14 },

@@ -158,6 +158,10 @@ function ExportRangeDialog({
             diffPay: r.diffPay ?? null,
             diffBasePay: r.diffBasePay ?? null,
             diffSurchargePay: r.diffSurchargePay ?? null,
+            vacationHours: r.vacationHours ?? 0,
+            vacationPay: r.vacationPay ?? null,
+            sickHours: r.sickHours ?? 0,
+            sickPay: r.sickPay ?? null,
           }));
           if (rows.length === 0) continue;
           const payBalances = m.balances.filter((b) => b.totalPay != null);
