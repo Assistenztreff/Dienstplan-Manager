@@ -228,6 +228,9 @@ export async function computeHoursBalances(
           compensationType: shiftModelsTable.compensationType,
           compensationPercent: shiftModelsTable.compensationPercent,
           compensationFlatCents: shiftModelsTable.compensationFlatCents,
+          // Modellname zur Erkennung von Bereitschafts-Diensten
+          // (vorbereitete Abrechnungskategorien der Auswertung).
+          modelName: shiftModelsTable.name,
         })
         .from(shiftsTable)
         .leftJoin(shiftModelsTable, eq(shiftsTable.shiftModelId, shiftModelsTable.id))

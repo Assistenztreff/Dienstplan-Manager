@@ -2898,6 +2898,50 @@ components:
         totalPay:
           type: ["number", "null"]
           description: Gesamtvergütung = basePay + Zuschläge. Nur Premium.
+        # --- Zukünftige Abrechnungskategorien (contract-first vorbereitet) ---
+        # Alle Felder OPTIONAL, damit bestehende Clients und der eingefrorene
+        # Monatsabschluss-Snapshot (month_closings) kompatibel bleiben. Solange
+        # keine Erfassungs-Features existieren, liefert der Server 0 — die
+        # Werte fließen NICHT in totalPay ein.
+        pausenzeitStunden:
+          type: number
+          description: Erfasste Pausenzeiten in Stunden (noch keine Erfassung — immer 0).
+        teamsitzungStunden:
+          type: number
+          description: Teamsitzungs-Stunden (noch keine Erfassung — immer 0).
+        teamsitzungEuro:
+          type: number
+          description: Vergütung der Teamsitzungen in Euro (noch keine Erfassung — immer 0).
+        bereitschaftenAnzahl:
+          type: integer
+          description: Anzahl der Bereitschafts-Dienste im Monat (FIX-Schichten mit Schichtmodell „Bereitschaft").
+        bereitschaftsStunden:
+          type: number
+          description: Stunden der Bereitschafts-Dienste im Monat (FIX-Schichten mit Schichtmodell „Bereitschaft").
+        vertretungenAnzahl:
+          type: integer
+          description: Anzahl der Vertretungen (noch keine Erfassung — immer 0).
+        vertretungsStunden:
+          type: number
+          description: Vertretungs-Stunden (noch keine Erfassung — immer 0).
+        urlaubsabgeltungEuro:
+          type: number
+          description: Urlaubsabgeltung in Euro (noch keine Erfassung — immer 0).
+        kindKrankTage:
+          type: number
+          description: Kind-krank-Tage (noch keine Erfassung — immer 0).
+        freistellungTage:
+          type: number
+          description: Freistellungs-Tage (noch keine Erfassung — immer 0).
+        freistellungStunden:
+          type: number
+          description: Freistellungs-Stunden (noch keine Erfassung — immer 0).
+        abgesagtArbeitgeberStunden:
+          type: number
+          description: Vom Arbeitgeber abgesagte Stunden (noch keine Erfassung — immer 0).
+        abgesagtArbeitnehmerStunden:
+          type: number
+          description: Vom Arbeitnehmer abgesagte Stunden (noch keine Erfassung — immer 0).
 
     MonthClosingEntry:
       type: object

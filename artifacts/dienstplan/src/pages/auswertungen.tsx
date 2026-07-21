@@ -28,6 +28,7 @@ import { exportStatementSectionsPdf, type StatementRecalculation } from "@/lib/p
 import { PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
 import { formatDays } from "@/lib/utils";
 import { MonthClosingCard, RecalculationSection, PayrollTotalsCard } from "@/components/month-closing";
+import { GesamtAuswertungMatrix } from "@/components/gesamt-auswertung-matrix";
 
 function monthIndex(date: Date): number {
   return date.getFullYear() * 12 + date.getMonth();
@@ -495,6 +496,13 @@ export default function Auswertungen() {
             <Skeleton className="h-48 w-full rounded-xl" />
           </>
         ) : visibleBalances && Array.isArray(visibleBalances) && visibleBalances.length > 0 ? (
+          isAdmin && selectedAssistant === "all" ? (
+            /* "Alle": kompakte Matrix (Kategorien × Assistenzkräfte) statt
+               einzelner Karten — inkl. der vorbereiteten zukünftigen
+               Abrechnungskategorien (Teamsitzung, Bereitschaften,
+               Vertretungen) mit 0-Defaults. */
+            <GesamtAuswertungMatrix balances={visibleBalances} />
+          ) : (
           visibleBalances.map((balance: any) => {
             const percentage =
               balance.plannedHours > 0
@@ -704,6 +712,7 @@ export default function Auswertungen() {
               </Card>
             );
           })
+          )
         ) : (
           <div className="p-12 text-center border rounded-xl bg-card">
             <p className="text-muted-foreground">Keine Auswertungsdaten fuer diesen Zeitraum gefunden.</p>

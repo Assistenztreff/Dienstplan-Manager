@@ -1143,6 +1143,32 @@ export interface HoursBalance {
      * @nullable
      */
   totalPay?: number | null;
+  /** Erfasste Pausenzeiten in Stunden (noch keine Erfassung — immer 0). */
+  pausenzeitStunden?: number;
+  /** Teamsitzungs-Stunden (noch keine Erfassung — immer 0). */
+  teamsitzungStunden?: number;
+  /** Vergütung der Teamsitzungen in Euro (noch keine Erfassung — immer 0). */
+  teamsitzungEuro?: number;
+  /** Anzahl der Bereitschafts-Dienste im Monat (FIX-Schichten mit Schichtmodell „Bereitschaft"). */
+  bereitschaftenAnzahl?: number;
+  /** Stunden der Bereitschafts-Dienste im Monat (FIX-Schichten mit Schichtmodell „Bereitschaft"). */
+  bereitschaftsStunden?: number;
+  /** Anzahl der Vertretungen (noch keine Erfassung — immer 0). */
+  vertretungenAnzahl?: number;
+  /** Vertretungs-Stunden (noch keine Erfassung — immer 0). */
+  vertretungsStunden?: number;
+  /** Urlaubsabgeltung in Euro (noch keine Erfassung — immer 0). */
+  urlaubsabgeltungEuro?: number;
+  /** Kind-krank-Tage (noch keine Erfassung — immer 0). */
+  kindKrankTage?: number;
+  /** Freistellungs-Tage (noch keine Erfassung — immer 0). */
+  freistellungTage?: number;
+  /** Freistellungs-Stunden (noch keine Erfassung — immer 0). */
+  freistellungStunden?: number;
+  /** Vom Arbeitgeber abgesagte Stunden (noch keine Erfassung — immer 0). */
+  abgesagtArbeitgeberStunden?: number;
+  /** Vom Arbeitnehmer abgesagte Stunden (noch keine Erfassung — immer 0). */
+  abgesagtArbeitnehmerStunden?: number;
 }
 
 export type MonthClosingEntryBillingMethod = typeof MonthClosingEntryBillingMethod[keyof typeof MonthClosingEntryBillingMethod];

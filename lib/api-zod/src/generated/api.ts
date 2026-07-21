@@ -1376,7 +1376,20 @@ export const GetHoursBalanceResponseItem = zod.object({
   "nightSurchargePay": zod.number().nullish().describe('Geldwert des Nachtzuschlags (Zuschlagsstunden nach Abrechnungsart inkl. Abwesenheits-Fortzahlung \* Stundenlohn). Nur Premium.'),
   "sundaySurchargePay": zod.number().nullish().describe('Geldwert des Sonntagszuschlags (Zuschlagsstunden nach Abrechnungsart inkl. Abwesenheits-Fortzahlung \* Stundenlohn). Nur Premium.'),
   "holidaySurchargePay": zod.number().nullish().describe('Geldwert des Feiertagszuschlags (Zuschlagsstunden nach Abrechnungsart inkl. Abwesenheits-Fortzahlung \* Stundenlohn). Nur Premium.'),
-  "totalPay": zod.number().nullish().describe('Gesamtvergütung = basePay + Zuschläge. Nur Premium.')
+  "totalPay": zod.number().nullish().describe('Gesamtvergütung = basePay + Zuschläge. Nur Premium.'),
+  "pausenzeitStunden": zod.number().optional().describe('Erfasste Pausenzeiten in Stunden (noch keine Erfassung — immer 0).'),
+  "teamsitzungStunden": zod.number().optional().describe('Teamsitzungs-Stunden (noch keine Erfassung — immer 0).'),
+  "teamsitzungEuro": zod.number().optional().describe('Vergütung der Teamsitzungen in Euro (noch keine Erfassung — immer 0).'),
+  "bereitschaftenAnzahl": zod.number().optional().describe('Anzahl der Bereitschafts-Dienste im Monat (FIX-Schichten mit Schichtmodell „Bereitschaft\").'),
+  "bereitschaftsStunden": zod.number().optional().describe('Stunden der Bereitschafts-Dienste im Monat (FIX-Schichten mit Schichtmodell „Bereitschaft\").'),
+  "vertretungenAnzahl": zod.number().optional().describe('Anzahl der Vertretungen (noch keine Erfassung — immer 0).'),
+  "vertretungsStunden": zod.number().optional().describe('Vertretungs-Stunden (noch keine Erfassung — immer 0).'),
+  "urlaubsabgeltungEuro": zod.number().optional().describe('Urlaubsabgeltung in Euro (noch keine Erfassung — immer 0).'),
+  "kindKrankTage": zod.number().optional().describe('Kind-krank-Tage (noch keine Erfassung — immer 0).'),
+  "freistellungTage": zod.number().optional().describe('Freistellungs-Tage (noch keine Erfassung — immer 0).'),
+  "freistellungStunden": zod.number().optional().describe('Freistellungs-Stunden (noch keine Erfassung — immer 0).'),
+  "abgesagtArbeitgeberStunden": zod.number().optional().describe('Vom Arbeitgeber abgesagte Stunden (noch keine Erfassung — immer 0).'),
+  "abgesagtArbeitnehmerStunden": zod.number().optional().describe('Vom Arbeitnehmer abgesagte Stunden (noch keine Erfassung — immer 0).')
 })
 export const GetHoursBalanceResponse = zod.array(GetHoursBalanceResponseItem)
 

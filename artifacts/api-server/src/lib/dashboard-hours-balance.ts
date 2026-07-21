@@ -36,6 +36,12 @@ export interface BalanceShift {
   compensationType?: CompensationType | null;
   compensationPercent?: number | null;
   compensationFlatCents?: number | null;
+  /**
+   * Name des zugrundeliegenden Schichtmodells — dient der Erkennung von
+   * Bereitschafts-Diensten (Modellname "Bereitschaft") für die vorbereiteten
+   * Abrechnungskategorien der Auswertung.
+   */
+  modelName?: string | null;
 }
 
 /** Abrechnungsart: SOLL = nach Plan, IST = nach erfassten Ist-Zeiten. */
@@ -118,6 +124,23 @@ export interface HoursBalanceRow {
   holidayPercent: number;
   /** Angewandte Abrechnungsart dieser Zeile. */
   billingMethod: BillingMethod;
+  // --- Zukünftige Abrechnungskategorien (contract-first vorbereitet) ---
+  // Optionale Felder; solange keine Erfassung existiert, liefert der Server 0.
+  // Sie fließen NICHT in totalPay ein. Nur die Bereitschaften sind bereits
+  // real befüllt (FIX-Schichten mit Schichtmodell "Bereitschaft").
+  pausenzeitStunden: number;
+  teamsitzungStunden: number;
+  teamsitzungEuro: number;
+  bereitschaftenAnzahl: number;
+  bereitschaftsStunden: number;
+  vertretungenAnzahl: number;
+  vertretungsStunden: number;
+  urlaubsabgeltungEuro: number;
+  kindKrankTage: number;
+  freistellungTage: number;
+  freistellungStunden: number;
+  abgesagtArbeitgeberStunden: number;
+  abgesagtArbeitnehmerStunden: number;
   // Premium-Lohnauswertung. null, wenn kein Stundenlohn hinterlegt ist (dann
   // keine Geldwerte). Geldwerte folgen der Abrechnungsart (billingMethod) —
   // dieselbe Basis wie die Stunden-Spalten — plus Lohnfortzahlung (Urlaub/Krank
@@ -317,6 +340,19 @@ export function computeHoursBalanceRow(params: {
     }
   }
 
+  // --- Zukünftige Abrechnungskategorien ---
+  // Bereitschaften sind bereits eindeutig über das Schichtmodell "Bereitschaft"
+  // (seeded Standard-Dienst) identifizierbar: Anzahl und Roh-Stunden der
+  // geplanten FIX-Bereitschafts-Dienste dieses Monats — rein plan-strukturelle
+  // Kennzahlen, unabhängig von der Abrechnungsart. Alle übrigen Kategorien
+  // (Pausen, Teamsitzungen, Vertretungen, Urlaubsabgeltung, Kind-krank,
+  // Freistellung, abgesagte Stunden) haben noch KEINE Datenquelle und bleiben
+  // bewusst 0 — keine Fake-Berechnungen; spätere Erfassungs-Features müssen
+  // nur noch Werte liefern.
+  const bereitschaftsShifts = workShifts.filter((s) => s.modelName === "Bereitschaft");
+  const bereitschaftenAnzahl = bereitschaftsShifts.length;
+  const bereitschaftsStunden = bereitschaftsShifts.reduce((acc, s) => acc + shiftHours(s), 0);
+
   const sickHours = sickFulfilledHours;
   const vacationDays = contract?.vacationDays ?? DEFAULT_VACATION_DAYS;
   // Urlaubstage IMMER aus der stundengenauen Buchhaltung ableiten (gerundet
@@ -402,6 +438,20 @@ export function computeHoursBalanceRow(params: {
     sundayPercent,
     holidayPercent,
     billingMethod,
+    // Zukünftige Abrechnungskategorien: Bereitschaften real, Rest 0 (s. o.).
+    pausenzeitStunden: 0,
+    teamsitzungStunden: 0,
+    teamsitzungEuro: 0,
+    bereitschaftenAnzahl,
+    bereitschaftsStunden: round2(bereitschaftsStunden),
+    vertretungenAnzahl: 0,
+    vertretungsStunden: 0,
+    urlaubsabgeltungEuro: 0,
+    kindKrankTage: 0,
+    freistellungTage: 0,
+    freistellungStunden: 0,
+    abgesagtArbeitgeberStunden: 0,
+    abgesagtArbeitnehmerStunden: 0,
     hourlyWage: wage,
     basePay,
     nightSurchargePay,
