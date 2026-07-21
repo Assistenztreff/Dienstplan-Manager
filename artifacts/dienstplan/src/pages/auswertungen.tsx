@@ -25,6 +25,7 @@ import { useAuth } from "@/context/auth";
 import { hasAccess } from "@/lib/entitlements";
 import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 import { exportStatementSectionsPdf, type StatementRecalculation } from "@/lib/pdf-export";
+import { mapDiffRowsToRecalculationRows } from "@/lib/recalculation-mapping";
 import { PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
 import { formatDays } from "@/lib/utils";
 import { MonthClosingCard, RecalculationSection, PayrollTotalsCard } from "@/components/month-closing";
@@ -148,21 +149,7 @@ function ExportRangeDialog({
             ...(teamId != null ? { teamId } : {}),
           });
           if (!diff.closed || diff.rows.length === 0) continue;
-          const rows = (
-            assistantFilter !== "all"
-              ? diff.rows.filter((r) => r.userId === assistantFilter)
-              : diff.rows
-          ).map((r) => ({
-            userName: r.userName,
-            diffHours: r.diffHours,
-            diffPay: r.diffPay ?? null,
-            diffBasePay: r.diffBasePay ?? null,
-            diffSurchargePay: r.diffSurchargePay ?? null,
-            vacationHours: r.vacationHours ?? 0,
-            vacationPay: r.vacationPay ?? null,
-            sickHours: r.sickHours ?? 0,
-            sickPay: r.sickPay ?? null,
-          }));
+          const rows = mapDiffRowsToRecalculationRows(diff.rows, assistantFilter);
           if (rows.length === 0) continue;
           const payBalances = m.balances.filter((b) => b.totalPay != null);
           recalculations.push({
