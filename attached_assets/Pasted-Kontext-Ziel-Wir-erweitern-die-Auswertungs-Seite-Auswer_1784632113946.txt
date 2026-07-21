@@ -1,0 +1,161 @@
+Kontext & Ziel:
+Wir erweitern die Auswertungs-Seite (Auswertungen.tsx). Wenn der Nutzer den Button "Alle" wählt, soll eine übersichtliche Gesamtübersicht (Matrix/Tabelle) gerendert werden, die sich optisch nahtlos an den bestehenden Mitarbeiter-Karten orientiert. Wählt der Nutzer eine einzelne Assistenzkraft aus, bleibt die bestehende Einzelkarten-Ansicht aktiv.
+Zusätzlich erweitern wir das Datenmodell um optionale Felder (Pausen, Teamsitzungen, Bereitschaften, Freistellung etc.), damit der Code sofort lauffähig ist, aber bereits alle zukünftigen Abrechnungskategorien unterstützt.
+
+🛠️ Umzusetzende Schritte:
+1. Typ-Definitionen erstellen/erweitern
+Erstelle oder erweitere die Datei src/types/auswertung.ts:
+
+export interface MitarbeiterAuswertungData {
+  id: string;
+  name: string;
+  colorTag: string; // Tailwind-Klassen für den Tag, z. B. "bg-[#CAE677] text-[#05305B]"
+  initials: string; // z. B. "CN"
+
+  // Aktuell erfasste Grunddaten
+  geleisteteStunden: number;
+  sollStunden: number;
+  krankheitsStunden: number;
+  urlaubstageGenommen: number;
+  nachtStunden: number;
+  grundlohnEuro: number;
+  nachtzuschlagEuro: number;
+  gesamtlohnEuro: number;
+
+  // Optionale / Zukünftige Kategorien (Default auf 0)
+  pausenzeitStunden?: number;
+  teamsitzungStunden?: number;
+  teamsitzungEuro?: number;
+  bereitschaftenAnzahl?: number;
+  bereitschaftsStunden?: number;
+  vertretungenAnzahl?: number;
+  vertretungsStunden?: number;
+  urlaubsabgeltungEuro?: number;
+  kindKrankTage?: number;
+  freistellungTage?: number;
+  freistellungStunden?: number;
+  abgesagtArbeitgeberStunden?: number;
+  abgesagtArbeitnehmerStunden?: number;
+}
+2. Gesamt-Matrix-Komponente erstellen
+Erstelle die Datei src/components/GesamtAuswertungMatrix.tsx:
+
+TypeScript
+
+import React from "react";
+import { MitarbeiterAuswertungData } from "../types/auswertung";
+
+interface Props {
+  data: MitarbeiterAuswertungData[];
+}
+
+export const GesamtAuswertungMatrix: React.FC<Props> = ({ data }) => {
+  // Zeilenstruktur für die Auswertungs-Matrix
+  const rows = [
+    {
+      label: "Geleistete Stunden (bewertet)",
+      render: (m: MitarbeiterAuswertungData) => `${m.geleisteteStunden} / ${m.sollStunden} h`,
+      highlight: true
+    },
+    {
+      label: "Krankheitsstunden (Lohnfortzahlung)",
+      render: (m: MitarbeiterAuswertungData) => `${m.krankheitsStunden} h`
+    },
+    {
+      label: "Urlaubstage (Genommen)",
+      render: (m: MitarbeiterAuswertungData) => `${m.urlaubstageGenommen} Tage`
+    },
+    {
+      label: "Nachtstunden (Zuschlag)",
+      render: (m: MitarbeiterAuswertungData) => `${m.nachtStunden} h`
+    },
+    {
+      label: "Teamsitzung",
+      render: (m: MitarbeiterAuswertungData) => `${m.teamsitzungStunden || 0} h`
+    },
+    {
+      label: "Bereitschaften",
+      render: (m: MitarbeiterAuswertungData) => `${m.bereitschaftenAnzahl || 0} (Anz.) / ${m.bereitschaftsStunden || 0} h`
+    },
+    {
+      label: "Vertretungen",
+      render: (m: MitarbeiterAuswertungData) => `${m.vertretungenAnzahl || 0} (Anz.) / ${m.vertretungsStunden || 0} h`
+    },
+    {
+      label: "Grundlohn",
+      render: (m: MitarbeiterAuswertungData) => `${m.grundlohnEuro.toFixed(2)} €`
+    },
+    {
+      label: "Nachtzuschlag (€)",
+      render: (m: MitarbeiterAuswertungData) => `${m.nachtzuschlagEuro.toFixed(2)} €`
+    },
+    {
+      label: "GESAMT LOHN (BRUTTO)",
+      render: (m: MitarbeiterAuswertungData) => `${m.gesamtlohnEuro.toFixed(2)} €`,
+      isTotal: true
+    }
+  ];
+
+  return (
+    <div className="w-full bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden my-6">
+      <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+        <h3 className="text-base font-bold text-[#05305B]">Gesamtübersicht – Alle Assistenzkräfte</h3>
+        <span className="text-xs text-gray-500 font-medium">{data.length} Assistenten erfasst</span>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse min-w-[700px]">
+          <thead>
+            <tr className="border-b border-gray-200 bg-gray-100">
+              <th className="p-3 text-xs font-bold text-gray-600 uppercase tracking-wider w-64">
+                Kategorie
+              </th>
+              {data.map((m) => (
+                <th key={m.id} className="p-3 text-center min-w-[140px]">
+                  <div className="flex items-center justify-center gap-2">
+                    <span className={`px-2 py-1 rounded-full text-xs font-bold shadow-sm ${m.colorTag}`}>
+                      {m.initials}
+                    </span>
+                    <span className="text-sm font-bold text-[#05305B]">{m.name}</span>
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, idx) => {
+              const isEven = idx % 2 === 0;
+              const rowStyle = row.isTotal
+                ? "bg-[#D4F0F0]/40 font-bold border-t-2 border-[#05305B]"
+                : row.highlight
+                ? "bg-gray-50 font-semibold"
+                : isEven
+                ? "bg-white"
+                : "bg-gray-50/50";
+
+              return (
+                <tr key={row.label} className={`border-b border-gray-100 transition-colors ${rowStyle}`}>
+                  <td className="p-3 text-sm text-[#05305B] font-medium">
+                    {row.label}
+                  </td>
+                  {data.map((m) => (
+                    <td key={m.id} className="p-3 text-sm text-center font-mono text-[#05305B]">
+                      {row.render(m)}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+3. Integration in AuswertungenPage.tsx
+Passe die Hauptseite der Auswertung so an:
+
+Halte einen State für den aktiven Filter bereit (z. B. const [selectedId, setSelectedId] = useState<string>("all")).
+Rendere den Button "Alle" als aktiven Tab.
+Zeige <GesamtAuswertungMatrix data="{...}"/>, wenn selectedId === "all" ist.
+Zeige die bisherige Einzelansicht, wenn eine spezifische Mitarbeiter-ID ausgewählt ist.
