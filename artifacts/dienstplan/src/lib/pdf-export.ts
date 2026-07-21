@@ -278,7 +278,7 @@ export type ExportStatementSectionsOptions = {
 
 // Eigene Seite je Nachberechnung: Differenz-Tabelle des Vormonats + Summen
 // des exportierten Monats inkl. der Nachberechnung als eigene Position.
-function renderRecalculationPage(
+export function renderRecalculationPage(
   doc: any,
   autoTable: any,
   recalc: StatementRecalculation,
