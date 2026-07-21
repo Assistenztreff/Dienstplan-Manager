@@ -125,14 +125,15 @@ test("Auswertungen-Header exportiert den Sammel-Nachweis aller Assistenten mit e
   await page.goto("/auswertungen");
   await expect(page.getByRole("heading", { name: "Auswertungen", exact: true })).toBeVisible();
 
-  // Seite startet beim aktuellen Monat; einen Monat zurück in den Zielmonat,
-  // bis die Balance-Karte des angelegten Assistenten erscheint.
-  await page.getByTestId("month-prev").click();
-  await expect(page.getByRole("heading", { name: assistant.name })).toBeVisible();
-
   // Filter explizit auf "Alle" stellen, damit der Gesamt-Nachweis (namePart
   // "Alle") und nicht ein Einzel-Nachweis erzeugt wird.
   await page.getByTestId("assistant-chip-all").click();
+
+  // Seite startet beim aktuellen Monat; einen Monat zurück in den Zielmonat,
+  // bis der angelegte Assistent in der Gesamtübersichts-Matrix erscheint
+  // (bei Filter „Alle" rendert statt der Einzelkarten die Matrix).
+  await page.getByTestId("month-prev").click();
+  await expect(page.getByTestId(`matrix-col-${assistant.id}`)).toBeVisible();
 
   // Export-Button im Header ist freigeschaltet, sobald Daten geladen sind.
   const exportButton = page.getByTestId("export-pdf-button");

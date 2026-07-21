@@ -506,11 +506,15 @@ export default function Auswertungen() {
           </>
         ) : visibleBalances && Array.isArray(visibleBalances) && visibleBalances.length > 0 ? (
           isAdmin && selectedAssistant === "all" ? (
-            /* "Alle": kompakte Matrix (Kategorien × Assistenzkräfte) statt
-               einzelner Karten — inkl. der vorbereiteten zukünftigen
-               Abrechnungskategorien (Teamsitzung, Bereitschaften,
-               Vertretungen) mit 0-Defaults. */
-            <GesamtAuswertungMatrix balances={visibleBalances} />
+            // Filter „Alle" (nur Admin): kompakte Vergleichs-Matrix statt der
+            // Einzelkarten-Liste — gleiche Datenquelle (hours-balance), inkl.
+            // der vorbereiteten zukünftigen Abrechnungskategorien
+            // (Teamsitzung, Bereitschaften, Vertretungen) mit 0-Defaults.
+            <GesamtAuswertungMatrix
+              balances={visibleBalances}
+              recalcByUser={recalcByUser}
+              prevMonthLabel={prevOfShownLabel}
+            />
           ) : (
           visibleBalances.map((balance: any) => {
             const percentage =
