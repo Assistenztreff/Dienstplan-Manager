@@ -349,7 +349,8 @@ export function RecalculationSection({
                 <th className="py-2 pr-3 font-medium">Assistenzkraft</th>
                 <th className="py-2 pr-3 font-medium text-right">Gemeldet</th>
                 <th className="py-2 pr-3 font-medium text-right">Aktuell</th>
-                <th className="py-2 font-medium text-right">Differenz</th>
+                <th className="py-2 pr-3 font-medium text-right">Differenz</th>
+                <th className="py-2 font-medium text-right">davon Urlaub / Krankheit</th>
               </tr>
             </thead>
             <tbody>
@@ -368,7 +369,7 @@ export function RecalculationSection({
                       <div className="text-xs text-muted-foreground">{euro(row.currentPay)}</div>
                     )}
                   </td>
-                  <td className="py-2 text-right whitespace-nowrap font-medium">
+                  <td className="py-2 pr-3 text-right whitespace-nowrap font-medium">
                     <span className={row.diffHours !== 0 ? (row.diffHours > 0 ? "text-green-700" : "text-red-700") : ""}>
                       {signed(row.diffHours, "h")}
                     </span>
@@ -377,6 +378,41 @@ export function RecalculationSection({
                         {row.diffPay > 0 ? "+" : ""}
                         {euro(row.diffPay)}
                       </div>
+                    )}
+                  </td>
+                  {/* Abwesenheits-Ausweis: Urlaubs-/Krankheitsstunden
+                      (Lohnfortzahlung) im aktuellen Stand des Vormonats. */}
+                  <td className="py-2 text-right whitespace-nowrap" data-testid={`recalc-absence-${row.userId}`}>
+                    {(row.vacationHours ?? 0) > 0 && (
+                      <div>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="h-2 w-2 rounded-full bg-amber-400 inline-block" />
+                          <span className="text-muted-foreground">Urlaub</span>
+                          <span className="font-medium">
+                            {(row.vacationHours ?? 0).toLocaleString("de-DE", { maximumFractionDigits: 2 })} h
+                          </span>
+                        </span>
+                        {row.vacationPay != null && (
+                          <div className="text-xs text-muted-foreground">{euro(row.vacationPay)}</div>
+                        )}
+                      </div>
+                    )}
+                    {(row.sickHours ?? 0) > 0 && (
+                      <div className={(row.vacationHours ?? 0) > 0 ? "mt-1" : ""}>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="h-2 w-2 rounded-full bg-gray-400 inline-block" />
+                          <span className="text-muted-foreground">Krankheit</span>
+                          <span className="font-medium">
+                            {(row.sickHours ?? 0).toLocaleString("de-DE", { maximumFractionDigits: 2 })} h
+                          </span>
+                        </span>
+                        {row.sickPay != null && (
+                          <div className="text-xs text-muted-foreground">{euro(row.sickPay)}</div>
+                        )}
+                      </div>
+                    )}
+                    {(row.vacationHours ?? 0) === 0 && (row.sickHours ?? 0) === 0 && (
+                      <span className="text-muted-foreground">—</span>
                     )}
                   </td>
                 </tr>

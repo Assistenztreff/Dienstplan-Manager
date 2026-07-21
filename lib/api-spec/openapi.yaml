@@ -3052,6 +3052,18 @@ components:
         diffSurchargePay:
           type: ["number", "null"]
           description: Zuschlags-Anteil (Nacht/Sonntag/Feiertag) der Geld-Differenz (EUR); null ohne Geldwerte.
+        vacationHours:
+          type: number
+          description: Urlaubsstunden (Lohnfortzahlung) im AKTUELLEN Stand des abgeschlossenen Monats; nie negativ.
+        vacationPay:
+          type: ["number", "null"]
+          description: Geldwert der Urlaubs-Lohnfortzahlung (EUR, Stundenlohn × Stunden); null ohne Stundenlohn.
+        sickHours:
+          type: number
+          description: Krankheitsstunden (Lohnfortzahlung) im AKTUELLEN Stand des abgeschlossenen Monats; nie negativ.
+        sickPay:
+          type: ["number", "null"]
+          description: Geldwert der Krankheits-Lohnfortzahlung (EUR, Stundenlohn × Stunden); null ohne Stundenlohn.
 
     MonthClosingDiff:
       type: object

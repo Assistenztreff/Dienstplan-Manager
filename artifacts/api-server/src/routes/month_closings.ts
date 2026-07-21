@@ -29,7 +29,7 @@ import { requirePlanFeature } from "../lib/plan";
 import { parseTeamIdParam, resolveWriteTeamId } from "../lib/teams";
 import { computeHoursBalances } from "../lib/hours-balance-service";
 import { computeMonthClosingDiff } from "../lib/month-closing-diff";
-import type { HoursBalanceRow } from "../lib/dashboard-hours-balance";
+import { round2, type HoursBalanceRow } from "../lib/dashboard-hours-balance";
 import type { Request, Response } from "express";
 
 const router = Router();
@@ -131,6 +131,12 @@ function toEntry(row: HoursBalanceRow): MonthClosingEntry {
     sundaySurchargePay: row.sundaySurchargePay ?? null,
     holidaySurchargePay: row.holidaySurchargePay ?? null,
     totalPay: row.totalPay ?? null,
+    // Abwesenheits-Ausweis mit einfrieren, damit die Nachberechnung auch
+    // stundenneutrale Umwandlungen (Dienst → Urlaub/Krankheit) erkennt.
+    vacationHours: row.vacationFulfilledHours,
+    vacationPay: row.hourlyWage != null ? round2(row.hourlyWage * row.vacationFulfilledHours) : null,
+    sickHours: row.sickHours,
+    sickPay: row.hourlyWage != null ? round2(row.hourlyWage * row.sickHours) : null,
   };
 }
 
@@ -281,6 +287,12 @@ router.get(
           r.nightSurchargePay != null || r.sundaySurchargePay != null || r.holidaySurchargePay != null
             ? (r.nightSurchargePay ?? 0) + (r.sundaySurchargePay ?? 0) + (r.holidaySurchargePay ?? 0)
             : null,
+        // Abwesenheits-Ausweis (Lohnfortzahlung) im aktuellen Stand: gleiche
+        // Bewertungslogik wie hours-balance (Stundenlohn × valuedHours).
+        vacationHours: r.vacationFulfilledHours,
+        vacationPay: r.hourlyWage != null ? round2(r.hourlyWage * r.vacationFulfilledHours) : null,
+        sickHours: r.sickHours,
+        sickPay: r.hourlyWage != null ? round2(r.hourlyWage * r.sickHours) : null,
       })),
     );
 

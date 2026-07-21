@@ -362,6 +362,10 @@ export default function Auswertungen() {
     { query: { enabled: isAdmin && !analyticsLocked } } as any,
   ) as { data: MonthClosingDiff | undefined };
   const recalcByUser = new Map<number, { diffPay: number; diffBasePay: number; diffSurchargePay: number }>();
+  // Abwesenheits-Anteil der Nachberechnung (Urlaubs-/Krankheitsstunden des
+  // Vormonats) — eigenes Kästchen unter den Krankheitsstunden, unabhängig
+  // davon, ob sich der Geldwert geändert hat.
+  const recalcAbsenceByUser = new Map<number, { vacationHours: number; sickHours: number }>();
   if (prevDiff?.closed) {
     for (const r of prevDiff.rows) {
       if (r.diffPay != null && r.diffPay !== 0) {
@@ -370,6 +374,11 @@ export default function Auswertungen() {
           diffBasePay: r.diffBasePay ?? 0,
           diffSurchargePay: r.diffSurchargePay ?? 0,
         });
+      }
+      const vacationHours = r.vacationHours ?? 0;
+      const sickHours = r.sickHours ?? 0;
+      if (vacationHours > 0 || sickHours > 0) {
+        recalcAbsenceByUser.set(r.userId, { vacationHours, sickHours });
       }
     }
   }
@@ -558,6 +567,35 @@ export default function Auswertungen() {
                         <span className="text-slate-600">Krankheitsstunden (Lohnfortzahlung)</span>
                         <span className="font-semibold text-slate-700">{balance.sickHours} h</span>
                       </div>
+
+                      {/* Nachberechnung: Abwesenheits-Stunden des Vormonats —
+                          nur wenn die Nachberechnung einen Urlaubs-/
+                          Krankheitsanteil trägt. */}
+                      {(() => {
+                        const absence = recalcAbsenceByUser.get(balance.userId);
+                        if (!absence) return null;
+                        const hoursDe = (n: number) =>
+                          n.toLocaleString("de-DE", { maximumFractionDigits: 2 });
+                        return (
+                          <div
+                            className="rounded-lg border border-amber-300/70 bg-amber-50/50 px-3 py-2.5 space-y-1.5"
+                            data-testid={`recalc-absence-box-${balance.userId}`}
+                          >
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">
+                                Nachberechnung Krankheitsstunden Vormonat
+                              </span>
+                              <span className="font-semibold">{hoursDe(absence.sickHours)} h</span>
+                            </div>
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">
+                                Nachberechnung Urlaubsstunden Vormonat
+                              </span>
+                              <span className="font-semibold">{hoursDe(absence.vacationHours)} h</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* Bewertete Stunden & Zuschläge */}
                       <div className="rounded-lg border border-border/60 bg-muted/30 p-3 space-y-2">

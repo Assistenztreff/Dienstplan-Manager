@@ -32,6 +32,14 @@ export type MonthClosingEntry = {
   sundaySurchargePay: number | null;
   holidaySurchargePay: number | null;
   totalPay: number | null;
+  // Abwesenheits-Ausweis (Lohnfortzahlung) zum Abschluss-Zeitpunkt. Optional:
+  // Alt-Schnappschüsse (vor Einführung) haben die Felder nicht — die Diff-
+  // Berechnung behandelt fehlende Felder als "unbekannt" (kein Abwesenheits-
+  // Vergleich), damit Alt-Abschlüsse keine Schein-Nachberechnungen erzeugen.
+  vacationHours?: number | null;
+  vacationPay?: number | null;
+  sickHours?: number | null;
+  sickPay?: number | null;
 };
 
 export const monthClosingsTable = pgTable("month_closings", {

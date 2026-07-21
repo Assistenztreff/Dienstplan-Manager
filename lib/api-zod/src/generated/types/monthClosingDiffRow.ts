@@ -36,4 +36,18 @@ export interface MonthClosingDiffRow {
      * @nullable
      */
   diffSurchargePay?: number | null;
+  /** Urlaubsstunden (Lohnfortzahlung) im AKTUELLEN Stand des abgeschlossenen Monats; nie negativ. */
+  vacationHours?: number;
+  /**
+     * Geldwert der Urlaubs-Lohnfortzahlung (EUR, Stundenlohn × Stunden); null ohne Stundenlohn.
+     * @nullable
+     */
+  vacationPay?: number | null;
+  /** Krankheitsstunden (Lohnfortzahlung) im AKTUELLEN Stand des abgeschlossenen Monats; nie negativ. */
+  sickHours?: number;
+  /**
+     * Geldwert der Krankheits-Lohnfortzahlung (EUR, Stundenlohn × Stunden); null ohne Stundenlohn.
+     * @nullable
+     */
+  sickPay?: number | null;
 }

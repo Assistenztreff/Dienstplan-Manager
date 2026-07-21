@@ -17,6 +17,12 @@ export type DiffSourceRow = {
   totalPay: number | null;
   basePay?: number | null;
   surchargePay?: number | null;
+  // Abwesenheits-Ausweis (Lohnfortzahlung) im AKTUELLEN Stand: Urlaubs-/
+  // Krankheitsstunden und deren Geldwert (Stundenlohn × valuedHours).
+  vacationHours?: number | null;
+  vacationPay?: number | null;
+  sickHours?: number | null;
+  sickPay?: number | null;
 };
 
 export type MonthClosingDiffRow = {
@@ -32,6 +38,13 @@ export type MonthClosingDiffRow = {
   // Auswertung: Grundlohn- und Zuschlags-Anteil (null ohne Geldwerte).
   diffBasePay: number | null;
   diffSurchargePay: number | null;
+  // Abwesenheits-Ausweis: Urlaubs-/Krankheitsstunden (Lohnfortzahlung) im
+  // AKTUELLEN Stand des abgeschlossenen Monats — nie negativ, reine
+  // Zusatzinformation neben der unveränderten Vorzeichenlogik der Differenz.
+  vacationHours: number;
+  vacationPay: number | null;
+  sickHours: number;
+  sickPay: number | null;
 };
 
 // Toleranz gegen Fließkomma-Rauschen: Werte sind auf 2 Stellen gerundet,
@@ -86,7 +99,23 @@ export function computeMonthClosingDiff(
 
     const hoursChanged = Math.abs(diffHours) > EPS;
     const payChanged = diffPay != null && Math.abs(diffPay) > EPS;
-    if (!hoursChanged && !payChanged) continue;
+
+    // Abwesenheits-Änderung: stundenneutrale Umwandlung (Dienst → Urlaub/
+    // Krankheit) ändert weder Stunden noch Geld, muss aber im Abwesenheits-
+    // Ausweis sichtbar sein. Vergleich NUR, wenn der Schnappschuss die
+    // Abwesenheitsfelder kennt (neue Abschlüsse) — Alt-Schnappschüsse ohne
+    // Felder gelten als "unbekannt", damit keine Schein-Nachberechnungen
+    // aus dem bloßen Vorhandensein von Abwesenheiten entstehen.
+    const curVacation = cur?.vacationHours ?? 0;
+    const curSick = cur?.sickHours ?? 0;
+    const snapshotKnowsAbsence =
+      rep == null || rep.vacationHours !== undefined || rep.sickHours !== undefined;
+    const absenceChanged =
+      snapshotKnowsAbsence &&
+      (Math.abs(curVacation - (rep?.vacationHours ?? 0)) > EPS ||
+        Math.abs(curSick - (rep?.sickHours ?? 0)) > EPS);
+
+    if (!hoursChanged && !payChanged && !absenceChanged) continue;
 
     rows.push({
       userId,
@@ -99,6 +128,10 @@ export function computeMonthClosingDiff(
       diffPay,
       diffBasePay,
       diffSurchargePay,
+      vacationHours: round2(cur?.vacationHours ?? 0),
+      vacationPay: cur?.vacationPay ?? null,
+      sickHours: round2(cur?.sickHours ?? 0),
+      sickPay: cur?.sickPay ?? null,
     });
   }
   rows.sort((a, b) => a.userName.localeCompare(b.userName, "de"));

@@ -143,6 +143,83 @@ describe("computeMonthClosingDiff", () => {
     expect(rows[0].diffSurchargePay).toBeNull();
   });
 
+  it("reicht den Abwesenheits-Ausweis (Urlaub/Krank) aus dem aktuellen Stand durch", () => {
+    const rows = computeMonthClosingDiff(
+      [entry(1, "Anna", 40, 600)],
+      [
+        {
+          userId: 1,
+          userName: "Anna",
+          totalFulfilledHours: 40,
+          totalPay: 650,
+          vacationHours: 8,
+          vacationPay: 160,
+          sickHours: 16.333,
+          sickPay: 326.66,
+        },
+      ],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].vacationHours).toBeCloseTo(8, 2);
+    expect(rows[0].vacationPay).toBeCloseTo(160, 2);
+    expect(rows[0].sickHours).toBeCloseTo(16.33, 2);
+    expect(rows[0].sickPay).toBeCloseTo(326.66, 2);
+  });
+
+  it("Abwesenheits-Ausweis ohne Angaben: 0 Stunden, Geld null", () => {
+    const rows = computeMonthClosingDiff([entry(1, "Anna", 40)], [cur(1, "Anna", 41)]);
+    expect(rows[0].vacationHours).toBe(0);
+    expect(rows[0].vacationPay).toBeNull();
+    expect(rows[0].sickHours).toBe(0);
+    expect(rows[0].sickPay).toBeNull();
+  });
+
+  it("stundenneutrale Umwandlung: Abwesenheits-Änderung allein erzeugt eine Zeile", () => {
+    // Dienst → Krankheit umgewandelt: Stunden und Geld identisch, aber der
+    // (neue) Schnappschuss kennt die Abwesenheitsfelder (0) — Zeile erscheint.
+    const rows = computeMonthClosingDiff(
+      [{ ...entry(1, "Anna", 40, 600), vacationHours: 0, sickHours: 0 }],
+      [
+        {
+          userId: 1,
+          userName: "Anna",
+          totalFulfilledHours: 40,
+          totalPay: 600,
+          vacationHours: 0,
+          vacationPay: null,
+          sickHours: 8,
+          sickPay: 120,
+        },
+      ],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].diffHours).toBe(0);
+    expect(rows[0].diffPay).toBe(0);
+    expect(rows[0].sickHours).toBe(8);
+    expect(rows[0].sickPay).toBe(120);
+  });
+
+  it("Alt-Schnappschuss ohne Abwesenheitsfelder: keine Schein-Zeile bei gleichem Stand", () => {
+    // Legacy-Abschluss kennt die Abwesenheitsfelder nicht — bloßes Vorhandensein
+    // von Abwesenheiten im aktuellen Stand darf KEINE Nachberechnung auslösen.
+    const rows = computeMonthClosingDiff(
+      [entry(1, "Anna", 40, 600)],
+      [
+        {
+          userId: 1,
+          userName: "Anna",
+          totalFulfilledHours: 40,
+          totalPay: 600,
+          vacationHours: 8,
+          vacationPay: 160,
+          sickHours: 0,
+          sickPay: null,
+        },
+      ],
+    );
+    expect(rows).toEqual([]);
+  });
+
   it("sortiert nach Name (deutsch)", () => {
     const rows = computeMonthClosingDiff(
       [],
