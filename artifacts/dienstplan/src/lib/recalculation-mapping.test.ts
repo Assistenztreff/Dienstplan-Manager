@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { MonthClosingDiffRow } from "@workspace/api-client-react";
-import { mapDiffRowsToRecalculationRows } from "./recalculation-mapping";
+import {
+  computeRecalculationMonthTotals,
+  mapDiffRowsToRecalculationRows,
+  type RecalculationBalance,
+} from "./recalculation-mapping";
 
 // Friert die Übergabe-Strecke Diff-API → PDF-Export ein: die Abwesenheits-
 // Felder (vacationHours/vacationPay/sickHours/sickPay) aus der Antwort von
@@ -126,5 +130,67 @@ describe("mapDiffRowsToRecalculationRows", () => {
     expect(rows[0].sickHours).toBe(4);
     expect(rows[0].sickPay).toBe(48);
     expect(rows[0].vacationHours).toBe(0);
+  });
+});
+
+// Friert die zweite Übergabe-Strecke ein: die Geld-Summen der PDF-
+// Nachberechnungs-Seite (monthTotals) müssen korrekt aus den Monats-Balances
+// von GET /dashboard/hours-balance summiert werden — inkl. aller drei
+// Zuschlagsarten und dem Sonderfall „keine Lohnwerte → null".
+describe("computeRecalculationMonthTotals", () => {
+  function balance(overrides: RecalculationBalance): RecalculationBalance {
+    return { ...overrides };
+  }
+
+  it("summiert basePay, alle drei Zuschlagsarten und totalPay ueber alle Balances", () => {
+    const totals = computeRecalculationMonthTotals([
+      balance({
+        basePay: 1000,
+        nightSurchargePay: 50,
+        sundaySurchargePay: 30,
+        holidaySurchargePay: 20,
+        totalPay: 1100,
+      }),
+      balance({
+        basePay: 500,
+        nightSurchargePay: 10,
+        sundaySurchargePay: 0,
+        holidaySurchargePay: 40,
+        totalPay: 550,
+      }),
+    ]);
+    expect(totals).toEqual({
+      basePay: 1500,
+      surchargePay: 150,
+      totalPay: 1650,
+    });
+  });
+
+  it("liefert null, wenn keine Balance einen Lohnwert (totalPay) traegt", () => {
+    expect(
+      computeRecalculationMonthTotals([
+        balance({ basePay: 100 }),
+        balance({ totalPay: null }),
+      ]),
+    ).toBeNull();
+  });
+
+  it("liefert null bei leerer Balance-Liste", () => {
+    expect(computeRecalculationMonthTotals([])).toBeNull();
+  });
+
+  it("behandelt fehlende Felder als 0, sobald mindestens ein totalPay vorliegt", () => {
+    const totals = computeRecalculationMonthTotals([
+      balance({ totalPay: 200, basePay: 200 }),
+      balance({}),
+    ]);
+    expect(totals).toEqual({ basePay: 200, surchargePay: 0, totalPay: 200 });
+  });
+
+  it("totalPay 0 zaehlt als Lohnwert (nicht als fehlend)", () => {
+    const totals = computeRecalculationMonthTotals([
+      balance({ totalPay: 0, basePay: 0 }),
+    ]);
+    expect(totals).toEqual({ basePay: 0, surchargePay: 0, totalPay: 0 });
   });
 });

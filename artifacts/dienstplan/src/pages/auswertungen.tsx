@@ -25,7 +25,10 @@ import { useAuth } from "@/context/auth";
 import { hasAccess } from "@/lib/entitlements";
 import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 import { exportStatementSectionsPdf, type StatementRecalculation } from "@/lib/pdf-export";
-import { mapDiffRowsToRecalculationRows } from "@/lib/recalculation-mapping";
+import {
+  computeRecalculationMonthTotals,
+  mapDiffRowsToRecalculationRows,
+} from "@/lib/recalculation-mapping";
 import { PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
 import { formatDays } from "@/lib/utils";
 import { MonthClosingCard, RecalculationSection, PayrollTotalsCard } from "@/components/month-closing";
@@ -151,27 +154,12 @@ function ExportRangeDialog({
           if (!diff.closed || diff.rows.length === 0) continue;
           const rows = mapDiffRowsToRecalculationRows(diff.rows, assistantFilter);
           if (rows.length === 0) continue;
-          const payBalances = m.balances.filter((b) => b.totalPay != null);
           recalculations.push({
             monthLabel: m.monthLabel,
             prevLabel: format(prev, "MMMM yyyy", { locale: de }),
             closedAt: diff.closedAt,
             rows,
-            monthTotals:
-              payBalances.length > 0
-                ? {
-                    basePay: m.balances.reduce((s, b) => s + (b.basePay ?? 0), 0),
-                    surchargePay: m.balances.reduce(
-                      (s, b) =>
-                        s +
-                        (b.nightSurchargePay ?? 0) +
-                        (b.sundaySurchargePay ?? 0) +
-                        (b.holidaySurchargePay ?? 0),
-                      0,
-                    ),
-                    totalPay: m.balances.reduce((s, b) => s + (b.totalPay ?? 0), 0),
-                  }
-                : null,
+            monthTotals: computeRecalculationMonthTotals(m.balances),
           });
         } catch (err) {
           // Kein Abschluss/kein Zugriff (403/404) → PDF ohne Nachberechnungs-
