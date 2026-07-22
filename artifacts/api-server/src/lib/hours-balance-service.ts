@@ -33,24 +33,44 @@ import {
 } from "./dashboard-hours-balance";
 import { getTimeTrackingEnabledTeamIds } from "./time-tracking-enabled";
 
-async function activeContractFor(userId: number, date: Date) {
-  const dateStr = date.toISOString().split("T")[0];
+// Maßgeblicher Vertrag für die Auswertung eines Monats: Ein Vertrag zählt,
+// sobald er den ausgewerteten Monat IRGENDWO überlappt (startDate <= Monats-
+// ende UND endDate >= Monatsanfang bzw. offen). Ein Lookup nur zum
+// Monatsersten würde mittmonatlich startende Verträge (z. B. ab dem 15.)
+// still übersehen — die Urlaubsspalten fielen dann auf 0/vollen Anspruch
+// zurück. Bei mehreren Kandidaten werden Verträge aus dem aktuellen
+// Team-Scope bevorzugt (Multi-Team-Assistenten sollen keinen teamfremden
+// Vertrag erwischen — konsistent zur Abrechnungsart-Fallback-Kette),
+// innerhalb der Gruppe gewinnt der neueste Vertragsbeginn.
+async function contractForMonth(
+  userId: number,
+  month: number,
+  year: number,
+  teamScope: number[],
+) {
+  const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
+  // Letzter Kalendertag des Monats (UTC, Tag 0 des Folgemonats).
+  const monthEnd = new Date(Date.UTC(year, month, 0)).toISOString().split("T")[0];
   const contracts = await db
     .select()
     .from(contractsTable)
     .where(
       and(
         eq(contractsTable.userId, userId),
-        sql`${contractsTable.startDate} <= ${dateStr}`,
+        sql`${contractsTable.startDate} <= ${monthEnd}`,
         or(
           isNull(contractsTable.endDate),
-          sql`${contractsTable.endDate} >= ${dateStr}`
+          sql`${contractsTable.endDate} >= ${monthStart}`
         )
       )
-    )
-    .orderBy(sql`${contractsTable.startDate} DESC`)
-    .limit(1);
-  return contracts[0] ?? null;
+    );
+  if (!contracts.length) return null;
+  const byNewestStart = (a: (typeof contracts)[number], b: (typeof contracts)[number]) =>
+    new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
+  const scopeSet = new Set(teamScope);
+  const inScope = contracts.filter((c) => scopeSet.has(c.teamId));
+  const candidates = inScope.length ? inScope : contracts;
+  return candidates.sort(byNewestStart)[0] ?? null;
 }
 
 /**
@@ -91,8 +111,6 @@ export async function computeHoursBalances(
           )
         )
     : [];
-
-  const referenceDate = new Date(year, month - 1, 1);
 
   // Konto-Schalter „Zeiterfassung aktivieren" je Team (Eigentümer-Konto,
   // Standard AUS): Ist die Zeiterfassung des maßgeblichen Teams deaktiviert,
@@ -270,14 +288,14 @@ export async function computeHoursBalances(
           )
         );
 
-      const contract = await activeContractFor(assistant.id, referenceDate);
+      const contract = await contractForMonth(assistant.id, month, year, teamScope);
 
       // Abrechnungsart-Kette: Assistent (Vertrag) → Team-Override/Konto des
       // Team-Eigentümers → SOLL (Bestandsschutz-Default). teamMetaByTeam faltet
       // Override und Team-Eigentümer-Konto bereits zusammen.
       // Für die Team-Ebene brauchen wir ein Team IM aktuellen Scope: bevorzugt
-      // das Vertrags-Team (nur wenn es im Scope liegt — activeContractFor ist
-      // nicht team-gescoped und könnte bei Multi-Team-Assistenten ein fremdes
+      // das Vertrags-Team (contractForMonth bevorzugt bereits Scope-Verträge,
+      // kann aber — wenn NUR teamfremde Verträge existieren — noch ein fremdes
       // Team liefern), sonst das explizit angefragte Team, sonst — wenn der
       // Scope eindeutig ein einziges Team umfasst — dieses. Ohne eindeutiges
       // Team greift der SOLL-Default (auch wenn gar kein Vertrag existiert).

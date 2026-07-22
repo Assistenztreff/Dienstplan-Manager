@@ -30,6 +30,23 @@ import {
 
 const router = Router();
 
+// Validierte month/year-Query-Parameter (Default: aktueller Monat/aktuelles
+// Jahr). Ungültige Werte (NaN, z. B. "month=2026-07", oder außerhalb des
+// Wertebereichs) liefern null — die Route antwortet dann 400 statt später mit
+// einem unbehandelten RangeError ("Invalid time value") im Fehler-Tracking.
+function parseMonthYearParams(req: {
+  query: Record<string, unknown>;
+}): { month: number; year: number } | null {
+  const now = new Date();
+  const rawMonth = req.query["month"];
+  const rawYear = req.query["year"];
+  const month = rawMonth != null && rawMonth !== "" ? Number(rawMonth) : now.getMonth() + 1;
+  const year = rawYear != null && rawYear !== "" ? Number(rawYear) : now.getFullYear();
+  if (!Number.isInteger(month) || month < 1 || month > 12) return null;
+  if (!Number.isInteger(year) || year < 1970 || year > 9999) return null;
+  return { month, year };
+}
+
 async function activeContractFor(userId: number, date: Date) {
   const dateStr = date.toISOString().split("T")[0];
   const contracts = await db
@@ -62,8 +79,12 @@ const SAFE_SHIFT_USER = {
 };
 
 router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> => {
-  const month = req.query.month ? Number(req.query.month) : new Date().getMonth() + 1;
-  const year = req.query.year ? Number(req.query.year) : new Date().getFullYear();
+  const monthYear = parseMonthYearParams(req);
+  if (!monthYear) {
+    res.status(400).json({ error: "Ungültiger month-/year-Parameter" });
+    return;
+  }
+  const { month, year } = monthYear;
   // Superadmin (Betreiber) nutzt das Dashboard wie ein Admin — nur mit den
   // eigenen Teams (Team-Scoping-Helfer arbeiten rein über die userId).
   const isAdmin = isAdminLikeRole(req.session.role);
@@ -491,8 +512,12 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
 // ihre regulären Listen-Endpunkte sichtbar — gesperrt wird nur diese abgeleitete
 // Premium-Auswertung.
 router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advancedAnalytics"), async (req, res): Promise<void> => {
-  const month = req.query.month ? Number(req.query.month) : new Date().getMonth() + 1;
-  const year = req.query.year ? Number(req.query.year) : new Date().getFullYear();
+  const monthYear = parseMonthYearParams(req);
+  if (!monthYear) {
+    res.status(400).json({ error: "Ungültiger month-/year-Parameter" });
+    return;
+  }
+  const { month, year } = monthYear;
 
   // Berechnung lebt in lib/hours-balance-service.ts, damit der Monatsabschluss
   // (month_closings) exakt dieselben Zahlen einfriert und vergleicht.
