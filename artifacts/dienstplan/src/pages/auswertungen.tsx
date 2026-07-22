@@ -809,7 +809,11 @@ export default function Auswertungen() {
             const isOvertime = balance.valuedHours > balance.plannedHours;
 
             return (
-              <Card key={balance.userId} className="border-border/50 shadow-sm">
+              <Card
+                key={balance.userId}
+                className="border-border/50 shadow-sm"
+                data-testid={`balance-card-${balance.userId}`}
+              >
                 <CardContent className="p-5 md:p-6">
                   <h3 className="text-lg font-semibold mb-4">{balance.userName}</h3>
 
