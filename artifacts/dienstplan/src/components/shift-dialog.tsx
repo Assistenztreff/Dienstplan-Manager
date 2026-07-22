@@ -5,6 +5,7 @@ import {
   useUpdateShift,
   useDeleteShift,
   useListShiftModels,
+  useGetAllowanceSettings,
   getListShiftsQueryKey,
   ApiError,
   type ShiftInputType,
@@ -181,7 +182,8 @@ function initialSelection(editShift: ShiftForEdit | undefined, firstModelId: num
   if (
     editShift.type === "vacation" ||
     editShift.type === "sick" ||
-    editShift.type === "freizeitausgleich"
+    editShift.type === "freizeitausgleich" ||
+    editShift.type === "team"
   )
     return editShift.type;
   if (editShift.type === "work" && editShift.shiftModelId) return `model:${editShift.shiftModelId}`;
@@ -209,6 +211,12 @@ export function ShiftDialog({
   // fremder eigener Teams in die Auswahl, deren Speichern der Server korrekt
   // mit 403 ablehnt ("Schichtmodell gehört nicht zu diesem Team").
   const { data: models } = useListShiftModels(teamId != null ? { teamId } : {});
+  // Konto-globaler Schalter „Team-Dienst (Teamsitzung)": blendet die
+  // Team-Option im Typ-Wähler ein (Server-Gate bleibt maßgeblich).
+  const { data: allowanceSettings } = useGetAllowanceSettings(
+    teamId != null ? { teamId } : undefined,
+  );
+  const teamMeetingEnabled = allowanceSettings?.teamMeetingEnabled === true;
   // Aushilfe-Einsatz: nur für Dienstleister mit mehreren Teams relevant —
   // wählbar sind alle EIGENEN Teams außer dem aktuell angezeigten (teamId).
   const { teams } = useTeam();
@@ -338,6 +346,9 @@ export function ShiftDialog({
     form.selection === "vacation" ||
     form.selection === "sick" ||
     form.selection === "freizeitausgleich";
+  // Team-Eintrag (Teamsitzung): ganztägig, immer FIX (Server erzwingt beides),
+  // keine Zeit-/Status-Felder.
+  const isTeam = form.selection === "team";
   const is24h = form.selection === "legacy:full_day";
 
   // Auswahl-Anzeige des Assistenten-Pickers (nur Mitglieder des aktuellen Teams).
@@ -397,7 +408,7 @@ export function ShiftDialog({
     const errs: Partial<Record<keyof FormState, string>> = {};
     if (!form.userId) errs.userId = "Assistent auswählen";
     if (!form.date) errs.date = "Datum angeben";
-    if (!isAbsence) {
+    if (!isAbsence && !isTeam) {
       if (!form.startTime) errs.startTime = "Startzeit angeben";
       if (!form.endTime) errs.endTime = "Endzeit angeben";
       // Identische Start-/Endzeit ist erlaubt und bedeutet ein 24h-Dienst
@@ -433,7 +444,7 @@ export function ShiftDialog({
   // damit beide Pfade dieselbe Zeitlogik (Abwesenheit / 24h / Tagesübergang)
   // verwenden.
   function buildTimes(dateStr: string): { startIso: string; endIso: string } {
-    if (isAbsence) {
+    if (isAbsence || isTeam) {
       return {
         startIso: new Date(`${dateStr}T00:00:00`).toISOString(),
         endIso: new Date(`${dateStr}T23:59:59`).toISOString(),
@@ -473,7 +484,9 @@ export function ShiftDialog({
           shiftModelId,
           notes: form.notes || null,
           einsatzTeamId:
-            !isAbsence && form.einsatzTeamId ? Number(form.einsatzTeamId) : null,
+            !isAbsence && !isTeam && form.einsatzTeamId
+              ? Number(form.einsatzTeamId)
+              : null,
         };
         await updateShift.mutateAsync({
           id: editShift.id,
@@ -488,7 +501,7 @@ export function ShiftDialog({
           planningStatus: isAbsence ? "FIX" : form.planningStatus,
           shiftModelId,
           notes: form.notes || undefined,
-          ...(!isAbsence && form.einsatzTeamId
+          ...(!isAbsence && !isTeam && form.einsatzTeamId
             ? { einsatzTeamId: Number(form.einsatzTeamId) }
             : {}),
         };
@@ -560,7 +573,7 @@ export function ShiftDialog({
           planningStatus: isAbsence ? "FIX" : form.planningStatus,
           shiftModelId,
           notes: form.notes || undefined,
-          ...(!isAbsence && form.einsatzTeamId
+          ...(!isAbsence && !isTeam && form.einsatzTeamId
             ? { einsatzTeamId: Number(form.einsatzTeamId) }
             : {}),
         };
@@ -885,6 +898,18 @@ export function ShiftDialog({
                 {(activeModels.length > 0 || legacyEditOption || inactiveEditModel) && (
                   <SelectSeparator />
                 )}
+                {(teamMeetingEnabled || isTeam) && (
+                  <SelectGroup>
+                    <SelectLabel>Team</SelectLabel>
+                    <SelectItem value="team">
+                      <span className="flex items-center gap-2">
+                        <span className="inline-block h-2.5 w-2.5 rounded-full bg-sky-500" />
+                        Team (Teamsitzung)
+                      </span>
+                    </SelectItem>
+                  </SelectGroup>
+                )}
+                {(teamMeetingEnabled || isTeam) && <SelectSeparator />}
                 <SelectGroup>
                   <SelectLabel>Abwesenheit</SelectLabel>
                   <SelectItem value="vacation">
@@ -916,9 +941,10 @@ export function ShiftDialog({
             )}
           </div>
 
-          {/* Planungsstatus (nur für reguläre Dienste; Abwesenheiten sind kein
-              Planungs-Entwurf, sondern sofort verbindlich). */}
-          {!isAbsence && (
+          {/* Planungsstatus (nur für reguläre Dienste; Abwesenheiten und
+              Team-Einträge sind kein Planungs-Entwurf, sondern sofort
+              verbindlich — der Server erzwingt bei Team-Einträgen FIX). */}
+          {!isAbsence && !isTeam && (
             <div className="space-y-1.5">
               <Label>Status</Label>
               <Select
@@ -945,7 +971,7 @@ export function ShiftDialog({
           {/* Aushilfe-Einsatz: nur für Dienstleister mit mehreren Teams. Die
               Schicht bleibt im aktuellen Team (Stunden zählen hier); das
               gewählte Team sieht sie als schreibgeschützten Aushilfe-Eintrag. */}
-          {!isAbsence && teamId != null && einsatzTeams.length > 0 && (
+          {!isAbsence && !isTeam && teamId != null && einsatzTeams.length > 0 && (
             <div className="space-y-1.5">
               <Label>Aushilfe-Einsatz für Team</Label>
               <Select
@@ -998,7 +1024,7 @@ export function ShiftDialog({
           )}
 
           {/* Zeiten (nur für reguläre Schichten) */}
-          {!isAbsence && (
+          {!isAbsence && !isTeam && (
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Startzeit *</Label>
@@ -1029,6 +1055,14 @@ export function ShiftDialog({
                 )}
               </div>
             </div>
+          )}
+
+          {isTeam && (
+            <p className="text-xs text-muted-foreground rounded-md bg-muted/50 px-3 py-2">
+              Teamsitzung: ein Eintrag pro Team und Tag. Alle Assistenzkräfte des Teams
+              erhalten die in den Einstellungen festgelegte Stunden-Gutschrift als
+              Arbeitszeit. Der Eintrag ist sofort verbindlich (FIX).
+            </p>
           )}
 
           {isAbsence && (

@@ -100,6 +100,7 @@ const SHIFT_TYPE_LABELS: Record<string, string> = {
   vacation: "Urlaub",
   sick: "Krankheit",
   freizeitausgleich: "Freizeitausgleich",
+  team: "Teamsitzung",
 };
 
 const SHIFT_TYPE_CLASSES: Record<string, string> = {
@@ -112,6 +113,9 @@ const SHIFT_TYPE_CLASSES: Record<string, string> = {
   vacation: "bg-amber-200 text-amber-950 border-amber-600 hover:bg-amber-300",
   sick: "bg-slate-200 text-slate-800 border-slate-500 hover:bg-slate-300",
   freizeitausgleich: "bg-emerald-200 text-emerald-950 border-emerald-600 hover:bg-emerald-300",
+  // Team-Eintrag (Teamsitzung): semantische Farbe (Himmelblau), bewusst KEINE
+  // Personenfarbe — der Eintrag gilt dem ganzen Team.
+  team: "bg-sky-200 text-sky-950 border-sky-600 hover:bg-sky-300",
 };
 
 function shiftLabel(shift: Shift, modelMap: Map<number, ShiftModelInfo>): string {
@@ -131,7 +135,7 @@ function usePersonColors(): PersonColorAssignment | undefined {
 }
 
 function shiftBadgeClasses(shift: Shift, personColors?: PersonColorAssignment): string {
-  if (isAbsenceShift(shift)) {
+  if (isAbsenceShift(shift) || shift.type === "team") {
     return (
       SHIFT_TYPE_CLASSES[shift.type] ?? "bg-primary/20 text-assistenz-brand border-assistenz-brand/20 hover:bg-primary/30"
     );
@@ -169,6 +173,7 @@ const SHIFT_TYPE_DOTS: Record<string, string> = {
   vacation: "bg-amber-500",
   sick: "bg-slate-500",
   freizeitausgleich: "bg-emerald-600",
+  team: "bg-sky-500",
 };
 
 // Planungsstatus in den Tageszellen: VORLAEUFIG = gestrichelter Rand + reduzierte
@@ -421,6 +426,7 @@ function ShiftBadge({
       : null;
   const classes = shiftBadgeClasses(shift, personColors);
   const isAbsence = shift.type === "vacation" || shift.type === "sick";
+  const isTeamEntry = shift.type === "team";
   const start = new Date(shift.startTime);
   const end = new Date(shift.endTime);
   const startLabel = format(start, "HH:mm");
@@ -459,7 +465,7 @@ function ShiftBadge({
           {statusLabel}
         </div>
       )}
-      {isAbsence ? (
+      {isAbsence || isTeamEntry ? (
         <div className="font-medium truncate">{label}</div>
       ) : (
         <>
@@ -823,7 +829,7 @@ function MonthGrid({
                         <span
                           key={s.id}
                           title={s.user?.name}
-                          className={`flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-bold leading-none text-white ${userInitialsClass(s.userId, personColors)} ${shiftDotStatusClass(s)}`}
+                          className={`flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-bold leading-none text-white ${s.type === "team" ? "bg-sky-500" : userInitialsClass(s.userId, personColors)} ${shiftDotStatusClass(s)}`}
                         >
                           {s.user?.name ? nameInitials(s.user.name) : ""}
                         </span>
@@ -865,13 +871,13 @@ function MonthGrid({
                                 }
                               : undefined
                           }
-                          className={`flex items-center justify-center gap-1 rounded border px-1 py-px text-[9px] leading-tight truncate ${userBadgeClass(s.userId, personColors)} ${planningStatusBadgeOutline(s)} ${chipClickable ? "cursor-pointer hover:ring-1 hover:ring-primary/60" : ""}`}
+                          className={`flex items-center justify-center gap-1 rounded border px-1 py-px text-[9px] leading-tight truncate ${s.type === "team" ? "bg-sky-200 text-sky-950 border-sky-600" : userBadgeClass(s.userId, personColors)} ${planningStatusBadgeOutline(s)} ${chipClickable ? "cursor-pointer hover:ring-1 hover:ring-primary/60" : ""}`}
                         >
                           <span className="font-bold">
                             {s.user?.name ? nameInitials(s.user.name) : ""}
                           </span>
                           <span className="font-medium">
-                            {format(new Date(s.startTime), "HH:mm")}
+                            {s.type === "team" ? "Team" : format(new Date(s.startTime), "HH:mm")}
                           </span>
                         </span>
                         );

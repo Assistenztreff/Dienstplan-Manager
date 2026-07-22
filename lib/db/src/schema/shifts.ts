@@ -6,7 +6,7 @@ import { teamsTable } from "./teams";
 import { shiftModelsTable } from "./shift_models";
 import { relations } from "drizzle-orm";
 
-export const shiftTypeEnum = pgEnum("shift_type", ["active", "standby", "night", "full_day", "vacation", "sick", "work", "freizeitausgleich"]);
+export const shiftTypeEnum = pgEnum("shift_type", ["active", "standby", "night", "full_day", "vacation", "sick", "work", "freizeitausgleich", "team"]);
 
 // Planungsstatus einer Schicht im Lebenszyklus: VORLAEUFIG = Entwurf (interne
 // Planung), ANGEBOTEN = Vorschlag (dem Mitarbeiter angeboten), FIX = verbindlich

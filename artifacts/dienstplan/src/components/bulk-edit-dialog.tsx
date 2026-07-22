@@ -164,6 +164,8 @@ export function BulkEditDialog({
       (s) =>
         s.type !== "vacation" &&
         s.type !== "sick" &&
+        s.type !== "freizeitausgleich" &&
+        s.type !== "team" &&
         dateSet.has(localDayKey(s.startTime)) &&
         (filterUserId === "all" || s.userId === filterUserId),
     );

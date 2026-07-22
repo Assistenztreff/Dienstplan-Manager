@@ -77,6 +77,7 @@ const SHIFT_TYPE_LABELS: Record<string, string> = {
   full_day: "24h",
   vacation: "Urlaub",
   sick: "Krank",
+  team: "Teamsitzung",
 };
 
 function hoursFromShift(startTime: string, endTime: string): number {
@@ -136,6 +137,17 @@ async function renderStatementPage(
       `${formatDays(balance.vacationDaysRemaining)} Tage`,
     ],
   ];
+
+  // Teamsitzung: nur ausweisen, wenn Stunden gutgeschrieben wurden (konsistent
+  // zur Matrix-Zeile "Teamsitzung" in der Auswertung).
+  if ((balance.teamsitzungStunden ?? 0) > 0) {
+    summaryRows.push([
+      "Teamsitzung (Gutschrift)",
+      `${balance.teamsitzungStunden} h${
+        balance.hourlyWage != null ? ` (${eur(balance.teamsitzungEuro ?? 0)})` : ""
+      }`,
+    ]);
+  }
 
   // Zuschlaege: 0%-Zuschlaege werden NICHT aufgelistet (Point 6).
   if (balance.nightPercent > 0) {
@@ -523,7 +535,11 @@ function renderSimpleMonthPage(
   );
   doc.setTextColor(0);
 
-  const workShifts = shifts.filter((s) => !ABSENCE_TYPES.has(s.type));
+  // Team-Eintraege (Teamsitzung) sind ganztaegige Marker — ihre nominelle
+  // Dauer (00:00–23:59) darf NICHT als geplante Stunden zaehlen; die
+  // Stunden-Gutschrift erfolgt nur in der Premium-Auswertung (hours-balance).
+  const workShifts = shifts.filter((s) => !ABSENCE_TYPES.has(s.type) && s.type !== "team");
+  const teamDays = shifts.filter((s) => s.type === "team").length;
   const vacationDays = shifts.filter((s) => s.type === "vacation").length;
   const sickDays = shifts.filter((s) => s.type === "sick").length;
   const plannedHours =
@@ -536,6 +552,9 @@ function renderSimpleMonthPage(
     ["Anzahl Dienste", `${workShifts.length}`],
     ["Urlaubstage", `${vacationDays} ${vacationDays === 1 ? "Tag" : "Tage"}`],
     ["Krankheitstage", `${sickDays} ${sickDays === 1 ? "Tag" : "Tage"}`],
+    ...(teamDays > 0
+      ? [["Teamsitzungen", `${teamDays} ${teamDays === 1 ? "Tag" : "Tage"}`]]
+      : []),
   ];
 
   autoTable(doc, {
@@ -557,6 +576,9 @@ function renderSimpleMonthPage(
       const type = SHIFT_TYPE_LABELS[s.type] ?? s.type;
       if (ABSENCE_TYPES.has(s.type)) {
         return [date, type, "ganztägig", "1 Tag"];
+      }
+      if (s.type === "team") {
+        return [date, type, "ganztägig", "—"];
       }
       const timeRange = `${format(new Date(s.startTime), "HH:mm")} – ${format(new Date(s.endTime), "HH:mm")}`;
       return [date, type, timeRange, `${hoursFromShift(s.startTime, s.endTime)} h`];

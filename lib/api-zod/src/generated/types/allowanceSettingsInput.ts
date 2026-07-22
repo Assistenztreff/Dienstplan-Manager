@@ -46,4 +46,11 @@ export interface AllowanceSettingsInput {
   vacationFactor?: number;
   /** Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktivieren/deaktivieren. */
   ersatzruhetagEnabled?: boolean;
+  /** Team-Dienst (Teamsitzung) aktivieren/deaktivieren (konto-global, kein Team-Override). */
+  teamMeetingEnabled?: boolean;
+  /**
+     * Gutgeschriebene Stunden je Teamsitzung und Assistenzkraft.
+     * @minimum 0.1
+     */
+  teamMeetingHours?: number;
 }

@@ -44,6 +44,8 @@ type FormState = {
   vacationHoursPerDay: string;
   vacationFactor: string;
   ersatzruhetagEnabled: boolean;
+  teamMeetingEnabled: boolean;
+  teamMeetingHours: string;
 };
 
 // Sonderwert für "erbt" (Abrechnungsart nicht auf dieser Ebene gesetzt).
@@ -142,6 +144,8 @@ export function AllowanceSettingsForm() {
     vacationHoursPerDay: "8",
     vacationFactor: "0.0941",
     ersatzruhetagEnabled: true,
+    teamMeetingEnabled: false,
+    teamMeetingHours: "1",
   });
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [saving, setSaving] = useState(false);
@@ -170,6 +174,8 @@ export function AllowanceSettingsForm() {
         vacationHoursPerDay: String(settings.vacationHoursPerDay ?? 8),
         vacationFactor: String(settings.vacationFactor ?? 0.0941),
         ersatzruhetagEnabled: settings.ersatzruhetagEnabled ?? true,
+        teamMeetingEnabled: settings.teamMeetingEnabled ?? false,
+        teamMeetingHours: String(settings.teamMeetingHours ?? 1),
       });
       setErrors({});
       setSaved(false);
@@ -210,6 +216,9 @@ export function AllowanceSettingsForm() {
         if (form.vacationFactor === "" || Number.isNaN(vf) || vf < 0)
           errs.vacationFactor = "Mindestens 0";
       }
+      const tmh = Number(form.teamMeetingHours);
+      if (form.teamMeetingHours === "" || Number.isNaN(tmh) || tmh < 0.1)
+        errs.teamMeetingHours = "Mindestens 0,1";
     }
     const cleaned = Object.fromEntries(Object.entries(errs).filter(([, v]) => v));
     setErrors(cleaned);
@@ -251,6 +260,8 @@ export function AllowanceSettingsForm() {
                 vacationHoursPerDay: Number(f.vacationHoursPerDay),
                 vacationFactor: Number(f.vacationFactor),
                 ersatzruhetagEnabled: f.ersatzruhetagEnabled,
+                teamMeetingEnabled: f.teamMeetingEnabled,
+                teamMeetingHours: Number(f.teamMeetingHours),
               }
             : {}),
         },
@@ -511,6 +522,49 @@ export function AllowanceSettingsForm() {
                         onCheckedChange={(v) => set("ersatzruhetagEnabled", v)}
                       />
                     </div>
+                  </div>
+
+                  <div className="border-t border-border/60 pt-5 space-y-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="teamMeetingEnabled" className="text-sm font-semibold">
+                          Team-Dienst (Teamsitzung)
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Erlaubt das Anlegen von Team-Einträgen im Dienstplan. Ein Team-Eintrag
+                          pro Tag schreibt allen Assistenzkräften des Teams die eingestellte
+                          Stundenzahl als Arbeitszeit gut (gilt für alle Teams dieses Kontos).
+                        </p>
+                      </div>
+                      <Switch
+                        id="teamMeetingEnabled"
+                        data-testid="allowance-team-meeting-switch"
+                        checked={form.teamMeetingEnabled}
+                        onCheckedChange={(v) => set("teamMeetingEnabled", v)}
+                      />
+                    </div>
+                    {form.teamMeetingEnabled && (
+                      <div className="space-y-1.5">
+                        <Label htmlFor="teamMeetingHours">Stunden-Gutschrift pro Teamsitzung</Label>
+                        <Input
+                          id="teamMeetingHours"
+                          data-testid="allowance-team-meeting-hours"
+                          type="number"
+                          min="0.1"
+                          step="0.1"
+                          value={form.teamMeetingHours}
+                          onChange={(e) => set("teamMeetingHours", e.target.value)}
+                          className={errors.teamMeetingHours ? "border-destructive" : ""}
+                        />
+                        {errors.teamMeetingHours && (
+                          <p className="text-xs text-destructive">{errors.teamMeetingHours}</p>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          Diese Stundenzahl wird jeder Assistenzkraft des Teams je Team-Eintrag
+                          gutgeschrieben und mit dem Stundenlohn vergütet.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="border-t border-border/60 pt-5 space-y-3">

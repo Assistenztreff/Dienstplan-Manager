@@ -471,6 +471,7 @@ export const ShiftType = {
   sick: 'sick',
   work: 'work',
   freizeitausgleich: 'freizeitausgleich',
+  team: 'team',
 } as const;
 
 /**
@@ -532,6 +533,7 @@ export const ShiftInputType = {
   sick: 'sick',
   work: 'work',
   freizeitausgleich: 'freizeitausgleich',
+  team: 'team',
 } as const;
 
 /**
@@ -577,6 +579,7 @@ export const ShiftUpdateType = {
   sick: 'sick',
   work: 'work',
   freizeitausgleich: 'freizeitausgleich',
+  team: 'team',
 } as const;
 
 /**
@@ -802,6 +805,10 @@ export interface AllowanceSettings {
   vacationFactor: number;
   /** Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktiv? Bei false verdient Feiertagsarbeit keinen Ausgleichs-Ruhetag. */
   ersatzruhetagEnabled: boolean;
+  /** Team-Dienst (Teamsitzung) aktiv? Konto-global (kein Team-Override); Standard AUS. Bei AUS lehnen POST/PATCH /shifts den Typ team mit 400 ab; bestehende Team-Einträge bleiben sichtbar (Bestandsschutz). */
+  teamMeetingEnabled: boolean;
+  /** Gutgeschriebene Stunden je Teamsitzung und Assistenzkraft (Konto-global, Standard 1,0). */
+  teamMeetingHours: number;
   updatedAt: string;
 }
 
@@ -887,6 +894,13 @@ export interface AllowanceSettingsInput {
   vacationFactor?: number;
   /** Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktivieren/deaktivieren. */
   ersatzruhetagEnabled?: boolean;
+  /** Team-Dienst (Teamsitzung) aktivieren/deaktivieren (konto-global, kein Team-Override). */
+  teamMeetingEnabled?: boolean;
+  /**
+     * Gutgeschriebene Stunden je Teamsitzung und Assistenzkraft.
+     * @minimum 0.1
+     */
+  teamMeetingHours?: number;
 }
 
 export interface TimeTrackingStatus {
@@ -1468,6 +1482,7 @@ export const ListShiftsType = {
   sick: 'sick',
   work: 'work',
   freizeitausgleich: 'freizeitausgleich',
+  team: 'team',
 } as const;
 
 export type ListShiftModelsParams = {

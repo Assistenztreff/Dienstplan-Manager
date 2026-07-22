@@ -60,6 +60,12 @@ export const allowanceSettingsTable = pgTable(
     // Ausgleichs-Ruhetag verdient. Aus Förder-/Kostenträger-Gründen abschaltbar;
     // Default true = Bestandsschutz (bisheriges Verhalten bleibt gleich).
     ersatzruhetagEnabled: boolean("ersatzruhetag_enabled").notNull().default(true),
+    // Team-Dienst (Teamsitzung): KONTO-GLOBAL (nur Konto-Zeile team_id NULL
+    // maßgeblich, kein Team-Override). Bei AN kann im Dienstplan ein Eintrag
+    // vom Typ "team" angelegt werden; ein Team-Eintrag pro Tag schreibt ALLEN
+    // Assistenzkräften des Teams teamMeetingHours als Arbeitszeit gut.
+    teamMeetingEnabled: boolean("team_meeting_enabled").notNull().default(false),
+    teamMeetingHours: real("team_meeting_hours").notNull().default(1),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [

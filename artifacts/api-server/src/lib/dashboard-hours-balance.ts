@@ -218,8 +218,23 @@ export function computeHoursBalanceRow(params: {
    * vacation_days_used existiert nicht mehr.
    */
   vacationHoursPerDay?: number | null;
+  /**
+   * Teamsitzungs-Gutschrift (Anzahl Team-Tage der Teams der Assistenzkraft ×
+   * konfigurierte teamMeetingHours des jeweiligen Konto-Eigentümers). Wird vom
+   * Aufrufer team-weise ermittelt (ein Team-Eintrag gilt für ALLE Mitglieder,
+   * nicht nur den zugewiesenen Nutzer). Zählt als Arbeitszeit: Soll UND
+   * Erfüllt (bilanz-neutral) sowie Grundlohn × Stundenlohn in BEIDEN
+   * Abrechnungsarten (wie Lohnfortzahlung). Keine Zuschläge.
+   */
+  teamsitzungStunden?: number;
 }): HoursBalanceRow {
-  const { userId, userName, shifts, timeEntries, allowance, allowanceByTeam, contract } = params;
+  const { userId, userName, timeEntries, allowance, allowanceByTeam, contract } = params;
+  // Team-Einträge (Teamsitzungen) selbst tragen keine Stunden — die Gutschrift
+  // kommt ausschließlich über params.teamsitzungStunden. Sie werden hier
+  // komplett herausgefiltert, damit ein ganztägiger Team-Eintrag (00:00–23:59)
+  // weder als Arbeitsschicht (24h Soll) noch als Abwesenheit zählt.
+  const shifts = params.shifts.filter((s) => s.type !== "team");
+  const teamsitzungStunden = params.teamsitzungStunden ?? 0;
   const { nightPercent, sundayPercent, holidayPercent } = allowance;
   // Default SOLL = Bestandsschutz: ohne explizite Abrechnungsart bleibt alles planbasiert.
   const billingMethod: BillingMethod = params.billingMethod ?? "SOLL";
@@ -324,13 +339,20 @@ export function computeHoursBalanceRow(params: {
     .reduce((acc, s) => acc + shiftHours(s), 0);
   plannedHours += inheritedAbsenceHours;
 
+  // Teamsitzungs-Gutschrift: zählt als Arbeitszeit zum Soll UND zu den
+  // erfüllten Stunden (bilanz-neutral, wie ein geplanter und geleisteter
+  // Dienst) — in beiden Abrechnungsarten, da für Teamsitzungen keine
+  // Ist-Zeiten erfasst werden.
+  plannedHours += teamsitzungStunden;
+
   const vacationShifts = shifts.filter((s) => s.type === "vacation");
   const vacationFulfilledHours = vacationShifts.reduce((acc, s) => acc + (s.valuedHours ?? 0), 0);
   const vacationDaysTaken = vacationShifts.length;
   const sickFulfilledHours = shifts
     .filter((s) => s.type === "sick")
     .reduce((acc, s) => acc + (s.valuedHours ?? 0), 0);
-  const totalFulfilledHours = valuedHours + vacationFulfilledHours + sickFulfilledHours;
+  const totalFulfilledHours =
+    valuedHours + vacationFulfilledHours + sickFulfilledHours + teamsitzungStunden;
 
   let trackedHours = 0;
   for (const entry of timeEntries) {
@@ -405,6 +427,9 @@ export function computeHoursBalanceRow(params: {
     }
     // Lohnfortzahlung: Urlaub/Krank zählen zum Grundlohn (immer regulär).
     base += wage * (vacationFulfilledHours + sickFulfilledHours);
+    // Teamsitzungs-Vergütung: Stundenlohn × gutgeschriebene Team-Stunden
+    // (beide Abrechnungsarten, wie Lohnfortzahlung; keine Zuschläge).
+    base += wage * teamsitzungStunden;
     basePay = round2(base);
     // Zuschlags-Vergütung = Zuschlagsstunden (nach Abrechnungsart, inkl.
     // Abwesenheits-Fortzahlung) × Stundenlohn.
@@ -438,10 +463,11 @@ export function computeHoursBalanceRow(params: {
     sundayPercent,
     holidayPercent,
     billingMethod,
-    // Zukünftige Abrechnungskategorien: Bereitschaften real, Rest 0 (s. o.).
+    // Zukünftige Abrechnungskategorien: Bereitschaften + Teamsitzungen real,
+    // Rest 0 (s. o.).
     pausenzeitStunden: 0,
-    teamsitzungStunden: 0,
-    teamsitzungEuro: 0,
+    teamsitzungStunden: round2(teamsitzungStunden),
+    teamsitzungEuro: wage != null ? round2(wage * teamsitzungStunden) : 0,
     bereitschaftenAnzahl,
     bereitschaftsStunden: round2(bereitschaftsStunden),
     vertretungenAnzahl: 0,

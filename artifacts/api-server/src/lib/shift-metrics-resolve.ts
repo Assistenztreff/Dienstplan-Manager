@@ -70,6 +70,14 @@ export function resolveShiftMetrics(
   window: NightWindow,
   state?: GermanState | null
 ): ShiftMetrics {
+  // Team-Dienst (Teamsitzung): trägt selbst KEINE gewerteten Stunden — die
+  // Stunden-Gutschrift (Anzahl Team-Tage × konfigurierte teamMeetingHours je
+  // Assistenzkraft) wird erst bei der Auswertung aus den Konto-Einstellungen
+  // berechnet, damit spätere Einstellungs-Änderungen sofort wirken. Keine
+  // Zuschläge (out of scope).
+  if (input.type === "team") {
+    return { valuedHours: 0, nightHours: 0, sundayHours: 0, holidayHours: 0 };
+  }
   if (isAbsenceType(input.type)) {
     const start = new Date(input.startTime);
     const end = new Date(input.endTime);

@@ -336,7 +336,7 @@ export const ListShiftsQueryParams = zod.object({
   "userId": zod.coerce.number().optional(),
   "month": zod.coerce.number().optional(),
   "year": zod.coerce.number().optional(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich']).optional(),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team']).optional(),
   "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext für die Datentrennung.')
 })
 
@@ -345,7 +345,7 @@ export const ListShiftsResponseItem = zod.object({
   "userId": zod.number(),
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich']),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team']),
   "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX']).optional().describe('Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.'),
   "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish(),
@@ -388,7 +388,7 @@ export const CreateShiftBody = zod.object({
   "teamId": zod.number().optional().describe('Optionaler Team-Kontext; muss ein erlaubtes Team sein.'),
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich']),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team']),
   "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX']).optional().describe('Optionaler Planungsstatus (Default FIX): VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.'),
   "shiftModelId": zod.number().nullish(),
   "notes": zod.string().optional(),
@@ -408,7 +408,7 @@ export const GetShiftResponse = zod.object({
   "userId": zod.number(),
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich']),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team']),
   "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX']).optional().describe('Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.'),
   "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish(),
@@ -453,7 +453,7 @@ export const UpdateShiftBody = zod.object({
   "userId": zod.number().optional().describe('Optionaler Wechsel des zugewiesenen Assistenten. Der neue Nutzer muss Mitglied des Teams der Schicht sein (Member-of-Team-Invariante), sonst 403. Wird genutzt für das Tauschen des Assistenten beim Massen-Ändern bestehender Schichten.'),
   "startTime": zod.coerce.date().optional(),
   "endTime": zod.coerce.date().optional(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich']).optional(),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team']).optional(),
   "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX']).optional().describe('Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.'),
   "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish(),
@@ -465,7 +465,7 @@ export const UpdateShiftResponse = zod.object({
   "userId": zod.number(),
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich']),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team']),
   "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX']).optional().describe('Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.'),
   "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish(),
@@ -773,6 +773,8 @@ export const GetAllowanceSettingsResponse = zod.object({
   "vacationHoursPerDay": zod.number().describe('Stunden je Urlaubstag (Anzeige Tage = Stunden \/ diesem Wert).'),
   "vacationFactor": zod.number().describe('Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor.'),
   "ersatzruhetagEnabled": zod.boolean().describe('Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktiv? Bei false verdient Feiertagsarbeit keinen Ausgleichs-Ruhetag.'),
+  "teamMeetingEnabled": zod.boolean().describe('Team-Dienst (Teamsitzung) aktiv? Konto-global (kein Team-Override); Standard AUS. Bei AUS lehnen POST\/PATCH \/shifts den Typ team mit 400 ab; bestehende Team-Einträge bleiben sichtbar (Bestandsschutz).'),
+  "teamMeetingHours": zod.number().describe('Gutgeschriebene Stunden je Teamsitzung und Assistenzkraft (Konto-global, Standard 1,0).'),
   "updatedAt": zod.coerce.date()
 })
 
@@ -799,6 +801,8 @@ export const updateAllowanceSettingsBodyVacationHoursPerDayMin = 0.1;
 
 export const updateAllowanceSettingsBodyVacationFactorMin = 0;
 
+export const updateAllowanceSettingsBodyTeamMeetingHoursMin = 0.1;
+
 
 
 export const UpdateAllowanceSettingsBody = zod.object({
@@ -814,7 +818,9 @@ export const UpdateAllowanceSettingsBody = zod.object({
   "vacationMethod": zod.enum(['bwavg', 'factor']).optional(),
   "vacationHoursPerDay": zod.number().min(updateAllowanceSettingsBodyVacationHoursPerDayMin).optional(),
   "vacationFactor": zod.number().min(updateAllowanceSettingsBodyVacationFactorMin).optional(),
-  "ersatzruhetagEnabled": zod.boolean().optional().describe('Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktivieren\/deaktivieren.')
+  "ersatzruhetagEnabled": zod.boolean().optional().describe('Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktivieren\/deaktivieren.'),
+  "teamMeetingEnabled": zod.boolean().optional().describe('Team-Dienst (Teamsitzung) aktivieren\/deaktivieren (konto-global, kein Team-Override).'),
+  "teamMeetingHours": zod.number().min(updateAllowanceSettingsBodyTeamMeetingHoursMin).optional().describe('Gutgeschriebene Stunden je Teamsitzung und Assistenzkraft.')
 })
 
 export const UpdateAllowanceSettingsResponse = zod.object({
@@ -834,6 +840,8 @@ export const UpdateAllowanceSettingsResponse = zod.object({
   "vacationHoursPerDay": zod.number().describe('Stunden je Urlaubstag (Anzeige Tage = Stunden \/ diesem Wert).'),
   "vacationFactor": zod.number().describe('Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor.'),
   "ersatzruhetagEnabled": zod.boolean().describe('Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktiv? Bei false verdient Feiertagsarbeit keinen Ausgleichs-Ruhetag.'),
+  "teamMeetingEnabled": zod.boolean().describe('Team-Dienst (Teamsitzung) aktiv? Konto-global (kein Team-Override); Standard AUS. Bei AUS lehnen POST\/PATCH \/shifts den Typ team mit 400 ab; bestehende Team-Einträge bleiben sichtbar (Bestandsschutz).'),
+  "teamMeetingHours": zod.number().describe('Gutgeschriebene Stunden je Teamsitzung und Assistenzkraft (Konto-global, Standard 1,0).'),
   "updatedAt": zod.coerce.date()
 })
 
@@ -1259,7 +1267,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "userId": zod.number(),
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich']),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team']),
   "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX']).optional().describe('Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.'),
   "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish(),

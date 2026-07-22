@@ -26,6 +26,7 @@ export type MatrixBalance = {
   holidaySurchargeHours: number;
   // Vorbereitete zukünftige Abrechnungskategorien (Server liefert 0-Defaults).
   teamsitzungStunden?: number;
+  teamsitzungEuro?: number;
   bereitschaftenAnzahl?: number;
   bereitschaftsStunden?: number;
   vertretungenAnzahl?: number;
@@ -183,7 +184,17 @@ export function GesamtAuswertungMatrix({
     {
       key: "teamsitzung",
       label: "Teamsitzung",
-      render: (b) => `${b.teamsitzungStunden ?? 0} h`,
+      render: (b) =>
+        b.hourlyWage != null && (b.teamsitzungStunden ?? 0) > 0 ? (
+          <>
+            {b.teamsitzungStunden ?? 0} h{" "}
+            <span className="text-muted-foreground">
+              ({formatEur(b.teamsitzungEuro ?? 0)})
+            </span>
+          </>
+        ) : (
+          `${b.teamsitzungStunden ?? 0} h`
+        ),
       isEmpty: (b) => (b.teamsitzungStunden ?? 0) === 0,
     },
     {

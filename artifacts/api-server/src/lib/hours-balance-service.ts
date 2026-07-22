@@ -90,14 +90,22 @@ export async function computeHoursBalances(
   // Rein team-gescoped: gezählt werden ausschließlich Mitglieder und
   // Schichten/Ist-Zeiten der Teams im aktuellen Scope (Team-Filter bzw. alle
   // erlaubten Teams).
-  const teamMemberIds = teamScope.length
-    ? (
-        await db
-          .select({ userId: teamMembersTable.userId })
-          .from(teamMembersTable)
-          .where(inArray(teamMembersTable.teamId, teamScope))
-      ).map((m) => m.userId)
+  const membershipRows = teamScope.length
+    ? await db
+        .select({ userId: teamMembersTable.userId, teamId: teamMembersTable.teamId })
+        .from(teamMembersTable)
+        .where(inArray(teamMembersTable.teamId, teamScope))
     : [];
+  const teamMemberIds = [...new Set(membershipRows.map((m) => m.userId))];
+  // Mitgliedschaften je Nutzer — die Teamsitzungs-Gutschrift gilt für ALLE
+  // Mitglieder des Teams eines Team-Eintrags, nicht nur für den zugewiesenen
+  // Nutzer.
+  const teamsByUser = new Map<number, number[]>();
+  for (const m of membershipRows) {
+    const list = teamsByUser.get(m.userId) ?? [];
+    list.push(m.teamId);
+    teamsByUser.set(m.userId, list);
+  }
 
   const assistants = teamMemberIds.length
     ? await db
@@ -145,6 +153,9 @@ export async function computeHoursBalances(
           nightEnd: allowanceSettingsTable.nightEnd,
           state: allowanceSettingsTable.state,
           billingMethod: allowanceSettingsTable.billingMethod,
+          // KONTO-GLOBAL (nur Konto-Zeile des Team-Eigentümers, nie Override):
+          // Stundenzahl der Teamsitzungs-Gutschrift je Team-Tag.
+          teamMeetingHours: allowanceSettingsTable.teamMeetingHours,
         })
         .from(teamsTable)
         // LEFT JOINs: Hat ein Team weder Override noch der Eigentümer eine
@@ -171,6 +182,38 @@ export async function computeHoursBalances(
       },
     ])
   );
+  // Teamsitzungs-Stundenzahl je Team (Konto-Zeile des Team-Eigentümers,
+  // Default 1.0) — angewandt wird IMMER der aktuell konfigurierte Wert
+  // (rückwirkend, wie die Zuschlags-Prozente).
+  const teamMeetingHoursByTeam = new Map(
+    teamAllowanceRows.map((r) => [r.teamId, r.teamMeetingHours ?? 1])
+  );
+
+  // Team-Einträge (Teamsitzungen) des Monats je Team: EIN FIX-Eintrag pro Tag
+  // schreibt ALLEN Mitgliedern des Teams die konfigurierten Stunden gut.
+  // Gezählt werden DISTINCT Kalendertage (defensiv gegen Alt-Duplikate).
+  const teamMeetingDayRows = teamScope.length
+    ? await db
+        .select({
+          teamId: shiftsTable.teamId,
+          days: sql<number>`COUNT(DISTINCT DATE(${shiftsTable.startTime}))`.mapWith(Number),
+        })
+        .from(shiftsTable)
+        .where(
+          and(
+            inArray(shiftsTable.teamId, teamScope),
+            eq(shiftsTable.type, "team"),
+            eq(shiftsTable.planningStatus, "FIX"),
+            sql`EXTRACT(MONTH FROM ${shiftsTable.startTime}) = ${month}`,
+            sql`EXTRACT(YEAR FROM ${shiftsTable.startTime}) = ${year}`,
+          )
+        )
+        .groupBy(shiftsTable.teamId)
+    : [];
+  const teamMeetingDaysByTeam = new Map(
+    teamMeetingDayRows.map((r) => [r.teamId, r.days])
+  );
+
   // Nachtfenster, Bundesland und Abrechnungsart je Team — nötig, um im IST-Modus
   // die Zuschlagsstunden aus den erfassten Ist-Zeiten neu zu berechnen. Fallback
   // je Feld: Team-Override → Konto des Team-Eigentümers → Default.
@@ -367,6 +410,15 @@ export async function computeHoursBalances(
 
       const vacationOps = contract ? await vacationOpsForTeam(contract.teamId) : null;
 
+      // Teamsitzungs-Gutschrift: Summe über alle Teams, in denen die
+      // Assistenzkraft Mitglied ist — Team-Tage × teamMeetingHours des
+      // jeweiligen Team-Eigentümer-Kontos.
+      const teamsitzungStunden = (teamsByUser.get(assistant.id) ?? []).reduce(
+        (acc, tId) =>
+          acc + (teamMeetingDaysByTeam.get(tId) ?? 0) * (teamMeetingHoursByTeam.get(tId) ?? 1),
+        0
+      );
+
       return computeHoursBalanceRow({
         userId: assistant.id,
         userName: assistant.name,
@@ -378,6 +430,7 @@ export async function computeHoursBalances(
         billingMethod,
         hourlyWage: assistant.hourlyWage,
         vacationHoursPerDay: vacationOps?.vacationHoursPerDay,
+        teamsitzungStunden,
       });
     })
   );

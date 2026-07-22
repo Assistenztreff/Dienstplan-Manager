@@ -18,4 +18,5 @@ export const ShiftInputType = {
   sick: 'sick',
   work: 'work',
   freizeitausgleich: 'freizeitausgleich',
+  team: 'team',
 } as const;

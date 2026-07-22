@@ -18,4 +18,5 @@ export const ListShiftsType = {
   sick: 'sick',
   work: 'work',
   freizeitausgleich: 'freizeitausgleich',
+  team: 'team',
 } as const;

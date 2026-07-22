@@ -285,6 +285,66 @@ function duplicateAbsenceResponseBody(existingId: number, type: string) {
   };
 }
 
+// Team-Dienst (Teamsitzung): Der Konto-Schalter des TEAM-EIGENTÜMERS
+// (allowance_settings, Konto-Zeile team_id NULL, konto-global wie
+// timeTrackingEnabled) muss AN sein, damit neue Team-Einträge angelegt werden
+// dürfen. Bestehende Einträge bleiben unberührt (Bestandsschutz).
+async function teamMeetingEnabledForTeam(teamId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ enabled: allowanceSettingsTable.teamMeetingEnabled })
+    .from(teamsTable)
+    .innerJoin(
+      allowanceSettingsTable,
+      and(
+        eq(allowanceSettingsTable.ownerId, teamsTable.ownerId),
+        isNull(allowanceSettingsTable.teamId)
+      )
+    )
+    .where(eq(teamsTable.id, teamId));
+  return row?.enabled === true;
+}
+
+// Verhindert einen zweiten Team-Eintrag (Teamsitzung) am selben Kalendertag im
+// selben TEAM — ein Eintrag genügt (er schreibt allen Mitgliedern die Stunden
+// gut); ein Duplikat würde die Gutschrift verdoppeln.
+async function findDuplicateTeamEntry(
+  teamId: number,
+  date: Date,
+  excludeShiftId: number | null
+): Promise<{ id: number } | null> {
+  const dateStr = new Date(date).toISOString().split("T")[0];
+  const conditions = [
+    eq(shiftsTable.teamId, teamId),
+    eq(shiftsTable.type, "team" as const),
+    sql`DATE(${shiftsTable.startTime}) = ${dateStr}`,
+  ];
+  if (excludeShiftId !== null) conditions.push(ne(shiftsTable.id, excludeShiftId));
+  const [row] = await db
+    .select({ id: shiftsTable.id })
+    .from(shiftsTable)
+    .where(and(...conditions))
+    .limit(1);
+  return row ?? null;
+}
+
+// Team-Einträge (Teamsitzung) sind produktseitig IMMER ganztägig — die Stunden-
+// Gutschrift kommt aus den Konto-Einstellungen, nicht aus dem Zeitfenster.
+// Der Server normalisiert deshalb IMMER autoritativ auf den vollen UTC-
+// Kalendertag des übermittelten Starts (00:00:00–23:59:59) — dieselbe
+// DATE(startTime)-UTC-Konvention wie der Duplikat-Check und die Auswertung.
+// Kein Client (auch kein fremder API-Client) kann so einen Team-Eintrag mit
+// abweichendem Zeitfenster persistieren.
+function normalizeTeamEntryTimes(startTime: Date): {
+  startTime: Date;
+  endTime: Date;
+} {
+  const dateStr = startTime.toISOString().split("T")[0];
+  return {
+    startTime: new Date(`${dateStr}T00:00:00.000Z`),
+    endTime: new Date(`${dateStr}T23:59:59.000Z`),
+  };
+}
+
 // Zeitwertung in Prozent: aus dem Schichtmodell (type "work"), sonst 100 (Legacy ohne Modell).
 async function valuationPercentFor(type: string, shiftModelId: number | null): Promise<number> {
   if (type === "work" && shiftModelId) {
@@ -404,7 +464,9 @@ async function findOverlappingShifts(
 ): Promise<ShiftConflict[]> {
   const conditions = [
     eq(shiftsTable.userId, userId),
-    notInArray(shiftsTable.type, ["vacation", "sick"]),
+    // Abwesenheiten UND Team-Einträge (Teamsitzungen) lösen keine
+    // Überschneidungswarnung mit regulären Schichten aus.
+    notInArray(shiftsTable.type, ["vacation", "sick", "team"]),
     lt(shiftsTable.startTime, endTime),
     gt(shiftsTable.endTime, startTime),
   ];
@@ -470,7 +532,7 @@ router.get("/shifts", requireAuth, async (req, res): Promise<void> => {
     )!,
   ];
   if (effectiveUserId) conditions.push(eq(shiftsTable.userId, effectiveUserId));
-  if (query.data.type) conditions.push(eq(shiftsTable.type, query.data.type as "active" | "standby" | "night" | "full_day" | "vacation" | "sick" | "work"));
+  if (query.data.type) conditions.push(eq(shiftsTable.type, query.data.type as "active" | "standby" | "night" | "full_day" | "vacation" | "sick" | "work" | "freizeitausgleich" | "team"));
   if (query.data.month && query.data.year) {
     conditions.push(sql`EXTRACT(MONTH FROM ${shiftsTable.startTime}) = ${query.data.month}`);
     conditions.push(sql`EXTRACT(YEAR FROM ${shiftsTable.startTime}) = ${query.data.year}`);
@@ -557,7 +619,7 @@ async function findPlannedWorkShiftsForDay(
       and(
         eq(shiftsTable.userId, userId),
         eq(shiftsTable.teamId, teamId),
-        notInArray(shiftsTable.type, ["vacation", "sick", "freizeitausgleich"]),
+        notInArray(shiftsTable.type, ["vacation", "sick", "freizeitausgleich", "team"]),
         sql`DATE(${shiftsTable.startTime}) = ${dateStr}`
       )
     );
@@ -623,11 +685,39 @@ router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
     return;
   }
 
+  // Team-Dienst (Teamsitzung): nur erlaubt, wenn der Konto-Schalter des
+  // Team-Eigentümers AN ist (Bestandsschutz: bestehende Einträge bleiben).
+  if (body.data.type === "team") {
+    if (!(await teamMeetingEnabledForTeam(write.teamId))) {
+      res.status(400).json({
+        error:
+          "Der Team-Dienst (Teamsitzung) ist in den Einstellungen deaktiviert.",
+        code: "team_meeting_disabled",
+      });
+      return;
+    }
+    // Ein Team-Eintrag pro Tag und Team genügt — Duplikate würden die
+    // Stunden-Gutschrift verdoppeln.
+    const duplicate = await findDuplicateTeamEntry(
+      write.teamId,
+      new Date(body.data.startTime),
+      null
+    );
+    if (duplicate) {
+      res.status(409).json({
+        error: "Für dieses Team besteht an diesem Tag bereits ein Team-Eintrag.",
+        code: "team_meeting_duplicate" as const,
+        existingShiftId: duplicate.id,
+      });
+      return;
+    }
+  }
+
   // Kollisionsprüfung: nur für reguläre Schichten und nur, wenn der Admin nicht
   // bewusst überschreibt (force). force kommt aus dem Roh-Body, nicht aus dem
   // validierten Schema, damit die OpenAPI-Spec unverändert bleibt.
   const force = req.body?.force === true;
-  if (!isAbsenceType(body.data.type) && !force) {
+  if (!isAbsenceType(body.data.type) && body.data.type !== "team" && !force) {
     const conflicts = await findOverlappingShifts(
       body.data.userId,
       body.data.startTime,
@@ -680,8 +770,8 @@ router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
   // Abwesenheiten können kein Einsatz sein (Urlaub/Krankheit "für" ein anderes
   // Team ergibt keinen Sinn und würde den Spiegel-Eintrag verfälschen).
   if (body.data.einsatzTeamId != null) {
-    if (isAbsenceType(body.data.type)) {
-      res.status(400).json({ error: "Abwesenheiten können kein Aushilfe-Einsatz sein" });
+    if (isAbsenceType(body.data.type) || body.data.type === "team") {
+      res.status(400).json({ error: "Abwesenheiten und Team-Einträge können kein Aushilfe-Einsatz sein" });
       return;
     }
     if (body.data.einsatzTeamId === write.teamId) {
@@ -713,8 +803,18 @@ router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
   const insertValues = {
     ...body.data,
     teamId: write.teamId,
-    ...(isAbsenceType(body.data.type) ? { planningStatus: "FIX" as const } : {}),
+    // Abwesenheiten UND Team-Einträge sind produktseitig immer verbindlich.
+    ...(isAbsenceType(body.data.type) || body.data.type === "team"
+      ? { planningStatus: "FIX" as const }
+      : {}),
   };
+
+  // Team-Einträge ganztägig erzwingen (serverseitig autoritativ, s. Helper).
+  if (body.data.type === "team") {
+    const normalized = normalizeTeamEntryTimes(insertValues.startTime);
+    insertValues.startTime = normalized.startTime;
+    insertValues.endTime = normalized.endTime;
+  }
 
   // Abwesenheits-Zeiten auflösen (Lohnausfallprinzip, Punkt 2 & 3):
   //  • Primary: existiert am Tag bereits ein geplanter Dienst, "überschreibt" die
@@ -887,7 +987,34 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
     }
   }
 
-  if (!isAbsenceType(effectiveType) && !force) {
+  // Team-Dienst (Teamsitzung) beim Bearbeiten: Typwechsel ZU team unterliegt
+  // demselben Konto-Schalter wie das Anlegen; Datums-/Typänderungen dürfen kein
+  // Tages-Duplikat im Team erzeugen. Reine Edits bestehender Team-Einträge
+  // (Notiz etc.) bleiben erlaubt (Bestandsschutz).
+  if (effectiveType === "team") {
+    if (oldShift.type !== "team" && !(await teamMeetingEnabledForTeam(oldShift.teamId))) {
+      res.status(400).json({
+        error: "Der Team-Dienst (Teamsitzung) ist in den Einstellungen deaktiviert.",
+        code: "team_meeting_disabled",
+      });
+      return;
+    }
+    const duplicate = await findDuplicateTeamEntry(
+      oldShift.teamId,
+      new Date(effectiveStart),
+      oldShift.id
+    );
+    if (duplicate) {
+      res.status(409).json({
+        error: "Für dieses Team besteht an diesem Tag bereits ein Team-Eintrag.",
+        code: "team_meeting_duplicate" as const,
+        existingShiftId: duplicate.id,
+      });
+      return;
+    }
+  }
+
+  if (!isAbsenceType(effectiveType) && effectiveType !== "team" && !force) {
     const conflicts = await findOverlappingShifts(
       effectiveUserId,
       effectiveStart,
@@ -943,8 +1070,8 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
   // Aushilfe-Einsatz setzen/ändern: gleiche Regeln wie beim Anlegen — anderes
   // eigenes Team, keine Abwesenheit. Entfernen (null) ist immer erlaubt.
   if (body.data.einsatzTeamId != null) {
-    if (isAbsenceType(effectiveType)) {
-      res.status(400).json({ error: "Abwesenheiten können kein Aushilfe-Einsatz sein" });
+    if (isAbsenceType(effectiveType) || effectiveType === "team") {
+      res.status(400).json({ error: "Abwesenheiten und Team-Einträge können kein Aushilfe-Einsatz sein" });
       return;
     }
     if (body.data.einsatzTeamId === oldShift.teamId) {
@@ -972,12 +1099,21 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
   // FIX — analog zum POST, damit kein Weg eine vorläufige Abwesenheit erzeugt.
   const updateValues = {
     ...body.data,
-    // Wird die Schicht zur Abwesenheit, verliert sie einen etwaigen
-    // Aushilfe-Einsatz (Spiegel-Eintrag im Ziel-Team wäre irreführend).
-    ...(isAbsenceType(effectiveType)
+    // Wird die Schicht zur Abwesenheit oder zum Team-Eintrag, verliert sie
+    // einen etwaigen Aushilfe-Einsatz (Spiegel-Eintrag wäre irreführend);
+    // beide sind immer verbindlich (FIX).
+    ...(isAbsenceType(effectiveType) || effectiveType === "team"
       ? { planningStatus: "FIX" as const, einsatzTeamId: null }
       : {}),
   };
+
+  // Team-Einträge ganztägig erzwingen — auch beim Bearbeiten (Typwechsel zu
+  // team oder Zeitänderung eines Team-Eintrags), serverseitig autoritativ.
+  if (effectiveType === "team") {
+    const normalized = normalizeTeamEntryTimes(new Date(effectiveStart));
+    updateValues.startTime = normalized.startTime;
+    updateValues.endTime = normalized.endTime;
+  }
   const [updated] = await db
     .update(shiftsTable)
     .set(updateValues)

@@ -268,7 +268,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich]
+            enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team]
         - name: teamId
           in: query
           description: Optionaler Team-Kontext für die Datentrennung.
@@ -2193,7 +2193,7 @@ components:
           format: date-time
         type:
           type: string
-          enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich]
+          enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team]
         planningStatus:
           type: string
           description: >-
@@ -2250,7 +2250,7 @@ components:
           format: date-time
         type:
           type: string
-          enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich]
+          enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team]
         planningStatus:
           type: string
           description: >-
@@ -2287,7 +2287,7 @@ components:
           format: date-time
         type:
           type: string
-          enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich]
+          enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team]
         planningStatus:
           type: string
           description: >-
@@ -2439,6 +2439,8 @@ components:
           vacationHoursPerDay,
           vacationFactor,
           ersatzruhetagEnabled,
+          teamMeetingEnabled,
+          teamMeetingHours,
           updatedAt,
         ]
       properties:
@@ -2491,6 +2493,17 @@ components:
           description: >-
             Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktiv? Bei false verdient
             Feiertagsarbeit keinen Ausgleichs-Ruhetag.
+        teamMeetingEnabled:
+          type: boolean
+          description: >-
+            Team-Dienst (Teamsitzung) aktiv? Konto-global (kein Team-Override);
+            Standard AUS. Bei AUS lehnen POST/PATCH /shifts den Typ team mit
+            400 ab; bestehende Team-Einträge bleiben sichtbar (Bestandsschutz).
+        teamMeetingHours:
+          type: number
+          description: >-
+            Gutgeschriebene Stunden je Teamsitzung und Assistenzkraft
+            (Konto-global, Standard 1,0).
         updatedAt:
           type: string
           format: date-time
@@ -2541,6 +2554,13 @@ components:
         ersatzruhetagEnabled:
           type: boolean
           description: Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktivieren/deaktivieren.
+        teamMeetingEnabled:
+          type: boolean
+          description: Team-Dienst (Teamsitzung) aktivieren/deaktivieren (konto-global, kein Team-Override).
+        teamMeetingHours:
+          type: number
+          minimum: 0.1
+          description: Gutgeschriebene Stunden je Teamsitzung und Assistenzkraft.
 
     TimeTrackingStatus:
       type: object
