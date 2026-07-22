@@ -1,0 +1,458 @@
+# 🚀 Dienstplan-App – Entwicklungs-Roadmap & Tasks
+
+Stand: 22. Juli 2026. Automatisch aus der Projekt-Task-Historie erstellt (399 erledigte, 37 offene Tasks; abgebrochene Tasks sind nicht aufgeführt).
+
+## 🟢 Erledigte Tasks (Done)
+
+- [x] #1 Abwesenheiten: Urlaub & Krankheit im Schichtplaner
+- [x] #2 Bugfix: Schicht speichern & Notes-Feld
+- [x] #3 Zeige Urlaub und Kranktage direkt im Kalender als ganztägige Blöcke
+- [x] #4 Genommene Urlaubstage spiegeln den tatsächlichen Monat, nicht das Gesamtjahr
+- [x] #5 Design-Update: AssistenzTreff-Branding
+- [x] #6 Schicht bearbeiten zeigt Assistenten-Name statt ID
+- [x] #7 Fehlermeldung beim Speichern zeigt Details statt generischem Text
+- [x] #8 Assistenten können sich einloggen und ihren eigenen Dienstplan sehen
+- [x] #9 Monatsauswertung als PDF exportieren
+- [x] #10 App auf dem Smartphone nutzen — native Mobile-Version
+- [x] #11 PDF-Export per Assistent — direkt aus der Assistenten-Detailseite
+- [x] #12 Unterschriftsfeld und Firmenlogo im PDF-Nachweis
+- [x] #13 Schichtmodelle verwalten
+- [x] #14 Zuschläge einstellen
+- [x] #15 Urlaub & Krankheit im Kalender
+- [x] #16 Stundenberechnung & Auswertung
+- [x] #17 Monatsgitter und Assistenten-Filter auch in der Desktop-Ansicht anbieten
+- [x] #18 Automatisierten Test für den Dienstplan-Kalender nach Login einrichten
+- [x] #19 Bevorzugte Kalenderansicht merken
+- [x] #20 Prüfen, dass Assistenten nur ihre eigenen Daten sehen
+- [x] #21 Schicht anlegen und bearbeiten automatisch testen
+- [x] #23 Schichten über Mitternacht erlauben (Nachtdienste)
+- [x] #26 Nachtdienste über Mitternacht automatisch im Browser testen
+- [x] #27 Kollisionswarnung beim Planen
+- [x] #28 Abwesenheitsplaner
+- [x] #29 Geplante Zeiten per Klick übernehmen
+- [x] #30 Regionale Feiertage berücksichtigen
+- [x] #31 Dashboard mit Warnhinweisen
+- [x] #32 Mobile: Zeit-Picker & eigener Stundenstand
+- [x] #33 Automatische Tests für die Kollisionswarnung
+- [x] #34 Automatische Tests fuer den Abwesenheitsplaner
+- [x] #35 Automatische Tests für die Zeit-Übernahme absichern
+- [x] #36 Hinweise auf dem Dashboard anklickbar machen
+- [x] #37 Automatische Tests für die Dashboard-Warnhinweise
+- [x] #40 Logo größer & serifenlose Überschriften
+- [x] #41 Logo und Schriftart auch in der Mobile-App angleichen
+- [x] #42 Multi-Team Fundament & Team anlegen
+- [x] #43 Personen den Teams zuweisen
+- [x] #44 Team-Wechsler & strikte Datentrennung
+- [x] #45 Splash-Screen und App-Icon der Mobile-App auf AssistenzTreff-Branding umstellen
+- [x] #46 Automatisch testen, dass Teams ihre Daten nicht gegenseitig sehen
+- [x] #47 Verhindern, dass Schichten mit Schichtmodellen aus fremden Teams verknüpft werden
+- [x] #48 Nutzerliste pro Dienstleister trennen (echte Mandantentrennung)
+- [x] #51 Automatisch testen, dass das Dashboard keine fremden Team-Daten zeigt
+- [x] #52 Wiederverwendbare Test-Hilfen für Team-Setup statt Copy-Paste
+- [x] #53 Automatisch testen, dass Schichten keine fremden Team-Schichtmodelle akzeptieren
+- [x] #54 Mehrtägige Abwesenheiten als einen durchgehenden Balken anzeigen
+- [x] #55 Automatisch testen, dass Urlaub und Krank ohne Uhrzeit erscheinen
+- [x] #57 Automatisch testen, dass das Bearbeiten-Fenster den Assistenten-Namen zeigt
+- [x] #58 Klare Fehlermeldungen auch in der Zeiterfassung und beim Einladen
+- [x] #59 Auch den gewählten Assistenten-Filter im Dienstplan merken
+- [x] #60 Mehrere Monate auf einen Schlag als Nachweis exportieren
+- [x] #61 Automatisch testen, dass der Einzel-Nachweis-Export funktioniert
+- [x] #63 Eigenes Firmenlogo in den Einstellungen hochladen
+- [x] #64 PDF-Layout mit dunklem Logo lesbarer machen
+- [x] #65 Automatisch testen, dass 24h-Dienste korrekt über den Folgetag laufen
+- [x] #66 Dashboard-Kennzahlen ebenfalls anklickbar machen
+- [x] #67 Automatisch testen, dass doppelte Urlaubstage nicht zweimal abgezogen werden
+- [x] #68 Resturlaub-Anzeige für gezieltes Testen mit Markierungen versehen
+- [x] #69 Automatisch testen, dass die Zeit-Übernahme auch auf dem Smartphone funktioniert
+- [x] #70 App-Icon mit eckenfüllendem Android-Adaptive-Icon optimieren
+- [x] #71 Soll/Ist-Auswertung mit Zuschlägen automatisch testen
+- [x] #72 Auch den zweiten Datentrennungs-Test auf die geteilten Test-Hilfen umstellen
+- [x] #73 Automatisch testen, dass Schichtmodelle anderer Teams nicht änderbar oder löschbar sind
+- [x] #74 Automatisch testen, dass Assistenten im Dashboard nur ihre eigenen Daten sehen
+- [x] #75 Automatisch testen, dass die Dashboard-Kacheln zu den richtigen Seiten springen
+- [x] #76 Automatisch testen, dass die Stundenbilanz-Kachel auf dem Dashboard stimmt
+- [x] #77 Automatisch testen, dass Schichtmodelle nicht in fremden Teams angelegt werden können
+- [x] #78 Konkrete Serverfehler auch in den restlichen Speichern-Dialogen anzeigen
+- [x] #79 Automatisch testen, dass der Assistent beim Bearbeiten nicht gewechselt werden kann
+- [x] #80 Gemerkten Assistenten-Filter auch in der Zeiterfassung und Auswertung übernehmen
+- [x] #81 Automatisch testen, dass der gemerkte Assistenten-Filter nach Reload erhalten bleibt
+- [x] #82 Zeiterfassung auf dem Smartphone gegen falsche Eingaben absichern (automatischer Test)
+- [x] #83 Sicherstellen, dass bereits erfasste Schichten auf dem Smartphone nicht doppelt auftauchen (automatischer Test)
+- [x] #84 Zeitraum-Nachweis auch für alle Assistenten auf einmal exportieren
+- [x] #85 Automatisch testen, dass der Zeitraum-Nachweis-Export mehrere Monate erzeugt
+- [x] #86 Doppelte Urlaubstage auch serverseitig verhindern
+- [x] #87 Neue 24h-Dienste direkt im Kalender anlegen können
+- [x] #88 Pro Team ein eigenes Logo für Dienstleister
+- [x] #89 Automatisch testen, dass der Logo-Upload und das PDF-Logo funktionieren
+- [x] #90 App-Icon im Android-13-Designmodus an die Systemfarben anpassen
+- [x] #91 Resturlaub auch ohne aktiven Vertrag verständlich anzeigen
+- [x] #92 Show who is absent across the whole team at a glance
+- [x] #93 Automated checks that multi-day absence bars render correctly
+- [x] #94 Automatisch testen, dass Urlaub und Krank auch in der Listenansicht ohne Uhrzeit erscheinen
+- [x] #95 Automatisch testen, dass der Gesamt-Nachweis aller Assistenten exportiert wird
+- [x] #96 Automatisch testen, dass Assistenten über die API keine Schichten anlegen oder ändern können
+- [x] #97 Automatisch testen, dass Schichten und Verträge nicht in fremden Teams angelegt werden können
+- [x] #98 Automatisch testen, dass die übrigen Dashboard-Kacheln die richtigen Zahlen zeigen
+- [x] #99 Automatisch testen, dass das Datum beim Bearbeiten richtig vorbelegt wird
+- [x] #100 Nacht-Einträge ohne Schicht auch manuell auf dem Smartphone erfassen
+- [x] #101 Team-Umschalter auch in der Zeiterfassung berücksichtigen
+- [x] #102 Zeiterfassungs-Tests auf dem Smartphone stabiler machen (kein zufälliges Fehlschlagen)
+- [x] #103 Make sure remembered calendar view (table vs grid) survives a reload
+- [x] #104 Fix broken branding settings so the app compiles again
+- [x] #105 Auto-Login in der Entwicklungsumgebung für schnelleren Dev-Flow
+- [x] #106 Automatisch testen, dass Speichern-Dialoge konkrete Serverfehler zeigen
+- [x] #107 Im Entwicklungsmodus zwischen mehreren Test-Nutzern umschalten
+- [x] #108 Doppelte Abwesenheiten auch beim Bearbeiten serverseitig verhindern
+- [x] #109 Automatisch testen, dass doppelte Urlaubstage serverseitig abgelehnt werden
+- [x] #110 Sicherstellen, dass der Zeitraum-Nachweis pro Monat wirklich eine PDF-Seite enthält
+- [x] #111 Logo des aktiven Teams im App-Kopf anzeigen
+- [x] #112 Automatisch testen, dass doppelter Urlaub auch teamübergreifend abgelehnt wird
+- [x] #113 Automatisch prüfen, dass geplanter Urlaub ohne Vertrag angezeigt wird
+- [x] #114 Login-basierte Browser-Tests im Dev-Modus wieder lauffähig machen
+- [x] #115 App-Icon auch im iPhone-Dunkel- und Farbtonmodus sauber anzeigen
+- [x] #116 Automatisch testen, dass Assistenten keine Teams oder Mitgliedschaften ändern können
+- [x] #117 Absichern, dass Ist-Zeiten nicht in fremden Teams angelegt werden können
+- [x] #118 Automatisch testen, dass eine Nachtschicht über Mitternacht beim Bearbeiten korrekt vorbelegt wird
+- [x] #119 Automatisch testen, dass Datum und Zeit beim Bearbeiten geändert und korrekt gespeichert werden
+- [x] #120 Keep the existing PDF-export tests green when auto-login is active
+- [x] #121 Anzeigen, dass ein Zeiteintrag über Mitternacht geht
+- [x] #122 Gleichen Folgetag-Schalter auch in der Web-Zeiterfassung anbieten
+- [x] #126 Automatisch testen, dass die Kalender-Ansicht am PC (Tabelle/Monat) erhalten bleibt
+- [x] #127 Automatisch testen, wie Nacht-, Sonntags- und Feiertagsstunden einer Schicht ermittelt werden
+- [x] #128 DienstStatus-Enum und SchichtVorlage-Typen zentral einführen
+- [x] #129 Schichten als Entwurf, Vorschlag oder verbindlich kennzeichnen
+- [x] #130 Wiederkehrende Arbeitszeit-Vorlagen anlegen und im Dienstplan nutzen
+- [x] #131 App-Design an die echte Website angleichen (weiß, dunkelblau, gelbe Buttons)
+- [x] #134 Assistenzkraft im Bearbeiten-Dialog löschen können
+- [x] #135 Automatisch testen, dass eine Assistenzkraft samt Daten gelöscht werden kann
+- [x] #136 Automatisch testen, dass 'Abbrechen' beim Löschen die Assistenzkraft erhält
+- [x] #138 Bearbeiten zeigt falschen Assistenten
+- [x] #139 Verhindern, dass das Bearbeiten-Fenster die falsche Assistenzkraft zeigt
+- [x] #140 Fix 19 dependency vulnerabilities
+- [x] #141 Farb-Legende & 24h-Dienst-Fix
+- [x] #142 Farbcode bei Diensten entfernen
+- [x] #144 Sicherstellen, dass Massen-Eintragen/Löschen zuverlässig funktioniert
+- [x] #145 Bestehende Schichten über mehrere Tage gleichzeitig ändern
+- [x] #148 Sicherstellen, dass eine 24h-Schicht beim Bearbeiten korrekt vorbelegt wird
+- [x] #152 Absichern, dass die Soll/Ist-Auswertung die Roh-Kennzahlen korrekt zu Zuschlägen aufsummiert
+- [x] #153 Verhindern, dass das Bearbeiten gespeicherte Personendaten still verfälscht
+- [x] #159 Geplante Entwürfe und Vorschläge vor dem Stundennachweis ausblenden
+- [x] #160 Sicherstellen, dass der Planungsstatus beim Speichern wirklich erhalten bleibt
+- [x] #161 Vorlagen-Wochentage beim Schicht-Anlegen tatsächlich nutzen
+- [x] #169 Beweisen, dass der Einzel-Monats-Nachweis genau eine PDF-Seite liefert
+- [x] #171 Confirm absence bars still connect across month boundaries
+- [x] #172 Make sure the month-grid absence bars also stay connected
+- [x] #174 Sicherstellen, dass der Test-Nutzer-Wechsler in Produktion unsichtbar bleibt
+- [x] #176 Sicherstellen, dass ein privat-Konto die Team-Verwaltung nicht erreicht
+- [x] #180 Sicherstellen, dass geplanter Krank-Tag ohne Vertrag nicht als Urlaub gezählt wird
+- [x] #182 Sicherstellen, dass das gezielte Löschen pro Assistent nur dessen Einträge entfernt
+- [x] #186 Verhindern, dass derselbe Urlaubstag per Bearbeiten teamübergreifend doppelt entsteht
+- [x] #190 Make sure bulk-changing shifts to a new assistant can't leak across teams
+- [x] #191 Let admins also switch the shift type or model when bulk-editing
+- [x] #192 App-Shell-Layout mit fixiertem Plattform-Header und -Footer
+- [x] #193 Sicherstellen, dass Krank-Tage auch bei Assistenten MIT Vertrag den Resturlaub nicht verbrauchen
+- [x] #197 Sicherstellen, dass das Entfernen eines Urlaubstags den Resturlaub wieder gutschreibt
+- [x] #198 Sub-Navigation als zweizeiligen Header umgestalten
+- [x] #199 Geben Sie Nutzern wieder eine Möglichkeit, sich abzumelden
+- [x] #200 Verhindern, dass das Löschen eines von zwei überlappenden Urlauben den Resturlaub doppelt gutschreibt
+- [x] #201 Sicherstellen, dass das Löschen eines Krank-Zeitraums den Urlaub unberührt lässt
+- [x] #202 Verhindern, dass das teilweise Löschen eines Urlaubs auch in der Smartphone-App falsch gutschreibt
+- [x] #204 Entitlements: Free/Premium & Bestandsschutz
+- [x] #205 Verhindern, dass Free-Grenzen per Browser umgangen werden
+- [x] #206 Stop Free accounts from exceeding their assistant and team limits via the API
+- [x] #207 Fix Free accounts starting already over the shift-model limit
+- [x] #208 Make sure plan limits cannot be bypassed, automatically
+- [x] #209 Confirm a new free account can add one of its own shift types
+- [x] #210 Stop free accounts from exceeding their assistant and team limits
+- [x] #213 Tell Free users why creating an assistant or team was blocked
+- [x] #214 Confirm Free plan limits stay enforced as the app grows
+- [x] #215 Enforce the remaining premium-only features on the server
+- [x] #216 Stop Free accounts from adding more assistants than their plan allows
+- [x] #217 Stop Free accounts from creating more teams than their plan allows
+- [x] #218 Tell Free users why a new shift model was blocked
+- [x] #219 Stop Free limit messages from showing in the mobile app's wrong place
+- [x] #220 Confirm Free accounts can never exceed their assistant, team, and planning limits
+- [x] #221 Show Free users a clear upgrade prompt instead of a raw error when they hit a limit
+- [x] #222 Stop Free accounts from creating more teams than their plan allows
+- [x] #223 Stop Free accounts from planning further ahead than their plan allows
+- [x] #224 Keep Free accounts from quietly bypassing the assistant/team caps in the app UI
+- [x] #225 Make sure upgrading a maxed-out Free account immediately unlocks creating more
+- [x] #226 Stop Free accounts from adding more assistants than their plan allows
+- [x] #227 Limit how far ahead Free accounts can plan shifts
+- [x] #228 Show Free users a clear upgrade prompt instead of an error on wage and analytics screens
+- [x] #229 Confirm Free accounts truly cannot reach wage data or payroll analytics
+- [x] #234 Confirm a paid upgrade also unlocks bulk editing and extra shift types
+- [x] #235 Make sure dropping back to Free never hides or deletes data a customer already has
+- [x] #236 Tell Free users why a far-future shift was rejected, with an upgrade prompt
+- [x] #239 Make sure Free users see the shift-model and planning-horizon caps in the app too
+- [x] #240 Give Free users a real way to upgrade to Premium
+- [x] #241 Lock down the remaining Premium-only features for Free accounts
+- [x] #245 Beweisen, dass Entwurfsschichten nie in den offiziellen Nachweis gelangen
+- [x] #246 Nutzern im Plan zeigen, welche Dienste noch unverbindlich sind
+- [x] #248 Confirm the web app keeps showing all data after a downgrade to Free
+- [x] #250 Beweisen, dass Free-Nutzer beim Zu-weit-Planen die Upgrade-Meldung wirklich sehen
+- [x] #251 Show a friendly upgrade message if a Premium-only action still slips through
+- [x] #254 Sorgen, dass Free-Konten ihre erfassten Ist-Stunden in Auswertungen sehen
+- [x] #255 Kalender-Abo-Link, damit sich der Kalender automatisch aktualisiert
+- [x] #256 Prüfen, dass Premium-Sperren nach Plan-Wechsel sofort und überall greifen
+- [x] #257 Repariere die 33 dauerhaft fehlschlagenden E2E-Tests, damit die Testsuite wieder Regressionen zuverlässig erkennt
+- [x] #258 Verwirrende 'offene Zeiteinträge'-Warnung für Free-Konten entschärfen
+- [x] #259 Sicherstellen, dass Free-Ist-Stunden nach einem Upgrade nicht plötzlich schrumpfen
+- [x] #262 Sicherstellen, dass nur der Betreiber Premium freischalten kann
+- [x] #263 Beweisen, dass die 'offene Zeiteinträge'-Warnung nur bei Premium-Teams erscheint
+- [x] #264 Alte offene Zeiteinträge nach dem Upgrade mit einem Klick sammelbestätigen
+- [x] #265 Absichern, dass der Stunden-Hinweis nach einem Upgrade wirklich erscheint und wieder verschwindet
+- [x] #266 E2E-Testdatenbank repariert sich nach Schema-Änderungen wieder selbst
+- [x] #267 Beweisen, dass auch Assistenten den Stunden-Hinweis nach einem Upgrade sehen
+- [x] #270 Verhindern, dass Schema-Änderungen die Entwicklungsdatenbank nach einem Merge still veralten lassen
+- [x] #273 Betreiber-Konto (superadmin) per Skript sicher anlegen können
+- [x] #274 Nachvollziehen können, wer wann Premium freigeschaltet hat
+- [x] #275 Lexware-Buchungs-Log als Dummy bauen (echte Anbindung nach Server-Migration)
+- [x] #278 Übrig gebliebene Test-Konten aus der E2E-Datenbank zuverlässig entfernen
+- [x] #279 Verhindern, dass das Löschen eines Kontos mit eigenem Team als Serverfehler endet
+- [x] #280 Beweisen, dass ein widerrufener Kalender-Abo-Link sofort ungültig ist
+- [x] #281 Den Test-Nutzer-Wechsler im Dev-Modus wieder anzeigen
+- [x] #283 Sicherstellen, dass eine doppelte E-Mail beim Bearbeiten eine verständliche Meldung zeigt statt still zu scheitern
+- [x] #287 Bestätigen, dass der Kalender-Export nur verbindliche Dienste enthält
+- [x] #288 Verhindern, dass ein Konto die Zuschlags-Prozente aller anderen Konten mitändert
+- [x] #289 Eigene Zuschlagssätze pro Team für Dienstleister ermöglichen
+- [x] #290 Sicherstellen, dass ein Post-Merge-Fehlschlag den API-Server nicht mit veraltetem Schema weiterlaufen lässt
+- [x] #291 Verständliche Meldung im UI zeigen, wenn ein Konto wegen eigener Teams nicht gelöscht werden kann
+- [x] #292 Automatisch alle Test-Konto-Leichen nach jedem E2E-Lauf entfernen
+- [x] #293 Beweisen, dass der Sammelnachweis pro Assistent eine korrekte PDF-Seite enthält
+- [x] #294 Sicherstellen, dass ein Assistenten-Kalender-Abo keine fremden Dienste verrät
+- [x] #295 Beweisen, dass Entwurfs-Dienste im Plan sichtbar gekennzeichnet bleiben
+- [x] #296 Entwürfe und Vorschläge direkt im Plan mit einem Klick bestätigen
+- [x] #298 Beweisen, dass die Test-DB nach einem abgebrochenen Lauf wirklich sauber startet
+- [x] #301 Alle Entwürfe eines Monats mit einem Klick bestätigen
+- [x] #302 Sicherstellen, dass die Ein-Klick-Bestätigung im Kalender nicht unbemerkt kaputtgeht
+- [x] #303 Verhindern, dass Einzeltest-Läufe an einer veralteten Test-Datenbank scheitern
+- [x] #305 Sicherstellen, dass Assistenten den Bestätigen-Button im Kalender nie sehen
+- [x] #306 Versehentliche Betreiber-Rechte durch E-Mail-Tippfehler verhindern
+- [x] #307 Sicherstellen, dass jede Premium-Freischaltung wirklich im Protokoll landet
+- [x] #308 Beim Freischalten die zugehörige Rechnungs-/Zahlungsreferenz festhalten können
+- [x] #309 Assistenten den Kalender-Abo-Zugang ermöglichen, wenn ihr Arbeitgeber Premium hat
+- [x] #312 Prüfen, ob weitere Premium-Funktionen für Assistenten fälschlich am eigenen (immer Free) Konto hängen
+- [x] #315 Projektnotizen (replit.md) straffen
+- [x] #317 Schichtmodell-Limit Free auf 3 senken
+- [x] #318 Einfacher Monats-Export für Free
+- [x] #319 Urlaubs-Tracking als Premium-Feature
+- [x] #320 Resturlaub-Zählung serverseitig absichern, falls später eine API dafür entsteht
+- [x] #321 Sicherstellen, dass Free-Konten Abwesenheiten anlegen können und keine Resturlaub-Bilanz sehen
+- [x] #325 Testkonten trennen und neu aufsetzen
+- [x] #329 Assistenzkräften ihren eigenen Resturlaub anzeigen, wenn der Arbeitgeber Premium hat
+- [x] #330 Sicherstellen, dass normale Konten das Plan-Änderungsprotokoll niemals einsehen können
+- [x] #333 Sicherstellen, dass Assistenten nie den Resturlaub von Team-Kollegen abrufen können
+- [x] #334 Assistenten auf dem Dashboard freundlich erklären, warum keine Resturlaub-Karte erscheint
+- [x] #335 Testkonten-Trennung dauerhaft reparieren (Merge-Skript entschärfen)
+- [x] #336 Sicherstellen, dass die Testkonten-Trennung nie wieder unbemerkt kaputtgeht
+- [x] #337 Echtes Fehler-Tracking mit Warn-E-Mail im Operator-Dashboard
+- [x] #338 Warn-E-Mails scharf schalten: Resend-Schlüssel hinterlegen und Versand prüfen
+- [x] #339 Fehler im Operator-Dashboard als erledigt abhaken können
+- [x] #340 Alle offenen Fehler mit einem Klick abhaken können
+- [x] #341 Wiederkehrende Fehler bündeln statt jede Wiederholung einzeln zu listen
+- [x] #342 Beweisen, dass der Wiederholungs-Zähler (N×) im Dashboard sichtbar bleibt
+- [x] #343 Mehr Details zu einem Fehler sehen können (z. B. Stacktrace)
+- [x] #345 Warn-Mails an beliebige Empfänger ermöglichen (eigene Absender-Domain bei Resend verifizieren)
+- [x] #346 Den Testkonten-Trennungs-Check bei jedem Testlauf automatisch mitlaufen lassen
+- [x] #347 Sicherstellen, dass das Fehler-Tracking bei vielen Fehlern die neuesten behält
+- [x] #352 Canvas aufräumen: ungenutzte Design-Entwürfe löschen
+- [x] #353 Betreiber darauf hinweisen, wenn alte Fehler wegen des 500er-Limits verworfen wurden
+- [x] #354 Projektnotizen (replit.md) straffen und neu ordnen
+- [x] #355 Sicherstellen, dass der Hinweis zum Fehler-Aufbewahrungslimit nicht unbemerkt kaputtgeht
+- [x] #357 Sicherstellen, dass der Kalender-Export keine fremden Team-Dienste preisgibt
+- [x] #362 Security scan
+- [x] #364 Tenant Isolation and Shared State
+- [x] #365 Authentication and Session Control
+- [x] #366 Audit Integrity
+- [x] #367 Storage Access Control
+- [x] #368 Test: Massen-Dienstart behält Stunden & Zuschläge
+- [x] #369 Test wieder aktivieren: Massen-Anlegen & -Löschen
+- [x] #370 Test: Vorlagen-Hinweis im Mehrfach-Modus
+- [x] #371 Test: monatsweise Sammelbestätigung
+- [x] #372 Freundliche Meldung bei doppelter E-Mail
+- [x] #373 Test: Assistent sieht Kalender-Abo-Karte
+- [x] #374 Test: Team-Zuschläge greifen im Browser
+- [x] #375 Suche im Plan-Änderungsprotokoll
+- [x] #376 Test-DB-Selbstheilungs-Check automatisch
+- [x] #377 Einzeltests schneller bei unverändertem Schema
+- [x] #378 Test-Fehlerzeilen automatisch aufräumen
+- [x] #379 Betreiber-Rechte sicher entziehen
+- [x] #380 Beweisen, dass sammelbestätigte Dienste wirklich in den Auswertungen auftauchen
+- [x] #381 Sicherstellen, dass eine misslungene Teil-Bestätigung ehrlich gemeldet wird
+- [x] #382 Betreiber kann Änderungsprotokoll auch nach Zeitraum eingrenzen
+- [x] #384 Verständliche Meldung bei doppelter E-Mail auch bei der Registrierung
+- [x] #386 Verhindern, dass abgebrochene Testläufe die nächsten Läufe blockieren
+- [x] #388 Restore end-to-end tests broken by the account-type lockdown
+- [x] #389 Confirm assistants can actually create and use a calendar subscription link
+- [x] #390 Make sure a rotated calendar link instantly stops working
+- [x] #391 Confirm revoking a calendar link cuts off access even after downgrade
+- [x] #392 Beweisen, dass der Fehlerzeilen-Cleanup wirklich greift und echte Fehler verschont
+- [x] #393 Verhindern, dass ein umbenannter Test-Fehler-Kontext den Cleanup stillschweigend aushebelt
+- [x] #395 Abwesenheiten immer verbindlich zählen
+- [x] #396 Confirm calendar-created absences show up in payroll reports
+- [x] #404 Dienstplan: Buttons & Scrollen
+- [x] #405 Sicherstellen, dass fremde Arbeitgeber nie Resturlaub anderer Konten abrufen können
+- [x] #406 Nutzer mit bestehendem Konto direkt von der Registrierung zur Anmeldung leiten
+- [x] #407 Vor dem Erneuern des Kalender-Links nachfragen, damit niemand ihn versehentlich kaputt macht
+- [x] #408 Beweisen, dass auch der Admin-Kalender-Link nach dem Erneuern sofort tot ist
+- [x] #409 Zeitraum-Filter im Protokoll an deutsche Zeitzone anpassen
+- [x] #410 Schnellauswahl 'Letzter Monat' für das Änderungsprotokoll
+- [x] #411 Beweisen, dass auch das Monats-PDF nur verbindliche Dienste ausweist
+- [x] #412 Verhindern, dass ein versehentlich parallel gestarteter Testlauf einen laufenden Lauf abschiesst
+- [x] #413 Ganze Seite scrollbar machen, Dienstplanleiste bleibt sticky
+- [x] #414 Fehlerliste im Operator-Dashboard zeitlich eingrenzen können
+- [x] #415 Sicherstellen, dass die Dienstplanleiste beim Scrollen dauerhaft sichtbar bleibt
+- [x] #416 Mobil schneller zurück nach oben, wenn das Menü weggescrollt ist
+- [x] #417 Confirm a vacation that replaces a planned shift keeps payroll balance neutral
+- [x] #418 Beweisen, dass die Schnellauswahl im Protokoll wirklich nur den gewählten Monat zeigt
+- [x] #420 Beweisen, dass fremde Arbeitgeber Verträge anderer Konten weder ändern noch löschen können
+- [x] #422 Confirm the whole test suite is green after the account-type lockdown
+- [x] #423 Prevent long-broken tests from silently drifting out of date
+- [x] #424 Sicherstellen, dass der Monats-PDF-Knopf ehrlich meldet, wenn es nichts Verbindliches gibt
+- [x] #425 Sicherstellen, dass auch ein kompletter Fehlschlag der Sammelbestätigung ehrlich gemeldet wird
+- [x] #427 Dienstplanleiste: Icons bei Platzmangel, max. zwei Zeilen mobil
+- [x] #428 Catch broken schedule header layouts on narrow phones before they ship
+- [x] #429 Retire the outdated vacation-days counter so no report can ever show stale numbers
+- [x] #430 Speed up the 25-minute test suite so regressions are caught faster
+- [x] #431 Beweisen, dass auch 'Dieser Monat' und 'Letzte 30 Tage' nur den richtigen Zeitraum zeigen
+- [x] #432 Beweisen, dass der Alle-Export keine leeren Seiten für Assistenten ohne Dienste erzeugt
+- [x] #433 Beweisen, dass Urlaub auf leerem Tag mit Schichtmodell die Modellzeiten samt Zuschlägen übernimmt
+- [x] #434 Sicherstellen, dass bei mehreren Diensten am Urlaubstag keiner als Doppel-Soll übrig bleibt
+- [x] #435 Sicherstellen, dass die Dienstplanleiste auch im eingebetteten Modus oben kleben bleibt
+- [x] #438 Sicherstellen, dass der Nach-oben-Knopf auf dem Handy nie wieder verschwindet
+- [x] #439 Beweisen, dass fremde Arbeitgeber Ist-Zeiten anderer Konten weder ändern noch löschen können
+- [x] #440 Beweisen, dass fremde Arbeitgeber Schichten anderer Konten weder ändern noch löschen können
+- [x] #442 Catch broken test code automatically before it wastes a test run
+- [x] #443 Tenant-Grenze: fehlende Schreib-Sicherheitstests (zusammengeführt aus #443/#444/#445)
+- [x] #446 Catch forgotten 'await' in tests that the type checker cannot see
+- [x] #447 Merge-Check erweitern: Server-Rechenlogik + UI-Smoke-Tests (zusammengeführt aus #447/#491)
+- [x] #448 Halbe Urlaubstage überall sauber anzeigen (z. B. 3,5 statt 3.5 Tage)
+- [x] #449 Klären, ob ein in den Urlaubstag hineinragender Nachtdienst vom Vortag stehen bleiben darf
+- [x] #450 Verhindern, dass vergessener API-Codegen den Hauptstand rot macht (zusammengeführt aus #450/#452/#453)
+- [x] #451 Beweisen, dass ganztägiger Urlaub ohne Dienst-Verknüpfung keine Zuschläge und kein Doppel-Soll erzeugt
+- [x] #454 Beweisen, dass der Embed-Modus beim Navigieren in der App nicht verloren geht
+- [x] #456 Beweisen, dass der Monats-Export ohne bestätigte Dienste sauber abbricht statt ein leeres PDF zu liefern
+- [x] #457 Mehrfachauswahl-Aktionsleiste im Dienstplan wieder sichtbar machen
+- [x] #458 Aktionsleiste der Mehrfachauswahl passt auch auf schmale Handy-Bildschirme
+- [x] #459 Team-Switcher ohne Alle-Teams-Eintrag; Dienstplanleiste mit Text-Buttons & Mehrfachauswahl nur mit X
+- [x] #461 Kopfzeile springt bei Mehrfachauswahl nicht mehr zurück und überlappt nicht
+- [x] #462 Team-Zuweisung im Assistenten-Menü & Überführen statt Mitglieder-Dialog
+- [x] #464 Monats-PDF-Klick lässt die Icon-Kopfzeile nicht mehr kurz aufspringen
+- [x] #468 Teamübergreifende Aushilfen im Schicht-Dialog
+- [x] #469 Aushilfe-Schicht in fremdem Team anlegen (403-Fix)
+- [x] #478 Aushilfen-Logik komplett zurückbauen
+- [x] #479 Bestätigen per Klick-Test: Der Dienst-Dialog zeigt nur noch Mitglieder des aktuellen Teams
+- [x] #480 Zuordnen-Funktion auf der Assistenten-Seite entfernen
+- [x] #481 Projektdokumentation straffen
+- [x] #482 Schicht-Dialog: Dienste team-bezogen laden
+- [x] #483 Duplizierte Standard-Dienste-Liste zusammenführen, damit Backfill und Seeding nie auseinanderlaufen
+- [x] #485 Schichtmodelle in Einstellungen pro Team filtern
+- [x] #486 Beweisen, dass der Team-Filter im Dienste-Bereich Neuanlagen ins richtige Team lenkt
+- [x] #487 „Neuen Dienst"-Button über die Dienste-Karte verschieben
+- [x] #488 App-weites barrierefreies Farbsystem (WCAG AA)
+- [x] #489 Farb-Doppelungen vermeiden, wenn ein Team mehr als 8 Assistenzkräfte hat
+- [x] #490 Automatisch sicherstellen, dass neue Farbkombinationen barrierefrei bleiben
+- [x] #492 Sicherstellen, dass die ersten 8 Teammitglieder dauerhaft 8 verschiedene Farben behalten
+- [x] #493 Urlaub außerhalb des Vertragszeitraums blockieren
+- [x] #494 Vertragsbeginn änderbar machen + Urlaubszähler neu berechnen
+- [x] #495 Urlaubstag aus Vertragsstunden bewerten, solange der 13-Wochen-Schnitt fehlt
+- [x] #496 Soll-Stunden pro Abwesenheitstag ebenfalls aus 'Arbeitstage pro Woche' ableiten
+- [x] #497 Bestehende Vertraege prüfen: Arbeitstage pro Woche stimmt oft nicht (Default 5)
+- [x] #498 Assistenten sehen im Dashboard, wie ihr Urlaubstag aktuell bewertet wird
+- [x] #499 Testdatenbank hält automatisch mit Schema-Änderungen Schritt
+- [x] #501 24h-Dienst-Badge im Kalender entfernen
+- [x] #502 Kalender: Zwei-Stufen-Klick & bessere Schichtdarstellung
+- [x] #503 Tastatur-Nutzung im Monatskalender: Tage per Pfeiltasten wählen
+- [x] #504 Desktop-Chips im Kalender: Klick auf Chip öffnet direkt die Schicht
+- [x] #505 Sicherstellen, dass der Zwei-Stufen-Klick auch im Embed-Modus dauerhaft funktioniert
+- [x] #506 Mit Pfeiltasten über die Monatsgrenze in den Vor-/Folgemonat springen
+- [x] #508 Sicherstellen, dass der Zwei-Stufen-Klick auch in der Desktop-Monatsansicht den Dialog öffnet
+- [x] #509 Schicht-Dialog: Kalender öffnet nicht mehr automatisch und erscheint mittig
+- [x] #512 Bestätigen, dass Assistenten die Urlaubstag-Bewertung im Dashboard wirklich sehen
+- [x] #514 Testlauf-Vorbereitung beschleunigen: Schema-Check ohne pnpm-Umweg
+- [x] #515 Auch die übrigen Vorlauf-Checks vor Testläufen von langsamen Skript-Starts befreien
+- [x] #517 Dienstplan: (+1) entfernen & gleiche Tabellen-Spaltenbreiten
+- [x] #519 Lohnauswertung: Geldwerte folgen dem SOLL/IST-Schalter (inkl. Lohnfortzahlung)
+- [x] #520 Monatsabschluss mit Nachberechnung im Folgemonat (nach Task #519)
+- [x] #521 Bestätigen, dass die Lohnauswertung auch im Ist-Modus korrekt rechnet (API-Regressionstest)
+- [x] #522 Zeiterfassungs-Schalter in den Einstellungen (Standard: aus)
+- [x] #523 Zeiterfassung im Menü und auf der Seite ausblenden, wenn deaktiviert
+- [x] #524 Lohnberechnung aus dem Dienstplan bei deaktivierter Zeiterfassung
+- [x] #525 Nachberechnung als eigener Abschnitt im Monats-PDF
+- [x] #526 Warnhinweis beim Bearbeiten abgeschlossener Monate auch in der Massenbearbeitung prüfen
+- [x] #527 Zeiterfassungs-Menüpunkt ausblenden, solange die Zeiterfassung deaktiviert ist
+- [x] #528 Sicherstellen, dass das Dashboard bei ausgeschalteter Zeiterfassung wirklich keine Zeiterfassungs-Kacheln zeigt
+- [x] #529 Sicherstellen, dass die Zeiterfassung auch im Handy-Menü zuverlässig verschwindet
+- [x] #532 Catch falsche Zuschlags-Geldbeträge bei Team-Sonderregeln, bevor sie in der Abrechnung landen
+- [x] #533 Sicherstellen, dass der Monatsabschluss exakt die angezeigten Geldwerte einfriert
+- [x] #535 Vorzeitiger Monatsabschluss + Nachberechnung in Summen
+- [x] #536 Sicherstellen, dass beim Massen-Anlegen im abgeschlossenen Monat nur EIN Warnhinweis erscheint
+- [x] #547 Fehlermeldungen geben keine teamfremden Termindaten preis (weitere Endpunkte prüfen)
+- [x] #554 Vergessene 'await'-Fehler auch im Server-Code und in Unit-Tests abfangen
+- [x] #556 Verständliche Fehlermeldung statt rohem HTML bei kurz nicht erreichbarem Server
+- [x] #557 Sicherstellen, dass auch technische Fehlertexte (err.message) nie rohes HTML zeigen
+- [x] #559 Nachberechnung: Urlaubs-/Krankheitsstunden ausweisen
+- [x] #560 Urlaubs-/Krank-Anteil der Nachberechnung auch im PDF-Stundennachweis ausweisen
+- [x] #561 Auswertungen: Gesamtübersicht-Matrix bei „Alle“
+- [x] #562 Auswertungen: Neue Abrechnungskategorien vorbereiten
+- [x] #567 Beweisen, dass der PDF-Stundennachweis den Urlaubs-/Krank-Anteil der Nachberechnung korrekt ausweist
+- [x] #568 Sicherstellen, dass Urlaubs-/Krank-Werte aus der Nachberechnung unverfälscht ins PDF gelangen
+- [x] #569 Sicherstellen, dass die Geld-Summen der Nachberechnungs-Seite korrekt aus den Monats-Balances berechnet werden
+- [x] #570 Auswertungen-Kopf im Dienstplan-Design mit Dropdown und Ansichts-Umschalter
+- [x] #572 Karten-Ansicht der Auswertungen einmal fest per Test absichern
+- [x] #574 Auswertung: Urlaubstage-Abzug auch bei mittmonatlich startenden Verträgen
+- [x] #575 Team-Dienst für Teamsitzungen mit Stunden-Gutschrift
+
+## 🟡 Geplante & Offene Tasks (To-Do)
+
+- [ ] #576 Ungültige Monats-Filter in Schicht- und Zeiterfassungslisten sauber abweisen
+- [ ] #573 Doppelten Sticky-Header-Code von Dienstplan & Auswertungen an einer Stelle pflegen
+- [ ] #566 Absichern, dass die Gesamtübersicht-Matrix bei „Alle“ korrekt rendert (Free vs. Premium, gemischte Sätze)
+- [ ] #565 Aus der Gesamtübersicht per Klick auf eine Assistenzkraft in ihre Einzelansicht springen
+- [ ] #564 Bereitschaften-Zahlen absichern, damit sie nicht unbemerkt kaputtgehen
+- [ ] #563 Neue Abrechnungskategorien erfassbar machen (Teamsitzung, Vertretungen & Co.)
+- [ ] #553 Verhindern, dass die E-Mail-Prüfung verrät, wer ein Konto hat
+- [ ] #552 Bestätigen, dass die Urlaubstag-Bewertung nach IST-Historie auf den 13-Wochen-Schnitt umspringt
+- [ ] #551 Beweisen, dass der Einzel-Assistent-Export ebenfalls sauber abbricht, wenn der gewählte Assistent keine FIX-Dienste hat
+- [ ] #550 Bestätigen, dass auch die Massenbearbeitung nur Team-Mitglieder zur Auswahl anbietet
+- [ ] #549 Nachweisen, dass der Embed-Modus auch beim Navigieren über das mobile App-Menü erhalten bleibt
+- [ ] #548 Absichern, dass der Notfall-Farbcode (ohne Team-Liste) stabil bleibt
+- [ ] #546 Verhindern, dass zwei gleichzeitige Test-Läufe die Test-Datenbank zerschießen
+- [ ] #545 Dev-Testkonten-Neuaufsetzen läuft wieder durch (Altlasten-Konten blockieren es)
+- [ ] #544 Beweisen, dass der Nachberechnungs-Abschnitt wirklich im Lohn-PDF landet
+- [ ] #543 Nachberechnung auch im PDF-Export aus der Assistenten-Ansicht ausweisen
+- [ ] #542 Beweisen, dass Krankheit auf leerem Tag genauso zuschlagsfrei bleibt wie Urlaub
+- [ ] #540 Im Urlaubs-Dialog auf einen hineinragenden Vortags-Nachtdienst hinweisen
+- [ ] #539 Beweisen, dass der Kalender-Link eines deaktivierten Kontos sofort tot ist
+- [ ] #534 Direkt aus dem Hinweis heraus die Zeiterfassung einschalten können
+- [ ] #531 Testläufe starten auch nach einem abgebrochenen Vorlauf zuverlässig
+- [ ] #530 Testläufe scheitern nicht mehr an liegengebliebenen Test-Konten
+- [ ] #516 Vorlauf-Checks per Fingerprint überspringen, wenn sich nichts geändert hat
+- [ ] #513 Doppelten Test-Aufbau für Assistenten-Logins an einer Stelle pflegen
+- [ ] #511 Tastatur-Monatswechsel auch im Agenda- und Tabellen-Modus ermöglichen
+- [ ] #510 Kalender öffnet auch bei Verträgen, Abwesenheiten & Zeiterfassung nicht mehr von selbst
+- [ ] #455 Auch den 'Letzter Monat'-Test von langsamen Skript-Aufrufen befreien
+- [ ] #453 Verhindern, dass vergessener Code-Neuaufbau nach API-Änderungen den Merge bricht
+- [ ] #445 Beweisen, dass niemand Schichten in fremde Teams hinein anlegen kann
+- [ ] #444 Beweisen, dass fremde Arbeitgeber Dienste (Schichtmodelle) anderer Konten weder ändern noch löschen können
+- [ ] #441 Cut test time further by running tests in parallel
+- [ ] #437 Fehlerliste nach Meldung oder Route durchsuchen können
+- [ ] #436 Fehlerliste per Schnellauswahl (Dieser Monat / Letzte 30 Tage) eingrenzen
+- [ ] #421 Passwort-vergessen-Seite mit der eingegebenen E-Mail vorbefüllen
+- [ ] #419 Dauerhaft absichern, dass ein Zweitlauf laufende Tests nie mehr abschiessen kann
+- [ ] #383 Protokoll-Suche bleibt schnell, wenn viele Plan-Änderungen auflaufen
+- [ ] #358 Echte Lexware-Buchungen anzeigen, sobald der deutsche Server bereit ist
+
+## 🏛️ Architektur & System-Kontext
+
+- **Stack**: pnpm-Monorepo; Frontend React + Vite + Tailwind (`artifacts/dienstplan`, Single Responsive Web App/PWA), Backend Express 5 (`artifacts/api-server`), PostgreSQL mit Drizzle ORM (`lib/db`), gehostet auf Replit.
+- **Contract-first**: `lib/api-spec/openapi.yaml` ist die Single Source of Truth; daraus werden React-Query-Hooks und Zod-Schemas generiert (Orval). Generierte Verzeichnisse werden nie manuell editiert.
+- **Rollen & Konto-Typen**: Rollen `admin` (Assistenznehmer), `assistant` (nur eigene Daten), `superadmin` (Betreiber, nur per Skript). Konto-Typ `users.account_type` = `privat` | `dienstleister` (typsicheres Postgres-Enum, bei Registrierung fixiert) — Basis für Conditional Rendering wie Team-Verwaltung und Logo-Uploads.
+- **Multi-Team & Datentrennung**: Alle Domänen-Tabellen tragen `team_id` (NOT NULL); jede Route ist team-gescoped (erlaubte Teams = Besitz + Mitgliedschaft), Fremdzugriff liefert 403/404.
+- **Free/Premium**: `@workspace/entitlements` als Single Source of Truth; Gates serverseitig, Frontend-Gates reine UX; Bestandsschutz (Free-Limits beschränken nur Neues).
+- **Schichten & Auswertung**: Planungsstatus VORLAEUFIG/ANGEBOTEN/FIX (nur FIX zählt), Zuschlags-Engine (Nacht/Sonntag/Feiertag, konto- und team-scoped Sätze), Monatsabschluss mit Nachberechnung, Teamsitzungs-Dienst mit Stunden-Gutschrift, PDF-Exporte.
+- **Master-Layout "Connect" / Plattform-Einbettung**: Die App wird per iframe in die AssistenzTreff-Plattform eingebettet (`?embed=1`, Cross-Site-Cookie `SameSite=None; Secure` in Produktion); eigenes Branding je Konto/Team.
+- **Spätere MySQL/MariaDB-Migration (All-Inkl)**: Aktuell bewusst PostgreSQL-Features im Einsatz (Enums, jsonb, partielle Unique-Indizes). Ein Umzug erfordert einen eigenen Migrations-Task (Adapter-/Schema-Umbau); bis dahin bleibt PostgreSQL maßgeblich.
+- **Tests**: Merge-Validierung bei jedem Task (Typecheck, Unit, API-e2e, UI-Smoke) gegen isolierte Test-Datenbank.
+  
