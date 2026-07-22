@@ -1,5 +1,5 @@
 import { isAdminRole } from "@/lib/roles";
-import { useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   useGetHoursBalance,
   useListUsers,
@@ -12,7 +12,20 @@ import type { MonthClosingDiff } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Download, Lock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Lock, Table2, LayoutGrid } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  buildPersonColorAssignment,
+  userInitialsClass,
+  nameInitials,
+} from "@/lib/shift-model-colors";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { Progress } from "@/components/ui/progress";
@@ -23,7 +36,7 @@ import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
 import { hasAccess } from "@/lib/entitlements";
-import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
+import { useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 import { exportStatementSectionsPdf, type StatementRecalculation } from "@/lib/pdf-export";
 import {
   computeRecalculationMonthTotals,
@@ -40,6 +53,321 @@ function monthIndex(date: Date): number {
 
 function formatEur(n: number): string {
   return n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+}
+
+// --- Kompakter Sticky-Header im Dienstplan-Stil ------------------------------
+// Gleiche Optik/Mechanik wie der Dienstplan-Header (Tier-Measurement:
+// labels → icons → stack), bewusst lokal dupliziert, damit der
+// Dienstplan-Header unverändert bleibt (Out-of-Scope der Angleichung).
+
+function usePersistentState<T extends string>(
+  key: string,
+  fallback: T,
+  allowed: readonly T[],
+): [T, (value: T) => void] {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const stored = localStorage.getItem(key);
+      if (stored != null && (allowed as readonly string[]).includes(stored)) return stored as T;
+    } catch {
+      // localStorage nicht verfügbar — Fallback nutzen
+    }
+    return fallback;
+  });
+  const set = (v: T) => {
+    setValue(v);
+    try {
+      localStorage.setItem(key, v);
+    } catch {
+      // Schreiben fehlgeschlagen — Auswahl gilt nur für diese Sitzung
+    }
+  };
+  return [value, set];
+}
+
+function ViewToggle({
+  value,
+  onChange,
+  options,
+  showLabels,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string; icon: LucideIcon }[];
+  showLabels: boolean;
+}) {
+  return (
+    <div className="inline-flex shrink-0 rounded-lg border border-border bg-muted/40 p-0.5">
+      {options.map((opt) => {
+        const Icon = opt.icon;
+        const active = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            data-testid={`view-toggle-${opt.value}`}
+            data-active={active ? "true" : "false"}
+            onClick={() => onChange(opt.value)}
+            title={opt.label}
+            aria-label={opt.label}
+            className={`flex items-center gap-1.5 rounded-md ${showLabels ? "px-3" : "px-1.5"} py-1.5 text-sm font-medium transition-colors ${
+              active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+            }`}
+          >
+            <Icon className="h-4 w-4" />
+            {showLabels && <span>{opt.label}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+type HeaderTier = "labels" | "icons" | "stack";
+
+const MOBILE_STACK_QUERY = "(max-width: 639px)";
+
+function useIsMobileViewport() {
+  const [isMobile, setIsMobile] = useState<boolean>(() =>
+    typeof window !== "undefined" ? window.matchMedia(MOBILE_STACK_QUERY).matches : false,
+  );
+  useLayoutEffect(() => {
+    const mql = window.matchMedia(MOBILE_STACK_QUERY);
+    const onChange = () => setIsMobile(mql.matches);
+    onChange();
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+  return isMobile;
+}
+
+function useHeaderTier(contentKey: string, remeasureKey = "") {
+  const measureRef = useRef<HTMLDivElement | null>(null);
+  const isMobile = useIsMobileViewport();
+  const [tier, setTier] = useState<HeaderTier>("labels");
+  const tierRef = useRef<HeaderTier>(tier);
+  tierRef.current = tier;
+  const failedAt = useRef<{ labels: number; icons: number }>({ labels: 0, icons: 0 });
+
+  useLayoutEffect(() => {
+    failedAt.current = { labels: 0, icons: 0 };
+    setTier("labels");
+  }, [contentKey]);
+
+  useLayoutEffect(() => {
+    if (isMobile) return;
+    const el = measureRef.current;
+    if (!el) return;
+    const check = () => {
+      const t = tierRef.current;
+      const width = el.clientWidth;
+      if (width === 0) return;
+      if (t !== "stack" && el.scrollWidth > width + 1) {
+        failedAt.current[t] = Math.max(failedAt.current[t], width);
+        setTier(t === "labels" ? "icons" : "stack");
+        return;
+      }
+      if (t === "stack" && width > failedAt.current.icons + 48) {
+        setTier("icons");
+      } else if (t === "icons" && failedAt.current.labels > 0 && width > failedAt.current.labels + 48) {
+        setTier("labels");
+      }
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [tier, contentKey, remeasureKey, isMobile]);
+
+  return { measureRef, tier: isMobile ? ("stack" as const) : tier };
+}
+
+type AuswertungView = "matrix" | "cards";
+
+function AuswertungenHeader({
+  isAdmin,
+  assistants,
+  selectedAssistant,
+  onSelectAssistant,
+  view,
+  onView,
+  exportDisabled,
+  exportTitle,
+  onExport,
+  monthLabel,
+  onPrevMonth,
+  onNextMonth,
+}: {
+  isAdmin: boolean;
+  assistants: Assistant[];
+  selectedAssistant: number | "all";
+  onSelectAssistant: (v: number | "all") => void;
+  view: AuswertungView;
+  onView: (v: AuswertungView) => void;
+  exportDisabled: boolean;
+  exportTitle?: string;
+  onExport: () => void;
+  monthLabel: string;
+  onPrevMonth: () => void;
+  onNextMonth: () => void;
+}) {
+  const { selectedTeamId } = useTeam();
+  const personColors = useMemo(
+    () => buildPersonColorAssignment(assistants.map((a) => a.id)),
+    [assistants],
+  );
+  const contentKey = [
+    isAdmin,
+    assistants.length,
+    String(selectedAssistant),
+    selectedTeamId ?? "none",
+    monthLabel,
+  ].join("|");
+  const { measureRef, tier } = useHeaderTier(contentKey, [view, exportDisabled].join("|"));
+  const showLabels = tier === "labels";
+  const stacked = tier === "stack";
+
+  const title = (
+    <h2
+      className={`text-lg md:text-xl font-serif font-bold text-foreground ${stacked ? "min-w-0 shrink truncate" : "shrink-0"}`}
+    >
+      Auswertungen
+    </h2>
+  );
+
+  const assistantFilter = isAdmin && assistants.length > 0 && (
+    <Select
+      value={String(selectedAssistant)}
+      onValueChange={(v) => onSelectAssistant(v === "all" ? "all" : Number(v))}
+    >
+      <SelectTrigger
+        className={
+          stacked
+            ? "h-9 w-full min-w-0 gap-1.5 truncate"
+            : "h-9 w-auto min-w-[7.5rem] max-w-[190px] shrink gap-2 truncate"
+        }
+        data-testid="assistant-select"
+        aria-label="Assistent filtern"
+      >
+        <SelectValue placeholder="Alle Assistenten" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="all" data-testid="assistant-option-all">
+          Alle Assistenten
+        </SelectItem>
+        {assistants.map((a) => (
+          <SelectItem key={a.id} value={String(a.id)} data-testid={`assistant-option-${a.id}`}>
+            <span className="inline-flex items-center gap-2">
+              <span
+                aria-hidden="true"
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none ${userInitialsClass(a.id, personColors)}`}
+              >
+                {nameInitials(a.name)}
+              </span>
+              {a.name}
+            </span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  const viewToggle = isAdmin && (
+    <ViewToggle
+      value={view}
+      onChange={(v) => onView(v as AuswertungView)}
+      showLabels={showLabels}
+      options={[
+        { value: "matrix", label: "Übersicht", icon: Table2 },
+        { value: "cards", label: "Karten", icon: LayoutGrid },
+      ]}
+    />
+  );
+
+  const exportButton = (
+    <Button
+      variant="outline"
+      size="sm"
+      className={showLabels ? "gap-1.5" : `h-9 shrink-0 px-0 ${stacked ? "w-8" : "w-9"}`}
+      onClick={onExport}
+      disabled={exportDisabled}
+      title={exportTitle ?? "Stundennachweis als PDF exportieren"}
+      aria-label="PDF Export"
+      data-testid="export-pdf-button"
+    >
+      <Download className="h-4 w-4" />
+      {showLabels && <span>PDF Export</span>}
+    </Button>
+  );
+
+  const monthSwitcher = (
+    <div className={`flex items-center gap-0.5 ${stacked ? "min-w-0" : "shrink-0"}`}>
+      <Button
+        variant="ghost"
+        size="icon"
+        className={stacked ? "h-8 w-6 shrink-0" : "h-8 w-8"}
+        onClick={onPrevMonth}
+        aria-label="Vorheriger Monat"
+        data-testid="month-prev"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </Button>
+      <span
+        className={
+          stacked
+            ? "min-w-0 truncate whitespace-nowrap text-center text-lg font-normal tracking-tight text-foreground"
+            : "whitespace-nowrap text-center text-sm font-medium md:text-base"
+        }
+        data-testid="month-label"
+      >
+        {monthLabel}
+      </span>
+      <Button
+        variant="ghost"
+        size="icon"
+        className={stacked ? "h-8 w-6 shrink-0" : "h-8 w-8"}
+        onClick={onNextMonth}
+        aria-label="Nächster Monat"
+        data-testid="month-next"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+
+  return (
+    <div className="sticky top-0 z-40 -mx-4 -mt-4 mb-1 border-b border-border/40 bg-white/95 px-4 py-3 backdrop-blur md:-mx-6 md:-mt-6 md:px-6">
+      {stacked ? (
+        <div ref={measureRef} className="flex w-full flex-col gap-2.5">
+          <div className="flex w-full flex-nowrap items-center gap-2">
+            {title}
+            <div className="shrink">
+              <TeamSwitcher />
+            </div>
+            {assistantFilter && (
+              <div className="ml-auto w-full min-w-0 max-w-[190px] shrink">{assistantFilter}</div>
+            )}
+          </div>
+          <div className="flex w-full flex-nowrap items-center gap-1">
+            {viewToggle}
+            {exportButton}
+            <div className="ml-auto flex min-w-0 items-center">{monthSwitcher}</div>
+          </div>
+        </div>
+      ) : (
+        <div ref={measureRef} className="flex w-full flex-nowrap items-center gap-2">
+          {title}
+          <TeamSwitcher />
+          {assistantFilter}
+          <div className="ml-auto flex flex-nowrap items-center gap-1.5">
+            {viewToggle}
+            {exportButton}
+            {monthSwitcher}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 type ExportRangeDialogProps = {
@@ -327,6 +655,14 @@ export default function Auswertungen() {
     !(isAdmin && usersLoading),
   );
 
+  // Ansichts-Umschalter (nur Admin): Gesamtübersichts-Matrix vs. Einzelkarten.
+  // Die Kartenansicht funktioniert auch bei Auswahl „Alle" (alle als Karten).
+  const [view, setView] = usePersistentState<AuswertungView>(
+    "auswertungen.view",
+    "matrix",
+    ["matrix", "cards"],
+  );
+
   // Nachberechnung des Vormonats (Soft-Close-Diff) — je Assistent im grünen
   // Lohnauswertungs-Kasten unter den Zuschlägen ausgewiesen und zum
   // Gesamtlohn addiert. Endpunkt ist admin- & advancedAnalytics-gegated.
@@ -374,52 +710,30 @@ export default function Auswertungen() {
   const monthLabel = format(currentDate, "MMMM yyyy", { locale: de });
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-          <div>
-            <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Auswertungen</h2>
-            <p className="text-muted-foreground mt-1 text-sm">Soll/Ist-Abgleich der Stunden</p>
-            {/* Transparenz: Entwürfe/Vorschläge bleiben im Dienstplan sichtbar,
-                zählen aber bewusst nicht in Auswertungen und Stundennachweis. */}
-            <p className="text-xs text-muted-foreground mt-1" data-testid="fix-only-hint">
-              Es zählen nur bestätigte Dienste — Entwürfe und Vorschläge fließen nicht ein.
-            </p>
-          </div>
-          <TeamSwitcher />
-        </div>
+    <div className="flex flex-col gap-6 animate-in fade-in duration-300">
+      {/* Kompakter Sticky-Header im Dienstplan-Stil: alles in EINER Zeile.
+          Premium-Gate payrollExport bleibt reine UX (autoritativ setzt der
+          Server via hours-balance durch — die einzige Datenquelle des PDFs). */}
+      <AuswertungenHeader
+        isAdmin={isAdmin}
+        assistants={assistants}
+        selectedAssistant={selectedAssistant}
+        onSelectAssistant={setSelectedAssistant}
+        view={view}
+        onView={setView}
+        exportDisabled={!canPayrollExport || isLoading || !visibleBalances || visibleBalances.length === 0}
+        exportTitle={canPayrollExport ? undefined : PLAN_FEATURE_MESSAGES.payrollExport}
+        onExport={() => setExportOpen(true)}
+        monthLabel={monthLabel}
+        onPrevMonth={prevMonth}
+        onNextMonth={nextMonth}
+      />
 
-        <div className="flex items-center gap-2 md:gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={prevMonth} data-testid="month-prev">
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span
-              className="font-medium text-sm md:text-lg min-w-[120px] md:min-w-40 text-center"
-              data-testid="month-label"
-            >
-              {monthLabel}
-            </span>
-            <Button variant="outline" size="icon" onClick={nextMonth} data-testid="month-next">
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-
-          {/* Premium-Gate payrollExport (UX; autoritativ setzt der Server via
-              hours-balance durch — die einzige Datenquelle des PDF-Nachweises). */}
-          <Button
-            variant="outline"
-            onClick={() => setExportOpen(true)}
-            disabled={!canPayrollExport || isLoading || !visibleBalances || visibleBalances.length === 0}
-            title={canPayrollExport ? undefined : PLAN_FEATURE_MESSAGES.payrollExport}
-            className="gap-2"
-            data-testid="export-pdf-button"
-          >
-            <Download className="h-4 w-4" />
-            Als PDF exportieren
-          </Button>
-        </div>
-      </div>
+      {/* Transparenz: Entwürfe/Vorschläge bleiben im Dienstplan sichtbar,
+          zählen aber bewusst nicht in Auswertungen und Stundennachweis. */}
+      <p className="text-xs text-muted-foreground" data-testid="fix-only-hint">
+        Es zählen nur bestätigte Dienste — Entwürfe und Vorschläge fließen nicht ein.
+      </p>
 
       <ExportRangeDialog
         open={exportOpen}
@@ -432,14 +746,6 @@ export default function Auswertungen() {
             : undefined
         }
       />
-
-      {isAdmin && assistants.length > 0 && (
-        <AssistantFilter
-          assistants={assistants}
-          selected={selectedAssistant}
-          onSelect={setSelectedAssistant}
-        />
-      )}
 
       {/* Monatsabschluss (Soft-Close) + Nachberechnung des Vormonats — nur
           Admin & Premium (die Endpunkte sind advancedAnalytics-gegated). */}
@@ -484,11 +790,11 @@ export default function Auswertungen() {
             <Skeleton className="h-48 w-full rounded-xl" />
           </>
         ) : visibleBalances && Array.isArray(visibleBalances) && visibleBalances.length > 0 ? (
-          isAdmin && selectedAssistant === "all" ? (
-            // Filter „Alle" (nur Admin): kompakte Vergleichs-Matrix statt der
-            // Einzelkarten-Liste — gleiche Datenquelle (hours-balance), inkl.
-            // der vorbereiteten zukünftigen Abrechnungskategorien
-            // (Teamsitzung, Bereitschaften, Vertretungen) mit 0-Defaults.
+          isAdmin && view === "matrix" ? (
+            // Ansicht „Übersicht" (nur Admin): kompakte Vergleichs-Matrix statt
+            // der Einzelkarten-Liste — gleiche Datenquelle (hours-balance),
+            // gefiltert nach der Dropdown-Auswahl; inkl. der vorbereiteten
+            // zukünftigen Abrechnungskategorien mit 0-Defaults.
             <GesamtAuswertungMatrix
               balances={visibleBalances}
               recalcByUser={recalcByUser}

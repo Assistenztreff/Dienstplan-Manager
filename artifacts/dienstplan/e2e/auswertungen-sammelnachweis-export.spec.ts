@@ -126,8 +126,14 @@ test("Auswertungen-Header exportiert den Sammel-Nachweis aller Assistenten mit e
   await expect(page.getByRole("heading", { name: "Auswertungen", exact: true })).toBeVisible();
 
   // Filter explizit auf "Alle" stellen, damit der Gesamt-Nachweis (namePart
-  // "Alle") und nicht ein Einzel-Nachweis erzeugt wird.
-  await page.getByTestId("assistant-chip-all").click();
+  // "Alle") und nicht ein Einzel-Nachweis erzeugt wird. Die Auswahl läuft
+  // jetzt über das Dropdown im kompakten Sticky-Header (kein Chip mehr).
+  await page.getByTestId("assistant-select").click();
+  await page.getByTestId("assistant-option-all").click();
+
+  // Sicherstellen, dass die Gesamtübersichts-Matrix aktiv ist (persistente
+  // Ansicht könnte aus einem früheren Lauf auf „Karten" stehen).
+  await page.getByTestId("view-toggle-matrix").click();
 
   // Seite startet beim aktuellen Monat; einen Monat zurück in den Zielmonat,
   // bis der angelegte Assistent in der Gesamtübersichts-Matrix erscheint
