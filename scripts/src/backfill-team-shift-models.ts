@@ -1,3 +1,4 @@
+import "./lib/normalize-db-url";
 import { DEFAULT_SHIFT_MODELS } from "@workspace/shift-defaults";
 import pg from "pg";
 

@@ -1,3 +1,4 @@
+import "./lib/normalize-db-url";
 import pg from "pg";
 import { TEST_ERROR_CONTEXTS } from "@workspace/test-fixtures";
 

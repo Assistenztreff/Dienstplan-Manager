@@ -1,3 +1,4 @@
+import "./lib/normalize-db-url";
 import pg from "pg";
 import { deleteAccountTrees } from "@workspace/test-fixtures";
 

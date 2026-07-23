@@ -1,3 +1,4 @@
+import "./lib/normalize-db-url";
 import pg from "pg";
 import { RETENTION_SEED_CONTEXT } from "@workspace/test-fixtures";
 

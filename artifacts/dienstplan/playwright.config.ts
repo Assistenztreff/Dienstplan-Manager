@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { normalizeDatabaseUrl } from "@workspace/db/database-url";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -43,7 +44,7 @@ const externalBaseUrl = process.env.E2E_BASE_URL;
 const useManagedStack = !externalBaseUrl;
 
 function deriveTestDbUrl(base: string): string {
-  const u = new URL(base);
+  const u = new URL(normalizeDatabaseUrl(base));
   const current = decodeURIComponent(u.pathname.replace(/^\//, "")) || "postgres";
   u.pathname = `/${current}_test`;
   return u.toString();
@@ -55,7 +56,9 @@ const baseURL = externalBaseUrl ?? `http://localhost:${WEB_PORT}`;
 // treffen wie der Browser, E2E_BASE_URL für die Worker-Prozesse setzen.
 process.env.E2E_BASE_URL = baseURL;
 
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = process.env.DATABASE_URL
+  ? normalizeDatabaseUrl(process.env.DATABASE_URL)
+  : undefined;
 if (useManagedStack && !databaseUrl) {
   throw new Error("DATABASE_URL muss für den isolierten E2E-Test-Stack gesetzt sein.");
 }

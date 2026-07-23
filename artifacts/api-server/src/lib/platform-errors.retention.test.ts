@@ -24,6 +24,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { sql } from "drizzle-orm";
+import { normalizeDatabaseUrl } from "@workspace/db/database-url";
 
 // Klein gestelltes Aufbewahrungslimit fuer diese Tests.
 const TEST_LIMIT = 5;
@@ -31,7 +32,7 @@ const TEST_LIMIT = 5;
 // Spiegel von scripts/src/lib/test-db-url.ts (scripts ist ein eigenes
 // Leaf-Paket, aus dem api-server nicht importieren darf).
 function deriveTestDbUrl(base: string): string {
-  const u = new URL(base);
+  const u = new URL(normalizeDatabaseUrl(base));
   const current = decodeURIComponent(u.pathname.replace(/^\//, "")) || "postgres";
   u.pathname = `/${current}_test`;
   return u.toString();

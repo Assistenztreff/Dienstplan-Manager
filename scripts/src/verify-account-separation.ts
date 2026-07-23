@@ -1,3 +1,4 @@
+import "./lib/normalize-db-url";
 import {
   CheckError,
   runAccountSeparationCheck,

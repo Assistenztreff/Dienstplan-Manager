@@ -1,3 +1,4 @@
+import "./lib/normalize-db-url";
 import { execSync, spawnSync } from "node:child_process";
 import pg from "pg";
 import { deriveTestDbUrl } from "./lib/test-db-url.js";

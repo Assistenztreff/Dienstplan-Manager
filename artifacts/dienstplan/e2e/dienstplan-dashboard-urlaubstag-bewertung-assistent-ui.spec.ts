@@ -126,8 +126,11 @@ test("Resturlaub-Karte zeigt die Urlaubstag-Bewertung mit Quelle Vertragsdaten",
 
   await page.goto("/");
 
-  // Die Resturlaub-Karte muss erscheinen (Vertrag vorhanden, Premium-Gate offen).
-  await expect(page.getByTestId("assistant-vacation-card")).toBeVisible();
+  // Die Resturlaub-Karte muss erscheinen (Vertrag vorhanden, Premium-Gate
+  // offen). Grosszuegiges Timeout: contracts + vacation-balance laufen
+  // sequenziell gegen die entfernte DB (je 1-2 s Latenz) — 5 s Default reicht
+  // dann nicht.
+  await expect(page.getByTestId("assistant-vacation-card")).toBeVisible({ timeout: 20_000 });
 
   // Transparenz-Zeile: 28 h / 5 Tage = 5,6 h, Quelle Vertragsdaten
   // (formatHours nutzt de-DE, also Komma).
@@ -154,7 +157,8 @@ test("Korrektur der Arbeitstage/Woche aendert die angezeigte Bewertung", async (
   await page.goto("/");
 
   const line = page.getByTestId("assistant-vacation-daily-hours");
-  await expect(line).toBeVisible();
+  // Siehe oben: sequenzielle Requests gegen die entfernte DB brauchen laenger.
+  await expect(line).toBeVisible({ timeout: 20_000 });
   await expect(
     line,
     "Anzeige muss dem korrigierten Vertrag folgen",

@@ -1,3 +1,4 @@
+import "./lib/normalize-db-url";
 import pg from "pg";
 import { DEFAULT_SHIFT_MODELS } from "@workspace/shift-defaults";
 import { deleteAccountTrees } from "@workspace/test-fixtures";

@@ -1,3 +1,4 @@
+import "./lib/normalize-db-url";
 import { randomBytes, scryptSync } from "node:crypto";
 import pg from "pg";
 

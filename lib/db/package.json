@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./database-url": "./src/database-url.ts",
     "./schema": "./src/schema/index.ts",
     "./verify-schema": "./src/verify-schema.ts"
   },
