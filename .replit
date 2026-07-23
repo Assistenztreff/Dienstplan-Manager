@@ -101,6 +101,7 @@ channel = "stable-25_05"
 [userenv.shared]
 ERROR_ALERT_EMAIL = "kontakt@assistenztreff.de"
 ERROR_ALERT_FROM = "Dienstplan-App <alerts@mail.assistenztreff.de>"
+DATABASE_SSL_NO_VERIFY = "1"
 
 [objectStorage]
 defaultBucketID = "replit-objstore-41a84f93-38b8-403d-b0e1-9371dea9138a"
