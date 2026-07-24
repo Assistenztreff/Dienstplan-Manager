@@ -15,7 +15,6 @@ import {
   LogOut,
   ArrowUp,
 } from "lucide-react";
-import logoUrl from "@assets/Arbeitgebermodell oder Assistenzdienst.png";
 import { useAuth } from "@/context/auth";
 import { useToast } from "@/hooks/use-toast";
 import { isAdminRole } from "@/lib/roles";
@@ -46,66 +45,53 @@ const ALL_NAV_ITEMS = [
 // "Plattform-Optik" selbst — der Header ist daher IMMER sichtbar.
 // ---------------------------------------------------------------------------
 
-const PLATFORM_LINKS = ["Leistungen", "Über uns", "Kontakt"];
-
-const PLATFORM_PILLS: { label: string; active: boolean }[] = [
-  { label: "Job Börse", active: false },
-  { label: "Map", active: false },
-  { label: "Connect", active: true }, // Dienstplan-App lebt unter "Connect"
-  { label: "Aktuelles", active: false },
-  { label: "Wissen", active: false },
-  { label: "Speaker:in", active: false },
-];
+const PLATFORM_LINKS = ["Über uns", "Handbuch", "Leistungen"];
 
 function PlatformHeaderPlaceholder() {
   return (
-    <header className="shrink-0 bg-brand-cyan text-brand-white" data-testid="platform-header">
-      {/* Obere Zeile: Logo + externe Plattform-Links (Platzhalter).
-          HINWEIS: Beim Server-Umzug wird hier spaeter Conditional Rendering
-          fuer Dienstleister-Logos ergaenzt (z. B. eigenes Logo des Mandanten
-          statt des AssistenzTreff-Logos). */}
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
-        <img src={logoUrl} alt="AssistenzTreff" className="h-9 w-auto object-contain" />
+    <header
+      className="flex h-20 shrink-0 items-center bg-brand-hellblau text-brand-dark"
+      data-testid="platform-header"
+    >
+      {/* Eine Zeile: Wortmarke links, Plattform-Links + Login + Registrieren
+          rechts. Alles Platzhalter fuer das spaetere Plattform-Markup —
+          Klickflaechen h-12 fuer gute Erreichbarkeit. */}
+      <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4">
+        <span className="flex h-12 items-center gap-2.5">
+          <span
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-dark text-lg font-bold text-brand-white"
+            aria-hidden="true"
+          >
+            A
+          </span>
+          <span className="text-xl font-bold tracking-tight">AssistenzPlaner</span>
+        </span>
 
-        {/* Desktop: externe Plattform-Text-Links (nur ab md sichtbar). */}
-        <nav className="hidden items-center gap-6 text-sm font-medium md:flex">
+        <nav aria-label="Plattform" className="flex items-center gap-1 sm:gap-2">
+          {/* Desktop: externe Plattform-Text-Links (nur ab md sichtbar). */}
           {PLATFORM_LINKS.map((label) => (
-            <span key={label} className="cursor-default opacity-90 hover:opacity-100">
-              {label}
-            </span>
-          ))}
-        </nav>
-
-        {/* Mobile: Hamburger-Button im Stil der Hauptplattform (nur < md).
-            Platzhalter — oeffnet auf der echten Plattform das mobile Menue. */}
-        <button
-          type="button"
-          className="flex items-center gap-2 rounded-md bg-white/15 px-3 py-1.5 text-sm font-medium text-brand-white md:hidden"
-          aria-label="Menü"
-        >
-          <span>Menü</span>
-          <Menu className="h-5 w-5" />
-        </button>
-      </div>
-
-      {/* Untere Zeile: Pillen-Navigation der Plattform (Platzhalter).
-          "Connect" ist aktiv markiert, da die Dienstplan-App dort eingebettet
-          ist. Auf Mobil ausgeblendet (dort uebernimmt der Hamburger-Button). */}
-      <div className="hidden border-t border-white/20 md:block">
-        <div className="mx-auto flex max-w-7xl items-center gap-2 overflow-x-auto whitespace-nowrap px-4 py-2">
-          {PLATFORM_PILLS.map((pill) => (
-            <span
-              key={pill.label}
-              className={`rounded-full px-4 py-1.5 text-sm font-medium ${
-                pill.active
-                  ? "bg-brand-dark text-brand-white"
-                  : "bg-white/15 text-brand-white"
-              }`}
+            <a
+              key={label}
+              href="#"
+              onClick={(e) => e.preventDefault()}
+              className="hidden h-12 items-center rounded-md px-4 text-sm font-semibold hover:bg-brand-dark/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-dark md:flex"
             >
-              {pill.label}
-            </span>
+              {label}
+            </a>
           ))}
-        </div>
+          <Link
+            href="/login"
+            className="hidden h-12 items-center rounded-md px-4 text-sm font-semibold hover:bg-brand-dark/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-dark sm:flex"
+          >
+            Login
+          </Link>
+          <Link
+            href="/registrierung"
+            className="ml-1 flex h-12 items-center rounded-md bg-brand-dark px-5 text-sm font-semibold text-brand-white shadow-sm hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-dark focus-visible:outline-offset-2 sm:ml-2"
+          >
+            Registrieren
+          </Link>
+        </nav>
       </div>
     </header>
   );
@@ -119,38 +105,40 @@ function PlatformHeaderPlaceholder() {
 // ausgeblendet.
 // ---------------------------------------------------------------------------
 
-const FOOTER_COLUMNS: { heading: string; links: string[] }[] = [
-  { heading: "AssistenzTreff", links: ["Über uns", "Leistungen", "Kontakt"] },
-  { heading: "Connect", links: ["Job Börse", "Map", "Aktuelles"] },
-  { heading: "Rechtliches", links: ["Impressum", "Datenschutz", "AGB"] },
-];
+const FOOTER_LINKS = ["Impressum", "Datenschutz", "Kontakt", "Barrierefreiheit"];
 
 function PlatformFooterPlaceholder() {
   const { currentUser } = useAuth();
   return (
-    <footer className="shrink-0 bg-brand-dark text-brand-white">
-      <div className="mx-auto grid max-w-7xl grid-cols-2 gap-6 px-4 py-6 sm:grid-cols-3">
-        {FOOTER_COLUMNS.map((col) => (
-          <div key={col.heading}>
-            <h3 className="mb-2 text-sm font-semibold text-brand-yellow">{col.heading}</h3>
-            <ul className="space-y-1 text-sm">
-              {col.links.map((link) => (
-                <li key={link} className="cursor-default text-brand-white/90 hover:text-brand-white">
-                  {link}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
+    <footer className="shrink-0 border-t border-slate-200 bg-slate-100 text-slate-600">
+      {/* ~120px hohe, schlanke Fusszeile: zentrierte Rechtliches-Links +
+          Copyright. Klickflaechen h-11 fuer gute Erreichbarkeit. */}
+      <div className="mx-auto flex min-h-[120px] w-full max-w-7xl flex-col items-center justify-center gap-3 px-4 py-4">
+        <nav
+          aria-label="Rechtliches"
+          className="flex flex-wrap items-center justify-center gap-2"
+        >
+          {FOOTER_LINKS.map((label) => (
+            <a
+              key={label}
+              href="#"
+              onClick={(e) => e.preventDefault()}
+              className="flex h-11 items-center rounded-md px-4 text-sm font-medium hover:bg-slate-200 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-dark"
+            >
+              {label}
+            </a>
+          ))}
+        </nav>
+        <p className="text-xs text-slate-500">© 2026 AssistenzTreff</p>
       </div>
 
       {/* Dezenter, versteckter Zugang zum Operator-Dashboard — nur fuer
           Superadmins sichtbar (nicht Teil der regulaeren Navigation). */}
       {currentUser?.role === "superadmin" && (
-        <div className="border-t border-white/10">
+        <div className="border-t border-slate-200">
           <div className="mx-auto max-w-7xl px-4 py-3">
             <Link href="/operator-dashboard">
-              <span className="inline-flex items-center gap-1.5 text-xs text-brand-white/50 hover:text-brand-white cursor-pointer">
+              <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-900 cursor-pointer">
                 <ShieldCheck className="h-3.5 w-3.5" />
                 Operator-Dashboard
               </span>
@@ -254,9 +242,9 @@ function AppSubNavigation() {
             <Link key={item.href} href={item.href}>
               <span
                 onClick={() => setIsAppMenuOpen(false)}
-                className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors cursor-pointer ${
+                className={`flex items-center gap-2 px-3 py-2.5 text-sm transition-colors cursor-pointer ${
                   location === item.href
-                    ? "bg-brand-yellow text-brand-dark font-medium"
+                    ? "bg-brand-yellow text-brand-dark font-semibold"
                     : "text-slate-600 hover:bg-slate-200 hover:text-slate-900"
                 }`}
               >
@@ -289,35 +277,42 @@ function AppSubNavigation() {
         </div>
       </div>
 
-      {/* Desktop: kompakter, einzeiliger Pillen-Balken (text-xs, wenig
-          vertikales Padding), damit die Navigation auf iPad/Desktop in einer
-          Zeile bleibt und maximal Hoehe fuer den Inhalt (Kalender) frei wird.
+      {/* Desktop: Menueleiste als TEXT-LINKS (keine Pillen) auf hellgrauem
+          Band — aktiver Punkt gelb hinterlegt (rechteckig, kein rounded).
+          text-sm statt text-xs fuer bessere Lesbarkeit; h-12 Klickflaechen.
           Nicht sticky: scrollt mit der Seite nach oben weg. */}
       <div className="hidden shrink-0 border-b border-slate-200 bg-slate-100 md:block" data-testid="app-subnav-desktop">
-        <div className="mx-auto max-w-7xl px-4 py-2">
-          <nav className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
-            {navItems.map((item) => (
-              <Link key={item.href} href={item.href}>
-                <span
-                  className={`flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors cursor-pointer ${
-                    location === item.href
-                      ? "bg-brand-yellow text-brand-dark font-medium"
-                      : "text-slate-600 hover:bg-slate-200 hover:text-slate-900"
-                  }`}
-                >
-                  <item.icon className="h-4 w-4 shrink-0" />
-                  <span>{item.label}</span>
-                </span>
-              </Link>
-            ))}
+        <div className="mx-auto max-w-7xl px-4">
+          <nav
+            aria-label="Dienstplan-App"
+            className="flex flex-wrap items-center gap-x-1 gap-y-0"
+          >
+            {navItems.map((item) => {
+              const isActive = location === item.href;
+              return (
+                <Link key={item.href} href={item.href}>
+                  <span
+                    aria-current={isActive ? "page" : undefined}
+                    className={`flex h-12 shrink-0 items-center gap-1.5 px-3 text-sm transition-colors cursor-pointer ${
+                      isActive
+                        ? "bg-brand-yellow text-brand-dark font-semibold"
+                        : "font-medium text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                    }`}
+                  >
+                    <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span>{item.label}</span>
+                  </span>
+                </Link>
+              );
+            })}
             <button
               type="button"
               onClick={() => void handleLogout()}
               disabled={loggingOut}
-              className="flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 disabled:opacity-60"
+              className="flex h-12 shrink-0 items-center gap-1.5 px-3 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 disabled:opacity-60"
               title={currentUser ? `Angemeldet als ${currentUser.name}` : "Abmelden"}
             >
-              <LogOut className="h-4 w-4 shrink-0" />
+              <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
               <span>{loggingOut ? "Wird abgemeldet..." : "Abmelden"}</span>
             </button>
 
