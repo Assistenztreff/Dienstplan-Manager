@@ -91,7 +91,7 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
 
 ## PWA & Standalone-Betrieb
 
-- PWA-Meta-Tags vorhanden; noch KEIN Manifest/Service Worker. Die App läuft eigenständig (First-Party) unter der Subdomain dienstplan.assistenztreff.de — KEINE iframe-Einbettung mehr; eigene Postgres-DB bleibt.
+- **Installierbare PWA**: `manifest.webmanifest` (standalone, de, Icons 192/512 + maskable, Theme #0a1f33) + `public/sw.js` (App-Shell-Caching: Navigation network-first mit Shell-Fallback, gehashte Assets cache-first, `/api` NIE gecacht). SW-Registrierung nur im Prod-Build (`import.meta.env.PROD` in `main.tsx`); Icon-Quelle `public/icons/icon.svg` (PNGs via ImageMagick generiert), `apple-touch-icon` = `icons/icon-180.png`. Die App läuft eigenständig (First-Party) unter der Subdomain dienstplan.assistenztreff.de — KEINE iframe-Einbettung mehr; eigene Postgres-DB bleibt.
 - **Session-Cookie**: immer `SameSite=Lax`; in Produktion zusätzlich `Secure` (HTTPS via Proxy, `trust proxy` gesetzt). Kein Embed-Modus, kein `SESSION_COOKIE_CROSS_SITE` mehr; Plattform-Header-/Footer-Platzhalter werden IMMER gerendert (die App liefert die „Plattform-Optik" selbst).
 
 ## Tests
