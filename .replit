@@ -54,12 +54,12 @@ args = "pnpm --filter @workspace/dienstplan run test && pnpm --filter @workspace
 name = "e2e"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm --filter @workspace/api-server run test:db && pnpm --filter @workspace/dienstplan run test:e2e:api && pnpm --filter @workspace/dienstplan run test:e2e:smoke"
-
 [workflows.workflow.metadata]
 isValidation = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/api-server run test:db && pnpm --filter @workspace/scripts run test:db && pnpm --filter @workspace/dienstplan run test:e2e:api && pnpm --filter @workspace/dienstplan run test:e2e:smoke"
 
 [agent]
 stack = "PNPM_WORKSPACE"
