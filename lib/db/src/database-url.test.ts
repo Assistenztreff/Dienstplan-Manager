@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { normalizeDatabaseUrl } from "./database-url";
+import { normalizeDatabaseUrl, resolveDatabaseUrl } from "./database-url";
 
 describe("normalizeDatabaseUrl", () => {
   afterEach(() => {
@@ -61,5 +61,70 @@ describe("normalizeDatabaseUrl", () => {
     expect(normalizeDatabaseUrl("postgresql://nurhost/db")).toBe(
       "postgresql://nurhost/db",
     );
+  });
+});
+
+describe("resolveDatabaseUrl", () => {
+  const ORIGINAL = {
+    APP_DATABASE_URL: process.env.APP_DATABASE_URL,
+    DATABASE_URL: process.env.DATABASE_URL,
+    SCALEWAY_DB_PASSWORD: process.env.SCALEWAY_DB_PASSWORD,
+  } as const;
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(ORIGINAL)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    delete process.env.DATABASE_SSL_NO_VERIFY;
+  });
+
+  it("liefert undefined, wenn keine der Variablen gesetzt ist", () => {
+    delete process.env.APP_DATABASE_URL;
+    delete process.env.DATABASE_URL;
+    delete process.env.SCALEWAY_DB_PASSWORD;
+    expect(resolveDatabaseUrl()).toBeUndefined();
+  });
+
+  it("APP_DATABASE_URL hat Vorrang vor DATABASE_URL", () => {
+    process.env.APP_DATABASE_URL = "postgresql://u:p@app-host:5432/app-db";
+    process.env.DATABASE_URL = "postgresql://u:p@replit-host:5432/replit-db";
+    delete process.env.SCALEWAY_DB_PASSWORD;
+    expect(resolveDatabaseUrl()).toBe("postgresql://u:p@app-host:5432/app-db");
+  });
+
+  it("faellt ohne APP_DATABASE_URL auf DATABASE_URL zurueck", () => {
+    delete process.env.APP_DATABASE_URL;
+    process.env.DATABASE_URL = "postgresql://u:p@replit-host:5432/replit-db";
+    delete process.env.SCALEWAY_DB_PASSWORD;
+    expect(resolveDatabaseUrl()).toBe(
+      "postgresql://u:p@replit-host:5432/replit-db",
+    );
+  });
+
+  it("SCALEWAY_DB_PASSWORD ueberschreibt das Passwort in APP_DATABASE_URL", () => {
+    process.env.APP_DATABASE_URL = "postgresql://u:altespw@app-host:5432/app-db";
+    process.env.SCALEWAY_DB_PASSWORD = "neu{es}pw#1";
+    const parsed = new URL(resolveDatabaseUrl()!);
+    expect(decodeURIComponent(parsed.password)).toBe("neu{es}pw#1");
+    expect(parsed.hostname).toBe("app-host");
+    expect(parsed.pathname).toBe("/app-db");
+  });
+
+  it("SCALEWAY_DB_PASSWORD wirkt NICHT auf die verwaltete DATABASE_URL", () => {
+    delete process.env.APP_DATABASE_URL;
+    process.env.DATABASE_URL = "postgresql://u:managedpw@replit-host:5432/replit-db";
+    process.env.SCALEWAY_DB_PASSWORD = "rotiert";
+    const parsed = new URL(resolveDatabaseUrl()!);
+    expect(decodeURIComponent(parsed.password)).toBe("managedpw");
+  });
+
+  it("normalisiert unkodierte Passwoerter auch im APP_DATABASE_URL-Pfad", () => {
+    process.env.APP_DATABASE_URL =
+      "postgresql://admin:u[UZ0{mM[CJ?QBl#n;Rj@app-host:11527/app-db?sslmode=require";
+    delete process.env.SCALEWAY_DB_PASSWORD;
+    const result = resolveDatabaseUrl()!;
+    expect(() => new URL(result)).not.toThrow();
+    expect(new URL(result).hostname).toBe("app-host");
   });
 });
