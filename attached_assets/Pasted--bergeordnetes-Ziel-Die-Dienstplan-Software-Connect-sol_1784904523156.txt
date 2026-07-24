@@ -1,0 +1,28 @@
+Übergeordnetes Ziel
+Die Dienstplan-Software (Connect) soll von der iframe-Einbettung auf eine Standalone-Anwendung (lauffähig unter der Subdomain dienstplan.assistenztreff.de) umgestellt werden. Die App muss dabei das Corporate Design von AssistenzTreff übernehmen, jedoch als eigenständige, barrierefreie und flexible UI fungieren. Bevor Code geschrieben wird, erstellen wir ein visuelles Mockup im Replit Canvas.
+🎨 Teil 1: Design-Grundlagen & Corporate Identity
+Farben (Corporate Colors):
+Hintergrund Header (Oben): Ein sattes Hellblau/Cyan (Referenz image_7.png).
+Akzentfarben (z.B. Buttons): Ein tiefes Dunkelblau (Referenz image_7.png -> "Registrieren"-Button) sowie ein leuchtendes Gelb (für Hervorhebungen/Aktiv-Status, Referenz image_6.png).
+App-Inhaltsbereich (Unten): Ein sehr helles Grau für Menüleisten/Pills (Referenz image_6.png) und Weiß für den Hauptcontent.
+Barrierefreiheit & Proportionen:
+Alle Klickflächen (Buttons, Navigationlinks, Logo-Upload) müssen ausreichend groß dimensioniert sein (h-12 bis h-16 für Header-Elemente).
+Schriftgrößen müssen lesbar und kontrastreich sein (text-sm für Navigation, text-base oder größer für Buttons).
+✏️ Teil 2: Mockup-Phase im Replit Canvas
+Bevor die React/Tailwind-Komponenten erstellt werden, erstelle ein Mockup im Replit Canvas-Tool, um das Layout und insbesondere die Barrierefreiheit zu testen.
+1. Mockup-Layout der Standalone-App:
+Simuliere eine Seite, die wie ein Master-Layout wirkt, aber direkt in der App gerendert wird:
+Bereich 1: Plattform-Header (Fixiert Oben, Höhe ca. 80px):
+Soll dem Header von image_7.png nachempfunden sein (Hintergrund hellblau).
+Links: Platziere das dynamische Logo ("AssistenzPlaner" Schriftzug, analog zu image_8.png, skaliert proportional zu den Links).
+Rechts: Platziere die Hauptlinks: "Über uns", "Handbuch", "Leistungen", sowie "Login" und "Registrieren" (dunkelblauer Button).
+Proportions-Test: Stelle sicher, dass das Logo und die Navigationslinks proportional perfekt zueinander passen (Mitte der Header-Zeile).
+Bereich 2: App-Inhaltsbereich (Dazwischen, scrollbar):
+Menüleiste (Hellgrau): Platziere hier die Menüpunkte aus deinem Replit-Dummy (image_6.png): "Dashboard", "Dienstplan", "Assistenten", "Abwesenheiten", "Auswertungen", "Einstellungen".
+⚠️ Test der Schriftgrößen & Barrierefreiheit (Besondere Anforderung):
+Stelle diese Menüpunkte größer dar als im ursprünglichen Dummy, um Barrierefreiheit zu gewährleisten.
+⚠️ Darstellungs-Stil: Diese Menüpunkte sollen in der Vorschau NICHT als Pill-Buttons (abgerundete Schaltflächen) angezeigt werden, sondern als klare Text-Links/Text-Bereiche mit adequate Abständen.
+Aktiv-Status: Simuliere, dass ein Menüpunkt (z.B. "Dashboard") aktiv ist, indem er den gelben Hintergrund (image_6.png) erhält.
+Content-Platzhalter: Platziere einen großen leeren weißen Bereich (max-w-7xl, zentriert), in dem später die eigentliche Schichtplanung etc. stattfindet.
+Bereich 3: Plattform-Footer (Dazwischen, am Ende der Seite, Höhe ca. 120px):
+Simuliere einen schlichten Footer (z.B. grau), der Links für Impressum, Datenschutz, Kontakt und Barrierefreiheit enthält.
