@@ -2,6 +2,17 @@ import { spawnSync } from "node:child_process";
 import pg from "pg";
 import { normalizeDatabaseUrl } from "@workspace/db/database-url";
 import { findMissingSchemaObjects } from "@workspace/db/verify-schema";
+import {
+  parseArgs,
+  hostAndDb,
+  dbName,
+  urlsCollide,
+  confirmNameMatches,
+  pushOutputIndicatesFailure,
+  TTY_PROMPT_PATTERN,
+  SESSION_DROP_PATTERN,
+  NO_CHANGES_PATTERN,
+} from "./lib/migrate-prod-guards.js";
 
 /**
  * Sicherer Produktions-DB-Abgleich beim Veröffentlichen (Republish).
@@ -92,46 +103,6 @@ const PRE_PUSH_SQL: string[] = [
   `DROP SEQUENCE IF EXISTS team_branding_settings_id_seq;`,
 ];
 
-interface CliArgs {
-  targetUrlRaw: string | undefined;
-  apply: boolean;
-  confirmName: string | undefined;
-}
-
-function parseArgs(argv: string[]): CliArgs {
-  let apply = false;
-  let confirmName: string | undefined;
-  let targetUrlRaw = process.env.PROD_DATABASE_URL;
-
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    if (arg === "--yes") {
-      apply = true;
-      const next = argv[i + 1];
-      if (next && !next.startsWith("--")) {
-        confirmName = next;
-        i++;
-      }
-    } else if (arg.startsWith("--yes=")) {
-      apply = true;
-      confirmName = arg.slice("--yes=".length);
-    } else if (!arg.startsWith("--")) {
-      targetUrlRaw = arg;
-    } else {
-      throw new Error(`Unbekannte Option: ${arg}`);
-    }
-  }
-  return { targetUrlRaw, apply, confirmName };
-}
-
-function hostAndDb(url: string): string {
-  const parsed = new URL(url);
-  return `${parsed.hostname}:${parsed.port || "5432"}${parsed.pathname}`;
-}
-
-function dbName(url: string): string {
-  return new URL(url).pathname.replace(/^\//, "").split("?")[0];
-}
 
 /** drizzle-kit push gegen die Ziel-URL ausführen; Ausgabe zurückgeben. */
 function runDrizzlePush(
@@ -158,10 +129,6 @@ function runDrizzlePush(
   };
 }
 
-const TTY_PROMPT_PATTERN = /Interactive prompts require a TTY/i;
-const ERROR_LINE_PATTERN = /^\s*Error:/m;
-const SESSION_DROP_PATTERN = /DROP\s+TABLE\s+(IF\s+EXISTS\s+)?"?(public"?\."?)?session"?/i;
-const NO_CHANGES_PATTERN = /No changes detected|Everything's fine|schema is up to date/i;
 
 async function main(): Promise<void> {
   const { targetUrlRaw, apply, confirmName } = parseArgs(process.argv.slice(2));
@@ -207,7 +174,7 @@ async function main(): Promise<void> {
     } catch {
       envHostDb = undefined;
     }
-    if (envUrl === targetUrl || (envHostDb && envHostDb === targetHostDb)) {
+    if (urlsCollide(targetUrl, envUrl)) {
       console.error(
         `ABBRUCH: Die Ziel-URL entspricht der Staging-/Dev-URL aus ${envName} (${envHostDb ?? "?"}). ` +
           "migrate-prod läuft ausschließlich gegen eine EIGENE Produktions-DB.",
@@ -226,7 +193,7 @@ async function main(): Promise<void> {
   await probe.end();
   console.log(`Ziel-Datenbank: ${targetHostDb} (current_database = ${info.rows[0].db})`);
 
-  if (apply && confirmName !== targetDbName) {
+  if (apply && !confirmNameMatches(confirmName, targetDbName)) {
     console.error(
       `ABBRUCH: Bestätigung fehlt oder falsch. Zum Anwenden exakt den Namen der Ziel-DB angeben: --yes ${targetDbName}`,
     );
@@ -333,8 +300,7 @@ async function main(): Promise<void> {
   if (
     push.status !== 0 ||
     push.error != null ||
-    TTY_PROMPT_PATTERN.test(push.output) ||
-    ERROR_LINE_PATTERN.test(push.output)
+    pushOutputIndicatesFailure(push.output)
   ) {
     console.error(
       [

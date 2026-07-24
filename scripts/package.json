@@ -28,7 +28,8 @@
     "verify-test-db-cleanup": "tsx ./src/verify-test-db-cleanup.ts",
     "verify-test-platform-errors-cleanup": "tsx ./src/verify-test-platform-errors-cleanup.ts",
     "verify-account-separation": "tsx ./src/verify-account-separation.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@workspace/db": "workspace:*",
@@ -40,6 +41,7 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "@types/pg": "^8.20.0",
-    "tsx": "catalog:"
+    "tsx": "catalog:",
+    "vitest": "^4.1.8"
   }
 }
