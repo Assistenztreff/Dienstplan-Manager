@@ -25,4 +25,12 @@ export interface ShiftInput {
      * @nullable
      */
   einsatzTeamId?: number | null;
+  /** Vertretung: Arbeitsdienst als kurzfristige Vertretung markieren (nur für Arbeitsdienste; bei Abwesenheiten/Team-Einträgen serverseitig zurückgesetzt). */
+  isVertretung?: boolean;
+  /**
+     * Unbezahlte Pausenminuten (Info-Kennzahl; reduziert NICHT die gewerteten Stunden).
+     * @minimum 0
+     * @maximum 1440
+     */
+  pauseMinutes?: number;
 }

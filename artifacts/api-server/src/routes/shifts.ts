@@ -53,6 +53,8 @@ const SHIFT_SELECT = {
   planningStatus: shiftsTable.planningStatus,
   shiftModelId: shiftsTable.shiftModelId,
   notes: shiftsTable.notes,
+  isVertretung: shiftsTable.isVertretung,
+  pauseMinutes: shiftsTable.pauseMinutes,
   valuedHours: shiftsTable.valuedHours,
   nightHours: shiftsTable.nightHours,
   sundayHours: shiftsTable.sundayHours,
@@ -466,7 +468,16 @@ async function findOverlappingShifts(
     eq(shiftsTable.userId, userId),
     // Abwesenheiten UND Team-Einträge (Teamsitzungen) lösen keine
     // Überschneidungswarnung mit regulären Schichten aus.
-    notInArray(shiftsTable.type, ["vacation", "sick", "team"]),
+    notInArray(shiftsTable.type, [
+      "vacation",
+      "sick",
+      "team",
+      "kind_krank",
+      "freistellung",
+      "abgesagt_ag",
+      "abgesagt_an",
+      "urlaubsabgeltung",
+    ]),
     lt(shiftsTable.startTime, endTime),
     gt(shiftsTable.endTime, startTime),
   ];
@@ -532,7 +543,7 @@ router.get("/shifts", requireAuth, async (req, res): Promise<void> => {
     )!,
   ];
   if (effectiveUserId) conditions.push(eq(shiftsTable.userId, effectiveUserId));
-  if (query.data.type) conditions.push(eq(shiftsTable.type, query.data.type as "active" | "standby" | "night" | "full_day" | "vacation" | "sick" | "work" | "freizeitausgleich" | "team"));
+  if (query.data.type) conditions.push(eq(shiftsTable.type, query.data.type as "active" | "standby" | "night" | "full_day" | "vacation" | "sick" | "work" | "freizeitausgleich" | "team" | "kind_krank" | "freistellung" | "abgesagt_ag" | "abgesagt_an" | "urlaubsabgeltung"));
   if (query.data.month && query.data.year) {
     conditions.push(sql`EXTRACT(MONTH FROM ${shiftsTable.startTime}) = ${query.data.month}`);
     conditions.push(sql`EXTRACT(YEAR FROM ${shiftsTable.startTime}) = ${query.data.year}`);
@@ -619,7 +630,17 @@ async function findPlannedWorkShiftsForDay(
       and(
         eq(shiftsTable.userId, userId),
         eq(shiftsTable.teamId, teamId),
-        notInArray(shiftsTable.type, ["vacation", "sick", "freizeitausgleich", "team"]),
+        notInArray(shiftsTable.type, [
+          "vacation",
+          "sick",
+          "freizeitausgleich",
+          "team",
+          "kind_krank",
+          "freistellung",
+          "abgesagt_ag",
+          "abgesagt_an",
+          "urlaubsabgeltung",
+        ]),
         sql`DATE(${shiftsTable.startTime}) = ${dateStr}`
       )
     );
@@ -804,8 +825,10 @@ router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
     ...body.data,
     teamId: write.teamId,
     // Abwesenheiten UND Team-Einträge sind produktseitig immer verbindlich.
+    // Vertretungs-Markierung und Pausenminuten sind reine Arbeitsdienst-Infos
+    // und werden dort serverseitig zurückgesetzt.
     ...(isAbsenceType(body.data.type) || body.data.type === "team"
-      ? { planningStatus: "FIX" as const }
+      ? { planningStatus: "FIX" as const, isVertretung: false, pauseMinutes: 0 }
       : {}),
   };
 
@@ -1102,8 +1125,15 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
     // Wird die Schicht zur Abwesenheit oder zum Team-Eintrag, verliert sie
     // einen etwaigen Aushilfe-Einsatz (Spiegel-Eintrag wäre irreführend);
     // beide sind immer verbindlich (FIX).
+    // Vertretungs-Markierung und Pausenminuten gehören nur zu Arbeitsdiensten
+    // und werden bei Abwesenheit/Team-Eintrag serverseitig zurückgesetzt.
     ...(isAbsenceType(effectiveType) || effectiveType === "team"
-      ? { planningStatus: "FIX" as const, einsatzTeamId: null }
+      ? {
+          planningStatus: "FIX" as const,
+          einsatzTeamId: null,
+          isVertretung: false,
+          pauseMinutes: 0,
+        }
       : {}),
   };
 

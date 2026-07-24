@@ -166,6 +166,11 @@ export function BulkEditDialog({
         s.type !== "sick" &&
         s.type !== "freizeitausgleich" &&
         s.type !== "team" &&
+        s.type !== "kind_krank" &&
+        s.type !== "freistellung" &&
+        s.type !== "abgesagt_ag" &&
+        s.type !== "abgesagt_an" &&
+        s.type !== "urlaubsabgeltung" &&
         dateSet.has(localDayKey(s.startTime)) &&
         (filterUserId === "all" || s.userId === filterUserId),
     );

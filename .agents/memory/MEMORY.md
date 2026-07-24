@@ -82,3 +82,4 @@
 - [E2E floating-promise lint](e2e-floating-promise-lint.md) — lint:e2e (no-floating-promises + missing-playwright-await) is chained into typecheck; discarded async calls must be awaited or `void`-marked.
 - [Shared staging _test DB race](shared-staging-test-db-race.md) — parallel task environments share the staging `_test` DB; separation pre-check can fail from foreign runs, verify one-offs with E2E_SKIP_SEPARATION_CHECK=1.
 - [migrate-prod & drizzle dry-run](migrate-prod-dry-run.md) — prod schema sync via migrate-prod; `push --strict --verbose` without TTY = safe dry-run (prints statements, applies nothing, exits 0 — check prompt text).
+- [Unpaid info-only shift types](unpaid-info-shift-types.md) — info categories keep valuedHours (no surcharges); Soll/Lohn exclusion lives only in the hours-balance INFO_ONLY filter.

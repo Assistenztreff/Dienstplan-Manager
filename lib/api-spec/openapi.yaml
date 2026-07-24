@@ -268,7 +268,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team]
+            enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team, kind_krank, freistellung, abgesagt_ag, abgesagt_an, urlaubsabgeltung]
         - name: teamId
           in: query
           description: Optionaler Team-Kontext für die Datentrennung.
@@ -2193,7 +2193,7 @@ components:
           format: date-time
         type:
           type: string
-          enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team]
+          enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team, kind_krank, freistellung, abgesagt_ag, abgesagt_an, urlaubsabgeltung]
         planningStatus:
           type: string
           description: >-
@@ -2219,6 +2219,16 @@ components:
           description: >-
             Name des Stammteams der Schicht (nur gesetzt, wenn einsatzTeamId
             gesetzt ist) — für den Badge "Aushilfe aus …" im Ziel-Team-Kalender.
+        isVertretung:
+          type: boolean
+          description: >-
+            Vertretung: Arbeitsdienst als kurzfristige Vertretung markiert
+            (Info-Kennzahl der Auswertung; Stunden zählen normal).
+        pauseMinutes:
+          type: integer
+          description: >-
+            Unbezahlte Pausenminuten (reine Info-Kennzahl; reduziert NICHT
+            die gewerteten Stunden).
         valuedHours:
           type: number
         nightHours:
@@ -2250,7 +2260,7 @@ components:
           format: date-time
         type:
           type: string
-          enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team]
+          enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team, kind_krank, freistellung, abgesagt_ag, abgesagt_an, urlaubsabgeltung]
         planningStatus:
           type: string
           description: >-
@@ -2268,6 +2278,19 @@ components:
             Einsatz erfolgt. Muss ein erlaubtes Team des Aufrufers sein und
             darf nicht das Team der Schicht selbst sein; bei Abwesenheiten
             nicht erlaubt.
+        isVertretung:
+          type: boolean
+          description: >-
+            Vertretung: Arbeitsdienst als kurzfristige Vertretung markieren
+            (nur für Arbeitsdienste; bei Abwesenheiten/Team-Einträgen
+            serverseitig zurückgesetzt).
+        pauseMinutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+          description: >-
+            Unbezahlte Pausenminuten (Info-Kennzahl; reduziert NICHT die
+            gewerteten Stunden).
 
     ShiftUpdate:
       type: object
@@ -2287,7 +2310,7 @@ components:
           format: date-time
         type:
           type: string
-          enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team]
+          enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team, kind_krank, freistellung, abgesagt_ag, abgesagt_an, urlaubsabgeltung]
         planningStatus:
           type: string
           description: >-
@@ -2303,6 +2326,18 @@ components:
           description: >-
             Aushilfe-Einsatz setzen oder mit null entfernen. Gleiche Regeln
             wie beim Anlegen (eigenes anderes Team, keine Abwesenheiten).
+        isVertretung:
+          type: boolean
+          description: >-
+            Vertretung setzen/entfernen (nur für Arbeitsdienste; bei
+            Abwesenheiten/Team-Einträgen serverseitig zurückgesetzt).
+        pauseMinutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+          description: >-
+            Unbezahlte Pausenminuten (Info-Kennzahl; reduziert NICHT die
+            gewerteten Stunden).
 
     ShiftModel:
       type: object
@@ -2918,20 +2953,21 @@ components:
         totalPay:
           type: ["number", "null"]
           description: Gesamtvergütung = basePay + Zuschläge. Nur Premium.
-        # --- Zukünftige Abrechnungskategorien (contract-first vorbereitet) ---
+        # --- Weitere Abrechnungskategorien ---
         # Alle Felder OPTIONAL, damit bestehende Clients und der eingefrorene
-        # Monatsabschluss-Snapshot (month_closings) kompatibel bleiben. Solange
-        # keine Erfassungs-Features existieren, liefert der Server 0 — die
-        # Werte fließen NICHT in totalPay ein.
+        # Monatsabschluss-Snapshot (month_closings) kompatibel bleiben.
+        # Diese Kategorien sind INFORMATIV und fließen NICHT in totalPay ein;
+        # bezahlte Kategorien (Freistellung, abgesagte AG-Stunden, Teamsitzung,
+        # Lohnfortzahlung) sind bereits in basePay enthalten.
         pausenzeitStunden:
           type: number
-          description: Erfasste Pausenzeiten in Stunden (noch keine Erfassung — immer 0).
+          description: Erfasste unbezahlte Pausenzeiten in Stunden (Summe pauseMinutes der FIX-Arbeitsdienste; reine Info, reduziert nicht die gewerteten Stunden).
         teamsitzungStunden:
           type: number
-          description: Teamsitzungs-Stunden (noch keine Erfassung — immer 0).
+          description: Teamsitzungs-Stunden (FIX-Team-Tage × konfigurierte Stunden).
         teamsitzungEuro:
           type: number
-          description: Vergütung der Teamsitzungen in Euro (noch keine Erfassung — immer 0).
+          description: Vergütung der Teamsitzungen in Euro (Stundenlohn × Teamsitzungs-Stunden).
         bereitschaftenAnzahl:
           type: integer
           description: Anzahl der Bereitschafts-Dienste im Monat (FIX-Schichten mit Schichtmodell „Bereitschaft").
@@ -2940,28 +2976,28 @@ components:
           description: Stunden der Bereitschafts-Dienste im Monat (FIX-Schichten mit Schichtmodell „Bereitschaft").
         vertretungenAnzahl:
           type: integer
-          description: Anzahl der Vertretungen (noch keine Erfassung — immer 0).
+          description: Anzahl der als Vertretung markierten FIX-Arbeitsdienste im Monat.
         vertretungsStunden:
           type: number
-          description: Vertretungs-Stunden (noch keine Erfassung — immer 0).
+          description: Roh-Stunden der als Vertretung markierten FIX-Arbeitsdienste (Info; zählen zusätzlich normal in Soll/Erfüllt).
         urlaubsabgeltungEuro:
           type: number
-          description: Urlaubsabgeltung in Euro (noch keine Erfassung — immer 0).
+          description: Urlaubsabgeltung in Euro (Stundenlohn × gewertete Stunden der FIX-Einträge vom Typ urlaubsabgeltung; fließt NICHT in totalPay ein, reine Auszahlungs-Info).
         kindKrankTage:
           type: number
-          description: Kind-krank-Tage (noch keine Erfassung — immer 0).
+          description: Anzahl der Kind-krank-Tage (FIX-Einträge vom Typ kind_krank; unbezahlt, zählen nicht in Soll/Erfüllt/Lohn).
         freistellungTage:
           type: number
-          description: Freistellungs-Tage (noch keine Erfassung — immer 0).
+          description: Anzahl der bezahlten Freistellungs-Tage (FIX-Einträge vom Typ freistellung; Lohnfortzahlung wie Krankheit).
         freistellungStunden:
           type: number
-          description: Freistellungs-Stunden (noch keine Erfassung — immer 0).
+          description: Gewertete Stunden der bezahlten Freistellung (zählen in Erfüllt und Grundlohn).
         abgesagtArbeitgeberStunden:
           type: number
-          description: Vom Arbeitgeber abgesagte Stunden (noch keine Erfassung — immer 0).
+          description: Vom Arbeitgeber abgesagte Stunden (Typ abgesagt_ag; bezahlt nach Lohnausfallprinzip — zählen in Erfüllt und Grundlohn).
         abgesagtArbeitnehmerStunden:
           type: number
-          description: Vom Arbeitnehmer abgesagte Stunden (noch keine Erfassung — immer 0).
+          description: Vom Arbeitnehmer abgesagte Stunden (Typ abgesagt_an; unbezahlt, reine Info — zählen nicht in Soll/Erfüllt/Lohn).
 
     MonthClosingEntry:
       type: object

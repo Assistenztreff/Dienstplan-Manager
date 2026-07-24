@@ -65,30 +65,30 @@ export interface HoursBalance {
      * @nullable
      */
   totalPay?: number | null;
-  /** Erfasste Pausenzeiten in Stunden (noch keine Erfassung — immer 0). */
+  /** Erfasste unbezahlte Pausenzeiten in Stunden (Summe pauseMinutes der FIX-Arbeitsdienste; reine Info, reduziert nicht die gewerteten Stunden). */
   pausenzeitStunden?: number;
-  /** Teamsitzungs-Stunden (noch keine Erfassung — immer 0). */
+  /** Teamsitzungs-Stunden (FIX-Team-Tage × konfigurierte Stunden). */
   teamsitzungStunden?: number;
-  /** Vergütung der Teamsitzungen in Euro (noch keine Erfassung — immer 0). */
+  /** Vergütung der Teamsitzungen in Euro (Stundenlohn × Teamsitzungs-Stunden). */
   teamsitzungEuro?: number;
   /** Anzahl der Bereitschafts-Dienste im Monat (FIX-Schichten mit Schichtmodell „Bereitschaft"). */
   bereitschaftenAnzahl?: number;
   /** Stunden der Bereitschafts-Dienste im Monat (FIX-Schichten mit Schichtmodell „Bereitschaft"). */
   bereitschaftsStunden?: number;
-  /** Anzahl der Vertretungen (noch keine Erfassung — immer 0). */
+  /** Anzahl der als Vertretung markierten FIX-Arbeitsdienste im Monat. */
   vertretungenAnzahl?: number;
-  /** Vertretungs-Stunden (noch keine Erfassung — immer 0). */
+  /** Roh-Stunden der als Vertretung markierten FIX-Arbeitsdienste (Info; zählen zusätzlich normal in Soll/Erfüllt). */
   vertretungsStunden?: number;
-  /** Urlaubsabgeltung in Euro (noch keine Erfassung — immer 0). */
+  /** Urlaubsabgeltung in Euro (Stundenlohn × gewertete Stunden der FIX-Einträge vom Typ urlaubsabgeltung; fließt NICHT in totalPay ein, reine Auszahlungs-Info). */
   urlaubsabgeltungEuro?: number;
-  /** Kind-krank-Tage (noch keine Erfassung — immer 0). */
+  /** Anzahl der Kind-krank-Tage (FIX-Einträge vom Typ kind_krank; unbezahlt, zählen nicht in Soll/Erfüllt/Lohn). */
   kindKrankTage?: number;
-  /** Freistellungs-Tage (noch keine Erfassung — immer 0). */
+  /** Anzahl der bezahlten Freistellungs-Tage (FIX-Einträge vom Typ freistellung; Lohnfortzahlung wie Krankheit). */
   freistellungTage?: number;
-  /** Freistellungs-Stunden (noch keine Erfassung — immer 0). */
+  /** Gewertete Stunden der bezahlten Freistellung (zählen in Erfüllt und Grundlohn). */
   freistellungStunden?: number;
-  /** Vom Arbeitgeber abgesagte Stunden (noch keine Erfassung — immer 0). */
+  /** Vom Arbeitgeber abgesagte Stunden (Typ abgesagt_ag; bezahlt nach Lohnausfallprinzip — zählen in Erfüllt und Grundlohn). */
   abgesagtArbeitgeberStunden?: number;
-  /** Vom Arbeitnehmer abgesagte Stunden (noch keine Erfassung — immer 0). */
+  /** Vom Arbeitnehmer abgesagte Stunden (Typ abgesagt_an; unbezahlt, reine Info — zählen nicht in Soll/Erfüllt/Lohn). */
   abgesagtArbeitnehmerStunden?: number;
 }

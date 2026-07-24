@@ -336,7 +336,7 @@ export const ListShiftsQueryParams = zod.object({
   "userId": zod.coerce.number().optional(),
   "month": zod.coerce.number().optional(),
   "year": zod.coerce.number().optional(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team']).optional(),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team', 'kind_krank', 'freistellung', 'abgesagt_ag', 'abgesagt_an', 'urlaubsabgeltung']).optional(),
   "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext für die Datentrennung.')
 })
 
@@ -345,13 +345,15 @@ export const ListShiftsResponseItem = zod.object({
   "userId": zod.number(),
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team']),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team', 'kind_krank', 'freistellung', 'abgesagt_ag', 'abgesagt_an', 'urlaubsabgeltung']),
   "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX']).optional().describe('Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.'),
   "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish(),
   "einsatzTeamId": zod.number().nullish().describe('Aushilfe-Einsatz: ID des anderen eigenen Teams, für das dieser Einsatz erfolgt. Die Schicht (und ihre Stunden) bleiben beim Stammteam; das Ziel-Team sieht nur einen schreibgeschützten Spiegel-Eintrag.'),
   "einsatzTeamName": zod.string().nullish().describe('Name des Einsatz-Teams (nur gesetzt, wenn einsatzTeamId gesetzt ist).'),
   "homeTeamName": zod.string().nullish().describe('Name des Stammteams der Schicht (nur gesetzt, wenn einsatzTeamId gesetzt ist) — für den Badge \"Aushilfe aus …\" im Ziel-Team-Kalender.'),
+  "isVertretung": zod.boolean().optional().describe('Vertretung: Arbeitsdienst als kurzfristige Vertretung markiert (Info-Kennzahl der Auswertung; Stunden zählen normal).'),
+  "pauseMinutes": zod.number().optional().describe('Unbezahlte Pausenminuten (reine Info-Kennzahl; reduziert NICHT die gewerteten Stunden).'),
   "valuedHours": zod.number().optional(),
   "nightHours": zod.number().optional(),
   "sundayHours": zod.number().optional(),
@@ -383,16 +385,23 @@ export const ListShiftsResponse = zod.array(ListShiftsResponseItem)
 /**
  * @summary Schicht anlegen
  */
+export const createShiftBodyPauseMinutesMin = 0;
+export const createShiftBodyPauseMinutesMax = 1440;
+
+
+
 export const CreateShiftBody = zod.object({
   "userId": zod.number(),
   "teamId": zod.number().optional().describe('Optionaler Team-Kontext; muss ein erlaubtes Team sein.'),
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team']),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team', 'kind_krank', 'freistellung', 'abgesagt_ag', 'abgesagt_an', 'urlaubsabgeltung']),
   "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX']).optional().describe('Optionaler Planungsstatus (Default FIX): VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.'),
   "shiftModelId": zod.number().nullish(),
   "notes": zod.string().optional(),
-  "einsatzTeamId": zod.number().nullish().describe('Aushilfe-Einsatz: ID eines anderen eigenen Teams, für das der Einsatz erfolgt. Muss ein erlaubtes Team des Aufrufers sein und darf nicht das Team der Schicht selbst sein; bei Abwesenheiten nicht erlaubt.')
+  "einsatzTeamId": zod.number().nullish().describe('Aushilfe-Einsatz: ID eines anderen eigenen Teams, für das der Einsatz erfolgt. Muss ein erlaubtes Team des Aufrufers sein und darf nicht das Team der Schicht selbst sein; bei Abwesenheiten nicht erlaubt.'),
+  "isVertretung": zod.boolean().optional().describe('Vertretung: Arbeitsdienst als kurzfristige Vertretung markieren (nur für Arbeitsdienste; bei Abwesenheiten\/Team-Einträgen serverseitig zurückgesetzt).'),
+  "pauseMinutes": zod.number().min(createShiftBodyPauseMinutesMin).max(createShiftBodyPauseMinutesMax).optional().describe('Unbezahlte Pausenminuten (Info-Kennzahl; reduziert NICHT die gewerteten Stunden).')
 })
 
 
@@ -408,13 +417,15 @@ export const GetShiftResponse = zod.object({
   "userId": zod.number(),
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team']),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team', 'kind_krank', 'freistellung', 'abgesagt_ag', 'abgesagt_an', 'urlaubsabgeltung']),
   "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX']).optional().describe('Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.'),
   "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish(),
   "einsatzTeamId": zod.number().nullish().describe('Aushilfe-Einsatz: ID des anderen eigenen Teams, für das dieser Einsatz erfolgt. Die Schicht (und ihre Stunden) bleiben beim Stammteam; das Ziel-Team sieht nur einen schreibgeschützten Spiegel-Eintrag.'),
   "einsatzTeamName": zod.string().nullish().describe('Name des Einsatz-Teams (nur gesetzt, wenn einsatzTeamId gesetzt ist).'),
   "homeTeamName": zod.string().nullish().describe('Name des Stammteams der Schicht (nur gesetzt, wenn einsatzTeamId gesetzt ist) — für den Badge \"Aushilfe aus …\" im Ziel-Team-Kalender.'),
+  "isVertretung": zod.boolean().optional().describe('Vertretung: Arbeitsdienst als kurzfristige Vertretung markiert (Info-Kennzahl der Auswertung; Stunden zählen normal).'),
+  "pauseMinutes": zod.number().optional().describe('Unbezahlte Pausenminuten (reine Info-Kennzahl; reduziert NICHT die gewerteten Stunden).'),
   "valuedHours": zod.number().optional(),
   "nightHours": zod.number().optional(),
   "sundayHours": zod.number().optional(),
@@ -449,15 +460,22 @@ export const UpdateShiftParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const updateShiftBodyPauseMinutesMin = 0;
+export const updateShiftBodyPauseMinutesMax = 1440;
+
+
+
 export const UpdateShiftBody = zod.object({
   "userId": zod.number().optional().describe('Optionaler Wechsel des zugewiesenen Assistenten. Der neue Nutzer muss Mitglied des Teams der Schicht sein (Member-of-Team-Invariante), sonst 403. Wird genutzt für das Tauschen des Assistenten beim Massen-Ändern bestehender Schichten.'),
   "startTime": zod.coerce.date().optional(),
   "endTime": zod.coerce.date().optional(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team']).optional(),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team', 'kind_krank', 'freistellung', 'abgesagt_ag', 'abgesagt_an', 'urlaubsabgeltung']).optional(),
   "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX']).optional().describe('Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.'),
   "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish(),
-  "einsatzTeamId": zod.number().nullish().describe('Aushilfe-Einsatz setzen oder mit null entfernen. Gleiche Regeln wie beim Anlegen (eigenes anderes Team, keine Abwesenheiten).')
+  "einsatzTeamId": zod.number().nullish().describe('Aushilfe-Einsatz setzen oder mit null entfernen. Gleiche Regeln wie beim Anlegen (eigenes anderes Team, keine Abwesenheiten).'),
+  "isVertretung": zod.boolean().optional().describe('Vertretung setzen\/entfernen (nur für Arbeitsdienste; bei Abwesenheiten\/Team-Einträgen serverseitig zurückgesetzt).'),
+  "pauseMinutes": zod.number().min(updateShiftBodyPauseMinutesMin).max(updateShiftBodyPauseMinutesMax).optional().describe('Unbezahlte Pausenminuten (Info-Kennzahl; reduziert NICHT die gewerteten Stunden).')
 })
 
 export const UpdateShiftResponse = zod.object({
@@ -465,13 +483,15 @@ export const UpdateShiftResponse = zod.object({
   "userId": zod.number(),
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team']),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team', 'kind_krank', 'freistellung', 'abgesagt_ag', 'abgesagt_an', 'urlaubsabgeltung']),
   "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX']).optional().describe('Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.'),
   "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish(),
   "einsatzTeamId": zod.number().nullish().describe('Aushilfe-Einsatz: ID des anderen eigenen Teams, für das dieser Einsatz erfolgt. Die Schicht (und ihre Stunden) bleiben beim Stammteam; das Ziel-Team sieht nur einen schreibgeschützten Spiegel-Eintrag.'),
   "einsatzTeamName": zod.string().nullish().describe('Name des Einsatz-Teams (nur gesetzt, wenn einsatzTeamId gesetzt ist).'),
   "homeTeamName": zod.string().nullish().describe('Name des Stammteams der Schicht (nur gesetzt, wenn einsatzTeamId gesetzt ist) — für den Badge \"Aushilfe aus …\" im Ziel-Team-Kalender.'),
+  "isVertretung": zod.boolean().optional().describe('Vertretung: Arbeitsdienst als kurzfristige Vertretung markiert (Info-Kennzahl der Auswertung; Stunden zählen normal).'),
+  "pauseMinutes": zod.number().optional().describe('Unbezahlte Pausenminuten (reine Info-Kennzahl; reduziert NICHT die gewerteten Stunden).'),
   "valuedHours": zod.number().optional(),
   "nightHours": zod.number().optional(),
   "sundayHours": zod.number().optional(),
@@ -1267,13 +1287,15 @@ export const GetDashboardSummaryResponse = zod.object({
   "userId": zod.number(),
   "startTime": zod.coerce.date(),
   "endTime": zod.coerce.date(),
-  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team']),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team', 'kind_krank', 'freistellung', 'abgesagt_ag', 'abgesagt_an', 'urlaubsabgeltung']),
   "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX']).optional().describe('Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.'),
   "shiftModelId": zod.number().nullish(),
   "notes": zod.string().nullish(),
   "einsatzTeamId": zod.number().nullish().describe('Aushilfe-Einsatz: ID des anderen eigenen Teams, für das dieser Einsatz erfolgt. Die Schicht (und ihre Stunden) bleiben beim Stammteam; das Ziel-Team sieht nur einen schreibgeschützten Spiegel-Eintrag.'),
   "einsatzTeamName": zod.string().nullish().describe('Name des Einsatz-Teams (nur gesetzt, wenn einsatzTeamId gesetzt ist).'),
   "homeTeamName": zod.string().nullish().describe('Name des Stammteams der Schicht (nur gesetzt, wenn einsatzTeamId gesetzt ist) — für den Badge \"Aushilfe aus …\" im Ziel-Team-Kalender.'),
+  "isVertretung": zod.boolean().optional().describe('Vertretung: Arbeitsdienst als kurzfristige Vertretung markiert (Info-Kennzahl der Auswertung; Stunden zählen normal).'),
+  "pauseMinutes": zod.number().optional().describe('Unbezahlte Pausenminuten (reine Info-Kennzahl; reduziert NICHT die gewerteten Stunden).'),
   "valuedHours": zod.number().optional(),
   "nightHours": zod.number().optional(),
   "sundayHours": zod.number().optional(),
@@ -1385,19 +1407,19 @@ export const GetHoursBalanceResponseItem = zod.object({
   "sundaySurchargePay": zod.number().nullish().describe('Geldwert des Sonntagszuschlags (Zuschlagsstunden nach Abrechnungsart inkl. Abwesenheits-Fortzahlung \* Stundenlohn). Nur Premium.'),
   "holidaySurchargePay": zod.number().nullish().describe('Geldwert des Feiertagszuschlags (Zuschlagsstunden nach Abrechnungsart inkl. Abwesenheits-Fortzahlung \* Stundenlohn). Nur Premium.'),
   "totalPay": zod.number().nullish().describe('Gesamtvergütung = basePay + Zuschläge. Nur Premium.'),
-  "pausenzeitStunden": zod.number().optional().describe('Erfasste Pausenzeiten in Stunden (noch keine Erfassung — immer 0).'),
-  "teamsitzungStunden": zod.number().optional().describe('Teamsitzungs-Stunden (noch keine Erfassung — immer 0).'),
-  "teamsitzungEuro": zod.number().optional().describe('Vergütung der Teamsitzungen in Euro (noch keine Erfassung — immer 0).'),
+  "pausenzeitStunden": zod.number().optional().describe('Erfasste unbezahlte Pausenzeiten in Stunden (Summe pauseMinutes der FIX-Arbeitsdienste; reine Info, reduziert nicht die gewerteten Stunden).'),
+  "teamsitzungStunden": zod.number().optional().describe('Teamsitzungs-Stunden (FIX-Team-Tage × konfigurierte Stunden).'),
+  "teamsitzungEuro": zod.number().optional().describe('Vergütung der Teamsitzungen in Euro (Stundenlohn × Teamsitzungs-Stunden).'),
   "bereitschaftenAnzahl": zod.number().optional().describe('Anzahl der Bereitschafts-Dienste im Monat (FIX-Schichten mit Schichtmodell „Bereitschaft\").'),
   "bereitschaftsStunden": zod.number().optional().describe('Stunden der Bereitschafts-Dienste im Monat (FIX-Schichten mit Schichtmodell „Bereitschaft\").'),
-  "vertretungenAnzahl": zod.number().optional().describe('Anzahl der Vertretungen (noch keine Erfassung — immer 0).'),
-  "vertretungsStunden": zod.number().optional().describe('Vertretungs-Stunden (noch keine Erfassung — immer 0).'),
-  "urlaubsabgeltungEuro": zod.number().optional().describe('Urlaubsabgeltung in Euro (noch keine Erfassung — immer 0).'),
-  "kindKrankTage": zod.number().optional().describe('Kind-krank-Tage (noch keine Erfassung — immer 0).'),
-  "freistellungTage": zod.number().optional().describe('Freistellungs-Tage (noch keine Erfassung — immer 0).'),
-  "freistellungStunden": zod.number().optional().describe('Freistellungs-Stunden (noch keine Erfassung — immer 0).'),
-  "abgesagtArbeitgeberStunden": zod.number().optional().describe('Vom Arbeitgeber abgesagte Stunden (noch keine Erfassung — immer 0).'),
-  "abgesagtArbeitnehmerStunden": zod.number().optional().describe('Vom Arbeitnehmer abgesagte Stunden (noch keine Erfassung — immer 0).')
+  "vertretungenAnzahl": zod.number().optional().describe('Anzahl der als Vertretung markierten FIX-Arbeitsdienste im Monat.'),
+  "vertretungsStunden": zod.number().optional().describe('Roh-Stunden der als Vertretung markierten FIX-Arbeitsdienste (Info; zählen zusätzlich normal in Soll\/Erfüllt).'),
+  "urlaubsabgeltungEuro": zod.number().optional().describe('Urlaubsabgeltung in Euro (Stundenlohn × gewertete Stunden der FIX-Einträge vom Typ urlaubsabgeltung; fließt NICHT in totalPay ein, reine Auszahlungs-Info).'),
+  "kindKrankTage": zod.number().optional().describe('Anzahl der Kind-krank-Tage (FIX-Einträge vom Typ kind_krank; unbezahlt, zählen nicht in Soll\/Erfüllt\/Lohn).'),
+  "freistellungTage": zod.number().optional().describe('Anzahl der bezahlten Freistellungs-Tage (FIX-Einträge vom Typ freistellung; Lohnfortzahlung wie Krankheit).'),
+  "freistellungStunden": zod.number().optional().describe('Gewertete Stunden der bezahlten Freistellung (zählen in Erfüllt und Grundlohn).'),
+  "abgesagtArbeitgeberStunden": zod.number().optional().describe('Vom Arbeitgeber abgesagte Stunden (Typ abgesagt_ag; bezahlt nach Lohnausfallprinzip — zählen in Erfüllt und Grundlohn).'),
+  "abgesagtArbeitnehmerStunden": zod.number().optional().describe('Vom Arbeitnehmer abgesagte Stunden (Typ abgesagt_an; unbezahlt, reine Info — zählen nicht in Soll\/Erfüllt\/Lohn).')
 })
 export const GetHoursBalanceResponse = zod.array(GetHoursBalanceResponseItem)
 

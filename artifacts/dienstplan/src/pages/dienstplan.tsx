@@ -101,6 +101,11 @@ const SHIFT_TYPE_LABELS: Record<string, string> = {
   sick: "Krankheit",
   freizeitausgleich: "Freizeitausgleich",
   team: "Teamsitzung",
+  kind_krank: "Kind krank",
+  freistellung: "Freistellung (bezahlt)",
+  abgesagt_ag: "Abgesagt (Arbeitgeber)",
+  abgesagt_an: "Abgesagt (Assistenz)",
+  urlaubsabgeltung: "Urlaubsabgeltung",
 };
 
 const SHIFT_TYPE_CLASSES: Record<string, string> = {
@@ -116,6 +121,12 @@ const SHIFT_TYPE_CLASSES: Record<string, string> = {
   // Team-Eintrag (Teamsitzung): semantische Farbe (Himmelblau), bewusst KEINE
   // Personenfarbe — der Eintrag gilt dem ganzen Team.
   team: "bg-sky-200 text-sky-950 border-sky-600 hover:bg-sky-300",
+  // Neue Abrechnungskategorien: ebenfalls semantische Farben.
+  kind_krank: "bg-zinc-200 text-zinc-800 border-zinc-500 hover:bg-zinc-300",
+  freistellung: "bg-teal-200 text-teal-950 border-teal-600 hover:bg-teal-300",
+  abgesagt_ag: "bg-orange-200 text-orange-950 border-orange-600 hover:bg-orange-300",
+  abgesagt_an: "bg-stone-200 text-stone-800 border-stone-500 hover:bg-stone-300",
+  urlaubsabgeltung: "bg-lime-200 text-lime-950 border-lime-600 hover:bg-lime-300",
 };
 
 function shiftLabel(shift: Shift, modelMap: Map<number, ShiftModelInfo>): string {
@@ -174,6 +185,11 @@ const SHIFT_TYPE_DOTS: Record<string, string> = {
   sick: "bg-slate-500",
   freizeitausgleich: "bg-emerald-600",
   team: "bg-sky-500",
+  kind_krank: "bg-zinc-500",
+  freistellung: "bg-teal-600",
+  abgesagt_ag: "bg-orange-600",
+  abgesagt_an: "bg-stone-500",
+  urlaubsabgeltung: "bg-lime-600",
 };
 
 // Planungsstatus in den Tageszellen: VORLAEUFIG = gestrichelter Rand + reduzierte
@@ -187,7 +203,16 @@ function shiftDotStatusClass(shift: Shift): string {
   return "";
 }
 
-const ABSENCE_TYPES = new Set(["vacation", "sick", "freizeitausgleich"]);
+const ABSENCE_TYPES = new Set([
+  "vacation",
+  "sick",
+  "freizeitausgleich",
+  "kind_krank",
+  "freistellung",
+  "abgesagt_ag",
+  "abgesagt_an",
+  "urlaubsabgeltung",
+]);
 function isAbsenceShift(shift: Shift): boolean {
   return ABSENCE_TYPES.has(shift.type);
 }

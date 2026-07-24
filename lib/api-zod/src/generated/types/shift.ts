@@ -36,6 +36,10 @@ export interface Shift {
      * @nullable
      */
   homeTeamName?: string | null;
+  /** Vertretung: Arbeitsdienst als kurzfristige Vertretung markiert (Info-Kennzahl der Auswertung; Stunden zählen normal). */
+  isVertretung?: boolean;
+  /** Unbezahlte Pausenminuten (reine Info-Kennzahl; reduziert NICHT die gewerteten Stunden). */
+  pauseMinutes?: number;
   valuedHours?: number;
   nightHours?: number;
   sundayHours?: number;

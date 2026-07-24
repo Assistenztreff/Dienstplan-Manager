@@ -22,7 +22,32 @@ export function isAbsenceType(type: string): boolean {
   // "freizeitausgleich" (Ersatzruhetag nach § 11 Abs. 3 ArbZG) ist ein bezahlter
   // Ausgleichs-Ruhetag und wird wie eine Abwesenheit gewertet: volle Tages-
   // Gutschrift ohne Zuschläge, statt einer Arbeitswertung.
-  return type === "vacation" || type === "sick" || type === "freizeitausgleich";
+  //
+  // Neue Abrechnungskategorien (ebenfalls Abwesenheits-Verhalten in der Route:
+  // Duplikat-Check pro Tag, Ersetzung des geplanten Dienstes, FIX-Zwang, kein
+  // Aushilfe-Einsatz):
+  //  - kind_krank:       unbezahlt (Krankengeld der Kasse) — Metriken = 0
+  //  - freistellung:     bezahlte Freistellung — Lohnfortzahlung wie Krankheit
+  //  - abgesagt_ag:      vom Arbeitgeber abgesagt — bezahlt (Lohnausfallprinzip)
+  //  - abgesagt_an:      vom Arbeitnehmer abgesagt — unbezahlt, Metriken = 0
+  //  - urlaubsabgeltung: ausgezahlter Urlaub — gewertete Stunden nur als Basis
+  //    für den Euro-Wert der Auswertung (fließt dort nicht in Soll/Erfüllt).
+  return (
+    type === "vacation" ||
+    type === "sick" ||
+    type === "freizeitausgleich" ||
+    type === "kind_krank" ||
+    type === "freistellung" ||
+    type === "abgesagt_ag" ||
+    type === "abgesagt_an" ||
+    type === "urlaubsabgeltung"
+  );
+}
+
+// Unbezahlte Kategorien: reine Info-Zählung, KEINE gewerteten Stunden und keine
+// Zuschläge — sie dürfen weder Erfüllung noch Lohn erzeugen.
+export function isUnpaidAbsenceType(type: string): boolean {
+  return type === "kind_krank" || type === "abgesagt_an";
 }
 
 // Ein "ganztägiger" Abwesenheitseintrag folgt der Frontend-Konvention
@@ -77,6 +102,19 @@ export function resolveShiftMetrics(
   // Zuschläge (out of scope).
   if (input.type === "team") {
     return { valuedHours: 0, nightHours: 0, sundayHours: 0, holidayHours: 0 };
+  }
+  // Unbezahlte Kategorien (Kind-krank, vom Arbeitnehmer abgesagt): KEINE
+  // Zuschläge, aber gewertete Stunden wie andere Abwesenheiten speichern —
+  // die Auswertung filtert diese Typen ohnehin aus Soll/Erfüllt/Lohn heraus
+  // und nutzt valuedHours nur als Info-Kennzahl (z. B. "AN abgesagt: 8 h",
+  // nicht die Roh-Dauer 24 h eines Ganztags-Eintrags).
+  if (isUnpaidAbsenceType(input.type)) {
+    return {
+      valuedHours: input.plannedHours,
+      nightHours: 0,
+      sundayHours: 0,
+      holidayHours: 0,
+    };
   }
   if (isAbsenceType(input.type)) {
     const start = new Date(input.startTime);

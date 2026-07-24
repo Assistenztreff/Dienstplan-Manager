@@ -19,4 +19,9 @@ export const ShiftUpdateType = {
   work: 'work',
   freizeitausgleich: 'freizeitausgleich',
   team: 'team',
+  kind_krank: 'kind_krank',
+  freistellung: 'freistellung',
+  abgesagt_ag: 'abgesagt_ag',
+  abgesagt_an: 'abgesagt_an',
+  urlaubsabgeltung: 'urlaubsabgeltung',
 } as const;

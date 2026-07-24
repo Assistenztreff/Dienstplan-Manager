@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, real, text, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, real, text, timestamp, pgEnum, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -6,7 +6,28 @@ import { teamsTable } from "./teams";
 import { shiftModelsTable } from "./shift_models";
 import { relations } from "drizzle-orm";
 
-export const shiftTypeEnum = pgEnum("shift_type", ["active", "standby", "night", "full_day", "vacation", "sick", "work", "freizeitausgleich", "team"]);
+export const shiftTypeEnum = pgEnum("shift_type", [
+  "active",
+  "standby",
+  "night",
+  "full_day",
+  "vacation",
+  "sick",
+  "work",
+  "freizeitausgleich",
+  "team",
+  // Neue Abrechnungskategorien (Task: Kategorien erfassbar machen):
+  // kind_krank      = Kind-krank-Tag (unbezahlt, Krankengeld der Kasse; nur Info-Zaehlung)
+  // freistellung    = bezahlte Freistellung (Lohnfortzahlung wie Krankheit)
+  // abgesagt_ag     = vom Arbeitgeber abgesagte Stunden (bezahlt, Lohnausfallprinzip)
+  // abgesagt_an     = vom Arbeitnehmer abgesagte Stunden (unbezahlt, nur Info)
+  // urlaubsabgeltung = ausgezahlter, nicht genommener Urlaub (nur Geldwert)
+  "kind_krank",
+  "freistellung",
+  "abgesagt_ag",
+  "abgesagt_an",
+  "urlaubsabgeltung",
+]);
 
 // Planungsstatus einer Schicht im Lebenszyklus: VORLAEUFIG = Entwurf (interne
 // Planung), ANGEBOTEN = Vorschlag (dem Mitarbeiter angeboten), FIX = verbindlich
@@ -29,6 +50,13 @@ export const shiftsTable = pgTable("shifts", {
   // die Schicht nur als schreibgeschuetzten Spiegel-Eintrag im Kalender.
   einsatzTeamId: integer("einsatz_team_id").references(() => teamsTable.id, { onDelete: "set null" }),
   notes: text("notes"),
+  // Vertretung: markiert einen Arbeitsdienst als kurzfristige Vertretung fuer
+  // eine ausgefallene Kollegin/einen Kollegen (Info-Kennzahl der Auswertung;
+  // Stunden zaehlen normal).
+  isVertretung: boolean("is_vertretung").notNull().default(false),
+  // Unbezahlte Pausenminuten (reine Info-Kennzahl; reduziert NICHT die
+  // gewerteten Stunden — Produktentscheidung v1).
+  pauseMinutes: integer("pause_minutes").notNull().default(0),
   // Berechnete Roh-Kennzahlen (beim Speichern ermittelt, Zuschlags-% erst bei Auswertung).
   valuedHours: real("valued_hours").notNull().default(0),
   nightHours: real("night_hours").notNull().default(0),

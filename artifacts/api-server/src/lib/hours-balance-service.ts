@@ -286,6 +286,8 @@ export async function computeHoursBalances(
           sundayHours: shiftsTable.sundayHours,
           holidayHours: shiftsTable.holidayHours,
           teamId: shiftsTable.teamId,
+          isVertretung: shiftsTable.isVertretung,
+          pauseMinutes: shiftsTable.pauseMinutes,
           compensationType: shiftModelsTable.compensationType,
           compensationPercent: shiftModelsTable.compensationPercent,
           compensationFlatCents: shiftModelsTable.compensationFlatCents,

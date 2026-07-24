@@ -25,4 +25,12 @@ export interface ShiftUpdate {
      * @nullable
      */
   einsatzTeamId?: number | null;
+  /** Vertretung setzen/entfernen (nur für Arbeitsdienste; bei Abwesenheiten/Team-Einträgen serverseitig zurückgesetzt). */
+  isVertretung?: boolean;
+  /**
+     * Unbezahlte Pausenminuten (Info-Kennzahl; reduziert NICHT die gewerteten Stunden).
+     * @minimum 0
+     * @maximum 1440
+     */
+  pauseMinutes?: number;
 }

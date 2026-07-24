@@ -59,6 +59,8 @@ type ShiftForEdit = {
   shiftModelId?: number | null;
   notes?: string | null;
   einsatzTeamId?: number | null;
+  isVertretung?: boolean | null;
+  pauseMinutes?: number | null;
 };
 
 // Planungsstatus: Entwurf (intern) → Vorschlag (angeboten) → Bestätigt (fix).
@@ -140,6 +142,10 @@ type FormState = {
   notes: string;
   // Aushilfe-Einsatz: ID eines anderen eigenen Teams als String, "" = keiner.
   einsatzTeamId: string;
+  // Vertretung: Info-Markierung für Arbeitsdienste (Auswertungs-Zählung).
+  isVertretung: boolean;
+  // Unbezahlte Pause in Minuten als String ("" = 0; reine Info-Kennzahl).
+  pauseMinutes: string;
 };
 
 function toTimeString(isoString: string): string {
@@ -183,7 +189,12 @@ function initialSelection(editShift: ShiftForEdit | undefined, firstModelId: num
     editShift.type === "vacation" ||
     editShift.type === "sick" ||
     editShift.type === "freizeitausgleich" ||
-    editShift.type === "team"
+    editShift.type === "team" ||
+    editShift.type === "kind_krank" ||
+    editShift.type === "freistellung" ||
+    editShift.type === "abgesagt_ag" ||
+    editShift.type === "abgesagt_an" ||
+    editShift.type === "urlaubsabgeltung"
   )
     return editShift.type;
   if (editShift.type === "work" && editShift.shiftModelId) return `model:${editShift.shiftModelId}`;
@@ -270,6 +281,11 @@ export function ShiftDialog({
           : "VORLAEUFIG",
       notes: editShift?.notes ?? "",
       einsatzTeamId: editShift?.einsatzTeamId != null ? String(editShift.einsatzTeamId) : "",
+      isVertretung: editShift?.isVertretung === true,
+      pauseMinutes:
+        editShift?.pauseMinutes != null && editShift.pauseMinutes > 0
+          ? String(editShift.pauseMinutes)
+          : "",
     };
   }
 
@@ -345,7 +361,12 @@ export function ShiftDialog({
   const isAbsence =
     form.selection === "vacation" ||
     form.selection === "sick" ||
-    form.selection === "freizeitausgleich";
+    form.selection === "freizeitausgleich" ||
+    form.selection === "kind_krank" ||
+    form.selection === "freistellung" ||
+    form.selection === "abgesagt_ag" ||
+    form.selection === "abgesagt_an" ||
+    form.selection === "urlaubsabgeltung";
   // Team-Eintrag (Teamsitzung): ganztägig, immer FIX (Server erzwingt beides),
   // keine Zeit-/Status-Felder.
   const isTeam = form.selection === "team";
@@ -487,6 +508,9 @@ export function ShiftDialog({
             !isAbsence && !isTeam && form.einsatzTeamId
               ? Number(form.einsatzTeamId)
               : null,
+          isVertretung: !isAbsence && !isTeam ? form.isVertretung : false,
+          pauseMinutes:
+            !isAbsence && !isTeam ? Math.max(0, Number(form.pauseMinutes) || 0) : 0,
         };
         await updateShift.mutateAsync({
           id: editShift.id,
@@ -503,6 +527,12 @@ export function ShiftDialog({
           notes: form.notes || undefined,
           ...(!isAbsence && !isTeam && form.einsatzTeamId
             ? { einsatzTeamId: Number(form.einsatzTeamId) }
+            : {}),
+          ...(!isAbsence && !isTeam
+            ? {
+                isVertretung: form.isVertretung,
+                pauseMinutes: Math.max(0, Number(form.pauseMinutes) || 0),
+              }
             : {}),
         };
         await createShift.mutateAsync({
@@ -575,6 +605,12 @@ export function ShiftDialog({
           notes: form.notes || undefined,
           ...(!isAbsence && !isTeam && form.einsatzTeamId
             ? { einsatzTeamId: Number(form.einsatzTeamId) }
+            : {}),
+          ...(!isAbsence && !isTeam
+            ? {
+                isVertretung: form.isVertretung,
+                pauseMinutes: Math.max(0, Number(form.pauseMinutes) || 0),
+              }
             : {}),
         };
         try {
@@ -930,6 +966,36 @@ export function ShiftDialog({
                       Freizeitausgleich (Ersatzruhetag)
                     </span>
                   </SelectItem>
+                  <SelectItem value="kind_krank">
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block h-2.5 w-2.5 rounded-full bg-zinc-500" />
+                      Kind krank (unbezahlt)
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="freistellung">
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block h-2.5 w-2.5 rounded-full bg-teal-600" />
+                      Freistellung (bezahlt)
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="abgesagt_ag">
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block h-2.5 w-2.5 rounded-full bg-orange-600" />
+                      Abgesagt durch Arbeitgeber (bezahlt)
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="abgesagt_an">
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block h-2.5 w-2.5 rounded-full bg-stone-500" />
+                      Abgesagt durch Assistenz (unbezahlt)
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="urlaubsabgeltung">
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block h-2.5 w-2.5 rounded-full bg-lime-600" />
+                      Urlaubsabgeltung (ausgezahlt)
+                    </span>
+                  </SelectItem>
                 </SelectGroup>
               </SelectContent>
             </Select>
@@ -996,6 +1062,39 @@ export function ShiftDialog({
                   sieht den Dienst als Aushilfe-Eintrag im Kalender.
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Vertretung + unbezahlte Pause: reine Info-Kennzahlen der
+              Lohnauswertung, nur für Arbeitsdienste (Server setzt sie bei
+              Abwesenheiten/Team-Einträgen zurück). */}
+          {!isAbsence && !isTeam && (
+            <div className="grid grid-cols-2 items-end gap-3">
+              <label
+                className="flex h-9 cursor-pointer items-center gap-2 text-sm"
+                data-testid="shift-dialog-vertretung"
+              >
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-primary"
+                  checked={form.isVertretung}
+                  onChange={(e) => set("isVertretung", e.target.checked)}
+                />
+                Vertretung
+              </label>
+              <div className="space-y-1.5">
+                <Label>Unbezahlte Pause (Min.)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={1440}
+                  step={5}
+                  placeholder="0"
+                  data-testid="shift-dialog-pause"
+                  value={form.pauseMinutes}
+                  onChange={(e) => set("pauseMinutes", e.target.value)}
+                />
+              </div>
             </div>
           )}
 
@@ -1071,7 +1170,17 @@ export function ShiftDialog({
                 ? "Urlaubstag wird als ganzer Tag eingetragen und vom Urlaubskontigent abgezogen."
                 : form.selection === "freizeitausgleich"
                   ? "Ersatzruhetag für geleistete Feiertagsarbeit. Wird als bezahlter ganzer Tag eingetragen und vom Ersatzruhetag-Konto abgezogen — der Urlaubsanspruch bleibt unberührt."
-                  : "Krankheitstag wird als ganzer Tag eingetragen. Vertragsstunden werden als Lohnfortzahlung gutgeschrieben."}
+                  : form.selection === "kind_krank"
+                    ? "Kind-krank-Tag wird als ganzer Tag eingetragen. Unbezahlt (Krankengeld über die Krankenkasse) — zählt in der Auswertung nur als Info-Kennzahl."
+                    : form.selection === "freistellung"
+                      ? "Bezahlte Freistellung wird als ganzer Tag eingetragen. Vertragsstunden werden als Lohnfortzahlung gutgeschrieben."
+                      : form.selection === "abgesagt_ag"
+                        ? "Vom Arbeitgeber abgesagter Dienst. Die Stunden werden nach dem Lohnausfallprinzip bezahlt und in der Auswertung gutgeschrieben."
+                        : form.selection === "abgesagt_an"
+                          ? "Von der Assistenzkraft abgesagter Dienst. Unbezahlt — die Stunden erscheinen in der Auswertung nur als Info-Kennzahl."
+                          : form.selection === "urlaubsabgeltung"
+                            ? "Urlaubsabgeltung: nicht genommener Urlaub wird ausgezahlt. Der Euro-Wert erscheint in der Auswertung als eigene Position (kein Arbeits-Soll)."
+                            : "Krankheitstag wird als ganzer Tag eingetragen. Vertragsstunden werden als Lohnfortzahlung gutgeschrieben."}
             </p>
           )}
 

@@ -16,8 +16,23 @@ export const round2 = (n: number) => Math.round(n * 100) / 100;
 // (Ersatzruhetag nach § 11 Abs. 3 ArbZG — ein bezahlter freier Tag, KEINE
 // Arbeitszeit). Muss mit isAbsenceType (shift-metrics-resolve) übereinstimmen;
 // bewusst lokal dupliziert, damit dieses Modul DB-/Express-frei bleibt.
-const ABSENCE_SHIFT_TYPES = new Set(["vacation", "sick", "freizeitausgleich"]);
+const ABSENCE_SHIFT_TYPES = new Set([
+  "vacation",
+  "sick",
+  "freizeitausgleich",
+  // Bezahlte neue Kategorien — laufen wie Urlaub/Krank durch die
+  // Lohnfortzahlung (Soll aus geerbten Zeiten, Zuschlags-Fortzahlung,
+  // Grundlohn aus valuedHours):
+  "freistellung",
+  "abgesagt_ag",
+]);
 const isAbsenceShiftType = (type: string): boolean => ABSENCE_SHIFT_TYPES.has(type);
+
+// Rein informative Kategorien: zählen NICHT in Soll/Erfüllt/Zuschläge/Lohn,
+// sondern nur in ihre eigenen Auswertungs-Spalten. Muss mit
+// isUnpaidAbsenceType/urlaubsabgeltung (shift-metrics-resolve) übereinstimmen;
+// bewusst lokal dupliziert, damit dieses Modul DB-/Express-frei bleibt.
+const INFO_ONLY_SHIFT_TYPES = new Set(["kind_krank", "abgesagt_an", "urlaubsabgeltung"]);
 
 /** Schicht-Felder, die in die Auswertung einfließen. */
 export interface BalanceShift {
@@ -42,6 +57,10 @@ export interface BalanceShift {
    * Abrechnungskategorien der Auswertung.
    */
   modelName?: string | null;
+  /** Vertretungs-Markierung (Info-Kennzahl; Stunden zählen normal). */
+  isVertretung?: boolean | null;
+  /** Unbezahlte Pausenminuten (Info-Kennzahl; reduziert NICHT die Stunden). */
+  pauseMinutes?: number | null;
 }
 
 /** Abrechnungsart: SOLL = nach Plan, IST = nach erfassten Ist-Zeiten. */
@@ -233,7 +252,13 @@ export function computeHoursBalanceRow(params: {
   // kommt ausschließlich über params.teamsitzungStunden. Sie werden hier
   // komplett herausgefiltert, damit ein ganztägiger Team-Eintrag (00:00–23:59)
   // weder als Arbeitsschicht (24h Soll) noch als Abwesenheit zählt.
-  const shifts = params.shifts.filter((s) => s.type !== "team");
+  // Rein informative Kategorien (Kind-krank, vom AN abgesagt, Urlaubsabgeltung)
+  // werden VOR der Soll/Erfüllt-Rechnung in eigene Zähl-Spalten abgezweigt —
+  // sie dürfen weder Soll noch Erfüllung noch Zuschläge/Lohn beeinflussen.
+  const infoShifts = params.shifts.filter((s) => INFO_ONLY_SHIFT_TYPES.has(s.type));
+  const shifts = params.shifts.filter(
+    (s) => s.type !== "team" && !INFO_ONLY_SHIFT_TYPES.has(s.type)
+  );
   const teamsitzungStunden = params.teamsitzungStunden ?? 0;
   const { nightPercent, sundayPercent, holidayPercent } = allowance;
   // Default SOLL = Bestandsschutz: ohne explizite Abrechnungsart bleibt alles planbasiert.
@@ -250,7 +275,10 @@ export function computeHoursBalanceRow(params: {
 
   // Quelle der gewerteten Arbeits- und Zuschlagsstunden hängt an der Abrechnungsart:
   // SOLL = geplante FIX-Schichten, IST = tatsächlich erfasste (bestätigte) Ist-Zeiten.
-  const isWorkEntry = (e: BalanceTimeEntry) => !isAbsenceShiftType(e.shiftType ?? "");
+  // Info-Kategorien haben ggf. Abwesenheits-Buchungen in der Zeiterfassung —
+  // sie sind weder Arbeit noch Lohnfortzahlung und bleiben komplett außen vor.
+  const isWorkEntry = (e: BalanceTimeEntry) =>
+    !isAbsenceShiftType(e.shiftType ?? "") && !INFO_ONLY_SHIFT_TYPES.has(e.shiftType ?? "");
   const workEntries = timeEntries.filter(isWorkEntry);
 
   let valuedHours: number;
@@ -351,26 +379,58 @@ export function computeHoursBalanceRow(params: {
   const sickFulfilledHours = shifts
     .filter((s) => s.type === "sick")
     .reduce((acc, s) => acc + (s.valuedHours ?? 0), 0);
+  // Bezahlte neue Kategorien: Freistellung + vom Arbeitgeber abgesagte Stunden
+  // zählen wie Krankheit als Lohnfortzahlung in Erfüllt und Grundlohn.
+  const freistellungShifts = shifts.filter((s) => s.type === "freistellung");
+  const freistellungTage = freistellungShifts.length;
+  const freistellungStunden = freistellungShifts.reduce(
+    (acc, s) => acc + (s.valuedHours ?? 0),
+    0
+  );
+  const abgesagtAgStunden = shifts
+    .filter((s) => s.type === "abgesagt_ag")
+    .reduce((acc, s) => acc + (s.valuedHours ?? 0), 0);
+  const paidExtraFulfilledHours = freistellungStunden + abgesagtAgStunden;
   const totalFulfilledHours =
-    valuedHours + vacationFulfilledHours + sickFulfilledHours + teamsitzungStunden;
+    valuedHours +
+    vacationFulfilledHours +
+    sickFulfilledHours +
+    paidExtraFulfilledHours +
+    teamsitzungStunden;
 
   let trackedHours = 0;
   for (const entry of timeEntries) {
     const hours = entry.actualHours ?? 0;
-    if (!isAbsenceShiftType(entry.shiftType ?? "")) {
+    if (isWorkEntry(entry)) {
       trackedHours += hours;
     }
   }
 
-  // --- Zukünftige Abrechnungskategorien ---
-  // Bereitschaften sind bereits eindeutig über das Schichtmodell "Bereitschaft"
+  // --- Informative Kategorien (kein Soll/Erfüllt/Lohn) ---
+  const kindKrankTage = infoShifts.filter((s) => s.type === "kind_krank").length;
+  // Gewertete Stunden (valuedHours) statt Roh-Dauer, damit ganztägige
+  // Einträge (00:00–23:59) nicht als 24 h erscheinen — gleiche Basis wie
+  // die bezahlten Abwesenheits-Kategorien.
+  const abgesagtAnStunden = infoShifts
+    .filter((s) => s.type === "abgesagt_an")
+    .reduce((acc, s) => acc + (s.valuedHours ?? 0), 0);
+  // Urlaubsabgeltung: Euro-Wert = Stundenlohn × gewertete Stunden der Einträge
+  // (valuedHours = vertragliche Tages-Soll-Stunden bzw. geerbte Dienstzeiten).
+  const urlaubsabgeltungStunden = infoShifts
+    .filter((s) => s.type === "urlaubsabgeltung")
+    .reduce((acc, s) => acc + (s.valuedHours ?? 0), 0);
+  // Vertretungen: markierte Arbeitsdienste (Info; Stunden zählen zusätzlich normal).
+  const vertretungsShifts = workShifts.filter((s) => s.isVertretung === true);
+  const vertretungenAnzahl = vertretungsShifts.length;
+  const vertretungsStunden = vertretungsShifts.reduce((acc, s) => acc + shiftHours(s), 0);
+  // Unbezahlte Pausen (Info): Summe der Pausenminuten der Arbeitsdienste.
+  const pausenzeitStunden =
+    workShifts.reduce((acc, s) => acc + (s.pauseMinutes ?? 0), 0) / 60;
+
+  // Bereitschaften sind eindeutig über das Schichtmodell "Bereitschaft"
   // (seeded Standard-Dienst) identifizierbar: Anzahl und Roh-Stunden der
   // geplanten FIX-Bereitschafts-Dienste dieses Monats — rein plan-strukturelle
-  // Kennzahlen, unabhängig von der Abrechnungsart. Alle übrigen Kategorien
-  // (Pausen, Teamsitzungen, Vertretungen, Urlaubsabgeltung, Kind-krank,
-  // Freistellung, abgesagte Stunden) haben noch KEINE Datenquelle und bleiben
-  // bewusst 0 — keine Fake-Berechnungen; spätere Erfassungs-Features müssen
-  // nur noch Werte liefern.
+  // Kennzahlen, unabhängig von der Abrechnungsart.
   const bereitschaftsShifts = workShifts.filter((s) => s.modelName === "Bereitschaft");
   const bereitschaftenAnzahl = bereitschaftsShifts.length;
   const bereitschaftsStunden = bereitschaftsShifts.reduce((acc, s) => acc + shiftHours(s), 0);
@@ -425,8 +485,9 @@ export function computeHoursBalanceRow(params: {
         addBase({ ...s, hours: s.valuedHours ?? 0 });
       }
     }
-    // Lohnfortzahlung: Urlaub/Krank zählen zum Grundlohn (immer regulär).
-    base += wage * (vacationFulfilledHours + sickFulfilledHours);
+    // Lohnfortzahlung: Urlaub/Krank sowie bezahlte Freistellung und vom
+    // Arbeitgeber abgesagte Stunden zählen zum Grundlohn (immer regulär).
+    base += wage * (vacationFulfilledHours + sickFulfilledHours + paidExtraFulfilledHours);
     // Teamsitzungs-Vergütung: Stundenlohn × gutgeschriebene Team-Stunden
     // (beide Abrechnungsarten, wie Lohnfortzahlung; keine Zuschläge).
     base += wage * teamsitzungStunden;
@@ -463,21 +524,21 @@ export function computeHoursBalanceRow(params: {
     sundayPercent,
     holidayPercent,
     billingMethod,
-    // Zukünftige Abrechnungskategorien: Bereitschaften + Teamsitzungen real,
-    // Rest 0 (s. o.).
-    pausenzeitStunden: 0,
+    // Weitere Abrechnungskategorien (informativ; bezahlte Anteile stecken
+    // bereits in basePay, urlaubsabgeltungEuro fließt NICHT in totalPay ein).
+    pausenzeitStunden: round2(pausenzeitStunden),
     teamsitzungStunden: round2(teamsitzungStunden),
     teamsitzungEuro: wage != null ? round2(wage * teamsitzungStunden) : 0,
     bereitschaftenAnzahl,
     bereitschaftsStunden: round2(bereitschaftsStunden),
-    vertretungenAnzahl: 0,
-    vertretungsStunden: 0,
-    urlaubsabgeltungEuro: 0,
-    kindKrankTage: 0,
-    freistellungTage: 0,
-    freistellungStunden: 0,
-    abgesagtArbeitgeberStunden: 0,
-    abgesagtArbeitnehmerStunden: 0,
+    vertretungenAnzahl,
+    vertretungsStunden: round2(vertretungsStunden),
+    urlaubsabgeltungEuro: wage != null ? round2(wage * urlaubsabgeltungStunden) : 0,
+    kindKrankTage,
+    freistellungTage,
+    freistellungStunden: round2(freistellungStunden),
+    abgesagtArbeitgeberStunden: round2(abgesagtAgStunden),
+    abgesagtArbeitnehmerStunden: round2(abgesagtAnStunden),
     hourlyWage: wage,
     basePay,
     nightSurchargePay,

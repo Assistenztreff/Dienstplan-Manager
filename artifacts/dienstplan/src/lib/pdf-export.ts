@@ -78,6 +78,12 @@ const SHIFT_TYPE_LABELS: Record<string, string> = {
   vacation: "Urlaub",
   sick: "Krank",
   team: "Teamsitzung",
+  freizeitausgleich: "Freizeitausgleich",
+  kind_krank: "Kind krank",
+  freistellung: "Freistellung",
+  abgesagt_ag: "Abgesagt (AG)",
+  abgesagt_an: "Abgesagt (AN)",
+  urlaubsabgeltung: "Urlaubsabgeltung",
 };
 
 function hoursFromShift(startTime: string, endTime: string): number {
@@ -480,7 +486,16 @@ function addSignatureFooter(doc: any, pageWidth: number) {
 // (Urlaub/Krank), damit auch Free-Konten und Assistenzkraefte einen
 // vollstaendigen Monatsueberblick als PDF bekommen.
 
-const ABSENCE_TYPES = new Set(["vacation", "sick"]);
+const ABSENCE_TYPES = new Set([
+  "vacation",
+  "sick",
+  "freizeitausgleich",
+  "kind_krank",
+  "freistellung",
+  "abgesagt_ag",
+  "abgesagt_an",
+  "urlaubsabgeltung",
+]);
 
 export type SimpleMonthShift = {
   userId: number;
