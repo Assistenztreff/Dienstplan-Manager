@@ -12,6 +12,8 @@ import {
   useListTeamMembers,
   useRemoveTeamMember,
   getHoursBalance,
+  getMonthClosingDiff,
+  ApiError,
   getListUsersQueryKey,
   getListContractsQueryKey,
   getListTeamMembersQueryKey,
@@ -51,7 +53,11 @@ import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { toast } from "sonner";
-import { exportStatementSectionsPdf } from "@/lib/pdf-export";
+import { exportStatementSectionsPdf, type StatementRecalculation } from "@/lib/pdf-export";
+import {
+  computeRecalculationMonthTotals,
+  mapDiffRowsToRecalculationRows,
+} from "@/lib/recalculation-mapping";
 
 type User = {
   id: number;
@@ -860,6 +866,7 @@ function ExportDialog({ open, onClose, userId, userName }: ExportDialogProps) {
     setIsExporting(true);
     try {
       const sections: Array<{ balance: any; month: number; year: number; monthLabel: string }> = [];
+      const months: Array<{ month: number; year: number; monthLabel: string; balances: any[] }> = [];
 
       for (let i = 0; i < monthCount; i++) {
         const cursor = new Date(fromDate.getFullYear(), fromDate.getMonth() + i, 1);
@@ -867,12 +874,14 @@ function ExportDialog({ open, onClose, userId, userName }: ExportDialogProps) {
         const year = cursor.getFullYear();
         const monthLabel = format(cursor, "MMMM yyyy", { locale: de });
 
-        const balances = await getHoursBalance({
+        const raw = (await getHoursBalance({
           month,
           year,
           ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
-        });
-        const balance = (balances as any[]).find((b) => b.userId === userId);
+        })) as any[];
+        const balances = raw.filter((b) => b.userId === userId);
+        months.push({ month, year, monthLabel, balances });
+        const balance = balances[0];
         if (balance) {
           sections.push({ balance, month, year, monthLabel });
         }
@@ -881,6 +890,47 @@ function ExportDialog({ open, onClose, userId, userName }: ExportDialogProps) {
       if (sections.length === 0) {
         toast.error("Keine Auswertungsdaten fuer den gewaehlten Zeitraum gefunden.");
         return;
+      }
+
+      // Nachberechnung: je exportiertem Monat die Differenzen des jeweiligen
+      // Vormonats laden (sofern dieser abgeschlossen wurde), auf die
+      // exportierte Assistenzkraft filtern und als eigene Position in den
+      // PDF-Nachweis aufnehmen — analog zum Export aus der Auswertung.
+      const recalculations: StatementRecalculation[] = [];
+      let recalcFetchFailed = false;
+      for (const m of months) {
+        const prev = new Date(m.year, m.month - 2, 1);
+        try {
+          const diff = await getMonthClosingDiff({
+            month: prev.getMonth() + 1,
+            year: prev.getFullYear(),
+            ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
+          });
+          if (!diff.closed || diff.rows.length === 0) continue;
+          const rows = mapDiffRowsToRecalculationRows(diff.rows, userId);
+          if (rows.length === 0) continue;
+          recalculations.push({
+            monthLabel: m.monthLabel,
+            prevLabel: format(prev, "MMMM yyyy", { locale: de }),
+            closedAt: diff.closedAt,
+            rows,
+            monthTotals: computeRecalculationMonthTotals(m.balances),
+          });
+        } catch (err) {
+          // Kein Abschluss/kein Zugriff (403/404) → PDF ohne Nachberechnungs-
+          // Seite. Echte Fehler (Netz/Server) NICHT verschlucken: der Export
+          // läuft weiter, aber der Nutzer bekommt eine sichtbare Warnung.
+          if (err instanceof ApiError && (err.status === 403 || err.status === 404)) {
+            continue;
+          }
+          recalcFetchFailed = true;
+          console.error(err);
+        }
+      }
+      if (recalcFetchFailed) {
+        toast.warning(
+          "Nachberechnung konnte nicht geladen werden — das PDF wird ohne Nachberechnungs-Seite erstellt.",
+        );
       }
 
       const safeName = userName.replace(/[^\p{L}\p{N}]+/gu, "_").replace(/^_+|_+$/g, "");
@@ -895,6 +945,7 @@ function ExportDialog({ open, onClose, userId, userName }: ExportDialogProps) {
         sections,
         teamId: selectedTeamId,
         filename: `Stundennachweis_${safeName}_${rangePart}.pdf`,
+        recalculations,
       });
       onClose();
     } catch (err) {
