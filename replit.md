@@ -87,11 +87,10 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
 - **Warn-E-Mail bei Level error** (Resend, fire-and-forget, wirft NIE): ohne `RESEND_API_KEY` Skip; Drosselung 15 min pro Meldung+Kontext; Fallbacks für Empfänger/Absender.
 - **Lexware-Buchungs-Log**: Dummy mit Adapter (`lib/lexware.ts`); ohne `LEXWARE_API_KEY` Mock (`source: "demo"`, Badge „Demo-Daten"); mit Key wirft `getLexwareClient()` bewusst LAUT (echter Client folgt nach DB-Migration auf deutschen Server) — späterer Umbau = nur Adapter-Tausch.
 
-## PWA & Plattform-Einbettung (iframe)
+## PWA & Standalone-Betrieb
 
-- PWA-Meta-Tags vorhanden; noch KEIN Manifest/Service Worker. Einbettung per `<iframe>` in die AssistenzTreff-Plattform (Symfony); eigene Postgres-DB bleibt.
-- **Cross-Site-Cookie**: in Produktion (oder `SESSION_COOKIE_CROSS_SITE=1`) `SameSite=None; Secure` — sonst schlägt der Login im iframe still fehl. Lokal/Dev `Lax`.
-- **Embed-Modus** `?embed=1` (sessionStorage): blendet Plattform-Platzhalter aus; keine `window.top`-Auto-Erkennung. Plattformseitig: iframe-URL mit `?embed=1`, Deploy-Domain in `frame-src` (nelmio_security).
+- PWA-Meta-Tags vorhanden; noch KEIN Manifest/Service Worker. Die App läuft eigenständig (First-Party) unter der Subdomain dienstplan.assistenztreff.de — KEINE iframe-Einbettung mehr; eigene Postgres-DB bleibt.
+- **Session-Cookie**: immer `SameSite=Lax`; in Produktion zusätzlich `Secure` (HTTPS via Proxy, `trust proxy` gesetzt). Kein Embed-Modus, kein `SESSION_COOKIE_CROSS_SITE` mehr; Plattform-Header-/Footer-Platzhalter werden IMMER gerendert (die App liefert die „Plattform-Optik" selbst).
 
 ## Tests
 

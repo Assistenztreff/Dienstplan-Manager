@@ -10,7 +10,6 @@
 - [requireDienstleister fresh read](require-dienstleister-fresh-read.md) — team CRUD gating reads account_type from DB per request (not session) so runtime account-type switches take effect immediately.
 - [Idempotent UNIQUE/PK constraint](idempotent-unique-constraint.md) — re-adding UNIQUE/PK raises 42P07 (duplicate_table) not 42710; guard with pg_constraint check + catch both. Post-merge needs ~180s timeout.
 - [User-list team scoping](team-member-shared-pool.md) — GET /users is team-membership-scoped (no global pool); every user-create flow must assign membership or the user vanishes from scoped lists/pickers.
-- [Cross-site iframe embedding](iframe-embed-cross-site-cookie.md) — embedding the SPA as a 3rd-party iframe needs SameSite=None;Secure session cookie (Lax is silently dropped), platform CSP frame-src, and ?embed=1 chrome mode.
 - [Second admin only via seed](second-admin-only-via-seed.md) — role+accountType can't both be set via API; cross-tenant tests needing a foreign admin must seed it (setup-admin script).
 - [Curl test ID parsing on shifts](curl-shift-id-parsing.md) — shift JSON embeds a nested user.id; greedy regex/jq mistakes can grab the wrong id and DELETE the wrong row. Parse the top-level id only.
 - [Vite dynamic-import reload mid-action](vite-dynamic-import-export-reload.md) — heavy `await import()` deps (jspdf) need optimizeDeps.include or Vite reloads mid-export, aborting the download (E2E hangs).
@@ -70,7 +69,6 @@
 - [E2E DB fixtures in-process](e2e-inprocess-db-helpers.md) — never execSync pnpm scripts per test (~3.2s/spawn ≈ minutes/run); run the SQL in-process; e2e/ isn't typechecked, so sync→async helper changes need an ad-hoc tsc pass.
 - [Merge validation e2e-api](merge-validation-e2e-api.md) — registered validations typecheck + e2e-api (~3 min, all *-api.spec.ts) run on every merge; name API-only specs with that suffix to join the gate.
 - [Stale generated client on main](stale-generated-client-on-main.md) — openapi.yaml can outrun committed Orval output; red typecheck on generated types = run codegen, not debug pages.
-- [Embed sticky viewport height](embed-sticky-viewport-height.md) — ?embed=1 removes header+footer, so scroll-based specs lose scroll room; embed variants need shorter viewports (400x460 mobile).
 - [E2E scroll-threshold & opacity](e2e-scroll-threshold-opacity.md) — test-DB content scrolls <300px (inject spacer into main); opacity-hidden elements need getComputedStyle checks, not toBeVisible.
 - [TeamSwitcher auto-select](team-switcher-auto-select.md) — no "Alle Teams"; dienstleister e2e fixtures must live in the FIRST team or specs switch explicitly; first load fires one unscoped fetch.
 - [Header tier measurement](header-tier-measurement.md) — narrower toggle states use a remeasureKey (never reset to labels); no min-w-0 wrapper around min-width selects or overlap replaces measurable overflow.
@@ -82,3 +80,4 @@
 - [Scope checks before content checks](scope-before-content-oracle.md) — run team/member 403 checks BEFORE overlap/duplicate 409 checks in write routes, or errors become a cross-tenant data oracle.
 - [Staging/Prod-DB-Trennung](staging-prod-db-split.md) — APP_DATABASE_URL-Override hat Vorrang; jeder Kind-Spawn mit DATABASE_URL-Override muss APP_DATABASE_URL mitsetzen.
 - [E2E floating-promise lint](e2e-floating-promise-lint.md) — lint:e2e (no-floating-promises + missing-playwright-await) is chained into typecheck; discarded async calls must be awaited or `void`-marked.
+- [Shared staging _test DB race](shared-staging-test-db-race.md) — parallel task environments share the staging `_test` DB; separation pre-check can fail from foreign runs, verify one-offs with E2E_SKIP_SEPARATION_CHECK=1.

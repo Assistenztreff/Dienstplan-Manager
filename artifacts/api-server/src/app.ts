@@ -14,21 +14,15 @@ import { recordPlatformError } from "./lib/platform-errors";
 
 const PgStore = ConnectPgSimple(session);
 
-// Wenn die App in einem fremden Origin (z. B. als iframe in der
-// Assistenztreff-Plattform) eingebettet wird, ist der Kontext "cross-site".
-// Ein SameSite=Lax-Cookie wird dann vom Browser NICHT mitgesendet -> Login
-// würde im iframe stillschweigend fehlschlagen. In diesem Fall muss das
-// Session-Cookie SameSite=None; Secure sein (Secure setzt HTTPS voraus).
-// Standardmäßig in Produktion aktiv; per SESSION_COOKIE_CROSS_SITE=1 auch in
-// anderen Umgebungen erzwingbar (z. B. zum Testen gegen ein Deployment).
-const crossSiteCookie =
-  process.env.NODE_ENV === "production" ||
-  process.env.SESSION_COOKIE_CROSS_SITE === "1";
+// Standalone-Betrieb (First-Party unter dienstplan.assistenztreff.de bzw. der
+// Replit-Deploy-Domain): Das Session-Cookie ist immer SameSite=Lax; in
+// Produktion zusätzlich Secure (HTTPS via Proxy, siehe trust proxy).
+const isProduction = process.env.NODE_ENV === "production";
 
 // Explizite Allowlist erlaubter Cross-Origin-Aufrufer (z. B. eine separat
 // gehostete Mobile-Web-App). Im Normalfall LEER: Frontend und API laufen unter
-// derselben Origin (SPA -> /api same-origin, auch innerhalb des iframes), CORS
-// wird dann gar nicht benötigt. Format: kommagetrennte Origins.
+// derselben Origin (SPA -> /api same-origin), CORS wird dann gar nicht
+// benötigt. Format: kommagetrennte Origins.
 const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS ?? "")
   .split(",")
   .map((o) => o.trim())
@@ -47,17 +41,16 @@ const app: Express = express();
 
 app.set("trust proxy", 1);
 
-// CORS streng: KEIN reflektierendes credentialed CORS. Da das Session-Cookie
-// cross-site (SameSite=None) gesendet wird, würde reflektierendes CORS jeder
-// fremden Origin erlauben, authentifizierte Antworten auszulesen. Erlaubt sind
-// daher nur: kein Origin-Header (same-origin/native/curl) und explizit
-// gelistete Origins. In Dev (Lax-Cookie) bleibt es bequem permissiv.
+// CORS streng: KEIN reflektierendes credentialed CORS. Erlaubt sind nur:
+// kein Origin-Header (same-origin/native/curl) und explizit gelistete
+// Origins. In Dev bleibt es bequem permissiv. Das SameSite=Lax-Cookie
+// schützt zusätzlich vor Cross-Site-Requests mit Credentials.
 app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
       if (allowedOrigins.includes(origin)) return callback(null, true);
-      if (!crossSiteCookie) return callback(null, true);
+      if (!isProduction) return callback(null, true);
       return callback(null, false);
     },
     credentials: true,
@@ -78,8 +71,8 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      sameSite: crossSiteCookie ? "none" : "lax",
-      secure: crossSiteCookie,
+      sameSite: "lax",
+      secure: isProduction,
       maxAge: 7 * 24 * 60 * 60 * 1000,
     },
   }),

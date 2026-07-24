@@ -15,31 +15,24 @@ import {
 } from "./helpers/teams";
 
 /**
- * Zwei-Stufen-Klick im EMBED-MODUS (?embed=1, iframe-Einbettung in die
- * AssistenzTreff-Plattform).
+ * Zwei-Stufen-Klick in der MOBILEN Monatsgitter-Ansicht (Standalone-Betrieb).
  *
  * Der Zwei-Stufen-Klick (1. Klick markiert den Tag, 2. Klick auf den bereits
- * markierten Tag öffnet als Admin den Schicht-Dialog) ist in den normalen
- * UI-Specs abgedeckt — aber NICHT im Embed-Modus, in dem das Layout anders
- * aufgebaut ist (kein Plattform-Header/-Footer, deutlich weniger Höhe) und in
- * dem echte eingebettete Nutzer landen.
+ * markierten Tag öffnet als Admin den Schicht-Dialog) ist desktop-seitig in
+ * dienstplan-zweiklick-desktop.spec.ts abgedeckt — dieser Spec prüft die
+ * mobile Ansicht (400px), in der echte Smartphone-Nutzer landen.
  *
- * Deckt ab (mobil 400px, Embed-typisch nur 460px Höhe — siehe
- * dienstplan-sticky-kopfzeile-embed.spec.ts):
+ * Deckt ab (mobil 400px):
  * - Admin: 1. Klick markiert nur (kein Dialog), 2. Klick öffnet shift-dialog.
+ * - Admin: Klick auf einen ANDEREN Tag ist wieder Stufe 1.
  * - Assistent: 1. Klick markiert, 2. Klick öffnet NICHTS (kein Dialog).
- * - Beides mit aktivem Embed-Modus (platform-header fehlt im DOM).
  *
- * Setup wie in dienstplan-einklick-rollen-desktop.spec.ts: frisches
- * Free-Konto; Assistenten-Login über den Einladungsflow (Owner kurz auf
- * Premium heben, Token ziehen, zurück auf Free — Bestandsschutz hält den
- * Login gültig).
+ * Setup wie in dienstplan-zweiklick-desktop.spec.ts: frisches Free-Konto;
+ * Assistenten-Login über den Einladungsflow (Owner kurz auf Premium heben,
+ * Token ziehen, zurück auf Free — Bestandsschutz hält den Login gültig).
  */
 
-// Embed-typischer, knapper Mobil-Viewport (Plattform-Header + Browser-Chrome
-// nehmen dem iframe erheblich Höhe weg). Playwright scrollt Zellen bei Bedarf
-// selbst in den Sichtbereich.
-const EMBED_MOBILE_VIEWPORT = { width: 400, height: 460 };
+const MOBILE_VIEWPORT = { width: 400, height: 700 };
 
 let acc: FreeAccount;
 let assistantId: number;
@@ -50,12 +43,12 @@ test.beforeAll(async () => {
   // die Standard-Hook-Zeit.
   test.setTimeout(180_000);
 
-  acc = await registerFreeAccount("privat", "zweiklickembed");
+  acc = await registerFreeAccount("privat", "zweiklickmobil");
 
   const assistantRes = await acc.ctx.post("/api/users", {
     data: {
-      name: `E2E Zweiklick Embed Assistent ${Date.now()}`,
-      email: `e2e.zweiklickembed.assistent.${Date.now()}@dienstplan.test`,
+      name: `E2E Zweiklick Mobil Assistent ${Date.now()}`,
+      email: `e2e.zweiklickmobil.assistent.${Date.now()}@dienstplan.test`,
       role: "assistant",
     },
   });
@@ -114,24 +107,20 @@ function pickTargetDays(): { year: number; month1: number; dayA: number; dayB: n
 }
 
 /**
- * Öffnet den Dienstplan mit ?embed=1 in einem frischen Kontext mit der
- * übergebenen Session und stellt sicher, dass der Embed-Modus wirklich aktiv
- * ist (Plattform-Header-Platzhalter fehlt) und die mobile Monatsansicht steht.
+ * Öffnet den Dienstplan in einem frischen mobilen Kontext mit der übergebenen
+ * Session und stellt sicher, dass die mobile Monatsgitter-Ansicht steht.
  */
-async function openEmbeddedCalendar(
+async function openMobileCalendar(
   browser: Browser,
   sessionCtx: APIRequestContext,
 ): Promise<{ page: Page; close: () => Promise<void> }> {
   const context = await browser.newContext({
     storageState: await sessionCtx.storageState(),
-    viewport: EMBED_MOBILE_VIEWPORT,
+    viewport: MOBILE_VIEWPORT,
   });
   const page = await context.newPage();
-  await page.goto("/dienstplan?embed=1");
+  await page.goto("/dienstplan");
   await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible();
-
-  // Embed-Modus aktiv: Plattform-Header-Platzhalter ist NICHT im DOM.
-  await expect(page.getByTestId("platform-header")).toHaveCount(0);
 
   // Monatsgitter erzwingen (explizit gegen localStorage-Drift aus
   // Nachbar-Specs; Standard ist zwar "grid", aber sessionübergreifend
@@ -144,12 +133,12 @@ async function openEmbeddedCalendar(
   return { page, close: () => context.close() };
 }
 
-test("Embed-Modus (Admin, mobil): 1. Klick markiert nur, 2. Klick öffnet den Schicht-Dialog", async ({
+test("Mobil (Admin): 1. Klick markiert nur, 2. Klick öffnet den Schicht-Dialog", async ({
   browser,
 }) => {
   test.setTimeout(120_000);
   const { year, month1, dayA, dayB } = pickTargetDays();
-  const { page, close } = await openEmbeddedCalendar(browser, acc.ctx);
+  const { page, close } = await openMobileCalendar(browser, acc.ctx);
   try {
     const mobile = page.getByTestId("dienstplan-mobile");
     const dialog = page.getByTestId("shift-dialog");
@@ -178,13 +167,13 @@ test("Embed-Modus (Admin, mobil): 1. Klick markiert nur, 2. Klick öffnet den Sc
   }
 });
 
-test("Embed-Modus (Assistent, mobil): 1. Klick markiert, 2. Klick öffnet NICHTS", async ({
+test("Mobil (Assistent): 1. Klick markiert, 2. Klick öffnet NICHTS", async ({
   browser,
 }) => {
   test.setTimeout(120_000);
   if (!assistantCtx) throw new Error("Assistenten-Kontext nicht initialisiert");
   const { year, month1, dayA } = pickTargetDays();
-  const { page, close } = await openEmbeddedCalendar(browser, assistantCtx);
+  const { page, close } = await openMobileCalendar(browser, assistantCtx);
   try {
     const mobile = page.getByTestId("dienstplan-mobile");
     const dialog = page.getByTestId("shift-dialog");

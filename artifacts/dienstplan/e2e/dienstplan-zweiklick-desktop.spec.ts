@@ -18,8 +18,8 @@ import {
  * Zwei-Stufen-Klick in der DESKTOP-Monatsgitter-Ansicht.
  *
  * Der Zwei-Stufen-Klick (1. Klick markiert den Tag, 2. Klick auf den bereits
- * markierten Tag öffnet als Admin den Schicht-Dialog) ist mobil (normal +
- * Embed) per E2E abgedeckt. Die Desktop-Monatsgitter-Ansicht (Toggle
+ * markierten Tag öffnet als Admin den Schicht-Dialog) ist mobil per E2E
+ * abgedeckt. Die Desktop-Monatsgitter-Ansicht (Toggle
  * view-toggle-grid im Desktop-Header, Container dienstplan-desktop) nutzt
  * zwar dieselbe MonthGrid-Komponente, wurde aber bislang nicht explizit
  * geprüft — ein Layout-/Render-Regress dort bliebe unentdeckt.
@@ -29,7 +29,7 @@ import {
  * - Admin: Klick auf einen ANDEREN Tag ist wieder Stufe 1.
  * - Assistent: 1. Klick markiert, 2. Klick öffnet NICHTS (kein Dialog).
  *
- * Setup wie in dienstplan-zweiklick-embed.spec.ts: frisches Free-Konto;
+ * Setup wie in dienstplan-einklick-rollen-desktop.spec.ts: frisches Free-Konto;
  * Assistenten-Login über den Einladungsflow (Owner kurz auf Premium heben,
  * Token ziehen, zurück auf Free — Bestandsschutz hält den Login gültig).
  */

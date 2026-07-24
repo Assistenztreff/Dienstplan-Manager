@@ -18,7 +18,6 @@ import {
 import logoUrl from "@assets/Arbeitgebermodell oder Assistenzdienst.png";
 import { useAuth } from "@/context/auth";
 import { useToast } from "@/hooks/use-toast";
-import { isEmbedded } from "@/lib/embed";
 import { isAdminRole } from "@/lib/roles";
 import { useTimeTrackingEnabled } from "@/hooks/use-time-tracking-enabled";
 import { DevUserSwitcher } from "./dev-user-switcher";
@@ -42,9 +41,9 @@ const ALL_NAV_ITEMS = [
 // ---------------------------------------------------------------------------
 // Dieser Header ist ein reiner Platzhalter fuer das spaetere HTML/PHP der
 // AssistenzTreff-Hauptseite. Beim Umzug auf den eigenen All-Inkl-Server wird
-// dieser Block durch das echte Plattform-Markup ersetzt. Im Embed-Modus
-// (?embed=1) wird er ausgeblendet, damit keine doppelte Plattform-Huelle
-// entsteht (die Plattform liefert dann ihren eigenen Header).
+// dieser Block durch das echte Plattform-Markup ersetzt. Die App laeuft
+// eigenstaendig unter dienstplan.assistenztreff.de und liefert die
+// "Plattform-Optik" selbst — der Header ist daher IMMER sichtbar.
 // ---------------------------------------------------------------------------
 
 const PLATFORM_LINKS = ["Leistungen", "Über uns", "Kontakt"];
@@ -346,13 +345,13 @@ function AppSubNavigation() {
 //   Grid mehr). Der Plattform-Footer bleibt hier ausgeblendet, damit die
 //   App-Ansicht nicht durch die Plattform-Huelle unterbrochen wird.
 // - Alle anderen Seiten: zentrierter Inhalt (max-w-7xl) + Footer am Ende.
-// Im Embed-Modus werden die Plattform-Platzhalter ausgeblendet.
+// Die App laeuft eigenstaendig (Standalone unter dienstplan.assistenztreff.de)
+// und rendert die Plattform-Platzhalter daher IMMER.
 // ---------------------------------------------------------------------------
 // Ab dieser Scrolltiefe (px) erscheint mobil der "Nach oben"-Button.
 const SCROLL_TOP_THRESHOLD = 300;
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const embedded = isEmbedded();
   const [location] = useLocation();
   // Dienstplan nutzt die volle Bildschirmbreite (kein zentrierter Container).
   const fullBleed = location === "/dienstplan";
@@ -391,8 +390,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         data-testid="layout-scroll-container"
       >
         <div className="flex min-h-full flex-col">
-          {/* Plattform-Header (Platzhalter) — im Embed-Modus ausgeblendet */}
-          {!embedded && <PlatformHeaderPlaceholder />}
+          {/* Plattform-Header (Platzhalter) — immer sichtbar (Standalone) */}
+          <PlatformHeaderPlaceholder />
 
           {/* Dienstplan-App: Sub-Navigation (scrollt mit) */}
           <AppSubNavigation />
@@ -403,8 +402,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {children}
           </main>
 
-          {/* Plattform-Footer (Platzhalter) — im Embed-Modus ausgeblendet */}
-          {!embedded && <PlatformFooterPlaceholder />}
+          {/* Plattform-Footer (Platzhalter) — immer sichtbar (Standalone) */}
+          <PlatformFooterPlaceholder />
         </div>
       </div>
 
