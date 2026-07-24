@@ -72,7 +72,12 @@ export default function globalTeardown(): void {
     return;
   }
 
-  const cleanupEnv = { ...process.env, DATABASE_URL: testDatabaseUrl };
+  const cleanupEnv = {
+    ...process.env,
+    DATABASE_URL: testDatabaseUrl,
+    // Staging-Override neutralisieren (resolveDatabaseUrl bevorzugt ihn sonst).
+    APP_DATABASE_URL: testDatabaseUrl,
+  };
 
   try {
     execSync("pnpm --filter @workspace/scripts run cleanup-test-accounts", {

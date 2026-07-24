@@ -80,4 +80,5 @@
 - [drizzle push missing FKs](drizzle-push-missing-fks.md) — non-interactive push can create a table without its FK constraints (guard fails); repair via idempotent ALTER TABLE, re-push won't fix it.
 - [MonthGrid unmount on month change](monthgrid-unmount-focus.md) — /dienstplan swaps to a skeleton while the new month's shifts load, unmounting both grids; focus/keyboard continuity state must live in the parent, and effects must target only the visible (offsetParent) instance.
 - [Scope checks before content checks](scope-before-content-oracle.md) — run team/member 403 checks BEFORE overlap/duplicate 409 checks in write routes, or errors become a cross-tenant data oracle.
+- [Staging/Prod-DB-Trennung](staging-prod-db-split.md) — APP_DATABASE_URL-Override hat Vorrang; jeder Kind-Spawn mit DATABASE_URL-Override muss APP_DATABASE_URL mitsetzen.
 - [E2E floating-promise lint](e2e-floating-promise-lint.md) — lint:e2e (no-floating-promises + missing-playwright-await) is chained into typecheck; discarded async calls must be awaited or `void`-marked.

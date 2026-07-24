@@ -53,6 +53,7 @@ function runOwnedTeamScript(email: string, action: "create" | "delete"): void {
   };
   if (process.env.E2E_TEST_DATABASE_URL) {
     env.DATABASE_URL = process.env.E2E_TEST_DATABASE_URL;
+    env.APP_DATABASE_URL = process.env.E2E_TEST_DATABASE_URL;
   }
   execSync("pnpm --filter @workspace/scripts run seed-owned-team", {
     env,

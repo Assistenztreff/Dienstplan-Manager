@@ -1,5 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
-import { normalizeDatabaseUrl } from "@workspace/db/database-url";
+import { normalizeDatabaseUrl, resolveDatabaseUrl } from "@workspace/db/database-url";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -56,9 +56,13 @@ const baseURL = externalBaseUrl ?? `http://localhost:${WEB_PORT}`;
 // treffen wie der Browser, E2E_BASE_URL für die Worker-Prozesse setzen.
 process.env.E2E_BASE_URL = baseURL;
 
-const databaseUrl = process.env.DATABASE_URL
-  ? normalizeDatabaseUrl(process.env.DATABASE_URL)
-  : undefined;
+// APP_DATABASE_URL (Staging-Override) hat Vorrang vor DATABASE_URL. Aufgeloeste
+// URL zurueckschreiben, damit Worker-Prozesse/Specs (z. B. eigener Prod-Stack,
+// e2e/helpers/db.ts) dieselbe DB sehen.
+const databaseUrl = resolveDatabaseUrl();
+if (databaseUrl) {
+  process.env.DATABASE_URL = databaseUrl;
+}
 if (useManagedStack && !databaseUrl) {
   throw new Error("DATABASE_URL muss für den isolierten E2E-Test-Stack gesetzt sein.");
 }
@@ -506,6 +510,9 @@ export default defineConfig({
             env: {
               PORT: API_PORT,
               DATABASE_URL: testDatabaseUrl,
+              // Staging-Override neutralisieren, sonst gewinnt er via
+              // resolveDatabaseUrl über die Test-URL.
+              APP_DATABASE_URL: testDatabaseUrl,
               NODE_ENV: "development",
             },
           },

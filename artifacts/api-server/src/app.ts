@@ -67,6 +67,8 @@ app.use(
 app.use(
   session({
     store: new PgStore({
+      // @workspace/db (frueher importiert) schreibt die via resolveDatabaseUrl
+      // aufgeloeste URL (APP_DATABASE_URL-Override) nach process.env zurueck.
       conString: process.env.DATABASE_URL,
       tableName: "session",
       pruneSessionInterval: 60 * 60,

@@ -198,7 +198,7 @@ export async function runAccountSeparationCheck(
   const runAgainstTestDb = (script: string): void => {
     execSync(`pnpm --filter @workspace/scripts run ${script}`, {
       stdio: "inherit",
-      env: { ...process.env, DATABASE_URL: testUrl },
+      env: { ...process.env, DATABASE_URL: testUrl, APP_DATABASE_URL: testUrl },
       timeout: 180_000,
     });
   };
@@ -521,7 +521,7 @@ export async function runTestDbCleanupCheck(
     // ------------------------------------------------------------------
     execSync("pnpm --filter @workspace/scripts run cleanup-test-accounts", {
       stdio: "inherit",
-      env: { ...process.env, DATABASE_URL: testUrl },
+      env: { ...process.env, DATABASE_URL: testUrl, APP_DATABASE_URL: testUrl },
       timeout: 120_000,
     });
 
@@ -624,7 +624,7 @@ export async function runPlatformErrorsCleanupCheck(
   const runCleanup = (): void => {
     execSync("pnpm --filter @workspace/scripts run cleanup-test-platform-errors", {
       stdio: "inherit",
-      env: { ...process.env, DATABASE_URL: testUrl },
+      env: { ...process.env, DATABASE_URL: testUrl, APP_DATABASE_URL: testUrl },
       timeout: 120_000,
     });
   };

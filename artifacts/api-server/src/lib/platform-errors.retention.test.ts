@@ -24,7 +24,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { sql } from "drizzle-orm";
-import { normalizeDatabaseUrl } from "@workspace/db/database-url";
+import { normalizeDatabaseUrl, resolveDatabaseUrl } from "@workspace/db/database-url";
 
 // Klein gestelltes Aufbewahrungslimit fuer diese Tests.
 const TEST_LIMIT = 5;
@@ -47,7 +47,7 @@ let dbmod: Db;
 let mod: PlatformErrors;
 
 beforeAll(async () => {
-  const base = process.env.DATABASE_URL;
+  const base = resolveDatabaseUrl();
   if (!base) throw new Error("DATABASE_URL muss gesetzt sein.");
 
   // Env VOR den dynamischen Imports umbiegen: db-Pool und Limit werden beim
@@ -66,7 +66,7 @@ beforeAll(async () => {
     execSync("pnpm --filter @workspace/scripts run setup-test-db", {
       cwd: repoRoot,
       stdio: ["ignore", "inherit", "inherit"],
-      env: { ...process.env, DATABASE_URL: base },
+      env: { ...process.env, DATABASE_URL: base, APP_DATABASE_URL: base },
       timeout: 180_000,
     });
     await dbmod.db.execute(sql`SELECT 1 FROM platform_errors LIMIT 1`);

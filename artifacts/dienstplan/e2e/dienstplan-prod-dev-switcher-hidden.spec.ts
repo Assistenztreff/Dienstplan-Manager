@@ -123,6 +123,7 @@ test.describe("Produktions-Modus: Dev-Nutzer-Wechsler unsichtbar", () => {
         NODE_ENV: "production",
         PORT: String(API_PORT),
         DATABASE_URL: testDbUrl!,
+        APP_DATABASE_URL: testDbUrl!,
         SESSION_SECRET: "e2e-prod-mode-check",
       },
     });

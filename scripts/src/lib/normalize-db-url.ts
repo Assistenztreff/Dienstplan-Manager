@@ -1,11 +1,14 @@
 /**
- * Seiteneffekt-Import: normalisiert process.env.DATABASE_URL (percent-kodiert
- * unkodierte Sonderzeichen im Passwort; optionaler sslmode-Rewrite via
- * DATABASE_SSL_NO_VERIFY=1), bevor ein Script pg-Clients erstellt.
+ * Seiteneffekt-Import: loest die effektive Datenbank-URL auf
+ * (APP_DATABASE_URL hat Vorrang vor DATABASE_URL; percent-kodiert unkodierte
+ * Sonderzeichen im Passwort; optionaler sslmode-Rewrite via
+ * DATABASE_SSL_NO_VERIFY=1) und schreibt sie nach process.env.DATABASE_URL,
+ * bevor ein Script pg-Clients erstellt.
  * MUSS in jedem Script importiert werden, das DATABASE_URL direkt nutzt.
  */
-import { normalizeDatabaseUrl } from "@workspace/db/database-url";
+import { resolveDatabaseUrl } from "@workspace/db/database-url";
 
-if (process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = normalizeDatabaseUrl(process.env.DATABASE_URL);
+const databaseUrl = resolveDatabaseUrl();
+if (databaseUrl) {
+  process.env.DATABASE_URL = databaseUrl;
 }

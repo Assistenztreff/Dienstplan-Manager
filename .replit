@@ -103,5 +103,11 @@ ERROR_ALERT_EMAIL = "kontakt@assistenztreff.de"
 ERROR_ALERT_FROM = "Dienstplan-App <alerts@mail.assistenztreff.de>"
 DATABASE_SSL_NO_VERIFY = "1"
 
+[userenv.development]
+APP_DATABASE_URL = "postgresql://admin:u%5BUZ0%7BmM%5BCJ%3FQBl%23n%3BRj@51.158.116.70:11527/dienstplan-app-staging?sslmode=no-verify"
+
+[userenv.production]
+APP_DATABASE_URL = "postgresql://admin:u%5BUZ0%7BmM%5BCJ%3FQBl%23n%3BRj@51.158.116.70:11527/dienstplan-app-assitreff?sslmode=no-verify"
+
 [objectStorage]
 defaultBucketID = "replit-objstore-41a84f93-38b8-403d-b0e1-9371dea9138a"

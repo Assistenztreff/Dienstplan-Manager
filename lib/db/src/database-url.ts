@@ -50,3 +50,16 @@ export function normalizeDatabaseUrl(raw: string): string {
   }
   return url;
 }
+
+/**
+ * Liefert die effektive Datenbank-URL: `APP_DATABASE_URL` hat Vorrang vor
+ * `DATABASE_URL` (letztere wird auf Replit von der eingebauten Datenbank
+ * verwaltet und kann nicht ueberschrieben werden). So kann die
+ * Entwicklungsumgebung auf Staging und die veroeffentlichte App auf die
+ * Produktions-DB zeigen. Ergebnis ist bereits normalisiert.
+ */
+export function resolveDatabaseUrl(): string | undefined {
+  const raw = process.env.APP_DATABASE_URL ?? process.env.DATABASE_URL;
+  if (!raw) return undefined;
+  return normalizeDatabaseUrl(raw);
+}

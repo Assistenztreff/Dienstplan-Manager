@@ -49,7 +49,9 @@ async function main(): Promise<void> {
 
   // Schema + Seed gegen die Test-DB. DATABASE_URL für die Kind-Prozesse
   // überschreiben, damit Drizzle/Setup-Skripte die Test-DB treffen.
-  const childEnv = { ...process.env, DATABASE_URL: testUrl };
+  // APP_DATABASE_URL mit überschreiben, sonst gewinnt der Staging-Override
+  // (resolveDatabaseUrl) in den Kind-Prozessen über die Test-URL.
+  const childEnv = { ...process.env, DATABASE_URL: testUrl, APP_DATABASE_URL: testUrl };
   // stdin wird bewusst NICHT durchgereicht ("ignore"): drizzle-kit push soll
   // bei interaktiven Rückfragen sofort mit "Interactive prompts require a TTY"
   // fehlschlagen statt zu hängen — der Fehler löst dann den Neuaufbau aus.
