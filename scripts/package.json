@@ -19,6 +19,7 @@
     "cleanup-test-platform-errors": "tsx ./src/cleanup-test-platform-errors.ts",
     "migrate-teams": "tsx ./src/migrate-teams.ts",
     "migrate-prod": "tsx ./src/migrate-prod.ts",
+    "pre-push-sql": "tsx ./src/pre-push-sql.ts",
     "migrate-allowance-settings": "tsx ./src/migrate-allowance-settings.ts",
     "migrate-absences-fix": "tsx ./src/migrate-absences-fix.ts",
     "backfill-team-shift-models": "tsx ./src/backfill-team-shift-models.ts",

@@ -13,6 +13,7 @@ import {
   SESSION_DROP_PATTERN,
   NO_CHANGES_PATTERN,
 } from "./lib/migrate-prod-guards.js";
+import { runPrePushSql } from "./lib/pre-push-sql.js";
 
 /**
  * Sicherer Produktions-DB-Abgleich beim Veröffentlichen (Republish).
@@ -55,53 +56,9 @@ const DATA_MIGRATIONS = [
   "backfill-team-shift-models",
 ] as const;
 
-// Idempotente SQL-Vorab-Schritte aus scripts/post-merge.sh (dort per psql):
-// verhindern interaktive drizzle-push-Rückfragen auf Bestands-DBs.
-// Bei Änderungen in post-merge.sh hier mitziehen.
-const PRE_PUSH_SQL: string[] = [
-  `ALTER TABLE users ADD COLUMN IF NOT EXISTS calendar_token text;`,
-  `DO $$ BEGIN
-     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_calendar_token_unique') THEN
-       ALTER TABLE users ADD CONSTRAINT users_calendar_token_unique UNIQUE (calendar_token);
-     END IF;
-   END $$;`,
-  `ALTER TABLE allowance_settings ADD COLUMN IF NOT EXISTS team_id integer;`,
-  `DO $$ BEGIN
-     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'allowance_settings_team_id_teams_id_fk') THEN
-       ALTER TABLE allowance_settings
-         ADD CONSTRAINT allowance_settings_team_id_teams_id_fk
-         FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE;
-     END IF;
-   END $$;`,
-  `DO $$ BEGIN
-     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'allowance_settings_team_id_unique') THEN
-       ALTER TABLE allowance_settings ADD CONSTRAINT allowance_settings_team_id_unique UNIQUE (team_id);
-     END IF;
-   END $$;`,
-  `ALTER TABLE allowance_settings DROP CONSTRAINT IF EXISTS allowance_settings_owner_id_unique;`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS allowance_settings_owner_account_unique
-     ON allowance_settings (owner_id) WHERE team_id IS NULL;`,
-  `DO $$ BEGIN
-     IF EXISTS (SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'branding_settings' AND column_name = 'id') THEN
-       ALTER TABLE branding_settings DROP CONSTRAINT IF EXISTS branding_settings_pkey;
-       ALTER TABLE branding_settings DROP COLUMN id;
-       ALTER TABLE branding_settings DROP CONSTRAINT IF EXISTS branding_settings_owner_id_unique;
-       ALTER TABLE branding_settings ADD CONSTRAINT branding_settings_pkey PRIMARY KEY (owner_id);
-     END IF;
-   END $$;`,
-  `DROP SEQUENCE IF EXISTS branding_settings_id_seq;`,
-  `DO $$ BEGIN
-     IF EXISTS (SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'team_branding_settings' AND column_name = 'id') THEN
-       ALTER TABLE team_branding_settings DROP CONSTRAINT IF EXISTS team_branding_settings_pkey;
-       ALTER TABLE team_branding_settings DROP COLUMN id;
-       ALTER TABLE team_branding_settings DROP CONSTRAINT IF EXISTS team_branding_settings_team_id_unique;
-       ALTER TABLE team_branding_settings ADD CONSTRAINT team_branding_settings_pkey PRIMARY KEY (team_id);
-     END IF;
-   END $$;`,
-  `DROP SEQUENCE IF EXISTS team_branding_settings_id_seq;`,
-];
+// Idempotente SQL-Vorab-Schritte: gemeinsame Quelle mit scripts/post-merge.sh
+// (dort via `pnpm --filter @workspace/scripts run pre-push-sql`).
+// Neue Schritte NUR in scripts/src/lib/pre-push-sql.ts eintragen.
 
 
 /** drizzle-kit push gegen die Ziel-URL ausführen; Ausgabe zurückgeben. */
@@ -275,9 +232,7 @@ async function main(): Promise<void> {
     const sqlClient = new pg.Client({ connectionString: targetUrl });
     await sqlClient.connect();
     try {
-      for (const stmt of PRE_PUSH_SQL) {
-        await sqlClient.query(stmt);
-      }
+      await runPrePushSql(sqlClient);
     } finally {
       await sqlClient.end();
     }
@@ -308,7 +263,7 @@ async function main(): Promise<void> {
         "FEHLER: drizzle-kit push ist fehlgeschlagen oder wollte interaktiv nachfragen",
         "(Datenverlust-/Truncate-Rückfrage ohne TTY). Es wurde NICHT still teilweise angewendet.",
         "Handlungsanweisung: Die betroffene Schema-Änderung braucht einen idempotenten",
-        "SQL-Vorab-Schritt (Vorbild: PRE_PUSH_SQL in diesem Skript bzw. scripts/post-merge.sh),",
+        "SQL-Vorab-Schritt (gemeinsame Quelle: scripts/src/lib/pre-push-sql.ts),",
         "der die Änderung prompt-frei macht. Danach migrate-prod erneut ausführen.",
       ].join("\n"),
     );

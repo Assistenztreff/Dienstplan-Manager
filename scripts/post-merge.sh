@@ -14,66 +14,12 @@ pnpm --filter @workspace/scripts run migrate-absences-fix
 # Dienste nachgezogen (neue Teams werden seit dem Schicht-Dialog-Fix direkt
 # beim Anlegen geseedet). Reine Daten-Migration, idempotent.
 pnpm --filter @workspace/scripts run backfill-team-shift-models
-# calendar_token (Kalender-Abo-Feed) idempotent VOR db push anlegen: drizzle-kit
-# push fragt bei neuen UNIQUE-Constraints interaktiv nach (kein TTY im
-# Post-Merge => Abbruch). Vorab angelegt erkennt push "no changes".
-psql "$DATABASE_URL" <<'SQL'
-ALTER TABLE users ADD COLUMN IF NOT EXISTS calendar_token text;
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_calendar_token_unique') THEN
-    ALTER TABLE users ADD CONSTRAINT users_calendar_token_unique UNIQUE (calendar_token);
-  END IF;
-END $$;
-SQL
-# Team-Overrides für Zuschlags-Einstellungen: allowance_settings.team_id
-# idempotent VOR db push anlegen und den alten UNIQUE(owner_id)-Constraint
-# durch einen partiellen Index (nur Konto-Zeilen, team_id IS NULL) ersetzen —
-# drizzle-kit push würde dafür interaktiv nachfragen (kein TTY => Abbruch).
-psql "$DATABASE_URL" <<'SQL'
-ALTER TABLE allowance_settings ADD COLUMN IF NOT EXISTS team_id integer;
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'allowance_settings_team_id_teams_id_fk') THEN
-    ALTER TABLE allowance_settings
-      ADD CONSTRAINT allowance_settings_team_id_teams_id_fk
-      FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE;
-  END IF;
-END $$;
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'allowance_settings_team_id_unique') THEN
-    ALTER TABLE allowance_settings ADD CONSTRAINT allowance_settings_team_id_unique UNIQUE (team_id);
-  END IF;
-END $$;
-ALTER TABLE allowance_settings DROP CONSTRAINT IF EXISTS allowance_settings_owner_id_unique;
-CREATE UNIQUE INDEX IF NOT EXISTS allowance_settings_owner_account_unique
-  ON allowance_settings (owner_id) WHERE team_id IS NULL;
-SQL
-# Branding-Tabellen: Die Surrogat-Spalte `id` (serial PK) wurde aus dem Drizzle-
-# Schema entfernt (owner_id bzw. team_id ist jetzt PK). Auf Dev-DBs mit dem
-# alten Zustand fragt db push interaktiv wegen des Spalten-Drops (Data-Loss-
-# Warnung) und bricht ohne TTY ab. Idempotenter Vorab-Umbau: id-Spalte + alte
-# PK/UNIQUE-Constraints entfernen, PK auf die fachliche Spalte legen.
-psql "$DATABASE_URL" <<'SQL'
-DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.columns
-             WHERE table_name = 'branding_settings' AND column_name = 'id') THEN
-    ALTER TABLE branding_settings DROP CONSTRAINT IF EXISTS branding_settings_pkey;
-    ALTER TABLE branding_settings DROP COLUMN id;
-    ALTER TABLE branding_settings DROP CONSTRAINT IF EXISTS branding_settings_owner_id_unique;
-    ALTER TABLE branding_settings ADD CONSTRAINT branding_settings_pkey PRIMARY KEY (owner_id);
-  END IF;
-END $$;
-DROP SEQUENCE IF EXISTS branding_settings_id_seq;
-DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.columns
-             WHERE table_name = 'team_branding_settings' AND column_name = 'id') THEN
-    ALTER TABLE team_branding_settings DROP CONSTRAINT IF EXISTS team_branding_settings_pkey;
-    ALTER TABLE team_branding_settings DROP COLUMN id;
-    ALTER TABLE team_branding_settings DROP CONSTRAINT IF EXISTS team_branding_settings_team_id_unique;
-    ALTER TABLE team_branding_settings ADD CONSTRAINT team_branding_settings_pkey PRIMARY KEY (team_id);
-  END IF;
-END $$;
-DROP SEQUENCE IF EXISTS team_branding_settings_id_seq;
-SQL
+# Idempotente SQL-Vorab-Schritte VOR db push (gemeinsame Quelle mit
+# migrate-prod: scripts/src/lib/pre-push-sql.ts — neue Schritte NUR dort
+# eintragen). Sie machen Bestands-DBs prompt-frei, weil drizzle-kit push bei
+# neuen UNIQUE-Constraints/Spalten-Drops interaktiv nachfragt (kein TTY im
+# Post-Merge => Abbruch).
+pnpm --filter @workspace/scripts run pre-push-sql
 # WICHTIG (verifiziert): Nach diesem Skript laeuft die Plattform-
 # "Workflow-Reconciliation" und startet bereits laufende Workflows neu —
 # und zwar SOWOHL bei Erfolg ALS AUCH bei Fehlschlag des Skripts. Der
