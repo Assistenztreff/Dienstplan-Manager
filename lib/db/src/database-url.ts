@@ -59,7 +59,19 @@ export function normalizeDatabaseUrl(raw: string): string {
  * Produktions-DB zeigen. Ergebnis ist bereits normalisiert.
  */
 export function resolveDatabaseUrl(): string | undefined {
-  const raw = process.env.APP_DATABASE_URL ?? process.env.DATABASE_URL;
+  const fromApp = process.env.APP_DATABASE_URL;
+  const raw = fromApp ?? process.env.DATABASE_URL;
   if (!raw) return undefined;
-  return normalizeDatabaseUrl(raw);
+  let url = normalizeDatabaseUrl(raw);
+  // Rotiertes DB-Passwort: SCALEWAY_DB_PASSWORD (Secret) hat Vorrang vor dem
+  // in APP_DATABASE_URL eingebetteten Passwort. So bricht eine Passwort-
+  // Rotation nicht alle hinterlegten URLs (Secrets sind fuer den Agenten
+  // nicht loeschbar und koennen umgebungsspezifische Werte ueberschatten).
+  const rotated = process.env.SCALEWAY_DB_PASSWORD;
+  if (fromApp && rotated && isParseableUrl(url)) {
+    const parsed = new URL(url);
+    parsed.password = encodeURIComponent(rotated);
+    url = parsed.toString();
+  }
+  return url;
 }
