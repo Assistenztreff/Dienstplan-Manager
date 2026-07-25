@@ -172,7 +172,6 @@ export const ListContractsResponseItem = zod.object({
   "startDate": zod.coerce.date(),
   "endDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
-  "billingMethod": zod.union([zod.literal('SOLL'),zod.literal('IST'),zod.literal(null)]).nullish().describe('Abrechnungsart pro Assistenzkraft; null = erbt von Team\/Konto.'),
   "createdAt": zod.coerce.date(),
   "user": zod.object({
   "id": zod.number(),
@@ -216,8 +215,7 @@ export const CreateContractBody = zod.object({
   "vacationDays": zod.number().min(createContractBodyVacationDaysMin),
   "startDate": zod.coerce.date(),
   "endDate": zod.coerce.date().optional(),
-  "notes": zod.string().optional(),
-  "billingMethod": zod.union([zod.literal('SOLL'),zod.literal('IST'),zod.literal(null)]).nullish().describe('Abrechnungsart pro Assistenzkraft; null = erbt von Team\/Konto.')
+  "notes": zod.string().optional()
 })
 
 
@@ -238,7 +236,6 @@ export const GetContractResponse = zod.object({
   "startDate": zod.coerce.date(),
   "endDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
-  "billingMethod": zod.union([zod.literal('SOLL'),zod.literal('IST'),zod.literal(null)]).nullish().describe('Abrechnungsart pro Assistenzkraft; null = erbt von Team\/Konto.'),
   "createdAt": zod.coerce.date(),
   "user": zod.object({
   "id": zod.number(),
@@ -283,8 +280,7 @@ export const UpdateContractBody = zod.object({
   "vacationDays": zod.number().min(updateContractBodyVacationDaysMin).optional(),
   "startDate": zod.coerce.date().optional(),
   "endDate": zod.string().nullish(),
-  "notes": zod.string().nullish(),
-  "billingMethod": zod.union([zod.literal('SOLL'),zod.literal('IST'),zod.literal(null)]).nullish().describe('Abrechnungsart pro Assistenzkraft; null = erbt von Team\/Konto.')
+  "notes": zod.string().nullish()
 })
 
 export const UpdateContractResponse = zod.object({
@@ -297,7 +293,6 @@ export const UpdateContractResponse = zod.object({
   "startDate": zod.coerce.date(),
   "endDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
-  "billingMethod": zod.union([zod.literal('SOLL'),zod.literal('IST'),zod.literal(null)]).nullish().describe('Abrechnungsart pro Assistenzkraft; null = erbt von Team\/Konto.'),
   "createdAt": zod.coerce.date(),
   "user": zod.object({
   "id": zod.number(),

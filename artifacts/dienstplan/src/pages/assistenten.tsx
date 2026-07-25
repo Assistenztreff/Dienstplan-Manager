@@ -85,7 +85,6 @@ type Contract = {
   startDate: string;
   endDate?: string | null;
   notes?: string | null;
-  billingMethod?: "SOLL" | "IST" | null;
 };
 
 type FormState = {
@@ -106,12 +105,7 @@ type FormState = {
   vacationDays: string;
   startDate: string;
   notes: string;
-  billingMethod: string;
 };
-
-// Sonderwert für "erbt" (Abrechnungsart nicht auf Assistenten-Ebene gesetzt →
-// Fallback auf Team-/Konto-Regelung).
-const INHERIT_BILLING = "inherit";
 
 const EMPTY_FORM: FormState = {
   vorname: "",
@@ -131,7 +125,6 @@ const EMPTY_FORM: FormState = {
   vacationDays: "30",
   startDate: format(new Date(), "yyyy-MM-dd"),
   notes: "",
-  billingMethod: INHERIT_BILLING,
 };
 
 function splitName(name: string): { vorname: string; nachname: string } {
@@ -319,7 +312,6 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
         vacationDays: editContract ? String(editContract.vacationDays) : "30",
         startDate: editContract ? editContract.startDate : format(new Date(), "yyyy-MM-dd"),
         notes: editContract?.notes ?? "",
-        billingMethod: editContract?.billingMethod ?? INHERIT_BILLING,
       };
     }
     return EMPTY_FORM;
@@ -397,9 +389,6 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
               vacationDays: Number(form.vacationDays),
               startDate: form.startDate,
               notes: form.notes || null,
-              billingMethod: (form.billingMethod === INHERIT_BILLING
-                ? null
-                : form.billingMethod) as "SOLL" | "IST" | null,
             },
           });
         } else {
@@ -411,9 +400,6 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
               vacationDays: Number(form.vacationDays),
               startDate: form.startDate,
               notes: form.notes || undefined,
-              billingMethod: (form.billingMethod === INHERIT_BILLING
-                ? null
-                : form.billingMethod) as "SOLL" | "IST" | null,
               ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
             },
           });
@@ -449,9 +435,6 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
             vacationDays: Number(form.vacationDays),
             startDate: form.startDate,
             notes: form.notes || undefined,
-            billingMethod: (form.billingMethod === INHERIT_BILLING
-              ? null
-              : form.billingMethod) as "SOLL" | "IST" | null,
             ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
           },
         });
@@ -731,32 +714,6 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
                   onChange={(e) => set("notes", e.target.value)}
                   placeholder="z.B. Teilzeit Nachmittag"
                 />
-              </FieldRow>
-
-              <FieldRow label="Abrechnungsart">
-                <Select
-                  value={form.billingMethod}
-                  onValueChange={(v) => set("billingMethod", v)}
-                >
-                  <SelectTrigger
-                    className="bg-card"
-                    data-testid="contract-billing-method-select"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={INHERIT_BILLING}>
-                      Team-/Konto-Regelung übernehmen
-                    </SelectItem>
-                    <SelectItem value="SOLL">Soll – nach geplanten Schichten</SelectItem>
-                    <SelectItem value="IST">Ist – nach erfassten Zeiten</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground mt-1.5">
-                  Legt fest, ob Stunden und Zuschläge für diese Assistenzkraft aus den geplanten
-                  Schichten (Soll) oder den tatsächlich erfassten Zeiten (Ist) berechnet werden.
-                  Ohne eigene Wahl gilt die Team- bzw. Konto-Regelung.
-                </p>
               </FieldRow>
             </div>
           </section>

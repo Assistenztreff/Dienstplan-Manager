@@ -60,6 +60,16 @@ export const PRE_PUSH_SQL: string[] = [
      END IF;
    END $$;`,
   `DROP SEQUENCE IF EXISTS team_branding_settings_id_seq;`,
+  // Vertrags-Override der Abrechnungsart entfernt: Alt-Werte neutralisieren,
+  // damit historische Verträge die Auswertung nie wieder beeinflussen können.
+  // Spalte bleibt (Drop wäre ein interaktiver Data-Loss-Prompt), wird aber
+  // nirgends mehr gelesen. Guard: nur wenn die Spalte (noch) existiert.
+  `DO $$ BEGIN
+     IF EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'contracts' AND column_name = 'billing_method') THEN
+       UPDATE contracts SET billing_method = NULL WHERE billing_method IS NOT NULL;
+     END IF;
+   END $$;`,
 ];
 
 /** Alle Vorab-Schritte sequenziell gegen den übergebenen Client ausführen. */

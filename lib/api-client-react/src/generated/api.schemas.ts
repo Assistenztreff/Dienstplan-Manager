@@ -353,18 +353,6 @@ export interface TeamMemberMoveInput {
   targetTeamId: number;
 }
 
-/**
- * Abrechnungsart pro Assistenzkraft; null = erbt von Team/Konto.
- * @nullable
- */
-export type ContractBillingMethod = typeof ContractBillingMethod[keyof typeof ContractBillingMethod] | null;
-
-
-export const ContractBillingMethod = {
-  SOLL: 'SOLL',
-  IST: 'IST',
-} as const;
-
 export interface Contract {
   id: number;
   userId: number;
@@ -379,26 +367,9 @@ export interface Contract {
   endDate?: string | null;
   /** @nullable */
   notes?: string | null;
-  /**
-     * Abrechnungsart pro Assistenzkraft; null = erbt von Team/Konto.
-     * @nullable
-     */
-  billingMethod?: ContractBillingMethod;
   createdAt: string;
   user?: User;
 }
-
-/**
- * Abrechnungsart pro Assistenzkraft; null = erbt von Team/Konto.
- * @nullable
- */
-export type ContractInputBillingMethod = typeof ContractInputBillingMethod[keyof typeof ContractInputBillingMethod] | null;
-
-
-export const ContractInputBillingMethod = {
-  SOLL: 'SOLL',
-  IST: 'IST',
-} as const;
 
 export interface ContractInput {
   userId: number;
@@ -417,24 +388,7 @@ export interface ContractInput {
   startDate: string;
   endDate?: string;
   notes?: string;
-  /**
-     * Abrechnungsart pro Assistenzkraft; null = erbt von Team/Konto.
-     * @nullable
-     */
-  billingMethod?: ContractInputBillingMethod;
 }
-
-/**
- * Abrechnungsart pro Assistenzkraft; null = erbt von Team/Konto.
- * @nullable
- */
-export type ContractUpdateBillingMethod = typeof ContractUpdateBillingMethod[keyof typeof ContractUpdateBillingMethod] | null;
-
-
-export const ContractUpdateBillingMethod = {
-  SOLL: 'SOLL',
-  IST: 'IST',
-} as const;
 
 export interface ContractUpdate {
   /** @minimum 0 */
@@ -452,11 +406,6 @@ export interface ContractUpdate {
   endDate?: string | null;
   /** @nullable */
   notes?: string | null;
-  /**
-     * Abrechnungsart pro Assistenzkraft; null = erbt von Team/Konto.
-     * @nullable
-     */
-  billingMethod?: ContractUpdateBillingMethod;
 }
 
 export type ShiftType = typeof ShiftType[keyof typeof ShiftType];

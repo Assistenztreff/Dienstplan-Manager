@@ -42,7 +42,6 @@ const CONTRACT_SELECT = {
   startDate: contractsTable.startDate,
   endDate: contractsTable.endDate,
   notes: contractsTable.notes,
-  billingMethod: contractsTable.billingMethod,
   createdAt: contractsTable.createdAt,
   user: {
     id: usersTable.id,

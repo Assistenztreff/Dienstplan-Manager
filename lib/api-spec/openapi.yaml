@@ -2108,10 +2108,6 @@ components:
           type: ["string", "null"]
         notes:
           type: ["string", "null"]
-        billingMethod:
-          type: ["string", "null"]
-          enum: [SOLL, IST, null]
-          description: Abrechnungsart pro Assistenzkraft; null = erbt von Team/Konto.
         createdAt:
           type: string
           format: date-time
@@ -2146,10 +2142,6 @@ components:
           format: date
         notes:
           type: string
-        billingMethod:
-          type: ["string", "null"]
-          enum: [SOLL, IST, null]
-          description: Abrechnungsart pro Assistenzkraft; null = erbt von Team/Konto.
 
     ContractUpdate:
       type: object
@@ -2172,10 +2164,6 @@ components:
           type: ["string", "null"]
         notes:
           type: ["string", "null"]
-        billingMethod:
-          type: ["string", "null"]
-          enum: [SOLL, IST, null]
-          description: Abrechnungsart pro Assistenzkraft; null = erbt von Team/Konto.
 
     Shift:
       type: object

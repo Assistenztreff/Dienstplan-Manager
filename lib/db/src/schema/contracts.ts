@@ -7,8 +7,8 @@ import { relations } from "drizzle-orm";
 
 // Abrechnungsart: SOLL = Abrechnung nach Plan (geplante FIX-Schichten), IST =
 // Abrechnung nach den tatsächlich erfassten Zeiten (Stunden UND Zuschläge werden
-// aus den Ist-Zeiten berechnet). NULL auf einer Zeile bedeutet "erben": die
-// wirksame Art ergibt sich aus der Kette Assistent → Team → Konto → SOLL.
+// aus den Ist-Zeiten berechnet). Gilt einheitlich pro Team/Konto: die wirksame
+// Art ergibt sich aus der Kette Team-Override → Konto → SOLL.
 export const billingMethodEnum = pgEnum("billing_method", ["SOLL", "IST"]);
 
 export const contractsTable = pgTable("contracts", {
@@ -29,7 +29,11 @@ export const contractsTable = pgTable("contracts", {
   startDate: date("start_date").notNull(),
   endDate: date("end_date"),
   notes: text("notes"),
-  // Abrechnungsart pro Assistenzkraft; NULL = erbt von Team/Konto.
+  // VERALTET (bewusst behalten, um einen destruktiven Spalten-Drop bei
+  // nicht-interaktivem db push zu vermeiden): Der Vertrags-Override der
+  // Abrechnungsart wurde entfernt — die Spalte wird NIRGENDS mehr gelesen,
+  // Alt-Werte werden per pre-push-SQL auf NULL bereinigt. Die Abrechnungsart
+  // kommt ausschließlich aus allowance_settings (Team-Override → Konto → SOLL).
   billingMethod: billingMethodEnum("billing_method"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

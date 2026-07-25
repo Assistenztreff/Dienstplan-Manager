@@ -96,6 +96,27 @@ export async function dbDeleteAccountByEmail(email: string): Promise<void> {
   });
 }
 
+/**
+ * Setzt die (VERALTETE) Spalte contracts.billing_method direkt in der DB.
+ * Der Vertrags-Override der Abrechnungsart wurde aus API/UI entfernt — dieser
+ * Helfer stellt einen HISTORISCHEN Alt-Wert nach, um zu beweisen, dass er die
+ * Auswertung nicht mehr beeinflusst.
+ */
+export async function dbSetContractBillingMethod(
+  contractId: number,
+  method: "SOLL" | "IST",
+): Promise<void> {
+  await withDbClient(async (client) => {
+    const res = await client.query(
+      "UPDATE contracts SET billing_method = $1 WHERE id = $2",
+      [method, contractId],
+    );
+    if (res.rowCount === 0) {
+      throw new Error(`Kein Vertrag mit id ${contractId} gefunden.`);
+    }
+  });
+}
+
 /** Passwort-Hashing exakt wie das setup-admin-Skript (scrypt, salt:hash). */
 function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");

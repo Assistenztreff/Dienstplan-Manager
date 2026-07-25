@@ -335,9 +335,11 @@ export async function computeHoursBalances(
 
       const contract = await contractForMonth(assistant.id, month, year, teamScope);
 
-      // Abrechnungsart-Kette: Assistent (Vertrag) → Team-Override/Konto des
-      // Team-Eigentümers → SOLL (Bestandsschutz-Default). teamMetaByTeam faltet
-      // Override und Team-Eigentümer-Konto bereits zusammen.
+      // Abrechnungsart-Kette: Team-Override/Konto des Team-Eigentümers → SOLL
+      // (Bestandsschutz-Default). Der frühere Vertrags-Override wurde bewusst
+      // entfernt — die Abrechnungsart gilt einheitlich für ALLE Assistenzkräfte
+      // eines Teams/Kontos. teamMetaByTeam faltet Override und
+      // Team-Eigentümer-Konto bereits zusammen.
       // Für die Team-Ebene brauchen wir ein Team IM aktuellen Scope: bevorzugt
       // das Vertrags-Team (contractForMonth bevorzugt bereits Scope-Verträge,
       // kann aber — wenn NUR teamfremde Verträge existieren — noch ein fremdes
@@ -352,8 +354,7 @@ export async function computeHoursBalances(
         contractTeamId ?? requestedTeamId ?? (teamScope.length === 1 ? teamScope[0] : undefined);
       const teamBilling =
         fallbackTeamId != null ? teamMetaByTeam.get(fallbackTeamId)?.billingMethod : null;
-      const configuredBillingMethod: "SOLL" | "IST" =
-        contract?.billingMethod ?? teamBilling ?? "SOLL";
+      const configuredBillingMethod: "SOLL" | "IST" = teamBilling ?? "SOLL";
       // Zeiterfassung deaktiviert (Konto-Schalter des Team-Eigentümers)?
       // Dann effektiv SOLL: komplette Geldrechnung aus den FIX-Schichten.
       // Ohne eindeutiges Team gilt der Schalter, wenn mindestens ein Team im
