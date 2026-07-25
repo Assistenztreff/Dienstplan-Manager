@@ -118,7 +118,13 @@ export default function Registrierung() {
                       — oder{" "}
                       <button
                         type="button"
-                        onClick={() => navigate("/passwort-vergessen")}
+                        onClick={() =>
+                          navigate(
+                            email.trim()
+                              ? `/passwort-vergessen?email=${encodeURIComponent(email.trim())}`
+                              : "/passwort-vergessen",
+                          )
+                        }
                         className="text-foreground underline underline-offset-2"
                       >
                         Passwort vergessen?
