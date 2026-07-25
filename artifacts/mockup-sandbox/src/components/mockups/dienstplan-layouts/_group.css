@@ -1,0 +1,52 @@
+@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+/* Design-Tokens der Dienstplan-App (artifacts/dienstplan/src/index.css) */
+:root {
+  --background: 0 0% 100%;
+  --foreground: 210 90% 19%;
+  --border: 0 0% 90%;
+  --card: 0 0% 98%;
+  --card-foreground: 210 90% 19%;
+  --card-border: 0 0% 90%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 210 90% 19%;
+  --popover-border: 0 0% 90%;
+  --primary: 66 79% 75%;
+  --primary-foreground: 210 90% 19%;
+  --secondary: 0 0% 96%;
+  --secondary-foreground: 210 90% 19%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 210 15% 40%;
+  --accent: 66 79% 75%;
+  --accent-foreground: 210 90% 19%;
+  --destructive: 0 60% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --input: 0 0% 90%;
+  --ring: 210 90% 19%;
+  --radius: .5rem;
+  --font-sans: 'Inter', sans-serif;
+  --font-serif: 'Rubik', sans-serif;
+
+  /* AssistenzTreff-Markenfarben */
+  --assistenz-brand: #05305b;
+  --assistenz-dark: #092948;
+  --assistenz-yellow: #ebf18b;
+  --assistenz-mint: #d4f0f0;
+  --assistenz-green: #cae677;
+  --assistenz-peach: #fed4b1;
+  --assistenz-purple: #e2d4f0;
+  --assistenz-pink: #f0d4e2;
+  --assistenz-terracotta: #f5c7a9;
+  --assistenz-sage: #c6e2c6;
+}
+
+.dienstplan-mockup {
+  font-family: 'Inter', sans-serif;
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
+}
+.dienstplan-mockup h1,
+.dienstplan-mockup h2,
+.dienstplan-mockup .font-serif {
+  font-family: 'Rubik', sans-serif;
+}
