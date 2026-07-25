@@ -39,6 +39,8 @@ let targetUrl: string;
 let targetDbName: string;
 let migrateOutput = "";
 let migrateStatus: number | null = null;
+let rerunOutput = "";
+let rerunStatus: number | null = null;
 
 function adminClient(): pg.Client {
   return new pg.Client({
@@ -87,33 +89,48 @@ beforeAll(async () => {
   // Das ECHTE Skript ausfuehren — genau wie beim Veroeffentlichen, nur mit
   // der Wegwerf-DB als Ziel. DATABASE_URL bleibt die Dev-/Staging-URL, damit
   // der Kollisions-Guard (anderer DB-Name, gleicher Host) mitgetestet wird.
-  const result = spawnSync(
-    "pnpm",
-    [
-      "--filter",
-      "@workspace/scripts",
-      "run",
-      "migrate-prod",
-      "--yes",
-      targetDbName,
-    ],
-    {
-      cwd: repoRoot,
-      stdio: ["ignore", "pipe", "pipe"],
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        PROD_DATABASE_URL: targetUrl,
-        DATABASE_URL: baseUrl,
-        APP_DATABASE_URL: baseUrl,
+  const runMigrateProd = () => {
+    const result = spawnSync(
+      "pnpm",
+      [
+        "--filter",
+        "@workspace/scripts",
+        "run",
+        "migrate-prod",
+        "--yes",
+        targetDbName,
+      ],
+      {
+        cwd: repoRoot,
+        stdio: ["ignore", "pipe", "pipe"],
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PROD_DATABASE_URL: targetUrl,
+          DATABASE_URL: baseUrl,
+          APP_DATABASE_URL: baseUrl,
+        },
+        timeout: 480_000,
       },
-      timeout: 480_000,
-    },
-  );
-  migrateOutput = `${result.stdout ?? ""}${result.stderr ?? ""}`;
-  migrateStatus = result.status;
-  if (result.error) throw result.error;
-}, 600_000);
+    );
+    if (result.error) throw result.error;
+    return {
+      output: `${result.stdout ?? ""}${result.stderr ?? ""}`,
+      status: result.status,
+    };
+  };
+
+  const first = runMigrateProd();
+  migrateOutput = first.output;
+  migrateStatus = first.status;
+
+  // ZWEITER Lauf gegen dieselbe (jetzt aufgebaute) DB: muss den
+  // Nicht-Frisch-Pfad nehmen (Daten-Migrationen + PRE_PUSH_SQL laufen und
+  // muessen idempotent sein) und ohne Schema-Aenderungen sauber durchlaufen.
+  const second = runMigrateProd();
+  rerunOutput = second.output;
+  rerunStatus = second.status;
+}, 1_200_000);
 
 afterAll(async () => {
   if (!baseUrl || !targetDbName) return;
@@ -143,6 +160,26 @@ describe("migrate-prod gegen leere Ziel-DB (Frisch-DB-Pfad)", () => {
   it("hinterlaesst ein vollstaendiges Schema (findMissingSchemaObjects leer)", async () => {
     const problems = await findMissingSchemaObjects(targetUrl);
     expect(problems).toEqual([]);
+  });
+
+  it("Zweitlauf gegen dieselbe DB nimmt den Nicht-Frisch-Pfad und laeuft sauber durch", () => {
+    expect(rerunStatus, rerunOutput).toBe(0);
+    // Nicht-Frisch-Pfad: users-Tabelle existiert jetzt.
+    expect(rerunOutput).not.toContain("Ziel-DB ist leer");
+    // Daten-Migrationen und SQL-Vorab-Schritte laufen (und sind idempotent).
+    expect(rerunOutput).toContain("[1/4] Daten-Migration");
+    expect(rerunOutput).toContain("[2/4] Idempotente SQL-Vorab-Schritte");
+    expect(rerunOutput).toContain("[4/4] Schema-Verifikation");
+    expect(rerunOutput).toContain("Fertig: Produktions-DB");
+  });
+
+  it("Zweitlauf wendet keine destruktiven Schema-Statements an", () => {
+    // Schema ist bereits aktuell — drizzle-kit darf nichts Destruktives mehr
+    // vorschlagen und keine TTY-Rueckfrage ausloesen.
+    expect(rerunOutput).not.toMatch(/DROP\s+TABLE/i);
+    expect(rerunOutput).not.toMatch(/DROP\s+COLUMN/i);
+    expect(rerunOutput).not.toMatch(/TRUNCATE/i);
+    expect(rerunOutput).not.toMatch(/Interactive prompts require a TTY/i);
   });
 
   it("legt alle Drizzle-Tabellen inklusive Session-Tabelle an", async () => {
