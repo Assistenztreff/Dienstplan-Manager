@@ -4,6 +4,7 @@ import {
   useCreateShift,
   useUpdateShift,
   useDeleteShift,
+  useListShifts,
   useListShiftModels,
   useGetAllowanceSettings,
   getListShiftsQueryKey,
@@ -160,6 +161,15 @@ function buildIso(date: string, time: string): string {
   return new Date(`${date}T${time}:00`).toISOString();
 }
 
+// Liefert das Vortagsdatum ("yyyy-MM-dd") zu einem Datum. Wird für den Hinweis
+// auf einen hineinragenden Vortags-Nachtdienst beim Anlegen von Abwesenheiten
+// gebraucht.
+function prevDayString(date: string): string {
+  const d = new Date(`${date}T00:00:00`);
+  d.setDate(d.getDate() - 1);
+  return format(d, "yyyy-MM-dd");
+}
+
 // Liefert das Folgedatum ("yyyy-MM-dd") zu einem Datum. Wird genutzt, wenn eine
 // Schicht über Mitternacht läuft und die Endzeit am nächsten Tag liegt.
 function nextDayString(date: string): string {
@@ -228,6 +238,14 @@ export function ShiftDialog({
     teamId != null ? { teamId } : undefined,
   );
   const teamMeetingEnabled = allowanceSettings?.teamMeetingEnabled === true;
+  // Schichten des Monats (gleicher Query wie die Kalender-Seite, kommt daher
+  // aus dem Cache): Basis für den Hinweis auf einen Vortags-Nachtdienst, der
+  // in den gewählten Abwesenheitstag hineinragt.
+  const { data: monthShifts } = useListShifts({
+    month,
+    year,
+    ...(teamId != null ? { teamId } : {}),
+  });
   // Aushilfe-Einsatz: nur für Dienstleister mit mehreren Teams relevant —
   // wählbar sind alle EIGENEN Teams außer dem aktuell angezeigten (teamId).
   const { teams } = useTeam();
@@ -403,6 +421,33 @@ export function ShiftDialog({
   const weekdayMismatchDates =
     selectedModel && modelWeekdays.length > 0
       ? relevantDates.filter((d) => !modelWeekdays.includes(isoWeekday(d)))
+      : [];
+
+  // Hinweis auf hineinragende Vortags-Dienste beim Anlegen von Abwesenheiten:
+  // Die Abwesenheits-Ersetzung matcht bewusst nur Dienste, die AM Abwesenheitstag
+  // beginnen. Ein Dienst des Vortags, der über Mitternacht in den gewählten Tag
+  // hineinragt (z. B. Nachtdienst 20:00–06:00), bleibt bestehen. Reiner Hinweis —
+  // kein Blocker.
+  const overhangShifts =
+    isAbsence && form.userId
+      ? (monthShifts ?? []).filter((s) => {
+          if (s.userId !== Number(form.userId)) return false;
+          if (editShift && s.id === editShift.id) return false;
+          // Nur reguläre Dienste (keine Abwesenheiten/Team-Einträge).
+          if (
+            s.type === "vacation" ||
+            s.type === "sick" ||
+            s.type === "freizeitausgleich" ||
+            s.type === "team"
+          )
+            return false;
+          const startDay = toDateString(s.startTime);
+          return relevantDates.some(
+            (d) =>
+              startDay === prevDayString(d) &&
+              new Date(s.endTime).getTime() > new Date(`${d}T00:00:00`).getTime(),
+          );
+        })
       : [];
 
   // Wenn das bearbeitete Modell inaktiv ist, trotzdem als Option anzeigen.
@@ -1181,6 +1226,22 @@ export function ShiftDialog({
                           : form.selection === "urlaubsabgeltung"
                             ? "Urlaubsabgeltung: nicht genommener Urlaub wird ausgezahlt. Der Euro-Wert erscheint in der Auswertung als eigene Position (kein Arbeits-Soll)."
                             : "Krankheitstag wird als ganzer Tag eingetragen. Vertragsstunden werden als Lohnfortzahlung gutgeschrieben."}
+            </p>
+          )}
+
+          {/* Hinweis: Ein Dienst des Vortags ragt in den gewählten Abwesenheits-
+              tag hinein (z. B. Nachtdienst 20:00–06:00). Er gehört zum Vortag
+              und bleibt bewusst bestehen — reiner Hinweis, kein Blocker. */}
+          {isAbsence && overhangShifts.length > 0 && (
+            <p
+              className="text-xs text-amber-700 dark:text-amber-500"
+              data-testid="shift-dialog-overhang-hint"
+            >
+              {overhangShifts.length === 1
+                ? `Hinweis: Der Dienst vom Vortag (${conflictLabel(overhangShifts[0])}) ragt in den gewählten Tag hinein. Er gehört zum Vortag und bleibt bestehen.`
+                : `Hinweis: ${overhangShifts.length} Dienste vom jeweiligen Vortag (${overhangShifts
+                    .map((s) => conflictLabel(s))
+                    .join("; ")}) ragen in die gewählten Tage hinein. Sie gehören zum Vortag und bleiben bestehen.`}
             </p>
           )}
 
