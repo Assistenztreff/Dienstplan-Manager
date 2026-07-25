@@ -45,7 +45,14 @@ const ALL_NAV_ITEMS = [
 // "Plattform-Optik" selbst — der Header ist daher IMMER sichtbar.
 // ---------------------------------------------------------------------------
 
-const PLATFORM_LINKS = ["Über uns", "Handbuch", "Leistungen"];
+// Echte Ziele auf der AssistenzTreff-Plattform (verifiziert am 2026-07-24).
+// "Handbuch" verweist auf den Wissensbereich der Plattform (/wissen) — eine
+// eigene Handbuch-Seite existiert dort (noch) nicht.
+const PLATFORM_LINKS = [
+  { label: "Über uns", href: "https://assistenztreff.de/ueber-uns" },
+  { label: "Handbuch", href: "https://assistenztreff.de/wissen" },
+  { label: "Leistungen", href: "https://assistenztreff.de/leistungen" },
+];
 
 function PlatformHeaderPlaceholder() {
   return (
@@ -69,11 +76,12 @@ function PlatformHeaderPlaceholder() {
 
         <nav aria-label="Plattform" className="flex items-center gap-1 sm:gap-2">
           {/* Desktop: externe Plattform-Text-Links (nur ab md sichtbar). */}
-          {PLATFORM_LINKS.map((label) => (
+          {PLATFORM_LINKS.map(({ label, href }) => (
             <a
               key={label}
-              href="#"
-              onClick={(e) => e.preventDefault()}
+              href={href}
+              target="_blank"
+              rel="noreferrer"
               className="hidden h-12 items-center rounded-md px-4 text-sm font-semibold hover:bg-brand-dark/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-dark md:flex"
             >
               {label}
@@ -105,7 +113,14 @@ function PlatformHeaderPlaceholder() {
 // ausgeblendet.
 // ---------------------------------------------------------------------------
 
-const FOOTER_LINKS = ["Impressum", "Datenschutz", "Kontakt", "Barrierefreiheit"];
+// Echte Ziele auf der AssistenzTreff-Plattform (verifiziert am 2026-07-24).
+// "Barrierefreiheit" wurde bewusst entfernt — auf der Plattform existiert
+// (noch) keine Barrierefreiheits-Erklaerungsseite.
+const FOOTER_LINKS = [
+  { label: "Impressum", href: "https://assistenztreff.de/impressum" },
+  { label: "Datenschutz", href: "https://assistenztreff.de/datenschutzerklaerung" },
+  { label: "Kontakt", href: "https://assistenztreff.de/kontakt" },
+];
 
 function PlatformFooterPlaceholder() {
   const { currentUser } = useAuth();
@@ -118,11 +133,12 @@ function PlatformFooterPlaceholder() {
           aria-label="Rechtliches"
           className="flex flex-wrap items-center justify-center gap-2"
         >
-          {FOOTER_LINKS.map((label) => (
+          {FOOTER_LINKS.map(({ label, href }) => (
             <a
               key={label}
-              href="#"
-              onClick={(e) => e.preventDefault()}
+              href={href}
+              target="_blank"
+              rel="noreferrer"
               className="flex h-11 items-center rounded-md px-4 text-sm font-medium hover:bg-slate-200 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-dark"
             >
               {label}
