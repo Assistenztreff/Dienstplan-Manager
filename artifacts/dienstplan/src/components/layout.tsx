@@ -15,6 +15,7 @@ import {
   LogOut,
   ArrowUp,
 } from "lucide-react";
+import platformLogoUrl from "@assets/AssistenzTreff.de_-_3_1784990304750.png";
 import { useAuth } from "@/context/auth";
 import { useToast } from "@/hooks/use-toast";
 import { isAdminRole } from "@/lib/roles";
@@ -102,14 +103,13 @@ function PlatformHeaderPlaceholder() {
         {/* Links: Wortmarke + Plattform-Links direkt daneben (wie auf
             assistenztreff.de); rechts nur Login/Profil + Pillen-Button. */}
         <div className="flex min-w-0 items-center gap-4 md:gap-8">
-          <span className="flex h-12 shrink-0 items-center gap-2.5">
-            <span
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-dark text-lg font-bold text-brand-white"
-              aria-hidden="true"
-            >
-              A
-            </span>
-            <span className="text-xl font-bold tracking-tight">AssistenzPlaner</span>
+          <span className="flex h-12 shrink-0 items-center">
+            <img
+              src={platformLogoUrl}
+              alt="AssistenzPlaner"
+              className="h-10 w-auto"
+              data-testid="platform-header-logo"
+            />
           </span>
 
           <nav
