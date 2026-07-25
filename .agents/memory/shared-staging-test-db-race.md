@@ -7,6 +7,8 @@ The e2e `_test` database lives on the external staging Postgres (APP_DATABASE_UR
 
 **Why:** the run lock is a local PID file — it cannot serialize runs across isolated environments.
 
+Interference can be CONTINUOUS (a sibling environment running its full suite): the separation pre-check then fails repeatedly with rotating symptoms — deadlocks in setup-test-accounts/migrate-teams, duplicate-key on fixed-email seeds, FK violations, phantom added/removed memberships. Retry loops don't help while the sibling is active; if code is otherwise verified (typecheck, unit, earlier green spec run), treat the merge e2e-gate failure as environment-blocked rather than burning more retries.
+
 **How to apply:** for a one-off local spec verification, clean leftover `e2e.*` accounts via cascade SQL (team-owned tables first) and run with `E2E_SKIP_SEPARATION_CHECK=1 E2E_SKIP_CLEANUP_CHECK=1`. Don't burn cycles reprovisioning — pollution can recur seconds later. psql to staging: strip `sslmode` param from the URL and set `PGSSLMODE=require`.
 
 Foreign runs' teardown also DELETES all `e2e.*@dienstplan.test` accounts mid-run: a superadmin seeded in `beforeAll` can vanish before/inside a test (login fails, or session dies mid-test with "Nicht angemeldet"). Seed a FRESH uniquely named account inside each test immediately before login; non-account rows (e.g. platform_errors with own context prefixes) are safe.

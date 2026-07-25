@@ -79,6 +79,7 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
 - **Registrierung** (public): `/registrierung` legt Admin mit gewähltem `accountType` an, erzeugt „Standard-Team", meldet direkt an.
 - **Einladungsflow**: `POST /api/users/:id/invite` → Passwort via `/einladung?token=...`. Passwort vergessen: `/passwort-vergessen` verweist auf den Admin (kein E-Mail-Self-Service).
 - **PUBLIC_PATHS**: `/login`, `/registrierung`, `/einladung`, `/passwort-vergessen`.
+- **E-Mail-Existenz-Orakel: dokumentiert AKZEPTIERT**: Registrierung + POST/PATCH `/users` melden belegte E-Mails mit 409 „bereits verwendet" — plattformweit. Echtes Verstecken ist unmöglich (E-Mail UNIQUE in der DB, Erfolg vs. 409 immer beobachtbar, kein E-Mail-Versand-Flow für generische Antworten); die UX zeigt den Fehler bewusst am Feld inkl. Login-Link. Mitigation: IP-Rate-Limit auf `POST /auth/register` (`lib/register-rate-limit.ts`, Default 20 Versuche/10 min, ENV `REGISTER_RATE_LIMIT_MAX`/`REGISTER_RATE_LIMIT_WINDOW_MS`, `0` = aus — so im E2E-Stack). Login bleibt orakelfrei (identische 401). Festgeschrieben in `dienstplan-email-existenz-orakel-api.spec.ts`.
 - **Dev-Auto-Login**: In Vite-DEV feuert die App bei 401 automatisch `POST /api/auth/dev-login` (öffentliche Seiten in Dev-Vorschau daher nicht sichtbar). Dev-Session-Cache (`assistenz_treff_session`, nur DEV) speichert NUR das nicht-sensible Profil; Cookie bleibt die Wahrheit.
 
 ## Operator-Dashboard & superadmin

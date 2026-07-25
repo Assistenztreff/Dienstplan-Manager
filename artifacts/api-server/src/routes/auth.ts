@@ -5,6 +5,7 @@ import type { User } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth-utils";
 import { seedDefaultShiftModels } from "../lib/default-shift-models";
+import { checkRegisterRateLimit } from "../lib/register-rate-limit";
 
 const router = Router();
 
@@ -44,6 +45,19 @@ router.post("/auth/login", async (req, res) => {
 });
 
 router.post("/auth/register", async (req, res) => {
+  // Enumerations-Bremse (Task #553): Die 409-Antwort bei belegter E-Mail ist
+  // ein bewusst akzeptiertes Existenz-Orakel (siehe lib/register-rate-limit.ts)
+  // — aber anonyme Massen-Abfragen werden pro IP gedrosselt. Zaehlt JEDEN
+  // Versuch, laeuft VOR jeder DB-Arbeit.
+  const rate = checkRegisterRateLimit(req.ip ?? "unknown");
+  if (!rate.allowed) {
+    res.setHeader("Retry-After", String(rate.retryAfterSeconds));
+    return res.status(429).json({
+      error: "Zu viele Registrierungsversuche — bitte später erneut versuchen.",
+      code: "rate_limited",
+    });
+  }
+
   const { name, email, password, accountType } = req.body as {
     name?: unknown;
     email?: unknown;
