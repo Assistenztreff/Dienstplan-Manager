@@ -21,6 +21,7 @@ import Login from "@/pages/login";
 import Registrierung from "@/pages/registrierung";
 import Einladung from "@/pages/einladung";
 import PasswortVergessen from "@/pages/passwort-vergessen";
+import { Impressum, Datenschutz, Kontakt, Barrierefreiheit } from "@/pages/rechtliches";
 import NotFound from "@/pages/not-found";
 import { isAdminRole } from "@/lib/roles";
 import { Loader2 } from "lucide-react";
@@ -34,7 +35,16 @@ const queryClient = new QueryClient({
   },
 });
 
-const PUBLIC_PATHS = ["/login", "/registrierung", "/einladung", "/passwort-vergessen"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/registrierung",
+  "/einladung",
+  "/passwort-vergessen",
+  "/impressum",
+  "/datenschutz",
+  "/kontakt",
+  "/barrierefreiheit",
+];
 
 function Router() {
   const { currentUser, isLoading } = useAuth();
@@ -65,6 +75,10 @@ function Router() {
         <Route path="/registrierung" component={Registrierung} />
         <Route path="/einladung" component={Einladung} />
         <Route path="/passwort-vergessen" component={PasswortVergessen} />
+        <Route path="/impressum" component={Impressum} />
+        <Route path="/datenschutz" component={Datenschutz} />
+        <Route path="/kontakt" component={Kontakt} />
+        <Route path="/barrierefreiheit" component={Barrierefreiheit} />
         <Route>{() => null}</Route>
       </Switch>
     );
@@ -90,6 +104,10 @@ function Router() {
             Bereiche (Schichtmodelle, Zuschlaege, Logo) sind in der Seite selbst
             per isAdminRole gegatet. */}
         <Route path="/einstellungen" component={Einstellungen} />
+        <Route path="/impressum" component={Impressum} />
+        <Route path="/datenschutz" component={Datenschutz} />
+        <Route path="/kontakt" component={Kontakt} />
+        <Route path="/barrierefreiheit" component={Barrierefreiheit} />
         {/* Preise & Premium: Ziel der Free-Limit-Hinweise (Upgrade-Anfrage). */}
         {isAdminRole(currentUser.role) && <Route path="/preise" component={Preise} />}
         {isAdminRole(currentUser.role) && currentUser.accountType === "dienstleister" && (

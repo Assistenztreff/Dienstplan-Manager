@@ -114,8 +114,9 @@ function PlatformHeaderPlaceholder() {
 // ---------------------------------------------------------------------------
 
 // Echte Ziele auf der AssistenzTreff-Plattform (verifiziert am 2026-07-24).
-// "Barrierefreiheit" wurde bewusst entfernt — auf der Plattform existiert
-// (noch) keine Barrierefreiheits-Erklaerungsseite.
+// "Barrierefreiheit" hat auf der Plattform (noch) keine eigene Seite und
+// verweist deshalb auf die statische In-App-Seite (pages/rechtliches.tsx);
+// dort liegen auch In-App-Fallbacks fuer Impressum/Datenschutz/Kontakt.
 const FOOTER_LINKS = [
   { label: "Impressum", href: "https://assistenztreff.de/impressum" },
   { label: "Datenschutz", href: "https://assistenztreff.de/datenschutzerklaerung" },
@@ -144,6 +145,14 @@ function PlatformFooterPlaceholder() {
               {label}
             </a>
           ))}
+          {/* Barrierefreiheit: In-App-Seite (auf der Plattform existiert noch
+              keine Erklaerungsseite). Gleiche Fokus-/Hover-Stile wie oben. */}
+          <Link
+            href="/barrierefreiheit"
+            className="flex h-11 items-center rounded-md px-4 text-sm font-medium hover:bg-slate-200 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-dark"
+          >
+            Barrierefreiheit
+          </Link>
         </nav>
         <p className="text-xs text-slate-500">© 2026 AssistenzTreff</p>
       </div>
