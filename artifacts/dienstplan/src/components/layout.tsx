@@ -54,7 +54,38 @@ const PLATFORM_LINKS = [
   { label: "Leistungen", href: "https://assistenztreff.de/leistungen" },
 ];
 
+// Gemeinsamer Look der Plattform-Textlinks (Über uns/Handbuch/Leistungen/
+// Login bzw. Profil): gleiche Schriftgröße, unterstrichen wie auf
+// assistenztreff.de, gelber Hover-Effekt (Desktop) — auf Touch-Geräten
+// erscheint derselbe Effekt beim Antippen (active:).
+const PLATFORM_LINK_CLASSES =
+  "items-center rounded-full px-4 text-base font-semibold underline decoration-2 underline-offset-4 transition-colors hover:bg-brand-yellow hover:no-underline active:bg-brand-yellow active:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-dark";
+
+// Pillen-Button rechts (Registrieren bzw. Logout): dunkelblau, weiße Schrift,
+// schmaler dunkelblauer Rand; Hover/Tap = gelb mit dunkler Schrift.
+const PLATFORM_PILL_CLASSES =
+  "flex h-12 items-center rounded-full border-2 border-brand-dark bg-brand-dark px-6 text-base font-semibold text-brand-white shadow-sm transition-colors hover:bg-brand-yellow hover:text-brand-dark active:bg-brand-yellow active:text-brand-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-dark focus-visible:outline-offset-2";
+
 function PlatformHeaderPlaceholder() {
+  const { currentUser, logout } = useAuth();
+  const { toast } = useToast();
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    try {
+      await logout();
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Fehler beim Abmelden",
+        description: "Bitte versuchen Sie es erneut.",
+      });
+    } finally {
+      setLoggingOut(false);
+    }
+  }
+
   return (
     <header
       className="flex h-20 shrink-0 items-center bg-brand-hellblau text-brand-dark"
@@ -82,23 +113,49 @@ function PlatformHeaderPlaceholder() {
               href={href}
               target="_blank"
               rel="noreferrer"
-              className="hidden h-12 items-center rounded-md px-4 text-sm font-semibold hover:bg-brand-dark/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-dark md:flex"
+              className={`hidden h-12 md:flex ${PLATFORM_LINK_CLASSES}`}
             >
               {label}
             </a>
           ))}
-          <Link
-            href="/login"
-            className="hidden h-12 items-center rounded-md px-4 text-sm font-semibold hover:bg-brand-dark/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-dark sm:flex"
-          >
-            Login
-          </Link>
-          <Link
-            href="/registrierung"
-            className="ml-1 flex h-12 items-center rounded-md bg-brand-dark px-5 text-sm font-semibold text-brand-white shadow-sm hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-dark focus-visible:outline-offset-2 sm:ml-2"
-          >
-            Registrieren
-          </Link>
+          {currentUser ? (
+            <>
+              {/* Eingeloggt: Profil + Logout oben rechts (wie AssistenzTreff). */}
+              <Link
+                href="/einstellungen"
+                className={`hidden h-12 sm:flex ${PLATFORM_LINK_CLASSES}`}
+                data-testid="platform-header-profil"
+              >
+                Profil
+              </Link>
+              <button
+                type="button"
+                onClick={() => void handleLogout()}
+                disabled={loggingOut}
+                className={`ml-1 sm:ml-2 ${PLATFORM_PILL_CLASSES}`}
+                data-testid="platform-header-logout"
+              >
+                {loggingOut ? "Wird abgemeldet..." : "Logout"}
+              </button>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className={`hidden h-12 sm:flex ${PLATFORM_LINK_CLASSES}`}
+                data-testid="platform-header-login"
+              >
+                Login
+              </Link>
+              <Link
+                href="/registrierung"
+                className={`ml-1 sm:ml-2 ${PLATFORM_PILL_CLASSES}`}
+                data-testid="platform-header-registrieren"
+              >
+                Registrieren
+              </Link>
+            </>
+          )}
         </nav>
       </div>
     </header>
