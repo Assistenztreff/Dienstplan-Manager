@@ -1,4 +1,5 @@
 import logoUrl from "./logo.png";
+import tabelleShotUrl from "./screenshot-tabelle-crop.jpg";
 
 // ---------------------------------------------------------------------------
 // Startseite (ausgeloggt) — Mockup nach Vorbild assistenztreff.de:
@@ -54,42 +55,14 @@ function Header() {
 
 // --- Stilisierter Screenshot 1: Dienstplan im Tabellenmodus -----------------
 
-const TABLE_ROWS = [
-  { name: "Anna Schmidt", dot: "#7dd3fc", dienste: ["Mi 1 · 06–14", "Do 2 · 06–14", "Mo 6 · 06–14"] },
-  { name: "Max Müller", dot: "#d9f99d", dienste: ["Mi 1 · 14–22", "Fr 3 · 14–22", "Di 7 · 14–22"] },
-  { name: "Lisa Weber", dot: "#a3e635", dienste: ["Do 2 · 22–06", "Sa 4 · 22–06", "Mi 8 · 22–06"] },
-  { name: "Tom Bauer", dot: "#fdba74", dienste: ["Fr 3 · 06–14", "Mo 6 · 06–14"] },
-  { name: "Sarah Klein", dot: "#d8b4fe", dienste: ["So 5 · 14–22", "Di 7 · 14–22"] },
-];
-
 function ShotTabelle() {
   return (
     <MockWindow title="Dienstplan · Tabelle · Juli 2026">
-      <div className="divide-y divide-slate-100">
-        <div className="flex items-center justify-between bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-500">
-          <span>Assistent:in</span>
-          <span>Dienste (FIX)</span>
-        </div>
-        {TABLE_ROWS.map((r) => (
-          <div key={r.name} className="flex items-center justify-between gap-3 px-4 py-2.5">
-            <span className="flex items-center gap-2 text-sm font-semibold" style={{ color: DARK }}>
-              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: r.dot }} />
-              {r.name}
-            </span>
-            <span className="flex flex-wrap justify-end gap-1.5">
-              {r.dienste.map((d) => (
-                <span
-                  key={d}
-                  className="rounded-md px-2 py-0.5 text-[11px] font-medium"
-                  style={{ backgroundColor: "#eef6f6", color: DARK }}
-                >
-                  {d}
-                </span>
-              ))}
-            </span>
-          </div>
-        ))}
-      </div>
+      <img
+        src={tabelleShotUrl}
+        alt="Echter Screenshot: Dienstplan im Tabellenmodus (Juli 2026)"
+        className="block w-full"
+      />
     </MockWindow>
   );
 }
@@ -207,9 +180,9 @@ export function Startseite() {
       <Header />
       {/* Zentraler Claim */}
       <section className="mx-auto max-w-4xl px-6 pb-16 pt-20 text-center">
-        <h1 className="text-4xl font-extrabold leading-tight md:text-5xl" style={{ color: DARK }}>
-          Dein Dienstplan. Deine Entscheidung. Dein Team.
-        </h1>
+        <h1 className="text-4xl font-extrabold leading-tight md:text-5xl" style={{ color: DARK }}>Dein Dienstplan. 
+        Deine Entscheidung. 
+        Dein Team.</h1>
         <h2 className="mx-auto mt-6 max-w-3xl text-lg font-normal leading-relaxed md:text-xl" style={{ color: DARK }}>
           Mit dem Assistenz Planer behältst du die Kontrolle über deine persönliche
           Assistenz – ganz gleich, wo du gerade bist. Dienste planen, Ausfälle regeln,
@@ -225,7 +198,6 @@ export function Startseite() {
           </a>
         </div>
       </section>
-
       {/* Screenshots + Erklärungen (statt Fotos) */}
       <section className="rounded-t-[3rem] bg-white/70 py-20 backdrop-blur">
         <div className="mx-auto max-w-6xl space-y-20 px-6">
