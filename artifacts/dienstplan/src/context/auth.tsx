@@ -96,14 +96,33 @@ function storeSession(user: AuthUser | null): void {
   }
 }
 
+// Globaler Hook für die Selbstheilung bei toten Sessions: Wenn eine beliebige
+// API-Abfrage mit 401 scheitert (z. B. weil die serverseitige Session nach
+// einem Datenbank-Reset nicht mehr existiert, das Cookie im Browser aber
+// noch), stößt der QueryClient hierüber eine erneute Authentifizierung an
+// (me → Dev-Login → sonst Logout). Single-flight: parallele 401s lösen nur
+// einen Durchlauf aus.
+let resyncAuthHandler: (() => Promise<boolean>) | null = null;
+
+/** Liefert `null`, wenn gerade kein Auth-Kontext montiert ist (z. B. kurzer
+ *  Remount) — dann darf der Aufrufer keinen Cooldown starten. */
+export function resyncAuthAfter401(): Promise<boolean> | null {
+  return resyncAuthHandler ? resyncAuthHandler() : null;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => readStoredSession());
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    let inflight: Promise<boolean> | null = null;
 
-    async function bootstrap() {
+    // Versucht, eine gültige Session herzustellen: erst /auth/me, im Dev-Modus
+    // notfalls per Dev-Login. Liefert true, wenn danach ein Nutzer angemeldet
+    // ist. Bei endgültigem Scheitern wird der lokale Zustand geleert, sodass
+    // die App auf die Login-Seite wechselt statt endlos 401s zu produzieren.
+    async function bootstrap(): Promise<boolean> {
       try {
         const meRes = await apiFetch("/api/auth/me");
         if (meRes.ok) {
@@ -112,7 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setCurrentUser(user);
             storeSession(user);
           }
-          return;
+          return true;
         }
 
         if (import.meta.env.DEV) {
@@ -123,7 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setCurrentUser(user);
               storeSession(user);
             }
-            return;
+            return true;
           }
         }
 
@@ -131,19 +150,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setCurrentUser(null);
           storeSession(null);
         }
+        return false;
       } catch {
         if (!cancelled) {
           setCurrentUser(null);
           storeSession(null);
         }
-      } finally {
-        if (!cancelled) setIsLoading(false);
+        return false;
       }
     }
 
-    bootstrap();
+    resyncAuthHandler = () => {
+      if (!inflight) {
+        inflight = bootstrap().finally(() => {
+          inflight = null;
+        });
+      }
+      return inflight;
+    };
+
+    bootstrap().finally(() => {
+      if (!cancelled) setIsLoading(false);
+    });
     return () => {
       cancelled = true;
+      resyncAuthHandler = null;
     };
   }, []);
 

@@ -1,5 +1,7 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ApiError } from "@workspace/api-client-react";
+import { resyncAuthAfter401 } from "@/context/auth";
 import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
@@ -26,7 +28,34 @@ import NotFound from "@/pages/not-found";
 import { isAdminRole } from "@/lib/roles";
 import { Loader2 } from "lucide-react";
 
-const queryClient = new QueryClient({
+// Selbstheilung bei toter Session: Liefert eine Abfrage 401 (Session-Cookie
+// zeigt z. B. nach einem Datenbank-Reset auf eine nicht mehr existierende
+// Session), wird einmalig eine erneute Anmeldung angestoßen (me → Dev-Login)
+// und bei Erfolg alle Abfragen neu geladen. Scheitert die Anmeldung, leert der
+// Auth-Kontext den Zustand und die App wechselt zur Login-Seite — statt endlos
+// leere Seiten mit 401-Fehlern zu zeigen.
+// Cooldown gegen Endlosschleifen: Wenn die Neuanmeldung zwar gelingt, die
+// Abfragen aber weiterhin 401 liefern (z. B. weil der Browser Cookies für die
+// eingebettete Vorschau blockiert), darf sich resync → invalidate → 401 →
+// resync nicht ewig drehen.
+let lastResyncAt = 0;
+const RESYNC_COOLDOWN_MS = 15_000;
+
+const queryClient: QueryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 401) {
+        const now = Date.now();
+        if (now - lastResyncAt < RESYNC_COOLDOWN_MS) return;
+        const resync = resyncAuthAfter401();
+        if (!resync) return; // Auth-Kontext gerade nicht montiert — kein Cooldown starten
+        lastResyncAt = now;
+        void resync.then((ok) => {
+          if (ok) void queryClient.invalidateQueries();
+        });
+      }
+    },
+  }),
   defaultOptions: {
     queries: {
       retry: false,
