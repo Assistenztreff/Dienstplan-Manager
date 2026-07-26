@@ -195,9 +195,8 @@ export function Startseite() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: HELLBLAU }}>
       <Header />
-
       {/* Zentraler Claim */}
-      <section className="mx-auto max-w-4xl px-6 pb-16 pt-20 text-center">
+      <section className="mx-auto max-w-4xl px-6 pb-16 pt-20 text-center bg-secondary">
         <h1 className="text-4xl font-extrabold leading-tight md:text-5xl" style={{ color: DARK }}>
           Assistenz Planer – mit unserer Dienstplaner behältst du und dein Team
           immer den Überblick – egal an welchen Ort.
@@ -219,7 +218,6 @@ export function Startseite() {
           </a>
         </div>
       </section>
-
       {/* Screenshots + Erklärungen (statt Fotos) */}
       <section className="rounded-t-[3rem] bg-white/70 py-20 backdrop-blur">
         <div className="mx-auto max-w-6xl space-y-20 px-6">
@@ -241,7 +239,6 @@ export function Startseite() {
           />
         </div>
       </section>
-
       {/* Footer-Andeutung */}
       <footer className="py-10 text-center text-sm" style={{ backgroundColor: DARK, color: "#cbd5e1" }}>
         Impressum · Datenschutz · Kontakt · Barrierefreiheit — © 2026 AssistenzTreff
