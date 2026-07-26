@@ -8,13 +8,13 @@ export const modules: ModuleMap = {
   "./components/mockups/dienstplan-layouts/Wochenband.tsx": () => import("../components/mockups/dienstplan-layouts/Wochenband.tsx"),
   "./components/mockups/dienstplan-leiste/AktionenUnten.tsx": () => import("../components/mockups/dienstplan-leiste/AktionenUnten.tsx"),
   "./components/mockups/dienstplan-leiste/MonatOben.tsx": () => import("../components/mockups/dienstplan-leiste/MonatOben.tsx"),
+  "./components/mockups/nachberechnung/InfokarteNachberechnung.tsx": () => import("../components/mockups/nachberechnung/InfokarteNachberechnung.tsx"),
+  "./components/mockups/nachberechnung/MitarbeiterkarteNachberechnung.tsx": () => import("../components/mockups/nachberechnung/MitarbeiterkarteNachberechnung.tsx"),
   "./components/mockups/standalone-shell/ShellDesktop.tsx": () => import("../components/mockups/standalone-shell/ShellDesktop.tsx"),
   "./components/mockups/standalone-shell/ShellDesktopHellblau.tsx": () => import("../components/mockups/standalone-shell/ShellDesktopHellblau.tsx"),
   "./components/mockups/standalone-shell/ShellMobile.tsx": () => import("../components/mockups/standalone-shell/ShellMobile.tsx"),
   "./components/mockups/startseite/MobileDashboard.tsx": () => import("../components/mockups/startseite/MobileDashboard.tsx"),
   "./components/mockups/startseite/MobileMenu.tsx": () => import("../components/mockups/startseite/MobileMenu.tsx"),
   "./components/mockups/startseite/MobileStartseite.tsx": () => import("../components/mockups/startseite/MobileStartseite.tsx"),
-  "./components/mockups/startseite/Startseite.tsx": () => import("../components/mockups/startseite/Startseite.tsx"),
-  "./components/mockups/nachberechnung/InfokarteNachberechnung.tsx": () => import("../components/mockups/nachberechnung/InfokarteNachberechnung.tsx"),
-  "./components/mockups/nachberechnung/MitarbeiterkarteNachberechnung.tsx": () => import("../components/mockups/nachberechnung/MitarbeiterkarteNachberechnung.tsx")
+  "./components/mockups/startseite/Startseite.tsx": () => import("../components/mockups/startseite/Startseite.tsx")
 };

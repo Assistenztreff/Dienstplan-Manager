@@ -208,9 +208,13 @@ export function Startseite() {
       {/* Zentraler Claim */}
       <section className="mx-auto max-w-4xl px-6 pb-16 pt-20 text-center">
         <h1 className="text-4xl font-extrabold leading-tight md:text-5xl" style={{ color: DARK }}>
-          Assistenz Planer – mit unserer Dienstplaner behältst du und dein Team
-          immer den Überblick – egal an welchen Ort.
+          Dein Dienstplan. Deine Entscheidung. Dein Team.
         </h1>
+        <h2 className="mx-auto mt-6 max-w-3xl text-lg font-normal leading-relaxed md:text-xl" style={{ color: DARK }}>
+          Mit dem Assistenz Planer behältst du die Kontrolle über deine persönliche
+          Assistenz – ganz gleich, wo du gerade bist. Dienste planen, Ausfälle regeln,
+          Team informieren: alles an einem Ort.
+        </h2>
         <div className="mt-8 flex justify-center gap-4">
           <a
             href="#"
