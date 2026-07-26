@@ -206,7 +206,7 @@ export function Startseite() {
     <div className="min-h-screen" style={{ backgroundColor: HELLBLAU }}>
       <Header />
       {/* Zentraler Claim */}
-      <section className="mx-auto max-w-4xl px-6 pb-16 pt-20 text-center bg-secondary">
+      <section className="mx-auto max-w-4xl px-6 pb-16 pt-20 text-center">
         <h1 className="text-4xl font-extrabold leading-tight md:text-5xl" style={{ color: DARK }}>
           Assistenz Planer – mit unserer Dienstplaner behältst du und dein Team
           immer den Überblick – egal an welchen Ort.
