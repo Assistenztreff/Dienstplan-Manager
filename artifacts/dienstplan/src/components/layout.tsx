@@ -71,7 +71,7 @@ const PLATFORM_LINK_CLASSES =
 const PLATFORM_PILL_CLASSES =
   "flex h-9 items-center rounded-full border border-brand-dark bg-brand-dark px-5 text-sm font-semibold text-brand-white shadow-sm transition-colors hover:bg-brand-yellow hover:text-brand-dark active:bg-brand-yellow active:text-brand-dark active:outline active:outline-[3px] active:outline-offset-2 active:outline-brand-dark focus-visible:bg-brand-yellow focus-visible:text-brand-dark focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark";
 
-function PlatformHeaderPlaceholder() {
+export function PlatformHeaderPlaceholder() {
   const { currentUser, logout } = useAuth();
   const { toast } = useToast();
   const [loggingOut, setLoggingOut] = useState(false);

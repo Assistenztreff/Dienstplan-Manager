@@ -24,6 +24,7 @@ import Registrierung from "@/pages/registrierung";
 import Einladung from "@/pages/einladung";
 import PasswortVergessen from "@/pages/passwort-vergessen";
 import { Impressum, Datenschutz, Kontakt, Barrierefreiheit } from "@/pages/rechtliches";
+import Startseite from "@/pages/startseite";
 import NotFound from "@/pages/not-found";
 import { isAdminRole } from "@/lib/roles";
 import { Loader2 } from "lucide-react";
@@ -81,7 +82,9 @@ function Router() {
 
   useEffect(() => {
     if (isLoading) return;
-    const isPublic = PUBLIC_PATHS.some((p) => location.startsWith(p));
+    // "/" ist ausgeloggt die oeffentliche Startseite (Landingpage).
+    const isPublic =
+      location === "/" || PUBLIC_PATHS.some((p) => location.startsWith(p));
     if (!currentUser && !isPublic) {
       navigate("/login");
     } else if (currentUser && location === "/login") {
@@ -100,6 +103,7 @@ function Router() {
   if (!currentUser) {
     return (
       <Switch>
+        <Route path="/" component={Startseite} />
         <Route path="/login" component={Login} />
         <Route path="/registrierung" component={Registrierung} />
         <Route path="/einladung" component={Einladung} />
