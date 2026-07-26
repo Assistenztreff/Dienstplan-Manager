@@ -9,3 +9,7 @@ Two pitfalls when testing UI that appears after a scroll-depth threshold and hid
 - **Playwright ignores opacity.** Elements hidden via `opacity-0 pointer-events-none` (kept in DOM with size) count as visible for `isVisible()`/`toBeVisible()`. Assert on `getComputedStyle(el).opacity` and `.pointerEvents` instead; for `md:hidden` desktop checks assert `display === "none"`.
 
 **How to apply:** any spec for scroll-triggered floating UI (scroll-to-top, back-to-top, reveal-on-scroll banners).
+
+## Nachtrag (Juli 2026)
+- Ein injizierter Scroll-Spacer muss INNERHALB des Sticky-Eltern-Containers liegen (erstes Kind von `<main>`, nicht `<main>` selbst) — sticky klebt nur innerhalb des Parents; ein Spacer dahinter schiebt die sticky Leiste aus dem Viewport.
+- Fokus-Rückgabe beim Schließen von Overlays immer mit `focus({ preventScroll: true })` — sonst scrollt der Browser das Trigger-Element in den Viewport und macht Scroll-Assertions kaputt.

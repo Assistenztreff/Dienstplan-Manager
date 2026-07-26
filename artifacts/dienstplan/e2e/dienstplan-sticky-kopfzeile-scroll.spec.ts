@@ -16,9 +16,9 @@ import { loginViaUi } from "./helpers/auth";
  * der den sticky-Kontext zerstoert):
  * - Desktop (1280px): Header + Desktop-Menueleiste scrollen weg,
  *   Dienstplanleiste klebt oben.
- * - Mobil (400px): Header + App-Menue-Leiste scrollen weg, Dienstplanleiste
- *   klebt oben; der App-Menue-Drawer (fixed) bleibt auch bei gescrolltem
- *   Inhalt voll sichtbar und schliessbar.
+ * - Mobil (400px): Header scrollt weg, Dienstplanleiste klebt oben; das
+ *   Vollbild-Menue (Hamburger im Plattform-Header, fixed) bleibt auch bei
+ *   gescrolltem Inhalt voll sichtbar und schliessbar.
  */
 
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "admin@dienstplan.local";
@@ -41,6 +41,23 @@ async function openDienstplan(page: Page): Promise<void> {
  */
 async function scrollLayoutToBottom(page: Page): Promise<void> {
   const container = page.getByTestId("layout-scroll-container");
+  // Testdaten-Unabhaengigkeit: Die geteilte Test-DB kann so wenig Inhalt
+  // haben, dass die Seite kaum scrollbar ist. Ein Spacer im <main> garantiert
+  // genuegend Scrollweg — geprueft wird das Sticky-Verhalten, nicht die
+  // Inhaltsmenge.
+  await page.evaluate(() => {
+    if (!document.querySelector("[data-testid='e2e-scroll-spacer']")) {
+      const spacer = document.createElement("div");
+      spacer.setAttribute("data-testid", "e2e-scroll-spacer");
+      spacer.style.height = "1500px";
+      // WICHTIG: in den Seiten-Container (erstes Kind von <main>) haengen,
+      // nicht in <main> selbst — sticky-Elemente kleben nur innerhalb ihres
+      // Eltern-Containers; ein Spacer DAHINTER wuerde die sticky Kopfzeile
+      // beim Scrollen aus dem Viewport schieben.
+      const pageRoot = document.querySelector("main")?.firstElementChild;
+      pageRoot?.appendChild(spacer);
+    }
+  });
   await container.evaluate((el) => {
     el.scrollTop = el.scrollHeight;
   });
@@ -113,8 +130,8 @@ test.describe("Dienstplan: Kopfzeile bleibt beim Scrollen sichtbar (Desktop)", (
 
 test.describe("Dienstplan: Kopfzeile bleibt beim Scrollen sichtbar (Mobil 400px)", () => {
   // Bewusst 700px Hoehe (kompaktes Smartphone): Das Monatsgitter ueberragt
-  // den Viewport dann deutlich, sodass Plattform-Header + App-Menue-Leiste
-  // (~110px) garantiert VOLLSTAENDIG aus dem Viewport scrollen koennen.
+  // den Viewport dann deutlich, sodass der Plattform-Header (~80px)
+  // garantiert VOLLSTAENDIG aus dem Viewport scrollen kann.
   test.use({ viewport: { width: 400, height: 700 } });
 
   test.beforeEach(async ({ page }) => {
@@ -125,48 +142,47 @@ test.describe("Dienstplan: Kopfzeile bleibt beim Scrollen sichtbar (Mobil 400px)
     await page.evaluate(() => localStorage.setItem("dienstplan.mobileView", "grid"));
   });
 
-  test("App-Menue-Leiste scrollt weg, Dienstplanleiste klebt oben, Drawer bleibt nutzbar", async ({
+  test("Header scrollt weg, Dienstplanleiste klebt oben, Vollbild-Menue bleibt nutzbar", async ({
     page,
   }) => {
     await openDienstplan(page);
 
     const platformHeader = page.getByTestId("platform-header");
-    const appMenuBar = page.getByTestId("app-menu-bar");
-    const drawer = page.getByTestId("app-menu-drawer");
+    const hamburger = page.getByTestId("platform-header-hamburger");
+    const fullMenu = page.getByTestId("mobile-full-menu");
 
-    // Ausgangslage: Plattform-Header + App-Menue-Leiste sichtbar, Drawer zu.
+    // Ausgangslage: Plattform-Header mit Hamburger sichtbar, Menue zu.
     await expect(platformHeader).toBeInViewport();
-    await expect(appMenuBar).toBeInViewport();
-    await expect(drawer).not.toBeInViewport();
+    await expect(hamburger).toBeInViewport();
+    await expect(fullMenu).not.toBeVisible();
 
-    // Drawer oeffnen: Er ist `fixed` und muss unabhaengig von der
+    // Vollbild-Menue oeffnen: Es ist `fixed` und muss unabhaengig von der
     // Scroll-Position voll sichtbar bleiben.
-    await page.getByRole("button", { name: "App-Menü öffnen" }).click();
-    await expect(drawer).toBeInViewport();
-    await expect(drawer.getByText("Dashboard")).toBeVisible();
+    await hamburger.click();
+    await expect(fullMenu).toBeInViewport();
+    await expect(fullMenu.getByRole("link", { name: "Dashboard" })).toBeVisible();
 
-    // Bei geoeffnetem Drawer nach unten scrollen: Der Drawer bleibt als
+    // Bei geoeffnetem Menue nach unten scrollen: Das Menue bleibt als
     // fixed-Element vollstaendig im Viewport ...
     await scrollLayoutToBottom(page);
-    await expect(drawer).toBeInViewport();
+    await expect(fullMenu).toBeInViewport();
 
     // ... und laesst sich weiterhin schliessen.
-    await drawer.getByRole("button", { name: "Menü schließen" }).click();
-    await expect(drawer).not.toBeInViewport();
+    await fullMenu.getByTestId("mobile-full-menu-close").click();
+    await expect(fullMenu).not.toBeVisible();
 
-    // Nach dem Schliessen (Seite ist weiterhin unten): Plattform-Header und
-    // App-Menue-Leiste sind weggescrollt, die Dienstplanleiste klebt oben.
+    // Nach dem Schliessen (Seite ist weiterhin unten): Der Plattform-Header
+    // (samt Hamburger) ist weggescrollt, die Dienstplanleiste klebt oben.
     await expect(platformHeader).not.toBeInViewport();
-    await expect(appMenuBar).not.toBeInViewport();
     await expectMonthLabelStickyAtTop(page);
     await expect(page.getByTestId("prev-month")).toBeInViewport();
     await expect(page.getByTestId("next-month")).toBeInViewport();
 
-    // Zurueck nach oben: Die App-Menue-Leiste erscheint wieder und der Drawer
-    // laesst sich erneut oeffnen (kompletter Roundtrip).
+    // Zurueck nach oben: Der Hamburger erscheint wieder und das Menue laesst
+    // sich erneut oeffnen (kompletter Roundtrip).
     await scrollLayoutToTop(page);
-    await expect(appMenuBar).toBeInViewport();
-    await page.getByRole("button", { name: "App-Menü öffnen" }).click();
-    await expect(drawer).toBeInViewport();
+    await expect(hamburger).toBeInViewport();
+    await hamburger.click();
+    await expect(fullMenu).toBeInViewport();
   });
 });

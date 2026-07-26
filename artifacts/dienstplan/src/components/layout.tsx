@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
@@ -75,6 +75,9 @@ export function PlatformHeaderPlaceholder() {
   const { currentUser, logout } = useAuth();
   const { toast } = useToast();
   const [loggingOut, setLoggingOut] = useState(false);
+  // Mobil (< md): EIN Hamburger buendelt Plattform-Links UND App-Menue in
+  // einem Vollbild-Menue (Mockup "Mobile-Menü").
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -134,10 +137,11 @@ export function PlatformHeaderPlaceholder() {
         <div className="flex items-center gap-1 sm:gap-2">
           {currentUser ? (
             <>
-              {/* Eingeloggt: Profil + Logout oben rechts (wie AssistenzTreff). */}
+              {/* Eingeloggt, ab md: Profil + Logout oben rechts (wie
+                  AssistenzTreff). Darunter uebernimmt der Hamburger. */}
               <Link
                 href="/einstellungen"
-                className={`hidden h-12 sm:flex ${PLATFORM_LINK_CLASSES}`}
+                className={`hidden h-12 md:flex ${PLATFORM_LINK_CLASSES}`}
                 data-testid="platform-header-profil"
               >
                 Profil
@@ -146,11 +150,32 @@ export function PlatformHeaderPlaceholder() {
                 type="button"
                 onClick={() => void handleLogout()}
                 disabled={loggingOut}
-                className={`ml-1 sm:ml-2 ${PLATFORM_PILL_CLASSES}`}
+                className={`ml-1 hidden sm:ml-2 md:flex ${PLATFORM_PILL_CLASSES}`}
                 data-testid="platform-header-logout"
               >
                 {loggingOut ? "Wird abgemeldet..." : "Logout"}
               </button>
+              {/* Mobil: Hamburger oeffnet das Vollbild-Menue. */}
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(true)}
+                className="flex h-12 w-12 items-center justify-center rounded-full text-brand-dark transition-colors hover:bg-brand-yellow focus-visible:bg-brand-yellow focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark md:hidden"
+                aria-label="Menü öffnen"
+                aria-expanded={mobileMenuOpen}
+                data-testid="platform-header-hamburger"
+              >
+                <Menu className="h-7 w-7" />
+              </button>
+              {mobileMenuOpen && (
+                <MobileFullMenu
+                  onClose={() => setMobileMenuOpen(false)}
+                  onLogout={() => {
+                    setMobileMenuOpen(false);
+                    void handleLogout();
+                  }}
+                  loggingOut={loggingOut}
+                />
+              )}
             </>
           ) : (
             <>
@@ -173,6 +198,174 @@ export function PlatformHeaderPlaceholder() {
         </div>
       </div>
     </header>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Mobiles Vollbild-Menue (Mockup "Mobile-Menü", < md)
+// ---------------------------------------------------------------------------
+// EIN Hamburger im Plattform-Header oeffnet dieses Menue. Oben Logo +
+// "schließen", darunter die App-Navigation als grosse Pillen-Buttons
+// (aktiver Punkt gelb), unten kleiner die Plattform-Links sowie
+// "Angemeldet als ..." + Abmelden-Pille.
+// ---------------------------------------------------------------------------
+
+function MobileFullMenu({
+  onClose,
+  onLogout,
+  loggingOut,
+}: {
+  onClose: () => void;
+  onLogout: () => void;
+  loggingOut: boolean;
+}) {
+  const { currentUser } = useAuth();
+  const [location] = useLocation();
+  const { enabled: timeTrackingEnabled } = useTimeTrackingEnabled();
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Modal-Verhalten: Fokus beim Oeffnen auf "schließen", Escape schliesst,
+  // Tab bleibt im Menue (Fokus-Falle), Hintergrund-Scroll wird gesperrt und
+  // der Fokus kehrt beim Schliessen zum ausloesenden Element zurueck.
+  useEffect(() => {
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeButtonRef.current?.focus();
+
+    // Hintergrund-Scroll sperren: Das Dokument scrollt nie selbst — gescrollt
+    // wird der innere Layout-Container (falls vorhanden, z. B. nicht auf der
+    // Startseite).
+    const scrollContainer = document.querySelector<HTMLElement>(
+      "[data-testid='layout-scroll-container']",
+    );
+    const previousOverflow = scrollContainer?.style.overflowY ?? "";
+    if (scrollContainer) scrollContainer.style.overflowY = "hidden";
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const root = overlayRef.current;
+      if (!root) return;
+      const focusables = Array.from(
+        root.querySelectorAll<HTMLElement>(
+          "a[href], button:not([disabled]), [tabindex]:not([tabindex='-1'])",
+        ),
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !root.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown, true);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown, true);
+      if (scrollContainer) scrollContainer.style.overflowY = previousOverflow;
+      // preventScroll: Der Fokus-Ruecksprung darf die Scroll-Position nicht
+      // veraendern (sonst springt die Seite beim Schliessen nach oben).
+      previouslyFocused?.focus({ preventScroll: true });
+    };
+  }, [onClose]);
+
+  const navItems = ALL_NAV_ITEMS.filter(
+    (item) =>
+      (!item.adminOnly || isAdminRole(currentUser?.role)) &&
+      (!item.dienstleisterOnly || currentUser?.accountType === "dienstleister") &&
+      (item.href !== "/zeiterfassung" || timeTrackingEnabled),
+  );
+
+  return (
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 z-50 overflow-y-auto bg-brand-hellblau text-brand-dark md:hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Menü"
+      data-testid="mobile-full-menu"
+    >
+      <div className="flex min-h-full flex-col">
+        {/* Kopfzeile: Logo links, schließen rechts */}
+        <div className="flex items-center justify-between px-5 pt-5">
+          <img src={platformLogoUrl} alt="AssistenzPlaner" className="h-9 w-auto" />
+          <button
+            type="button"
+            ref={closeButtonRef}
+            onClick={onClose}
+            className="flex h-12 items-center gap-2 rounded-full px-3 text-base font-semibold underline decoration-1 underline-offset-4 transition-colors hover:bg-brand-yellow hover:no-underline focus-visible:bg-brand-yellow focus-visible:no-underline focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark"
+            aria-label="Menü schließen"
+            data-testid="mobile-full-menu-close"
+          >
+            schließen
+            <X className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
+
+        {/* App-Navigation als Pillen-Buttons */}
+        <nav aria-label="Dienstplan-App" className="mt-8 flex flex-col gap-4 px-6">
+          {navItems.map((item) => {
+            const isActive = location === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onClose}
+                aria-current={isActive ? "page" : undefined}
+                className={`flex h-14 items-center justify-center rounded-full border border-brand-dark text-lg font-semibold text-brand-dark shadow-sm transition-colors focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark ${
+                  isActive ? "bg-brand-yellow" : "bg-white hover:bg-brand-yellow"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Plattform-Links + Konto */}
+        <div className="mt-10 flex items-start justify-between gap-4 px-8 pb-10">
+          <div className="flex flex-col gap-4 text-base font-medium">
+            {PLATFORM_LINKS.map(({ label, href }) => (
+              <a
+                key={label}
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+                className="underline decoration-1 underline-offset-4 hover:text-brand-dark/70"
+              >
+                {label}
+              </a>
+            ))}
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-4">
+            {currentUser && (
+              <span className="text-sm text-slate-600">
+                Angemeldet als {currentUser.name}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={onLogout}
+              disabled={loggingOut}
+              className={PLATFORM_PILL_CLASSES}
+              data-testid="mobile-full-menu-logout"
+            >
+              {loggingOut ? "Wird abgemeldet..." : "Abmelden"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -259,7 +452,6 @@ function AppSubNavigation() {
   const [location] = useLocation();
   const { currentUser, logout } = useAuth();
   const { toast } = useToast();
-  const [isAppMenuOpen, setIsAppMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
   // Zeiterfassung nur anzeigen, wenn der Konto-Schalter (bzw. der des
@@ -291,87 +483,9 @@ function AppSubNavigation() {
 
   return (
     <>
-      {/* Mobile: schmale Toggle-Leiste mit "App-Menue"-Button (oeffnet Drawer).
-          Scrollt mit der Seite mit; der Drawer selbst ist fixed und bleibt
-          damit unabhaengig von der Scroll-Position voll funktionsfaehig. */}
-      <div className="border-b border-slate-200 bg-slate-100 px-4 py-3 md:hidden" data-testid="app-menu-bar">
-        <button
-          type="button"
-          onClick={() => setIsAppMenuOpen(true)}
-          className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium text-slate-700 hover:bg-slate-200"
-          aria-label="App-Menü öffnen"
-        >
-          <Menu className="h-5 w-5 shrink-0" />
-          <span>App-Menü</span>
-        </button>
-      </div>
-
-      {/* Mobile: Backdrop hinter dem Drawer (Klick schliesst das Menue). */}
-      {isAppMenuOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-brand-dark/50 md:hidden"
-          onClick={() => setIsAppMenuOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-
-      {/* Mobile: Off-Canvas Slide-In-Menue (Drawer) von links. */}
-      <div
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 transform flex-col bg-slate-100 shadow-xl transition-transform duration-300 md:hidden ${
-          isAppMenuOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-        data-testid="app-menu-drawer"
-      >
-        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-          <span className="text-sm font-semibold text-slate-700">Menü</span>
-          <button
-            type="button"
-            onClick={() => setIsAppMenuOpen(false)}
-            className="rounded-md p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
-            aria-label="Menü schließen"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <nav className="flex flex-col gap-2 p-4">
-          {navItems.map((item) => (
-            <Link key={item.href} href={item.href}>
-              <span
-                onClick={() => setIsAppMenuOpen(false)}
-                className={`flex items-center gap-2 px-3 py-2.5 text-sm transition-colors cursor-pointer ${
-                  location === item.href
-                    ? "bg-brand-yellow text-brand-dark font-semibold"
-                    : "text-slate-600 hover:bg-slate-200 hover:text-slate-900"
-                }`}
-              >
-                <item.icon className="h-4 w-4 shrink-0" />
-                <span>{item.label}</span>
-              </span>
-            </Link>
-          ))}
-        </nav>
-
-        {/* Mobile: Nutzerinfo + Abmelden am unteren Rand des Drawers. */}
-        <div className="mt-auto border-t border-slate-200 p-4">
-          {currentUser && (
-            <p className="mb-2 truncate px-1 text-xs text-slate-500" title={currentUser.name}>
-              {currentUser.name}
-            </p>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              setIsAppMenuOpen(false);
-              void handleLogout();
-            }}
-            disabled={loggingOut}
-            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 disabled:opacity-60"
-          >
-            <LogOut className="h-4 w-4 shrink-0" />
-            <span>{loggingOut ? "Wird abgemeldet..." : "Abmelden"}</span>
-          </button>
-        </div>
-      </div>
+      {/* Mobil (< md) gibt es KEINE eigene App-Menue-Leiste mehr: das
+          App-Menue steckt im Hamburger des Plattform-Headers (Vollbild-
+          Menue, siehe MobileFullMenu). */}
 
       {/* Desktop: Menueleiste als TEXT-LINKS (keine Pillen) auf hellgrauem
           Band — aktiver Punkt gelb hinterlegt (rechteckig, kein rounded).
