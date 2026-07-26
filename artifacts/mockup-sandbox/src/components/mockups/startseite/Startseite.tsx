@@ -12,26 +12,36 @@ const DARK = "#092948";
 const HELLBLAU = "#d4f0f0";
 const YELLOW = "#ebf18b";
 
-const LINK =
-  "rounded-full border border-transparent px-4 py-2 text-base font-semibold underline decoration-2 underline-offset-4 transition-colors hover:border-[#092948] hover:bg-[#ebf18b] hover:no-underline";
+const NAV_LINK =
+  "px-3 py-1.5 text-sm font-medium text-[#092948] underline decoration-[1px] underline-offset-4 transition-colors hover:decoration-[#092948] hover:text-[#092948] no-underline hover:underline";
 
 function Header() {
   return (
-    <header className="flex h-20 items-center" style={{ backgroundColor: HELLBLAU, color: DARK }}>
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-6">
-        <div className="flex items-center gap-8">
-          <img src={logoUrl} alt="AssistenzPlaner" className="h-10 w-auto" />
+    <header
+      className="flex h-16 items-center border-b border-[#b8dede]"
+      style={{ backgroundColor: HELLBLAU, color: DARK }}
+    >
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6">
+        {/* Logo + Nav */}
+        <div className="flex items-center gap-10">
+          <img src={logoUrl} alt="AssistenzPlaner" className="h-9 w-auto" />
           <nav className="flex items-center gap-1">
-            <a href="#" className={LINK}>Leistungen</a>
-            <a href="#" className={LINK}>Über uns</a>
-            <a href="#" className={LINK}>Handbuch</a>
+            <a href="#" className={NAV_LINK}>Leistungen</a>
+            <a href="#" className={NAV_LINK}>Über uns</a>
+            <a href="#" className={NAV_LINK}>Handbuch</a>
           </nav>
         </div>
-        <div className="flex items-center gap-3">
-          <a href="#" className={LINK}>Login</a>
+        {/* Actions */}
+        <div className="flex items-center gap-5">
           <a
             href="#"
-            className="flex h-12 items-center rounded-full border border-[#092948] px-6 text-base font-semibold text-white shadow-sm transition-colors hover:bg-[#ebf18b] hover:text-[#092948]"
+            className="text-sm font-medium text-[#092948] underline decoration-[1px] underline-offset-4 hover:decoration-[#092948]"
+          >
+            Login
+          </a>
+          <a
+            href="#"
+            className="inline-flex h-9 items-center rounded-full px-5 text-sm font-semibold text-white transition-colors hover:opacity-90"
             style={{ backgroundColor: DARK }}
           >
             Registrieren
