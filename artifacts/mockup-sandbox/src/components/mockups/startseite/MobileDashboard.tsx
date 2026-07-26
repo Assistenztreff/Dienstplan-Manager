@@ -2,13 +2,13 @@ import logoUrl from "./logo.png";
 
 // ---------------------------------------------------------------------------
 // Smartphone-Ansicht (angemeldet, Menü GESCHLOSSEN):
-// kompakter Header mit Logo links und Hamburger rechts,
-// darunter das Dashboard der Dienstplan-App (stilisiert).
+// Header wie im neuen Konzept (Logo links, Hamburger rechts),
+// darunter das Dashboard im AKTUELLEN App-Design (heller Hintergrund,
+// weiße Karten mit dezenter Umrandung, Serifen-Überschrift).
 // ---------------------------------------------------------------------------
 
 const DARK = "#092948";
 const HELLBLAU = "#d4f0f0";
-const YELLOW = "#ebf18b";
 
 function Hamburger() {
   return (
@@ -20,67 +20,95 @@ function Hamburger() {
   );
 }
 
-function Kachel({ titel, wert, hinweis }: { titel: string; wert: string; hinweis?: string }) {
+function Chevron() {
   return (
-    <div className="rounded-2xl bg-white p-4 shadow-sm">
-      <p className="text-xs font-medium text-slate-500">{titel}</p>
-      <p className="mt-1 text-2xl font-bold" style={{ color: DARK }}>{wert}</p>
-      {hinweis && <p className="mt-0.5 text-[11px] text-slate-400">{hinweis}</p>}
+    <svg className="h-4 w-4 shrink-0 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  );
+}
+
+function KpiCard({ titel, wert, einheit }: { titel: string; wert: string; einheit?: string }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-medium text-slate-500">{titel}</p>
+        <Chevron />
+      </div>
+      <p className="mt-2 text-3xl font-bold text-slate-900">
+        {wert}
+        {einheit && <span className="ml-1 text-lg font-normal text-slate-500">{einheit}</span>}
+      </p>
     </div>
   );
 }
 
 export function MobileDashboard() {
-  const dienste = [
-    { tag: "Mo, 27. Juli", dienst: "Frühdienst · 06–14 Uhr", wer: "Anna Schmidt" },
-    { tag: "Mo, 27. Juli", dienst: "Spätdienst · 14–22 Uhr", wer: "Max Müller" },
-    { tag: "Di, 28. Juli", dienst: "Nachtdienst · 22–06 Uhr", wer: "Lisa Weber" },
-  ];
   return (
-    <div className="min-h-screen" style={{ backgroundColor: HELLBLAU, color: DARK }}>
-      {/* Header geschlossen: Logo + Hamburger */}
+    <div className="min-h-screen bg-white text-slate-900">
+      {/* Header geschlossen: Logo + Hamburger (hellblau wie Startseite) */}
       <header className="flex h-14 items-center justify-between border-b border-[#b8dede] px-4" style={{ backgroundColor: HELLBLAU }}>
         <img src={logoUrl} alt="AssistenzPlaner" className="h-8 w-auto" />
         <Hamburger />
       </header>
 
-      <main className="space-y-5 px-4 py-5">
+      <main className="space-y-5 px-4 py-6">
         <div>
-          <h1 className="text-xl font-bold">Guten Morgen, Oliver</h1>
-          <p className="text-sm text-slate-600">Sonntag, 26. Juli 2026</p>
+          <h1 className="font-serif text-3xl font-bold text-slate-900">Dashboard</h1>
+          <p className="mt-1 text-sm text-slate-500">Übersicht für Juli 2026</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Kachel titel="Dienste diesen Monat" wert="42" hinweis="davon 38 FIX" />
-          <Kachel titel="Offene Stundenzettel" wert="3" hinweis="zu bestätigen" />
-          <Kachel titel="Plan-Stunden Juli" wert="486 h" />
-          <Kachel titel="Abwesenheiten" wert="2" hinweis="Urlaub · Krankheit" />
+        <div className="grid grid-cols-1 gap-4">
+          <KpiCard titel="Aktive Assistenten" wert="6" />
+          <KpiCard titel="Schichten Heute" wert="3" />
+          <KpiCard titel="Stundenbilanz Monat" wert="412" einheit="/ 486 h" />
         </div>
 
-        <div className="rounded-2xl bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold">Nächste Dienste</h2>
-            <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ backgroundColor: YELLOW }}>Juli</span>
+        {/* Monatsabschluss-Erinnerung (amber, wie in der App) */}
+        <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/40 p-4 shadow-sm">
+          <svg className="h-5 w-5 shrink-0 text-amber-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+            <path d="M12 9v4" /><path d="M12 17h.01" />
+          </svg>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-amber-900">Monatsabschluss Juni 2026 steht noch aus</p>
+            <p className="mt-0.5 text-xs text-amber-800/80">
+              Die Lohnauswertung für Juni 2026 kann jetzt abgeschlossen werden.
+            </p>
           </div>
-          <div className="mt-3 space-y-2">
-            {dienste.map((d, i) => (
-              <div key={i} className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-2">
-                <div>
-                  <p className="text-xs font-semibold">{d.tag}</p>
-                  <p className="text-[11px] text-slate-500">{d.dienst}</p>
-                </div>
-                <span className="text-[11px] font-medium text-slate-600">{d.wer}</span>
+          <Chevron />
+        </div>
+
+        {/* Hinweise-Karte (amber) */}
+        <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4 shadow-sm">
+          <p className="flex items-center gap-2 text-base font-semibold text-amber-900">
+            <svg className="h-5 w-5 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+              <path d="M12 9v4" /><path d="M12 17h.01" />
+            </svg>
+            Hinweise
+          </p>
+          <div className="mt-3 flex items-start gap-3">
+            <svg className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-slate-900">3 offene Zeiterfassungen</p>
+              <p className="text-sm text-slate-500">Noch nicht bestätigt und warten auf Prüfung.</p>
+            </div>
+          </div>
+          <div className="mt-3 flex items-start gap-3">
+            <svg className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18" /><path d="m17 22 5-5" /><path d="m17 17 5 5" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-slate-900">2 Tage ohne geplante Schicht</p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                <span className="rounded-full border border-amber-300 bg-amber-100/50 px-2.5 py-0.5 text-xs text-amber-900">Mi, 29.07.</span>
+                <span className="rounded-full border border-amber-300 bg-amber-100/50 px-2.5 py-0.5 text-xs text-amber-900">Fr, 31.07.</span>
               </div>
-            ))}
+            </div>
           </div>
-        </div>
-
-        <div className="rounded-2xl p-4" style={{ backgroundColor: DARK }}>
-          <p className="text-sm font-semibold text-white">Monatsabschluss Juni offen</p>
-          <p className="mt-1 text-xs text-slate-300">Friere die Lohnauswertung ein, sobald alle Stunden bestätigt sind.</p>
-          <button className="mt-3 rounded-full px-4 py-1.5 text-xs font-semibold" style={{ backgroundColor: YELLOW, color: DARK }}>
-            Jetzt abschließen
-          </button>
         </div>
       </main>
     </div>
