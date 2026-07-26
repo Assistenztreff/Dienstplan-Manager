@@ -52,7 +52,7 @@ const ALL_NAV_ITEMS = [
 const PLATFORM_LINKS = [
   { label: "Leistungen", href: "https://assistenztreff.de/leistungen" },
   { label: "Über uns", href: "https://assistenztreff.de/ueber-uns" },
-  { label: "Handbuch", href: "https://assistenztreff.de/wissen" },
+  { label: "Kontakt", href: "https://assistenztreff.de/kontakt" },
 ];
 
 // Gemeinsamer Look der Plattform-Textlinks (Leistungen/Über uns/Handbuch/
@@ -63,13 +63,13 @@ const PLATFORM_LINKS = [
 // - Klick/Fokus: zusätzlich ein dicker dunkelblauer Rahmen mit Abstand um das
 //   gelbe Kästchen (Barrierefreiheits-Hilfe).
 const PLATFORM_LINK_CLASSES =
-  "items-center rounded-full border border-transparent px-4 text-base font-semibold underline decoration-2 underline-offset-4 transition-colors hover:border-brand-dark hover:bg-brand-yellow hover:no-underline active:border-brand-dark active:bg-brand-yellow active:no-underline active:outline active:outline-[3px] active:outline-offset-2 active:outline-brand-dark focus-visible:border-brand-dark focus-visible:bg-brand-yellow focus-visible:no-underline focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark";
+  "items-center rounded-full border border-transparent px-4 text-base font-semibold underline decoration-1 underline-offset-4 transition-colors hover:border-brand-dark hover:bg-brand-yellow hover:no-underline active:border-brand-dark active:bg-brand-yellow active:no-underline active:outline active:outline-[3px] active:outline-offset-2 active:outline-brand-dark focus-visible:border-brand-dark focus-visible:bg-brand-yellow focus-visible:no-underline focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark";
 
 // Pillen-Button rechts (Registrieren bzw. Logout): dunkelblau, weiße Schrift;
 // Hover/Tap = gelb mit dunkler Schrift und dünnem dunkelblauem Rahmen;
 // Klick/Fokus = zusätzlich dicker dunkelblauer Rahmen mit Abstand.
 const PLATFORM_PILL_CLASSES =
-  "flex h-12 items-center rounded-full border border-brand-dark bg-brand-dark px-6 text-base font-semibold text-brand-white shadow-sm transition-colors hover:bg-brand-yellow hover:text-brand-dark active:bg-brand-yellow active:text-brand-dark active:outline active:outline-[3px] active:outline-offset-2 active:outline-brand-dark focus-visible:bg-brand-yellow focus-visible:text-brand-dark focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark";
+  "flex h-9 items-center rounded-full border border-brand-dark bg-brand-dark px-5 text-sm font-semibold text-brand-white shadow-sm transition-colors hover:bg-brand-yellow hover:text-brand-dark active:bg-brand-yellow active:text-brand-dark active:outline active:outline-[3px] active:outline-offset-2 active:outline-brand-dark focus-visible:bg-brand-yellow focus-visible:text-brand-dark focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark";
 
 function PlatformHeaderPlaceholder() {
   const { currentUser, logout } = useAuth();
