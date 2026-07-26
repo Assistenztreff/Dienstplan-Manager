@@ -41,7 +41,7 @@ function Header() {
           </a>
           <a
             href="#"
-            className="inline-flex h-9 items-center rounded-full px-5 text-sm font-semibold text-white transition-colors hover:opacity-90"
+            className="flex h-9 rounded-full border border-[#092948] px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#ebf18b] hover:text-[#092948] pl-[16px] pr-[16px] justify-center items-center"
             style={{ backgroundColor: DARK }}
           >
             Registrieren
