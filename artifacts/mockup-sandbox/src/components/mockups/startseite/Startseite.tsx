@@ -209,13 +209,6 @@ export function Startseite() {
           >
             Jetzt kostenlos registrieren
           </a>
-          <a
-            href="#"
-            className="flex h-12 items-center rounded-full border-2 px-8 text-base font-semibold"
-            style={{ borderColor: DARK, color: DARK }}
-          >
-            Login
-          </a>
         </div>
       </section>
       {/* Screenshots + Erklärungen (statt Fotos) */}
