@@ -2,7 +2,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ArrowLeft, KeyRound } from "lucide-react";
-import logoUrl from "@assets/20260626_094418_0000_1782459883949.png";
+import logoUrl from "@assets/AssistenzTreff.de_-_3_1785145325057.png";
 
 export default function PasswortVergessen() {
   const [, navigate] = useLocation();
@@ -12,7 +12,7 @@ export default function PasswortVergessen() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="flex flex-col items-center gap-4 text-center">
-          <img src={logoUrl} alt="AssistenzTreff" className="h-20 w-auto" />
+          <img src={logoUrl} alt="AssistenzPlaner" className="h-14 w-auto max-w-full" />
           <p className="text-sm text-muted-foreground">Passwort zurücksetzen</p>
         </div>
 

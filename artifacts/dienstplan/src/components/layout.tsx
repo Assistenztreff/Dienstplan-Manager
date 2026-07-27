@@ -15,7 +15,7 @@ import {
   LogOut,
   ArrowUp,
 } from "lucide-react";
-import platformLogoUrl from "@assets/AssistenzTreff.de_-_3_1784990304750.png";
+import platformLogoUrl from "@assets/AssistenzTreff.de_-_3_1785145325057.png";
 import { useAuth } from "@/context/auth";
 import { useToast } from "@/hooks/use-toast";
 import { isAdminRole } from "@/lib/roles";
@@ -155,16 +155,21 @@ export function PlatformHeaderPlaceholder() {
               >
                 {loggingOut ? "Wird abgemeldet..." : "Logout"}
               </button>
-              {/* Mobil: Hamburger oeffnet das Vollbild-Menue. */}
+              {/* Mobil: "Menü" + Hamburger oeffnet das Vollbild-Menue
+                  (wie die AssistenzTreff-Smartphone-Ansicht: unterstrichener
+                  Text-Link mit ≡-Symbol daneben). */}
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(true)}
-                className="flex h-12 w-12 items-center justify-center rounded-full text-brand-dark transition-colors hover:bg-brand-yellow focus-visible:bg-brand-yellow focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark md:hidden"
+                className="flex h-12 items-center gap-2 rounded-full px-3 text-lg font-semibold text-brand-dark transition-colors hover:bg-brand-yellow focus-visible:bg-brand-yellow focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark md:hidden"
                 aria-label="Menü öffnen"
                 aria-expanded={mobileMenuOpen}
                 data-testid="platform-header-hamburger"
               >
-                <Menu className="h-7 w-7" />
+                <span className="underline decoration-1 underline-offset-4">
+                  Menü
+                </span>
+                <Menu className="h-7 w-7" strokeWidth={2.5} />
               </button>
               {mobileMenuOpen && (
                 <MobileFullMenu
