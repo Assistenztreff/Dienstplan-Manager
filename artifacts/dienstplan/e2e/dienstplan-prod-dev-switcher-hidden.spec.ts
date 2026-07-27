@@ -215,7 +215,7 @@ test.describe("Produktions-Modus: Dev-Nutzer-Wechsler unsichtbar", () => {
 
     await page.locator("#email").fill(ADMIN_EMAIL);
     await page.locator("#password").fill(ADMIN_PASSWORD);
-    await page.getByRole("button", { name: "Anmelden" }).click();
+    await page.getByRole("button", { name: "Login", exact: true }).click();
 
     // Eingeloggt: App-Shell mit Navigation ist da.
     await expect(page).toHaveURL(new RegExp(`^${PREVIEW_URL}/$`), { timeout: 15_000 });

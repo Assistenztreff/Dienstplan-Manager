@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/auth";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { CheckCircle2, Loader2 } from "lucide-react";
-import logoUrl from "@assets/assistenzplaner-logo-getrimmt.png";
+import { CheckCircle2, Lock } from "lucide-react";
+import {
+  AuthErrorBox,
+  AuthLabel,
+  AuthLayout,
+  AuthPasswordInput,
+  AuthSubmitButton,
+  AuthTextLink,
+} from "@/components/auth/auth-layout";
 
 export default function Einladung() {
   const { setPassword } = useAuth();
@@ -22,16 +25,16 @@ export default function Einladung() {
 
   if (!token) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="w-full max-w-sm border-border/50 shadow-sm">
-          <CardContent className="pt-6 text-center">
-            <p className="text-destructive text-sm">Ungültiger Einladungslink. Bitte anfordern Sie einen neuen.</p>
-            <Button variant="link" className="mt-2" onClick={() => navigate("/login")}>
-              Zur Anmeldung
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+      <AuthLayout title="Einladung">
+        <div className="space-y-4 text-center">
+          <p className="text-sm text-destructive">
+            Ungültiger Einladungslink. Bitte fordern Sie einen neuen an.
+          </p>
+          <p className="text-sm text-brand-dark">
+            <AuthTextLink onClick={() => navigate("/login")}>Zum Login</AuthTextLink>
+          </p>
+        </div>
+      </AuthLayout>
     );
   }
 
@@ -61,73 +64,57 @@ export default function Einladung() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <img src={logoUrl} alt="AssistenzPlaner" className="h-9 w-auto max-w-full" />
-          <p className="text-sm text-muted-foreground">Willkommen — bitte setzen Sie Ihr Passwort</p>
+    <AuthLayout title="Passwort setzen">
+      {done ? (
+        <div className="flex flex-col items-center gap-3 py-4 text-center">
+          <CheckCircle2 className="h-10 w-10 text-green-600" aria-hidden />
+          <p className="text-sm font-semibold text-brand-dark">
+            Passwort gesetzt! Sie werden weitergeleitet...
+          </p>
         </div>
+      ) : (
+        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-5">
+          <p className="text-center text-sm text-brand-dark">
+            Willkommen — wählen Sie ein sicheres Passwort für Ihr Konto.
+          </p>
+          {error && <AuthErrorBox>{error}</AuthErrorBox>}
 
-        <Card className="border-border/50 shadow-sm">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-lg">Passwort setzen</CardTitle>
-            <CardDescription>Wählen Sie ein sicheres Passwort für Ihr Konto.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {done ? (
-              <div className="flex flex-col items-center gap-3 py-4 text-center">
-                <CheckCircle2 className="h-10 w-10 text-green-600" />
-                <p className="text-sm font-medium">Passwort gesetzt! Sie werden weitergeleitet...</p>
-              </div>
-            ) : (
-              <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-                {error && (
-                  <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
-                    {error}
-                  </div>
-                )}
-                <div className="space-y-1.5">
-                  <Label htmlFor="password">Neues Passwort</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    autoComplete="new-password"
-                    required
-                    minLength={8}
-                    value={password}
-                    onChange={(e) => setPasswordValue(e.target.value)}
-                    placeholder="Mindestens 8 Zeichen"
-                    disabled={loading}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="confirm">Passwort bestätigen</Label>
-                  <Input
-                    id="confirm"
-                    type="password"
-                    autoComplete="new-password"
-                    required
-                    value={confirm}
-                    onChange={(e) => setConfirm(e.target.value)}
-                    placeholder="••••••••"
-                    disabled={loading}
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Wird gesetzt...
-                    </>
-                  ) : (
-                    "Passwort setzen und anmelden"
-                  )}
-                </Button>
-              </form>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+          <div className="space-y-2">
+            <AuthLabel htmlFor="password">Neues Passwort</AuthLabel>
+            <AuthPasswordInput
+              id="password"
+              icon={<Lock className="h-5 w-5" />}
+              autoComplete="new-password"
+              required
+              minLength={8}
+              value={password}
+              onChange={(e) => setPasswordValue(e.target.value)}
+              placeholder="Mindestens 8 Zeichen"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <AuthLabel htmlFor="confirm">Passwort wiederholen</AuthLabel>
+            <AuthPasswordInput
+              id="confirm"
+              icon={<Lock className="h-5 w-5" />}
+              autoComplete="new-password"
+              required
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              placeholder="Passwort wiederholen"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="pt-2">
+            <AuthSubmitButton loading={loading} loadingText="Wird gesetzt...">
+              Passwort setzen und anmelden
+            </AuthSubmitButton>
+          </div>
+        </form>
+      )}
+    </AuthLayout>
   );
 }

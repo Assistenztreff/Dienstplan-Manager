@@ -66,6 +66,8 @@ test("Registrierung mit bereits vergebener E-Mail zeigt den Fehler am E-Mail-Fel
   await page.locator("#name").fill("E2E Doppelte Email");
   await page.locator("#email").fill(existing.email);
   await page.locator("#password").fill("neuespasswort123");
+  // Task #610: neues Pflichtfeld „Passwort wiederholen" (reine Client-Prüfung).
+  await page.locator("#password-repeat").fill("neuespasswort123");
 
   await page.getByRole("button", { name: "Registrieren" }).click();
 
@@ -95,7 +97,7 @@ test("Registrierung mit bereits vergebener E-Mail zeigt den Fehler am E-Mail-Fel
     /\/login\?email=/,
   );
   await expect(
-    page.getByRole("button", { name: "Anmelden" }),
+    page.getByRole("button", { name: "Login", exact: true }),
     "Die Anmeldeseite muss sichtbar sein",
   ).toBeVisible();
   await expect(
