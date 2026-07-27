@@ -11,6 +11,7 @@
     "lint:e2e": "eslint --config eslint.config.e2e.mjs --max-warnings 0 .",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "screenshots:handbuch": "HANDBUCH_SCREENSHOTS=1 playwright test handbuch-screenshots.capture.spec.ts",
     "test:e2e:api": "playwright test \"api\\.spec\\.ts$\"",
     "test:e2e:smoke": "SPECS=$(grep -v '^#' e2e/smoke-specs.txt | tr '\\n' ' '); [ -n \"$(echo $SPECS | tr -d ' ')\" ] || { echo 'smoke-specs.txt ist leer — Abbruch statt Voll-Suite'; exit 1; }; playwright test $SPECS"
   },

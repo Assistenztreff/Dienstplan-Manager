@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { ChevronRight, CalendarDays, BarChart3, Settings, Building2, Search, ArrowRight, X } from "lucide-react";
 import "./_group.css";
 import { DocsHeader, DocsSidebar, SeeAlsoLink } from "./_shared/Chrome";
+import einstellungenMobilPng from "./_assets/einstellungen-mobil.png";
 
 export function Mobil() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(true);
@@ -73,11 +74,15 @@ export function Mobil() {
             Damit wird die Stempeluhr für alle Assistenten sichtbar.
           </p>
           
-          <div className="my-6 rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
-            <div className="mx-auto flex aspect-square w-full max-w-[200px] items-center justify-center rounded-lg border border-slate-200 bg-white shadow-sm">
-              <span className="text-xs font-bold text-slate-400">Screenshot: Einstellungen</span>
-            </div>
-          </div>
+          <figure className="my-6 rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
+            <img
+              src={einstellungenMobilPng}
+              alt="Einstellungen-Seite auf dem Smartphone mit Profilinformationen und Kalender-Export"
+              className="mx-auto w-full max-w-[240px] rounded-lg border border-slate-200 bg-white shadow-sm"
+              loading="lazy"
+            />
+            <figcaption className="mt-2 text-xs text-slate-500">Die Einstellungen auf dem Smartphone</figcaption>
+          </figure>
 
           <h2 className="text-2xl mt-8 mb-4">Schritt 2: Einstempeln</h2>
           <p>

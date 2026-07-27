@@ -2,6 +2,7 @@ import React from "react";
 import { ChevronRight, Users, Settings, Briefcase } from "lucide-react";
 import "./_group.css";
 import { DocsHeader, DocsSidebar, SeeAlsoLink, DienstleisterBadge } from "./_shared/Chrome";
+import teamVerwaltungPng from "./_assets/team-verwaltung-desktop.png";
 
 export function ArtikelTeamVerwaltung() {
   return (
@@ -42,11 +43,15 @@ export function ArtikelTeamVerwaltung() {
               Doppelbelegungen im Kalender kommt.
             </p>
 
-            <div className="my-8 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-4 text-center">
-              <div className="mx-auto flex aspect-[2/1] max-w-2xl items-center justify-center rounded-lg border border-slate-200 bg-white shadow-sm">
-                <span className="text-sm font-bold text-slate-400">Screenshot: Team-Übersicht (Dienstleister)</span>
-              </div>
-            </div>
+            <figure className="my-8 rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
+              <img
+                src={teamVerwaltungPng}
+                alt="Team-Verwaltung mit der Team-Liste, Schaltflächen zum Überführen, Bearbeiten und Löschen sowie dem Button Neues Team"
+                className="mx-auto w-full max-w-2xl rounded-lg border border-slate-200 bg-white shadow-sm"
+                loading="lazy"
+              />
+              <figcaption className="mt-3 text-sm text-slate-500">Die Team-Übersicht für Dienstleister-Konten</figcaption>
+            </figure>
 
             <h2 id="rollen-rechte">Rollen und Rechte verteilen</h2>
             <p>

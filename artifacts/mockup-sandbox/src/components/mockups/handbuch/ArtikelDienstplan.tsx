@@ -2,6 +2,8 @@ import React from "react";
 import { ChevronRight, CalendarDays, CalendarOff, Settings } from "lucide-react";
 import "./_group.css";
 import { DocsHeader, DocsSidebar, SeeAlsoLink } from "./_shared/Chrome";
+import monatsansichtPng from "./_assets/dienstplan-monatsansicht-desktop.png";
+import dienstDialogPng from "./_assets/dienst-dialog-desktop.png";
 
 export function ArtikelDienstplan() {
   return (
@@ -43,12 +45,15 @@ export function ArtikelDienstplan() {
               für mehrere Tage eintragen möchten, können Sie die Kopieren-Funktion nutzen.
             </p>
 
-            {/* Placeholder Screenshot */}
-            <div className="my-8 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-4 text-center">
-              <div className="mx-auto flex aspect-video max-w-2xl items-center justify-center rounded-lg border border-slate-200 bg-white shadow-sm">
-                <span className="text-sm font-bold text-slate-400">Screenshot: Monatsansicht</span>
-              </div>
-            </div>
+            <figure className="my-8 rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
+              <img
+                src={monatsansichtPng}
+                alt="Dienstplan in der tabellarischen Monatsansicht: Assistenten als Zeilen, Tage des Monats als Spalten, farbige Dienst-Blöcke mit Uhrzeiten"
+                className="mx-auto w-full max-w-2xl rounded-lg border border-slate-200 bg-white shadow-sm"
+                loading="lazy"
+              />
+              <figcaption className="mt-3 text-sm text-slate-500">Die Monatsansicht mit allen Assistenten und ihren Diensten</figcaption>
+            </figure>
 
             <h2 id="dienste-erstellen">Dienste erstellen und zuweisen</h2>
             <p>
@@ -61,12 +66,15 @@ export function ArtikelDienstplan() {
               ihn freigeben, wird er für die Assistenzkraft sichtbar und leuchtet in Ihrem Plan grün (Fix).
             </p>
 
-            {/* Placeholder Screenshot */}
-            <div className="my-8 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-4 text-center">
-              <div className="mx-auto flex aspect-video max-w-md items-center justify-center rounded-lg border border-slate-200 bg-white shadow-sm">
-                <span className="text-sm font-bold text-slate-400">Screenshot: Dienst-Dialog (Status Fix/Entwurf)</span>
-              </div>
-            </div>
+            <figure className="my-8 rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
+              <img
+                src={dienstDialogPng}
+                alt="Dialog Neue Schicht anlegen mit Feldern für Assistent, Datum, Typ (Frühdienst), Status (Entwurf), Start- und Endzeit"
+                className="mx-auto w-full max-w-md rounded-lg border border-slate-200 bg-white shadow-sm"
+                loading="lazy"
+              />
+              <figcaption className="mt-3 text-sm text-slate-500">Der Dienst-Dialog: neue Dienste starten als Entwurf und werden per Freigabe fix</figcaption>
+            </figure>
 
             <h2 id="siehe-auch">Siehe auch</h2>
             <p className="mb-6">
