@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Loader2 } from "lucide-react";
-import logoUrl from "@assets/AssistenzTreff.de_-_3_1785145325057.png";
+import logoUrl from "@assets/assistenzplaner-logo-getrimmt.png";
 
 export default function Registrierung() {
   const { register } = useAuth();
@@ -50,7 +50,7 @@ export default function Registrierung() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="flex flex-col items-center gap-4 text-center">
-          <img src={logoUrl} alt="AssistenzPlaner" className="h-14 w-auto max-w-full" />
+          <img src={logoUrl} alt="AssistenzPlaner" className="h-10 w-auto max-w-full" />
           <p className="text-sm text-muted-foreground">Konto erstellen</p>
         </div>
 

@@ -15,7 +15,7 @@ import {
   LogOut,
   ArrowUp,
 } from "lucide-react";
-import platformLogoUrl from "@assets/AssistenzTreff.de_-_3_1785145325057.png";
+import platformLogoUrl from "@assets/assistenzplaner-logo-getrimmt.png";
 import { useAuth } from "@/context/auth";
 import { useToast } from "@/hooks/use-toast";
 import { isAdminRole } from "@/lib/roles";
@@ -110,7 +110,7 @@ export function PlatformHeaderPlaceholder() {
             <img
               src={platformLogoUrl}
               alt="AssistenzPlaner"
-              className="h-10 w-auto"
+              className="h-8 w-auto"
               data-testid="platform-header-logo"
             />
           </span>
@@ -303,7 +303,7 @@ function MobileFullMenu({
       <div className="flex min-h-full flex-col">
         {/* Kopfzeile: Logo links, schließen rechts */}
         <div className="flex items-center justify-between px-5 pt-5">
-          <img src={platformLogoUrl} alt="AssistenzPlaner" className="h-9 w-auto" />
+          <img src={platformLogoUrl} alt="AssistenzPlaner" className="h-7 w-auto" />
           <button
             type="button"
             ref={closeButtonRef}
