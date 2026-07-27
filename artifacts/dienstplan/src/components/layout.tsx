@@ -161,7 +161,7 @@ export function PlatformHeaderPlaceholder() {
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(true)}
-                className="flex h-12 items-center gap-2 rounded-full px-3 text-lg font-semibold text-brand-dark transition-colors hover:bg-brand-yellow focus-visible:bg-brand-yellow focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark md:hidden"
+                className="-mr-2 flex h-12 items-center gap-1.5 rounded-full px-2 text-lg font-semibold text-brand-dark transition-colors hover:bg-brand-yellow focus-visible:bg-brand-yellow focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark md:hidden"
                 aria-label="Menü öffnen"
                 aria-expanded={mobileMenuOpen}
                 data-testid="platform-header-hamburger"
@@ -169,7 +169,7 @@ export function PlatformHeaderPlaceholder() {
                 <span className="underline decoration-1 underline-offset-4">
                   Menü
                 </span>
-                <Menu className="h-7 w-7" strokeWidth={2.5} />
+                <Menu className="h-6 w-6" strokeWidth={3} />
               </button>
               {mobileMenuOpen && (
                 <MobileFullMenu
