@@ -564,7 +564,10 @@ const SCROLL_TOP_THRESHOLD = 300;
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   // Dienstplan nutzt die volle Bildschirmbreite (kein zentrierter Container).
-  const fullBleed = location === "/dienstplan";
+  // Vollbreite Seiten ohne max-w-Container und ohne Innenabstand: der
+  // Dienstplan (breite Tabellen) und das Handbuch (farbige Hero-/Sidebar-
+  // Flaechen sollen bis an den Rand laufen).
+  const fullBleed = location === "/dienstplan" || location.startsWith("/handbuch");
 
   // Mobil scrollt die App-Menue-Leiste mit der Seite weg. Damit man das Menue
   // nicht muehsam zurueckscrollen muss, blenden wir nach ~300px Scrolltiefe
@@ -607,7 +610,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <AppSubNavigation />
 
           <main
-            className={`w-full flex-1 p-4 md:p-6 ${fullBleed ? "" : "mx-auto max-w-7xl"}`}
+            className={`w-full flex-1 ${
+              location.startsWith("/handbuch")
+                ? "" // Handbuch: farbige Flaechen bis an den Rand, ohne Innenabstand
+                : `p-4 md:p-6 ${fullBleed ? "" : "mx-auto max-w-7xl"}`
+            }`}
           >
             {children}
           </main>
