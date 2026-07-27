@@ -11,6 +11,8 @@
 # Abgedeckte Flows:
 # - Registrierung + Login-Formular (oeffentlicher Auth-Pfad)
 dienstplan-registrierung-doppelte-email.spec.ts
+# - Rechtsseiten (Impressum/Datenschutz) bleiben ohne Login erreichbar
+dienstplan-rechtsseiten-oeffentlich.spec.ts
 # - Dienst anlegen ueber den Dialog (Kern-Flow Monatskalender)
 dienstplan-shift-dialog.spec.ts
 # - Dienst bestaetigen (VORLAEUFIG/ANGEBOTEN -> FIX, Badge + Dialog-Banner)
