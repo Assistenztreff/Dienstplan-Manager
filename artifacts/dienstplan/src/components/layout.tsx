@@ -96,7 +96,7 @@ export function PlatformHeaderPlaceholder() {
 
   return (
     <header
-      className="flex h-20 shrink-0 items-center bg-brand-hellblau text-brand-dark"
+      className="flex h-20 shrink-0 items-center bg-brand-white text-brand-dark"
       data-testid="platform-header"
     >
       {/* Eine Zeile: Wortmarke links, Plattform-Links + Login + Registrieren
@@ -110,7 +110,7 @@ export function PlatformHeaderPlaceholder() {
             <img
               src={platformLogoUrl}
               alt="AssistenzPlaner"
-              className="h-8 w-auto"
+              className="h-10 w-auto"
               data-testid="platform-header-logo"
             />
           </span>
