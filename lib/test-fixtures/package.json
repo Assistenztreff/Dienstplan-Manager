@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./verify-checks": "./src/verify-checks.ts"
+    "./verify-checks": "./src/verify-checks.ts",
+    "./cross-run-lock": "./src/cross-run-lock.ts"
   },
   "dependencies": {
     "pg": "^8.20.0"

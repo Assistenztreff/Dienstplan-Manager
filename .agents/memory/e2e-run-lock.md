@@ -16,3 +16,5 @@ The managed E2E stack holds a PID lockfile (`node_modules/.cache/dienstplan-e2e/
 - Don't run the full suite from an agent bash call (2-min timeout kills it; nohup-detached runs get reaped mid-suite). Use the registered `e2e-api` workflow via restart_workflow and poll logs instead.
 
 - Killing a `pnpm exec playwright test` shell (timeout/SIGKILL of the pipe) leaves the actual Playwright node process ALIVE and holding the run lock; wait for that PID to exit (check `head -1 run.lock` + `kill -0`) instead of deleting the lock.
+
+**Cross-Run-Lock (Juli 2026):** Ergänzend zum lokalen PID-Lock hält jeder verwaltete Lauf einen cluster-weiten Postgres-Advisory-Lock (test-fixtures/cross-run-lock) über die gesamte Laufdauer; Freigabe best effort im globalTeardown NACH den Cleanup-Skripten (Handle via globalThis.__dienstplanE2eCrossRunLock, nie Config importieren). Socket ist unref'd, damit der Prozess am Laufende sauber endet.

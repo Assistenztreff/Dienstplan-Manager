@@ -151,11 +151,20 @@ interface MembershipRow {
 }
 
 async function membershipSnapshot(client: pg.Client): Promise<MembershipRow[]> {
+  // Fremde `e2e.*@dienstplan.test`-Konten (Spec-Fixtures paralleler Laeufe auf
+  // der geteilten _test-DB) bewusst AUSBLENDEN: sie gehoeren nie zur hier
+  // geseedeten Konstellation und entstehen/verschwinden sonst mitten zwischen
+  // Vorher- und Nachher-Snapshot — der Check meldet dann faelschlich, dass
+  // migrate-teams Mitgliedschaften hinzugefuegt/entfernt haette (Task #622).
+  // Die eigentliche Regression (migrate-teams veraendert die Belegung der
+  // Testkonten) bleibt voll abgedeckt: alle eigenen Fixtures (@dienstplan.local)
+  // sind weiterhin im Snapshot.
   const res = await client.query<MembershipRow>(
     `SELECT tm.team_id, t.name AS team_name, u.email
        FROM team_members tm
        JOIN teams t ON t.id = tm.team_id
        JOIN users u ON u.id = tm.user_id
+      WHERE u.email NOT LIKE 'e2e.%@dienstplan.test'
       ORDER BY tm.team_id, u.email`,
   );
   return res.rows;
@@ -330,7 +339,10 @@ export async function runAccountSeparationCheck(
            FROM team_members tm
            JOIN users u ON u.id = tm.user_id
            JOIN teams t ON t.id = tm.team_id
-          WHERE t.owner_id = $1 AND u.role = 'assistant' AND u.is_active`,
+          WHERE t.owner_id = $1 AND u.role = 'assistant' AND u.is_active
+            -- Fremde e2e-Spec-Fixtures paralleler Laeufe nicht mitzaehlen
+            -- (geteilte _test-DB, Task #622).
+            AND u.email NOT LIKE 'e2e.%@dienstplan.test'`,
         [ownerId],
       );
       return res.rows[0]!.n;
@@ -530,12 +542,19 @@ export async function runTestDbCleanupCheck(
     // ------------------------------------------------------------------
     const failures: string[] = [];
 
+    // Nur das EIGENE Zombie-Konto pruefen — nicht pauschal alle
+    // `e2e.*@dienstplan.test`-Konten: auf der geteilten _test-DB koennen
+    // parallele fremde Laeufe jederzeit neue e2e-Konten anlegen (nach dem
+    // Cleanup, vor dieser Assertion), was den Check faelschlich kippen
+    // wuerde (Task #622). Der Beweis "Cleanup entfernt e2e-Konten" haengt
+    // nur am eigenen geseedeten Konto.
     const zombieUsers = await client.query<{ email: string }>(
-      "SELECT email FROM users WHERE email LIKE 'e2e.%@dienstplan.test'",
+      "SELECT email FROM users WHERE email = $1",
+      [ZOMBIE_ADMIN_EMAIL],
     );
     if ((zombieUsers.rowCount ?? 0) > 0) {
       failures.push(
-        `E2E-Konten überlebten den Cleanup: ${zombieUsers.rows.map((r) => r.email).join(", ")}`,
+        `E2E-Zombie-Konto überlebte den Cleanup: ${zombieUsers.rows.map((r) => r.email).join(", ")}`,
       );
     }
 

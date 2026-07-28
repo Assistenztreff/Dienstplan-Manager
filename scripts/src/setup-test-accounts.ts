@@ -286,10 +286,16 @@ async function main(): Promise<void> {
     const errors: string[] = [];
 
     const memberRows = async (teamId: number): Promise<{ id: number; email: string; role: string }[]> => {
+      // Fremde `e2e.*@dienstplan.test`-Konten ausblenden: auf der geteilten
+      // `_test`-DB koennen parallele Laeufe solche Spec-Fixtures jederzeit
+      // anlegen (Task #622); sie gehoeren nie zum hier geprueften Zielbild.
+      // In der Dev-DB existieren solche Konten regulaer nicht.
       const res = await client.query<{ id: number; email: string; role: string }>(
         `SELECT u.id, u.email, u.role
            FROM team_members tm JOIN users u ON u.id = tm.user_id
-          WHERE tm.team_id = $1 ORDER BY u.id`,
+          WHERE tm.team_id = $1
+            AND u.email NOT LIKE 'e2e.%@dienstplan.test'
+          ORDER BY u.id`,
         [teamId],
       );
       return res.rows;
@@ -302,7 +308,11 @@ async function main(): Promise<void> {
     const contractHolders = await client.query<{ user_id: number }>(
       `SELECT DISTINCT c.user_id
          FROM contracts c JOIN users u ON u.id = c.user_id
-        WHERE c.team_id = $1 AND u.role = 'assistant'`,
+        WHERE c.team_id = $1 AND u.role = 'assistant'
+          -- Fremde e2e-Spec-Fixtures auch aus der Whitelist ausblenden
+          -- (symmetrisch zum Member-Filter unten, Task #622): sonst gilt ein
+          -- fremdes e2e-Konto mit Vertrag in Team 1 als "fehlendes" Mitglied.
+          AND u.email NOT LIKE 'e2e.%@dienstplan.test'`,
       [mainTeamId],
     );
     const expectedTeam1Ids = new Set<number>([

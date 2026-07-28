@@ -314,6 +314,38 @@ if (useManagedStack && !isWorkerProcess) {
   reapOrphansOnPort(WEB_PORT, "Test-Vite");
 }
 
+// --- Lauf-UEBERGREIFENDER Lock (Task #622: geteilte _test-DB) ---------------
+// Der PID-Lockfile oben schuetzt nur innerhalb DIESER Umgebung. Die `_test`-DB
+// liegt aber auf dem geteilten Staging-Postgres, den parallele Task-
+// Umgebungen mitbenutzen: deren Pre-Flight-Checks und Spec-Teardowns seeden/
+// loeschen `e2e.*`-Konten mitten in unserem Lauf und kippen verify-account-
+// separation & Co. Deshalb haelt jeder verwaltete Lauf zusaetzlich einen
+// Postgres-Advisory-Lock (Session-Lock, cluster-weit sichtbar) fuer die
+// GESAMTE Laufdauer — vom Config-Load (vor setup-test-db und den Checks) bis
+// zum Prozessende. Ein parallel gestarteter fremder Lauf wartet dann einfach,
+// statt den laufenden zu zerstoeren. Selbstheilend: stirbt ein Lauf (auch
+// SIGKILL), gibt der Server den Lock mit dem Verbindungsende automatisch
+// frei — kein haengender Zustand.
+// Skip via `E2E_SKIP_CROSS_RUN_LOCK=1` (nur fuer bewusste Sonderfaelle, z. B.
+// Laeufe gegen eine garantiert private DB).
+if (
+  useManagedStack &&
+  !isWorkerProcess &&
+  !process.env.E2E_SKIP_CROSS_RUN_LOCK &&
+  testDbName
+) {
+  const { acquireCrossRunLock } = await import(
+    "@workspace/test-fixtures/cross-run-lock"
+  );
+  const crossRunLock = await acquireCrossRunLock(databaseUrl!, testDbName);
+  // Handle fuer den globalTeardown hinterlegen (Best-effort-Freigabe am
+  // Laufende; das Prozessende wuerde den Lock ohnehin freigeben). Bewusst
+  // ueber globalThis statt Export: der Teardown darf die Config nie
+  // importieren (wuerde alle Start-Seiteneffekte erneut ausfuehren).
+  (globalThis as Record<string, unknown>).__dienstplanE2eCrossRunLock =
+    crossRunLock;
+}
+
 if (useManagedStack && !isWorkerProcess && !process.env.E2E_SKIP_DB_SETUP) {
   // Marker-Treffer allein genügt NICHT (Task #499): der Hash beweist nur
   // "setup-test-db lief mit diesen Quelldateien", nicht dass die _test-DB

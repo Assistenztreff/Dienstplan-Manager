@@ -57,7 +57,27 @@ function releaseRunLock(): void {
   }
 }
 
-export default function globalTeardown(): void {
+// Gibt den Lauf-uebergreifenden Advisory-Lock frei, den die Playwright-Config
+// beim Start auf dem geteilten Postgres erworben und ueber globalThis
+// hinterlegt hat (Task #622). Best effort — das Prozessende wuerde den Lock
+// ohnehin freigeben (Session-Lock). Bewusst NACH den Cleanup-Skripten
+// aufrufen: auch die Bereinigung arbeitet noch auf der geteilten `_test`-DB.
+async function releaseCrossRunLock(): Promise<void> {
+  const handle = (globalThis as Record<string, unknown>)
+    .__dienstplanE2eCrossRunLock as { release: () => Promise<void> } | undefined;
+  if (!handle) return;
+  try {
+    await handle.release();
+    console.log("globalTeardown: Lauf-uebergreifender E2E-Lock freigegeben.");
+  } catch (err) {
+    console.warn(
+      "globalTeardown: Lauf-uebergreifender Lock konnte nicht explizit freigegeben werden (Prozessende gibt ihn ohnehin frei):",
+      err,
+    );
+  }
+}
+
+export default async function globalTeardown(): Promise<void> {
   releaseRunLock();
 
   // Nur fuer den isolierten Test-Stack: dort stellt die Playwright-Config die
@@ -69,6 +89,7 @@ export default function globalTeardown(): void {
     console.log(
       "globalTeardown: keine E2E_TEST_DATABASE_URL (externer Stack) — Bereinigung uebersprungen.",
     );
+    await releaseCrossRunLock();
     return;
   }
 
@@ -107,4 +128,6 @@ export default function globalTeardown(): void {
       err,
     );
   }
+
+  await releaseCrossRunLock();
 }
