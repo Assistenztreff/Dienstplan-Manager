@@ -47,15 +47,15 @@ const ALL_NAV_ITEMS = [
 // ---------------------------------------------------------------------------
 
 // Echte Ziele auf der AssistenzTreff-Plattform (verifiziert am 2026-07-24).
-// "Handbuch" verweist auf den Wissensbereich der Plattform (/wissen) — eine
-// eigene Handbuch-Seite existiert dort (noch) nicht.
+// "Handbuch" fuehrt auf das In-App-Handbuch (/handbuch) und wird deshalb als
+// interner wouter-Link (ohne target="_blank") gerendert — siehe `internal`.
 const PLATFORM_LINKS = [
-  { label: "Leistungen", href: "https://assistenztreff.de/leistungen" },
-  { label: "Über uns", href: "https://assistenztreff.de/ueber-uns" },
-  { label: "Kontakt", href: "https://assistenztreff.de/kontakt" },
+  { label: "Leistungen", href: "https://assistenztreff.de/leistungen", internal: false },
+  { label: "Handbuch", href: "/handbuch", internal: true },
+  { label: "Kontakt", href: "https://assistenztreff.de/kontakt", internal: false },
 ];
 
-// Gemeinsamer Look der Plattform-Textlinks (Leistungen/Über uns/Handbuch/
+// Gemeinsamer Look der Plattform-Textlinks (Leistungen/Handbuch/Kontakt/
 // Login bzw. Profil), Vorbild „Kontakt" auf assistenztreff.de:
 // - Ruhezustand: unterstrichener Text.
 // - Hover (Desktop) bzw. Antippen (Touch): gelbes Kästchen mit dünnem
@@ -119,18 +119,30 @@ export function PlatformHeaderPlaceholder() {
             aria-label="Plattform"
             className="hidden items-center gap-1 md:flex lg:gap-2"
           >
-            {/* Desktop: externe Plattform-Text-Links (nur ab md sichtbar). */}
-            {PLATFORM_LINKS.map(({ label, href }) => (
-              <a
-                key={label}
-                href={href}
-                target="_blank"
-                rel="noreferrer"
-                className={`flex h-12 ${PLATFORM_LINK_CLASSES}`}
-              >
-                {label}
-              </a>
-            ))}
+            {/* Desktop: Plattform-Text-Links (nur ab md sichtbar). Interne
+                Ziele (Handbuch) navigieren im selben Tab per wouter-Link,
+                externe oeffnen weiterhin in neuem Tab. */}
+            {PLATFORM_LINKS.map(({ label, href, internal }) =>
+              internal ? (
+                <Link
+                  key={label}
+                  href={href}
+                  className={`flex h-12 ${PLATFORM_LINK_CLASSES}`}
+                >
+                  {label}
+                </Link>
+              ) : (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={`flex h-12 ${PLATFORM_LINK_CLASSES}`}
+                >
+                  {label}
+                </a>
+              ),
+            )}
           </nav>
         </div>
 
@@ -340,17 +352,28 @@ function MobileFullMenu({
         {/* Plattform-Links + Konto */}
         <div className="mt-10 flex items-start justify-between gap-4 px-8 pb-10">
           <div className="flex flex-col gap-4 text-base font-medium">
-            {PLATFORM_LINKS.map(({ label, href }) => (
-              <a
-                key={label}
-                href={href}
-                target="_blank"
-                rel="noreferrer"
-                className="underline decoration-1 underline-offset-4 hover:text-brand-dark/70"
-              >
-                {label}
-              </a>
-            ))}
+            {PLATFORM_LINKS.map(({ label, href, internal }) =>
+              internal ? (
+                <Link
+                  key={label}
+                  href={href}
+                  onClick={onClose}
+                  className="underline decoration-1 underline-offset-4 hover:text-brand-dark/70"
+                >
+                  {label}
+                </Link>
+              ) : (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline decoration-1 underline-offset-4 hover:text-brand-dark/70"
+                >
+                  {label}
+                </a>
+              ),
+            )}
           </div>
           <div className="flex shrink-0 flex-col items-end gap-4">
             {currentUser && (
