@@ -83,5 +83,6 @@
 - [Shared staging _test DB race](shared-staging-test-db-race.md) — parallel task environments share the staging `_test` DB; separation pre-check can fail from foreign runs, verify one-offs with E2E_SKIP_SEPARATION_CHECK=1.
 - [migrate-prod & drizzle dry-run](migrate-prod-dry-run.md) — prod schema sync via migrate-prod; `push --strict --verbose` without TTY = safe dry-run (prints statements, applies nothing, exits 0 — check prompt text).
 - [401 self-heal in web client](query-401-self-heal.md) — DB restore wipes sessions; stale cookies loop 401 with "logged-in" UI. Client resyncs via QueryCache onError; suspect stale session before missing data.
-- [Handbuch screenshot regeneration](handbuch-screenshot-capture.md) — env-gated capture spec writes real app shots into the mockup-sandbox handbuch _assets dir; friendly seed names, dev switcher hidden.
+- [Handbuch screenshot regeneration](handbuch-screenshot-capture.md) — env-gated capture spec + fingerprint staleness check in merge validation; private-DB escape hatch for lock contention.
+- [Completion-Validation Poll-Budget](completion-validation-poll-budget.md) — volle e2e-Suite (~36 Min) sprengt das Validierungs-Budget; e2e als Workflow grün laufen lassen, dann skip_validation_reason mit Nachweis.
 - [Unpaid info-only shift types](unpaid-info-shift-types.md) — info categories keep valuedHours (no surcharges); Soll/Lohn exclusion lives only in the hours-balance INFO_ONLY filter.
