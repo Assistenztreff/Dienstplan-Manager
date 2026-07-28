@@ -18,3 +18,12 @@ The managed E2E stack holds a PID lockfile (`node_modules/.cache/dienstplan-e2e/
 - Killing a `pnpm exec playwright test` shell (timeout/SIGKILL of the pipe) leaves the actual Playwright node process ALIVE and holding the run lock; wait for that PID to exit (check `head -1 run.lock` + `kill -0`) instead of deleting the lock.
 
 **Cross-Run-Lock (Juli 2026):** Ergänzend zum lokalen PID-Lock hält jeder verwaltete Lauf einen cluster-weiten Postgres-Advisory-Lock (test-fixtures/cross-run-lock) über die gesamte Laufdauer; Freigabe best effort im globalTeardown NACH den Cleanup-Skripten (Handle via globalThis.__dienstplanE2eCrossRunLock, nie Config importieren). Socket ist unref'd, damit der Prozess am Laufende sauber endet.
+
+## Verwaister Advisory-Lock nach abgebrochenem Task-Lauf (2026-07-28)
+Bricht der Nutzer einen Task-Agent-Lauf ab ("cancelled by client"), kann dessen
+DB-Verbindung mit gehaltenem Advisory-Lock als `idle` weiterleben — alle anderen
+E2E-Läufe warten dann endlos ("Warte weiter auf den Lauf-uebergreifenden E2E-Lock").
+**Diagnose/Fix:** auf der Staging-DB `pg_locks (locktype='advisory') JOIN pg_stat_activity`
+prüfen; ist der Halter `idle` und minutenlang unverändert → `pg_terminate_backend(pid)`
+(nur den idle-Halter). URL vorher mit `normalizeDatabaseUrl` aus `@workspace/db/database-url`
+reparieren, sonst Invalid URL.
