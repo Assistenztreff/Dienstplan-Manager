@@ -3,12 +3,15 @@ type ModuleMap = Record<string, () => Promise<Record<string, unknown>>>;
 export const modules: ModuleMap = {
   "./components/mockups/dashboard-polish/DashboardAkzent.tsx": () => import("../components/mockups/dashboard-polish/DashboardAkzent.tsx"),
   "./components/mockups/dashboard-polish/DashboardRuhig.tsx": () => import("../components/mockups/dashboard-polish/DashboardRuhig.tsx"),
+  "./components/mockups/dienstplan-layouts/Cockpit.tsx": () => import("../components/mockups/dienstplan-layouts/Cockpit.tsx"),
+  "./components/mockups/dienstplan-layouts/MonatsBuehne.tsx": () => import("../components/mockups/dienstplan-layouts/MonatsBuehne.tsx"),
+  "./components/mockups/dienstplan-layouts/Wochenband.tsx": () => import("../components/mockups/dienstplan-layouts/Wochenband.tsx"),
+  "./components/mockups/dienstplan-leiste/AktionenUnten.tsx": () => import("../components/mockups/dienstplan-leiste/AktionenUnten.tsx"),
+  "./components/mockups/dienstplan-leiste/MonatOben.tsx": () => import("../components/mockups/dienstplan-leiste/MonatOben.tsx"),
   "./components/mockups/handbuch/ArtikelDienstplan.tsx": () => import("../components/mockups/handbuch/ArtikelDienstplan.tsx"),
   "./components/mockups/handbuch/ArtikelTeamVerwaltung.tsx": () => import("../components/mockups/handbuch/ArtikelTeamVerwaltung.tsx"),
   "./components/mockups/handbuch/Mobil.tsx": () => import("../components/mockups/handbuch/Mobil.tsx"),
   "./components/mockups/handbuch/Start.tsx": () => import("../components/mockups/handbuch/Start.tsx"),
-  "./components/mockups/dienstplan-leiste/AktionenUnten.tsx": () => import("../components/mockups/dienstplan-leiste/AktionenUnten.tsx"),
-  "./components/mockups/dienstplan-leiste/MonatOben.tsx": () => import("../components/mockups/dienstplan-leiste/MonatOben.tsx"),
   "./components/mockups/nachberechnung/InfokarteNachberechnung.tsx": () => import("../components/mockups/nachberechnung/InfokarteNachberechnung.tsx"),
   "./components/mockups/nachberechnung/MitarbeiterkarteNachberechnung.tsx": () => import("../components/mockups/nachberechnung/MitarbeiterkarteNachberechnung.tsx"),
   "./components/mockups/standalone-shell/ShellDesktop.tsx": () => import("../components/mockups/standalone-shell/ShellDesktop.tsx"),
@@ -17,8 +20,5 @@ export const modules: ModuleMap = {
   "./components/mockups/startseite/MobileDashboard.tsx": () => import("../components/mockups/startseite/MobileDashboard.tsx"),
   "./components/mockups/startseite/MobileMenu.tsx": () => import("../components/mockups/startseite/MobileMenu.tsx"),
   "./components/mockups/startseite/MobileStartseite.tsx": () => import("../components/mockups/startseite/MobileStartseite.tsx"),
-  "./components/mockups/startseite/Startseite.tsx": () => import("../components/mockups/startseite/Startseite.tsx"),
-  "./components/mockups/dienstplan-layouts/Cockpit.tsx": () => import("../components/mockups/dienstplan-layouts/Cockpit.tsx"),
-  "./components/mockups/dienstplan-layouts/MonatsBuehne.tsx": () => import("../components/mockups/dienstplan-layouts/MonatsBuehne.tsx"),
-  "./components/mockups/dienstplan-layouts/Wochenband.tsx": () => import("../components/mockups/dienstplan-layouts/Wochenband.tsx")
+  "./components/mockups/startseite/Startseite.tsx": () => import("../components/mockups/startseite/Startseite.tsx")
 };
