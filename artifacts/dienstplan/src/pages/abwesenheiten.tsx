@@ -35,6 +35,7 @@ import { planUpgradeMessage, readableApiError, PLAN_FEATURE_MESSAGES } from "@/l
 import { warnIfMonthClosed } from "@/lib/month-closing-warning";
 import { useAuth } from "@/context/auth";
 import { hasAccess } from "@/lib/entitlements";
+import { PlanUpgradeLink } from "@/components/plan-limit-banner";
 import { formatDays, formatHours } from "@/lib/utils";
 import {
   buildRanges,
@@ -447,12 +448,12 @@ export default function Abwesenheiten() {
             <CardContent className="p-5">
               <h3 className="font-semibold mb-4">Resturlaub {currentYear}</h3>
               {trackingLocked ? (
-                <p
-                  className="text-sm text-muted-foreground"
-                  data-testid="absence-tracking-premium-hint"
-                >
-                  {PLAN_FEATURE_MESSAGES["absenceTracking"]}
-                </p>
+                <div className="space-y-2" data-testid="absence-tracking-premium-hint">
+                  <p className="text-sm text-muted-foreground">
+                    {PLAN_FEATURE_MESSAGES["absenceTracking"]}
+                  </p>
+                  <PlanUpgradeLink className="text-sm" />
+                </div>
               ) : isLoading ? (
                 <div className="space-y-3">
                   <Skeleton className="h-10 w-full" />

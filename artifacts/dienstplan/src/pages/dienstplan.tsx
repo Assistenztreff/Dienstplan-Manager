@@ -1114,6 +1114,9 @@ function DienstplanHeader({
 }) {
   const { selectedTeamId } = useTeam();
   const personColors = usePersonColors();
+  // Fuer den gesperrten Mehrfachauswahl-Button (Free): Klick fuehrt zur
+  // Preise-/Premium-Seite statt eines toten disabled-Buttons.
+  const [, navigateHeader] = useLocation();
   const contentKey = [
     isAdmin,
     assistants.length,
@@ -1274,13 +1277,15 @@ function DienstplanHeader({
         </Button>
       )
     ) : (
+      // Bewusst klickbar statt `disabled`: auf Touch-Geräten gibt es keinen
+      // Tooltip — der Klick führt direkt zur Preise-/Premium-Seite.
       <Button
         variant="outline"
         size="sm"
         className={showLabels ? "gap-1.5" : `h-9 shrink-0 px-0 ${stacked ? "w-8" : "w-9"}`}
-        disabled
-        title="Massenbearbeitung ist in Premium enthalten."
-        aria-label="Mehrfachauswahl (Premium)"
+        onClick={() => navigateHeader("/preise")}
+        title="Massenbearbeitung ist in Premium enthalten. Preise & Premium ansehen."
+        aria-label="Mehrfachauswahl (Premium) — Preise & Premium ansehen"
         data-testid="toggle-selection-mode-locked"
       >
         <Lock className="h-4 w-4" />

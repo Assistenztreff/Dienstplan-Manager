@@ -9,6 +9,22 @@ import type { ReactNode } from "react";
 import { Link } from "wouter";
 import { Sparkles } from "lucide-react";
 
+// Kompakter Upgrade-Link — derselbe Aufruf wie im Banner, aber einzeln
+// einsetzbar (z. B. unter Premium-Hinweistexten oder in Upsell-Karten),
+// damit JEDE Free-Grenze einen direkten Weg zur Preise-Seite hat.
+export function PlanUpgradeLink({ className = "" }: { className?: string }) {
+  return (
+    <Link
+      href="/preise"
+      className={`inline-flex items-center gap-1.5 font-medium text-foreground underline underline-offset-4 hover:no-underline whitespace-nowrap ${className}`}
+      data-testid="plan-limit-upgrade-link"
+    >
+      <Sparkles className="h-4 w-4" />
+      Preise &amp; Premium ansehen
+    </Link>
+  );
+}
+
 export function PlanLimitBanner({ children }: { children: ReactNode }) {
   return (
     <div
@@ -16,14 +32,7 @@ export function PlanLimitBanner({ children }: { children: ReactNode }) {
       data-testid="plan-limit-banner"
     >
       <span>{children}</span>
-      <Link
-        href="/preise"
-        className="inline-flex items-center gap-1.5 font-medium text-foreground underline underline-offset-4 hover:no-underline whitespace-nowrap self-start sm:self-auto"
-        data-testid="plan-limit-upgrade-link"
-      >
-        <Sparkles className="h-4 w-4" />
-        Preise &amp; Premium ansehen
-      </Link>
+      <PlanUpgradeLink className="self-start sm:self-auto" />
     </div>
   );
 }

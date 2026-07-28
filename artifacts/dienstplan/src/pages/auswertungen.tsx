@@ -36,6 +36,7 @@ import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
 import { hasAccess } from "@/lib/entitlements";
+import { PlanUpgradeLink } from "@/components/plan-limit-banner";
 import { useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 import { exportStatementSectionsPdf, type StatementRecalculation } from "@/lib/pdf-export";
 import {
@@ -783,6 +784,7 @@ export default function Auswertungen() {
               ist Teil des Premium-Tarifs. Für den Zugriff auf die Auswertungen auf
               Premium upgraden.
             </p>
+            <PlanUpgradeLink />
           </div>
         ) : isLoading ? (
           <>

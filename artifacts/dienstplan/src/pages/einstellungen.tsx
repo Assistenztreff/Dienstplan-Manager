@@ -45,7 +45,8 @@ import { Plus, Pencil, Trash2, GripVertical, Upload, ImageIcon, KeyRound, Mail, 
 import { AllowanceSettingsForm } from "@/components/allowance-settings-form";
 import { logoSrcFromPath, ACCEPTED_LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/logo";
 import { readableApiError, planUpgradeMessage, planFeatureMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
-import { hasAccess } from "@/lib/entitlements";
+import { hasAccess, getLimit, isWithinLimit } from "@/lib/entitlements";
+import { PlanLimitBanner, PlanUpgradeLink } from "@/components/plan-limit-banner";
 import { useToast } from "@/hooks/use-toast";
 
 type CompensationType = "regular" | "percentage" | "flat";
@@ -1042,6 +1043,7 @@ function CalendarExportCard() {
             <p className="text-xs text-muted-foreground">
               {PLAN_FEATURE_MESSAGES.calendarSync}
             </p>
+            <PlanUpgradeLink className="text-xs" />
           </>
         )}
 
@@ -1141,6 +1143,10 @@ export default function Einstellungen() {
   // Soft-geloeschte Modelle (isActive=false) bleiben fuer die Historie in der DB,
   // sollen aber weder in der Verwaltung noch in den Auswahllisten auftauchen.
   const sortedModels: ShiftModel[] = ((models ?? []) as ShiftModel[]).filter((m) => m.isActive);
+  // Free-Limit fuer Dienste/Schichtmodelle (Free = 5, Premium = unbegrenzt).
+  // UX-Gate wie bei den Assistenten; autoritativ setzt der Server durch.
+  const modelLimit = getLimit(currentUser, "maxShiftModels");
+  const canAddModel = isWithinLimit(currentUser, "maxShiftModels", sortedModels.length);
   const nextSortOrder =
     sortedModels.length > 0 ? Math.max(...sortedModels.map((m) => m.sortOrder)) + 10 : 10;
 
@@ -1227,12 +1233,32 @@ export default function Einstellungen() {
         ) : (
           <div />
         )}
-        <Button onClick={openCreate} className="gap-2">
-          <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">Neuen Dienst</span>
-          <span className="sm:hidden">Neu</span>
-        </Button>
+        {canAddModel ? (
+          <Button onClick={openCreate} className="gap-2" data-testid="model-create">
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Neuen Dienst</span>
+            <span className="sm:hidden">Neu</span>
+          </Button>
+        ) : (
+          <Button
+            disabled
+            className="gap-2"
+            title={`Im Free-Plan sind max. ${modelLimit} Dienste möglich. Upgrade auf Premium für unbegrenzte Dienste.`}
+            data-testid="model-create-locked"
+          >
+            <Lock className="h-4 w-4" />
+            <span className="hidden sm:inline">Neuen Dienst</span>
+            <span className="sm:hidden">Neu</span>
+          </Button>
+        )}
       </div>
+      {/* Limit-Hinweis (Free-Plan). Bei Premium ist modelLimit null. */}
+      {!canAddModel && modelLimit !== null && (
+        <PlanLimitBanner>
+          Im Free-Plan sind maximal {modelLimit} Dienste möglich. Für unbegrenzte Dienste ist ein
+          Upgrade auf Premium nötig.
+        </PlanLimitBanner>
+      )}
       <Card className="border-border/50 shadow-sm">
         <CardContent className="p-0">
           {isLoading ? (

@@ -46,6 +46,7 @@ import { useToast } from "@/hooks/use-toast";
 import { readableApiError, planFeatureMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
 import { warnIfMonthClosed } from "@/lib/month-closing-warning";
 import { hasAccess } from "@/lib/entitlements";
+import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { useTimeTrackingEnabled } from "@/hooks/use-time-tracking-enabled";
 import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 
@@ -531,6 +532,13 @@ export default function Zeiterfassung() {
           );
         })}
       </div>
+
+      {/* Free-Admins sehen die offenen Einträge, können sie aber nicht
+          bestätigen — der Banner erklärt das und verlinkt auf die Preise-Seite
+          (Durchsetzung bleibt serverseitig). */}
+      {isAdmin && !canConfirm && (
+        <PlanLimitBanner>{PLAN_FEATURE_MESSAGES.strictTimeTracking}</PlanLimitBanner>
+      )}
 
       {/* Ziel des geführten Nachbestätigungs-Flows nach einem Premium-Upgrade:
           erklärt, warum offene Einträge (noch) nicht in den Ist-Stunden stecken. */}

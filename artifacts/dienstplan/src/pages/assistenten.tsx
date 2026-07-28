@@ -49,7 +49,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Mail, Phone, MapPin, Calendar, Pencil, UserPlus, UserMinus, Send, Copy, Check, Download, ChevronLeft, ChevronRight, Trash2, Lock } from "lucide-react";
-import { PlanLimitBanner } from "@/components/plan-limit-banner";
+import { PlanLimitBanner, PlanUpgradeLink } from "@/components/plan-limit-banner";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { toast } from "sonner";
@@ -553,7 +553,8 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
                 data-testid="wage-data-premium-hint"
               >
                 Lohn- und Sozialversicherungsdaten lassen sich mit Premium erfassen
-                und bearbeiten. Bereits gespeicherte Daten bleiben erhalten.
+                und bearbeiten. Bereits gespeicherte Daten bleiben erhalten.{" "}
+                <PlanUpgradeLink className="text-xs" />
               </p>
             )}
             <div className="space-y-4">
