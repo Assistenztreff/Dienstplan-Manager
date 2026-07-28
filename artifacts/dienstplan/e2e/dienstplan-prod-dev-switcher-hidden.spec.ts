@@ -2,6 +2,7 @@ import { execSync, spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test, expect, request as playwrightRequest } from "@playwright/test";
+import { deriveTestDbTarget } from "@workspace/test-fixtures/test-db-name";
 import { ADMIN_EMAIL, ADMIN_PASSWORD } from "./helpers/teams";
 
 /**
@@ -51,10 +52,9 @@ function resolveTestDbUrl(): string | null {
   if (process.env.E2E_TEST_DATABASE_URL) return process.env.E2E_TEST_DATABASE_URL;
   const base = process.env.DATABASE_URL;
   if (!base) return null;
-  const u = new URL(base);
-  const current = decodeURIComponent(u.pathname.replace(/^\//, "")) || "postgres";
-  u.pathname = `/${current}_test`;
-  return u.toString();
+  // Zentrale Ableitung (inkl. privatem Umgebungs-Suffix) — muss dieselbe DB
+  // treffen wie playwright.config/setup-test-db.
+  return deriveTestDbTarget(base).url;
 }
 
 async function waitForOk(url: string, timeoutMs: number): Promise<void> {

@@ -80,7 +80,8 @@
 - [Scope checks before content checks](scope-before-content-oracle.md) — run team/member 403 checks BEFORE overlap/duplicate 409 checks in write routes, or errors become a cross-tenant data oracle.
 - [Staging/Prod-DB-Trennung](staging-prod-db-split.md) — APP_DATABASE_URL-Override hat Vorrang; jeder Kind-Spawn mit DATABASE_URL-Override muss APP_DATABASE_URL mitsetzen.
 - [E2E floating-promise lint](e2e-floating-promise-lint.md) — lint:e2e (no-floating-promises + missing-playwright-await) is chained into typecheck; discarded async calls must be awaited or `void`-marked.
-- [Shared staging _test DB race](shared-staging-test-db-race.md) — parallel task environments share the staging `_test` DB; separation pre-check can fail from foreign runs, verify one-offs with E2E_SKIP_SEPARATION_CHECK=1.
+- [Shared staging _test DB race](shared-staging-test-db-race.md) — HISTORISCH (nur noch bei E2E_SHARED_TEST_DB=1): geteilte `_test`-DB, Fremd-Läufe kippen Checks.
+- [Private E2E-Test-DBs](private-test-dbs.md) — Standard: eigene `<dbname>_test_<suffix>`-DB pro Umgebung via deriveTestDbTarget; Lock entfällt; Aufräumen über DB-Kommentar, nie Registry-Tabellen.
 - [migrate-prod & drizzle dry-run](migrate-prod-dry-run.md) — prod schema sync via migrate-prod; `push --strict --verbose` without TTY = safe dry-run (prints statements, applies nothing, exits 0 — check prompt text).
 - [401 self-heal in web client](query-401-self-heal.md) — DB restore wipes sessions; stale cookies loop 401 with "logged-in" UI. Client resyncs via QueryCache onError; suspect stale session before missing data.
 - [Handbuch screenshot regeneration](handbuch-screenshot-capture.md) — env-gated capture spec + fingerprint staleness check in merge validation; private-DB escape hatch for lock contention.

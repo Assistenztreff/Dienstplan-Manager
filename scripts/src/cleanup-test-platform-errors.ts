@@ -53,9 +53,9 @@ async function main(): Promise<void> {
   const currentDbName = decodeURIComponent(
     new URL(databaseUrl).pathname.replace(/^\//, ""),
   );
-  if (!currentDbName.endsWith("_test")) {
+  if (!/_test(_[a-z0-9]{1,16})?$/.test(currentDbName)) {
     throw new Error(
-      `Sicherheitsabbruch: DATABASE_URL zeigt auf "${currentDbName}", keine Test-Datenbank (erwartet Suffix "_test"). ` +
+      `Sicherheitsabbruch: DATABASE_URL zeigt auf "${currentDbName}", keine Test-Datenbank (erwartet Suffix "_test" oder "_test_<suffix>"). ` +
         "Dieses Skript loescht ausschliesslich in der isolierten Test-Datenbank.",
     );
   }

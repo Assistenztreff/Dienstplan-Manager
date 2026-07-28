@@ -33,20 +33,19 @@ import {
   deleteAccountTrees,
   TEST_ERROR_CONTEXTS,
 } from "./index.js";
+import { deriveTestDbTarget } from "./test-db-name.js";
 
 /** Erkannter Regressions-Fehlschlag eines Checks (Meldung nennt die Ursache). */
 export class CheckError extends Error {}
 
 /**
- * Leitet aus der Dev-`DATABASE_URL` die URL der isolierten Test-Datenbank
- * (`<dbname>_test`) ab.
+ * Leitet aus der Dev-`DATABASE_URL` die URL der isolierten Test-Datenbank ab.
+ * Delegiert an die zentrale Namenslogik (inkl. privatem Umgebungs-Suffix,
+ * Task #633), damit Checks und Provisionierung dieselbe DB treffen.
  */
 export function deriveTestDbUrl(base: string): { url: string; name: string } {
-  const u = new URL(base);
-  const current = decodeURIComponent(u.pathname.replace(/^\//, "")) || "postgres";
-  const testName = `${current}_test`;
-  u.pathname = `/${testName}`;
-  return { url: u.toString(), name: testName };
+  const target = deriveTestDbTarget(base);
+  return { url: target.url, name: target.name };
 }
 
 function provisionTestDb(reason: string): void {

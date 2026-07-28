@@ -1,5 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 import { normalizeDatabaseUrl, resolveDatabaseUrl } from "@workspace/db/database-url";
+import {
+  cleanupStaleTestDbs,
+  deriveTestDbTarget,
+  touchTestDbComment,
+} from "@workspace/test-fixtures/test-db-name";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -43,11 +48,13 @@ const chromiumExecutable = process.env.REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE;
 const externalBaseUrl = process.env.E2E_BASE_URL;
 const useManagedStack = !externalBaseUrl;
 
+// Test-DB-Ableitung: zentral in @workspace/test-fixtures/test-db-name.
+// Standardmaessig bekommt jede Umgebung eine PRIVATE `<dbname>_test_<suffix>`-
+// DB (Task #633) — parallele Task-Umgebungen serialisieren sich dann nicht
+// mehr am Advisory-Lock. Fallback auf die geteilte `<dbname>_test`:
+// `E2E_SHARED_TEST_DB=1`.
 function deriveTestDbUrl(base: string): string {
-  const u = new URL(normalizeDatabaseUrl(base));
-  const current = decodeURIComponent(u.pathname.replace(/^\//, "")) || "postgres";
-  u.pathname = `/${current}_test`;
-  return u.toString();
+  return deriveTestDbTarget(normalizeDatabaseUrl(base)).url;
 }
 
 const baseURL = externalBaseUrl ?? `http://localhost:${WEB_PORT}`;
@@ -326,12 +333,30 @@ if (useManagedStack && !isWorkerProcess) {
 // statt den laufenden zu zerstoeren. Selbstheilend: stirbt ein Lauf (auch
 // SIGKILL), gibt der Server den Lock mit dem Verbindungsende automatisch
 // frei — kein haengender Zustand.
-// Skip via `E2E_SKIP_CROSS_RUN_LOCK=1` (nur fuer bewusste Sonderfaelle, z. B.
-// Laeufe gegen eine garantiert private DB).
+// Skip via `E2E_SKIP_CROSS_RUN_LOCK=1` (nur fuer bewusste Sonderfaelle) —
+// und AUTOMATISCH, wenn der Lauf gegen die private Umgebungs-DB laeuft
+// (`<dbname>_test_<suffix>`, Task #633): dann gibt es keine geteilte DB,
+// die ein fremder Lauf kippen koennte, und der Lock wuerde parallele
+// Umgebungen nur unnoetig serialisieren.
+const testDbTarget =
+  useManagedStack && databaseUrl
+    ? deriveTestDbTarget(normalizeDatabaseUrl(databaseUrl))
+    : null;
+if (
+  useManagedStack &&
+  !isWorkerProcess &&
+  testDbTarget?.isPrivate &&
+  !process.env.E2E_SKIP_CROSS_RUN_LOCK
+) {
+  console.log(
+    `[e2e] Private Test-DB "${testDbTarget.name}" — Lauf-uebergreifender Lock entfaellt, parallele Umgebungen blockieren sich nicht.`,
+  );
+}
 if (
   useManagedStack &&
   !isWorkerProcess &&
   !process.env.E2E_SKIP_CROSS_RUN_LOCK &&
+  !testDbTarget?.isPrivate &&
   testDbName
 ) {
   const { acquireCrossRunLock } = await import(
@@ -419,6 +444,22 @@ if (useManagedStack && !isWorkerProcess && !process.env.E2E_SKIP_DB_SETUP) {
         );
       }
     }
+  }
+
+  // Nutzungs-Stempel + Selbstaufraeumung (Task #633): den Kommentar der
+  // eigenen Test-DB bei JEDEM Lauf auffrischen (auch wenn setup-test-db
+  // uebersprungen wurde), damit sie nicht als verwaist gilt; danach verwaiste
+  // private Test-DBs verschwundener Umgebungen wegräumen. Beides best effort.
+  if (testDbTarget) {
+    const normalizedBase = normalizeDatabaseUrl(databaseUrl!);
+    await touchTestDbComment(normalizedBase, testDbTarget.name, (m) =>
+      console.log(m),
+    );
+    await cleanupStaleTestDbs(normalizedBase, {
+      baseName: testDbTarget.baseName,
+      ownName: testDbTarget.name,
+      log: (m) => console.log(m),
+    });
   }
 
   // Die drei Vorlauf-Checks unten laufen in-process (Top-Level-await, gleiche

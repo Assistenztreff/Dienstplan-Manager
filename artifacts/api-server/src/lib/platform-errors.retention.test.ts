@@ -25,17 +25,16 @@ import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { sql } from "drizzle-orm";
 import { normalizeDatabaseUrl, resolveDatabaseUrl } from "@workspace/db/database-url";
+import { deriveTestDbTarget } from "@workspace/test-fixtures/test-db-name";
 
 // Klein gestelltes Aufbewahrungslimit fuer diese Tests.
 const TEST_LIMIT = 5;
 
-// Spiegel von scripts/src/lib/test-db-url.ts (scripts ist ein eigenes
-// Leaf-Paket, aus dem api-server nicht importieren darf).
+// Zentrale Namenslogik (inkl. privatem Umgebungs-Suffix, Task #633) — muss
+// dieselbe DB treffen wie setup-test-db, sonst provisioniert der Fallback
+// unten eine andere DB als die, gegen die getestet wird.
 function deriveTestDbUrl(base: string): string {
-  const u = new URL(normalizeDatabaseUrl(base));
-  const current = decodeURIComponent(u.pathname.replace(/^\//, "")) || "postgres";
-  u.pathname = `/${current}_test`;
-  return u.toString();
+  return deriveTestDbTarget(normalizeDatabaseUrl(base)).url;
 }
 
 const repoRoot = fileURLToPath(new URL("../../../../", import.meta.url));

@@ -47,6 +47,15 @@ async function main(): Promise<void> {
   }
   await admin.end();
 
+  // Nutzungs-Stempel (Datenbank-Kommentar) SOFORT setzen: private Test-DBs
+  // ohne Stempel wuerde die Selbstaufraeumung (cleanupStaleTestDbs) sonst nie
+  // als "von uns verwaltet" erkennen; der Stempel schuetzt zugleich frisch
+  // angelegte DBs vor einem Drop durch parallele Umgebungen (Task #633).
+  const { touchTestDbComment } = await import(
+    "@workspace/test-fixtures/test-db-name"
+  );
+  await touchTestDbComment(base, testDbName);
+
   // Schema + Seed gegen die Test-DB. DATABASE_URL für die Kind-Prozesse
   // überschreiben, damit Drizzle/Setup-Skripte die Test-DB treffen.
   // APP_DATABASE_URL mit überschreiben, sonst gewinnt der Staging-Override
@@ -114,6 +123,10 @@ async function main(): Promise<void> {
     await rebuild.query(`CREATE DATABASE "${testDbName}"`);
     await rebuild.end();
     console.log(`Test-Datenbank "${testDbName}" frisch angelegt.`);
+    const { touchTestDbComment: touchAfterRebuild } = await import(
+      "@workspace/test-fixtures/test-db-name"
+    );
+    await touchAfterRebuild(base, testDbName);
     pushAndVerify();
   }
   run("pnpm --filter @workspace/scripts run setup-admin");

@@ -4,7 +4,13 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
 
 ## User preferences
 
-- (keine)
+- **Kosteneffizient & ressourcenschonend arbeiten** — Kosten-/Zeitverbrauch ist dem Auftraggeber genauso wichtig wie fertiger Code:
+  - Größere Änderungen erst kurz skizzieren und bestätigen lassen (Plan-/Discuss-Modus), dann bauen; kleine, klar abgegrenzte Schritte statt mehrerer Features gleichzeitig.
+  - Keine kompletten Test-Suiten/E2E-Läufe „just in case" — nur gezielt die Tests der aktuellen Änderung. Kostenintensive Vorgänge (voller E2E-Lauf, Deployment, DB-Neuaufbau, große Rebuilds) vorher ankündigen; bei Unsicherheit nachfragen statt automatisch ausführen.
+  - **Fehlschlagende Tests/Checks**: Beim ersten Fehlschlag zuerst die Ursache in 1–2 Sätzen erklären, dann fixen. Maximal 2 automatische Korrekturversuche für denselben Check; beim dritten Fehlschlag stoppen und melden. Keine Trial-and-Error-Schleifen ohne begründete Hypothese; keine stillschweigende Wiederholung derselben fehlgeschlagenen Aktion.
+  - **Meldepflicht** (gut sichtbar, z. B. „⚠️ Kostenwarnung:" / „🛑 Blockiert:"): Check schlägt ≥3× fehl; ein Vorgang läuft ungewöhnlich lange/teuer; ineffiziente Stellen im Code (doppelte API-Calls, überflüssige Rebuilds, unnötig große Abfragen) auch außerhalb der aktuellen Aufgabe; unklare Anforderungen lieber einmal nachfragen statt mehrfach raten.
+  - Am Sessionende: kurze Zusammenfassung (was gemacht, wie viele Anläufe, Probleme).
+  - Keine automatischen Deployments ohne Rückfrage; keine Komplettüberarbeitung, wenn ein gezielter Fix reicht.
 
 ## Stack & Betrieb
 
