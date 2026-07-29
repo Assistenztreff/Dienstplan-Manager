@@ -160,3 +160,103 @@ export function blocksForCategory(category: ChangeCategory): string[] {
       ];
   }
 }
+
+// --- Paralleler Ausfuehrungsplan (Task #640) --------------------------------
+// Die volle Kette lief bisher seriell (~30-40 min). Da jede Umgebung private
+// Test-DBs `<dbname>_test_<suffix>` besitzt (Task #633) und die Playwright-
+// Config Ports/Locks pro Lauf parametrisierbar sind, koennen die teuren
+// Bloecke in unabhaengige "Lanes" zerlegt werden, die gleichzeitig laufen:
+//
+//   Lane db-tests    : api-server test:db  ->  scripts test:db (seriell)
+//   Lane api-shard-1 : Haelfte 1 der *-api.spec.ts (eigene DB + Ports)
+//   Lane api-shard-2 : Haelfte 2 der *-api.spec.ts (eigene DB + Ports)
+//   Danach seriell   : e2e:smoke (Standard-Stack/-DB, UI-lastig — bewusst
+//                      NICHT unter Volllast, sonst Timeout-Flakes)
+//
+// Jede API-Shard-Lane bekommt einen EIGENEN Test-DB-Suffix (Basis-Suffix der
+// Umgebung + Shard-Buchstabe) und eigene Ports — kein geteilter DB-Zustand,
+// keine Port-Kollisionen, kein gemeinsamer Lauf-Lock (Lock-Datei ist port-
+// gebunden, s. playwright.config.ts).
+//
+// SICHERHEITSREGEL: Ohne privaten Basis-Suffix (E2E_SHARED_TEST_DB=1) oder
+// bei E2E_PARALLEL=0 faellt der Plan auf die bewaehrte serielle Kette zurueck.
+
+export interface ValidationLane {
+  name: string;
+  /** Kommandos, die INNERHALB der Lane seriell laufen. */
+  commands: string[];
+  /** Zusaetzliche Umgebungsvariablen fuer alle Kommandos der Lane. */
+  env?: Record<string, string>;
+}
+
+export interface ValidationPlan {
+  /** Lanes, die gleichzeitig laufen. */
+  parallelLanes: ValidationLane[];
+  /** Kommandos, die NACH allen Lanes seriell laufen. */
+  serialTail: string[];
+}
+
+/** Anzahl paralleler API-Spec-Shards. */
+export const API_SHARD_COUNT = 2;
+
+/** Feste Port-Paare der Shard-Lanes (Standard-Lauf nutzt 8099/5199). */
+const SHARD_PORTS: ReadonlyArray<{ api: string; web: string }> = [
+  { api: "8091", web: "5191" },
+  { api: "8092", web: "5192" },
+];
+
+/** Shard-Kommando: playwright direkt, damit `--shard` sicher ankommt. */
+function apiShardCommand(shard: number): string {
+  return `pnpm --filter @workspace/dienstplan exec playwright test "api\\.spec\\.ts$" --shard=${shard}/${API_SHARD_COUNT}`;
+}
+
+/**
+ * Erstellt den Ausfuehrungsplan fuer eine Kategorie.
+ *
+ * @param baseSuffix privater Test-DB-Suffix der Umgebung
+ *   (resolveTestDbSuffix()); leer = geteilte `_test`-DB, dann ist Sharding
+ *   NICHT sicher und es laeuft die serielle Kette.
+ * @param allowParallel false (z. B. E2E_PARALLEL=0) erzwingt die serielle
+ *   Kette.
+ */
+export function planForCategory(
+  category: ChangeCategory,
+  baseSuffix: string,
+  allowParallel: boolean,
+): ValidationPlan {
+  const serial: ValidationPlan = {
+    parallelLanes:
+      blocksForCategory(category).length > 0
+        ? [{ name: "seriell", commands: blocksForCategory(category) }]
+        : [],
+    serialTail: [],
+  };
+  if (category !== "full" || !allowParallel || !baseSuffix) return serial;
+
+  // Suffix-Whitelist: [a-z0-9]{1,16}. Basis (Standard: 10 Hex-Zeichen) auf 15
+  // kappen, damit + Shard-Ziffer sicher passt.
+  const base = baseSuffix.toLowerCase().slice(0, 15);
+  if (!/^[a-z0-9]{1,15}$/.test(base)) return serial;
+
+  const shardLanes: ValidationLane[] = [];
+  for (let i = 1; i <= API_SHARD_COUNT; i++) {
+    const ports = SHARD_PORTS[i - 1];
+    if (!ports) return serial;
+    shardLanes.push({
+      name: `api-shard-${i}`,
+      commands: [apiShardCommand(i)],
+      env: {
+        E2E_TEST_DB_SUFFIX: `${base}${i}`,
+        E2E_API_PORT: ports.api,
+        E2E_WEB_PORT: ports.web,
+      },
+    });
+  }
+  return {
+    parallelLanes: [
+      { name: "db-tests", commands: [E2E_BLOCKS.apiServerDb, E2E_BLOCKS.scriptsDb] },
+      ...shardLanes,
+    ],
+    serialTail: [E2E_BLOCKS.e2eSmoke],
+  };
+}

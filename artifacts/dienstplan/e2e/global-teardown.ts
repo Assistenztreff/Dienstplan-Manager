@@ -37,9 +37,13 @@ function findRepoRoot(start: string): string {
 }
 
 function releaseRunLock(): void {
+  // Port-gebundener Lock-Name — MUSS der Ableitung in playwright.config.ts
+  // entsprechen (Task #640: parallele Shard-Lanes mit eigenen Ports).
+  const apiPort = process.env.E2E_API_PORT ?? "8099";
+  const webPort = process.env.E2E_WEB_PORT ?? "5199";
   const runLockPath = path.join(
     findRepoRoot(process.cwd()),
-    "node_modules/.cache/dienstplan-e2e/run.lock",
+    `node_modules/.cache/dienstplan-e2e/run-${apiPort}-${webPort}.lock`,
   );
   try {
     if (!existsSync(runLockPath)) return;

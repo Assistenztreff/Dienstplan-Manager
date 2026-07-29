@@ -18,12 +18,15 @@
  *   --dry-run                            — nur Kategorie + geplante Bloecke
  *                                          ausgeben, nichts ausfuehren
  */
-import { execSync, spawnSync } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
+import { resolveTestDbSuffix } from "@workspace/test-fixtures/test-db-name";
 import {
-  blocksForCategory,
   classifyChangedFiles,
+  planForCategory,
   type ChangeCategory,
   type ScopeResult,
+  type ValidationLane,
+  type ValidationPlan,
 } from "./lib/validation-scope.js";
 
 const log = (msg: string): void => console.log(`[scoped-e2e] ${msg}`);
@@ -111,36 +114,124 @@ function determineScope(): ScopeResult {
   return classifyChangedFiles(files);
 }
 
-function main(): void {
+/**
+ * Fuehrt ein Kommando aus; Ausgabe zeilenweise mit Lane-Praefix, damit die
+ * verschraenkten Logs paralleler Lanes lesbar bleiben.
+ */
+function runCommand(
+  cmd: string,
+  lane: string,
+  env: Record<string, string> | undefined,
+): Promise<number> {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, {
+      shell: true,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, ...env },
+    });
+    const forward = (stream: NodeJS.WritableStream) => {
+      let buffer = "";
+      return (chunk: Buffer) => {
+        buffer += chunk.toString("utf8");
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) stream.write(`[${lane}] ${line}\n`);
+      };
+    };
+    child.stdout.on("data", forward(process.stdout));
+    child.stderr.on("data", forward(process.stderr));
+    child.on("error", (err) => {
+      log(`[${lane}] Startfehler: ${err.message}`);
+      resolve(1);
+    });
+    child.on("close", (code) => resolve(code ?? 1));
+  });
+}
+
+/** Laesst die Kommandos einer Lane seriell laufen; erster Fehler bricht die Lane ab. */
+async function runLane(lane: ValidationLane): Promise<boolean> {
+  for (const cmd of lane.commands) {
+    log(`[${lane.name}] >>> ${cmd}`);
+    const started = Date.now();
+    const code = await runCommand(cmd, lane.name, lane.env);
+    const mins = ((Date.now() - started) / 60000).toFixed(1);
+    if (code !== 0) {
+      log(`[${lane.name}] Block fehlgeschlagen (nach ${mins} min): ${cmd}`);
+      return false;
+    }
+    log(`[${lane.name}] Block gruen (${mins} min): ${cmd}`);
+  }
+  return true;
+}
+
+function describePlan(plan: ValidationPlan): string {
+  const lanes = plan.parallelLanes
+    .map(
+      (l) =>
+        `  Lane ${l.name}${l.env ? ` (${Object.entries(l.env).map(([k, v]) => `${k}=${v}`).join(", ")})` : ""}:\n${l.commands.map((c) => `    - ${c}`).join("\n")}`,
+    )
+    .join("\n");
+  const tail =
+    plan.serialTail.length > 0
+      ? `\n  Danach seriell:\n${plan.serialTail.map((c) => `    - ${c}`).join("\n")}`
+      : "";
+  return `${lanes}${tail}`;
+}
+
+async function main(): Promise<void> {
   const scope = determineScope();
   log(`Kategorie: ${scope.category} — ${scope.reason}`);
   if (scope.decisiveFiles.length > 0) {
     log(`Massgebliche Datei(en): ${scope.decisiveFiles.join(", ")}`);
   }
 
-  const commands = blocksForCategory(scope.category);
+  // Parallelisierung (Task #640): nur mit privatem Test-DB-Suffix sicher
+  // (jede Shard-Lane bekommt eine eigene Wegwerf-DB). E2E_PARALLEL=0 als
+  // bewusster Rueckfall auf die serielle Kette.
+  let baseSuffix = "";
+  try {
+    baseSuffix = resolveTestDbSuffix();
+  } catch {
+    baseSuffix = "";
+  }
+  const allowParallel = process.env.E2E_PARALLEL !== "0";
+  const plan = planForCategory(scope.category, baseSuffix, allowParallel);
+  const totalCommands =
+    plan.parallelLanes.reduce((n, l) => n + l.commands.length, 0) +
+    plan.serialTail.length;
+
   if (process.argv.includes("--dry-run")) {
     log(
-      commands.length === 0
+      totalCommands === 0
         ? "Dry-Run: kein E2E-Testblock noetig."
-        : `Dry-Run: es liefen ${commands.length} von 4 Bloecken:\n${commands.map((c) => `  - ${c}`).join("\n")}`,
+        : `Dry-Run: geplanter Ablauf (${plan.parallelLanes.length} parallele Lane(s)):\n${describePlan(plan)}`,
     );
     return;
   }
-  if (commands.length === 0) {
+  if (totalCommands === 0) {
     log("Kein E2E-Testblock noetig — Kette wird uebersprungen (Typecheck/Unit/Screenshot-Check laufen separat).");
     return;
   }
-  log(`Es laufen ${commands.length} von 4 Bloecken der E2E-Kette.`);
-  for (const cmd of commands) {
-    log(`>>> ${cmd}`);
-    const res = spawnSync(cmd, { shell: true, stdio: "inherit" });
-    if (res.status !== 0 || res.error != null) {
-      log(`Block fehlgeschlagen: ${cmd}`);
-      process.exit(res.status ?? 1);
-    }
+
+  const startedAt = Date.now();
+  log(`Geplanter Ablauf (${plan.parallelLanes.length} parallele Lane(s)):\n${describePlan(plan)}`);
+  const results = await Promise.all(plan.parallelLanes.map((l) => runLane(l)));
+  const failedLanes = plan.parallelLanes
+    .filter((_, i) => !results[i])
+    .map((l) => l.name);
+  if (failedLanes.length > 0) {
+    log(`Fehlgeschlagene Lane(s): ${failedLanes.join(", ")}`);
+    process.exit(1);
   }
-  log("Alle ausgewaehlten Bloecke gruen.");
+  for (const cmd of plan.serialTail) {
+    const ok = await runLane({ name: "tail", commands: [cmd] });
+    if (!ok) process.exit(1);
+  }
+  const mins = ((Date.now() - startedAt) / 60000).toFixed(1);
+  log(`Alle ausgewaehlten Bloecke gruen (Gesamtdauer ${mins} min).`);
 }
 
-main();
+main().catch((err) => {
+  log(`Unerwarteter Fehler: ${err instanceof Error ? err.stack ?? err.message : err}`);
+  process.exit(1);
+});

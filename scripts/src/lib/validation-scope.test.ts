@@ -5,10 +5,12 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  API_SHARD_COUNT,
   blocksForCategory,
   classifyChangedFiles,
   classifyPath,
   E2E_BLOCKS,
+  planForCategory,
 } from "./validation-scope.js";
 
 describe("classifyPath", () => {
@@ -125,5 +127,80 @@ describe("blocksForCategory", () => {
       E2E_BLOCKS.e2eApi,
       E2E_BLOCKS.e2eSmoke,
     ]);
+  });
+});
+
+describe("planForCategory (Task #640)", () => {
+  it("docs => leerer Plan", () => {
+    const p = planForCategory("docs", "abc123", true);
+    expect(p.parallelLanes).toEqual([]);
+    expect(p.serialTail).toEqual([]);
+  });
+
+  it("frontend => eine serielle Lane mit Smoke", () => {
+    const p = planForCategory("frontend", "abc123", true);
+    expect(p.parallelLanes).toEqual([
+      { name: "seriell", commands: [E2E_BLOCKS.e2eSmoke] },
+    ]);
+    expect(p.serialTail).toEqual([]);
+  });
+
+  it("full + privater Suffix => DB-Lane + API-Shards parallel, Smoke danach", () => {
+    const p = planForCategory("full", "abc123", true);
+    expect(p.parallelLanes.map((l) => l.name)).toEqual([
+      "db-tests",
+      ...Array.from({ length: API_SHARD_COUNT }, (_, i) => `api-shard-${i + 1}`),
+    ]);
+    expect(p.parallelLanes[0]!.commands).toEqual([
+      E2E_BLOCKS.apiServerDb,
+      E2E_BLOCKS.scriptsDb,
+    ]);
+    // Jede Shard-Lane: eigener Suffix, eigene Ports, Playwright-Shard-Flag.
+    const suffixes = new Set<string>();
+    const ports = new Set<string>();
+    for (const [i, lane] of p.parallelLanes.slice(1).entries()) {
+      expect(lane.commands).toHaveLength(1);
+      expect(lane.commands[0]).toContain(`--shard=${i + 1}/${API_SHARD_COUNT}`);
+      expect(lane.commands[0]).toContain('"api\\.spec\\.ts$"');
+      const env = lane.env!;
+      expect(env.E2E_TEST_DB_SUFFIX).toMatch(/^[a-z0-9]{1,16}$/);
+      expect(env.E2E_TEST_DB_SUFFIX!.startsWith("abc123")).toBe(true);
+      suffixes.add(env.E2E_TEST_DB_SUFFIX!);
+      ports.add(env.E2E_API_PORT!);
+      ports.add(env.E2E_WEB_PORT!);
+      // Standard-Ports (8099/5199) bleiben dem Smoke-/Default-Lauf vorbehalten.
+      expect(env.E2E_API_PORT).not.toBe("8099");
+      expect(env.E2E_WEB_PORT).not.toBe("5199");
+    }
+    expect(suffixes.size).toBe(API_SHARD_COUNT);
+    expect(ports.size).toBe(API_SHARD_COUNT * 2);
+    expect(p.serialTail).toEqual([E2E_BLOCKS.e2eSmoke]);
+  });
+
+  it("langer Basis-Suffix wird gekappt und bleibt whitelist-konform", () => {
+    const p = planForCategory("full", "a".repeat(16), true);
+    for (const lane of p.parallelLanes.slice(1)) {
+      expect(lane.env!.E2E_TEST_DB_SUFFIX).toMatch(/^[a-z0-9]{1,16}$/);
+    }
+  });
+
+  it("full ohne privaten Suffix (geteilte _test-DB) => serielle Kette", () => {
+    const p = planForCategory("full", "", true);
+    expect(p.parallelLanes).toEqual([
+      { name: "seriell", commands: blocksForCategory("full") },
+    ]);
+    expect(p.serialTail).toEqual([]);
+  });
+
+  it("full mit E2E_PARALLEL=0 => serielle Kette", () => {
+    const p = planForCategory("full", "abc123", false);
+    expect(p.parallelLanes).toEqual([
+      { name: "seriell", commands: blocksForCategory("full") },
+    ]);
+  });
+
+  it("ungueltiger Suffix (Whitelist-Verletzung) => serielle Kette", () => {
+    const p = planForCategory("full", "ÄÖ/;drop", true);
+    expect(p.parallelLanes.map((l) => l.name)).toEqual(["seriell"]);
   });
 });

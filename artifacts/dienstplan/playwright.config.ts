@@ -43,6 +43,7 @@ const API_PORT = process.env.E2E_API_PORT ?? "8099";
 const WEB_PORT = process.env.E2E_WEB_PORT ?? "5199";
 
 const PROD_SPEC_API_PORT = "8097";
+const PROD_SPEC_WEB_PORT = "5197";
 const chromiumExecutable = process.env.REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE;
 
 // Externe Override-URL? Dann gegen diese testen, ohne eigenen Stack.
@@ -141,9 +142,12 @@ const repoRoot = findRepoRoot(process.cwd());
 const testDbName = testDatabaseUrl
   ? decodeURIComponent(new URL(testDatabaseUrl).pathname.replace(/^\//, ""))
   : "";
+// Marker pro Test-DB-NAME (Task #640): parallele Shard-Lanes laufen gegen
+// verschiedene private Test-DBs — ein geteilter Marker wuerde bei jedem
+// Lane-Wechsel invalidieren und die ~20s-Provisionierung staendig neu kosten.
 const schemaMarkerPath = path.join(
   repoRoot,
-  "node_modules/.cache/dienstplan-e2e/test-db-schema.hash",
+  `node_modules/.cache/dienstplan-e2e/test-db-schema-${testDbName || "default"}.hash`,
 );
 
 let schemaFingerprint = "";
@@ -252,9 +256,13 @@ function reapOrphansOnPort(port: string, label: string): void {
 // Freigabe: globalTeardown loescht den Lock, wenn er noch uns gehoert. Nach
 // hartem Abbruch bleibt der Lock liegen, zeigt aber auf eine tote PID und
 // blockiert den naechsten Lauf deshalb nicht (Selbstheilung bleibt erhalten).
+// Lock-Datei ist PORT-gebunden (Task #640): parallele Shard-Lanes derselben
+// Abschlusspruefung (eigene Ports + eigene private Test-DBs) duerfen sich
+// nicht gegenseitig blockieren — zwei Laeufe auf DENSELBEN Ports (z. B.
+// ueberlappende Validierungen) serialisieren sich weiterhin sauber.
 const runLockPath = path.join(
   repoRoot,
-  "node_modules/.cache/dienstplan-e2e/run.lock",
+  `node_modules/.cache/dienstplan-e2e/run-${API_PORT}-${WEB_PORT}.lock`,
 );
 
 function isPidAlive(pid: number): boolean {
@@ -351,9 +359,15 @@ if (useManagedStack && !isWorkerProcess) {
   acquireRunLock();
   reapOrphansOnPort(API_PORT, "Test-API");
   reapOrphansOnPort(WEB_PORT, "Test-Vite");
-  // Prod-Modus-Spec-Ports (eigener Stack, s.o.): auch deren Waisen freiräumen.
-  reapOrphansOnPort(PROD_SPEC_API_PORT, "Prod-Spec-API");
-  reapOrphansOnPort(PROD_SPEC_WEB_PORT, "Prod-Spec-Preview");
+  // Prod-Modus-Spec-Ports (eigener Stack, s.o.): auch deren Waisen freiräumen —
+  // aber NUR im Standard-Lauf (Default-Ports). Parallele API-Shard-Lanes
+  // (Task #640, eigene Ports via E2E_API_PORT/E2E_WEB_PORT) fuehren die
+  // Prod-Modus-Specs nie aus und duerfen einen ggf. parallel laufenden
+  // Prod-Spec-Stack eines anderen Laufs nicht abschiessen.
+  if (!process.env.E2E_API_PORT && !process.env.E2E_WEB_PORT) {
+    reapOrphansOnPort(PROD_SPEC_API_PORT, "Prod-Spec-API");
+    reapOrphansOnPort(PROD_SPEC_WEB_PORT, "Prod-Spec-Preview");
+  }
 }
 
 // --- Lauf-UEBERGREIFENDER Lock (Task #622: geteilte _test-DB) ---------------
@@ -644,5 +658,3 @@ export default defineConfig({
       }
     : {}),
 });
-
-const PROD_SPEC_WEB_PORT = "5197";
