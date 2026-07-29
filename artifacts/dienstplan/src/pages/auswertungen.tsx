@@ -801,6 +801,7 @@ export default function Auswertungen() {
               balances={visibleBalances}
               recalcByUser={recalcByUser}
               prevMonthLabel={prevOfShownLabel}
+              onSelectAssistant={setSelectedAssistant}
             />
           ) : (
           visibleBalances.map((balance: any) => {

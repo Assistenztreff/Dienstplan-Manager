@@ -169,6 +169,22 @@ test("Matrix bei Alle: Zell-Werte, Geldzeilen nur mit Stundenlohn, 0%-Zeile ausg
   await expect(page.getByTestId(`matrix-col-${wageAssistantId}`)).toBeVisible();
   await expect(page.getByTestId(`matrix-col-${noWageAssistantId}`)).toBeVisible();
   await expect(page.getByTestId(`balance-card-${wageAssistantId}`)).toHaveCount(0);
+
+  // Klick auf den Spaltenkopf einer Assistenzkraft setzt den Auswahlfilter
+  // (derselbe Mechanismus wie das Dropdown): Matrix zeigt nur noch diese
+  // Person — kein neues Karten-Layout.
+  await page.getByTestId(`matrix-select-${wageAssistantId}`).click();
+  await expect(page.getByTestId(`matrix-col-${wageAssistantId}`)).toBeVisible();
+  await expect(page.getByTestId(`matrix-col-${noWageAssistantId}`)).toHaveCount(0);
+  await expect(page.getByTestId("gesamt-auswertung-matrix")).toBeVisible();
+  // Das Dropdown spiegelt die Auswahl wider (Rückweg über "Alle" bleibt sichtbar).
+  await expect(page.getByTestId("assistant-select")).toContainText("Lohn");
+
+  // Rückweg: Filter "Alle" im bestehenden Dropdown stellt die Gesamtansicht wieder her.
+  await page.getByTestId("assistant-select").click();
+  await page.getByTestId("assistant-option-all").click();
+  await expect(page.getByTestId(`matrix-col-${wageAssistantId}`)).toBeVisible();
+  await expect(page.getByTestId(`matrix-col-${noWageAssistantId}`)).toBeVisible();
 });
 
 test("Nachberechnungs-Zeile: nach Abschluss des Vormonats + Aenderung erscheint sie im Folgemonat", async ({

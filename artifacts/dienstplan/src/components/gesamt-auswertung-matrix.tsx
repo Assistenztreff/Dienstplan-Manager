@@ -69,10 +69,13 @@ export function GesamtAuswertungMatrix({
   balances,
   recalcByUser,
   prevMonthLabel,
+  onSelectAssistant,
 }: {
   balances: MatrixBalance[];
   recalcByUser?: Map<number, MatrixRecalc>;
   prevMonthLabel?: string;
+  /** Klick auf einen Spaltenkopf: setzt den bestehenden Auswahlfilter auf diese Person. */
+  onSelectAssistant?: (userId: number) => void;
 }) {
   const personColors = useMemo(
     () => buildPersonColorAssignment(balances.map((b) => b.userId)),
@@ -313,17 +316,40 @@ export function GesamtAuswertungMatrix({
                   className="p-3 text-center min-w-[140px]"
                   data-testid={`matrix-col-${b.userId}`}
                 >
-                  <div className="flex items-center justify-center gap-2">
-                    <span
-                      aria-hidden="true"
-                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold leading-none ${userInitialsClass(b.userId, personColors)}`}
+                  {onSelectAssistant ? (
+                    // Klickbarer Spaltenkopf: setzt den Auswahlfilter auf diese
+                    // Person (derselbe Mechanismus wie das Dropdown — kein
+                    // eigenes Karten-Layout).
+                    <button
+                      type="button"
+                      onClick={() => onSelectAssistant(b.userId)}
+                      title={`Nur ${b.userName} anzeigen`}
+                      className="group mx-auto flex items-center justify-center gap-2 rounded-md px-2 py-1 -my-1 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                      data-testid={`matrix-select-${b.userId}`}
                     >
-                      {nameInitials(b.userName)}
-                    </span>
-                    <span className="text-sm font-semibold text-foreground whitespace-nowrap">
-                      {b.userName}
-                    </span>
-                  </div>
+                      <span
+                        aria-hidden="true"
+                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold leading-none ${userInitialsClass(b.userId, personColors)}`}
+                      >
+                        {nameInitials(b.userName)}
+                      </span>
+                      <span className="text-sm font-semibold text-foreground whitespace-nowrap underline-offset-4 group-hover:underline">
+                        {b.userName}
+                      </span>
+                    </button>
+                  ) : (
+                    <div className="flex items-center justify-center gap-2">
+                      <span
+                        aria-hidden="true"
+                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold leading-none ${userInitialsClass(b.userId, personColors)}`}
+                      >
+                        {nameInitials(b.userName)}
+                      </span>
+                      <span className="text-sm font-semibold text-foreground whitespace-nowrap">
+                        {b.userName}
+                      </span>
+                    </div>
+                  )}
                 </th>
               ))}
             </tr>
