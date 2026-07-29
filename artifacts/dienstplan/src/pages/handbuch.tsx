@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import {
   ArrowRight,
   Building2,
+  CalendarDays,
   CalendarOff,
   ChevronRight,
   FileText,
@@ -88,11 +89,13 @@ const KAPITEL: Array<{ title: string; items: KapitelEintrag[] }> = [
       },
       {
         title: "Einstellungen",
+        href: "/handbuch/einstellungen",
+        id: "einstellungen",
         children: [
-          { title: "Schichtmodelle" },
-          { title: "Zuschläge" },
-          { title: "Kalender-Abo" },
-          { title: "eigenes Logo", isPremium: true },
+          { title: "Schichtmodelle", href: "/handbuch/einstellungen#schichtmodelle" },
+          { title: "Zuschläge", href: "/handbuch/einstellungen#zuschlaege" },
+          { title: "Kalender-Abo", href: "/handbuch/einstellungen#kalender-abo" },
+          { title: "eigenes Logo", href: "/handbuch/einstellungen#firmenlogo", isPremium: true },
         ],
       },
     ],
@@ -1392,6 +1395,248 @@ export function HandbuchAuswertungen() {
       <div className="grid gap-4 sm:grid-cols-2">
         <SeeAlsoLink title="Zeiterfassung" href="/handbuch/zeiterfassung" icon={FileText} />
         <SeeAlsoLink title="Abwesenheiten" href="/handbuch/abwesenheiten" icon={CalendarOff} />
+      </div>
+    </ArtikelShell>
+  );
+}
+
+export function HandbuchEinstellungen() {
+  return (
+    <ArtikelShell
+      activeId="einstellungen"
+      bereich="Verwaltung"
+      titel="Einstellungen"
+      toc={[
+        { id: "profil", label: "Profil & Passwort" },
+        { id: "kalender-abo", label: "Kalender-Export & Abo" },
+        { id: "schichtmodelle", label: "Schichtmodelle (Dienste)" },
+        { id: "firmenlogo", label: "Firmenlogo (Premium)" },
+        { id: "zuschlaege", label: "Zuschläge & Abrechnungsart" },
+        { id: "pausen", label: "Pausen & Pausenabzug" },
+        { id: "weitere-schalter", label: "Weitere Schalter" },
+        { id: "rollen", label: "Was sehen Assistenzkräfte?" },
+        { id: "siehe-auch", label: "Siehe auch" },
+      ]}
+    >
+      <h1 className="mb-6 text-4xl font-bold leading-tight text-brand-dark md:text-5xl">
+        Einstellungen
+      </h1>
+      <p className="mb-10 text-xl leading-relaxed text-slate-500">
+        Die Einstellungen bündeln alles, was konto- und teamweit gilt: Ihr Profil, Schichtmodelle
+        für den Dienstplan, Zuschlagssätze, Pausen&shy;regelungen und den Kalender-Export.
+        Administrierende sehen alle Bereiche; Assistenzkräfte finden hier nur ihr Profil und den
+        Kalender-Export.
+      </p>
+
+      <h2 id="profil">Profil &amp; Passwort</h2>
+      <p>
+        Die Karte <strong>Profilinformationen</strong> zeigt Ihren Namen, Ihre E-Mail-Adresse und
+        ein abgedecktes Passwortfeld. Über <strong>Bearbeiten</strong> ändern Sie Name und
+        E-Mail-Adresse; über <strong>Passwort ändern</strong> legen Sie ein neues Passwort fest.
+        Geben Sie dazu zunächst Ihr aktuelles Passwort ein.
+      </p>
+
+      <ScreenshotPlatzhalter label="Screenshot: Einstellungen – Profilinformationen" />
+
+      <h2 id="kalender-abo">Kalender-Export &amp; Abo</h2>
+      <p>
+        Unter <strong>Kalender-Export</strong> können Sie Ihre verbindlichen (freigegebenen) Dienste
+        in eine Kalender-App übernehmen. Zwei Wege stehen bereit:
+      </p>
+      <ul>
+        <li>
+          <strong>Als .ics herunterladen</strong> — erzeugt sofort eine Datei, die Sie einmalig in
+          Google Kalender, Apple Kalender, Outlook oder eine andere App importieren.
+        </li>
+        <li>
+          <strong>Kalender-Abo</strong> — eine persönliche Abo-URL, die Ihre Kalender-App
+          regelmäßig abruft. Neue oder verschobene Dienste erscheinen dann automatisch, ohne
+          erneuten Download. Klicken Sie auf <strong>Abo-Link erstellen</strong>, um die URL zu
+          erzeugen, und fügen Sie sie in Ihrer Kalender-App als Kalender-Abonnement hinzu.
+        </li>
+      </ul>
+
+      <HinweisBox titel="Hinweis: Abo-URL geheim halten">
+        <p>
+          Die Abo-URL enthält einen persönlichen Zugriffs-Token. Geben Sie sie nicht weiter. Wurde
+          sie versehentlich geteilt, erneuern Sie sie über <strong>Link erneuern</strong> — die alte
+          URL wird damit sofort ungültig.
+        </p>
+      </HinweisBox>
+
+      <p>
+        Der Kalender-Export steht ab dem Premium-Tarif zur Verfügung. Im Free-Tarif ist die
+        Schaltfläche sichtbar, aber gesperrt.
+      </p>
+
+      <ScreenshotPlatzhalter label="Screenshot: Einstellungen – Kalender-Export & Abo" />
+
+      <h2 id="schichtmodelle">Schichtmodelle (Dienste)</h2>
+      <p>
+        Schichtmodelle legen die Vorlagen für Ihren Dienstplan fest — zum Beispiel
+        &bdquo;Frühdienst&ldquo;, &bdquo;Spätdienst&ldquo; oder &bdquo;24-Stunden&ldquo;. Beim
+        Anlegen einer Schicht im Dienstplan wählen Sie eines dieser Modelle aus; Start- und
+        Endzeit sowie Zeitwertung werden dann vorausgefüllt.
+      </p>
+      <p>
+        Über <strong>Neuen Dienst</strong> legen Sie ein Modell an. Sie vergeben eine
+        Bezeichnung, Standard-Start- und Endzeit, die Wochentage, an denen der Dienst typischerweise
+        anfällt, sowie die <strong>Zeitwertung</strong> in Prozent (100 % = volle Stunden). Für die
+        Vergütung wählen Sie zwischen regulärem Stundenlohn, einem prozentualen Stundenlohn oder
+        einem Festbetrag pro Schicht.
+      </p>
+
+      <HinweisBox titel="Hinweis: Free-Tarif – maximal 5 Dienste">
+        <p>
+          Im Free-Tarif sind bis zu 5 Schichtmodelle möglich. Die Schaltfläche{" "}
+          <strong>Neuen Dienst</strong> wird gesperrt, sobald diese Grenze erreicht ist. Für
+          unbegrenzte Modelle ist ein Upgrade auf Premium nötig.
+        </p>
+      </HinweisBox>
+
+      <p>
+        Bestehende Modelle lassen sich jederzeit <strong>bearbeiten</strong> oder auf{" "}
+        <strong>Inaktiv</strong> setzen — inaktive Modelle werden im Dienstplan nicht mehr zur
+        Auswahl angeboten, bleiben aber für ältere Einträge erhalten. Haben Sie mehrere Teams,
+        wählen Sie oben über <strong>Dienste für Team</strong>, für welches Team die Liste gilt.
+      </p>
+
+      <ScreenshotPlatzhalter label="Screenshot: Einstellungen – Schichtmodelle" />
+
+      <h2 id="firmenlogo">Firmenlogo <PremiumBadge /></h2>
+      <p>
+        Das Logo erscheint oben rechts auf dem PDF-Stundennachweis. Klicken Sie auf{" "}
+        <strong>Logo hochladen</strong> und wählen Sie eine PNG- oder JPG-Datei (max. 5 MB). Über{" "}
+        <strong>Logo ersetzen</strong> laden Sie ein anderes Bild hoch; über{" "}
+        <strong>Entfernen</strong> kehren Sie zum Standard-Logo zurück.
+      </p>
+      <p>
+        Als Dienstleister-Konto mit mehreren Teams können Sie je Team ein eigenes Logo hinterlegen:
+        Wechseln Sie dazu im Team-Umschalter oben in das gewünschte Team, bevor Sie das Logo
+        hochladen. Ohne Team-Logo gilt das Konto-Logo als Fallback.
+      </p>
+
+      <h2 id="zuschlaege">Zuschläge &amp; Abrechnungsart</h2>
+      <p>
+        Die Karte <strong>Zuschläge</strong> steuert, wie Nacht-, Sonntags- und Feiertagsstunden
+        bewertet werden. Als Dienstleister-Konto sehen Sie oben ein Auswahlfeld{" "}
+        <strong>Gilt für</strong>: Wählen Sie <strong>Konto-Standard (alle Teams)</strong> für eine
+        kontoweite Regelung oder ein einzelnes Team, um für dieses Team abweichende Sätze zu
+        hinterlegen. Eine Team-Regelung überschreibt den Konto-Standard vollständig für dieses Team.
+        Über <strong>Team-Regelung entfernen</strong> kehren Sie zum Konto-Standard zurück.
+      </p>
+
+      <ScreenshotPlatzhalter label="Screenshot: Einstellungen – Zuschläge" />
+
+      <p>Folgende Felder stehen bereit:</p>
+      <ul>
+        <li>
+          <strong>Nachtzuschlag</strong> — Prozentwert sowie Von/Bis-Uhrzeiten des Nachtfensters
+          (auch über Mitternacht hinweg möglich).
+        </li>
+        <li>
+          <strong>Sonntagszuschlag</strong> und <strong>Feiertagszuschlag</strong> — jeweils als
+          Prozentwert auf den Grundlohn.
+        </li>
+        <li>
+          <strong>Bundesland</strong> — bestimmt, welche regionalen Feiertage (z. B. Fronleichnam)
+          berücksichtigt werden. Ohne Auswahl gelten nur die bundesweiten Feiertage.
+        </li>
+        <li>
+          <strong>Abrechnungsart</strong> — wählen Sie zwischen{" "}
+          <strong>Soll – nach geplanten Schichten</strong> und{" "}
+          <strong>Ist – nach erfassten Zeiten</strong>. Diese Einstellung bestimmt, woraus
+          Auswertungen und der Stundennachweis berechnet werden. Eine abweichende Einstellung in der
+          Personalakte einer Assistenzkraft hat Vorrang vor dieser Regelung.
+        </li>
+      </ul>
+
+      <HinweisBox titel="Tipp: Änderungen wirken rückwirkend">
+        <p>
+          Zuschlagsänderungen wirken sich sofort auf alle vorhandenen Auswertungen aus — Schichten
+          müssen nicht neu gespeichert werden. Prüfen Sie daher bestehende Monatsauswertungen,
+          nachdem Sie Sätze angepasst haben.
+        </p>
+      </HinweisBox>
+
+      <h2 id="pausen">Pausen &amp; Pausenabzug</h2>
+      <p>
+        Zwei Schalter steuern, wie Pausen im AssistenzPlaner behandelt werden:
+      </p>
+
+      <h3>Pausen automatisch vorbefüllen</h3>
+      <p>
+        Ist dieser Schalter aktiviert, befüllt der Dienstplan beim Anlegen eines neuen Dienstes das
+        Pausenfeld automatisch — abhängig von der Dienstdauer. Sie legen eine zweistufige Staffel
+        fest: ab welcher Dienstlänge (in Stunden) wie viele Pausenminuten eingetragen werden. Die
+        gesetzliche Voreinstellung entspricht § 4 ArbZG: ab 6 Stunden 30 Minuten, ab 9 Stunden
+        45 Minuten. Der Wert bleibt pro Dienst überschreibbar; bestehende Dienste werden nicht
+        verändert. Außerdem wird die Staffel im Stundenzettel der Zeiterfassung als Vorbelegung
+        für das Pausenfeld verwendet.
+      </p>
+
+      <h3>Pausen von bezahlten Stunden abziehen</h3>
+      <p>
+        Ist dieser Schalter aktiviert, zieht der AssistenzPlaner die eingetragenen unbezahlten
+        Pausenminuten von den gewerteten Stunden und dem Grundlohn ab — in Auswertungen und
+        Stundennachweis, für beide Abrechnungsarten (Soll und Ist), rückwirkend schaltbar.
+        Zuschläge bleiben davon unberührt. Solange der Schalter ausgeschaltet ist, sind Pausen
+        eine reine Info-Kennzahl ohne Auswirkung auf die Lohnberechnung.
+      </p>
+
+      <HinweisBox titel="Hinweis: Beide Schalter gelten kontoweit">
+        <p>
+          Die Pausenregelung und der Pausenabzug gelten für alle Teams Ihres Kontos. Eine
+          Team-spezifische Einstellung ist hier nicht möglich.
+        </p>
+      </HinweisBox>
+
+      <h2 id="weitere-schalter">Weitere Schalter</h2>
+      <p>
+        Die folgenden Schalter sind ebenfalls unter Zuschläge zu finden und gelten kontoweit:
+      </p>
+      <ul>
+        <li>
+          <strong>Stundenzettel automatisch genehmigen</strong> — eingereichte Zeiteinträge werden
+          ohne manuelle Prüfung sofort bestätigt und in die Auswertung übernommen.
+        </li>
+        <li>
+          <strong>Zeiterfassung aktivieren</strong> — schaltet die Zeiterfassung für alle Teams
+          frei. Solange ausgeschaltet, können keine neuen Zeiteinträge angelegt werden; bestehende
+          Einträge bleiben erhalten. Das Ein- und Ausschalten erfordert eine Bestätigung.
+        </li>
+        <li>
+          <strong>Ersatzruhetag-Konto für Feiertage</strong> — wer an einem gesetzlichen Feiertag
+          arbeitet, erhält nach § 11 Abs. 3 ArbZG einen Ausgleichs-Ruhetag gutgeschrieben. Der
+          Schalter kann ausgeschaltet werden, wenn kein Ausgleichskonto geführt werden soll.
+        </li>
+        <li>
+          <strong>Team-Dienst (Teamsitzung)</strong> — erlaubt das Anlegen von Team-Einträgen im
+          Dienstplan. Ein Team-Eintrag schreibt allen Assistenzkräften des Teams die eingestellte
+          Stunden-Gutschrift als Arbeitszeit gut.
+        </li>
+        <li>
+          <strong>Urlaubsberechnung</strong> — wählen Sie zwischen dem gesetzlichen
+          13-Wochen-Durchschnitt (§ 11 BUrlG) und einem festen Faktor pro Arbeitsstunde.
+        </li>
+      </ul>
+
+      <h2 id="rollen">Was sehen Assistenzkräfte?</h2>
+      <p>
+        Assistenzkräfte erreichen die Einstellungen über das Menü und sehen dort zwei Bereiche:
+        <strong> Profilinformationen</strong> (Name, E-Mail, Passwort ändern) und{" "}
+        <strong>Kalender-Export</strong>. Alle übrigen Bereiche — Schichtmodelle, Firmenlogo,
+        Zuschläge und die konto&shy;weiten Schalter — sind ausschließlich für
+        Administrierende sichtbar.
+      </p>
+
+      <h2 id="siehe-auch">Siehe auch</h2>
+      <p className="mb-6">Diese Bereiche arbeiten eng mit den Einstellungen zusammen:</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <SeeAlsoLink title="Auswertungen" href="/handbuch/auswertungen" icon={FileText} />
+        <SeeAlsoLink title="Zeiterfassung" href="/handbuch/zeiterfassung" icon={CalendarDays} />
+        <SeeAlsoLink title="Dienstplan" href="/handbuch/dienstplan" icon={Settings} />
+        <SeeAlsoLink title="Assistenten" href="/handbuch/assistenten" icon={Users} />
       </div>
     </ArtikelShell>
   );

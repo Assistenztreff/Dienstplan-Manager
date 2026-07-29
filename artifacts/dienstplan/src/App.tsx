@@ -36,6 +36,7 @@ import {
   HandbuchZeiterfassung,
   HandbuchAbwesenheiten,
   HandbuchAuswertungen,
+  HandbuchEinstellungen,
 } from "@/pages/handbuch";
 import Startseite from "@/pages/startseite";
 import NotFound from "@/pages/not-found";
@@ -136,6 +137,7 @@ function Router() {
         <Route path="/handbuch/zeiterfassung" component={HandbuchZeiterfassung} />
         <Route path="/handbuch/abwesenheiten" component={HandbuchAbwesenheiten} />
         <Route path="/handbuch/auswertungen" component={HandbuchAuswertungen} />
+        <Route path="/handbuch/einstellungen" component={HandbuchEinstellungen} />
         <Route>{() => null}</Route>
       </Switch>
     );
@@ -175,6 +177,7 @@ function Router() {
         <Route path="/handbuch/zeiterfassung" component={HandbuchZeiterfassung} />
         <Route path="/handbuch/abwesenheiten" component={HandbuchAbwesenheiten} />
         <Route path="/handbuch/auswertungen" component={HandbuchAuswertungen} />
+        <Route path="/handbuch/einstellungen" component={HandbuchEinstellungen} />
         {/* Preise & Premium: Ziel der Free-Limit-Hinweise (Upgrade-Anfrage). */}
         {isAdminRole(currentUser.role) && <Route path="/preise" component={Preise} />}
         {isAdminRole(currentUser.role) && currentUser.accountType === "dienstleister" && (
