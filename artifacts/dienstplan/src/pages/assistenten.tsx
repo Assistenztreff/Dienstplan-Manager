@@ -11,9 +11,6 @@ import {
   useInviteUser,
   useListTeamMembers,
   useRemoveTeamMember,
-  getHoursBalance,
-  getMonthClosingDiff,
-  ApiError,
   getListUsersQueryKey,
   getListContractsQueryKey,
   getListTeamMembersQueryKey,
@@ -48,16 +45,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Mail, Phone, MapPin, Calendar, Pencil, UserPlus, UserMinus, Send, Copy, Check, Download, ChevronLeft, ChevronRight, Trash2, Lock } from "lucide-react";
+import { Plus, Mail, Phone, MapPin, Calendar, Pencil, UserPlus, UserMinus, Send, Copy, Check, Download, Trash2, Lock } from "lucide-react";
 import { PlanLimitBanner, PlanUpgradeLink } from "@/components/plan-limit-banner";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { toast } from "sonner";
 import { exportStatementSectionsPdf, type StatementRecalculation } from "@/lib/pdf-export";
-import {
-  computeRecalculationMonthTotals,
-  mapDiffRowsToRecalculationRows,
-} from "@/lib/recalculation-mapping";
+import { StatementExportDialog } from "@/components/statement-export-dialog";
 
 type User = {
   id: number;
@@ -786,205 +780,6 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
   );
 }
 
-type ExportDialogProps = {
-  open: boolean;
-  onClose: () => void;
-  userId: number;
-  userName: string;
-};
-
-function monthIndex(date: Date): number {
-  return date.getFullYear() * 12 + date.getMonth();
-}
-
-function ExportDialog({ open, onClose, userId, userName }: ExportDialogProps) {
-  const { selectedTeamId } = useTeam();
-  const [fromDate, setFromDate] = useState(new Date());
-  const [toDate, setToDate] = useState(new Date());
-  const [isExporting, setIsExporting] = useState(false);
-
-  const fromIndex = monthIndex(fromDate);
-  const toIndex = monthIndex(toDate);
-  const rangeInvalid = toIndex < fromIndex;
-  const monthCount = rangeInvalid ? 0 : toIndex - fromIndex + 1;
-
-  const fromLabel = format(fromDate, "MMMM yyyy", { locale: de });
-  const toLabel = format(toDate, "MMMM yyyy", { locale: de });
-
-  const stepFrom = (delta: number) =>
-    setFromDate((d) => new Date(d.getFullYear(), d.getMonth() + delta, 1));
-  const stepTo = (delta: number) =>
-    setToDate((d) => new Date(d.getFullYear(), d.getMonth() + delta, 1));
-
-  async function handleExport() {
-    if (rangeInvalid) {
-      toast.error("Der Bis-Monat darf nicht vor dem Von-Monat liegen.");
-      return;
-    }
-    setIsExporting(true);
-    try {
-      const sections: Array<{ balance: any; month: number; year: number; monthLabel: string }> = [];
-      const months: Array<{ month: number; year: number; monthLabel: string; balances: any[] }> = [];
-
-      for (let i = 0; i < monthCount; i++) {
-        const cursor = new Date(fromDate.getFullYear(), fromDate.getMonth() + i, 1);
-        const month = cursor.getMonth() + 1;
-        const year = cursor.getFullYear();
-        const monthLabel = format(cursor, "MMMM yyyy", { locale: de });
-
-        const raw = (await getHoursBalance({
-          month,
-          year,
-          ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
-        })) as any[];
-        const balances = raw.filter((b) => b.userId === userId);
-        months.push({ month, year, monthLabel, balances });
-        const balance = balances[0];
-        if (balance) {
-          sections.push({ balance, month, year, monthLabel });
-        }
-      }
-
-      if (sections.length === 0) {
-        toast.error("Keine Auswertungsdaten fuer den gewaehlten Zeitraum gefunden.");
-        return;
-      }
-
-      // Nachberechnung: je exportiertem Monat die Differenzen des jeweiligen
-      // Vormonats laden (sofern dieser abgeschlossen wurde), auf die
-      // exportierte Assistenzkraft filtern und als eigene Position in den
-      // PDF-Nachweis aufnehmen — analog zum Export aus der Auswertung.
-      const recalculations: StatementRecalculation[] = [];
-      let recalcFetchFailed = false;
-      for (const m of months) {
-        const prev = new Date(m.year, m.month - 2, 1);
-        try {
-          const diff = await getMonthClosingDiff({
-            month: prev.getMonth() + 1,
-            year: prev.getFullYear(),
-            ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
-          });
-          if (!diff.closed || diff.rows.length === 0) continue;
-          const rows = mapDiffRowsToRecalculationRows(diff.rows, userId);
-          if (rows.length === 0) continue;
-          recalculations.push({
-            monthLabel: m.monthLabel,
-            prevLabel: format(prev, "MMMM yyyy", { locale: de }),
-            closedAt: diff.closedAt,
-            rows,
-            monthTotals: computeRecalculationMonthTotals(m.balances),
-          });
-        } catch (err) {
-          // Kein Abschluss/kein Zugriff (403/404) → PDF ohne Nachberechnungs-
-          // Seite. Echte Fehler (Netz/Server) NICHT verschlucken: der Export
-          // läuft weiter, aber der Nutzer bekommt eine sichtbare Warnung.
-          if (err instanceof ApiError && (err.status === 403 || err.status === 404)) {
-            continue;
-          }
-          recalcFetchFailed = true;
-          console.error(err);
-        }
-      }
-      if (recalcFetchFailed) {
-        toast.warning(
-          "Nachberechnung konnte nicht geladen werden — das PDF wird ohne Nachberechnungs-Seite erstellt.",
-        );
-      }
-
-      const safeName = userName.replace(/[^\p{L}\p{N}]+/gu, "_").replace(/^_+|_+$/g, "");
-      const first = sections[0];
-      const last = sections[sections.length - 1];
-      const rangePart =
-        sections.length === 1
-          ? `${first.year}_${String(first.month).padStart(2, "0")}`
-          : `${first.year}_${String(first.month).padStart(2, "0")}-${last.year}_${String(last.month).padStart(2, "0")}`;
-
-      await exportStatementSectionsPdf({
-        sections,
-        teamId: selectedTeamId,
-        filename: `Stundennachweis_${safeName}_${rangePart}.pdf`,
-        recalculations,
-      });
-      onClose();
-    } catch (err) {
-      toast.error("PDF-Export fehlgeschlagen.");
-      console.error(err);
-    } finally {
-      setIsExporting(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="font-serif text-xl">Stundennachweis exportieren</DialogTitle>
-        </DialogHeader>
-
-        <div className="py-2 space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Einzelnachweis fuer{" "}
-            <span className="font-medium text-foreground">{userName}</span> als PDF.
-            Waehle den gewuenschten Zeitraum – pro Monat entsteht eine Seite.
-          </p>
-
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Von-Monat</Label>
-              <div className="flex items-center justify-between gap-2">
-                <Button variant="outline" size="icon" onClick={() => stepFrom(-1)} disabled={isExporting}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="font-medium text-sm flex-1 text-center" data-testid="export-from-label">
-                  {fromLabel}
-                </span>
-                <Button variant="outline" size="icon" onClick={() => stepFrom(1)} disabled={isExporting}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Bis-Monat</Label>
-              <div className="flex items-center justify-between gap-2">
-                <Button variant="outline" size="icon" onClick={() => stepTo(-1)} disabled={isExporting}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="font-medium text-sm flex-1 text-center" data-testid="export-to-label">
-                  {toLabel}
-                </span>
-                <Button variant="outline" size="icon" onClick={() => stepTo(1)} disabled={isExporting}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {rangeInvalid ? (
-            <p className="text-xs text-destructive">
-              Der Bis-Monat darf nicht vor dem Von-Monat liegen.
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              {monthCount === 1 ? "1 Monat" : `${monthCount} Monate`} werden exportiert.
-            </p>
-          )}
-        </div>
-
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose} disabled={isExporting}>
-            Abbrechen
-          </Button>
-          <Button onClick={handleExport} disabled={isExporting || rangeInvalid} className="gap-2">
-            <Download className="h-4 w-4" />
-            {isExporting ? "Exportiere..." : "Als PDF exportieren"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export default function Assistenten() {
   const { currentUser } = useAuth();
   const queryClient = useQueryClient();
@@ -1314,11 +1109,20 @@ export default function Assistenten() {
         />
       )}
       {exportUser && (
-        <ExportDialog
+        <StatementExportDialog
           open={!!exportUser}
           onClose={() => setExportUser(undefined)}
-          userId={exportUser.id}
-          userName={exportUser.name}
+          teamId={selectedTeamId}
+          assistantFilter={exportUser.id}
+          assistantName={exportUser.name}
+          rangeFromSections
+          description={
+            <>
+              Einzelnachweis fuer{" "}
+              <span className="font-medium text-foreground">{exportUser.name}</span> als PDF.
+              Waehle den gewuenschten Zeitraum – pro Monat entsteht eine Seite.
+            </>
+          }
         />
       )}
       {/* Bestaetigung vor dem Entfernen aus dem Team; bei der LETZTEN
