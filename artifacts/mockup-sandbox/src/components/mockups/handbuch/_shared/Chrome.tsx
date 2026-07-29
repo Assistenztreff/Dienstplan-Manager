@@ -44,14 +44,15 @@ export const CHAPTERS: Array<{
   {
     title: "Modul-Übersicht",
     items: [
-      { title: "Dashboard", href: "#" },
+      { title: "Dashboard", href: "#", id: "dashboard" },
       { title: "Dienstplan", href: "#", id: "dienstplan" },
-      { title: "Assistenten", href: "#" },
+      { title: "Assistenten", href: "#", id: "assistenten" },
       { title: "Zeiterfassung", href: "#", id: "zeiterfassung" },
-      { title: "Abwesenheiten", href: "#" },
+      { title: "Abwesenheiten", href: "#", id: "abwesenheiten" },
       { 
         title: "Auswertungen", 
         href: "#",
+        id: "auswertungen",
         children: [
           { title: "Premium-Lohnauswertung", href: "#", isPremium: true },
           { title: "PDF-Stundennachweis", href: "#", isPremium: true },
@@ -66,6 +67,7 @@ export const CHAPTERS: Array<{
       { 
         title: "Einstellungen", 
         href: "#",
+        id: "einstellungen",
         children: [
           { title: "Schichtmodelle", href: "#" },
           { title: "Zuschläge", href: "#" },

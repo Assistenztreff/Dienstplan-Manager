@@ -86,4 +86,5 @@
 - [401 self-heal in web client](query-401-self-heal.md) — DB restore wipes sessions; stale cookies loop 401 with "logged-in" UI. Client resyncs via QueryCache onError; suspect stale session before missing data.
 - [Handbuch screenshot regeneration](handbuch-screenshot-capture.md) — env-gated capture spec + fingerprint staleness check in merge validation; private-DB escape hatch for lock contention.
 - [Completion-Validation Poll-Budget](completion-validation-poll-budget.md) — volle e2e-Suite (~36 Min) sprengt das Validierungs-Budget; e2e als Workflow grün laufen lassen, dann skip_validation_reason mit Nachweis.
+- [Validation poll budget vs. E2E-Kette](validation-poll-budget-e2e.md) — >45-min-e2e-Validierung stirbt an POLL_BUDGET_EXCEEDED und hinterlässt stale run.locks; Lock-PID prüfen/löschen, ggf. dokumentierter Skip.
 - [Unpaid info-only shift types](unpaid-info-shift-types.md) — info categories keep valuedHours (no surcharges); Soll/Lohn exclusion lives only in the hours-balance INFO_ONLY filter.
