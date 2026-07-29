@@ -29,3 +29,16 @@ against the still-drifted DB.
   IF NOT EXISTS, backfill, SET NOT NULL, guarded ADD CONSTRAINT) then push.
 - Always restart the API-server workflow afterwards so it runs against the
   reconciled schema.
+
+## Umgekehrter Fall: Dev-DB ist der Merge VORAUS (in-flight Task-Agent)
+
+Post-merge push can also fail because the dev DB has EXTRA columns that main's
+schema doesn't know yet — an in-flight schema-change task agent already added
+them (shared staging DB). drizzle push then proposes DROP COLUMN (data-loss
+prompt, non-TTY abort).
+
+**How to apply:** Do NOT drop the columns and do NOT force the push — that
+breaks the running task agent. Verify via dry-run (`drizzle-kit push --strict
+--verbose < /dev/null`) that the DROPs are the ONLY pending statements; if so,
+the failure is benign. Leave it; interim merges will re-fail with the same
+warning until the schema-change task merges, after which push runs clean.
