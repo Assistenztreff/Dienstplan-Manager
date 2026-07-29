@@ -33,12 +33,28 @@ const FINGERPRINT_FILE = path.resolve(
 const INPUT_DIRS = ["src", "public"];
 const INPUT_FILES = ["index.html"];
 
+/**
+ * Nicht-Render-Dateien (Task #632): Änderungen hieran können das gerenderte
+ * UI nicht beeinflussen und dürfen den Check daher nicht rot machen.
+ * - Unit-Tests (*.test.*) und Specs (*.spec.*) samt __tests__-Ordner
+ * - Reine Typdeklarationen (*.d.ts) — compile-time only
+ */
+const EXCLUDED_DIR_NAMES = new Set(["__tests__"]);
+const EXCLUDED_FILE_RE = /(\.test\.[^./]+|\.spec\.[^./]+|\.d\.ts)$/;
+
+function isExcludedFile(name) {
+  return EXCLUDED_FILE_RE.test(name);
+}
+
 function walk(dir) {
   const out = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...walk(full));
-    else if (entry.isFile()) out.push(full);
+    if (entry.isDirectory()) {
+      if (!EXCLUDED_DIR_NAMES.has(entry.name)) out.push(...walk(full));
+    } else if (entry.isFile()) {
+      if (!isExcludedFile(entry.name)) out.push(full);
+    }
   }
   return out;
 }
