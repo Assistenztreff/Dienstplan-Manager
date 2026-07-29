@@ -6,7 +6,11 @@ import { defineConfig } from "vitest/config";
 // dass parallele Task-Umgebungen sich gegenseitig kippen.
 export default defineConfig({
   test: {
-    include: ["src/migrate-prod.fresh-db.test.ts"],
+    include: [
+      "src/migrate-prod.fresh-db.test.ts",
+      "src/setup-test-accounts.legacy-cleanup.db.test.ts",
+    ],
+    fileParallelism: false,
     globalSetup: ["./vitest.db.global-setup.ts"],
   },
 });

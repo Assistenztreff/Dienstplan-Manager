@@ -12,3 +12,5 @@ Unit tests needing real Postgres (e.g. pruning/retention SQL) must run against t
 **Teardown:** `await pool.end()` in afterAll or vitest hangs.
 
 Example: `artifacts/api-server/src/lib/platform-errors.retention.test.ts`.
+
+**Throwaway full-schema DB variant:** scripts that reshape the whole team layout (e.g. test-account re-setup) must NOT run against the shared `_test` DB. Instead create a uniquely named throwaway DB, push the full Drizzle schema via `pnpm --filter @workspace/db run push` (treat "Interactive prompts require a TTY" in output as failure even with exit 0), seed the minimal core rows, run the real script via spawnSync with DATABASE_URL+APP_DATABASE_URL overridden, drop the DB in afterAll. Example: `scripts/src/setup-test-accounts.legacy-cleanup.db.test.ts` (wired into scripts' vitest.db.config.ts; plain `test` excludes `**/*.db.test.ts`).
