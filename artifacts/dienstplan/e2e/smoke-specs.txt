@@ -23,3 +23,6 @@ dienstplan-nachweis-export.spec.ts
 dienstplan-dienste-team-filter.spec.ts
 # - Assistenten-Dashboard: Urlaubstag-Bewertung in der Resturlaub-Karte
 dienstplan-dashboard-urlaubstag-bewertung-assistent-ui.spec.ts
+# - Operator-Fehlerliste: Zeitraum-Schnellauswahl (Presets befuellen Felder,
+#   serverseitige Filterung an den Raendern; ~1,2 min solo)
+dienstplan-operator-fehler-schnellauswahl.spec.ts
