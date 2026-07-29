@@ -6,6 +6,10 @@ import {
   touchTestDbComment,
 } from "@workspace/test-fixtures/test-db-name";
 import { deriveRunLockPath } from "@workspace/test-fixtures/run-lock";
+import {
+  PROD_SPEC_API_PORT as PROD_SPEC_API_PORT_NUM,
+  PROD_SPEC_WEB_PORT as PROD_SPEC_WEB_PORT_NUM,
+} from "./e2e/helpers/prod-spec-ports";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -43,8 +47,10 @@ import path from "node:path";
 const API_PORT = process.env.E2E_API_PORT ?? "8099";
 const WEB_PORT = process.env.E2E_WEB_PORT ?? "5199";
 
-const PROD_SPEC_API_PORT = "8097";
-const PROD_SPEC_WEB_PORT = "5197";
+// Gemeinsame Quelle mit dem Prod-Modus-Spec (Task #639): Ports fuer den
+// Waisen-Reaper und das Spec kommen aus e2e/helpers/prod-spec-ports.ts.
+const PROD_SPEC_API_PORT = String(PROD_SPEC_API_PORT_NUM);
+const PROD_SPEC_WEB_PORT = String(PROD_SPEC_WEB_PORT_NUM);
 const chromiumExecutable = process.env.REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE;
 
 // Externe Override-URL? Dann gegen diese testen, ohne eigenen Stack.

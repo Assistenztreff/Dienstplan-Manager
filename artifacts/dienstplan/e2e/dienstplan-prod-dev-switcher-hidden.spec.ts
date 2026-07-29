@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { test, expect, request as playwrightRequest } from "@playwright/test";
 import { deriveTestDbTarget } from "@workspace/test-fixtures/test-db-name";
 import { ADMIN_EMAIL, ADMIN_PASSWORD } from "./helpers/teams";
+import { PROD_SPEC_API_PORT, PROD_SPEC_WEB_PORT } from "./helpers/prod-spec-ports";
 
 /**
  * Task #174 — Sicherstellen, dass der Test-Nutzer-Wechsler in Produktion
@@ -34,8 +35,9 @@ import { ADMIN_EMAIL, ADMIN_PASSWORD } from "./helpers/teams";
  *      Requests auf /api/auth/dev-*.
  */
 
-const API_PORT = 8097;
-const WEB_PORT = 5197;
+// Gemeinsame Quelle mit dem Waisen-Reaper in playwright.config.ts (Task #639).
+const API_PORT = PROD_SPEC_API_PORT;
+const WEB_PORT = PROD_SPEC_WEB_PORT;
 const API_URL = `http://localhost:${API_PORT}`;
 const PREVIEW_URL = `http://localhost:${WEB_PORT}`;
 
