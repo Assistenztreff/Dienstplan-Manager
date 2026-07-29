@@ -33,7 +33,7 @@
     "verify-account-separation": "tsx ./src/verify-account-separation.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --exclude '**/migrate-prod.fresh-db.test.ts'",
-    "test:db": "vitest run src/migrate-prod.fresh-db.test.ts"
+    "test:db": "vitest run -c vitest.db.config.ts"
   },
   "dependencies": {
     "@workspace/db": "workspace:*",
