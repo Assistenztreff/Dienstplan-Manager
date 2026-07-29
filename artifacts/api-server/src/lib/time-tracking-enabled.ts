@@ -98,6 +98,85 @@ export async function getTimeTrackingEnabledTeamIds(
  * des ARBEITGEBERS (aktiv, sobald der Eigentümer EINES ihrer Teams die
  * Zeiterfassung eingeschaltet hat — analog userHasFeatureViaTeamOwner).
  */
+/** Effektive Pausenregelung (Vorbefüllung) — Felder der Konto-Zeile. */
+export type PauseRule = {
+  pauseAutoEnabled: boolean;
+  pauseThreshold1Hours: number;
+  pauseMinutes1: number;
+  pauseThreshold2Hours: number;
+  pauseMinutes2: number;
+};
+
+const PAUSE_RULE_OFF: PauseRule = {
+  pauseAutoEnabled: false,
+  pauseThreshold1Hours: 6,
+  pauseMinutes1: 30,
+  pauseThreshold2Hours: 9,
+  pauseMinutes2: 45,
+};
+
+const pauseRuleSelect = {
+  pauseAutoEnabled: allowanceSettingsTable.pauseAutoEnabled,
+  pauseThreshold1Hours: allowanceSettingsTable.pauseThreshold1Hours,
+  pauseMinutes1: allowanceSettingsTable.pauseMinutes1,
+  pauseThreshold2Hours: allowanceSettingsTable.pauseThreshold2Hours,
+  pauseMinutes2: allowanceSettingsTable.pauseMinutes2,
+};
+
+/**
+ * Effektive Pausenregelung für den ANGEMELDETEN Nutzer (Vorbefüllung des
+ * Pausenfelds im Zeiterfassungs-Dialog): Admin-artige Rollen = eigene
+ * Konto-Zeile; Assistenzkräfte = Regel des ersten Team-Eigentümers mit
+ * AKTIVIERTER Vorbefüllung (analog isTimeTrackingEnabledForUser). Ohne
+ * Zeile/Aktivierung gilt die sichere Default-Regel AUS.
+ */
+export async function getPauseRuleForUser(userId: number): Promise<PauseRule> {
+  const [user] = await db
+    .select({ role: usersTable.role })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+  if (!user) return PAUSE_RULE_OFF;
+  if (user.role !== "assistant") {
+    const [row] = await db
+      .select(pauseRuleSelect)
+      .from(allowanceSettingsTable)
+      .where(
+        and(
+          eq(allowanceSettingsTable.ownerId, userId),
+          isNull(allowanceSettingsTable.teamId),
+        ),
+      )
+      .limit(1);
+    return row ?? PAUSE_RULE_OFF;
+  }
+  const owners = await db
+    .select(pauseRuleSelect)
+    .from(teamMembersTable)
+    .innerJoin(teamsTable, eq(teamMembersTable.teamId, teamsTable.id))
+    .leftJoin(
+      allowanceSettingsTable,
+      and(
+        eq(allowanceSettingsTable.ownerId, teamsTable.ownerId),
+        isNull(allowanceSettingsTable.teamId),
+      ),
+    )
+    .where(eq(teamMembersTable.userId, userId))
+    // Deterministische Auflösung bei mehreren Arbeitgebern: kleinste Team-ID
+    // gewinnt (sonst hinge die Vorbefüllung von der DB-Zeilenreihenfolge ab).
+    .orderBy(teamsTable.id);
+  const active = owners.find((o) => o.pauseAutoEnabled === true);
+  return active
+    ? {
+        pauseAutoEnabled: true,
+        pauseThreshold1Hours: active.pauseThreshold1Hours ?? 6,
+        pauseMinutes1: active.pauseMinutes1 ?? 30,
+        pauseThreshold2Hours: active.pauseThreshold2Hours ?? 9,
+        pauseMinutes2: active.pauseMinutes2 ?? 45,
+      }
+    : PAUSE_RULE_OFF;
+}
+
 export async function isTimeTrackingEnabledForUser(
   userId: number,
 ): Promise<boolean> {

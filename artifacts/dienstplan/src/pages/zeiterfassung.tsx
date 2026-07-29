@@ -5,6 +5,7 @@ import {
   useListTimeEntries,
   useListUsers,
   useListShifts,
+  useGetTimeTrackingStatus,
   useConfirmTimeEntry,
   useConfirmTimeEntriesBatch,
   useCreateTimeEntry,
@@ -48,6 +49,7 @@ import { warnIfMonthClosed } from "@/lib/month-closing-warning";
 import { hasAccess } from "@/lib/entitlements";
 import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { useTimeTrackingEnabled } from "@/hooks/use-time-tracking-enabled";
+import { computeAutoPauseMinutes } from "@/lib/pause";
 import { AssistantFilter, useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 
 const SHIFT_TYPE_LABEL: Record<string, string> = {
@@ -129,6 +131,10 @@ export default function Zeiterfassung() {
   // Konto-Schalter „Zeiterfassung": bei AUS zeigt die Seite nur den Hinweis.
   const { enabled: timeTrackingEnabled, isLoading: statusLoading } =
     useTimeTrackingEnabled();
+  // Effektive Pausenregelung (Vorbefüllung des Pausenfelds) — kommt über den
+  // /time-tracking-status-Endpunkt, den auch Assistenzkräfte lesen dürfen.
+  const { data: ttStatus } = useGetTimeTrackingStatus();
+  const pauseRule = ttStatus?.pauseRule;
   const isAssistant = currentUser?.role === "assistant";
   // Premium-Feature strictTimeTracking: Bestätigen/Ablehnen von Ist-Zeiten.
   // UX-Gate — die autoritative Durchsetzung liegt beim Server (403).
@@ -225,8 +231,18 @@ export default function Zeiterfassung() {
   const [startInput, setStartInput] = useState("");
   const [endInput, setEndInput] = useState("");
   const [notes, setNotes] = useState("");
+  // Unbezahlte Pause (Minuten): Vorbefüllung gemäß Pausenregel; sobald der
+  // Nutzer das Feld anfasst, wird nicht mehr automatisch überschrieben.
+  const [pauseInput, setPauseInput] = useState("0");
+  const [pauseTouched, setPauseTouched] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Vorbefüllung neu berechnen (nur solange das Feld unberührt ist).
+  function autoPauseFor(start: Date, end: Date): string {
+    const minutes = Math.round((end.getTime() - start.getTime()) / 60000);
+    return String(computeAutoPauseMinutes(minutes, pauseRule ?? {}));
+  }
 
   // Manueller Zeiteintrag ohne Schichtbezug (z.B. Nacht-Eintrag über Mitternacht).
   const [manualOpen, setManualOpen] = useState(false);
@@ -237,6 +253,8 @@ export default function Zeiterfassung() {
   const [manualStart, setManualStart] = useState("");
   const [manualEnd, setManualEnd] = useState("");
   const [manualEndsNextDay, setManualEndsNextDay] = useState(false);
+  const [manualPause, setManualPause] = useState("0");
+  const [manualPauseTouched, setManualPauseTouched] = useState(false);
   const [manualNotes, setManualNotes] = useState("");
   const [manualError, setManualError] = useState<string | null>(null);
   const [manualSaving, setManualSaving] = useState(false);
@@ -325,7 +343,21 @@ export default function Zeiterfassung() {
     setStartInput(toLocalInput(shift.startTime));
     setEndInput(toLocalInput(shift.endTime));
     setNotes("");
+    setPauseInput(autoPauseFor(new Date(shift.startTime), new Date(shift.endTime)));
+    setPauseTouched(false);
     setFormError(null);
+  }
+
+  // Zeitänderung im Übernehmen-Dialog: Pause nachziehen, solange unberührt.
+  function onAdoptTimeChange(nextStart: string, nextEnd: string) {
+    setStartInput(nextStart);
+    setEndInput(nextEnd);
+    if (pauseTouched) return;
+    const s = new Date(nextStart);
+    const e = new Date(nextEnd);
+    if (!Number.isNaN(s.getTime()) && !Number.isNaN(e.getTime()) && e > s) {
+      setPauseInput(autoPauseFor(s, e));
+    }
   }
 
   function closeDialog() {
@@ -337,6 +369,8 @@ export default function Zeiterfassung() {
     setManualStart(nowTimeStr());
     setManualEnd(nowTimeStr());
     setManualEndsNextDay(false);
+    setManualPause("0");
+    setManualPauseTouched(false);
     setManualNotes("");
     setManualError(null);
     // Admin: bereits gewählte Assistenzkraft aus dem Filter übernehmen,
@@ -349,6 +383,29 @@ export default function Zeiterfassung() {
         : (currentUser?.id ?? null),
     );
     setManualOpen(true);
+  }
+
+  // Zeitänderung im manuellen Dialog: Pause nachziehen, solange unberührt.
+  function onManualTimeChange(next: {
+    date?: string;
+    start?: string;
+    end?: string;
+    endsNextDay?: boolean;
+  }) {
+    const date = next.date ?? manualDate;
+    const start = next.start ?? manualStart;
+    const end = next.end ?? manualEnd;
+    const endsNextDay = next.endsNextDay ?? manualEndsNextDay;
+    if (next.date !== undefined) setManualDate(next.date);
+    if (next.start !== undefined) setManualStart(next.start);
+    if (next.end !== undefined) setManualEnd(next.end);
+    if (next.endsNextDay !== undefined) setManualEndsNextDay(next.endsNextDay);
+    if (manualPauseTouched || !date || !start || !end) return;
+    const s = buildLocal(date, start);
+    const e = buildLocal(endsNextDay && end <= start ? addOneDay(date) : date, end);
+    if (!Number.isNaN(s.getTime()) && !Number.isNaN(e.getTime()) && e > s) {
+      setManualPause(autoPauseFor(s, e));
+    }
   }
 
   async function handleManualSave() {
@@ -378,6 +435,15 @@ export default function Zeiterfassung() {
       setManualError("Die Endzeit muss nach der Startzeit liegen.");
       return;
     }
+    const manualPauseMinutes = Number(manualPause);
+    if (
+      !Number.isFinite(manualPauseMinutes) ||
+      manualPauseMinutes < 0 ||
+      manualPauseMinutes > 1440
+    ) {
+      setManualError("Pause: bitte 0 bis 1440 Minuten angeben.");
+      return;
+    }
     // Admin erfasst für eine gewählte Assistenzkraft; Assistent für sich selbst.
     const targetUserId = isAdmin ? manualUserId : currentUser.id;
     if (targetUserId == null) {
@@ -392,6 +458,7 @@ export default function Zeiterfassung() {
           ...(isAdmin && selectedTeamId != null ? { teamId: selectedTeamId } : {}),
           actualStart: start.toISOString(),
           actualEnd: end.toISOString(),
+          pauseMinutes: manualPauseMinutes,
           ...(manualNotes.trim() ? { notes: manualNotes.trim() } : {}),
         },
       });
@@ -433,6 +500,11 @@ export default function Zeiterfassung() {
       setFormError("Die Endzeit muss nach der Startzeit liegen.");
       return;
     }
+    const pauseMinutes = Number(pauseInput);
+    if (!Number.isFinite(pauseMinutes) || pauseMinutes < 0 || pauseMinutes > 1440) {
+      setFormError("Pause: bitte 0 bis 1440 Minuten angeben.");
+      return;
+    }
     setSaving(true);
     try {
       await createEntry.mutateAsync({
@@ -441,6 +513,7 @@ export default function Zeiterfassung() {
           shiftId: dialogShift.id,
           actualStart: start.toISOString(),
           actualEnd: end.toISOString(),
+          pauseMinutes,
           ...(notes.trim() ? { notes: notes.trim() } : {}),
         },
       });
@@ -717,7 +790,7 @@ export default function Zeiterfassung() {
                 <Input
                   type="datetime-local"
                   value={startInput}
-                  onChange={(e) => setStartInput(e.target.value)}
+                  onChange={(e) => onAdoptTimeChange(e.target.value, endInput)}
                   data-testid="adopt-start"
                 />
               </div>
@@ -726,9 +799,29 @@ export default function Zeiterfassung() {
                 <Input
                   type="datetime-local"
                   value={endInput}
-                  onChange={(e) => setEndInput(e.target.value)}
+                  onChange={(e) => onAdoptTimeChange(startInput, e.target.value)}
                   data-testid="adopt-end"
                 />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Unbezahlte Pause (Minuten)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="1440"
+                  step="5"
+                  value={pauseInput}
+                  onChange={(e) => {
+                    setPauseTouched(true);
+                    setPauseInput(e.target.value);
+                  }}
+                  data-testid="adopt-pause"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {pauseRule?.pauseAutoEnabled
+                    ? "Automatisch anhand der Pausenregelung vorbefüllt — bei Bedarf anpassen."
+                    : "Unbezahlte Pausenzeit dieses Eintrags (0 = keine Pause)."}
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label>Notiz (optional)</Label>
@@ -834,7 +927,7 @@ export default function Zeiterfassung() {
               <Input
                 type="date"
                 value={manualDate}
-                onChange={(e) => setManualDate(e.target.value)}
+                onChange={(e) => onManualTimeChange({ date: e.target.value })}
                 data-testid="manual-date"
               />
             </div>
@@ -844,7 +937,7 @@ export default function Zeiterfassung() {
                 <Input
                   type="time"
                   value={manualStart}
-                  onChange={(e) => setManualStart(e.target.value)}
+                  onChange={(e) => onManualTimeChange({ start: e.target.value })}
                   data-testid="manual-start"
                 />
               </div>
@@ -853,7 +946,7 @@ export default function Zeiterfassung() {
                 <Input
                   type="time"
                   value={manualEnd}
-                  onChange={(e) => setManualEnd(e.target.value)}
+                  onChange={(e) => onManualTimeChange({ end: e.target.value })}
                   data-testid="manual-end"
                 />
               </div>
@@ -870,9 +963,29 @@ export default function Zeiterfassung() {
               <Switch
                 id="manual-ends-next-day"
                 checked={manualEndsNextDay}
-                onCheckedChange={setManualEndsNextDay}
+                onCheckedChange={(v) => onManualTimeChange({ endsNextDay: v })}
                 data-testid="manual-ends-next-day"
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Unbezahlte Pause (Minuten)</Label>
+              <Input
+                type="number"
+                min="0"
+                max="1440"
+                step="5"
+                value={manualPause}
+                onChange={(e) => {
+                  setManualPauseTouched(true);
+                  setManualPause(e.target.value);
+                }}
+                data-testid="manual-pause"
+              />
+              <p className="text-xs text-muted-foreground">
+                {pauseRule?.pauseAutoEnabled
+                  ? "Automatisch anhand der Pausenregelung vorbefüllt — bei Bedarf anpassen."
+                  : "Unbezahlte Pausenzeit dieses Eintrags (0 = keine Pause)."}
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label>Notiz (optional)</Label>

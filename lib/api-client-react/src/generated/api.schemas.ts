@@ -803,6 +803,8 @@ export interface AllowanceSettings {
   pauseThreshold2Hours: number;
   /** Pausenminuten der Stufe 2 (Standard 45). */
   pauseMinutes2: number;
+  /** Pausen von den bezahlten Stunden abziehen? Konto-global (kein Team-Override); Standard AUS. Bei AN reduzieren die unbezahlten Pausenminuten die gewerteten Stunden und den Grundlohn der Arbeitsdienste in BEIDEN Abrechnungsarten (zur Lesezeit angewandt); Zuschlagsstunden bleiben unberührt. */
+  deductPausesEnabled: boolean;
   updatedAt: string;
 }
 
@@ -919,11 +921,26 @@ export interface AllowanceSettingsInput {
      * @maximum 1440
      */
   pauseMinutes2?: number;
+  /** Pausen von den bezahlten Stunden abziehen (konto-global, kein Team-Override). */
+  deductPausesEnabled?: boolean;
 }
+
+/**
+ * Effektive Pausenregelung für den angemeldeten Nutzer (Admin = eigene Konto-Einstellung, Assistenzkraft = Regel des ersten Team-Eigentümers mit aktivierter Vorbefüllung). Dient der Vorbefüllung des Pausenfelds im Zeiterfassungs-Dialog.
+ */
+export type TimeTrackingStatusPauseRule = {
+  pauseAutoEnabled: boolean;
+  pauseThreshold1Hours: number;
+  pauseMinutes1: number;
+  pauseThreshold2Hours: number;
+  pauseMinutes2: number;
+};
 
 export interface TimeTrackingStatus {
   /** true, wenn die Zeiterfassung für den angemeldeten Nutzer effektiv aktiv ist (Admin = eigene Konto-Einstellung, Assistenzkraft = mindestens ein Team-Eigentümer hat sie aktiviert). */
   enabled: boolean;
+  /** Effektive Pausenregelung für den angemeldeten Nutzer (Admin = eigene Konto-Einstellung, Assistenzkraft = Regel des ersten Team-Eigentümers mit aktivierter Vorbefüllung). Dient der Vorbefüllung des Pausenfelds im Zeiterfassungs-Dialog. */
+  pauseRule?: TimeTrackingStatusPauseRule;
 }
 
 export interface BrandingSettings {
@@ -996,6 +1013,8 @@ export interface TimeEntry {
   actualStart: string;
   actualEnd: string;
   actualHours?: number;
+  /** Unbezahlte Pausenminuten des Ist-Eintrags (Vorbefüllung gemäß Pausenregel, pro Eintrag überschreibbar). Reduziert die gewerteten Stunden nur bei aktivem Konto-Schalter deductPausesEnabled. */
+  pauseMinutes?: number;
   status: TimeEntryStatus;
   /** @nullable */
   notes?: string | null;
@@ -1014,12 +1033,24 @@ export interface TimeEntryInput {
   shiftId?: number;
   actualStart: string;
   actualEnd: string;
+  /**
+     * Unbezahlte Pausenminuten (überschreibbare Vorbefüllung gemäß Pausenregel).
+     * @minimum 0
+     * @maximum 1440
+     */
+  pauseMinutes?: number;
   notes?: string;
 }
 
 export interface TimeEntryUpdate {
   actualStart?: string;
   actualEnd?: string;
+  /**
+     * Unbezahlte Pausenminuten.
+     * @minimum 0
+     * @maximum 1440
+     */
+  pauseMinutes?: number;
   /** @nullable */
   notes?: string | null;
 }

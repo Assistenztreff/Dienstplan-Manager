@@ -98,6 +98,8 @@ export interface BalanceTimeEntry {
   holidayHours?: number | null;
   /** Team des Eintrags — bestimmt die anzuwendenden Zuschlags-Prozente. */
   teamId?: number | null;
+  /** Unbezahlte Pausenminuten des Ist-Eintrags (Abzug nur bei aktivem Konto-Schalter). */
+  pauseMinutes?: number | null;
   // Vergütung (Geld) des verknüpften Dienstmodells — für die Premium-
   // Lohnauswertung (Point 6). compensationPercent nur bei "percentage",
   // compensationFlatCents (Cent, dauerunabhängig) nur bei "flat".
@@ -246,6 +248,19 @@ export function computeHoursBalanceRow(params: {
    * Abrechnungsarten (wie Lohnfortzahlung). Keine Zuschläge.
    */
   teamsitzungStunden?: number;
+  /**
+   * Konto-Schalter „Pausen von bezahlten Stunden abziehen" je Team
+   * (Konto-Zeile des Team-Eigentümers, KONTO-GLOBAL — kein Team-Override).
+   * Bei AN reduzieren die unbezahlten Pausenminuten die gewerteten Stunden
+   * und den Grundlohn der Arbeitsdienste — in BEIDEN Abrechnungsarten
+   * (SOLL: shifts.pauseMinutes, IST: time_tracking.pauseMinutes). Zur
+   * Lesezeit angewandt (rückwirkend schaltbar). Zuschlagsstunden bleiben
+   * unberührt (die zeitliche Lage der Pause ist unbekannt). Abwesenheiten
+   * und Info-Kategorien tragen keine Pausen. Ohne Eintrag/teamId gilt
+   * `deductPausesFallback` (Default false = Bestandsschutz).
+   */
+  deductPausesByTeam?: Map<number, boolean>;
+  deductPausesFallback?: boolean;
 }): HoursBalanceRow {
   const { userId, userName, timeEntries, allowance, allowanceByTeam, contract } = params;
   // Team-Einträge (Teamsitzungen) selbst tragen keine Stunden — die Gutschrift
@@ -267,6 +282,22 @@ export function computeHoursBalanceRow(params: {
   const percentsForTeam = (teamId?: number | null): AllowancePercents =>
     (teamId != null ? allowanceByTeam?.get(teamId) : undefined) ?? allowance;
   const percentsFor = (s: BalanceShift): AllowancePercents => percentsForTeam(s.teamId);
+
+  // Pausen-Abzug (Konto-Schalter je Team-Eigentümer): gewertete Stunden eines
+  // Arbeitsdienstes/-eintrags abzüglich seiner Pausenminuten, nie unter 0.
+  const deductPausesFor = (teamId?: number | null): boolean =>
+    (teamId != null ? params.deductPausesByTeam?.get(teamId) : undefined) ??
+    params.deductPausesFallback ??
+    false;
+  const effectiveValuedHours = (e: {
+    valuedHours?: number | null;
+    pauseMinutes?: number | null;
+    teamId?: number | null;
+  }): number => {
+    const raw = e.valuedHours ?? 0;
+    if (!deductPausesFor(e.teamId)) return raw;
+    return Math.max(0, raw - (e.pauseMinutes ?? 0) / 60);
+  };
 
   const workShifts = shifts.filter(isWorkShift);
 
@@ -290,7 +321,7 @@ export function computeHoursBalanceRow(params: {
   let holidaySurchargeHours: number;
 
   if (billingMethod === "IST") {
-    valuedHours = workEntries.reduce((acc, e) => acc + (e.valuedHours ?? 0), 0);
+    valuedHours = workEntries.reduce((acc, e) => acc + effectiveValuedHours(e), 0);
     nightHours = workEntries.reduce((acc, e) => acc + (e.nightHours ?? 0), 0);
     sundayHours = workEntries.reduce((acc, e) => acc + (e.sundayHours ?? 0), 0);
     holidayHours = workEntries.reduce((acc, e) => acc + (e.holidayHours ?? 0), 0);
@@ -307,7 +338,7 @@ export function computeHoursBalanceRow(params: {
       0
     );
   } else {
-    valuedHours = workShifts.reduce((acc, s) => acc + (s.valuedHours ?? 0), 0);
+    valuedHours = workShifts.reduce((acc, s) => acc + effectiveValuedHours(s), 0);
     nightHours = workShifts.reduce((acc, s) => acc + (s.nightHours ?? 0), 0);
     sundayHours = workShifts.reduce((acc, s) => acc + (s.sundayHours ?? 0), 0);
     holidayHours = workShifts.reduce((acc, s) => acc + (s.holidayHours ?? 0), 0);
@@ -478,11 +509,14 @@ export function computeHoursBalanceRow(params: {
     };
     if (billingMethod === "IST") {
       for (const e of workEntries) {
-        addBase({ ...e, hours: e.valuedHours ?? e.actualHours ?? 0 });
+        // Pausen-Abzug auch im Grundlohn (gleiche Basis wie die Stunden-Spalte).
+        const hours =
+          e.valuedHours != null ? effectiveValuedHours(e) : (e.actualHours ?? 0);
+        addBase({ ...e, hours });
       }
     } else {
       for (const s of workShifts) {
-        addBase({ ...s, hours: s.valuedHours ?? 0 });
+        addBase({ ...s, hours: effectiveValuedHours(s) });
       }
     }
     // Lohnfortzahlung: Urlaub/Krank sowie bezahlte Freistellung und vom

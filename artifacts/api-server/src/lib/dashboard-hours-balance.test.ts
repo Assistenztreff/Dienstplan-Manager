@@ -370,3 +370,134 @@ describe("resolveEffectiveBillingMethod — Berechnungs-Weiche Zeiterfassung", (
     expect(resolveEffectiveBillingMethod(undefined, true)).toBe("SOLL");
   });
 });
+
+describe("computeHoursBalanceRow — Pausen-Abzug (deductPausesEnabled)", () => {
+  const TEAM = 7;
+  const deductOn = new Map([[TEAM, true]]);
+  const deductOff = new Map([[TEAM, false]]);
+
+  it("SOLL: zieht Pausenminuten von gewerteten Stunden und Grundlohn ab", () => {
+    const shifts: BalanceShift[] = [
+      {
+        type: "active",
+        startTime: local(2026, 6, 1, 8),
+        endTime: local(2026, 6, 1, 16),
+        valuedHours: 8,
+        pauseMinutes: 30,
+        teamId: TEAM,
+      },
+    ];
+    const result = computeHoursBalanceRow({
+      userId: 1,
+      userName: "Anna",
+      shifts,
+      timeEntries: [],
+      allowance: STD_ALLOWANCE,
+      contract: null,
+      hourlyWage: 20,
+      billingMethod: "SOLL",
+      deductPausesByTeam: deductOn,
+    });
+    expect(result.valuedHours).toBe(7.5);
+    expect(result.basePay).toBe(150);
+  });
+
+  it("SOLL: ohne Schalter bleibt alles unverändert (Bestandsschutz)", () => {
+    const shifts: BalanceShift[] = [
+      {
+        type: "active",
+        startTime: local(2026, 6, 1, 8),
+        endTime: local(2026, 6, 1, 16),
+        valuedHours: 8,
+        pauseMinutes: 30,
+        teamId: TEAM,
+      },
+    ];
+    const result = computeHoursBalanceRow({
+      userId: 1,
+      userName: "Anna",
+      shifts,
+      timeEntries: [],
+      allowance: STD_ALLOWANCE,
+      contract: null,
+      hourlyWage: 20,
+      billingMethod: "SOLL",
+      deductPausesByTeam: deductOff,
+    });
+    expect(result.valuedHours).toBe(8);
+    expect(result.basePay).toBe(160);
+  });
+
+  it("IST: zieht die Pausenminuten des Ist-Eintrags ab", () => {
+    const timeEntries: BalanceTimeEntry[] = [
+      {
+        actualHours: 8,
+        valuedHours: 8,
+        shiftType: "active",
+        teamId: TEAM,
+        pauseMinutes: 45,
+      },
+    ];
+    const result = computeHoursBalanceRow({
+      userId: 1,
+      userName: "Anna",
+      shifts: [],
+      timeEntries,
+      allowance: STD_ALLOWANCE,
+      contract: null,
+      hourlyWage: 20,
+      billingMethod: "IST",
+      deductPausesByTeam: deductOn,
+    });
+    expect(result.valuedHours).toBe(7.25);
+    expect(result.basePay).toBe(145);
+  });
+
+  it("klemmt bei übergroßer Pause auf 0 (nie negativ)", () => {
+    const shifts: BalanceShift[] = [
+      {
+        type: "active",
+        startTime: local(2026, 6, 1, 8),
+        endTime: local(2026, 6, 1, 9),
+        valuedHours: 1,
+        pauseMinutes: 120,
+        teamId: TEAM,
+      },
+    ];
+    const result = computeHoursBalanceRow({
+      userId: 1,
+      userName: "Anna",
+      shifts,
+      timeEntries: [],
+      allowance: STD_ALLOWANCE,
+      contract: null,
+      billingMethod: "SOLL",
+      deductPausesByTeam: deductOn,
+    });
+    expect(result.valuedHours).toBe(0);
+  });
+
+  it("Team ohne Map-Eintrag nutzt den Fallback (Default AUS)", () => {
+    const shifts: BalanceShift[] = [
+      {
+        type: "active",
+        startTime: local(2026, 6, 1, 8),
+        endTime: local(2026, 6, 1, 16),
+        valuedHours: 8,
+        pauseMinutes: 30,
+        teamId: 999,
+      },
+    ];
+    const result = computeHoursBalanceRow({
+      userId: 1,
+      userName: "Anna",
+      shifts,
+      timeEntries: [],
+      allowance: STD_ALLOWANCE,
+      contract: null,
+      billingMethod: "SOLL",
+      deductPausesByTeam: deductOn,
+    });
+    expect(result.valuedHours).toBe(8);
+  });
+});

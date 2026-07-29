@@ -156,6 +156,8 @@ export async function computeHoursBalances(
           // KONTO-GLOBAL (nur Konto-Zeile des Team-Eigentümers, nie Override):
           // Stundenzahl der Teamsitzungs-Gutschrift je Team-Tag.
           teamMeetingHours: allowanceSettingsTable.teamMeetingHours,
+          // KONTO-GLOBAL: Pausen von den bezahlten Stunden abziehen.
+          deductPausesEnabled: allowanceSettingsTable.deductPausesEnabled,
         })
         .from(teamsTable)
         // LEFT JOINs: Hat ein Team weder Override noch der Eigentümer eine
@@ -187,6 +189,11 @@ export async function computeHoursBalances(
   // (rückwirkend, wie die Zuschlags-Prozente).
   const teamMeetingHoursByTeam = new Map(
     teamAllowanceRows.map((r) => [r.teamId, r.teamMeetingHours ?? 1])
+  );
+  // Pausen-Abzug je Team (Konto-Zeile des Team-Eigentümers, Default AUS =
+  // Bestandsschutz: Pausen bleiben reine Info-Kennzahl).
+  const deductPausesByTeam = new Map(
+    teamAllowanceRows.map((r) => [r.teamId, r.deductPausesEnabled ?? false])
   );
 
   // Team-Einträge (Teamsitzungen) des Monats je Team: EIN FIX-Eintrag pro Tag
@@ -314,6 +321,7 @@ export async function computeHoursBalances(
           actualHours: timeTrackingTable.actualHours,
           actualStart: timeTrackingTable.actualStart,
           actualEnd: timeTrackingTable.actualEnd,
+          pauseMinutes: timeTrackingTable.pauseMinutes,
           teamId: timeTrackingTable.teamId,
           shiftType: shiftsTable.type,
           compensationType: shiftModelsTable.compensationType,
@@ -383,7 +391,13 @@ export async function computeHoursBalances(
           compensationFlatCents: e.compensationFlatCents,
         };
         if (!e.actualStart || !e.actualEnd) {
-          return { actualHours: e.actualHours, shiftType: e.shiftType, teamId: e.teamId, ...comp };
+          return {
+            actualHours: e.actualHours,
+            shiftType: e.shiftType,
+            teamId: e.teamId,
+            pauseMinutes: e.pauseMinutes,
+            ...comp,
+          };
         }
         const meta = e.teamId != null ? teamMetaByTeam.get(e.teamId) : undefined;
         const metrics = computeShiftMetrics(
@@ -403,6 +417,7 @@ export async function computeHoursBalances(
           actualHours: e.actualHours,
           shiftType: e.shiftType,
           teamId: e.teamId,
+          pauseMinutes: e.pauseMinutes,
           valuedHours: metrics.valuedHours,
           nightHours: metrics.nightHours,
           sundayHours: metrics.sundayHours,
@@ -434,6 +449,7 @@ export async function computeHoursBalances(
         hourlyWage: assistant.hourlyWage,
         vacationHoursPerDay: vacationOps?.vacationHoursPerDay,
         teamsitzungStunden,
+        deductPausesByTeam,
       });
     })
   );

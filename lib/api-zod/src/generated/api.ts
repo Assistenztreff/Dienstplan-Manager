@@ -795,6 +795,7 @@ export const GetAllowanceSettingsResponse = zod.object({
   "pauseMinutes1": zod.number().describe('Pausenminuten der Stufe 1 (Standard 30).'),
   "pauseThreshold2Hours": zod.number().describe('Ab dieser Dienstdauer (Stunden) gilt Pausen-Stufe 2 (Standard 9).'),
   "pauseMinutes2": zod.number().describe('Pausenminuten der Stufe 2 (Standard 45).'),
+  "deductPausesEnabled": zod.boolean().describe('Pausen von den bezahlten Stunden abziehen? Konto-global (kein Team-Override); Standard AUS. Bei AN reduzieren die unbezahlten Pausenminuten die gewerteten Stunden und den Grundlohn der Arbeitsdienste in BEIDEN Abrechnungsarten (zur Lesezeit angewandt); Zuschlagsstunden bleiben unberührt.'),
   "updatedAt": zod.coerce.date()
 })
 
@@ -855,7 +856,8 @@ export const UpdateAllowanceSettingsBody = zod.object({
   "pauseThreshold1Hours": zod.number().min(updateAllowanceSettingsBodyPauseThreshold1HoursMin).optional().describe('Ab dieser Dienstdauer (Stunden) gilt Pausen-Stufe 1.'),
   "pauseMinutes1": zod.number().min(updateAllowanceSettingsBodyPauseMinutes1Min).max(updateAllowanceSettingsBodyPauseMinutes1Max).optional().describe('Pausenminuten der Stufe 1.'),
   "pauseThreshold2Hours": zod.number().min(updateAllowanceSettingsBodyPauseThreshold2HoursMin).optional().describe('Ab dieser Dienstdauer (Stunden) gilt Pausen-Stufe 2.'),
-  "pauseMinutes2": zod.number().min(updateAllowanceSettingsBodyPauseMinutes2Min).max(updateAllowanceSettingsBodyPauseMinutes2Max).optional().describe('Pausenminuten der Stufe 2.')
+  "pauseMinutes2": zod.number().min(updateAllowanceSettingsBodyPauseMinutes2Min).max(updateAllowanceSettingsBodyPauseMinutes2Max).optional().describe('Pausenminuten der Stufe 2.'),
+  "deductPausesEnabled": zod.boolean().optional().describe('Pausen von den bezahlten Stunden abziehen (konto-global, kein Team-Override).')
 })
 
 export const UpdateAllowanceSettingsResponse = zod.object({
@@ -882,6 +884,7 @@ export const UpdateAllowanceSettingsResponse = zod.object({
   "pauseMinutes1": zod.number().describe('Pausenminuten der Stufe 1 (Standard 30).'),
   "pauseThreshold2Hours": zod.number().describe('Ab dieser Dienstdauer (Stunden) gilt Pausen-Stufe 2 (Standard 9).'),
   "pauseMinutes2": zod.number().describe('Pausenminuten der Stufe 2 (Standard 45).'),
+  "deductPausesEnabled": zod.boolean().describe('Pausen von den bezahlten Stunden abziehen? Konto-global (kein Team-Override); Standard AUS. Bei AN reduzieren die unbezahlten Pausenminuten die gewerteten Stunden und den Grundlohn der Arbeitsdienste in BEIDEN Abrechnungsarten (zur Lesezeit angewandt); Zuschlagsstunden bleiben unberührt.'),
   "updatedAt": zod.coerce.date()
 })
 
@@ -994,6 +997,7 @@ export const ListTimeEntriesResponseItem = zod.object({
   "actualStart": zod.coerce.date(),
   "actualEnd": zod.coerce.date(),
   "actualHours": zod.number().optional(),
+  "pauseMinutes": zod.number().optional().describe('Unbezahlte Pausenminuten des Ist-Eintrags (Vorbefüllung gemäß Pausenregel, pro Eintrag überschreibbar). Reduziert die gewerteten Stunden nur bei aktivem Konto-Schalter deductPausesEnabled.'),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
   "notes": zod.string().nullish(),
   "confirmedBy": zod.number().nullish(),
@@ -1025,12 +1029,18 @@ export const ListTimeEntriesResponse = zod.array(ListTimeEntriesResponseItem)
 /**
  * @summary Zeiteintrag erstellen
  */
+export const createTimeEntryBodyPauseMinutesMin = 0;
+export const createTimeEntryBodyPauseMinutesMax = 1440;
+
+
+
 export const CreateTimeEntryBody = zod.object({
   "userId": zod.number(),
   "teamId": zod.number().optional().describe('Optionaler Team-Kontext; muss ein erlaubtes Team sein.'),
   "shiftId": zod.number().optional(),
   "actualStart": zod.coerce.date(),
   "actualEnd": zod.coerce.date(),
+  "pauseMinutes": zod.number().min(createTimeEntryBodyPauseMinutesMin).max(createTimeEntryBodyPauseMinutesMax).optional().describe('Unbezahlte Pausenminuten (überschreibbare Vorbefüllung gemäß Pausenregel).'),
   "notes": zod.string().optional()
 })
 
@@ -1049,6 +1059,7 @@ export const GetTimeEntryResponse = zod.object({
   "actualStart": zod.coerce.date(),
   "actualEnd": zod.coerce.date(),
   "actualHours": zod.number().optional(),
+  "pauseMinutes": zod.number().optional().describe('Unbezahlte Pausenminuten des Ist-Eintrags (Vorbefüllung gemäß Pausenregel, pro Eintrag überschreibbar). Reduziert die gewerteten Stunden nur bei aktivem Konto-Schalter deductPausesEnabled.'),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
   "notes": zod.string().nullish(),
   "confirmedBy": zod.number().nullish(),
@@ -1083,9 +1094,15 @@ export const UpdateTimeEntryParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const updateTimeEntryBodyPauseMinutesMin = 0;
+export const updateTimeEntryBodyPauseMinutesMax = 1440;
+
+
+
 export const UpdateTimeEntryBody = zod.object({
   "actualStart": zod.coerce.date().optional(),
   "actualEnd": zod.coerce.date().optional(),
+  "pauseMinutes": zod.number().min(updateTimeEntryBodyPauseMinutesMin).max(updateTimeEntryBodyPauseMinutesMax).optional().describe('Unbezahlte Pausenminuten.'),
   "notes": zod.string().nullish()
 })
 
@@ -1096,6 +1113,7 @@ export const UpdateTimeEntryResponse = zod.object({
   "actualStart": zod.coerce.date(),
   "actualEnd": zod.coerce.date(),
   "actualHours": zod.number().optional(),
+  "pauseMinutes": zod.number().optional().describe('Unbezahlte Pausenminuten des Ist-Eintrags (Vorbefüllung gemäß Pausenregel, pro Eintrag überschreibbar). Reduziert die gewerteten Stunden nur bei aktivem Konto-Schalter deductPausesEnabled.'),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
   "notes": zod.string().nullish(),
   "confirmedBy": zod.number().nullish(),
@@ -1150,6 +1168,7 @@ export const ConfirmTimeEntryResponse = zod.object({
   "actualStart": zod.coerce.date(),
   "actualEnd": zod.coerce.date(),
   "actualHours": zod.number().optional(),
+  "pauseMinutes": zod.number().optional().describe('Unbezahlte Pausenminuten des Ist-Eintrags (Vorbefüllung gemäß Pausenregel, pro Eintrag überschreibbar). Reduziert die gewerteten Stunden nur bei aktivem Konto-Schalter deductPausesEnabled.'),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
   "notes": zod.string().nullish(),
   "confirmedBy": zod.number().nullish(),
@@ -1198,7 +1217,14 @@ export const ConfirmTimeEntriesBatchResponse = zod.object({
  * @summary Effektiver Zeiterfassungs-Zustand des Kontos bzw. Arbeitgebers
  */
 export const GetTimeTrackingStatusResponse = zod.object({
-  "enabled": zod.boolean().describe('true, wenn die Zeiterfassung für den angemeldeten Nutzer effektiv aktiv ist (Admin = eigene Konto-Einstellung, Assistenzkraft = mindestens ein Team-Eigentümer hat sie aktiviert).')
+  "enabled": zod.boolean().describe('true, wenn die Zeiterfassung für den angemeldeten Nutzer effektiv aktiv ist (Admin = eigene Konto-Einstellung, Assistenzkraft = mindestens ein Team-Eigentümer hat sie aktiviert).'),
+  "pauseRule": zod.object({
+  "pauseAutoEnabled": zod.boolean(),
+  "pauseThreshold1Hours": zod.number(),
+  "pauseMinutes1": zod.number(),
+  "pauseThreshold2Hours": zod.number(),
+  "pauseMinutes2": zod.number()
+}).optional().describe('Effektive Pausenregelung für den angemeldeten Nutzer (Admin = eigene Konto-Einstellung, Assistenzkraft = Regel des ersten Team-Eigentümers mit aktivierter Vorbefüllung). Dient der Vorbefüllung des Pausenfelds im Zeiterfassungs-Dialog.')
 })
 
 
@@ -1348,6 +1374,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "actualStart": zod.coerce.date(),
   "actualEnd": zod.coerce.date(),
   "actualHours": zod.number().optional(),
+  "pauseMinutes": zod.number().optional().describe('Unbezahlte Pausenminuten des Ist-Eintrags (Vorbefüllung gemäß Pausenregel, pro Eintrag überschreibbar). Reduziert die gewerteten Stunden nur bei aktivem Konto-Schalter deductPausesEnabled.'),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
   "notes": zod.string().nullish(),
   "confirmedBy": zod.number().nullish(),

@@ -5,8 +5,11 @@
  * Dienstplan-App API für Persönliche Assistenz
  * OpenAPI spec version: 0.1.0
  */
+import type { TimeTrackingStatusPauseRule } from './timeTrackingStatusPauseRule';
 
 export interface TimeTrackingStatus {
   /** true, wenn die Zeiterfassung für den angemeldeten Nutzer effektiv aktiv ist (Admin = eigene Konto-Einstellung, Assistenzkraft = mindestens ein Team-Eigentümer hat sie aktiviert). */
   enabled: boolean;
+  /** Effektive Pausenregelung für den angemeldeten Nutzer (Admin = eigene Konto-Einstellung, Assistenzkraft = Regel des ersten Team-Eigentümers mit aktivierter Vorbefüllung). Dient der Vorbefüllung des Pausenfelds im Zeiterfassungs-Dialog. */
+  pauseRule?: TimeTrackingStatusPauseRule;
 }

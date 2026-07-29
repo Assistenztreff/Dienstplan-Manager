@@ -77,6 +77,7 @@ router.get("/allowance-settings", requireAdmin, async (req, res): Promise<void> 
         pauseMinutes1: account.pauseMinutes1,
         pauseThreshold2Hours: account.pauseThreshold2Hours,
         pauseMinutes2: account.pauseMinutes2,
+        deductPausesEnabled: account.deductPausesEnabled,
         isOverride: true,
       });
       return;
@@ -134,6 +135,7 @@ router.put("/allowance-settings", requireAdmin, async (req, res): Promise<void> 
       pauseMinutes1: account.pauseMinutes1,
       pauseThreshold2Hours: account.pauseThreshold2Hours,
       pauseMinutes2: account.pauseMinutes2,
+      deductPausesEnabled: account.deductPausesEnabled,
       isOverride: true,
     });
     return;

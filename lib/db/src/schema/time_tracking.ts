@@ -16,6 +16,10 @@ export const timeTrackingTable = pgTable("time_tracking", {
   actualStart: timestamp("actual_start").notNull(),
   actualEnd: timestamp("actual_end").notNull(),
   actualHours: real("actual_hours"),
+  // Unbezahlte Pausenminuten des Ist-Eintrags (Vorbefüllung gemäß Pausenregel,
+  // pro Eintrag überschreibbar). Reduziert die gewerteten Stunden nur, wenn
+  // der Konto-Schalter deduct_pauses_enabled aktiv ist.
+  pauseMinutes: integer("pause_minutes").notNull().default(0),
   status: timeEntryStatusEnum("status").notNull().default("pending"),
   notes: text("notes"),
   confirmedBy: integer("confirmed_by").references(() => usersTable.id, { onDelete: "set null" }),

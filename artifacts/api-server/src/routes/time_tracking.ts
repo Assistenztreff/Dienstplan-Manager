@@ -28,6 +28,7 @@ import {
   isTimeTrackingEnabledForUser,
   getTimeTrackingEnabledTeamIds,
   respondTimeTrackingDisabled,
+  getPauseRuleForUser,
 } from "../lib/time-tracking-enabled";
 
 const router = Router();
@@ -43,6 +44,7 @@ const withUserSelect = {
   actualStart: timeTrackingTable.actualStart,
   actualEnd: timeTrackingTable.actualEnd,
   actualHours: timeTrackingTable.actualHours,
+  pauseMinutes: timeTrackingTable.pauseMinutes,
   status: timeTrackingTable.status,
   notes: timeTrackingTable.notes,
   confirmedBy: timeTrackingTable.confirmedBy,
@@ -422,8 +424,14 @@ router.post("/time-tracking/confirm-batch", requireAdmin, requirePlanFeature("st
 // Arbeitgebers (aktiv, sobald EIN Team-Eigentümer eingeschaltet hat). Bewusst
 // requireAuth — Assistenten haben keinen Zugriff auf /allowance-settings.
 router.get("/time-tracking-status", requireAuth, async (req, res): Promise<void> => {
-  const enabled = await isTimeTrackingEnabledForUser(req.session.userId!);
-  res.json({ enabled });
+  const [enabled, pauseRule] = await Promise.all([
+    isTimeTrackingEnabledForUser(req.session.userId!),
+    // Effektive Pausenregelung für die Vorbefüllung des Pausenfelds im
+    // Zeiterfassungs-Dialog (Assistenten haben keinen Zugriff auf
+    // /allowance-settings, daher hier mitgeliefert).
+    getPauseRuleForUser(req.session.userId!),
+  ]);
+  res.json({ enabled, pauseRule });
 });
 
 export default router;

@@ -9,6 +9,12 @@
 export interface TimeEntryUpdate {
   actualStart?: Date;
   actualEnd?: Date;
+  /**
+     * Unbezahlte Pausenminuten.
+     * @minimum 0
+     * @maximum 1440
+     */
+  pauseMinutes?: number;
   /** @nullable */
   notes?: string | null;
 }

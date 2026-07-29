@@ -56,5 +56,7 @@ export interface AllowanceSettings {
   pauseThreshold2Hours: number;
   /** Pausenminuten der Stufe 2 (Standard 45). */
   pauseMinutes2: number;
+  /** Pausen von den bezahlten Stunden abziehen? Konto-global (kein Team-Override); Standard AUS. Bei AN reduzieren die unbezahlten Pausenminuten die gewerteten Stunden und den Grundlohn der Arbeitsdienste in BEIDEN Abrechnungsarten (zur Lesezeit angewandt); Zuschlagsstunden bleiben unberührt. */
+  deductPausesEnabled: boolean;
   updatedAt: Date;
 }

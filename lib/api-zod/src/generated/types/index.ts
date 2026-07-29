@@ -112,6 +112,7 @@ export * from './timeEntryInput';
 export * from './timeEntryStatus';
 export * from './timeEntryUpdate';
 export * from './timeTrackingStatus';
+export * from './timeTrackingStatusPauseRule';
 export * from './updateAllowanceSettingsParams';
 export * from './updateProfileInput';
 export * from './uploadUrlRequest';

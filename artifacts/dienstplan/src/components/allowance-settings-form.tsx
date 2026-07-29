@@ -52,6 +52,7 @@ type FormState = {
   pauseMinutes1: string;
   pauseThreshold2Hours: string;
   pauseMinutes2: string;
+  deductPausesEnabled: boolean;
 };
 
 // Sonderwert für "erbt" (Abrechnungsart nicht auf dieser Ebene gesetzt).
@@ -168,6 +169,7 @@ export function AllowanceSettingsForm() {
     pauseMinutes1: "30",
     pauseThreshold2Hours: "9",
     pauseMinutes2: "45",
+    deductPausesEnabled: false,
   });
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [saving, setSaving] = useState(false);
@@ -203,6 +205,7 @@ export function AllowanceSettingsForm() {
         pauseMinutes1: String(settings.pauseMinutes1 ?? 30),
         pauseThreshold2Hours: String(settings.pauseThreshold2Hours ?? 9),
         pauseMinutes2: String(settings.pauseMinutes2 ?? 45),
+        deductPausesEnabled: settings.deductPausesEnabled ?? false,
       });
       setErrors({});
       setSaved(false);
@@ -310,6 +313,7 @@ export function AllowanceSettingsForm() {
                 pauseMinutes1: Number(f.pauseMinutes1),
                 pauseThreshold2Hours: Number(f.pauseThreshold2Hours),
                 pauseMinutes2: Number(f.pauseMinutes2),
+                deductPausesEnabled: f.deductPausesEnabled,
               }
             : {}),
         },
@@ -712,6 +716,29 @@ export function AllowanceSettingsForm() {
                         </p>
                       </>
                     )}
+                  </div>
+
+                  <div className="border-t border-border/60 pt-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="deductPausesEnabled" className="text-sm font-semibold">
+                          Pausen von bezahlten Stunden abziehen
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Zieht die eingetragenen unbezahlten Pausenminuten von den gewerteten
+                          Stunden und dem Grundlohn der Arbeitsdienste ab — in beiden
+                          Abrechnungsarten (Soll und Ist), rückwirkend schaltbar. Zuschläge
+                          bleiben unverändert. Solange ausgeschaltet, sind Pausen eine reine
+                          Info-Kennzahl (bisheriges Verhalten). Gilt konto-weit für alle Teams.
+                        </p>
+                      </div>
+                      <Switch
+                        id="deductPausesEnabled"
+                        data-testid="allowance-deduct-pauses-switch"
+                        checked={form.deductPausesEnabled}
+                        onCheckedChange={(v) => set("deductPausesEnabled", v)}
+                      />
+                    </div>
                   </div>
 
                   <div className="border-t border-border/60 pt-5 space-y-3">

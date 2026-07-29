@@ -13,5 +13,11 @@ export interface TimeEntryInput {
   shiftId?: number;
   actualStart: Date;
   actualEnd: Date;
+  /**
+     * Unbezahlte Pausenminuten (überschreibbare Vorbefüllung gemäß Pausenregel).
+     * @minimum 0
+     * @maximum 1440
+     */
+  pauseMinutes?: number;
   notes?: string;
 }

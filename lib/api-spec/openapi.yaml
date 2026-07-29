@@ -2469,6 +2469,7 @@ components:
           pauseMinutes1,
           pauseThreshold2Hours,
           pauseMinutes2,
+          deductPausesEnabled,
           updatedAt,
         ]
       properties:
@@ -2551,6 +2552,14 @@ components:
         pauseMinutes2:
           type: integer
           description: Pausenminuten der Stufe 2 (Standard 45).
+        deductPausesEnabled:
+          type: boolean
+          description: >-
+            Pausen von den bezahlten Stunden abziehen? Konto-global (kein
+            Team-Override); Standard AUS. Bei AN reduzieren die unbezahlten
+            Pausenminuten die gewerteten Stunden und den Grundlohn der
+            Arbeitsdienste in BEIDEN Abrechnungsarten (zur Lesezeit angewandt);
+            Zuschlagsstunden bleiben unberührt.
         updatedAt:
           type: string
           format: date-time
@@ -2629,6 +2638,11 @@ components:
           minimum: 0
           maximum: 1440
           description: Pausenminuten der Stufe 2.
+        deductPausesEnabled:
+          type: boolean
+          description: >-
+            Pausen von den bezahlten Stunden abziehen (konto-global, kein
+            Team-Override).
 
     TimeTrackingStatus:
       type: object
@@ -2640,6 +2654,32 @@ components:
             true, wenn die Zeiterfassung für den angemeldeten Nutzer effektiv
             aktiv ist (Admin = eigene Konto-Einstellung, Assistenzkraft =
             mindestens ein Team-Eigentümer hat sie aktiviert).
+        pauseRule:
+          type: object
+          description: >-
+            Effektive Pausenregelung für den angemeldeten Nutzer (Admin =
+            eigene Konto-Einstellung, Assistenzkraft = Regel des ersten
+            Team-Eigentümers mit aktivierter Vorbefüllung). Dient der
+            Vorbefüllung des Pausenfelds im Zeiterfassungs-Dialog.
+          required:
+            [
+              pauseAutoEnabled,
+              pauseThreshold1Hours,
+              pauseMinutes1,
+              pauseThreshold2Hours,
+              pauseMinutes2,
+            ]
+          properties:
+            pauseAutoEnabled:
+              type: boolean
+            pauseThreshold1Hours:
+              type: number
+            pauseMinutes1:
+              type: integer
+            pauseThreshold2Hours:
+              type: number
+            pauseMinutes2:
+              type: integer
 
     BrandingSettings:
       type: object
@@ -2716,6 +2756,12 @@ components:
           format: date-time
         actualHours:
           type: number
+        pauseMinutes:
+          type: integer
+          description: >-
+            Unbezahlte Pausenminuten des Ist-Eintrags (Vorbefüllung gemäß
+            Pausenregel, pro Eintrag überschreibbar). Reduziert die gewerteten
+            Stunden nur bei aktivem Konto-Schalter deductPausesEnabled.
         status:
           type: string
           enum: [pending, confirmed, rejected]
@@ -2748,6 +2794,11 @@ components:
         actualEnd:
           type: string
           format: date-time
+        pauseMinutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+          description: Unbezahlte Pausenminuten (überschreibbare Vorbefüllung gemäß Pausenregel).
         notes:
           type: string
 
@@ -2760,6 +2811,11 @@ components:
         actualEnd:
           type: string
           format: date-time
+        pauseMinutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+          description: Unbezahlte Pausenminuten.
         notes:
           type: ["string", "null"]
 

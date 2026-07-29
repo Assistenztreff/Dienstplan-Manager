@@ -93,4 +93,5 @@
 - [Parallele scoped-e2e-Lanes](parallel-scoped-e2e-lanes.md) — volle Kette laeuft als parallele Lanes (API-Spec-Shards mit eigener DB+Ports, port-gebundene Locks, Marker pro DB); Smoke danach seriell.
 - [Gestaffelte Merge-E2E](scoped-e2e-validation.md) — e2e-Validierung läuft über scoped-e2e (git-Diff→Kategorie docs/frontend/full); Regeln zentral in scripts/src/lib/validation-scope.ts; im Zweifel volle Kette.
 - [Team-Scope-Readiness vor Writes](team-scope-ready-gate.md) — Karten, die Konto- vs. Team-Zeile schreiben, müssen auf isTeamScopeReady warten; sonst Write in falschen Scope während der Team-Auto-Auswahl.
+- [Pausen-Abzug zur Lesezeit](pause-deduction-read-time.md) — deductPausesEnabled wirkt nur in computeHoursBalanceRow (nie in gespeicherten valuedHours); Assistenten-Pausenregel via /time-tracking-status.
 - [DB-backed register rate limit](register-rate-limit-db.md) — shared counters belong in Postgres (Autoscale = multi-instance) + per-IP advisory xact-lock; test:db must run DB files serially and re-point APP_DATABASE_URL too.

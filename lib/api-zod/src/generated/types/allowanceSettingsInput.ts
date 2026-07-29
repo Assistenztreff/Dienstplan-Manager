@@ -77,4 +77,6 @@ export interface AllowanceSettingsInput {
      * @maximum 1440
      */
   pauseMinutes2?: number;
+  /** Pausen von den bezahlten Stunden abziehen (konto-global, kein Team-Override). */
+  deductPausesEnabled?: boolean;
 }

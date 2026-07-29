@@ -16,6 +16,8 @@ export interface TimeEntry {
   actualStart: Date;
   actualEnd: Date;
   actualHours?: number;
+  /** Unbezahlte Pausenminuten des Ist-Eintrags (Vorbefüllung gemäß Pausenregel, pro Eintrag überschreibbar). Reduziert die gewerteten Stunden nur bei aktivem Konto-Schalter deductPausesEnabled. */
+  pauseMinutes?: number;
   status: TimeEntryStatus;
   /** @nullable */
   notes?: string | null;

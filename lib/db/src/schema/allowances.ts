@@ -77,6 +77,15 @@ export const allowanceSettingsTable = pgTable(
     pauseMinutes1: integer("pause_minutes1").notNull().default(30),
     pauseThreshold2Hours: real("pause_threshold2_hours").notNull().default(9),
     pauseMinutes2: integer("pause_minutes2").notNull().default(45),
+    // Pausen von den bezahlten Stunden abziehen: KONTO-GLOBAL (nur Konto-Zeile
+    // team_id NULL maßgeblich, kein Team-Override). Bei AN reduzieren die
+    // unbezahlten Pausenminuten (shifts.pause_minutes bzw.
+    // time_tracking.pause_minutes) die gewerteten Stunden und den Grundlohn
+    // der Arbeitsdienste — in BEIDEN Abrechnungsarten (SOLL und IST), zur
+    // Lesezeit angewandt (rückwirkend schaltbar, keine gespeicherte
+    // Neuberechnung). Zuschlagsstunden bleiben unberührt (Pausenlage unbekannt).
+    // Default AUS = Bestandsschutz (Pausen bleiben reine Info-Kennzahl).
+    deductPausesEnabled: boolean("deduct_pauses_enabled").notNull().default(false),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [
