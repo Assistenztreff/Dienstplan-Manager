@@ -9,6 +9,7 @@ export default defineConfig({
     include: [
       "src/lib/platform-errors.retention.test.ts",
       "src/lib/register-rate-limit.db.test.ts",
+      "src/routes/auth.register-rate-limit.route.db.test.ts",
     ],
     fileParallelism: false,
     globalSetup: ["./vitest.db.global-setup.ts"],
