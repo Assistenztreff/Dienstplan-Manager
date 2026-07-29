@@ -42,6 +42,7 @@ import path from "node:path";
 const API_PORT = process.env.E2E_API_PORT ?? "8099";
 const WEB_PORT = process.env.E2E_WEB_PORT ?? "5199";
 
+const PROD_SPEC_API_PORT = "8097";
 const chromiumExecutable = process.env.REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE;
 
 // Externe Override-URL? Dann gegen diese testen, ohne eigenen Stack.
@@ -350,6 +351,9 @@ if (useManagedStack && !isWorkerProcess) {
   acquireRunLock();
   reapOrphansOnPort(API_PORT, "Test-API");
   reapOrphansOnPort(WEB_PORT, "Test-Vite");
+  // Prod-Modus-Spec-Ports (eigener Stack, s.o.): auch deren Waisen freiräumen.
+  reapOrphansOnPort(PROD_SPEC_API_PORT, "Prod-Spec-API");
+  reapOrphansOnPort(PROD_SPEC_WEB_PORT, "Prod-Spec-Preview");
 }
 
 // --- Lauf-UEBERGREIFENDER Lock (Task #622: geteilte _test-DB) ---------------
@@ -640,3 +644,5 @@ export default defineConfig({
       }
     : {}),
 });
+
+const PROD_SPEC_WEB_PORT = "5197";
