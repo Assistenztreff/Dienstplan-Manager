@@ -159,7 +159,10 @@ function KapitelLink({
         <span className="flex-1">{item.title}</span>
         {item.isPremium && <PremiumBadge />}
         {item.isDienstleister && (
-          <Building2 className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+          <span title="Nur Dienstleister" className="flex shrink-0 items-center">
+            <Building2 className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+            <span className="sr-only">Nur Dienstleister</span>
+          </span>
         )}
         {/* Bei Premium-Eintraegen reicht das Badge — sonst wird die Zeile zu eng. */}
         {!item.isPremium && (
@@ -184,17 +187,23 @@ function KapitelLink({
       <span className="flex-1">{item.title}</span>
       {item.isPremium && <PremiumBadge />}
       {item.isDienstleister && (
-        <Building2 className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+        <span title="Nur Dienstleister" className="flex shrink-0 items-center">
+          <Building2 className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+          <span className="sr-only">Nur Dienstleister</span>
+        </span>
       )}
     </Link>
   );
 }
 
-function HandbuchSidebar({ activeId }: { activeId: string }) {
+// Gemeinsame Kapitelliste: wird in der Desktop-Seitenleiste, im mobilen
+// Aufklapp-Bereich der Artikel-Seiten UND im Inhaltsverzeichnis der
+// Startseite verwendet (eine Quelle, keine Duplikate).
+function KapitelListe({ activeId }: { activeId?: string }) {
   return (
-    <nav aria-label="Handbuch-Kapitel" className="h-full overflow-y-auto px-4 py-8 pb-24 lg:px-6">
+    <>
       {KAPITEL.map((section) => (
-        <div key={section.title} className="mb-8">
+        <div key={section.title} className="mb-8 last:mb-0">
           <h4 className="mb-3 px-3 text-xs font-bold uppercase tracking-wider text-slate-400">
             {section.title}
           </h4>
@@ -214,6 +223,14 @@ function HandbuchSidebar({ activeId }: { activeId: string }) {
           </div>
         </div>
       ))}
+    </>
+  );
+}
+
+function HandbuchSidebar({ activeId }: { activeId: string }) {
+  return (
+    <nav aria-label="Handbuch-Kapitel" className="h-full overflow-y-auto px-4 py-8 pb-24 lg:px-6">
+      <KapitelListe activeId={activeId} />
 
       <div className="mt-8 rounded-xl border border-brand-cyan/20 bg-brand-hellblau p-4">
         <h4 className="mb-2 text-sm font-bold text-brand-dark">Brauchen Sie Hilfe?</h4>
@@ -310,6 +327,22 @@ function ArtikelShell({
         {/* Bewusst KEIN <main>: das Layout (eingeloggt) bzw. die
             HandbuchShell (ausgeloggt) stellt bereits die main-Landmarke. */}
         <div className="min-w-0 flex-1 px-6 py-8 md:px-12 lg:py-12">
+          {/* Mobil/Tablet: Kapitelliste als aufklappbarer Bereich ueber dem
+              Artikel — die Desktop-Seitenleiste ist erst ab lg sichtbar. */}
+          <details
+            className="mb-8 rounded-xl border border-slate-200 bg-slate-50/50 lg:hidden"
+            data-testid="handbuch-kapitel-mobil"
+          >
+            <summary
+              className={`cursor-pointer select-none rounded-xl px-4 py-3 text-sm font-bold text-brand-dark ${FOCUS_CLASSES}`}
+            >
+              Kapitel-Übersicht
+            </summary>
+            <nav aria-label="Handbuch-Kapitel" className="border-t border-slate-200 px-4 py-4">
+              <KapitelListe activeId={activeId} />
+            </nav>
+          </details>
+
           <nav
             aria-label="Pfadnavigation"
             className="mb-8 flex items-center gap-2 text-sm font-medium text-slate-500"
@@ -462,6 +495,29 @@ export function HandbuchStart() {
                 />
               </span>
             </button>
+          </div>
+        </section>
+
+        {/* Inhaltsverzeichnis: komplette Kapitel-Übersicht (gleiche Quelle
+            wie die Seitenleiste der Artikel-Seiten). */}
+        <section
+          aria-labelledby="handbuch-inhaltsverzeichnis-titel"
+          className="border-t border-slate-200 px-6 py-16"
+          data-testid="handbuch-inhaltsverzeichnis"
+        >
+          <div className="mx-auto max-w-5xl">
+            <h3
+              id="handbuch-inhaltsverzeichnis-titel"
+              className="mb-8 text-center text-xl font-bold text-brand-dark"
+            >
+              Alle Kapitel im Überblick
+            </h3>
+            <nav
+              aria-label="Handbuch-Kapitel"
+              className="grid gap-8 rounded-2xl border border-slate-200 bg-white p-6 sm:grid-cols-2 lg:grid-cols-3 lg:p-8 [&>div]:mb-0"
+            >
+              <KapitelListe />
+            </nav>
           </div>
         </section>
 

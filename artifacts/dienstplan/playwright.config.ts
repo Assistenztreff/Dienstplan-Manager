@@ -266,17 +266,44 @@ function isPidAlive(pid: number): boolean {
   }
 }
 
+function readLockOwnerPid(): number | null {
+  if (!existsSync(runLockPath)) return null;
+  try {
+    const raw = readFileSync(runLockPath, "utf8").trim();
+    const parsed = Number.parseInt(raw, 10);
+    if (Number.isInteger(parsed) && parsed > 0) return parsed;
+  } catch {
+    // Unlesbarer Lock: wie verwaist behandeln (Aufrufer ueberschreibt).
+  }
+  return null;
+}
+
+// Blockierendes Warten statt Sofort-Abbruch: In dieser Umgebung starten
+// Validierungslaeufe (Merge-Validierung, Abschluss-Validierung) legitim
+// nacheinander bzw. knapp ueberlappend — ein sofortiger Abbruch macht jeden
+// zweiten Lauf rot, obwohl er nur kurz warten muesste. Deshalb wartet ein
+// neuer Lauf bis zu E2E_LOCK_WAIT_MS (Default 15 Min) auf die Freigabe und
+// bricht erst danach mit der bisherigen Meldung ab. Die Server des laufenden
+// Laufs werden dabei weiterhin nie angefasst (Reap erst NACH Lock-Erwerb).
 function acquireRunLock(): void {
-  let ownerPid: number | null = null;
-  if (existsSync(runLockPath)) {
-    try {
-      const raw = readFileSync(runLockPath, "utf8").trim();
-      const parsed = Number.parseInt(raw, 10);
-      if (Number.isInteger(parsed) && parsed > 0) ownerPid = parsed;
-    } catch {
-      // Unlesbarer Lock: wie verwaist behandeln (unten ueberschreiben).
+  const waitBudgetMs = Number.parseInt(
+    process.env.E2E_LOCK_WAIT_MS ?? "900000",
+    10,
+  );
+  const pollMs = 5000;
+  const deadline = Date.now() + (Number.isFinite(waitBudgetMs) ? waitBudgetMs : 900000);
+  let announced = false;
+  for (;;) {
+    const ownerPid = readLockOwnerPid();
+    if (ownerPid === null || ownerPid === process.pid || !isPidAlive(ownerPid)) {
+      if (ownerPid !== null && ownerPid !== process.pid) {
+        console.log(
+          `[e2e] Verwaister Lauf-Lock gefunden (PID ${ownerPid} lebt nicht mehr) — Lock wird uebernommen.`,
+        );
+      }
+      break;
     }
-    if (ownerPid !== null && ownerPid !== process.pid && isPidAlive(ownerPid)) {
+    if (Date.now() >= deadline) {
       throw new Error(
         `Es laeuft bereits ein E2E-Lauf (PID ${ownerPid}, Lock ${runLockPath}). ` +
           "Dieser Lauf bricht ab, um die Server des laufenden Laufs nicht zu beenden. " +
@@ -284,11 +311,15 @@ function acquireRunLock(): void {
           "haengen geblieben, obwohl kein Lauf mehr aktiv ist: Lockdatei loeschen und erneut starten.",
       );
     }
-    if (ownerPid !== null && ownerPid !== process.pid) {
+    if (!announced) {
       console.log(
-        `[e2e] Verwaister Lauf-Lock gefunden (PID ${ownerPid} lebt nicht mehr) — Lock wird uebernommen.`,
+        `[e2e] Wartet auf laufenden E2E-Lauf (PID ${ownerPid}, Lock ${runLockPath}) — bis zu ${Math.round((deadline - Date.now()) / 60000)} Min.`,
       );
+      announced = true;
     }
+    // Synchrones Warten ist hier bewusst: die Config laedt synchron, bevor
+    // irgendein Server startet; Atomics.wait blockiert ohne Busy-Loop.
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, pollMs);
   }
   mkdirSync(path.dirname(runLockPath), { recursive: true });
   writeFileSync(runLockPath, `${process.pid}\n`);

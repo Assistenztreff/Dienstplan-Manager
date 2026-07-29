@@ -89,3 +89,4 @@
 - [Validation poll budget vs. E2E-Kette](validation-poll-budget-e2e.md) — >45-min-e2e-Validierung stirbt an POLL_BUDGET_EXCEEDED und hinterlässt stale run.locks; Lock-PID prüfen/löschen, ggf. dokumentierter Skip.
 - [Validation-Poll-Budget & Zombie-Läufe](validation-poll-budget-zombie-runs.md) — POLL_BUDGET_EXCEEDED lässt die e2e-Kette als Zombie weiterlaufen (hält run.lock); vor Retry Playwright-Zombies killen.
 - [Unpaid info-only shift types](unpaid-info-shift-types.md) — info categories keep valuedHours (no surcharges); Soll/Lohn exclusion lives only in the hours-balance INFO_ONLY filter.
+- [E2E-Run-Lock wartet statt Abbruch](e2e-run-lock.md) — Validierungs-/Merge-Läufe überlappen; acquireRunLock wartet bis E2E_LOCK_WAIT_MS (15 Min) auf lebende Inhaber. Handbuch-UI-Änderung ⇒ screenshots:handbuch neu laufen lassen (Fingerprint-Gate in Validierung).
