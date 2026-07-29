@@ -74,9 +74,9 @@ describe("resolveShiftMetrics — Urlaub/Krank als Sonderfall", () => {
     expect(metrics.holidayHours).toBe(0);
   });
 
-  it("ignoriert für Abwesenheiten selbst einen Sonntag/Feiertag im Zeitraum", () => {
-    // Sonntag 11.01.2026 — eine Arbeitsschicht hätte Sonntagsstunden, eine
-    // Abwesenheit nicht.
+  it("berechnet Sonntagsstunden für ganztägige Abwesenheit am Sonntag (§11 BUrlG)", () => {
+    // Sonntag 11.01.2026 — ganztägiger Urlaub soll dieselben Sonntagsstunden ergeben
+    // wie ein Arbeitsdienst (geplante Stunden = 8h).
     const metrics = resolveShiftMetrics(
       {
         type: "vacation",
@@ -87,8 +87,92 @@ describe("resolveShiftMetrics — Urlaub/Krank als Sonderfall", () => {
       },
       NIGHT
     );
+    expect(metrics.valuedHours).toBe(8);
+    expect(metrics.sundayHours).toBe(8);
+    expect(metrics.holidayHours).toBe(0);
+    expect(metrics.nightHours).toBe(0);
+  });
+
+  it("berechnet Feiertagsstunden für ganztägige Abwesenheit am Feiertag (§2 EFZG)", () => {
+    // Neujahr 01.01.2026 (Donnerstag) — bundesweiter Feiertag
+    const metrics = resolveShiftMetrics(
+      {
+        type: "sick",
+        startTime: utc(2026, 0, 1, 0),
+        endTime: utc(2026, 0, 1, 23, 59),
+        plannedHours: 7.6,
+        valuationPercent: 100,
+      },
+      NIGHT
+    );
+    expect(metrics.valuedHours).toBe(7.6);
+    expect(metrics.holidayHours).toBe(7.6);
+    expect(metrics.sundayHours).toBe(0);
+    expect(metrics.nightHours).toBe(0);
+  });
+
+  it("Feiertag hat Vorrang vor Sonntag — kein Doppelzuschlag bei ganztägiger Abwesenheit", () => {
+    // Neujahr 01.01.2023 fällt auf einen Sonntag (bundesweiter Feiertag + Sonntag)
+    const metrics = resolveShiftMetrics(
+      {
+        type: "vacation",
+        startTime: utc(2023, 0, 1, 0),
+        endTime: utc(2023, 0, 1, 23, 59),
+        plannedHours: 8,
+        valuationPercent: 100,
+      },
+      NIGHT
+    );
+    expect(metrics.holidayHours).toBe(8);
+    expect(metrics.sundayHours).toBe(0);
+    expect(metrics.nightHours).toBe(0);
+  });
+
+  it("keine Zuschläge für ganztägige Abwesenheit an einem gewöhnlichen Werktag", () => {
+    // Montag 05.01.2026 — normaler Wochentag, kein Feiertag
+    const metrics = resolveShiftMetrics(
+      {
+        type: "vacation",
+        startTime: utc(2026, 0, 5, 0),
+        endTime: utc(2026, 0, 5, 23, 59),
+        plannedHours: 8,
+        valuationPercent: 100,
+      },
+      NIGHT
+    );
     expect(metrics.sundayHours).toBe(0);
     expect(metrics.holidayHours).toBe(0);
+    expect(metrics.nightHours).toBe(0);
+  });
+
+  it("Feiertagsstunden gelten auch bei Krank mit Bundesland (Fronleichnam BY)", () => {
+    // Fronleichnam 2026 = Do 04.06.2026 — Feiertag nur in BY und anderen Ländern
+    const bayernMetrics = resolveShiftMetrics(
+      {
+        type: "sick",
+        startTime: utc(2026, 5, 4, 0),
+        endTime: utc(2026, 5, 4, 23, 59),
+        plannedHours: 8,
+        valuationPercent: 100,
+      },
+      NIGHT,
+      "BY"
+    );
+    expect(bayernMetrics.holidayHours).toBe(8);
+
+    const berlinMetrics = resolveShiftMetrics(
+      {
+        type: "sick",
+        startTime: utc(2026, 5, 4, 0),
+        endTime: utc(2026, 5, 4, 23, 59),
+        plannedHours: 8,
+        valuationPercent: 100,
+      },
+      NIGHT,
+      "BE"
+    );
+    expect(berlinMetrics.holidayHours).toBe(0);
+    expect(berlinMetrics.sundayHours).toBe(0);
   });
 });
 

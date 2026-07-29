@@ -162,11 +162,12 @@ test("Überlappende Urlaubsbuchung überspringt bereits vorhandene Tage und zieh
 
   // Toast bestätigt: 2 neue Tage angelegt, 1 bereits vorhanden. (.first():
   // der Text erscheint doppelt — Toast + Screenreader-Announcer.)
-  await expect(page.getByText(/2 Tage angelegt, 1 bereits vorhanden/).first()).toBeVisible();
+  // 2 sequentielle Urlaubs-POSTs à ~4-5s — Toast kann bis zu 15s brauchen.
+  await expect(page.getByText(/2 Tage angelegt, 1 bereits vorhanden/).first()).toBeVisible({ timeout: 20000 });
 
   // Resturlaub sinkt nur um die 2 wirklich neuen Tage (auf 26), NICHT um 3.
-  await expect(taken).toHaveText("4");
-  await expect(remaining).toHaveText("26");
+  await expect(taken).toHaveText("4", { timeout: 15000 });
+  await expect(remaining).toHaveText("26", { timeout: 5000 });
 
   // Backend: insgesamt 4 eindeutige Urlaubstage (10.-13.), kein Doppelabzug.
   expect(await vacationDaysUsed(adminCtx, assistant.id, contractId)).toBe(4);

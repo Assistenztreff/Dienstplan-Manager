@@ -44,6 +44,23 @@ async function withDbClient<T>(fn: (client: pg.Client) => Promise<T>): Promise<T
   }
 }
 
+/**
+ * Aktiviert oder deaktiviert ein Konto direkt in der (Test-)DB (per E-Mail).
+ * Verwendet für Specs, die prüfen, ob ein deaktiviertes Konto sofort aus allen
+ * Zugangswegen ausgeschlossen wird (z. B. Kalender-Feed-404, Session-Revoke).
+ */
+export async function dbSetUserActive(email: string, isActive: boolean): Promise<void> {
+  await withDbClient(async (client) => {
+    const res = await client.query(
+      "UPDATE users SET is_active = $1 WHERE email = $2",
+      [isActive, email],
+    );
+    if (res.rowCount === 0) {
+      throw new Error(`Kein Nutzer mit E-Mail "${email}" gefunden.`);
+    }
+  });
+}
+
 /** Setzt den Abo-Plan eines Kontos direkt in der (Test-)DB (per E-Mail). */
 export async function dbSetAccountPlan(
   email: string,

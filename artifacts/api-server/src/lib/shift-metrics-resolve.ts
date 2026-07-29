@@ -11,6 +11,7 @@
 
 import {
   computeShiftMetrics,
+  isGermanHoliday,
   type NightWindow,
   type GermanState,
   type ShiftMetrics,
@@ -86,8 +87,12 @@ export interface ResolveShiftMetricsInput {
 
 // Ermittelt die Roh-Kennzahlen einer Schicht ohne jede DB-Abhängigkeit.
 //
-// - Urlaub/Krankheit: die vollen geplanten Tagesstunden gelten als erfüllt
-//   (gewertete Stunden = Vertrags-Soll des Tages), keine Zuschläge.
+// - Urlaub/Krankheit mit konkreten Zeiten (Lohnausfallprinzip): Nacht-/Sonntags-/
+//   Feiertagsstunden aus dem Zeitfenster werden fortgezahlt (wie der ersetzte Dienst).
+// - Urlaub/Krankheit ganztägig (00:00–23:59): Sonntagsstunden und Feiertagsstunden
+//   werden aus den geplanten Tagesstunden berechnet; Nachtstunden entfallen (kein
+//   konkretes Zeitfenster bekannt). Rechtsgrundlage: §11 BUrlG, §2 EFZG.
+//   Diese Zuschläge sind SV-pflichtig (§3b EStG gilt nur für geleistete Arbeit).
 // - Arbeitsschicht: delegiert an computeShiftMetrics (Wertung + Nacht-/Sonntags-/
 //   Feiertagsstunden inkl. landesspezifischer Feiertage).
 export function resolveShiftMetrics(
@@ -121,14 +126,20 @@ export function resolveShiftMetrics(
     const end = new Date(input.endTime);
     // Ein ganztägiger Abwesenheitseintrag (00:00–23:59, kein zugrundeliegender
     // Dienst) wird rein plan-basiert gewertet: die vollen geplanten Tages-Soll-
-    // Stunden gelten als erfüllt, KEINE Zuschläge — sonst würde jede Nacht/jeder
-    // Sonntag fälschlich mitgezählt.
+    // Stunden gelten als erfüllt. Da kein konkretes Zeitfenster bekannt ist,
+    // können Nachtstunden nicht berechnet werden. Sonntagsstunden und Feiertagsstunden
+    // werden dagegen aus den geplanten Stunden ermittelt (§11 BUrlG, §2 EFZG):
+    // Ein Urlaubs-/Kranktag am Sonntag oder Feiertag ist genauso zu vergüten wie
+    // ein entsprechender Arbeitsdienst (Lohnausfallprinzip).
+    // Feiertag hat Vorrang vor Sonntag (kein Doppelzuschlag — analog computeDayCategoryHours).
     if (isPlainFullDay(start, end)) {
+      const holidayDay = isGermanHoliday(start, state);
+      const sundayDay = start.getUTCDay() === 0;
       return {
         valuedHours: input.plannedHours,
         nightHours: 0,
-        sundayHours: 0,
-        holidayHours: 0,
+        sundayHours: sundayDay && !holidayDay ? input.plannedHours : 0,
+        holidayHours: holidayDay ? input.plannedHours : 0,
       };
     }
     // Zuschlagsfortzahlung (Lohnausfallprinzip): Deckt die Abwesenheit einen

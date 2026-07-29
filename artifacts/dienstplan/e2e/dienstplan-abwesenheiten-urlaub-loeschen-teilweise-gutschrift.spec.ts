@@ -153,6 +153,10 @@ test("Löschen nur eines von zwei Urlaubs-Zeiträumen bucht exakt diesen gut", a
 
   // 1) Beide getrennten Urlaubs-Zeiträume buchen.
   await bookAbsence(page, assistant.name, "Urlaub", KEEP_FROM, KEEP_TO);
+  // Warten bis der erste Save abgeschlossen ist (absence-list nur bei Einträgen
+  // vorhanden), bevor der zweite Zeitraum eingetragen wird. Sonst überschneidet
+  // sich der Form-Reset mit dem Datumsbefüllen des zweiten Buchungsvorgangs.
+  await expect(page.getByTestId("absence-list")).toBeVisible({ timeout: 25000 });
   await bookAbsence(page, assistant.name, "Urlaub", DELETE_FROM, DELETE_TO);
 
   // Beide Zeiträume erscheinen als getrennte Zeilen dieses Assistenten.
@@ -160,7 +164,7 @@ test("Löschen nur eines von zwei Urlaubs-Zeiträumen bucht exakt diesen gut", a
     .getByTestId("absence-list")
     .locator("> div")
     .filter({ hasText: assistant.name });
-  await expect(assistantRows).toHaveCount(2);
+  await expect(assistantRows).toHaveCount(2, { timeout: 35000 });
 
   // Zwischenstand: beide Zeiträume zusammen abgezogen.
   await expect(taken).toHaveText(String(TOTAL_DAYS));
@@ -184,9 +188,9 @@ test("Löschen nur eines von zwei Urlaubs-Zeiträumen bucht exakt diesen gut", a
   await expect(deleteRow).toHaveCount(1);
   await deleteRow.getByTestId("absence-delete").click();
 
-  // Nach dem Löschen: nur noch der behaltene Zeitraum verbleibt.
-  await expect(assistantRows).toHaveCount(1);
-  await expect(deleteRow).toHaveCount(0);
+  // Nach dem Löschen: nur noch der behaltene Zeitraum verbleibt (~4-5s DELETE).
+  await expect(assistantRows).toHaveCount(1, { timeout: 15000 });
+  await expect(deleteRow).toHaveCount(0, { timeout: 5000 });
 
   // Teilweise Gutschrift: NUR der gelöschte Zeitraum (3 Tage) zurückgebucht,
   // der verbleibende 2-Tage-Zeitraum bleibt abgezogen.

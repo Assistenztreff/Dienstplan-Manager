@@ -145,7 +145,8 @@ test("Entfernen eines Urlaubs-Zeitraums bucht den Resturlaub wieder gut", async 
 
   // 1) Urlaub buchen (3 zusammenhängende Tage).
   await bookAbsence(page, assistant.name, "Urlaub", VACATION_FROM, VACATION_TO);
-  await expect(page.getByTestId("absence-list")).toContainText("Urlaub");
+  // absence-list existiert nur wenn Einträge vorhanden; ~5s/Tag → 25s Puffer.
+  await expect(page.getByTestId("absence-list")).toContainText("Urlaub", { timeout: 25000 });
 
   // Zwischenstand: genommener Urlaub und Resturlaub spiegeln die Buchung.
   await expect(taken).toHaveText(String(EXPECTED_VACATION_DAYS));
@@ -169,11 +170,11 @@ test("Entfernen eines Urlaubs-Zeitraums bucht den Resturlaub wieder gut", async 
   await expect(absenceRow).toHaveCount(1);
   await absenceRow.getByTestId("absence-delete").click();
 
-  // Nach dem Löschen: der Eintrag verschwindet aus der Liste.
-  await expect(absenceRow).toHaveCount(0);
+  // Nach dem Löschen: der Eintrag verschwindet aus der Liste (~4-5s DELETE).
+  await expect(absenceRow).toHaveCount(0, { timeout: 15000 });
 
   // Resturlaub-Gutschrift: genommener Urlaub zurück auf 0, voller Resturlaub.
-  await expect(taken).toHaveText("0");
+  await expect(taken).toHaveText("0", { timeout: 10000 });
   await expect(remaining).toHaveText(String(VACATION_DAYS));
 
   // Backend-Gegenprobe: vacationDaysUsed des Vertrags wurde zurückgebucht.

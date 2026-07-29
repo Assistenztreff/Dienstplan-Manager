@@ -462,6 +462,19 @@ export function AllowanceSettingsForm() {
                 />
               </div>
 
+              {/* Hinweis SV-Pflicht bei Abwesenheits-Zuschlägen */}
+              <div className="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/40 px-4 py-3 text-sm text-blue-900 dark:text-blue-200">
+                <p className="font-medium mb-1">Zuschläge auf Urlaubs- und Kranktage</p>
+                <p className="text-blue-800 dark:text-blue-300">
+                  Fällt ein ganztägiger Urlaubs- oder Kranktag auf einen Sonntag oder Feiertag,
+                  werden die oben konfigurierten Zuschlagssätze auf die vertraglichen Tagesstunden
+                  angerechnet (§&nbsp;11 BUrlG, §&nbsp;2 EFZG). Diese Zuschläge sind{" "}
+                  <strong>sozialversicherungs- und lohnsteuerpflichtig</strong> – im Gegensatz zu
+                  Zuschlägen auf geleistete Arbeit, die nach §&nbsp;3b&nbsp;EStG steuerfrei sein
+                  können.
+                </p>
+              </div>
+
               <div className="space-y-1.5">
                 <Label htmlFor="state">Bundesland</Label>
                 <Select value={form.state} onValueChange={(v) => set("state", v)}>

@@ -150,7 +150,8 @@ test("geplante Krank-Tage verbrauchen bei Assistenten MIT Vertrag keinen Resturl
 
   // 1) Krank-Tage buchen (4 Tage).
   await bookAbsence(page, assistant.name, "Krank", SICK_FROM, SICK_TO);
-  await expect(page.getByTestId("absence-list")).toContainText("Krank");
+  // absence-list existiert nur wenn Einträge vorhanden; ~5s/Tag → 25s Puffer.
+  await expect(page.getByTestId("absence-list")).toContainText("Krank", { timeout: 25000 });
 
   // Krank-Tage dürfen den Resturlaub NICHT verändern: weiterhin 0 genommen und
   // voller Resturlaub (sonst stünde hier 4 genommen bzw. 26 Resturlaub).
@@ -159,7 +160,7 @@ test("geplante Krank-Tage verbrauchen bei Assistenten MIT Vertrag keinen Resturl
 
   // 2) Urlaubs-Tage buchen (2 Tage).
   await bookAbsence(page, assistant.name, "Urlaub", VACATION_FROM, VACATION_TO);
-  await expect(page.getByTestId("absence-list")).toContainText("Urlaub");
+  await expect(page.getByTestId("absence-list")).toContainText("Urlaub", { timeout: 25000 });
 
   // Jetzt zählt der Zähler ausschließlich die Urlaubstage (2), NICHT die
   // Krank-Tage (sonst stünden hier 6 genommen bzw. 24 Resturlaub).

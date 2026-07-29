@@ -1,4 +1,5 @@
 import { execSync, spawn, type ChildProcess } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test, expect, request as playwrightRequest } from "@playwright/test";
@@ -166,6 +167,112 @@ test.describe("Produktions-Modus: Dev-Nutzer-Wechsler unsichtbar", () => {
   test.afterAll(() => {
     killProcessTree(previewProc);
     killProcessTree(apiProc);
+  });
+
+  test("PWA-Assets: Manifest, Icons und Service-Worker-Registrierung (#596)", async ({ page }) => {
+    const api = await playwrightRequest.newContext({ baseURL: PREVIEW_URL });
+    try {
+      // manifest.webmanifest muss mit korrektem Content-Type ausgeliefert werden.
+      const manifest = await api.get("/manifest.webmanifest");
+      expect(manifest.status(), "GET /manifest.webmanifest muss 200 liefern").toBe(200);
+      expect(
+        manifest.headers()["content-type"],
+        "manifest.webmanifest muss Content-Type application/manifest+json haben",
+      ).toContain("application/manifest+json");
+      const manifestBody = (await manifest.json()) as { name?: string; icons?: unknown[] };
+      expect(manifestBody.name, "Manifest muss einen Namen haben").toBeTruthy();
+      expect(manifestBody.icons, "Manifest muss Icons enthalten").toBeTruthy();
+
+      // Wichtigste Icons müssen erreichbar sein.
+      for (const icon of ["/icons/icon-192.png", "/icons/icon-512.png", "/icons/icon-180.png"]) {
+        const r = await api.get(icon);
+        expect(r.status(), `Icon ${icon} muss 200 liefern`).toBe(200);
+        expect(r.headers()["content-type"], `${icon} muss image/png haben`).toContain("image/png");
+      }
+
+      // sw.js muss ausgeliefert werden (Service Worker ist nur im Prod-Build aktiv).
+      const sw = await api.get("/sw.js");
+      expect(sw.status(), "GET /sw.js muss 200 liefern").toBe(200);
+      expect(
+        sw.headers()["content-type"],
+        "sw.js muss JavaScript-Content-Type haben",
+      ).toMatch(/javascript|text\/plain/);
+    } finally {
+      await api.dispose();
+    }
+
+    // index.html muss manifest-Link und apple-touch-icon enthalten.
+    await page.goto(PREVIEW_URL);
+    const manifestLink = await page.locator('link[rel="manifest"]').getAttribute("href");
+    expect(manifestLink, "index.html muss einen manifest-Link enthalten").toBe(
+      "/manifest.webmanifest",
+    );
+    const appleIcon = await page.locator('link[rel="apple-touch-icon"]').getAttribute("href");
+    expect(appleIcon, "index.html muss einen apple-touch-icon-Link enthalten").toBeTruthy();
+
+    // Im Prod-Build muss navigator.serviceWorker.register() aufgerufen worden
+    // sein (nur wenn der Browser SW unterstützt — in Chromium immer der Fall).
+    const swRegistered = await page.evaluate(async () => {
+      if (!("serviceWorker" in navigator)) return false;
+      const reg = await navigator.serviceWorker.getRegistration("/");
+      return !!reg;
+    });
+    expect(swRegistered, "Im Prod-Build muss der Service Worker registriert sein").toBe(true);
+  });
+
+  test("SW-Update-Toast: 'Neu laden'-Hinweis erscheint nach Deploy-Update (#652)", async ({ page }) => {
+    // Pfad zur gebauten sw.js im dist-Verzeichnis (nach dem build im beforeAll).
+    const swDistPath = path.resolve(specDir, "..", "dist", "sw.js");
+    const originalSwContent = readFileSync(swDistPath, "utf-8");
+
+    try {
+      // --- 1. App laden, SW v1 installieren lassen --------------------------------
+      await page.goto(PREVIEW_URL);
+      // Warten, bis der Service Worker den Tab kontrolliert (activating → activated).
+      // Das kann ein paar Sekunden dauern (install → activate lifecycle).
+      await page.waitForFunction(
+        () => navigator.serviceWorker.controller !== null,
+        { timeout: 30_000 },
+      );
+
+      // --- 2. sw.js auf Disk leicht abändern → erzwingt Byte-Unterschied ----------
+      // Der Browser lädt sw.js beim update() neu; eine einzige Kommentarzeile
+      // reicht, damit der Browser einen anderen Hash erkennt und ein Update
+      // einleitet.
+      writeFileSync(swDistPath, originalSwContent + "\n// e2e-update-check\n", "utf-8");
+
+      // --- 3. SW-Update anstoßen --------------------------------------------------
+      // navigator.serviceWorker.getRegistration().update() triggert einen neuen
+      // Byte-für-Byte-Vergleich mit der gerade geänderten sw.js auf dem Server.
+      await page.evaluate(() =>
+        navigator.serviceWorker.getRegistration("/").then((r) => r?.update()),
+      );
+
+      // --- 4. "Neue Version verfügbar"-Toast prüfen --------------------------------
+      // main.tsx setzt den Toast, sobald der neue SW 'installed' (= wartend)
+      // erreicht und ein aktiver Controller vorhanden ist. Gelegentlich reagiert
+      // das Update innerhalb von Sekunden; 40 s reichen als Sicherheitspuffer.
+      await expect(
+        page.getByText("Neue Version verfügbar"),
+        "Nach einem SW-Byte-Update muss der 'Neue Version verfügbar'-Toast erscheinen",
+      ).toBeVisible({ timeout: 40_000 });
+
+      // --- 5. "Neu laden"-Button klicken ------------------------------------------
+      // Die Schaltfläche sendet SKIP_WAITING an den neuen SW, der daraufhin
+      // übernimmt; controllerchange → window.location.reload().
+      await page.getByRole("button", { name: "Neu laden" }).click();
+
+      // --- 6. Seite lädt neu und SW v2 ist jetzt aktiver Controller ---------------
+      await page.waitForLoadState("domcontentloaded", { timeout: 20_000 });
+      const swUrl = await page.evaluate(async () => {
+        const reg = await navigator.serviceWorker.getRegistration("/");
+        return reg?.active?.scriptURL ?? null;
+      });
+      expect(swUrl, "Nach 'Neu laden' muss ein aktiver SW vorhanden sein").toBeTruthy();
+    } finally {
+      // SW-Datei immer wiederherstellen, damit Folge-Tests kein Artefakt sehen.
+      writeFileSync(swDistPath, originalSwContent, "utf-8");
+    }
   });
 
   test("Prod-API: dev-users/dev-login existieren nicht (404), Login funktioniert", async () => {

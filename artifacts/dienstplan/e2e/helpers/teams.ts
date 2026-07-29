@@ -8,6 +8,7 @@ import {
   dbDeleteAccountByEmail,
   dbSeedAdmin,
   dbSetAccountPlan,
+  dbSetUserActive,
 } from "./db";
 
 /**

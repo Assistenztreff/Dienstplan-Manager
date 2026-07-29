@@ -113,7 +113,8 @@ test("geplanter Urlaub erscheint in der Resturlaub-Karte auch ohne Vertrag", asy
   await page.getByTestId("absence-save").click();
 
   // Buchung erscheint in der Liste.
-  await expect(page.getByTestId("absence-list")).toContainText("Urlaub");
+  // absence-list existiert nur wenn Einträge vorhanden. 3 Tage = ~15 s → 35 s Puffer.
+  await expect(page.getByTestId("absence-list")).toContainText("Urlaub", { timeout: 35000 });
 
   // Nach der Buchung: weiterhin "Kein Vertrag", jetzt mit korrekter Tageszahl.
   await expect(row).toContainText("Kein Vertrag");

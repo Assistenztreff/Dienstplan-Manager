@@ -153,6 +153,11 @@ test("Löschen eines Krank-Zeitraums lässt den genommenen Urlaub unberührt", a
 
   // 1) Beide Zeiträume buchen: Urlaub (2 Tage) und Krank (3 Tage).
   await bookAbsence(page, assistant.name, "Urlaub", VACATION_FROM, VACATION_TO);
+  // Warten bis der Urlaubs-Save abgeschlossen ist (absence-list erscheint erst mit
+  // Einträgen), bevor der Krank-Zeitraum eingetragen wird. Sonst überschneidet
+  // sich der laufende Save-API-Call mit dem Form-Reset und löscht die frisch
+  // gesetzten Krank-Daten wieder.
+  await expect(page.getByTestId("absence-list")).toBeVisible({ timeout: 25000 });
   await bookAbsence(page, assistant.name, "Krank", SICK_FROM, SICK_TO);
 
   // Beide Zeiträume erscheinen als getrennte Zeilen dieses Assistenten.
@@ -160,7 +165,8 @@ test("Löschen eines Krank-Zeitraums lässt den genommenen Urlaub unberührt", a
     .getByTestId("absence-list")
     .locator("> div")
     .filter({ hasText: assistant.name });
-  await expect(assistantRows).toHaveCount(2);
+  // 5 sequentielle Abwesenheits-POSTs à ~4-5s — 30s Puffer nötig.
+  await expect(assistantRows).toHaveCount(2, { timeout: 35000 });
 
   // Zwischenstand: NUR der Urlaub zählt (2 genommen); die Krank-Tage ändern den
   // Resturlaub nicht (sonst stünden hier 5 genommen bzw. 25 Resturlaub).
