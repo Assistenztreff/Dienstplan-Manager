@@ -46,6 +46,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { readableApiError, planUpgradeMessage } from "@/lib/api-error";
 import { warnIfMonthClosed } from "@/lib/month-closing-warning";
+import { computeAutoPauseMinutes } from "@/lib/pause";
 import { useTeam } from "@/context/team";
 
 type Assistant = { id: number; name: string };
@@ -186,6 +187,8 @@ function isoWeekday(dateStr: string): number {
 
 const WEEKDAY_SHORT = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
+const TIME_RE = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+
 function weekdaysLabel(weekdays: number[]): string {
   return [...weekdays]
     .sort((a, b) => a - b)
@@ -317,6 +320,9 @@ export function ShiftDialog({
   // Überschneidung (für die Warnung + force-Wiederholung).
   const [bulkCreated, setBulkCreated] = useState<Set<string>>(new Set());
   const [bulkConflicts, setBulkConflicts] = useState<string[] | null>(null);
+  // Pausen-Vorbefüllung: sobald der Nutzer das Pausenfeld selbst angefasst hat,
+  // wird es von der automatischen Regel nicht mehr überschrieben.
+  const [pauseTouched, setPauseTouched] = useState(false);
 
   // Formular nur beim Öffnen / beim Wechsel des Bearbeitungsziels zurücksetzen,
   // nicht wenn die Schichtmodelle asynchron nachladen (sonst gehen Eingaben verloren).
@@ -328,6 +334,7 @@ export function ShiftDialog({
       setBulkCreated(new Set());
       setBulkConflicts(null);
       setDateOpen(false);
+      setPauseTouched(false);
       setForm(buildInitialForm());
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -389,6 +396,37 @@ export function ShiftDialog({
   // keine Zeit-/Status-Felder.
   const isTeam = form.selection === "team";
   const is24h = form.selection === "legacy:full_day";
+
+  // Automatische Pausen-Vorbefüllung (Pausenregelung in den Einstellungen):
+  // NUR beim Anlegen neuer Dienste und nur, solange der Nutzer das Pausenfeld
+  // nicht selbst angefasst hat. Bearbeitete/bestehende Dienste bleiben
+  // unverändert (keine rückwirkende Neuberechnung).
+  const pauseAutoEnabled = allowanceSettings?.pauseAutoEnabled === true;
+  useEffect(() => {
+    if (!open || isEditing || pauseTouched || !pauseAutoEnabled) return;
+    if (isAbsence || isTeam) return;
+    if (!TIME_RE.test(form.startTime) || !TIME_RE.test(form.endTime)) return;
+    const [sh, sm] = form.startTime.split(":").map(Number);
+    const [eh, em] = form.endTime.split(":").map(Number);
+    let duration = eh * 60 + em - (sh * 60 + sm);
+    // Endzeit <= Startzeit = Tagesübergang; 24h-Dienst = feste 24 Stunden.
+    if (duration <= 0) duration += 24 * 60;
+    if (is24h) duration = 24 * 60;
+    const minutes = computeAutoPauseMinutes(duration, allowanceSettings ?? {});
+    const next = minutes > 0 ? String(minutes) : "";
+    setForm((f) => (f.pauseMinutes === next ? f : { ...f, pauseMinutes: next }));
+  }, [
+    open,
+    isEditing,
+    pauseTouched,
+    pauseAutoEnabled,
+    isAbsence,
+    isTeam,
+    is24h,
+    form.startTime,
+    form.endTime,
+    allowanceSettings,
+  ]);
 
   // Auswahl-Anzeige des Assistenten-Pickers (nur Mitglieder des aktuellen Teams).
   const selectedAssistant = assistants.find((a) => String(a.id) === form.userId);
@@ -1137,7 +1175,10 @@ export function ShiftDialog({
                   placeholder="0"
                   data-testid="shift-dialog-pause"
                   value={form.pauseMinutes}
-                  onChange={(e) => set("pauseMinutes", e.target.value)}
+                  onChange={(e) => {
+                    setPauseTouched(true);
+                    set("pauseMinutes", e.target.value);
+                  }}
                 />
               </div>
             </div>

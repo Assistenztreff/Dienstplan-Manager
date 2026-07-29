@@ -793,6 +793,16 @@ export interface AllowanceSettings {
   teamMeetingEnabled: boolean;
   /** Gutgeschriebene Stunden je Teamsitzung und Assistenzkraft (Konto-global, Standard 1,0). */
   teamMeetingHours: number;
+  /** Automatische Pausen-Vorbefüllung aktiv? Konto-global (kein Team-Override); Standard AUS. Bei AN befüllt der Schicht-Dialog die unbezahlte Pause neuer Dienste anhand der Dienstdauer vor (überschreibbar); bestehende Dienste bleiben unverändert. */
+  pauseAutoEnabled: boolean;
+  /** Ab dieser Dienstdauer (Stunden) gilt Pausen-Stufe 1 (Standard 6). */
+  pauseThreshold1Hours: number;
+  /** Pausenminuten der Stufe 1 (Standard 30). */
+  pauseMinutes1: number;
+  /** Ab dieser Dienstdauer (Stunden) gilt Pausen-Stufe 2 (Standard 9). */
+  pauseThreshold2Hours: number;
+  /** Pausenminuten der Stufe 2 (Standard 45). */
+  pauseMinutes2: number;
   updatedAt: string;
 }
 
@@ -885,6 +895,30 @@ export interface AllowanceSettingsInput {
      * @minimum 0.1
      */
   teamMeetingHours?: number;
+  /** Automatische Pausen-Vorbefüllung aktivieren/deaktivieren (konto-global, kein Team-Override). */
+  pauseAutoEnabled?: boolean;
+  /**
+     * Ab dieser Dienstdauer (Stunden) gilt Pausen-Stufe 1.
+     * @minimum 0.1
+     */
+  pauseThreshold1Hours?: number;
+  /**
+     * Pausenminuten der Stufe 1.
+     * @minimum 0
+     * @maximum 1440
+     */
+  pauseMinutes1?: number;
+  /**
+     * Ab dieser Dienstdauer (Stunden) gilt Pausen-Stufe 2.
+     * @minimum 0.1
+     */
+  pauseThreshold2Hours?: number;
+  /**
+     * Pausenminuten der Stufe 2.
+     * @minimum 0
+     * @maximum 1440
+     */
+  pauseMinutes2?: number;
 }
 
 export interface TimeTrackingStatus {

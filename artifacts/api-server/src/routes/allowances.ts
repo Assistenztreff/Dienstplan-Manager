@@ -72,6 +72,11 @@ router.get("/allowance-settings", requireAdmin, async (req, res): Promise<void> 
         timeTrackingEnabled: account.timeTrackingEnabled,
         teamMeetingEnabled: account.teamMeetingEnabled,
         teamMeetingHours: account.teamMeetingHours,
+        pauseAutoEnabled: account.pauseAutoEnabled,
+        pauseThreshold1Hours: account.pauseThreshold1Hours,
+        pauseMinutes1: account.pauseMinutes1,
+        pauseThreshold2Hours: account.pauseThreshold2Hours,
+        pauseMinutes2: account.pauseMinutes2,
         isOverride: true,
       });
       return;
@@ -124,6 +129,11 @@ router.put("/allowance-settings", requireAdmin, async (req, res): Promise<void> 
       timeTrackingEnabled: account.timeTrackingEnabled,
       teamMeetingEnabled: account.teamMeetingEnabled,
       teamMeetingHours: account.teamMeetingHours,
+      pauseAutoEnabled: account.pauseAutoEnabled,
+      pauseThreshold1Hours: account.pauseThreshold1Hours,
+      pauseMinutes1: account.pauseMinutes1,
+      pauseThreshold2Hours: account.pauseThreshold2Hours,
+      pauseMinutes2: account.pauseMinutes2,
       isOverride: true,
     });
     return;

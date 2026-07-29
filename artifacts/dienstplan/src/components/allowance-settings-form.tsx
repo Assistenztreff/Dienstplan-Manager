@@ -46,6 +46,11 @@ type FormState = {
   ersatzruhetagEnabled: boolean;
   teamMeetingEnabled: boolean;
   teamMeetingHours: string;
+  pauseAutoEnabled: boolean;
+  pauseThreshold1Hours: string;
+  pauseMinutes1: string;
+  pauseThreshold2Hours: string;
+  pauseMinutes2: string;
 };
 
 // Sonderwert für "erbt" (Abrechnungsart nicht auf dieser Ebene gesetzt).
@@ -146,6 +151,11 @@ export function AllowanceSettingsForm() {
     ersatzruhetagEnabled: true,
     teamMeetingEnabled: false,
     teamMeetingHours: "1",
+    pauseAutoEnabled: false,
+    pauseThreshold1Hours: "6",
+    pauseMinutes1: "30",
+    pauseThreshold2Hours: "9",
+    pauseMinutes2: "45",
   });
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [saving, setSaving] = useState(false);
@@ -176,6 +186,11 @@ export function AllowanceSettingsForm() {
         ersatzruhetagEnabled: settings.ersatzruhetagEnabled ?? true,
         teamMeetingEnabled: settings.teamMeetingEnabled ?? false,
         teamMeetingHours: String(settings.teamMeetingHours ?? 1),
+        pauseAutoEnabled: settings.pauseAutoEnabled ?? false,
+        pauseThreshold1Hours: String(settings.pauseThreshold1Hours ?? 6),
+        pauseMinutes1: String(settings.pauseMinutes1 ?? 30),
+        pauseThreshold2Hours: String(settings.pauseThreshold2Hours ?? 9),
+        pauseMinutes2: String(settings.pauseMinutes2 ?? 45),
       });
       setErrors({});
       setSaved(false);
@@ -219,6 +234,22 @@ export function AllowanceSettingsForm() {
       const tmh = Number(form.teamMeetingHours);
       if (form.teamMeetingHours === "" || Number.isNaN(tmh) || tmh < 0.1)
         errs.teamMeetingHours = "Mindestens 0,1";
+      if (form.pauseAutoEnabled) {
+        const validateThreshold = (v: string): string | undefined => {
+          const n = Number(v);
+          if (v === "" || Number.isNaN(n) || n < 0.1) return "Mindestens 0,1";
+          return undefined;
+        };
+        const validateMinutes = (v: string): string | undefined => {
+          const n = Number(v);
+          if (v === "" || Number.isNaN(n) || n < 0 || n > 1440) return "0 bis 1440";
+          return undefined;
+        };
+        errs.pauseThreshold1Hours = validateThreshold(form.pauseThreshold1Hours);
+        errs.pauseThreshold2Hours = validateThreshold(form.pauseThreshold2Hours);
+        errs.pauseMinutes1 = validateMinutes(form.pauseMinutes1);
+        errs.pauseMinutes2 = validateMinutes(form.pauseMinutes2);
+      }
     }
     const cleaned = Object.fromEntries(Object.entries(errs).filter(([, v]) => v));
     setErrors(cleaned);
@@ -262,6 +293,11 @@ export function AllowanceSettingsForm() {
                 ersatzruhetagEnabled: f.ersatzruhetagEnabled,
                 teamMeetingEnabled: f.teamMeetingEnabled,
                 teamMeetingHours: Number(f.teamMeetingHours),
+                pauseAutoEnabled: f.pauseAutoEnabled,
+                pauseThreshold1Hours: Number(f.pauseThreshold1Hours),
+                pauseMinutes1: Number(f.pauseMinutes1),
+                pauseThreshold2Hours: Number(f.pauseThreshold2Hours),
+                pauseMinutes2: Number(f.pauseMinutes2),
               }
             : {}),
         },
@@ -564,6 +600,105 @@ export function AllowanceSettingsForm() {
                           gutgeschrieben und mit dem Stundenlohn vergütet.
                         </p>
                       </div>
+                    )}
+                  </div>
+
+                  <div className="border-t border-border/60 pt-5 space-y-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="pauseAutoEnabled" className="text-sm font-semibold">
+                          Pausen automatisch vorbefüllen
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Befüllt beim Anlegen neuer Dienste die unbezahlte Pause automatisch
+                          anhand der Dienstdauer (Staffel unten). Der Wert bleibt pro Dienst
+                          überschreibbar; bestehende Dienste werden nicht verändert.
+                        </p>
+                      </div>
+                      <Switch
+                        id="pauseAutoEnabled"
+                        data-testid="allowance-pause-auto-switch"
+                        checked={form.pauseAutoEnabled}
+                        onCheckedChange={(v) => set("pauseAutoEnabled", v)}
+                      />
+                    </div>
+                    {form.pauseAutoEnabled && (
+                      <>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="pauseThreshold1Hours">Ab Dienstdauer (Std.)</Label>
+                            <Input
+                              id="pauseThreshold1Hours"
+                              type="number"
+                              min="0.1"
+                              step="0.5"
+                              data-testid="allowance-pause-threshold1"
+                              value={form.pauseThreshold1Hours}
+                              onChange={(e) => set("pauseThreshold1Hours", e.target.value)}
+                              className={errors.pauseThreshold1Hours ? "border-destructive" : ""}
+                            />
+                            {errors.pauseThreshold1Hours && (
+                              <p className="text-xs text-destructive">{errors.pauseThreshold1Hours}</p>
+                            )}
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="pauseMinutes1">Pause (Min.)</Label>
+                            <Input
+                              id="pauseMinutes1"
+                              type="number"
+                              min="0"
+                              max="1440"
+                              step="5"
+                              data-testid="allowance-pause-minutes1"
+                              value={form.pauseMinutes1}
+                              onChange={(e) => set("pauseMinutes1", e.target.value)}
+                              className={errors.pauseMinutes1 ? "border-destructive" : ""}
+                            />
+                            {errors.pauseMinutes1 && (
+                              <p className="text-xs text-destructive">{errors.pauseMinutes1}</p>
+                            )}
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="pauseThreshold2Hours">Ab Dienstdauer (Std.)</Label>
+                            <Input
+                              id="pauseThreshold2Hours"
+                              type="number"
+                              min="0.1"
+                              step="0.5"
+                              data-testid="allowance-pause-threshold2"
+                              value={form.pauseThreshold2Hours}
+                              onChange={(e) => set("pauseThreshold2Hours", e.target.value)}
+                              className={errors.pauseThreshold2Hours ? "border-destructive" : ""}
+                            />
+                            {errors.pauseThreshold2Hours && (
+                              <p className="text-xs text-destructive">{errors.pauseThreshold2Hours}</p>
+                            )}
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="pauseMinutes2">Pause (Min.)</Label>
+                            <Input
+                              id="pauseMinutes2"
+                              type="number"
+                              min="0"
+                              max="1440"
+                              step="5"
+                              data-testid="allowance-pause-minutes2"
+                              value={form.pauseMinutes2}
+                              onChange={(e) => set("pauseMinutes2", e.target.value)}
+                              className={errors.pauseMinutes2 ? "border-destructive" : ""}
+                            />
+                            {errors.pauseMinutes2 && (
+                              <p className="text-xs text-destructive">{errors.pauseMinutes2}</p>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Zweistufige Staffel: Erreicht die Dienstdauer eine Schwelle, wird die
+                          zugehörige Pause vorbefüllt — die höhere erreichte Stufe gewinnt.
+                          Voreinstellung = gesetzliche Staffel (§ 4 ArbZG): ab 6 Std. → 30 Min.,
+                          ab 9 Std. → 45 Min. Gilt konto-weit für alle Teams.
+                        </p>
+                      </>
                     )}
                   </div>
 

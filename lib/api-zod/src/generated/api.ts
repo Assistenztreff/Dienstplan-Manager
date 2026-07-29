@@ -790,6 +790,11 @@ export const GetAllowanceSettingsResponse = zod.object({
   "ersatzruhetagEnabled": zod.boolean().describe('Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktiv? Bei false verdient Feiertagsarbeit keinen Ausgleichs-Ruhetag.'),
   "teamMeetingEnabled": zod.boolean().describe('Team-Dienst (Teamsitzung) aktiv? Konto-global (kein Team-Override); Standard AUS. Bei AUS lehnen POST\/PATCH \/shifts den Typ team mit 400 ab; bestehende Team-Einträge bleiben sichtbar (Bestandsschutz).'),
   "teamMeetingHours": zod.number().describe('Gutgeschriebene Stunden je Teamsitzung und Assistenzkraft (Konto-global, Standard 1,0).'),
+  "pauseAutoEnabled": zod.boolean().describe('Automatische Pausen-Vorbefüllung aktiv? Konto-global (kein Team-Override); Standard AUS. Bei AN befüllt der Schicht-Dialog die unbezahlte Pause neuer Dienste anhand der Dienstdauer vor (überschreibbar); bestehende Dienste bleiben unverändert.'),
+  "pauseThreshold1Hours": zod.number().describe('Ab dieser Dienstdauer (Stunden) gilt Pausen-Stufe 1 (Standard 6).'),
+  "pauseMinutes1": zod.number().describe('Pausenminuten der Stufe 1 (Standard 30).'),
+  "pauseThreshold2Hours": zod.number().describe('Ab dieser Dienstdauer (Stunden) gilt Pausen-Stufe 2 (Standard 9).'),
+  "pauseMinutes2": zod.number().describe('Pausenminuten der Stufe 2 (Standard 45).'),
   "updatedAt": zod.coerce.date()
 })
 
@@ -818,6 +823,16 @@ export const updateAllowanceSettingsBodyVacationFactorMin = 0;
 
 export const updateAllowanceSettingsBodyTeamMeetingHoursMin = 0.1;
 
+export const updateAllowanceSettingsBodyPauseThreshold1HoursMin = 0.1;
+
+export const updateAllowanceSettingsBodyPauseMinutes1Min = 0;
+export const updateAllowanceSettingsBodyPauseMinutes1Max = 1440;
+
+export const updateAllowanceSettingsBodyPauseThreshold2HoursMin = 0.1;
+
+export const updateAllowanceSettingsBodyPauseMinutes2Min = 0;
+export const updateAllowanceSettingsBodyPauseMinutes2Max = 1440;
+
 
 
 export const UpdateAllowanceSettingsBody = zod.object({
@@ -835,7 +850,12 @@ export const UpdateAllowanceSettingsBody = zod.object({
   "vacationFactor": zod.number().min(updateAllowanceSettingsBodyVacationFactorMin).optional(),
   "ersatzruhetagEnabled": zod.boolean().optional().describe('Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktivieren\/deaktivieren.'),
   "teamMeetingEnabled": zod.boolean().optional().describe('Team-Dienst (Teamsitzung) aktivieren\/deaktivieren (konto-global, kein Team-Override).'),
-  "teamMeetingHours": zod.number().min(updateAllowanceSettingsBodyTeamMeetingHoursMin).optional().describe('Gutgeschriebene Stunden je Teamsitzung und Assistenzkraft.')
+  "teamMeetingHours": zod.number().min(updateAllowanceSettingsBodyTeamMeetingHoursMin).optional().describe('Gutgeschriebene Stunden je Teamsitzung und Assistenzkraft.'),
+  "pauseAutoEnabled": zod.boolean().optional().describe('Automatische Pausen-Vorbefüllung aktivieren\/deaktivieren (konto-global, kein Team-Override).'),
+  "pauseThreshold1Hours": zod.number().min(updateAllowanceSettingsBodyPauseThreshold1HoursMin).optional().describe('Ab dieser Dienstdauer (Stunden) gilt Pausen-Stufe 1.'),
+  "pauseMinutes1": zod.number().min(updateAllowanceSettingsBodyPauseMinutes1Min).max(updateAllowanceSettingsBodyPauseMinutes1Max).optional().describe('Pausenminuten der Stufe 1.'),
+  "pauseThreshold2Hours": zod.number().min(updateAllowanceSettingsBodyPauseThreshold2HoursMin).optional().describe('Ab dieser Dienstdauer (Stunden) gilt Pausen-Stufe 2.'),
+  "pauseMinutes2": zod.number().min(updateAllowanceSettingsBodyPauseMinutes2Min).max(updateAllowanceSettingsBodyPauseMinutes2Max).optional().describe('Pausenminuten der Stufe 2.')
 })
 
 export const UpdateAllowanceSettingsResponse = zod.object({
@@ -857,6 +877,11 @@ export const UpdateAllowanceSettingsResponse = zod.object({
   "ersatzruhetagEnabled": zod.boolean().describe('Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktiv? Bei false verdient Feiertagsarbeit keinen Ausgleichs-Ruhetag.'),
   "teamMeetingEnabled": zod.boolean().describe('Team-Dienst (Teamsitzung) aktiv? Konto-global (kein Team-Override); Standard AUS. Bei AUS lehnen POST\/PATCH \/shifts den Typ team mit 400 ab; bestehende Team-Einträge bleiben sichtbar (Bestandsschutz).'),
   "teamMeetingHours": zod.number().describe('Gutgeschriebene Stunden je Teamsitzung und Assistenzkraft (Konto-global, Standard 1,0).'),
+  "pauseAutoEnabled": zod.boolean().describe('Automatische Pausen-Vorbefüllung aktiv? Konto-global (kein Team-Override); Standard AUS. Bei AN befüllt der Schicht-Dialog die unbezahlte Pause neuer Dienste anhand der Dienstdauer vor (überschreibbar); bestehende Dienste bleiben unverändert.'),
+  "pauseThreshold1Hours": zod.number().describe('Ab dieser Dienstdauer (Stunden) gilt Pausen-Stufe 1 (Standard 6).'),
+  "pauseMinutes1": zod.number().describe('Pausenminuten der Stufe 1 (Standard 30).'),
+  "pauseThreshold2Hours": zod.number().describe('Ab dieser Dienstdauer (Stunden) gilt Pausen-Stufe 2 (Standard 9).'),
+  "pauseMinutes2": zod.number().describe('Pausenminuten der Stufe 2 (Standard 45).'),
   "updatedAt": zod.coerce.date()
 })
 

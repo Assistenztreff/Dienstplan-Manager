@@ -53,4 +53,28 @@ export interface AllowanceSettingsInput {
      * @minimum 0.1
      */
   teamMeetingHours?: number;
+  /** Automatische Pausen-Vorbefüllung aktivieren/deaktivieren (konto-global, kein Team-Override). */
+  pauseAutoEnabled?: boolean;
+  /**
+     * Ab dieser Dienstdauer (Stunden) gilt Pausen-Stufe 1.
+     * @minimum 0.1
+     */
+  pauseThreshold1Hours?: number;
+  /**
+     * Pausenminuten der Stufe 1.
+     * @minimum 0
+     * @maximum 1440
+     */
+  pauseMinutes1?: number;
+  /**
+     * Ab dieser Dienstdauer (Stunden) gilt Pausen-Stufe 2.
+     * @minimum 0.1
+     */
+  pauseThreshold2Hours?: number;
+  /**
+     * Pausenminuten der Stufe 2.
+     * @minimum 0
+     * @maximum 1440
+     */
+  pauseMinutes2?: number;
 }

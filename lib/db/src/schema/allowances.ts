@@ -66,6 +66,17 @@ export const allowanceSettingsTable = pgTable(
     // Assistenzkräften des Teams teamMeetingHours als Arbeitszeit gut.
     teamMeetingEnabled: boolean("team_meeting_enabled").notNull().default(false),
     teamMeetingHours: real("team_meeting_hours").notNull().default(1),
+    // Pausenregelung: KONTO-GLOBAL (nur Konto-Zeile team_id NULL maßgeblich,
+    // kein Team-Override). Bei AN befüllt der Schicht-Dialog das Feld
+    // "Unbezahlte Pause" neuer Dienste anhand der Dienstdauer automatisch vor
+    // (Staffel: ab Schwelle 1 → Minuten 1, ab Schwelle 2 → Minuten 2; Defaults
+    // = gesetzliche Staffel §4 ArbZG). Reine Vorbefüllung — pro Dienst
+    // überschreibbar, bestehende Dienste bleiben unangetastet.
+    pauseAutoEnabled: boolean("pause_auto_enabled").notNull().default(false),
+    pauseThreshold1Hours: real("pause_threshold1_hours").notNull().default(6),
+    pauseMinutes1: integer("pause_minutes1").notNull().default(30),
+    pauseThreshold2Hours: real("pause_threshold2_hours").notNull().default(9),
+    pauseMinutes2: integer("pause_minutes2").notNull().default(45),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [
