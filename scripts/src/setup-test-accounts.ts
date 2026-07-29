@@ -129,6 +129,55 @@ async function ensureShiftModels(client: pg.Client, teamId: number): Promise<voi
   );
 }
 
+/**
+ * Entfernt Altlasten-Mitglieder aus einem Zielbild-Team (Betreiber- bzw.
+ * Dienstleister-Team), BEVOR die Haupt-Transaktion laeuft:
+ *   - Bekannte Kern-Konten (Oliver, Betreiber, Dienstleister, Assistent)
+ *     verlieren nur die Mitgliedschaft.
+ *   - Unbekannte Konten (z. B. alte manuelle Testkonten wie test1@tester.de)
+ *     werden samt komplettem Datenbaum via deleteAccountTrees geloescht —
+ *     inkl. Schichten, Vertraegen und Zeiterfassung (user_id-FKs kaskadieren).
+ * Fremde e2e-Spec-Fixtures (`e2e.*@dienstplan.test`) bleiben unangetastet.
+ */
+async function removeLegacyMembers(
+  client: pg.Client,
+  teamId: number,
+  allowedEmails: Set<string>,
+  coreEmails: Set<string>,
+  label: string,
+): Promise<void> {
+  const res = await client.query<{ id: number; email: string }>(
+    `SELECT u.id, u.email
+       FROM team_members tm JOIN users u ON u.id = tm.user_id
+      WHERE tm.team_id = $1
+        AND u.email NOT LIKE 'e2e.%@dienstplan.test'`,
+    [teamId],
+  );
+  const legacy = res.rows.filter((r) => !allowedEmails.has(r.email));
+  if (legacy.length === 0) return;
+
+  const membershipOnly = legacy.filter((r) => coreEmails.has(r.email));
+  const toDelete = legacy.filter((r) => !coreEmails.has(r.email));
+
+  for (const m of membershipOnly) {
+    await client.query(
+      "DELETE FROM team_members WHERE team_id = $1 AND user_id = $2",
+      [teamId, m.id],
+    );
+    console.log(`${label}: Mitgliedschaft von Kern-Konto ${m.email} entfernt.`);
+  }
+  if (toDelete.length > 0) {
+    const ids = toDelete.map((r) => r.id);
+    const result = await deleteAccountTrees(client, ids);
+    console.log(
+      `${label}: ${toDelete.length} Altlasten-Konto/Konten samt Daten geloescht ` +
+        `(${toDelete.map((r) => r.email).join(", ")}; ` +
+        `${result.deletedUsers} Konten, ${result.deletedTeams} Teams, ` +
+        `${result.deletedOrphans} verwaiste Assistenten).`,
+    );
+  }
+}
+
 async function main(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) throw new Error("DATABASE_URL muss gesetzt sein.");
@@ -148,6 +197,54 @@ async function main(): Promise<void> {
     if (!betreiber) throw new Error(`Konto ${EMAIL_BETREIBER} nicht gefunden.`);
     if (!dienstleister) throw new Error(`Konto ${EMAIL_DIENSTLEISTER} nicht gefunden.`);
     if (!assistent) throw new Error(`Konto ${EMAIL_ASSISTENT} nicht gefunden.`);
+
+    // ------------------------------------------------------------------
+    // 0) Altlasten-Bereinigung (eigene Transaktion in deleteAccountTrees,
+    //    daher VOR der Haupt-Transaktion): fremde manuelle Testkonten aus
+    //    Betreiber- und Dienstleister-Team entfernen, damit die
+    //    Ziel-Belegungs-Pruefung am Ende erreichbar ist.
+    // ------------------------------------------------------------------
+    const coreEmails = new Set<string>([
+      EMAIL_OLIVER,
+      EMAIL_BETREIBER,
+      EMAIL_DIENSTLEISTER,
+      EMAIL_ASSISTENT,
+      EMAIL_MARIA,
+      EMAIL_ALT_DIENST,
+    ]);
+    const preBetreiberTeam = await client.query<{ id: number }>(
+      "SELECT id FROM teams WHERE owner_id = $1 ORDER BY id LIMIT 1",
+      [betreiber.id],
+    );
+    if (preBetreiberTeam.rows[0]) {
+      await removeLegacyMembers(
+        client,
+        preBetreiberTeam.rows[0].id,
+        new Set<string>([
+          EMAIL_BETREIBER,
+          EMAIL_ASSISTENT,
+          ...[1, 2, 3, 4].map((n) => `max.mustermann${n}@dienstplan.local`),
+        ]),
+        coreEmails,
+        "Betreiber-Team",
+      );
+    }
+    const preDlTeam = await client.query<{ id: number }>(
+      "SELECT id FROM teams WHERE owner_id = $1 ORDER BY id LIMIT 1",
+      [dienstleister.id],
+    );
+    if (preDlTeam.rows[0]) {
+      await removeLegacyMembers(
+        client,
+        preDlTeam.rows[0].id,
+        new Set<string>([
+          EMAIL_DIENSTLEISTER,
+          ...[5, 6, 7, 8, 9].map((n) => `max.mustermann${n}@dienstplan.local`),
+        ]),
+        coreEmails,
+        "Dienstleister-Team",
+      );
+    }
 
     await client.query("BEGIN");
 
