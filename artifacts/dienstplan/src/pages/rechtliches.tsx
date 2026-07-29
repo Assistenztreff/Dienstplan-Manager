@@ -9,18 +9,36 @@ import { useAuth } from "@/context/auth";
 // Datenschutzerklaerung muessen auch ohne Login zugaenglich sein) und werden
 // aus der Fusszeile (PlatformFooterPlaceholder) verlinkt.
 //
-// Betreiber-Angaben (Name, Anschrift, ...) sind bewusst als klar erkennbare
-// Platzhalter in eckigen Klammern ausgefuehrt und muessen vor dem
-// Produktivgang durch die echten Angaben ersetzt werden.
+// Impressum und Datenschutzerklaerung werden NICHT dupliziert, sondern
+// verweisen auf die massgeblichen Rechtstexte der Hauptseite
+// assistenztreff.de (Entscheidung des Betreibers, Juli 2026). So gibt es
+// genau eine Quelle fuer die Betreiber-Angaben.
 // ---------------------------------------------------------------------------
 
 const OPERATOR = {
-  name: "[Vor- und Nachname des Betreibers]",
   company: "AssistenzTreff",
-  street: "[Straße und Hausnummer]",
-  city: "[PLZ und Ort]",
-  email: "kontakt@assistenztreff.de",
+  email: "kontakt@assistenztreff.de", // verifiziert gegen assistenztreff.de/impressum
 };
+
+// Massgebliche Rechtstexte auf der Plattform (verifiziert am 27.07.2026).
+const PLATFORM_LEGAL = {
+  impressum: "https://assistenztreff.de/impressum",
+  datenschutz: "https://assistenztreff.de/datenschutzerklaerung",
+  kontakt: "https://assistenztreff.de/kontakt",
+};
+
+function ExternalLegalLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a
+      className="font-semibold underline hover:text-slate-900"
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+    >
+      {children}
+    </a>
+  );
+}
 
 function LegalPageShell({
   title,
@@ -70,47 +88,20 @@ export function Impressum() {
   return (
     <LegalPageShell title="Impressum">
       <section>
-        <h2>Angaben gemäß § 5 DDG</h2>
         <p>
-          {OPERATOR.name}
-          <br />
-          {OPERATOR.company}
-          <br />
-          {OPERATOR.street}
-          <br />
-          {OPERATOR.city}
+          Die Dienstplan-App ist ein Angebot von {OPERATOR.company}. Es gilt das
+          Impressum der Hauptseite:
         </p>
-      </section>
-      <section>
-        <h2>Kontakt</h2>
+        <p>
+          <ExternalLegalLink href={PLATFORM_LEGAL.impressum}>
+            Impressum auf assistenztreff.de
+          </ExternalLegalLink>
+        </p>
         <p>
           E-Mail:{" "}
           <a className="underline hover:text-slate-900" href={`mailto:${OPERATOR.email}`}>
             {OPERATOR.email}
           </a>
-        </p>
-      </section>
-      <section>
-        <h2>Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV</h2>
-        <p>
-          {OPERATOR.name}, {OPERATOR.street}, {OPERATOR.city}
-        </p>
-      </section>
-      <section>
-        <h2>Haftung für Inhalte</h2>
-        <p>
-          Als Diensteanbieter sind wir für eigene Inhalte auf diesen Seiten nach den
-          allgemeinen Gesetzen verantwortlich. Wir sind jedoch nicht verpflichtet,
-          übermittelte oder gespeicherte fremde Informationen zu überwachen oder nach
-          Umständen zu forschen, die auf eine rechtswidrige Tätigkeit hinweisen.
-        </p>
-      </section>
-      <section>
-        <h2>Haftung für Links</h2>
-        <p>
-          Unser Angebot kann Links zu externen Websites Dritter enthalten, auf deren
-          Inhalte wir keinen Einfluss haben. Für die Inhalte der verlinkten Seiten ist
-          stets der jeweilige Anbieter oder Betreiber der Seiten verantwortlich.
         </p>
       </section>
     </LegalPageShell>
@@ -123,14 +114,22 @@ export function Datenschutz() {
       <section>
         <h2>1. Verantwortlicher</h2>
         <p>
-          Verantwortlich für die Datenverarbeitung auf dieser Website ist:
-          <br />
-          {OPERATOR.name}, {OPERATOR.street}, {OPERATOR.city}
+          Verantwortlich für die Datenverarbeitung ist der Betreiber von{" "}
+          {OPERATOR.company}. Name und Anschrift finden Sie in der{" "}
+          <ExternalLegalLink href={PLATFORM_LEGAL.datenschutz}>
+            Datenschutzerklärung auf assistenztreff.de
+          </ExternalLegalLink>{" "}
+          sowie im{" "}
+          <ExternalLegalLink href={PLATFORM_LEGAL.impressum}>Impressum</ExternalLegalLink>.
           <br />
           E-Mail:{" "}
           <a className="underline hover:text-slate-900" href={`mailto:${OPERATOR.email}`}>
             {OPERATOR.email}
           </a>
+        </p>
+        <p>
+          Die nachfolgenden Abschnitte ergänzen die Datenschutzerklärung der Hauptseite
+          um die Besonderheiten der Dienstplan-App.
         </p>
       </section>
       <section>
@@ -217,13 +216,15 @@ export function Kontakt() {
           </a>
         </p>
         <p>
-          Postanschrift:
-          <br />
-          {OPERATOR.company}
-          <br />
-          {OPERATOR.street}
-          <br />
-          {OPERATOR.city}
+          Die Postanschrift finden Sie im{" "}
+          <ExternalLegalLink href={PLATFORM_LEGAL.impressum}>
+            Impressum auf assistenztreff.de
+          </ExternalLegalLink>
+          ; weitere Kontaktmöglichkeiten auf der{" "}
+          <ExternalLegalLink href={PLATFORM_LEGAL.kontakt}>
+            Kontaktseite der Hauptseite
+          </ExternalLegalLink>
+          .
         </p>
         <p>
           Hinweis für Assistenzkräfte: Bei Fragen zu Ihrem Zugang (z. B. Passwort
