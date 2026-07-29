@@ -25,6 +25,7 @@
     "backfill-team-shift-models": "tsx ./src/backfill-team-shift-models.ts",
     "check-codegen-drift": "tsx ./src/check-codegen-drift.ts",
     "setup-test-db": "tsx ./src/setup-test-db.ts",
+    "scoped-e2e": "tsx ./src/scoped-e2e.ts",
     "verify-test-db-schema": "tsx ./src/verify-test-db-schema.ts",
     "verify-test-db-cleanup": "tsx ./src/verify-test-db-cleanup.ts",
     "verify-test-platform-errors-cleanup": "tsx ./src/verify-test-platform-errors-cleanup.ts",
