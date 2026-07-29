@@ -155,6 +155,43 @@ async function renderStatementPage(
     ]);
   }
 
+  // Neue Kategorien (konsistent zur Auswertungs-Matrix): nur ausweisen,
+  // wenn Werte vorliegen — 0-Positionen blaehen den Nachweis nicht auf.
+  // Info-Kennzahlen (nicht lohnrelevant) sind als solche gekennzeichnet.
+  if ((balance.vertretungenAnzahl ?? 0) > 0 || (balance.vertretungsStunden ?? 0) > 0) {
+    summaryRows.push([
+      "Vertretungen (Info)",
+      `${balance.vertretungenAnzahl ?? 0} (Anz.) / ${balance.vertretungsStunden ?? 0} h`,
+    ]);
+  }
+  if ((balance.pausenzeitStunden ?? 0) > 0) {
+    summaryRows.push(["Pausen (unbezahlt, Info)", `${balance.pausenzeitStunden} h`]);
+  }
+  if ((balance.kindKrankTage ?? 0) > 0) {
+    summaryRows.push([
+      "Kind krank (unbezahlt, Info)",
+      `${formatDays(balance.kindKrankTage)} Tage`,
+    ]);
+  }
+  if ((balance.freistellungStunden ?? 0) > 0 || (balance.freistellungTage ?? 0) > 0) {
+    summaryRows.push([
+      "Freistellung (bezahlt)",
+      `${balance.freistellungStunden ?? 0} h (${formatDays(balance.freistellungTage ?? 0)} Tage)`,
+    ]);
+  }
+  if ((balance.abgesagtArbeitgeberStunden ?? 0) > 0) {
+    summaryRows.push([
+      "Abgesagt durch Arbeitgeber (bezahlt)",
+      `${balance.abgesagtArbeitgeberStunden} h`,
+    ]);
+  }
+  if ((balance.abgesagtArbeitnehmerStunden ?? 0) > 0) {
+    summaryRows.push([
+      "Abgesagt durch Arbeitnehmer (unbezahlt, Info)",
+      `${balance.abgesagtArbeitnehmerStunden} h`,
+    ]);
+  }
+
   // Zuschlaege: 0%-Zuschlaege werden NICHT aufgelistet (Point 6).
   if (balance.nightPercent > 0) {
     summaryRows.push([
@@ -192,6 +229,14 @@ async function renderStatementPage(
       summaryRows.push(["Feiertagszuschlag", eur(balance.holidaySurchargePay ?? 0)]);
     }
     summaryRows.push(["Gesamtlohn (brutto)", eur(balance.totalPay ?? 0)]);
+    // Urlaubsabgeltung ist eine separate Auszahlung und bewusst NICHT im
+    // Gesamtlohn enthalten — eigene, klar beschriftete Euro-Position danach.
+    if ((balance.urlaubsabgeltungEuro ?? 0) > 0) {
+      summaryRows.push([
+        "Urlaubsabgeltung (zusaetzlich, nicht im Gesamtlohn)",
+        eur(balance.urlaubsabgeltungEuro ?? 0),
+      ]);
+    }
   }
 
   autoTable(doc, {

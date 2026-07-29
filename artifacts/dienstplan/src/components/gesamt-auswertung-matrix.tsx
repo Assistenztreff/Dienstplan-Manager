@@ -31,6 +31,13 @@ export type MatrixBalance = {
   bereitschaftsStunden?: number;
   vertretungenAnzahl?: number;
   vertretungsStunden?: number;
+  pausenzeitStunden?: number;
+  kindKrankTage?: number;
+  freistellungTage?: number;
+  freistellungStunden?: number;
+  abgesagtArbeitgeberStunden?: number;
+  abgesagtArbeitnehmerStunden?: number;
+  urlaubsabgeltungEuro?: number;
   hourlyWage?: number | null;
   basePay?: number | null;
   nightSurchargePay?: number | null;
@@ -57,6 +64,8 @@ type Row = {
   isEmpty?: (b: MatrixBalance) => boolean;
   highlight?: boolean;
   isTotal?: boolean;
+  /** Reine Info-Kennzahl (nicht lohnrelevant) — bekommt ein „Info"-Kennzeichen am Label. */
+  info?: boolean;
 };
 
 // Kompakte Gesamtübersicht bei Filter „Alle": Kategorien als Zeilen,
@@ -90,6 +99,16 @@ export function GesamtAuswertungMatrix({
   // Geldzeilen nur, wenn mindestens eine Kraft einen Stundenlohn hat
   // (gleiches Gating wie die Einzelkarten; Free-Plan sieht die Seite ohnehin nicht).
   const anyWage = balances.some((b) => b.hourlyWage != null);
+  // Neue Kategorien: Zeilen erscheinen nur, wenn mindestens eine Kraft einen
+  // Wert ≠ 0 hat (0-Werte würden die Matrix sonst dauerhaft aufblähen).
+  const anyPausen = balances.some((b) => (b.pausenzeitStunden ?? 0) > 0);
+  const anyKindKrank = balances.some((b) => (b.kindKrankTage ?? 0) > 0);
+  const anyFreistellung = balances.some(
+    (b) => (b.freistellungStunden ?? 0) > 0 || (b.freistellungTage ?? 0) > 0,
+  );
+  const anyAbgesagtAg = balances.some((b) => (b.abgesagtArbeitgeberStunden ?? 0) > 0);
+  const anyAbgesagtAn = balances.some((b) => (b.abgesagtArbeitnehmerStunden ?? 0) > 0);
+  const anyUrlaubsabgeltung = balances.some((b) => (b.urlaubsabgeltungEuro ?? 0) > 0);
   const anyRecalc =
     recalcByUser != null && balances.some((b) => recalcByUser.has(b.userId));
 
@@ -206,6 +225,7 @@ export function GesamtAuswertungMatrix({
       render: (b) => `${b.bereitschaftenAnzahl ?? 0} (Anz.) / ${b.bereitschaftsStunden ?? 0} h`,
       isEmpty: (b) =>
         (b.bereitschaftenAnzahl ?? 0) === 0 && (b.bereitschaftsStunden ?? 0) === 0,
+      info: true,
     },
     {
       key: "vertretungen",
@@ -213,7 +233,70 @@ export function GesamtAuswertungMatrix({
       render: (b) => `${b.vertretungenAnzahl ?? 0} (Anz.) / ${b.vertretungsStunden ?? 0} h`,
       isEmpty: (b) =>
         (b.vertretungenAnzahl ?? 0) === 0 && (b.vertretungsStunden ?? 0) === 0,
+      info: true,
     },
+    // --- Neue Kategorien (nur sichtbar, wenn mind. eine Kraft Werte hat) ---
+    ...(anyPausen
+      ? [
+          {
+            key: "pausen",
+            label: "Pausen (unbezahlt)",
+            render: (b: MatrixBalance) => `${b.pausenzeitStunden ?? 0} h`,
+            isEmpty: (b: MatrixBalance) => (b.pausenzeitStunden ?? 0) === 0,
+            info: true,
+          },
+        ]
+      : []),
+    ...(anyKindKrank
+      ? [
+          {
+            key: "kindKrank",
+            label: "Kind krank (unbezahlt)",
+            render: (b: MatrixBalance) => `${formatDays(b.kindKrankTage ?? 0)}`,
+            isEmpty: (b: MatrixBalance) => (b.kindKrankTage ?? 0) === 0,
+            info: true,
+          },
+        ]
+      : []),
+    ...(anyFreistellung
+      ? [
+          {
+            key: "freistellung",
+            label: "Freistellung (bezahlt)",
+            render: (b: MatrixBalance) => (
+              <>
+                {b.freistellungStunden ?? 0} h{" "}
+                <span className="text-muted-foreground">
+                  ({formatDays(b.freistellungTage ?? 0)})
+                </span>
+              </>
+            ),
+            isEmpty: (b: MatrixBalance) =>
+              (b.freistellungStunden ?? 0) === 0 && (b.freistellungTage ?? 0) === 0,
+          },
+        ]
+      : []),
+    ...(anyAbgesagtAg
+      ? [
+          {
+            key: "abgesagtAg",
+            label: "Abgesagt durch Arbeitgeber (bezahlt)",
+            render: (b: MatrixBalance) => `${b.abgesagtArbeitgeberStunden ?? 0} h`,
+            isEmpty: (b: MatrixBalance) => (b.abgesagtArbeitgeberStunden ?? 0) === 0,
+          },
+        ]
+      : []),
+    ...(anyAbgesagtAn
+      ? [
+          {
+            key: "abgesagtAn",
+            label: "Abgesagt durch Arbeitnehmer (unbezahlt)",
+            render: (b: MatrixBalance) => `${b.abgesagtArbeitnehmerStunden ?? 0} h`,
+            isEmpty: (b: MatrixBalance) => (b.abgesagtArbeitnehmerStunden ?? 0) === 0,
+            info: true,
+          },
+        ]
+      : []),
     ...(anyWage
       ? [
           {
@@ -281,6 +364,23 @@ export function GesamtAuswertungMatrix({
               ),
             isTotal: true,
           },
+          // Urlaubsabgeltung ist eine separate Auszahlung und bewusst NICHT im
+          // Gesamtlohn enthalten — daher als eigene Position nach der Summe.
+          ...(anyUrlaubsabgeltung
+            ? [
+                {
+                  key: "urlaubsabgeltung",
+                  label: "Urlaubsabgeltung (zusätzlich, nicht im Gesamtlohn)",
+                  render: (b: MatrixBalance) =>
+                    (b.urlaubsabgeltungEuro ?? 0) > 0 ? (
+                      formatEur(b.urlaubsabgeltungEuro ?? 0)
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    ),
+                  isEmpty: (b: MatrixBalance) => (b.urlaubsabgeltungEuro ?? 0) === 0,
+                },
+              ]
+            : []),
         ]
       : []),
   ];
@@ -385,6 +485,11 @@ export function GesamtAuswertungMatrix({
                     className={`sticky left-0 z-10 p-3 text-sm font-medium text-left ${stickyBg} ${allEmpty ? "text-muted-foreground" : "text-foreground"}`}
                   >
                     {row.label}
+                    {row.info && (
+                      <span className="ml-1.5 align-middle rounded bg-muted px-1 py-0.5 text-[10px] font-normal uppercase tracking-wide text-muted-foreground">
+                        Info
+                      </span>
+                    )}
                   </th>
                   {balances.map((b) => (
                     <td
