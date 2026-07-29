@@ -52,6 +52,9 @@ beforeAll(async () => {
   // Env VOR den dynamischen Imports umbiegen: db-Pool und Limit werden beim
   // Modul-Load gelesen.
   process.env.DATABASE_URL = deriveTestDbUrl(base);
+  // APP_DATABASE_URL hat in resolveDatabaseUrl Vorrang — ebenfalls umbiegen,
+  // sonst zeigt der Pool trotz DATABASE_URL-Override auf die Dev-DB.
+  process.env.APP_DATABASE_URL = process.env.DATABASE_URL;
   process.env.PLATFORM_ERRORS_MAX_STORED = String(TEST_LIMIT);
 
   dbmod = await import("@workspace/db");

@@ -48,8 +48,10 @@ router.post("/auth/register", async (req, res) => {
   // Enumerations-Bremse (Task #553): Die 409-Antwort bei belegter E-Mail ist
   // ein bewusst akzeptiertes Existenz-Orakel (siehe lib/register-rate-limit.ts)
   // — aber anonyme Massen-Abfragen werden pro IP gedrosselt. Zaehlt JEDEN
-  // Versuch, laeuft VOR jeder DB-Arbeit.
-  const rate = checkRegisterRateLimit(req.ip ?? "unknown");
+  // Versuch, laeuft VOR jeder weiteren DB-Arbeit. Der Zaehler liegt in der
+  // gemeinsamen DB (Task #600), damit die Bremse auch mit mehreren
+  // Autoscale-Instanzen plattformweit greift.
+  const rate = await checkRegisterRateLimit(req.ip ?? "unknown");
   if (!rate.allowed) {
     res.setHeader("Retry-After", String(rate.retryAfterSeconds));
     return res.status(429).json({

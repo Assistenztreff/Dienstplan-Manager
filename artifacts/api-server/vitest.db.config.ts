@@ -6,7 +6,11 @@ import { defineConfig } from "vitest/config";
 // DB-Zugriff, der Teardown gibt ihn am Suite-Ende frei).
 export default defineConfig({
   test: {
-    include: ["src/lib/platform-errors.retention.test.ts"],
+    include: [
+      "src/lib/platform-errors.retention.test.ts",
+      "src/lib/register-rate-limit.db.test.ts",
+    ],
+    fileParallelism: false,
     globalSetup: ["./vitest.db.global-setup.ts"],
   },
 });

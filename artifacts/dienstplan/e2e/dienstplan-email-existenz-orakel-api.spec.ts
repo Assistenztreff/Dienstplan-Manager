@@ -17,7 +17,8 @@ import {
  * E-Mail-Versand-Flow, der eine generische Antwort traegt. Das 409-Verhalten
  * ist daher AKZEPTIERT und hier festgeschrieben; als Mitigation gegen anonyme
  * Massen-Enumeration drosselt ein IP-Rate-Limit die oeffentliche Registrierung
- * (unit-getestet in register-rate-limit.test.ts; im E2E-Stack via
+ * (DB-gestuetzt, mehrprozess-fest — getestet in register-rate-limit.db.test.ts;
+ * im E2E-Stack via
  * REGISTER_RATE_LIMIT_MAX=0 deaktiviert, weil die Suite dutzende Konten von
  * 127.0.0.1 registriert).
  *
