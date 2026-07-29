@@ -32,6 +32,10 @@ import {
   HandbuchRegistrierung,
   HandbuchRollen,
   HandbuchDashboard,
+  HandbuchAssistenten,
+  HandbuchZeiterfassung,
+  HandbuchAbwesenheiten,
+  HandbuchAuswertungen,
 } from "@/pages/handbuch";
 import Startseite from "@/pages/startseite";
 import NotFound from "@/pages/not-found";
@@ -128,6 +132,10 @@ function Router() {
         <Route path="/handbuch/registrierung" component={HandbuchRegistrierung} />
         <Route path="/handbuch/rollen" component={HandbuchRollen} />
         <Route path="/handbuch/dashboard" component={HandbuchDashboard} />
+        <Route path="/handbuch/assistenten" component={HandbuchAssistenten} />
+        <Route path="/handbuch/zeiterfassung" component={HandbuchZeiterfassung} />
+        <Route path="/handbuch/abwesenheiten" component={HandbuchAbwesenheiten} />
+        <Route path="/handbuch/auswertungen" component={HandbuchAuswertungen} />
         <Route>{() => null}</Route>
       </Switch>
     );
@@ -163,6 +171,10 @@ function Router() {
         <Route path="/handbuch/registrierung" component={HandbuchRegistrierung} />
         <Route path="/handbuch/rollen" component={HandbuchRollen} />
         <Route path="/handbuch/dashboard" component={HandbuchDashboard} />
+        <Route path="/handbuch/assistenten" component={HandbuchAssistenten} />
+        <Route path="/handbuch/zeiterfassung" component={HandbuchZeiterfassung} />
+        <Route path="/handbuch/abwesenheiten" component={HandbuchAbwesenheiten} />
+        <Route path="/handbuch/auswertungen" component={HandbuchAuswertungen} />
         {/* Preise & Premium: Ziel der Free-Limit-Hinweise (Upgrade-Anfrage). */}
         {isAdminRole(currentUser.role) && <Route path="/preise" component={Preise} />}
         {isAdminRole(currentUser.role) && currentUser.accountType === "dienstleister" && (

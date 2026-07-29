@@ -46,8 +46,17 @@ test("Startseite zeigt das vollständige Inhaltsverzeichnis, Kapitel-Links funkt
   await expect(toc.getByText("Nur Dienstleister")).toBeAttached();
   await expect(toc.getByText("folgt").first()).toBeVisible();
 
-  // Nicht vorhandene Kapitel sind NICHT verlinkt.
-  await expect(toc.getByRole("link", { name: "Dashboard" })).toHaveCount(0);
+  // Nicht vorhandene Kapitel (Einstellungen samt Unterkapiteln) sind NICHT verlinkt.
+  await expect(toc.getByRole("link", { name: "Schichtmodelle" })).toHaveCount(0);
+  await expect(toc.getByRole("link", { name: "Kalender-Abo" })).toHaveCount(0);
+
+  // Die Modul-Kapitel sind verlinkt (Task #649).
+  for (const kapitel of ["Dashboard", "Assistenten", "Zeiterfassung", "Abwesenheiten"]) {
+    await expect(toc.getByRole("link", { name: kapitel, exact: true })).toHaveCount(1);
+  }
+  await expect(
+    toc.getByRole("link", { name: "Auswertungen", exact: true }),
+  ).toHaveCount(1);
 
   // Vorhandene Kapitel sind direkt anklickbar.
   await toc.getByRole("link", { name: "Team-Verwaltung" }).click();

@@ -55,14 +55,24 @@ const KAPITEL: Array<{ title: string; items: KapitelEintrag[] }> = [
     items: [
       { title: "Dashboard", href: "/handbuch/dashboard", id: "dashboard" },
       { title: "Dienstplan", href: "/handbuch/dienstplan", id: "dienstplan" },
-      { title: "Assistenten" },
-      { title: "Zeiterfassung" },
-      { title: "Abwesenheiten" },
+      { title: "Assistenten", href: "/handbuch/assistenten", id: "assistenten" },
+      { title: "Zeiterfassung", href: "/handbuch/zeiterfassung", id: "zeiterfassung" },
+      { title: "Abwesenheiten", href: "/handbuch/abwesenheiten", id: "abwesenheiten" },
       {
         title: "Auswertungen",
+        href: "/handbuch/auswertungen",
+        id: "auswertungen",
         children: [
-          { title: "Premium-Lohnauswertung", isPremium: true },
-          { title: "PDF-Stundennachweis", isPremium: true },
+          {
+            title: "Premium-Lohnauswertung",
+            href: "/handbuch/auswertungen#lohnauswertung",
+            isPremium: true,
+          },
+          {
+            title: "PDF-Stundennachweis",
+            href: "/handbuch/auswertungen#pdf-export",
+            isPremium: true,
+          },
         ],
       },
     ],
@@ -414,10 +424,10 @@ function ArtikelShell({
 const THEMEN: Array<{ label: string; href?: string }> = [
   { label: "Dienstplan für den ganzen Monat freigeben", href: "/handbuch/dienstplan" },
   { label: "Neue Teams für Klienten anlegen", href: "/handbuch/team-verwaltung" },
-  { label: "Wie funktioniert die Zeiterfassung?" },
+  { label: "Wie funktioniert die Zeiterfassung?", href: "/handbuch/zeiterfassung" },
   { label: "Zuschläge für Nacht- und Sonntagsarbeit" },
-  { label: "Krankmeldung und Ersatz finden" },
-  { label: "Stundennachweis als PDF exportieren" },
+  { label: "Krankmeldung und Ersatz finden", href: "/handbuch/abwesenheiten" },
+  { label: "Stundennachweis als PDF exportieren", href: "/handbuch/auswertungen" },
 ];
 
 export function HandbuchStart() {
@@ -646,7 +656,11 @@ export function HandbuchDienstplan() {
         Sie weiterführende Themen:
       </p>
       <div className="grid gap-4 sm:grid-cols-2">
-        <SeeAlsoLink title="Krankheit & Urlaub verwalten" icon={CalendarOff} />
+        <SeeAlsoLink
+          title="Krankheit & Urlaub verwalten"
+          href="/handbuch/abwesenheiten"
+          icon={CalendarOff}
+        />
         <SeeAlsoLink title="Schichtmodelle anlegen" icon={Settings} />
       </div>
     </ArtikelShell>
@@ -710,7 +724,7 @@ export function HandbuchTeamVerwaltung() {
       <p className="mb-6">So strukturieren Sie Ihr Unternehmen effektiv im AssistenzPlaner:</p>
       <div className="grid gap-4 sm:grid-cols-2">
         <SeeAlsoLink title="Rollen verstehen" href="/handbuch/rollen" icon={Settings} />
-        <SeeAlsoLink title="Assistenten verwalten" icon={Users} />
+        <SeeAlsoLink title="Assistenten verwalten" href="/handbuch/assistenten" icon={Users} />
       </div>
     </ArtikelShell>
   );
@@ -985,6 +999,399 @@ export function HandbuchDashboard() {
       <div className="grid gap-4 sm:grid-cols-2">
         <SeeAlsoLink title="Dienstplan" href="/handbuch/dienstplan" icon={FileText} />
         <SeeAlsoLink title="Rollen verstehen" href="/handbuch/rollen" icon={Settings} />
+      </div>
+    </ArtikelShell>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Artikel: Assistenten
+// ---------------------------------------------------------------------------
+export function HandbuchAssistenten() {
+  return (
+    <ArtikelShell
+      activeId="assistenten"
+      bereich="Modul-Übersicht"
+      titel="Assistenten"
+      toc={[
+        { id: "uebersicht", label: "Die Assistenten-Übersicht" },
+        { id: "anlegen", label: "Assistenten anlegen und bearbeiten" },
+        { id: "einladen", label: "Teammitglied einladen" },
+        { id: "entfernen", label: "Entfernen und Löschen" },
+        { id: "siehe-auch", label: "Siehe auch" },
+      ]}
+    >
+      <h1 className="mb-6 text-4xl font-bold leading-tight text-brand-dark md:text-5xl">
+        Assistenten
+      </h1>
+      <p className="mb-10 text-xl leading-relaxed text-slate-500">
+        Im Bereich Assistenten verwalten Sie die Mitglieder Ihres Teams: Kontaktdaten, vertragliche
+        Konditionen und den Zugang zur App. Der Bereich steht nur der Verwaltung zur Verfügung —
+        Assistenzkräfte sehen ihn nicht.
+      </p>
+
+      <h2 id="uebersicht">Die Assistenten-Übersicht</h2>
+      <p>
+        Jede Assistenzkraft erscheint als eigene Karte mit Namen, Kontaktdaten und den wichtigsten
+        Vertragsdaten: Wochenstunden, Arbeitstage pro Woche, Urlaubsanspruch und Vertragsbeginn.
+        Ein Status zeigt, ob die Person aktiv oder inaktiv ist. Gewerbliche Konten wählen oben
+        über die Team-Auswahl, welches Team angezeigt wird.
+      </p>
+
+      <ScreenshotPlatzhalter label="Screenshot: Assistenten-Übersicht (Karten)" />
+
+      <h2 id="anlegen">Assistenten anlegen und bearbeiten</h2>
+      <p>
+        Über die Schaltfläche &bdquo;Neu anlegen&ldquo; öffnen Sie den Dialog für eine neue
+        Assistenzkraft. Er ist in drei Bereiche gegliedert:
+      </p>
+      <p>
+        <strong>Personendaten:</strong> Vorname, Nachname, E-Mail-Adresse und Adresse sind
+        Pflichtfelder, eine Telefonnummer können Sie zusätzlich hinterlegen.
+      </p>
+      <p>
+        <strong>Lohn- und Sozialversicherungsdaten</strong> (Premium): Hier erfassen Sie unter
+        anderem Steuerklasse, Krankenkasse, IBAN und den Stundenlohn. Der Stundenlohn ist die
+        Grundlage für die Premium-Lohnauswertung. Im Free-Tarif sind diese Felder gesperrt.
+      </p>
+      <p>
+        <strong>Vertragliche Konditionen:</strong> Wochenstunden, Urlaubsanspruch in Tagen pro
+        Jahr, Arbeitstage pro Woche und der Vertragsbeginn. Aus diesen Angaben berechnet der
+        AssistenzPlaner die SOLL-Stunden und das Urlaubskonto.
+      </p>
+      <p>
+        Über &bdquo;Bearbeiten&ldquo; auf der Karte ändern Sie die Daten später jederzeit —
+        zum Beispiel bei einer Vertragsänderung.
+      </p>
+
+      <HinweisBox titel="Hinweis: Free-Tarif mit bis zu 6 Assistenten">
+        <p>
+          Im Free-Tarif können Sie maximal 6 Assistenten anlegen. Ist die Grenze erreicht,
+          erscheint ein Hinweis mit der Möglichkeit, ein Premium-Upgrade anzufragen.
+        </p>
+      </HinweisBox>
+
+      <h2 id="einladen">Teammitglied einladen</h2>
+      <p>
+        Damit sich eine Assistenzkraft selbst anmelden kann, laden Sie sie ein: Klicken Sie auf
+        der Karte auf &bdquo;Einladen&ldquo; und im Dialog &bdquo;Teammitglied einladen&ldquo; auf
+        &bdquo;Einladungslink generieren&ldquo;. Den erzeugten Link kopieren Sie und senden ihn
+        der Person auf einem Weg Ihrer Wahl. Der Link ist 48 Stunden gültig; danach können Sie
+        jederzeit einen neuen generieren. Der eigene Zugang für Assistenzkräfte ist eine
+        Premium-Funktion.
+      </p>
+
+      <ScreenshotPlatzhalter label="Screenshot: Dialog Teammitglied einladen" />
+
+      <p>
+        Über &bdquo;Nachweis&ldquo; auf der Karte exportieren Sie außerdem den
+        PDF-Stundennachweis einer einzelnen Person (Premium) — mehr dazu im Kapitel Auswertungen.
+      </p>
+
+      <h2 id="entfernen">Entfernen und Löschen</h2>
+      <p>
+        Gewerbliche Konten mit mehreren Teams können eine Person über &bdquo;Aus Team
+        entfernen&ldquo; aus dem gerade gewählten Team nehmen — ihre Daten und Zuordnungen in
+        anderen Teams bleiben erhalten. Ist es die letzte Team-Zuordnung, weist ein roter Hinweis
+        darauf hin, dass die Person danach in keiner Team-Liste mehr erscheint.
+      </p>
+      <p>
+        Das endgültige Löschen finden Sie im Bearbeiten-Dialog. Es entfernt die Person
+        unwiderruflich — einschließlich ihrer Verträge, Dienste und erfassten Zeiten. Prüfen Sie
+        vorher, ob das Deaktivieren oder Entfernen aus dem Team nicht ausreicht.
+      </p>
+
+      <h2 id="siehe-auch">Siehe auch</h2>
+      <p className="mb-6">So arbeiten Sie mit den angelegten Assistenten weiter:</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <SeeAlsoLink title="Dienstplan" href="/handbuch/dienstplan" icon={FileText} />
+        <SeeAlsoLink title="Auswertungen" href="/handbuch/auswertungen" icon={Star} />
+      </div>
+    </ArtikelShell>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Artikel: Zeiterfassung
+// ---------------------------------------------------------------------------
+export function HandbuchZeiterfassung() {
+  return (
+    <ArtikelShell
+      activeId="zeiterfassung"
+      bereich="Modul-Übersicht"
+      titel="Zeiterfassung"
+      toc={[
+        { id: "grundprinzip", label: "SOLL und IST" },
+        { id: "erfassen", label: "Zeiten erfassen" },
+        { id: "pruefen", label: "Prüfen und bestätigen" },
+        { id: "siehe-auch", label: "Siehe auch" },
+      ]}
+    >
+      <h1 className="mb-6 text-4xl font-bold leading-tight text-brand-dark md:text-5xl">
+        Zeiterfassung
+      </h1>
+      <p className="mb-10 text-xl leading-relaxed text-slate-500">
+        In der Zeiterfassung halten Assistenzkräfte fest, wann sie tatsächlich gearbeitet haben.
+        Die Verwaltung prüft die Einträge und gibt sie frei — so entsteht die Grundlage für
+        Stundenbilanz und Abrechnung.
+      </p>
+
+      <h2 id="grundprinzip">SOLL und IST</h2>
+      <p>
+        Der AssistenzPlaner unterscheidet geplante Zeiten (SOLL) aus dem Dienstplan und
+        tatsächlich geleistete Zeiten (IST) aus der Zeiterfassung. Jeder IST-Eintrag hat einen
+        Status: <strong>Offen</strong>, <strong>Bestätigt</strong> oder{" "}
+        <strong>Abgelehnt</strong>. Über die Reiter &bdquo;Alle&ldquo;, &bdquo;Offen&ldquo;,
+        &bdquo;Bestätigt&ldquo; und &bdquo;Abgelehnt&ldquo; filtern Sie die Liste danach.
+      </p>
+
+      <ScreenshotPlatzhalter label="Screenshot: Zeiterfassung (Liste mit Status)" />
+
+      <h2 id="erfassen">Zeiten erfassen</h2>
+      <p>
+        Am schnellsten geht es über den Bereich <strong>Geplante Schichten übernehmen</strong>:
+        Dort erscheinen alle Dienste, für die noch keine IST-Zeit erfasst wurde. Ein Klick auf
+        &bdquo;Übernehmen&ldquo; öffnet den Dialog mit den geplanten Zeiten als Vorschlag — passen
+        Sie sie bei Bedarf an, ergänzen Sie optional eine Notiz und speichern Sie mit
+        &bdquo;Ist-Zeit speichern&ldquo;. Der Eintrag steht danach auf &bdquo;Offen&ldquo;.
+      </p>
+      <p>
+        Unabhängig vom Dienstplan erfassen Sie Zeiten über die Schaltfläche &bdquo;Zeit
+        erfassen&ldquo; oben rechts: Datum, Start- und Endzeit wählen und speichern. Für
+        Nachtdienste, die über Mitternacht gehen, aktivieren Sie den Schalter &bdquo;Endet am
+        Folgetag&ldquo; — zum Beispiel 22:00 bis 06:00 Uhr.
+      </p>
+      <p>
+        Assistenzkräfte erfassen Zeiten nur für sich selbst. Als Verwaltung können Sie im Dialog
+        eine Assistenzkraft auswählen und Zeiten stellvertretend nachtragen.
+      </p>
+
+      <h2 id="pruefen">Prüfen und bestätigen</h2>
+      <p>
+        Als Verwaltung sehen Sie in der Liste zusätzlich die Spalte mit den Aktionen: Mit dem
+        grünen Häkchen bestätigen Sie einen Eintrag, mit dem roten X lehnen Sie ihn ab. Erst
+        bestätigte Einträge fließen in die IST-Stunden ein. Der Bestätigungs-Workflow ist eine
+        Premium-Funktion.
+      </p>
+      <p>
+        Für viele Einträge auf einmal nutzen Sie <strong>Alle offenen bestätigen</strong>: Ein
+        Dialog fasst die Anzahl der offenen Einträge und die Stundensumme zusammen, bevor Sie die
+        Sammelbestätigung abschließen.
+      </p>
+
+      <ScreenshotPlatzhalter label="Screenshot: Sammelbestätigung (Dialog)" />
+
+      <HinweisBox titel="Tipp: Wöchentlich prüfen">
+        <p>
+          Filtern Sie regelmäßig auf &bdquo;Offen&ldquo; und bestätigen Sie zeitnah. So bleibt
+          die Stundenbilanz auf dem Dashboard aktuell und der Monatsabschluss in den Auswertungen
+          geht ohne Rückstau über die Bühne.
+        </p>
+      </HinweisBox>
+
+      <p>
+        Falls die Zeiterfassung in Ihren Einstellungen deaktiviert ist, zeigt die Seite den
+        Hinweis &bdquo;Zeiterfassung ist deaktiviert&ldquo; — als Verwaltung gelangen Sie von dort
+        direkt in die Einstellungen, um sie wieder einzuschalten.
+      </p>
+
+      <h2 id="siehe-auch">Siehe auch</h2>
+      <p className="mb-6">Die erfassten Stunden laufen hier zusammen:</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <SeeAlsoLink title="Auswertungen" href="/handbuch/auswertungen" icon={Star} />
+        <SeeAlsoLink title="Dienstplan" href="/handbuch/dienstplan" icon={FileText} />
+      </div>
+    </ArtikelShell>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Artikel: Abwesenheiten
+// ---------------------------------------------------------------------------
+export function HandbuchAbwesenheiten() {
+  return (
+    <ArtikelShell
+      activeId="abwesenheiten"
+      bereich="Modul-Übersicht"
+      titel="Abwesenheiten"
+      toc={[
+        { id: "arten", label: "Die Abwesenheitsarten" },
+        { id: "eintragen", label: "Abwesenheit eintragen" },
+        { id: "resturlaub", label: "Resturlaub im Blick" },
+        { id: "siehe-auch", label: "Siehe auch" },
+      ]}
+    >
+      <h1 className="mb-6 text-4xl font-bold leading-tight text-brand-dark md:text-5xl">
+        Abwesenheiten
+      </h1>
+      <p className="mb-10 text-xl leading-relaxed text-slate-500">
+        Im Bereich Abwesenheiten erfassen Sie Urlaub, Krankheit und andere Fehlzeiten als
+        Zeitraum. Die Einträge erscheinen automatisch im Dienstplan und fließen korrekt in
+        Stundenbilanz und Urlaubskonto ein. Der Bereich steht der Verwaltung zur Verfügung.
+      </p>
+
+      <h2 id="arten">Die Abwesenheitsarten</h2>
+      <p>
+        Neben <strong>Urlaub</strong> und <strong>Krank</strong> kennt der AssistenzPlaner
+        weitere Arten, die unterschiedlich bewertet werden: &bdquo;Freizeitausgleich
+        (Ersatzruhetag)&ldquo;, &bdquo;Kind krank (unbezahlt)&ldquo;, &bdquo;Freistellung
+        (bezahlt)&ldquo;, &bdquo;Abgesagt durch Arbeitgeber (bezahlt)&ldquo;, &bdquo;Abgesagt
+        durch Assistenz (unbezahlt)&ldquo; und &bdquo;Urlaubsabgeltung (ausgezahlt)&ldquo;. Die
+        Zusätze in Klammern zeigen direkt, ob die Zeit bezahlt wird. In den Auswertungen erscheint
+        jede Art als eigene Zeile.
+      </p>
+
+      <h2 id="eintragen">Abwesenheit eintragen</h2>
+      <p>
+        In der Karte <strong>Abwesenheit eintragen</strong> wählen Sie die Assistenzkraft, die
+        Art und den Zeitraum von/bis. Optional wählen Sie ein Schichtmodell: Dann wird die
+        Abwesenheit mit dessen Zeiten bewertet — ohne Modell zählt sie ganztägig. Mit
+        &bdquo;Eintragen&ldquo; wird der Zeitraum gebucht; Tage, an denen bereits eine Abwesenheit
+        besteht, werden automatisch übersprungen.
+      </p>
+
+      <ScreenshotPlatzhalter label="Screenshot: Abwesenheit eintragen (Formular)" />
+
+      <p>
+        Die App warnt Sie an den richtigen Stellen: bei Überschneidungen mit bestehenden
+        Diensten, beim Eintragen in einen bereits abgeschlossenen Monat und wenn ein Dienst vom
+        Vortag (etwa eine Nachtwache bis 06:00 Uhr) in den gewählten Tag hineinragt — dieser
+        gehört zum Vortag und bleibt bestehen.
+      </p>
+      <p>
+        In der Liste <strong>Eingetragene Abwesenheiten</strong> sehen Sie alle Einträge und
+        können sie über das Papierkorb-Symbol wieder löschen — gutgeschriebene Urlaubstage werden
+        dabei zurückgebucht.
+      </p>
+
+      <h2 id="resturlaub">Resturlaub im Blick</h2>
+      <p>
+        Die Karte <strong>Resturlaub</strong> zeigt pro Assistenzkraft den Jahresanspruch, die
+        bereits genommenen und die verbleibenden Urlaubstage. Urlaub wird stundengenau geführt:
+        Ein Urlaubstag entspricht standardmäßig 8 Stunden, ein längerer Dienst kann also mehr als
+        einen Urlaubstag kosten. Das automatische Resturlaub-Tracking ist eine Premium-Funktion —
+        das Eintragen von Abwesenheiten selbst ist in allen Tarifen enthalten.
+      </p>
+
+      <HinweisBox titel="Hinweis: Bewertung bei neuen Verträgen">
+        <p>
+          Liegt noch keine ausreichende IST-Historie vor, bewertet der AssistenzPlaner
+          Urlaubstage nach den Vertragsdaten (Arbeitstage pro Woche). Ein gelber Hinweis zeigt
+          das an — dort können Sie die Arbeitstage pro Woche direkt korrigieren und mit
+          &bdquo;Übernehmen&ldquo; speichern. Sobald genug erfasste Zeiten vorliegen, wechselt
+          die Bewertung automatisch auf den Durchschnitt der letzten 13 Wochen.
+        </p>
+      </HinweisBox>
+
+      <p>
+        Assistenzkräfte sehen ihren eigenen Resturlaub auf dem Dashboard in der Karte
+        &bdquo;Mein Resturlaub&ldquo;.
+      </p>
+
+      <h2 id="siehe-auch">Siehe auch</h2>
+      <p className="mb-6">Abwesenheiten wirken sich hier direkt aus:</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <SeeAlsoLink title="Dienstplan" href="/handbuch/dienstplan" icon={FileText} />
+        <SeeAlsoLink title="Auswertungen" href="/handbuch/auswertungen" icon={Star} />
+      </div>
+    </ArtikelShell>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Artikel: Auswertungen
+// ---------------------------------------------------------------------------
+export function HandbuchAuswertungen() {
+  return (
+    <ArtikelShell
+      activeId="auswertungen"
+      bereich="Modul-Übersicht"
+      titel="Auswertungen"
+      toc={[
+        { id: "ansichten", label: "Übersicht und Karten" },
+        { id: "kategorien", label: "Die Kategorien-Zeilen" },
+        { id: "lohnauswertung", label: "Premium-Lohnauswertung" },
+        { id: "monatsabschluss", label: "Monat abschließen" },
+        { id: "pdf-export", label: "PDF-Stundennachweis" },
+        { id: "siehe-auch", label: "Siehe auch" },
+      ]}
+    >
+      <h1 className="mb-6 text-4xl font-bold leading-tight text-brand-dark md:text-5xl">
+        Auswertungen
+      </h1>
+      <p className="mb-10 text-xl leading-relaxed text-slate-500">
+        Die Auswertungen stellen für jeden Monat SOLL und IST gegenüber: geplante Stunden,
+        geleistete Stunden, Zuschläge und Abwesenheiten. Die Soll/Ist-Auswertung gehört zum
+        Premium-Tarif; Assistenzkräfte sehen den Bereich nicht.
+      </p>
+
+      <h2 id="ansichten">Übersicht und Karten</h2>
+      <p>
+        Oben wählen Sie den Monat, das Team und über &bdquo;Assistent filtern&ldquo; entweder
+        &bdquo;Alle Assistenten&ldquo; oder eine einzelne Person. Zwei Ansichten stehen bereit:
+        Die <strong>Übersicht</strong> zeigt alle Assistenzkräfte nebeneinander in einer
+        Matrix-Tabelle, die <strong>Karten</strong>-Ansicht eine ausführliche Karte pro Person
+        mit Fortschrittsbalken für geleistete und geplante Stunden.
+      </p>
+      <p>
+        Gesamtübersicht und Einzelansicht nutzen dasselbe Tabellenformat — ein Klick auf den
+        Namen einer Assistenzkraft im Spaltenkopf setzt den Filter direkt auf diese Person.
+      </p>
+
+      <ScreenshotPlatzhalter label="Screenshot: Auswertungen (Matrix-Übersicht)" />
+
+      <HinweisBox titel="Hinweis: Nur bestätigte Dienste zählen">
+        <p>
+          In die Auswertung fließen nur freigegebene Dienste ein — Entwürfe und Vorschläge
+          bleiben außen vor. Prüfen Sie vor dem Monatsende auch, ob noch offene Zeiteinträge in
+          der Zeiterfassung auf Bestätigung warten.
+        </p>
+      </HinweisBox>
+
+      <h2 id="kategorien">Die Kategorien-Zeilen</h2>
+      <p>
+        Die Tabelle gliedert die Stunden in Kategorien: geleistete Stunden (gewertet), erfüllte
+        Stunden gesamt inklusive Urlaub und Krankheit sowie Nacht-, Sonntags- und
+        Feiertagsstunden. Weitere Zeilen wie &bdquo;Teamsitzung&ldquo;,
+        &bdquo;Bereitschaften&ldquo;, &bdquo;Pausen (unbezahlt)&ldquo;, &bdquo;Kind krank
+        (unbezahlt)&ldquo;, &bdquo;Freistellung (bezahlt)&ldquo; oder
+        &bdquo;Urlaubsabgeltung&ldquo; erscheinen automatisch, sobald im Monat entsprechende
+        Einträge vorhanden sind.
+      </p>
+
+      <h2 id="lohnauswertung">Premium-Lohnauswertung</h2>
+      <p>
+        Ist bei den Assistenten ein Stundenlohn hinterlegt, rechnet die{" "}
+        <strong>Lohnauswertung</strong> (Premium) die Stunden in Euro um: Grundlohn,
+        Nachtzuschlag, Sonntagszuschlag, Feiertagszuschlag und die Bruttosumme &bdquo;GESAMT
+        (brutto)&ldquo;. Die Zuschlagssätze pflegen Sie in den Einstellungen unter Zuschläge.
+      </p>
+
+      <h2 id="monatsabschluss">Monat abschließen</h2>
+      <p>
+        Mit <strong>Monat abschließen</strong> (Premium) frieren Sie den geprüften Stand als
+        Referenz ein. Gibt es zu dem Zeitpunkt noch offene Ist-Zeiten, warnt der Dialog vorab.
+        Ändert sich nach dem Abschluss doch noch etwas — etwa eine nachgetragene Krankmeldung —
+        zeigt der Folgemonat eine gelb markierte <strong>Nachberechnung</strong> mit den
+        Differenzen in Stunden und Euro. So bleibt nachvollziehbar, was bereits abgerechnet war.
+      </p>
+
+      <h2 id="pdf-export">PDF-Stundennachweis</h2>
+      <p>
+        Über <strong>PDF Export</strong> (Premium) erzeugen Sie den Stundennachweis für die
+        Lohnabrechnung: Ist eine einzelne Person gefiltert, als einzelnes PDF — bei
+        &bdquo;Alle Assistenten&ldquo; als Sammelnachweis mit allen Personen. Den Export für
+        eine einzelne Person erreichen Sie auch direkt über &bdquo;Nachweis&ldquo; auf der
+        jeweiligen Karte im Bereich Assistenten.
+      </p>
+
+      <ScreenshotPlatzhalter label="Screenshot: Dialog Stundennachweis exportieren" />
+
+      <h2 id="siehe-auch">Siehe auch</h2>
+      <p className="mb-6">Diese Bereiche liefern die Daten für die Auswertung:</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <SeeAlsoLink title="Zeiterfassung" href="/handbuch/zeiterfassung" icon={FileText} />
+        <SeeAlsoLink title="Abwesenheiten" href="/handbuch/abwesenheiten" icon={CalendarOff} />
       </div>
     </ArtikelShell>
   );
