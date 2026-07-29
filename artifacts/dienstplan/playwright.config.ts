@@ -5,6 +5,7 @@ import {
   deriveTestDbTarget,
   touchTestDbComment,
 } from "@workspace/test-fixtures/test-db-name";
+import { deriveRunLockPath } from "@workspace/test-fixtures/run-lock";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -253,14 +254,11 @@ function reapOrphansOnPort(port: string, label: string): void {
 // Freigabe: globalTeardown loescht den Lock, wenn er noch uns gehoert. Nach
 // hartem Abbruch bleibt der Lock liegen, zeigt aber auf eine tote PID und
 // blockiert den naechsten Lauf deshalb nicht (Selbstheilung bleibt erhalten).
-// Port-gebundener Lock-Name — MUSS der Ableitung in e2e/global-teardown.ts
-// entsprechen (Task #640: parallele Shard-Lanes mit eigenen Ports). Der alte
-// globale Name `run.lock` liess parallele Shard-Lanes kollidieren und wurde
-// vom port-gebundenen Teardown nie geloescht.
-const runLockPath = path.join(
-  repoRoot,
-  `node_modules/.cache/dienstplan-e2e/run-${API_PORT}-${WEB_PORT}.lock`,
-);
+// Port-gebundener Lock-Name — geteilte Ableitung mit e2e/global-teardown.ts
+// via @workspace/test-fixtures/run-lock (Task #643). Der alte globale Name
+// `run.lock` liess parallele Shard-Lanes kollidieren und wurde vom
+// port-gebundenen Teardown nie geloescht.
+const runLockPath = deriveRunLockPath(repoRoot);
 
 function isPidAlive(pid: number): boolean {
   try {

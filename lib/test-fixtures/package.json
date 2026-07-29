@@ -8,6 +8,7 @@
     "./verify-checks": "./src/verify-checks.ts",
     "./test-db-name": "./src/test-db-name.ts",
     "./cross-run-lock": "./src/cross-run-lock.ts",
+    "./run-lock": "./src/run-lock.ts",
     "./vitest-db-lock": "./src/vitest-db-lock.ts"
   },
   "dependencies": {

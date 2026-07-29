@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
+import { deriveRunLockPath } from "@workspace/test-fixtures/run-lock";
 
 /**
  * Playwright-globalTeardown: entfernt nach JEDEM E2E-Lauf alle uebrig
@@ -37,14 +38,10 @@ function findRepoRoot(start: string): string {
 }
 
 function releaseRunLock(): void {
-  // Port-gebundener Lock-Name — MUSS der Ableitung in playwright.config.ts
-  // entsprechen (Task #640: parallele Shard-Lanes mit eigenen Ports).
-  const apiPort = process.env.E2E_API_PORT ?? "8099";
-  const webPort = process.env.E2E_WEB_PORT ?? "5199";
-  const runLockPath = path.join(
-    findRepoRoot(process.cwd()),
-    `node_modules/.cache/dienstplan-e2e/run-${apiPort}-${webPort}.lock`,
-  );
+  // Port-gebundener Lock-Name — geteilte Ableitung mit playwright.config.ts
+  // via @workspace/test-fixtures/run-lock (Task #643). Bewusst NICHT die
+  // Config importieren (deren Start-Seiteneffekte wuerden erneut laufen).
+  const runLockPath = deriveRunLockPath(findRepoRoot(process.cwd()));
   try {
     if (!existsSync(runLockPath)) return;
     const raw = readFileSync(runLockPath, "utf8").trim();
