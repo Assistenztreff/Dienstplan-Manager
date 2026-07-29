@@ -5,6 +5,7 @@ import {
   useDeleteAllowanceSettingsOverride,
   getGetAllowanceSettingsQueryKey,
   getGetTimeTrackingStatusQueryKey,
+  type AllowanceSettings,
   type AllowanceSettingsInputState,
   type AllowanceSettingsInputBillingMethod,
   type AllowanceSettingsInputVacationMethod,
@@ -123,7 +124,7 @@ function PercentField({
 
 export function AllowanceSettingsForm() {
   const queryClient = useQueryClient();
-  const { teams, isDienstleister } = useTeam();
+  const { teams, isDienstleister, isTeamScopeReady } = useTeam();
 
   // Bereich: Konto-Standard oder ein bestimmtes Team (nur Dienstleister mit Teams).
   const [scope, setScope] = useState<string>(ACCOUNT_SCOPE);
@@ -131,7 +132,18 @@ export function AllowanceSettingsForm() {
   const scopeTeamId = scope === ACCOUNT_SCOPE ? undefined : Number(scope);
 
   const queryParams = scopeTeamId !== undefined ? { teamId: scopeTeamId } : undefined;
-  const { data: settings, isLoading } = useGetAllowanceSettings(queryParams);
+  // Erst laden/anzeigen, wenn der Team-Scope settled ist: Vorher ist unklar,
+  // ob der "Gilt für"-Bereichswähler überhaupt existiert — ein Speichern in
+  // diesem Fenster schriebe in einen Bereich, den der Nutzer so nie gesehen
+  // hat (gleiches Muster wie die Logo-Karte, Task #618).
+  // Dual-Cast (Optionen + Ergebnis), sonst inferiert `data` zu `{}` (Orval).
+  const { data: settings, isLoading: settingsLoading } = useGetAllowanceSettings(queryParams, {
+    query: { enabled: isTeamScopeReady },
+  } as Parameters<typeof useGetAllowanceSettings>[1]) as {
+    data?: AllowanceSettings;
+    isLoading: boolean;
+  };
+  const isLoading = !isTeamScopeReady || settingsLoading;
   const updateSettings = useUpdateAllowanceSettings();
   const deleteOverride = useDeleteAllowanceSettingsOverride();
 

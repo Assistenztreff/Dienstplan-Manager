@@ -821,7 +821,7 @@ function CalendarExportCard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currentUser } = useAuth();
-  const { selectedTeamId } = useTeam();
+  const { selectedTeamId, isTeamScopeReady } = useTeam();
   const [isExporting, setIsExporting] = useState(false);
 
   // Premium-Feature calendarSync: Export der verbindlichen (FIX) Schichten als
@@ -956,7 +956,7 @@ function CalendarExportCard() {
               variant="outline"
               className="gap-2"
               onClick={handleDownload}
-              disabled={isExporting}
+              disabled={isExporting || !isTeamScopeReady}
               data-testid="calendar-export-button"
             >
               <CalendarDays className="h-4 w-4" />
@@ -1100,7 +1100,8 @@ export default function Einstellungen() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { currentUser } = useAuth();
-  const { teams, isDienstleister: isTeamDienstleister, selectedTeamId } = useTeam();
+  const { teams, isDienstleister: isTeamDienstleister, selectedTeamId, isTeamScopeReady } =
+    useTeam();
 
   // Team-Filter fuer den Dienste-Bereich (nur Dienstleister mit Teams):
   // initial dem globalen Team-Switcher folgen; eine lokale Auswahl im Dropdown
@@ -1113,9 +1114,15 @@ export default function Einstellungen() {
         : selectedTeamId)
     : null;
 
-  const { data: models, isLoading } = useListShiftModels(
+  // Dienste erst laden/bedienbar machen, wenn der Team-Scope settled ist:
+  // Vorher ist modelTeamId noch null und ein "Neuen Dienst" (targetTeamId)
+  // schriebe in den falschen Bereich, sobald die Team-Auto-Auswahl greift
+  // (gleiches Muster wie die Logo-Karte, Task #618).
+  const { data: models, isLoading: modelsLoading } = useListShiftModels(
     modelTeamId != null ? { teamId: modelTeamId } : undefined,
+    { query: { enabled: isTeamScopeReady } } as Parameters<typeof useListShiftModels>[1],
   );
+  const isLoading = !isTeamScopeReady || modelsLoading;
   const deleteModel = useDeleteShiftModel();
 
   const isDienstleister = currentUser?.accountType === "dienstleister";
@@ -1241,7 +1248,12 @@ export default function Einstellungen() {
           <div />
         )}
         {canAddModel ? (
-          <Button onClick={openCreate} className="gap-2" data-testid="model-create">
+          <Button
+            onClick={openCreate}
+            className="gap-2"
+            data-testid="model-create"
+            disabled={!isTeamScopeReady}
+          >
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Neuen Dienst</span>
             <span className="sm:hidden">Neu</span>
