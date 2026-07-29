@@ -665,9 +665,16 @@ function ProfileCard() {
 function LogoSettingsCard() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { isDienstleister, hasTeams, teams, selectedTeamId } = useTeam();
+  const { isDienstleister, hasTeams, teams, selectedTeamId, isTeamScopeReady } = useTeam();
   const teamParams = selectedTeamId != null ? { teamId: selectedTeamId } : undefined;
-  const { data, isLoading } = useGetBrandingSettings(teamParams);
+  // Branding erst laden/anzeigen, wenn der Team-Scope settled ist: Vorher ist
+  // unklar, ob die Konto- oder die Team-Zeile gemeint ist — ein Upload in
+  // diesem Fenster schriebe in den falschen Scope, und die Karte spränge nach
+  // der Team-Auto-Auswahl auf "Kein Logo" um (Task #618).
+  const { data, isLoading: brandingLoading } = useGetBrandingSettings(teamParams, {
+    query: { enabled: isTeamScopeReady },
+  } as Parameters<typeof useGetBrandingSettings>[1]);
+  const isLoading = !isTeamScopeReady || brandingLoading;
   const updateBranding = useUpdateBrandingSettings();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);

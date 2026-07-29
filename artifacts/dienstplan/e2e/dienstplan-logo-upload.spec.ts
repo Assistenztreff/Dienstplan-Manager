@@ -13,9 +13,11 @@ import { deleteAccountByEmail, registerFreeAccount } from "./helpers/teams";
  * - "Entfernen" setzt zurück -> Vorschau zeigt wieder "Kein Logo"
  * - Negativfall: ohne eigenes Logo bleibt das Standard-Logo der Fallback
  *
- * Wichtig: Ohne teamId liest/schreibt der Endpunkt die Konto-Zeile des
- * jeweils angemeldeten Kontos (nicht mehr einen globalen Singleton). Der Test
- * merkt sich den ursprünglichen Zustand und stellt ihn im Cleanup wieder her.
+ * Wichtig: Für ein Dienstleister-Konto mit Team folgt die Logo-Karte dem
+ * Team-Switcher (Auto-Auswahl des ersten Teams) — Upload/Entfernen schreiben
+ * die TEAM-Zeile. Alle API-Prüfungen dieses Specs lesen daher denselben
+ * Team-Scope (?teamId=...). Ohne teamId spräche der Endpunkt die Konto-Zeile
+ * an — ein anderer Scope, der hier bewusst NICHT geprüft wird.
  */
 
 // Die Logo-Karte rendert NUR für Dienstleister-Konten (Privat-Konten nutzen
@@ -38,7 +40,10 @@ const PNG_BUFFER = Buffer.from(PNG_BASE64, "base64");
 type BrandingSettings = { logoPath: string | null };
 
 let adminCtx: APIRequestContext;
-let originalLogoPath: string | null = null;
+// Standard-Team des registrierten Dienstleister-Kontos: Die Logo-Karte folgt
+// dem Team-Switcher (auto-select des ersten Teams), Upload/Entfernen schreiben
+// also die TEAM-Zeile — alle API-Prüfungen müssen denselben Scope lesen.
+let teamId: number;
 
 /**
  * Öffnet die Einstellungen als Admin. Im Dev-Modus meldet die App sich
@@ -61,7 +66,7 @@ async function gotoSettingsAsAdmin(page: Page): Promise<void> {
 }
 
 async function getBranding(): Promise<BrandingSettings> {
-  const res = await adminCtx.get("/api/branding-settings");
+  const res = await adminCtx.get(`/api/branding-settings?teamId=${teamId}`);
   expect(res.ok(), `GET branding-settings fehlgeschlagen (${res.status()})`).toBe(true);
   return (await res.json()) as BrandingSettings;
 }
@@ -71,11 +76,17 @@ test.beforeAll(async () => {
   adminCtx = account.ctx;
   accountEmail = account.email;
 
-  // Ursprünglichen Zustand merken und auf "kein Logo" zurücksetzen, damit der
-  // Test mit einem definierten Ausgangszustand startet.
-  originalLogoPath = (await getBranding()).logoPath;
+  // Standard-Team ermitteln (Eigentümer darf GET /teams).
+  const teamsRes = await adminCtx.get("/api/teams");
+  expect(teamsRes.ok(), `GET /teams fehlgeschlagen (${teamsRes.status()})`).toBe(true);
+  const teams = (await teamsRes.json()) as Array<{ id: number }>;
+  expect(teams.length, "Registrierung muss ein Standard-Team anlegen").toBeGreaterThan(0);
+  teamId = teams[0].id;
+
+  // Frisch registriertes Konto: Team-Branding startet ohne Logo; zur Sicherheit
+  // trotzdem auf einen definierten Ausgangszustand zurücksetzen.
   const resetRes = await adminCtx.put("/api/branding-settings", {
-    data: { logoPath: null },
+    data: { logoPath: null, teamId },
   });
   expect(resetRes.ok(), "Branding-Reset fehlgeschlagen").toBe(true);
 });
@@ -143,7 +154,7 @@ test("Logo-Upload zeigt Vorschau, persistiert objectPath und liefert das Bild au
 
 test("Negativfall: ohne eigenes Logo bleibt das Standard-Logo der Fallback", async ({ page }) => {
   // Sicherstellen, dass kein eigenes Logo gespeichert ist.
-  const reset = await adminCtx.put("/api/branding-settings", { data: { logoPath: null } });
+  const reset = await adminCtx.put("/api/branding-settings", { data: { logoPath: null, teamId } });
   expect(reset.ok()).toBe(true);
 
   await gotoSettingsAsAdmin(page);

@@ -11,6 +11,14 @@ type TeamContextType = {
   hasTeams: boolean;
   selectedTeamId: number | null;
   setSelectedTeamId: (id: number | null) => void;
+  /**
+   * true, sobald der Team-Kontext SETTLED ist: Für Dienstleister heißt das,
+   * die Team-Liste ist geladen UND die Auto-Auswahl des ersten Teams (siehe
+   * Effekt unten) ist bereits angewandt. Scope-abhängige Schreib-Flows (z.B.
+   * Logo-Upload: Konto- vs. Team-Zeile) müssen darauf warten, sonst schreiben
+   * sie in den falschen Scope, wenn die Auswahl mitten im Flow umspringt.
+   */
+  isTeamScopeReady: boolean;
 };
 
 const STORAGE_KEY = "dienstplan.selectedTeamId";
@@ -21,6 +29,7 @@ const TeamContext = createContext<TeamContextType>({
   hasTeams: false,
   selectedTeamId: null,
   setSelectedTeamId: () => {},
+  isTeamScopeReady: false,
 });
 
 function readStored(): number | null {
@@ -35,7 +44,7 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
   const isDienstleister =
     isAdminRole(currentUser?.role) && currentUser?.accountType === "dienstleister";
 
-  const { data: teamsData } = useListTeams({
+  const { data: teamsData, isLoading: teamsLoading } = useListTeams({
     query: { enabled: !!isDienstleister },
   } as Parameters<typeof useListTeams>[0]);
 
@@ -65,6 +74,16 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDienstleister, teams, selectedTeamId]);
 
+  // Scope settled? Nicht-Dienstleister: sofort (immer Konto-Scope). Dienst-
+  // leister: Teams geladen und — falls Teams existieren — die Auto-Auswahl
+  // bereits auf ein gültiges Team gezeigt (der Effekt oben läuft einen Render
+  // später; bis dahin gilt der Scope als "noch nicht bereit").
+  const isTeamScopeReady =
+    !isDienstleister ||
+    (!teamsLoading &&
+      (teams.length === 0 ||
+        (selectedTeamId !== null && teams.some((t) => t.id === selectedTeamId))));
+
   return (
     <TeamContext.Provider
       value={{
@@ -73,6 +92,7 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
         hasTeams: teams.length > 0,
         selectedTeamId: isDienstleister ? selectedTeamId : null,
         setSelectedTeamId,
+        isTeamScopeReady,
       }}
     >
       {children}

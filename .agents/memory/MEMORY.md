@@ -92,3 +92,4 @@
 - [E2E-Run-Lock wartet statt Abbruch](e2e-run-lock.md) — Validierungs-/Merge-Läufe überlappen; acquireRunLock wartet bis E2E_LOCK_WAIT_MS (15 Min) auf lebende Inhaber. Handbuch-UI-Änderung ⇒ screenshots:handbuch neu laufen lassen (Fingerprint-Gate in Validierung).
 - [Parallele scoped-e2e-Lanes](parallel-scoped-e2e-lanes.md) — volle Kette laeuft als parallele Lanes (API-Spec-Shards mit eigener DB+Ports, port-gebundene Locks, Marker pro DB); Smoke danach seriell.
 - [Gestaffelte Merge-E2E](scoped-e2e-validation.md) — e2e-Validierung läuft über scoped-e2e (git-Diff→Kategorie docs/frontend/full); Regeln zentral in scripts/src/lib/validation-scope.ts; im Zweifel volle Kette.
+- [Team-Scope-Readiness vor Writes](team-scope-ready-gate.md) — Karten, die Konto- vs. Team-Zeile schreiben, müssen auf isTeamScopeReady warten; sonst Write in falschen Scope während der Team-Auto-Auswahl.
