@@ -17,12 +17,15 @@ const CACHE_NAME = `dienstplan-shell-${CACHE_VERSION}`;
 const APP_SHELL = ["/", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then((cache) => cache.addAll(APP_SHELL))
-      .then(() => self.skipWaiting()),
-  );
+  // Kein automatisches skipWaiting: ein neuer Worker wartet, bis der Nutzer
+  // im Update-Hinweis "Neu laden" klickt (SKIP_WAITING-Message von der Seite).
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("activate", (event) => {
