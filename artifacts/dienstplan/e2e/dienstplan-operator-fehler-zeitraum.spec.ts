@@ -1,3 +1,4 @@
+import { pickDateField } from "./helpers/date-picker";
 import { execSync } from "node:child_process";
 import {
   test,
@@ -212,8 +213,8 @@ test.describe("Zeitraum-Filter in der Operator-Fehlerliste", () => {
     await expect(toInput).toBeVisible();
 
     // Treffer: Zeitraum gestern..morgen umschliesst das heutige Auftreten.
-    await fromInput.fill(isoDate(-1));
-    await toInput.fill(isoDate(1));
+    await pickDateField(page, "input-error-range-from", isoDate(-1));
+    await pickDateField(page, "input-error-range-to", isoDate(1));
     await expect(
       page.getByTestId(`row-operator-error-${boomErrorId}`),
     ).toBeVisible();
@@ -221,8 +222,10 @@ test.describe("Zeitraum-Filter in der Operator-Fehlerliste", () => {
     // Kein-Treffer: Zeitraum-Anfang weit in der Zukunft -> KEIN Eintrag kann
     // dort ein letztes Auftreten haben, der Leer-Hinweis erscheint (robust
     // gegen parallel laufende Specs, die neue Fehler erzeugen).
-    await fromInput.fill(isoDate(2));
-    await toInput.fill(isoDate(3));
+    // Erst "bis" erhöhen: der Picker erzwingt min/max wirklich (das frühere
+    // native Feld ignorierte die Grenzen beim programmatischen fill()).
+    await pickDateField(page, "input-error-range-to", isoDate(3));
+    await pickDateField(page, "input-error-range-from", isoDate(2));
     await expect(page.getByTestId("text-operator-errors-empty")).toBeVisible();
     await expect(
       page.getByTestId(`row-operator-error-${boomErrorId}`),
@@ -264,8 +267,8 @@ test.describe("Zeitraum-Filter in der Operator-Fehlerliste", () => {
           req.url().includes("from=") &&
           req.url().includes("to="),
       );
-      await page.getByTestId("input-error-range-from").fill(day);
-      await page.getByTestId("input-error-range-to").fill(day);
+      await pickDateField(page, "input-error-range-from", day);
+      await pickDateField(page, "input-error-range-to", day);
       const req = await requestPromise;
       const url = new URL(req.url());
       const from = url.searchParams.get("from");

@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { DatePickerField } from "@/components/date-picker-field";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { getBarrierefreieFarbe } from "@/lib/barrierefreie-farben";
@@ -924,10 +925,9 @@ export default function Zeiterfassung() {
             )}
             <div className="space-y-1.5">
               <Label>Datum</Label>
-              <Input
-                type="date"
+              <DatePickerField
                 value={manualDate}
-                onChange={(e) => onManualTimeChange({ date: e.target.value })}
+                onChange={(v) => onManualTimeChange({ date: v })}
                 data-testid="manual-date"
               />
             </div>

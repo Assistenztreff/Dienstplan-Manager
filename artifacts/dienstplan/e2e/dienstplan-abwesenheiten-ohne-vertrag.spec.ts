@@ -1,3 +1,4 @@
+import { pickDateField } from "./helpers/date-picker";
 import {
   test,
   expect,
@@ -107,8 +108,8 @@ test("geplanter Urlaub erscheint in der Resturlaub-Karte auch ohne Vertrag", asy
   await page.getByRole("option", { name: assistant.name }).click();
 
   // Typ bleibt "Urlaub" (Default). Zeitraum = 3 Tage im laufenden Jahr.
-  await page.getByTestId("absence-from").fill(VACATION_FROM);
-  await page.getByTestId("absence-to").fill(VACATION_TO);
+  await pickDateField(page, "absence-from", VACATION_FROM);
+  await pickDateField(page, "absence-to", VACATION_TO);
   await page.getByTestId("absence-save").click();
 
   // Buchung erscheint in der Liste.

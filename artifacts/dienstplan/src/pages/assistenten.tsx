@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { DatePickerField } from "@/components/date-picker-field";
 import {
   Select,
   SelectContent,
@@ -554,12 +555,14 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <FieldRow label="Geburtsdatum">
-                  <Input
-                    className="bg-card"
-                    type="date"
+                  <DatePickerField
                     value={form.birthDate}
-                    onChange={(e) => set("birthDate", e.target.value)}
+                    onChange={(v) => set("birthDate", v)}
                     disabled={!canEditWageData}
+                    data-testid="assistant-birth-date"
+                    yearsBack={90}
+                    yearsForward={0}
+                    clearable
                   />
                 </FieldRow>
                 <FieldRow label="Steuerklasse">
@@ -694,11 +697,13 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
               </FieldRow>
 
               <FieldRow label="Vertragsbeginn *" error={errors.startDate}>
-                <Input
-                  className="bg-card"
-                  type="date"
+                <DatePickerField
                   value={form.startDate}
-                  onChange={(e) => set("startDate", e.target.value)}
+                  onChange={(v) => set("startDate", v)}
+                  invalid={Boolean(errors.startDate)}
+                  data-testid="contract-start-date"
+                  yearsBack={15}
+                  yearsForward={3}
                 />
               </FieldRow>
 

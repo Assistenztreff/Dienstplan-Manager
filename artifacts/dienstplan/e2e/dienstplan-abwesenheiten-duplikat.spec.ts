@@ -1,3 +1,4 @@
+import { pickDateField } from "./helpers/date-picker";
 import {
   test,
   expect,
@@ -143,18 +144,20 @@ test("Überlappende Urlaubsbuchung überspringt bereits vorhandene Tage und zieh
   await page.getByRole("option", { name: assistant.name }).click();
 
   // --- Erste Buchung: 10.+11. (2 Tage) ---
-  await page.getByTestId("absence-from").fill(FIRST_FROM);
-  await page.getByTestId("absence-to").fill(FIRST_TO);
+  await pickDateField(page, "absence-from", FIRST_FROM);
+  await pickDateField(page, "absence-to", FIRST_TO);
   await page.getByTestId("absence-save").click();
 
-  await expect(taken).toHaveText("2");
+  // Großzügiges Zeitfenster: 2 sequentielle Urlaubs-POSTs à ~4-5s (Vertrags-
+  // Read-Modify-Write) sprengen unter Last die Default-5s.
+  await expect(taken).toHaveText("2", { timeout: 20000 });
   await expect(remaining).toHaveText("28");
   expect(await vacationDaysUsed(adminCtx, assistant.id, contractId)).toBe(2);
 
   // --- Zweite, überlappende Buchung: 11.-13. ---
   // Der 11. existiert bereits und muss übersprungen werden; nur 12.+13. neu.
-  await page.getByTestId("absence-from").fill(SECOND_FROM);
-  await page.getByTestId("absence-to").fill(SECOND_TO);
+  await pickDateField(page, "absence-from", SECOND_FROM);
+  await pickDateField(page, "absence-to", SECOND_TO);
   await page.getByTestId("absence-save").click();
 
   // Toast bestätigt: 2 neue Tage angelegt, 1 bereits vorhanden. (.first():

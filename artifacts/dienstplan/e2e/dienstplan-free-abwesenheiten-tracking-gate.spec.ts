@@ -1,3 +1,4 @@
+import { pickDateField } from "./helpers/date-picker";
 import { test, expect, type Page } from "@playwright/test";
 import {
   deleteFreeAccount,
@@ -131,20 +132,22 @@ test.describe("Abwesenheiten: Eintragen frei, Resturlaub-Tracking Premium", () =
     await page.getByTestId("absence-user").click();
     await page.getByRole("option", { name: assistantName }).click();
     // Art bleibt "Urlaub" (Default).
-    await page.getByTestId("absence-from").fill(VACATION_FROM);
-    await page.getByTestId("absence-to").fill(VACATION_TO);
+    await pickDateField(page, "absence-from", VACATION_FROM);
+    await pickDateField(page, "absence-to", VACATION_TO);
     await page.getByTestId("absence-save").click();
 
     const list = page.getByTestId("absence-list");
     await expect(list, "Urlaub muss im Free-Tarif angelegt werden").toContainText(
       "Urlaub · 2 Tage",
+      // 2 sequentielle Urlaubs-POSTs à ~4-5s — Default-5s sind zu knapp.
+      { timeout: 20000 },
     );
 
     // --- Krankheit eintragen (1 Tag) — muss ebenfalls gelingen ------------
     await page.getByTestId("absence-type").click();
     await page.getByRole("option", { name: "Krank" }).click();
-    await page.getByTestId("absence-from").fill(SICK_DAY);
-    await page.getByTestId("absence-to").fill(SICK_DAY);
+    await pickDateField(page, "absence-from", SICK_DAY);
+    await pickDateField(page, "absence-to", SICK_DAY);
     await page.getByTestId("absence-save").click();
 
     await expect(list, "Krankheit muss im Free-Tarif angelegt werden").toContainText(

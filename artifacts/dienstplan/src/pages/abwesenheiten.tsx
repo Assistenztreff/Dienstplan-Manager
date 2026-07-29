@@ -18,6 +18,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { DatePickerField } from "@/components/date-picker-field";
 import {
   Select,
   SelectContent,
@@ -409,19 +410,17 @@ export default function Abwesenheiten() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Von</Label>
-                <Input
-                  type="date"
+                <DatePickerField
                   value={from}
-                  onChange={(e) => setFrom(e.target.value)}
+                  onChange={setFrom}
                   data-testid="absence-from"
                 />
               </div>
               <div className="space-y-1.5">
                 <Label>Bis</Label>
-                <Input
-                  type="date"
+                <DatePickerField
                   value={to}
-                  onChange={(e) => setTo(e.target.value)}
+                  onChange={setTo}
                   data-testid="absence-to"
                 />
               </div>

@@ -1,3 +1,4 @@
+import { pickDateField } from "./helpers/date-picker";
 import {
   test,
   expect,
@@ -104,8 +105,8 @@ async function bookAbsence(
   await page.getByTestId("absence-type").click();
   await page.getByRole("option", { name: kind, exact: true }).click();
 
-  await page.getByTestId("absence-from").fill(fromDate);
-  await page.getByTestId("absence-to").fill(toDate);
+  await pickDateField(page, "absence-from", fromDate);
+  await pickDateField(page, "absence-to", toDate);
   await page.getByTestId("absence-save").click();
 }
 

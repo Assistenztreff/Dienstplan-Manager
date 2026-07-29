@@ -223,10 +223,10 @@ test.describe("Schnellauswahl Dieser Monat / Letzte 30 Tage filtern serverseitig
       // Die Felder muessen auf den aktuellen Monat zeigen (Vorbedingung aus
       // #382, hier nur als Sanity-Check).
       const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
-      await expect(page.getByTestId("input-plan-change-from")).toHaveValue(
+      await expect(page.getByTestId("input-plan-change-from")).toHaveAttribute("data-value", 
         `${y}-${pad(m + 1)}-01`,
       );
-      await expect(page.getByTestId("input-plan-change-to")).toHaveValue(
+      await expect(page.getByTestId("input-plan-change-to")).toHaveAttribute("data-value", 
         `${y}-${pad(m + 1)}-${pad(lastDay)}`,
       );
 
@@ -268,10 +268,10 @@ test.describe("Schnellauswahl Dieser Monat / Letzte 30 Tage filtern serverseitig
       // Felder muessen heute-29 bis heute zeigen (Sanity-Check). Datum via
       // UTC-Getter aus dem backdatierten Tag-30-Zeitstempel abgeleitet.
       const from30 = ts30Tag30;
-      await expect(page.getByTestId("input-plan-change-from")).toHaveValue(
+      await expect(page.getByTestId("input-plan-change-from")).toHaveAttribute("data-value", 
         `${from30.getUTCFullYear()}-${pad(from30.getUTCMonth() + 1)}-${pad(from30.getUTCDate())}`,
       );
-      await expect(page.getByTestId("input-plan-change-to")).toHaveValue(
+      await expect(page.getByTestId("input-plan-change-to")).toHaveAttribute("data-value", 
         `${y}-${pad(m + 1)}-${pad(d)}`,
       );
 

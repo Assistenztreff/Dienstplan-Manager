@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "@/components/layout";
+import { OfflineBanner } from "@/components/offline-banner";
 import { AuthProvider, useAuth } from "@/context/auth";
 import { TeamProvider } from "@/context/team";
 import Dashboard from "@/pages/dashboard";
@@ -181,6 +182,8 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        {/* Offline-Hinweis global über allen Seiten (auch Login/Startseite). */}
+        <OfflineBanner />
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
           <AuthProvider>
             <TeamProvider>

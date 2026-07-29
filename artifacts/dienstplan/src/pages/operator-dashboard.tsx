@@ -62,6 +62,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DatePickerField } from "@/components/date-picker-field";
 import { Label } from "@/components/ui/label";
 import { Users, Receipt, AlertTriangle, ShieldCheck, History, Check, CheckCheck, Undo2, ChevronDown, ChevronUp, Search } from "lucide-react";
 import { readableApiError } from "@/lib/api-error";
@@ -547,12 +548,10 @@ export default function OperatorDashboard() {
               <Label htmlFor="plan-change-from" className="text-xs text-muted-foreground">
                 Zeitraum von
               </Label>
-              <Input
-                id="plan-change-from"
-                type="date"
+              <DatePickerField
                 value={planFrom}
                 max={planTo || undefined}
-                onChange={(e) => setPlanFrom(e.target.value)}
+                onChange={setPlanFrom}
                 className="w-auto"
                 data-testid="input-plan-change-from"
               />
@@ -561,12 +560,10 @@ export default function OperatorDashboard() {
               <Label htmlFor="plan-change-to" className="text-xs text-muted-foreground">
                 Zeitraum bis
               </Label>
-              <Input
-                id="plan-change-to"
-                type="date"
+              <DatePickerField
                 value={planTo}
                 min={planFrom || undefined}
-                onChange={(e) => setPlanTo(e.target.value)}
+                onChange={setPlanTo}
                 className="w-auto"
                 data-testid="input-plan-change-to"
               />
@@ -856,12 +853,10 @@ export default function OperatorDashboard() {
               <Label htmlFor="error-range-from" className="text-xs text-muted-foreground">
                 Zeitraum von
               </Label>
-              <Input
-                id="error-range-from"
-                type="date"
+              <DatePickerField
                 value={errorFrom}
                 max={errorTo || undefined}
-                onChange={(e) => setErrorFrom(e.target.value)}
+                onChange={setErrorFrom}
                 className="w-auto"
                 data-testid="input-error-range-from"
               />
@@ -870,12 +865,10 @@ export default function OperatorDashboard() {
               <Label htmlFor="error-range-to" className="text-xs text-muted-foreground">
                 Zeitraum bis
               </Label>
-              <Input
-                id="error-range-to"
-                type="date"
+              <DatePickerField
                 value={errorTo}
                 min={errorFrom || undefined}
-                onChange={(e) => setErrorTo(e.target.value)}
+                onChange={setErrorTo}
                 className="w-auto"
                 data-testid="input-error-range-to"
               />

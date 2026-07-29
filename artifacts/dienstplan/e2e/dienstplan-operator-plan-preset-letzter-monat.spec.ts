@@ -222,10 +222,10 @@ test.describe("Schnellauswahl Letzter Monat filtert das Protokoll serverseitig",
       const prevYear = m === 0 ? y - 1 : y;
       const prevMonth = m === 0 ? 12 : m;
       const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
-      await expect(page.getByTestId("input-plan-change-from")).toHaveValue(
+      await expect(page.getByTestId("input-plan-change-from")).toHaveAttribute("data-value", 
         `${prevYear}-${pad(prevMonth)}-01`,
       );
-      await expect(page.getByTestId("input-plan-change-to")).toHaveValue(
+      await expect(page.getByTestId("input-plan-change-to")).toHaveAttribute("data-value", 
         `${prevYear}-${pad(prevMonth)}-${pad(lastDay)}`,
       );
 

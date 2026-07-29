@@ -168,10 +168,10 @@ test.describe("Schnellauswahl-Presets in der Operator-Fehlerliste", () => {
       await page.getByTestId("button-error-preset-this-month").click();
 
       const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
-      await expect(page.getByTestId("input-error-range-from")).toHaveValue(
+      await expect(page.getByTestId("input-error-range-from")).toHaveAttribute("data-value", 
         `${y}-${pad(m + 1)}-01`,
       );
-      await expect(page.getByTestId("input-error-range-to")).toHaveValue(
+      await expect(page.getByTestId("input-error-range-to")).toHaveAttribute("data-value", 
         `${y}-${pad(m + 1)}-${pad(lastDay)}`,
       );
 
@@ -209,10 +209,10 @@ test.describe("Schnellauswahl-Presets in der Operator-Fehlerliste", () => {
 
       await page.getByTestId("button-error-preset-last-30-days").click();
 
-      await expect(page.getByTestId("input-error-range-from")).toHaveValue(
+      await expect(page.getByTestId("input-error-range-from")).toHaveAttribute("data-value", 
         `${ts30Tag30.getUTCFullYear()}-${pad(ts30Tag30.getUTCMonth() + 1)}-${pad(ts30Tag30.getUTCDate())}`,
       );
-      await expect(page.getByTestId("input-error-range-to")).toHaveValue(
+      await expect(page.getByTestId("input-error-range-to")).toHaveAttribute("data-value", 
         `${y}-${pad(m + 1)}-${pad(d)}`,
       );
 
@@ -251,10 +251,10 @@ test.describe("Schnellauswahl-Presets in der Operator-Fehlerliste", () => {
 
       const firstPrevMonth = new Date(Date.UTC(y, m - 1, 1));
       const lastPrevMonth = new Date(Date.UTC(y, m, 0));
-      await expect(page.getByTestId("input-error-range-from")).toHaveValue(
+      await expect(page.getByTestId("input-error-range-from")).toHaveAttribute("data-value", 
         `${firstPrevMonth.getUTCFullYear()}-${pad(firstPrevMonth.getUTCMonth() + 1)}-01`,
       );
-      await expect(page.getByTestId("input-error-range-to")).toHaveValue(
+      await expect(page.getByTestId("input-error-range-to")).toHaveAttribute("data-value", 
         `${lastPrevMonth.getUTCFullYear()}-${pad(lastPrevMonth.getUTCMonth() + 1)}-${pad(lastPrevMonth.getUTCDate())}`,
       );
     } finally {

@@ -1,3 +1,4 @@
+import { pickDateField } from "./helpers/date-picker";
 import {
   test,
   expect,
@@ -164,7 +165,7 @@ test.describe("Zeiterfassung: manueller Folgetag-Eintrag (Web)", () => {
     await expect(page.getByTestId("manual-dialog")).toBeVisible();
 
     // Festes Datum, damit der Folgetag-Wechsel eindeutig prüfbar ist.
-    await page.getByTestId("manual-date").fill("2026-03-10");
+    await pickDateField(page, "manual-date", "2026-03-10");
     await page.getByTestId("manual-start").fill("22:00");
     await page.getByTestId("manual-end").fill("06:00");
 

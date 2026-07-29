@@ -1,3 +1,4 @@
+import { pickDateField } from "./helpers/date-picker";
 import { execSync } from "node:child_process";
 import {
   test,
@@ -230,15 +231,17 @@ test.describe("Zeitraum-Filter im Plan-Änderungsprotokoll", () => {
     await expect(toInput).toBeVisible();
 
     // Treffer: Zeitraum gestern..morgen umschliesst den heutigen Eintrag.
-    await fromInput.fill(isoDate(-1));
-    await toInput.fill(isoDate(1));
+    await pickDateField(page, "input-plan-change-from", isoDate(-1));
+    await pickDateField(page, "input-plan-change-to", isoDate(1));
     await expect(
       page.locator("[data-testid^='text-plan-change-note-']").first(),
     ).toContainText(invoiceNote);
 
     // Kein-Treffer: Zeitraum-Anfang in der Zukunft -> Leer-Hinweis.
-    await fromInput.fill(isoDate(2));
-    await toInput.fill(isoDate(3));
+    // Erst "bis" erhöhen: der Picker erzwingt min/max wirklich (das frühere
+    // native Feld ignorierte die Grenzen beim programmatischen fill()).
+    await pickDateField(page, "input-plan-change-to", isoDate(3));
+    await pickDateField(page, "input-plan-change-from", isoDate(2));
     await expect(
       page.getByTestId("text-operator-plan-changes-empty"),
     ).toBeVisible();
@@ -275,8 +278,8 @@ test.describe("Zeitraum-Filter im Plan-Änderungsprotokoll", () => {
           req.url().includes("from=") &&
           req.url().includes("to="),
       );
-      await page.getByTestId("input-plan-change-from").fill(day);
-      await page.getByTestId("input-plan-change-to").fill(day);
+      await pickDateField(page, "input-plan-change-from", day);
+      await pickDateField(page, "input-plan-change-to", day);
       const req = await requestPromise;
       const url = new URL(req.url());
       const from = url.searchParams.get("from");

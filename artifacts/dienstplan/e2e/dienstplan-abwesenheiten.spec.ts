@@ -1,3 +1,4 @@
+import { pickDateField } from "./helpers/date-picker";
 import {
   test,
   expect,
@@ -129,12 +130,14 @@ test("Urlaubsbuchung am 1. Januar / Vertragsbeginn zieht korrekt vom Resturlaub 
   await page.getByRole("option", { name: assistant.name }).click();
 
   // Typ bleibt "Urlaub" (Default). Zeitraum = einzelner Tag am Vertragsbeginn.
-  await page.getByTestId("absence-from").fill(VACATION_DAY);
-  await page.getByTestId("absence-to").fill(VACATION_DAY);
+  await pickDateField(page, "absence-from", VACATION_DAY);
+  await pickDateField(page, "absence-to", VACATION_DAY);
   await page.getByTestId("absence-save").click();
 
-  // Buchung erscheint in der Liste.
-  await expect(page.getByTestId("absence-list")).toContainText("Urlaub");
+  // Buchung erscheint in der Liste. Großzügiges Zeitfenster: der POST /shifts
+  // (Urlaubsbuchung inkl. Vertrags-Update) kann unter Last mehrere Sekunden
+  // dauern — die Default-5s liefen dabei nachweislich knapp ab (POST 201).
+  await expect(page.getByTestId("absence-list")).toContainText("Urlaub", { timeout: 15000 });
 
   // Resturlaub-Anzeige aktualisiert: 29 von 30 (1 genommen).
   await expect(taken).toHaveText("1");
