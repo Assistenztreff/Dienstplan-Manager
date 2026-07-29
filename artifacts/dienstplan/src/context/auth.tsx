@@ -208,8 +208,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = (await r.json().catch(() => ({}))) as { error?: string };
       const err = new Error(safeErrorText(data.error, "Registrierung fehlgeschlagen")) as Error & {
         status?: number;
+        retryAfterSeconds?: number;
       };
       err.status = r.status;
+      // 429 (Rate-Limit, Task #553): Wartezeit aus dem Retry-After-Header
+      // mitgeben, damit die Registrierungsseite sie verständlich anzeigen kann.
+      const retryAfter = Number(r.headers.get("Retry-After"));
+      if (Number.isFinite(retryAfter) && retryAfter > 0) {
+        err.retryAfterSeconds = retryAfter;
+      }
       throw err;
     }
     const user = (await r.json()) as AuthUser;

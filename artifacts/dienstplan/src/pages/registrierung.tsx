@@ -53,10 +53,28 @@ export default function Registrierung() {
       navigate("/");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Registrierung fehlgeschlagen";
+      const status = err instanceof Error ? (err as { status?: number }).status : undefined;
       // Eine bereits vergebene E-Mail (409) direkt am E-Mail-Feld anzeigen —
       // analog zum Anlege-/Bearbeiten-Pfad für Assistenten.
-      if (err instanceof Error && (err as { status?: number }).status === 409) {
+      if (status === 409) {
         setEmailError(message);
+      } else if (status === 429) {
+        // Rate-Limit (Task #553): verständliche Meldung mit Wartezeit aus
+        // dem Retry-After-Header statt des generischen Sammel-Fehlers.
+        const retryAfterSeconds =
+          err instanceof Error
+            ? (err as { retryAfterSeconds?: number }).retryAfterSeconds
+            : undefined;
+        if (typeof retryAfterSeconds === "number" && retryAfterSeconds > 0) {
+          const minuten = Math.max(1, Math.ceil(retryAfterSeconds / 60));
+          setError(
+            minuten === 1
+              ? "Zu viele Versuche — bitte in 1 Minute erneut versuchen."
+              : `Zu viele Versuche — bitte in ${minuten} Minuten erneut versuchen.`,
+          );
+        } else {
+          setError("Zu viele Versuche — bitte später erneut versuchen.");
+        }
       } else {
         setError(message);
       }
