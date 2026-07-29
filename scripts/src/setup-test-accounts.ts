@@ -36,6 +36,35 @@ const EMAIL_ALT_DIENST = "dienst@dienstplan.local";
 
 const BETREIBER_TEAM_NAME = "Betreiber-Team";
 
+/**
+ * Die 7 realen Assistenzkraefte des Standard-Teams (Zielbild, Task #647).
+ * Diese Liste ist die verbindliche Whitelist fuer Team 1: Schritt 0 entfernt
+ * alle anderen (nicht-e2e-)Konten aus dem Standard-Team — auch solche, die
+ * sich einen Vertrag in Team 1 erschlichen haben. Die Endkontrolle prueft
+ * gegen dieselbe Liste (frueher dienten die Vertraege in Team 1 als
+ * Whitelist, wodurch ein eingeschleustes Fremdkonto MIT Vertrag als
+ * "erwartetes Mitglied" durchging). Aendert sich der reale Bestand,
+ * muss diese Liste angepasst werden. Vergleiche immer case-insensitiv
+ * (Eintraege hier kleingeschrieben).
+ *
+ * Zusaetzlich zaehlen die vom E2E-Harness geseedeten Stellvertreter
+ * `verify.assistenzkraft%@dienstplan.local` (verify-account-separation)
+ * als reale Assistenzkraefte — auf der Test-DB stehen sie fuer die 7
+ * echten Konten und duerfen weder geloescht noch beanstandet werden.
+ */
+const VERIFY_ASSISTANT_PATTERN = "verify.assistenzkraft%@dienstplan.local";
+const isVerifyAssistantEmail = (email: string): boolean =>
+  /^verify\.assistenzkraft.*@dienstplan\.local$/i.test(email);
+const REAL_ASSISTANT_EMAILS = [
+  "tolga_kahraman@hotmail.de",
+  "florian.thierer@gmail.com",
+  "camillo.neubert@web.de",
+  "tortuenomade@hotmail.fr",
+  "kontakt@assistenztreff.de",
+  "centaury82@gmail.com",
+  "ollie@exemple.com",
+] as const;
+
 interface UserRow {
   id: number;
   role: string;
@@ -153,11 +182,13 @@ async function removeLegacyMembers(
         AND u.email NOT LIKE 'e2e.%@dienstplan.test'`,
     [teamId],
   );
-  const legacy = res.rows.filter((r) => !allowedEmails.has(r.email));
+  const legacy = res.rows.filter(
+    (r) => !allowedEmails.has(r.email.toLowerCase()) && !isVerifyAssistantEmail(r.email),
+  );
   if (legacy.length === 0) return;
 
-  const membershipOnly = legacy.filter((r) => coreEmails.has(r.email));
-  const toDelete = legacy.filter((r) => !coreEmails.has(r.email));
+  const membershipOnly = legacy.filter((r) => coreEmails.has(r.email.toLowerCase()));
+  const toDelete = legacy.filter((r) => !coreEmails.has(r.email.toLowerCase()));
 
   for (const m of membershipOnly) {
     await client.query(
@@ -212,6 +243,32 @@ async function main(): Promise<void> {
       EMAIL_MARIA,
       EMAIL_ALT_DIENST,
     ]);
+    // Standard-Team (Team von Oliver bzw. noch von Maria): Whitelist sind
+    // Oliver + die realen Assistenzkraefte. Kern-Konten und die
+    // Mustermann-Dummys werden erst in Schritt 1 (Mitgliedschafts-Umzug)
+    // behandelt, daher hier erlaubt; alles andere ist eine Altlast.
+    const preMainOwnerId = maria?.id ?? oliver.id;
+    const preMainTeam = await client.query<{ id: number }>(
+      "SELECT id FROM teams WHERE owner_id = $1 ORDER BY id LIMIT 1",
+      [preMainOwnerId],
+    );
+    if (preMainTeam.rows[0]) {
+      await removeLegacyMembers(
+        client,
+        preMainTeam.rows[0].id,
+        new Set<string>([
+          EMAIL_OLIVER,
+          EMAIL_MARIA,
+          EMAIL_ASSISTENT,
+          ...REAL_ASSISTANT_EMAILS,
+          ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(
+            (n) => `max.mustermann${n}@dienstplan.local`,
+          ),
+        ]),
+        coreEmails,
+        "Standard-Team",
+      );
+    }
     const preBetreiberTeam = await client.query<{ id: number }>(
       "SELECT id FROM teams WHERE owner_id = $1 ORDER BY id LIMIT 1",
       [betreiber.id],
@@ -399,22 +456,19 @@ async function main(): Promise<void> {
     };
 
     // Team 1 (Oliver): exakt Oliver + die realen Assistenzkraefte. Als
-    // Whitelist dienen die Vertraege in Team 1 (jede reale Assistenzkraft
-    // hat dort einen Vertrag) — so wird auch das versehentliche VERLIEREN
-    // einer erwarteten Mitgliedschaft erkannt, nicht nur Fremdzugaenge.
-    const contractHolders = await client.query<{ user_id: number }>(
-      `SELECT DISTINCT c.user_id
-         FROM contracts c JOIN users u ON u.id = c.user_id
-        WHERE c.team_id = $1 AND u.role = 'assistant'
-          -- Fremde e2e-Spec-Fixtures auch aus der Whitelist ausblenden
-          -- (symmetrisch zum Member-Filter unten, Task #622): sonst gilt ein
-          -- fremdes e2e-Konto mit Vertrag in Team 1 als "fehlendes" Mitglied.
-          AND u.email NOT LIKE 'e2e.%@dienstplan.test'`,
-      [mainTeamId],
+    // Whitelist dient die feste Liste REAL_ASSISTANT_EMAILS (Task #647) —
+    // NICHT mehr die Vertraege in Team 1: ein eingeschleustes Fremdkonto
+    // MIT Vertrag galt sonst als "erwartetes Mitglied". Existierende reale
+    // Konten, deren Mitgliedschaft fehlt, werden weiterhin als Fehler
+    // erkannt; in frischen DBs ohne die realen Konten prueft die Liste
+    // schlicht nur die vorhandenen.
+    const realAssistants = await client.query<{ id: number }>(
+      "SELECT id FROM users WHERE lower(email) = ANY($1) OR email LIKE $2",
+      [[...REAL_ASSISTANT_EMAILS], VERIFY_ASSISTANT_PATTERN],
     );
     const expectedTeam1Ids = new Set<number>([
       oliver.id,
-      ...contractHolders.rows.map((r) => r.user_id),
+      ...realAssistants.rows.map((r) => r.id),
     ]);
     const team1Members = await memberRows(mainTeamId);
     for (const m of team1Members) {

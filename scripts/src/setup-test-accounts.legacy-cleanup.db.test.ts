@@ -38,6 +38,12 @@ const EMAIL_BETREIBER = "betreiber@dienstplan.local";
 const EMAIL_DIENSTLEISTER = "dienstleister@dienstplan.local";
 const EMAIL_ASSISTENT = "assistent@dienstplan.local";
 const EMAIL_FREMD = "test1@tester.de";
+// Eingeschleustes Fremdkonto im STANDARD-Team — MIT Vertrag in Team 1
+// (Task #647): frueher galt es dadurch als "erwartetes Mitglied" der
+// Endkontrolle und blieb dauerhaft liegen.
+const EMAIL_FREMD_STD = "test2@tester.de";
+// Eine der realen Assistenzkraefte aus der festen Whitelist des Skripts.
+const EMAIL_REAL = "tolga_kahraman@hotmail.de";
 
 let baseUrl: string;
 let targetUrl: string;
@@ -47,6 +53,9 @@ let runStatus: number | null = null;
 let fremdId = 0;
 let fremdTeamId = 0;
 let dlTeamId = 0;
+let stdTeamId = 0;
+let fremdStdId = 0;
+let realId = 0;
 
 function adminClient(): pg.Client {
   return new pg.Client({
@@ -159,7 +168,7 @@ beforeAll(async () => {
       return teamId;
     };
 
-    await mkTeam("Standard-Team", oliverId);
+    stdTeamId = await mkTeam("Standard-Team", oliverId);
     await mkTeam("Betreiber-Team", betreiberId);
     dlTeamId = await mkTeam("Dienstleister-Team", dlId);
 
@@ -212,6 +221,30 @@ beforeAll(async () => {
       "INSERT INTO team_members (team_id, user_id) VALUES ($1, $2)",
       [dlTeamId, assistentId],
     );
+
+    // Standard-Team (Task #647): reale Assistenzkraft (aus der festen
+    // Whitelist) MIT Vertrag muss bleiben; eingeschleustes Fremdkonto MIT
+    // Vertrag in Team 1 muss trotz Vertrags-"Tarnung" entfernt werden.
+    realId = await insertUser(seed, "Tolga Kahraman", EMAIL_REAL, "assistant");
+    await seed.query(
+      "INSERT INTO team_members (team_id, user_id) VALUES ($1, $2)",
+      [stdTeamId, realId],
+    );
+    await seed.query(
+      `INSERT INTO contracts (user_id, team_id, weekly_hours, vacation_days, start_date)
+       VALUES ($1, $2, 30, 30, '2026-01-01')`,
+      [realId, stdTeamId],
+    );
+    fremdStdId = await insertUser(seed, "Std-Eindringling", EMAIL_FREMD_STD, "assistant");
+    await seed.query(
+      "INSERT INTO team_members (team_id, user_id) VALUES ($1, $2)",
+      [stdTeamId, fremdStdId],
+    );
+    await seed.query(
+      `INSERT INTO contracts (user_id, team_id, weekly_hours, vacation_days, start_date)
+       VALUES ($1, $2, 20, 25, '2026-01-01')`,
+      [fremdStdId, stdTeamId],
+    );
   } finally {
     await seed.end();
   }
@@ -255,6 +288,44 @@ describe("setup-test-accounts raeumt eingeschleuste Altlasten selbst weg", () =>
     expect(runOutput).toContain(
       `Mitgliedschaft von Kern-Konto ${EMAIL_ASSISTENT} entfernt`,
     );
+    // Auch das Standard-Team hat sein Fremdkonto selbst entsorgt.
+    expect(runOutput).toContain(EMAIL_FREMD_STD);
+  });
+
+  it("wirft das Fremdkonto MIT Vertrag aus dem Standard-Team, reale Assistenzkraft bleibt", async () => {
+    const client = new pg.Client({ connectionString: targetUrl });
+    await client.connect();
+    try {
+      const members = await client.query<{ email: string }>(
+        `SELECT u.email FROM team_members tm JOIN users u ON u.id = tm.user_id
+          WHERE tm.team_id = $1 ORDER BY u.email`,
+        [stdTeamId],
+      );
+      expect(members.rows.map((r) => r.email).sort()).toEqual(
+        [EMAIL_OLIVER, EMAIL_REAL].sort(),
+      );
+
+      // Fremdkonto samt Datenbaum (inkl. Vertrag in Team 1) restlos weg.
+      const fremdUsers = await client.query(
+        "SELECT 1 FROM users WHERE id = $1 OR email = $2",
+        [fremdStdId, EMAIL_FREMD_STD],
+      );
+      expect(fremdUsers.rowCount).toBe(0);
+      const fremdContracts = await client.query(
+        "SELECT 1 FROM contracts WHERE user_id = $1",
+        [fremdStdId],
+      );
+      expect(fremdContracts.rowCount).toBe(0);
+
+      // Reale Assistenzkraft behaelt Konto, Mitgliedschaft und Vertrag.
+      const realContract = await client.query(
+        "SELECT 1 FROM contracts WHERE user_id = $1 AND team_id = $2",
+        [realId, stdTeamId],
+      );
+      expect(realContract.rowCount).toBe(1);
+    } finally {
+      await client.end();
+    }
   });
 
   it("entfernt das Fremdkonto restlos samt Datenbaum (Konto, Team, Schichten, Vertraege, Zeiterfassung, Plan-Historie)", async () => {
