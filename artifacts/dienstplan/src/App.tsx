@@ -24,7 +24,14 @@ import Registrierung from "@/pages/registrierung";
 import Einladung from "@/pages/einladung";
 import PasswortVergessen from "@/pages/passwort-vergessen";
 import { Impressum, Datenschutz, Kontakt, Barrierefreiheit } from "@/pages/rechtliches";
-import { HandbuchStart, HandbuchDienstplan, HandbuchTeamVerwaltung } from "@/pages/handbuch";
+import {
+  HandbuchStart,
+  HandbuchDienstplan,
+  HandbuchTeamVerwaltung,
+  HandbuchRegistrierung,
+  HandbuchRollen,
+  HandbuchDashboard,
+} from "@/pages/handbuch";
 import Startseite from "@/pages/startseite";
 import NotFound from "@/pages/not-found";
 import { isAdminRole } from "@/lib/roles";
@@ -117,6 +124,9 @@ function Router() {
         <Route path="/handbuch" component={HandbuchStart} />
         <Route path="/handbuch/dienstplan" component={HandbuchDienstplan} />
         <Route path="/handbuch/team-verwaltung" component={HandbuchTeamVerwaltung} />
+        <Route path="/handbuch/registrierung" component={HandbuchRegistrierung} />
+        <Route path="/handbuch/rollen" component={HandbuchRollen} />
+        <Route path="/handbuch/dashboard" component={HandbuchDashboard} />
         <Route>{() => null}</Route>
       </Switch>
     );
@@ -149,6 +159,9 @@ function Router() {
         <Route path="/handbuch" component={HandbuchStart} />
         <Route path="/handbuch/dienstplan" component={HandbuchDienstplan} />
         <Route path="/handbuch/team-verwaltung" component={HandbuchTeamVerwaltung} />
+        <Route path="/handbuch/registrierung" component={HandbuchRegistrierung} />
+        <Route path="/handbuch/rollen" component={HandbuchRollen} />
+        <Route path="/handbuch/dashboard" component={HandbuchDashboard} />
         {/* Preise & Premium: Ziel der Free-Limit-Hinweise (Upgrade-Anfrage). */}
         {isAdminRole(currentUser.role) && <Route path="/preise" component={Preise} />}
         {isAdminRole(currentUser.role) && currentUser.accountType === "dienstleister" && (

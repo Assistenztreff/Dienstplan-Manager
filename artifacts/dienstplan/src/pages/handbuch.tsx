@@ -42,14 +42,18 @@ const KAPITEL: Array<{ title: string; items: KapitelEintrag[] }> = [
   {
     title: "Erste Schritte",
     items: [
-      { title: "Registrierung & Einstieg" },
-      { title: "Rollen verstehen" },
+      {
+        title: "Registrierung & Einstieg",
+        href: "/handbuch/registrierung",
+        id: "registrierung",
+      },
+      { title: "Rollen verstehen", href: "/handbuch/rollen", id: "rollen" },
     ],
   },
   {
     title: "Modul-Übersicht",
     items: [
-      { title: "Dashboard" },
+      { title: "Dashboard", href: "/handbuch/dashboard", id: "dashboard" },
       { title: "Dienstplan", href: "/handbuch/dienstplan", id: "dienstplan" },
       { title: "Assistenten" },
       { title: "Zeiterfassung" },
@@ -297,6 +301,19 @@ function ScreenshotPlatzhalter({ label, aspect = "aspect-video" }: { label: stri
         className={`mx-auto flex ${aspect} max-w-2xl items-center justify-center rounded-lg border border-slate-200 bg-white shadow-sm`}
       >
         <span className="text-sm font-bold text-slate-400">{label}</span>
+      </div>
+    </div>
+  );
+}
+
+// Hinweis-Box für Tipps und Stolperfallen — gleiches visuelles Muster wie die
+// "Brauchen Sie Hilfe?"-Box der Seitenleiste (Plattform-Hellblau, runde Ecken).
+function HinweisBox({ titel, children }: { titel: string; children: React.ReactNode }) {
+  return (
+    <div className="my-8 rounded-xl border border-brand-cyan/20 bg-brand-hellblau p-5">
+      <h3 className="mb-2 text-sm font-bold text-brand-dark">{titel}</h3>
+      <div className="text-sm leading-relaxed text-slate-700 [&_p]:mb-2 [&_p:last-child]:mb-0">
+        {children}
       </div>
     </div>
   );
@@ -692,8 +709,282 @@ export function HandbuchTeamVerwaltung() {
       <h2 id="siehe-auch">Siehe auch</h2>
       <p className="mb-6">So strukturieren Sie Ihr Unternehmen effektiv im AssistenzPlaner:</p>
       <div className="grid gap-4 sm:grid-cols-2">
-        <SeeAlsoLink title="Rollen verstehen" icon={Settings} />
+        <SeeAlsoLink title="Rollen verstehen" href="/handbuch/rollen" icon={Settings} />
         <SeeAlsoLink title="Assistenten verwalten" icon={Users} />
+      </div>
+    </ArtikelShell>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Artikel: Registrierung & Einstieg
+// ---------------------------------------------------------------------------
+export function HandbuchRegistrierung() {
+  return (
+    <ArtikelShell
+      activeId="registrierung"
+      bereich="Erste Schritte"
+      titel="Registrierung & Einstieg"
+      toc={[
+        { id: "konto-erstellen", label: "Ein Konto erstellen" },
+        { id: "anmelden", label: "Anmelden" },
+        { id: "einladung-annehmen", label: "Als Assistenzkraft per Einladung" },
+        { id: "passwort-vergessen", label: "Passwort vergessen?" },
+        { id: "siehe-auch", label: "Siehe auch" },
+      ]}
+    >
+      <h1 className="mb-6 text-4xl font-bold leading-tight text-brand-dark md:text-5xl">
+        Registrierung &amp; Einstieg
+      </h1>
+      <p className="mb-10 text-xl leading-relaxed text-slate-500">
+        Der AssistenzPlaner ist in wenigen Minuten startklar. Diese Seite zeigt Ihnen, wie Sie ein
+        Konto erstellen, sich anmelden und wie Assistenzkräfte per Einladung in Ihr Team kommen.
+      </p>
+
+      <h2 id="konto-erstellen">Ein Konto erstellen</h2>
+      <p>
+        Klicken Sie auf der Startseite oben rechts auf &bdquo;Registrieren&ldquo;. Als Erstes
+        wählen Sie aus, wie Sie das Konto nutzen möchten:
+      </p>
+      <p>
+        <strong>Privat</strong> ist die richtige Wahl, wenn Sie als einzelner Assistenznehmer im
+        Arbeitgebermodell Ihr eigenes Team organisieren. <strong>Gewerblich</strong> wählen Sie
+        als Assistenzdienst (Dienstleister), der mehrere Teams für verschiedene Klienten
+        verwaltet. Für gewerbliche Konten steht später zusätzlich der Bereich
+        Team-Verwaltung zur Verfügung.
+      </p>
+      <p>
+        Danach geben Sie Ihren Vor- und Nachnamen, Ihre E-Mail-Adresse und ein Passwort mit
+        mindestens 8 Zeichen ein und bestätigen mit &bdquo;Jetzt registrieren&ldquo;. Sie landen
+        direkt auf dem Dashboard und können sofort loslegen.
+      </p>
+
+      <ScreenshotPlatzhalter label="Screenshot: Registrierung (Kontotyp-Auswahl)" />
+
+      <HinweisBox titel="Hinweis: Kontotyp gut überlegen">
+        <p>
+          Der Kontotyp lässt sich später nicht selbst umstellen. Wenn Sie unsicher sind, ob
+          &bdquo;Privat&ldquo; oder &bdquo;Gewerblich&ldquo; passt, wenden Sie sich vorab über die
+          Kontaktseite an uns.
+        </p>
+      </HinweisBox>
+
+      <p>
+        Jedes neue Konto startet im kostenlosen <strong>Free</strong>-Tarif. Erweiterte Funktionen
+        wie die Premium-Lohnauswertung oder der PDF-Stundennachweis gehören zum{" "}
+        <strong>Premium</strong>-Tarif; das Upgrade fragen Sie über die Seite
+        &bdquo;Preise&ldquo; per E-Mail an.
+      </p>
+
+      <h2 id="anmelden">Anmelden</h2>
+      <p>
+        Auf der Login-Seite melden Sie sich mit E-Mail-Adresse und Passwort an. Von dort gelangen
+        Sie auch zur Registrierung oder zum Zurücksetzen des Passworts, falls Sie es vergessen
+        haben.
+      </p>
+
+      <h2 id="einladung-annehmen">Als Assistenzkraft per Einladung</h2>
+      <p>
+        Assistenzkräfte registrieren sich nicht selbst — sie werden eingeladen. Ihr
+        Assistenznehmer oder Dienstleister legt Sie im Bereich &bdquo;Assistenten&ldquo; an und
+        erzeugt dort über &bdquo;Teammitglied einladen&ldquo; einen persönlichen Einladungslink.
+      </p>
+      <p>
+        Öffnen Sie den Link, den Sie erhalten haben. Auf der Seite &bdquo;Passwort setzen&ldquo;
+        wählen Sie ein neues Passwort, wiederholen es und bestätigen mit &bdquo;Passwort setzen
+        und anmelden&ldquo;. Danach sind Sie direkt eingeloggt und sehen Ihren Dienstplan.
+      </p>
+
+      <ScreenshotPlatzhalter label="Screenshot: Einladung annehmen (Passwort setzen)" />
+
+      <h2 id="passwort-vergessen">Passwort vergessen?</h2>
+      <p>
+        Aus Sicherheitsgründen wird das Passwort nicht automatisch per E-Mail zurückgesetzt.
+        Wenden Sie sich als Assistenzkraft an Ihren Administrator — dieser kann Ihnen einen neuen
+        Einladungslink senden, mit dem Sie ein neues Passwort setzen.
+      </p>
+
+      <h2 id="siehe-auch">Siehe auch</h2>
+      <p className="mb-6">Diese Themen helfen Ihnen bei den ersten Schritten weiter:</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <SeeAlsoLink title="Rollen verstehen" href="/handbuch/rollen" icon={Settings} />
+        <SeeAlsoLink title="Dashboard" href="/handbuch/dashboard" icon={User} />
+      </div>
+    </ArtikelShell>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Artikel: Rollen verstehen
+// ---------------------------------------------------------------------------
+export function HandbuchRollen() {
+  return (
+    <ArtikelShell
+      activeId="rollen"
+      bereich="Erste Schritte"
+      titel="Rollen verstehen"
+      toc={[
+        { id: "rollen-ueberblick", label: "Die Rollen im Überblick" },
+        { id: "assistenznehmer", label: "Was Assistenznehmer sehen" },
+        { id: "assistenten-sicht", label: "Was Assistenten sehen" },
+        { id: "kontotypen", label: "Privat oder Gewerblich?" },
+        { id: "siehe-auch", label: "Siehe auch" },
+      ]}
+    >
+      <h1 className="mb-6 text-4xl font-bold leading-tight text-brand-dark md:text-5xl">
+        Rollen verstehen
+      </h1>
+      <p className="mb-10 text-xl leading-relaxed text-slate-500">
+        Nicht jede Person sieht im AssistenzPlaner dasselbe. Wer plant und verwaltet, braucht
+        andere Funktionen als jemand, der Dienste übernimmt. Diese Seite erklärt, welche Rollen es
+        gibt und was sie dürfen.
+      </p>
+
+      <h2 id="rollen-ueberblick">Die Rollen im Überblick</h2>
+      <p>
+        Im AssistenzPlaner gibt es zwei Rollen: <strong>Assistenznehmer</strong> und{" "}
+        <strong>Assistent</strong>. Der Assistenznehmer ist die verwaltende Rolle — er erstellt
+        den Dienstplan, lädt Teammitglieder ein, pflegt Verträge und gibt Zeiterfassungen frei.
+        Assistenten sind die Mitglieder des Teams: Sie sehen ihren eigenen Plan, erfassen ihre
+        Arbeitszeiten und verwalten ihr Profil.
+      </p>
+      <p>
+        Welche Rolle eine Person hat, sehen Sie als Verwaltung in der Mitglieder-Liste — zum
+        Beispiel in der Team-Verwaltung, wo neben jedem Namen &bdquo;Assistenznehmer&ldquo; oder
+        &bdquo;Assistent&ldquo; steht.
+      </p>
+
+      <HinweisBox titel="Tipp: Rollen werden automatisch vergeben">
+        <p>
+          Sie müssen Rollen nicht von Hand zuweisen. Wer sich selbst registriert, ist
+          Assistenznehmer. Wer über einen Einladungslink dazukommt, ist Assistent.
+        </p>
+      </HinweisBox>
+
+      <h2 id="assistenznehmer">Was Assistenznehmer sehen</h2>
+      <p>
+        Als Assistenznehmer steht Ihnen das App-Menü in voller Breite zur Verfügung: Dashboard,
+        Dienstplan, Assistenten, Zeiterfassung, Abwesenheiten, Auswertungen und Einstellungen.
+        Sie legen Dienste an und geben sie frei, genehmigen Abwesenheiten, prüfen Zeiteinträge und
+        werten Stunden und Lohn aus.
+      </p>
+      <p>
+        Gewerbliche Konten (Dienstleister) sehen zusätzlich den Bereich{" "}
+        <strong>Team-Verwaltung</strong>, um mehrere Teams für verschiedene Klienten zu
+        organisieren.
+      </p>
+
+      <h2 id="assistenten-sicht">Was Assistenten sehen</h2>
+      <p>
+        Assistenten sehen ein schlankeres Menü: Dashboard, Dienstplan, Zeiterfassung und
+        Einstellungen. Im Dienstplan sehen sie die freigegebenen Dienste, in der Zeiterfassung
+        tragen sie ihre tatsächlichen Arbeitszeiten ein. In den Einstellungen verwalten sie ihr
+        Profil und ihr persönliches Kalender-Abo.
+      </p>
+      <p>
+        Die Verwaltungsbereiche — Assistenten, Abwesenheiten, Auswertungen — sind für Assistenten
+        nicht sichtbar. So bleibt der Blick frei für das, was für den eigenen Arbeitsalltag
+        zählt.
+      </p>
+
+      <ScreenshotPlatzhalter label="Screenshot: App-Menü (Assistenznehmer vs. Assistent)" />
+
+      <h2 id="kontotypen">Privat oder Gewerblich?</h2>
+      <p>
+        Unabhängig von der Rolle unterscheidet der AssistenzPlaner zwei Kontotypen:{" "}
+        <strong>Privat</strong> für einzelne Assistenznehmer im Arbeitgebermodell und{" "}
+        <strong>Gewerblich</strong> für Assistenzdienste, die mehrere Teams verwalten. Der
+        Kontotyp wird bei der Registrierung festgelegt und bestimmt, ob die Team-Verwaltung zur
+        Verfügung steht.
+      </p>
+
+      <h2 id="siehe-auch">Siehe auch</h2>
+      <p className="mb-6">Mehr zum Arbeiten mit Rollen und Teams:</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <SeeAlsoLink title="Team-Verwaltung" href="/handbuch/team-verwaltung" icon={Building2} />
+        <SeeAlsoLink
+          title="Registrierung & Einstieg"
+          href="/handbuch/registrierung"
+          icon={User}
+        />
+      </div>
+    </ArtikelShell>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Artikel: Dashboard
+// ---------------------------------------------------------------------------
+export function HandbuchDashboard() {
+  return (
+    <ArtikelShell
+      activeId="dashboard"
+      bereich="Modul-Übersicht"
+      titel="Dashboard"
+      toc={[
+        { id: "kennzahlen", label: "Die Kennzahlen-Karten" },
+        { id: "hinweise", label: "Der Bereich Hinweise" },
+        { id: "assistenten-dashboard", label: "Das Dashboard für Assistenten" },
+        { id: "siehe-auch", label: "Siehe auch" },
+      ]}
+    >
+      <h1 className="mb-6 text-4xl font-bold leading-tight text-brand-dark md:text-5xl">
+        Dashboard
+      </h1>
+      <p className="mb-10 text-xl leading-relaxed text-slate-500">
+        Das Dashboard ist Ihre Startseite nach dem Login. Es zeigt die Übersicht für den
+        aktuellen Monat: die wichtigsten Kennzahlen auf einen Blick und Hinweise auf Dinge, die
+        Ihre Aufmerksamkeit brauchen.
+      </p>
+
+      <h2 id="kennzahlen">Die Kennzahlen-Karten</h2>
+      <p>
+        Im oberen Bereich sehen Sie als Verwaltung vier Karten: <strong>Aktive
+        Assistenten</strong>, <strong>Schichten heute</strong>, <strong>offene
+        Zeiteinträge</strong> und die <strong>Stundenbilanz</strong> des Monats mit Ist- und
+        Soll-Stunden.
+      </p>
+      <p>
+        Die Karten sind gleichzeitig Schnellzugriffe: Ein Klick auf eine Karte führt Sie direkt in
+        den passenden Bereich — zum Beispiel von den aktiven Assistenten zur Assistenten-Seite
+        oder von den offenen Zeiteinträgen zur Zeiterfassung.
+      </p>
+
+      <ScreenshotPlatzhalter label="Screenshot: Dashboard (Kennzahlen-Karten)" />
+
+      <h2 id="hinweise">Der Bereich Hinweise</h2>
+      <p>
+        Unter den Kennzahlen fasst der Bereich <strong>Hinweise</strong> zusammen, wo etwas zu tun
+        ist: offene Zeiterfassungen, die noch bestätigt werden müssen, Assistenten mit wenig
+        Resturlaub oder Tage, an denen noch keine Schicht geplant ist. Gibt es nichts zu tun,
+        bleibt der Bereich leer — dann ist alles im grünen Bereich.
+      </p>
+
+      <HinweisBox titel="Tipp: Täglicher Startpunkt">
+        <p>
+          Ein kurzer Blick auf die Hinweise am Morgen reicht oft aus, um nichts zu übersehen —
+          Lücken im Plan und offene Zeiteinträge fallen hier sofort auf.
+        </p>
+      </HinweisBox>
+
+      <p>
+        Gewerbliche Konten mit mehreren Teams wählen oben über die Team-Auswahl aus, für welches
+        Team die Zahlen angezeigt werden.
+      </p>
+
+      <h2 id="assistenten-dashboard">Das Dashboard für Assistenten</h2>
+      <p>
+        Assistenten sehen auf dem Dashboard ihre persönliche Übersicht — darunter die eigene
+        Stundenbilanz und die Karte <strong>Mein Resturlaub</strong> mit Anspruch, bereits
+        genommenen und verbleibenden Urlaubstagen für das laufende Jahr. Verwaltungs-Kennzahlen
+        wie offene Zeiteinträge anderer Teammitglieder erscheinen hier nicht.
+      </p>
+
+      <h2 id="siehe-auch">Siehe auch</h2>
+      <p className="mb-6">Von hier aus geht es direkt weiter in die Planung:</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <SeeAlsoLink title="Dienstplan" href="/handbuch/dienstplan" icon={FileText} />
+        <SeeAlsoLink title="Rollen verstehen" href="/handbuch/rollen" icon={Settings} />
       </div>
     </ArtikelShell>
   );
