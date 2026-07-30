@@ -27,6 +27,8 @@ async function loginAsAdmin(page: Page): Promise<void> {
   expect(res.ok(), `Login (${res.status()})`).toBe(true);
 }
 
+const CALENDAR_VISIBLE_SELECTOR = "[data-radix-popover-content]";
+
 // DatePickerField verwendet intern einen Dialog (kein Radix-Popover).
 // Die DialogContent-testid wird von DatePickerField als `${testId}-picker` gesetzt.
 // Wir prüfen konkret die beiden Datumsfelder der Abwesenheiten-Seite.

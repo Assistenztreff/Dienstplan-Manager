@@ -871,6 +871,7 @@ function CalendarExportCard() {
           : "Den Link in der Kalender-App als Abonnement hinzufügen.",
       });
     } catch (err) {
+      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast({
         title: "Abo-Link konnte nicht erstellt werden",
         description:
@@ -889,6 +890,7 @@ function CalendarExportCard() {
         description: "Abonnierte Kalender erhalten keine Aktualisierungen mehr.",
       });
     } catch (err) {
+      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast({
         title: "Widerrufen fehlgeschlagen",
         description: readableApiError(err, "Bitte erneut versuchen."),
@@ -927,6 +929,7 @@ function CalendarExportCard() {
       a.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
+      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast({
         title: "Kalender-Export fehlgeschlagen",
         description:
@@ -1188,6 +1191,7 @@ export default function Einstellungen() {
       await deleteModel.mutateAsync({ id });
       await queryClient.invalidateQueries({ queryKey: getListShiftModelsQueryKey() });
     } catch (err) {
+      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast({
         title: "Schichtmodell kann nicht gelöscht werden",
         description: readableApiError(err, "Bitte erneut versuchen."),

@@ -207,6 +207,7 @@ export function StatementExportDialog({
       }
       onClose();
     } catch (err) {
+      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast.error("PDF-Export fehlgeschlagen.");
       console.error(err);
     } finally {

@@ -308,6 +308,7 @@ export default function Zeiterfassung() {
       });
       setBatchOpen(false);
     } catch (err) {
+      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast({
         title: "Sammelbestätigung fehlgeschlagen",
         description: planFeatureMessage(err) ?? readableApiError(err, "Bitte erneut versuchen."),
@@ -327,6 +328,7 @@ export default function Zeiterfassung() {
           void queryClient.invalidateQueries({ queryKey: ["/api/time-tracking"] });
         },
         onError: (err) => {
+          if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
           toast({
             title: "Fehler beim Aktualisieren",
             description:

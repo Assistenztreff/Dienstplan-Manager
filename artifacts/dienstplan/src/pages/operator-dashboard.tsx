@@ -278,6 +278,7 @@ export default function OperatorDashboard() {
             : `${result.resolvedCount} Einträge wurden als erledigt markiert.`,
       });
     } catch (err) {
+      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast({
         title: "Abhaken fehlgeschlagen",
         description: readableApiError(err, "Bitte erneut versuchen."),
@@ -294,6 +295,7 @@ export default function OperatorDashboard() {
       await updateError.mutateAsync({ id: errorId, data: { resolved } });
       await queryClient.invalidateQueries({ queryKey: getListOperatorErrorsQueryKey() });
     } catch (err) {
+      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast({
         title: "Status konnte nicht geändert werden",
         description: readableApiError(err, "Bitte erneut versuchen."),
@@ -330,6 +332,7 @@ export default function OperatorDashboard() {
         description: `${account.name} (${account.email}) ist jetzt auf dem ${nextPlan === "premium" ? "Premium" : "Free"}-Plan. Die Umstellung wirkt sofort.`,
       });
     } catch (err) {
+      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast({
         title: "Plan-Umschaltung fehlgeschlagen",
         description: readableApiError(err, "Bitte erneut versuchen."),

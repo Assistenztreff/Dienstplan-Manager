@@ -101,6 +101,7 @@ export function MonthClosingCard({
         description: "Die Lohnauswertung wurde als Referenz eingefroren.",
       });
     } catch {
+      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast.error("Abschluss fehlgeschlagen", {
         description: "Der Monat konnte nicht abgeschlossen werden. Bitte erneut versuchen.",
       });

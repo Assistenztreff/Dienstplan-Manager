@@ -191,6 +191,7 @@ function TransferDialog({ team, teams, onClose }: TransferDialogProps) {
       });
       onClose();
     } catch (err) {
+      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast({
         title: "Überführen fehlgeschlagen",
         description: readableApiError(err, "Bitte erneut versuchen."),
@@ -328,6 +329,7 @@ export default function TeamVerwaltung() {
       await deleteTeam.mutateAsync({ id });
       await queryClient.invalidateQueries({ queryKey: getListTeamsQueryKey() });
     } catch (err) {
+      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast({
         title: "Team kann nicht gelöscht werden",
         description: readableApiError(err, "Es sind noch Daten oder Mitglieder zugeordnet."),

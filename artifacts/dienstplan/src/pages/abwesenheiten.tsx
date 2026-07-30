@@ -98,6 +98,7 @@ function WorkdaysHint({ contract }: { contract: Contract }) {
       });
       setValue("");
     } catch {
+      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast({ title: "Speichern fehlgeschlagen", variant: "destructive" });
     } finally {
       setSaving(false);
@@ -328,6 +329,7 @@ export default function Abwesenheiten() {
       void warnIfMonthClosed(range.endDate, null);
       toast({ title: "Abwesenheit entfernt" });
     } catch {
+      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast({ title: "Entfernen fehlgeschlagen", variant: "destructive" });
     } finally {
       setDeletingKey(null);

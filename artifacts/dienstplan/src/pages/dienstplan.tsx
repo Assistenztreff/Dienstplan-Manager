@@ -1490,6 +1490,7 @@ export default function Dienstplan() {
       await queryClient.invalidateQueries({ queryKey: getListShiftsQueryKey({ month, year }) });
       toast.success("Dienst bestätigt — zählt jetzt in Auswertungen und Stundennachweis.");
     } catch {
+      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast.error("Bestätigen fehlgeschlagen. Bitte erneut versuchen.");
     } finally {
       setConfirmingShiftId(null);
@@ -1529,6 +1530,7 @@ export default function Dienstplan() {
       setIsBulkConfirming(false);
       closeDialog();
     }
+    if (failed > 0 && !navigator.onLine) return; // Banner erklärt den Grund bereits.
     if (failed === 0) {
       toast.success(
         confirmed === 1
@@ -1597,6 +1599,7 @@ export default function Dienstplan() {
         toast.error("Keine bestätigten Dienste oder Abwesenheiten in diesem Monat.");
       }
     } catch (err) {
+      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast.error("PDF-Export fehlgeschlagen.");
       console.error(err);
     } finally {

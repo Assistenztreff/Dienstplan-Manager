@@ -84,6 +84,7 @@ export function PlatformHeaderPlaceholder() {
     try {
       await logout();
     } catch {
+      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast({
         variant: "destructive",
         title: "Fehler beim Abmelden",
@@ -499,6 +500,7 @@ function AppSubNavigation() {
     try {
       await logout();
     } catch {
+      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast({
         variant: "destructive",
         title: "Fehler beim Abmelden",

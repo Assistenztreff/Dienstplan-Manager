@@ -833,6 +833,7 @@ export default function Assistenten() {
       await invalidateMemberQueries();
       toast.success("Assistenzkraft aus dem Team entfernt.");
     } catch (err) {
+      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast.error(readableApiError(err, "Entfernen fehlgeschlagen. Bitte erneut versuchen."));
     } finally {
       setMemberBusy(false);

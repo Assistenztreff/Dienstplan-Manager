@@ -116,7 +116,7 @@ async function createShift(type: string): Promise<number> {
 /** hours-balance für den aktuellen Monat lesen. */
 async function getBalance(): Promise<Record<string, number>> {
   const res = await acc.ctx.get(
-    `/api/dashboard/hours-balance?month=${MONTH}&year=${YEAR}&userId=${assistantId}`,
+    `/api/hours-balance?month=${MONTH}&year=${YEAR}&userId=${assistantId}`,
   );
   expect(res.status(), `hours-balance (${res.status()}): ${await res.text()}`).toBe(200);
   const rows = (await res.json()) as Array<Record<string, number>>;
@@ -128,7 +128,7 @@ async function getBalance(): Promise<Record<string, number>> {
 test(`Urlaubstag am Sonntag (${SUNDAY_KEY}) → sundayHours > 0 (#542)`, async () => {
   await createShift("vacation");
 
-  const bal = await getBalance();
+    const bal = await getBalance();
   expect(
     bal.sundayHours ?? 0,
     "Urlaubstag am Sonntag muss sundayHours > 0 liefern",
@@ -142,7 +142,7 @@ test(`Urlaubstag am Sonntag (${SUNDAY_KEY}) → sundayHours > 0 (#542)`, async (
 test(`Kranktag am Sonntag (${SUNDAY_KEY}) → sundayHours > 0 (#542)`, async () => {
   await createShift("sick");
 
-  const bal = await getBalance();
+    const bal = await getBalance();
   expect(
     bal.sundayHours ?? 0,
     "Kranktag am Sonntag muss sundayHours > 0 liefern (§2 EFZG)",
