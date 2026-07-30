@@ -1,11 +1,14 @@
 /**
- * #595 – Freundliche Offline-Anzeige statt Fehlermeldungen ohne Internet.
+ * #595 / #664 – Freundliche Offline-Anzeige statt Fehlermeldungen ohne Internet.
  *
  * Verifiziert:
  * 1. Das Offline-Banner erscheint, wenn der Browser in den Offline-Modus wechselt.
  * 2. Das Banner verschwindet wieder, wenn die Verbindung wiederhergestellt wird.
  * 3. Nach dem Offline-Bootstrap bleibt der angemeldete Nutzer erhalten (kein
  *    Redirect auf die Login-Seite, kein "Nicht angemeldet"-Zustand).
+ * 4. (#664) Kein Fehler-Toast erscheint, wenn Queries/Mutations offline scheitern.
+ *    App.tsx unterdrückt Toasts via QueryCache.onError + MutationCache.onError
+ *    (Guard: isNetworkError && !navigator.onLine → return).
  *
  * Technik:
  *   Playwright context.setOffline(true/false) simuliert den Offline-Modus auf
@@ -96,6 +99,56 @@ test("Nach Offline-Phase bleibt angemeldeter Nutzer erhalten (kein Logout) (#595
   expect(url, "Offline → kein Logout-Redirect").not.toContain("/login");
 
   // Verbindung wiederherstellen.
+  await context.setOffline(false);
+  await expect(page.getByTestId("offline-banner")).not.toBeVisible({ timeout: 5_000 });
+});
+
+test("Kein Fehler-Toast bei Query-/Netzwerkfehler offline (#664)", async ({
+  page,
+  context,
+}) => {
+  /**
+   * App.tsx unterdrückt Toasts, wenn navigator.onLine === false:
+   *   QueryCache.onError:   isNetworkError && navigator.onLine  → toast (online only)
+   *   MutationCache.onError: isNetworkError && !navigator.onLine → return (kein toast)
+   *
+   * Dieser Test verifiziert das im Browser: Seite lädt online, dann Netzwerk
+   * trennen, In-App-Navigation erzwingt neue Query-Starts (fresh mount), nach
+   * 2 s darf kein Sonner-Toast sichtbar sein.
+   */
+  test.setTimeout(50_000);
+  await loginAsAdmin(page);
+  await page.goto("/dienstplan");
+  await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible({ timeout: 10_000 });
+
+  // Sicherstellen, dass kein Toast initial da ist.
+  await expect(page.locator("[data-sonner-toast]")).not.toBeVisible();
+
+  // Netzwerk trennen → Banner erscheint, navigator.onLine = false.
+  await context.setOffline(true);
+  await expect(page.getByTestId("offline-banner")).toBeVisible({ timeout: 5_000 });
+
+  // In-App-Navigation auf eine andere Seite: React Router remountet die
+  // Auswertungen-Komponenten, deren useQuery-Hooks feuern sofort (retry:false)
+  // und scheitern mit TypeError — QueryCache.onError sieht navigator.onLine===false
+  // und unterdrückt den Toast.
+  await page.evaluate(() => {
+    window.history.pushState({}, "", "/auswertungen");
+    window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
+  });
+
+  // Warten, bis etwaige Toasts erscheinen würden (2 s Puffer).
+  await page.waitForTimeout(2_000);
+
+  // Kein Sonner-Toast darf erscheinen.
+  const toastLocator = page.locator("[data-sonner-toast]");
+  const toastCount = await toastLocator.count();
+  expect(toastCount, "Es darf kein Fehler-Toast erscheinen wenn offline").toBe(0);
+
+  // Offline-Banner weiterhin sichtbar.
+  await expect(page.getByTestId("offline-banner")).toBeVisible();
+
+  // Verbindung wiederherstellen — Banner verschwindet.
   await context.setOffline(false);
   await expect(page.getByTestId("offline-banner")).not.toBeVisible({ timeout: 5_000 });
 });

@@ -44,6 +44,16 @@ export type MatrixBalance = {
   sundaySurchargePay?: number | null;
   holidaySurchargePay?: number | null;
   totalPay?: number | null;
+  // SV-pflichtige Abwesenheits-Zuschlagsanteile (§ 11 BUrlG / § 2 EFZG, seit #660).
+  absenceNightHours?: number;
+  absenceNightSurchargeHours?: number;
+  absenceSundayHours?: number;
+  absenceSundaySurchargeHours?: number;
+  absenceHolidayHours?: number;
+  absenceHolidaySurchargeHours?: number;
+  absenceNightSurchargePay?: number | null;
+  absenceSundaySurchargePay?: number | null;
+  absenceHolidaySurchargePay?: number | null;
 };
 
 export type MatrixRecalc = {
@@ -109,6 +119,13 @@ export function GesamtAuswertungMatrix({
   const anyAbgesagtAg = balances.some((b) => (b.abgesagtArbeitgeberStunden ?? 0) > 0);
   const anyAbgesagtAn = balances.some((b) => (b.abgesagtArbeitnehmerStunden ?? 0) > 0);
   const anyUrlaubsabgeltung = balances.some((b) => (b.urlaubsabgeltungEuro ?? 0) > 0);
+  // SV-pflichtige Abwesenheits-Zuschläge: Zeile erscheint, wenn mindestens
+  // eine Kraft davon betroffen ist (Urlaub/Krank auf Sonntag / Feiertag / Nacht).
+  const anyAbsenceNightSurcharge = balances.some((b) => (b.absenceNightSurchargeHours ?? 0) > 0);
+  const anyAbsenceSundaySurcharge = balances.some((b) => (b.absenceSundaySurchargeHours ?? 0) > 0);
+  const anyAbsenceHolidaySurcharge = balances.some((b) => (b.absenceHolidaySurchargeHours ?? 0) > 0);
+  const anyAbsenceSurcharge =
+    anyAbsenceNightSurcharge || anyAbsenceSundaySurcharge || anyAbsenceHolidaySurcharge;
   const anyRecalc =
     recalcByUser != null && balances.some((b) => recalcByUser.has(b.userId));
 
@@ -199,6 +216,41 @@ export function GesamtAuswertungMatrix({
             label: holidayUniform != null ? `Feiertag (${holidayUniform}%)` : "Feiertagsstunden (Zuschlag)",
             render: (b: MatrixBalance) =>
               surchargeHoursCell(b.holidayPercent, b.holidayHours, b.holidaySurchargeHours, holidayUniform),
+          },
+        ]
+      : []),
+    // SV-pflichtige Abwesenheits-Zuschläge (§ 11 BUrlG / § 2 EFZG):
+    // Urlaubs-/Kranktage auf Sonn-/Feiertagen oder Nachts tragen Zuschläge,
+    // die sozialversicherungspflichtig sind (im Gegensatz zu § 3b EStG steuerfrei
+    // bei Arbeitsdienst). Zeile erscheint nur wenn mindestens eine Kraft betroffen.
+    ...(anyAbsenceSurcharge
+      ? [
+          {
+            key: "absenceSurchargeHours",
+            label: "davon SV-pflichtig (Urlaub/Krank)",
+            render: (b: MatrixBalance) => {
+              const totalHours =
+                (b.absenceNightHours ?? 0) +
+                (b.absenceSundayHours ?? 0) +
+                (b.absenceHolidayHours ?? 0);
+              const totalSurcharge =
+                (b.absenceNightSurchargeHours ?? 0) +
+                (b.absenceSundaySurchargeHours ?? 0) +
+                (b.absenceHolidaySurchargeHours ?? 0);
+              if (totalSurcharge === 0) {
+                return <span className="text-muted-foreground">—</span>;
+              }
+              return (
+                <>
+                  {totalHours} h{" "}
+                  <span className="text-amber-700">(+{totalSurcharge} h)</span>
+                </>
+              );
+            },
+            isEmpty: (b: MatrixBalance) =>
+              (b.absenceNightSurchargeHours ?? 0) === 0 &&
+              (b.absenceSundaySurchargeHours ?? 0) === 0 &&
+              (b.absenceHolidaySurchargeHours ?? 0) === 0,
           },
         ]
       : []),
@@ -328,6 +380,25 @@ export function GesamtAuswertungMatrix({
                   key: "holidayPay",
                   label: "Feiertagszuschlag (€)",
                   render: (b: MatrixBalance) => moneyCell(b, b.holidaySurchargePay),
+                },
+              ]
+            : []),
+          ...(anyAbsenceSurcharge
+            ? [
+                {
+                  key: "absenceSurchargePay",
+                  label: "davon SV-pflichtig (€)",
+                  render: (b: MatrixBalance) => {
+                    const total =
+                      (b.absenceNightSurchargePay ?? 0) +
+                      (b.absenceSundaySurchargePay ?? 0) +
+                      (b.absenceHolidaySurchargePay ?? 0);
+                    return moneyCell(b, total);
+                  },
+                  isEmpty: (b: MatrixBalance) =>
+                    (b.absenceNightSurchargePay ?? 0) === 0 &&
+                    (b.absenceSundaySurchargePay ?? 0) === 0 &&
+                    (b.absenceHolidaySurchargePay ?? 0) === 0,
                 },
               ]
             : []),

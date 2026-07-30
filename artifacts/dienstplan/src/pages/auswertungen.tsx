@@ -617,6 +617,31 @@ export default function Auswertungen() {
                             </span>
                           </div>
                         )}
+                        {/* SV-pflichtige Abwesenheits-Zuschläge (§ 11 BUrlG / § 2 EFZG):
+                            Urlaub/Krank auf Sonntag/Feiertag/Nacht — nur wenn vorhanden. */}
+                        {(() => {
+                          const absTotal =
+                            (balance.absenceNightSurchargeHours ?? 0) +
+                            (balance.absenceSundaySurchargeHours ?? 0) +
+                            (balance.absenceHolidaySurchargeHours ?? 0);
+                          if (absTotal === 0) return null;
+                          const absHours =
+                            (balance.absenceNightHours ?? 0) +
+                            (balance.absenceSundayHours ?? 0) +
+                            (balance.absenceHolidayHours ?? 0);
+                          return (
+                            <div className="flex items-center justify-between text-sm pt-1 border-t border-border/40">
+                              <span className="text-muted-foreground flex items-center gap-1">
+                                <span className="text-xs bg-amber-100 text-amber-800 rounded px-1 font-medium">SV-pflichtig</span>
+                                Urlaub/Krank
+                              </span>
+                              <span className="font-medium">
+                                {absHours} h
+                                <span className="text-amber-700"> (+{absTotal} h)</span>
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Lohnauswertung (Premium): nur wenn ein Stundenlohn
@@ -649,6 +674,23 @@ export default function Auswertungen() {
                               <span className="font-medium">{formatEur(balance.holidaySurchargePay ?? 0)}</span>
                             </div>
                           )}
+                          {/* SV-pflichtiger Anteil der Zuschläge (Urlaub/Krank): nur wenn vorhanden. */}
+                          {(() => {
+                            const absPayTotal =
+                              (balance.absenceNightSurchargePay ?? 0) +
+                              (balance.absenceSundaySurchargePay ?? 0) +
+                              (balance.absenceHolidaySurchargePay ?? 0);
+                            if (absPayTotal === 0) return null;
+                            return (
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground flex items-center gap-1">
+                                  <span className="text-xs bg-amber-100 text-amber-800 rounded px-1 font-medium">SV-pflichtig</span>
+                                  Urlaub/Krank
+                                </span>
+                                <span className="font-medium">{formatEur(absPayTotal)}</span>
+                              </div>
+                            );
+                          })()}
                           {(() => {
                             const recalc = recalcByUser.get(balance.userId);
                             const signedEur = (n: number) => `${n > 0 ? "+" : ""}${formatEur(n)}`;
