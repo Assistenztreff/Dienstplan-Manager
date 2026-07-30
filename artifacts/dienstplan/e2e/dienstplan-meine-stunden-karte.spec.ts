@@ -83,6 +83,19 @@ test.beforeAll(async () => {
   });
   expect(shiftRes.status(), `Schicht anlegen (${shiftRes.status()})`).toBe(201);
 
+  // 4b. Kind-krank-Tag für Testid-Prüfung (#681)
+  const kindKrankDay = `${YEAR}-${MM}-07`;
+  const kindKrankRes = await acc.ctx.post("/api/shifts", {
+    data: {
+      userId: assistantId,
+      type: "kind_krank",
+      planningStatus: "FIX",
+      startTime: `${kindKrankDay}T00:00:00.000Z`,
+      endTime: `${kindKrankDay}T23:59:59.000Z`,
+    },
+  });
+  expect(kindKrankRes.status(), `Kind-krank anlegen (${kindKrankRes.status()})`).toBe(201);
+
   // 5. Einladungstoken generieren
   const inviteRes = await acc.ctx.post(`/api/users/${assistantId}/invite`);
   expect(inviteRes.status(), `Einladung erstellen (${inviteRes.status()})`).toBe(200);
@@ -122,6 +135,9 @@ test("Meine-Stunden-Karte erscheint für Assistenten mit Vertrag (#675)", async 
 
   // Krankheitsstunden-Zeile vorhanden
   await expect(page.getByTestId("meine-stunden-krank")).toBeVisible();
+
+  // Kind-krank-Tag wurde in beforeAll angelegt → Zeile muss erscheinen (#681)
+  await expect(page.getByTestId("meine-stunden-kindkrank")).toBeVisible();
 });
 
 test("Detail-Button der Meine-Stunden-Karte navigiert nach /auswertungen (#675)", async ({

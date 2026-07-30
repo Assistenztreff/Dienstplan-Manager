@@ -37,6 +37,7 @@ import { warnIfMonthClosed } from "@/lib/month-closing-warning";
 import { useAuth } from "@/context/auth";
 import { hasAccess } from "@/lib/entitlements";
 import { PlanUpgradeLink } from "@/components/plan-limit-banner";
+import { MonthYearPicker } from "@/components/month-year-picker";
 import { formatDays, formatHours } from "@/lib/utils";
 import {
   buildRanges,
@@ -380,12 +381,18 @@ export default function Abwesenheiten() {
           <ChevronLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Vorheriger Monat</span>
         </Button>
-        <span
-          className="text-base font-semibold tabular-nums"
-          data-testid="absence-month-label"
-        >
-          {format(currentNavMonth, "MMMM yyyy", { locale: de })}
-        </span>
+        <MonthYearPicker
+          month={currentNavMonth.getMonth() + 1}
+          year={currentNavMonth.getFullYear()}
+          onChange={(m, y) => {
+            const newMonth = new Date(y, m - 1, 1);
+            setCurrentNavMonth(newMonth);
+            setFrom(format(startOfMonth(newMonth), "yyyy-MM-dd"));
+            setTo(format(endOfMonth(newMonth), "yyyy-MM-dd"));
+          }}
+          testId="absence-month-label"
+          triggerClassName="text-base font-semibold tabular-nums"
+        />
         <Button
           variant="outline"
           size="sm"

@@ -124,6 +124,15 @@ export function MeineStundenKarte() {
           testId="meine-stunden-urlaub"
         />
 
+        {/* ---- Kind-krank-Tage (immer sichtbar wenn > 0) ---- */}
+        {(data.kindKrankTage ?? 0) > 0 && (
+          <StatRow
+            label="Kind-krank-Tage"
+            value={formatDays(data.kindKrankTage ?? 0)}
+            testId="meine-stunden-kindkrank"
+          />
+        )}
+
         {/* ---- Lohn (nur wenn Arbeitgeber Premium + Stundenlohn hinterlegt) ---- */}
         {hasWage && (
           <>
@@ -135,6 +144,54 @@ export function MeineStundenKarte() {
               })}
               testId="meine-stunden-grundlohn"
             />
+            {/* Zuschläge auf tatsächlich geleistete Arbeit (§ 3b EStG steuerfrei) */}
+            {(data.nightSurchargePay ?? 0) > 0 && (
+              <StatRow
+                label="Nachtzuschlag"
+                value={(data.nightSurchargePay ?? 0).toLocaleString("de-DE", {
+                  style: "currency",
+                  currency: "EUR",
+                })}
+                testId="meine-stunden-nachtzuschlag"
+              />
+            )}
+            {(data.sundaySurchargePay ?? 0) > 0 && (
+              <StatRow
+                label="Sonntagszuschlag"
+                value={(data.sundaySurchargePay ?? 0).toLocaleString("de-DE", {
+                  style: "currency",
+                  currency: "EUR",
+                })}
+                testId="meine-stunden-sonntagszuschlag"
+              />
+            )}
+            {(data.holidaySurchargePay ?? 0) > 0 && (
+              <StatRow
+                label="Feiertagszuschlag"
+                value={(data.holidaySurchargePay ?? 0).toLocaleString("de-DE", {
+                  style: "currency",
+                  currency: "EUR",
+                })}
+                testId="meine-stunden-feiertagszuschlag"
+              />
+            )}
+            {/* SV-pflichtige Zuschläge auf Urlaubs-/Kranktage (§ 11 BUrlG / § 2 EFZG) */}
+            {((data.absenceNightSurchargePay ?? 0) +
+              (data.absenceSundaySurchargePay ?? 0) +
+              (data.absenceHolidaySurchargePay ?? 0)) > 0 && (
+              <StatRow
+                label="SV-pflichtig (Urlaub/Krank)"
+                value={(
+                  (data.absenceNightSurchargePay ?? 0) +
+                  (data.absenceSundaySurchargePay ?? 0) +
+                  (data.absenceHolidaySurchargePay ?? 0)
+                ).toLocaleString("de-DE", {
+                  style: "currency",
+                  currency: "EUR",
+                })}
+                testId="meine-stunden-sv-pflichtig"
+              />
+            )}
             <StatRow
               label="Gesamtlohn (brutto)"
               value={(data.totalPay ?? 0).toLocaleString("de-DE", {
