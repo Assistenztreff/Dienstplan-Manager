@@ -96,3 +96,6 @@
 - [Team-Scope-Readiness vor Writes](team-scope-ready-gate.md) — Karten, die Konto- vs. Team-Zeile schreiben, müssen auf isTeamScopeReady warten; sonst Write in falschen Scope während der Team-Auto-Auswahl.
 - [Pausen-Abzug zur Lesezeit](pause-deduction-read-time.md) — deductPausesEnabled wirkt nur in computeHoursBalanceRow (nie in gespeicherten valuedHours); Assistenten-Pausenregel via /time-tracking-status.
 - [DB-backed register rate limit](register-rate-limit-db.md) — shared counters belong in Postgres (Autoscale = multi-instance) + per-IP advisory xact-lock; test:db must run DB files serially and re-point APP_DATABASE_URL too.
+- [UpdateAllowanceSettingsBody Pflichtfelder](allowance-settings-put-required-fields.md) — hat non-optional nightPercent/nightStart/nightEnd/sundayPercent/holidayPercent; PUT gibt 400 ohne sie → erst GET lesen, dann mit Spread + Änderungen zurückschicken.
+- [Admin-Deaktivierung killt Session](admin-deactivation-kills-session.md) — nach PATCH isActive=false ist requireAuth sofort 401; E2E-Tests müssen Assistenten-Tokens verwenden (nicht Admin-eigene) wenn Admin-Session nach Deaktivierung noch gebraucht wird.
+- [makeShiftTimes Math.min Falle](make-shift-times-min-trap.md) — relative Tag-Berechnung mit Math.min(tag+offset, 25) kollabiert auf Tag 25 wenn tag>25; stattdessen feste Tage (z. B. 5 und 6) hartcodieren.
