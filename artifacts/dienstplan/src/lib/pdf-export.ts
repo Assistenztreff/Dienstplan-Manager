@@ -7,6 +7,10 @@ import { formatDays } from "@/lib/utils";
 
 const DEFAULT_LOGO_ASPECT = 3973 / 848;
 
+// Rundet auf zwei Dezimalstellen (Client-seitige Hilfsfunktion für
+// Differenzberechnungen aus bereits gerundeten API-Werten).
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
 type LoadedImage = { dataUrl: string; aspect: number };
 
 async function loadImageDataUrl(url: string): Promise<string | null> {
@@ -196,24 +200,94 @@ async function renderStatementPage(
     ]);
   }
 
-  // Zuschlaege: 0%-Zuschlaege werden NICHT aufgelistet (Point 6).
+  // Zuschlaege: 0%-Zuschlaege werden NICHT aufgelistet.
+  // Wenn Abwesenheits-Anteile vorhanden sind, wird je Zuschlags-Art in zwei
+  // Zeilen aufgeteilt:
+  //   1. Arbeitstag-Zuschlag (§ 3b EStG steuerfrei)
+  //   2. Urlaub/Krank-Zuschlag (SV-pflichtig nach § 11 BUrlG / § 2 EFZG)
+  // Ohne Abwesenheitsanteil erscheint eine einzige Zeile wie bisher.
+  const absenceNightH = balance.absenceNightHours ?? 0;
+  const absenceNightSurchargeH = balance.absenceNightSurchargeHours ?? 0;
+  const absenceSundayH = balance.absenceSundayHours ?? 0;
+  const absenceSundaySurchargeH = balance.absenceSundaySurchargeHours ?? 0;
+  const absenceHolidayH = balance.absenceHolidayHours ?? 0;
+  const absenceHolidaySurchargeH = balance.absenceHolidaySurchargeHours ?? 0;
+
+  const workNightH = (balance.nightHours ?? 0) - absenceNightH;
+  const workNightSurchargeH = (balance.nightSurchargeHours ?? 0) - absenceNightSurchargeH;
+  const workSundayH = (balance.sundayHours ?? 0) - absenceSundayH;
+  const workSundaySurchargeH = (balance.sundaySurchargeHours ?? 0) - absenceSundaySurchargeH;
+  const workHolidayH = (balance.holidayHours ?? 0) - absenceHolidayH;
+  const workHolidaySurchargeH = (balance.holidaySurchargeHours ?? 0) - absenceHolidaySurchargeH;
+
   if (balance.nightPercent > 0) {
-    summaryRows.push([
-      `Nachtstunden (Zuschlag ${balance.nightPercent}%)`,
-      `${balance.nightHours} h (+${balance.nightSurchargeHours} h)`,
-    ]);
+    if (absenceNightH > 0 && workNightH > 0) {
+      // Geteilte Anzeige: Arbeitstag (steuerfrei) + Abwesenheit (SV-pflichtig)
+      summaryRows.push([
+        `Nachtstunden, Arbeitstag (${balance.nightPercent}%, § 3b EStG)`,
+        `${r2(workNightH)} h (+${r2(workNightSurchargeH)} h)`,
+      ]);
+      summaryRows.push([
+        `Nachtstunden, Urlaub/Krank (${balance.nightPercent}%, SV-pflichtig)`,
+        `${r2(absenceNightH)} h (+${r2(absenceNightSurchargeH)} h)`,
+      ]);
+    } else if (absenceNightH > 0) {
+      // Nur Abwesenheits-Anteil vorhanden
+      summaryRows.push([
+        `Nachtstunden, Urlaub/Krank (${balance.nightPercent}%, SV-pflichtig)`,
+        `${r2(absenceNightH)} h (+${r2(absenceNightSurchargeH)} h)`,
+      ]);
+    } else {
+      // Nur Arbeitstag-Anteil (bisheriges Verhalten)
+      summaryRows.push([
+        `Nachtstunden (Zuschlag ${balance.nightPercent}%)`,
+        `${balance.nightHours} h (+${balance.nightSurchargeHours} h)`,
+      ]);
+    }
   }
   if (balance.sundayPercent > 0) {
-    summaryRows.push([
-      `Sonntagsstunden (Zuschlag ${balance.sundayPercent}%)`,
-      `${balance.sundayHours} h (+${balance.sundaySurchargeHours} h)`,
-    ]);
+    if (absenceSundayH > 0 && workSundayH > 0) {
+      summaryRows.push([
+        `Sonntagsstunden, Arbeitstag (${balance.sundayPercent}%, § 3b EStG)`,
+        `${r2(workSundayH)} h (+${r2(workSundaySurchargeH)} h)`,
+      ]);
+      summaryRows.push([
+        `Sonntagsstunden, Urlaub/Krank (${balance.sundayPercent}%, SV-pflichtig)`,
+        `${r2(absenceSundayH)} h (+${r2(absenceSundaySurchargeH)} h)`,
+      ]);
+    } else if (absenceSundayH > 0) {
+      summaryRows.push([
+        `Sonntagsstunden, Urlaub/Krank (${balance.sundayPercent}%, SV-pflichtig)`,
+        `${r2(absenceSundayH)} h (+${r2(absenceSundaySurchargeH)} h)`,
+      ]);
+    } else {
+      summaryRows.push([
+        `Sonntagsstunden (Zuschlag ${balance.sundayPercent}%)`,
+        `${balance.sundayHours} h (+${balance.sundaySurchargeHours} h)`,
+      ]);
+    }
   }
   if (balance.holidayPercent > 0) {
-    summaryRows.push([
-      `Feiertagsstunden (Zuschlag ${balance.holidayPercent}%)`,
-      `${balance.holidayHours} h (+${balance.holidaySurchargeHours} h)`,
-    ]);
+    if (absenceHolidayH > 0 && workHolidayH > 0) {
+      summaryRows.push([
+        `Feiertagsstunden, Arbeitstag (${balance.holidayPercent}%, § 3b EStG)`,
+        `${r2(workHolidayH)} h (+${r2(workHolidaySurchargeH)} h)`,
+      ]);
+      summaryRows.push([
+        `Feiertagsstunden, Urlaub/Krank (${balance.holidayPercent}%, SV-pflichtig)`,
+        `${r2(absenceHolidayH)} h (+${r2(absenceHolidaySurchargeH)} h)`,
+      ]);
+    } else if (absenceHolidayH > 0) {
+      summaryRows.push([
+        `Feiertagsstunden, Urlaub/Krank (${balance.holidayPercent}%, SV-pflichtig)`,
+        `${r2(absenceHolidayH)} h (+${r2(absenceHolidaySurchargeH)} h)`,
+      ]);
+    } else {
+      summaryRows.push([
+        `Feiertagsstunden (Zuschlag ${balance.holidayPercent}%)`,
+        `${balance.holidayHours} h (+${balance.holidaySurchargeHours} h)`,
+      ]);
+    }
   }
 
   // Lohnauswertung (Premium): nur wenn ein Stundenlohn hinterlegt ist. Geld
@@ -224,13 +298,40 @@ async function renderStatementPage(
     summaryRows.push(["Stundenlohn", eur(balance.hourlyWage)]);
     summaryRows.push([`Grundlohn (${basisLabel})`, eur(balance.basePay ?? 0)]);
     if (balance.nightPercent > 0 && (balance.nightSurchargePay ?? 0) !== 0) {
-      summaryRows.push(["Nachtzuschlag", eur(balance.nightSurchargePay ?? 0)]);
+      const absenceNightPay = balance.absenceNightSurchargePay ?? 0;
+      const workNightPay = (balance.nightSurchargePay ?? 0) - absenceNightPay;
+      if (absenceNightPay > 0 && workNightPay > 0) {
+        summaryRows.push([`Nachtzuschlag (§ 3b EStG steuerfrei)`, eur(workNightPay)]);
+        summaryRows.push([`Nachtzuschlag (SV-pflichtig)`, eur(absenceNightPay)]);
+      } else if (absenceNightPay > 0) {
+        summaryRows.push([`Nachtzuschlag (SV-pflichtig)`, eur(absenceNightPay)]);
+      } else {
+        summaryRows.push(["Nachtzuschlag", eur(balance.nightSurchargePay ?? 0)]);
+      }
     }
     if (balance.sundayPercent > 0 && (balance.sundaySurchargePay ?? 0) !== 0) {
-      summaryRows.push(["Sonntagszuschlag", eur(balance.sundaySurchargePay ?? 0)]);
+      const absenceSundayPay = balance.absenceSundaySurchargePay ?? 0;
+      const workSundayPay = (balance.sundaySurchargePay ?? 0) - absenceSundayPay;
+      if (absenceSundayPay > 0 && workSundayPay > 0) {
+        summaryRows.push([`Sonntagszuschlag (§ 3b EStG steuerfrei)`, eur(workSundayPay)]);
+        summaryRows.push([`Sonntagszuschlag (SV-pflichtig)`, eur(absenceSundayPay)]);
+      } else if (absenceSundayPay > 0) {
+        summaryRows.push([`Sonntagszuschlag (SV-pflichtig)`, eur(absenceSundayPay)]);
+      } else {
+        summaryRows.push(["Sonntagszuschlag", eur(balance.sundaySurchargePay ?? 0)]);
+      }
     }
     if (balance.holidayPercent > 0 && (balance.holidaySurchargePay ?? 0) !== 0) {
-      summaryRows.push(["Feiertagszuschlag", eur(balance.holidaySurchargePay ?? 0)]);
+      const absenceHolidayPay = balance.absenceHolidaySurchargePay ?? 0;
+      const workHolidayPay = (balance.holidaySurchargePay ?? 0) - absenceHolidayPay;
+      if (absenceHolidayPay > 0 && workHolidayPay > 0) {
+        summaryRows.push([`Feiertagszuschlag (§ 3b EStG steuerfrei)`, eur(workHolidayPay)]);
+        summaryRows.push([`Feiertagszuschlag (SV-pflichtig)`, eur(absenceHolidayPay)]);
+      } else if (absenceHolidayPay > 0) {
+        summaryRows.push([`Feiertagszuschlag (SV-pflichtig)`, eur(absenceHolidayPay)]);
+      } else {
+        summaryRows.push(["Feiertagszuschlag", eur(balance.holidaySurchargePay ?? 0)]);
+      }
     }
     summaryRows.push(["Gesamtlohn (brutto)", eur(balance.totalPay ?? 0)]);
     // Urlaubsabgeltung ist eine separate Auszahlung und bewusst NICHT im

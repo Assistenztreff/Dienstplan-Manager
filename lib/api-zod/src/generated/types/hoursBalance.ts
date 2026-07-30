@@ -91,4 +91,31 @@ export interface HoursBalance {
   abgesagtArbeitgeberStunden?: number;
   /** Vom Arbeitnehmer abgesagte Stunden (Typ abgesagt_an; unbezahlt, reine Info — zählen nicht in Soll/Erfüllt/Lohn). */
   abgesagtArbeitnehmerStunden?: number;
+  /** Nachtstunden aus Urlaubs-/Kranktagen (Anteil von nightHours, der auf Abwesenheitsschichten entfällt). */
+  absenceNightHours?: number;
+  /** Nachtzuschlag-Stunden aus Urlaubs-/Kranktagen (SV-pflichtig). */
+  absenceNightSurchargeHours?: number;
+  /** Sonntagsstunden aus Urlaubs-/Kranktagen (Anteil von sundayHours, der auf Abwesenheitsschichten entfällt). */
+  absenceSundayHours?: number;
+  /** Sonntagszuschlag-Stunden aus Urlaubs-/Kranktagen (SV-pflichtig). */
+  absenceSundaySurchargeHours?: number;
+  /** Feiertagsstunden aus Urlaubs-/Kranktagen (Anteil von holidayHours, der auf Abwesenheitsschichten entfällt). */
+  absenceHolidayHours?: number;
+  /** Feiertagszuschlag-Stunden aus Urlaubs-/Kranktagen (SV-pflichtig). */
+  absenceHolidaySurchargeHours?: number;
+  /**
+     * Geldwert des SV-pflichtigen Nachtzuschlags auf Abwesenheitstagen (Premium).
+     * @nullable
+     */
+  absenceNightSurchargePay?: number | null;
+  /**
+     * Geldwert des SV-pflichtigen Sonntagszuschlags auf Abwesenheitstagen (Premium).
+     * @nullable
+     */
+  absenceSundaySurchargePay?: number | null;
+  /**
+     * Geldwert des SV-pflichtigen Feiertagszuschlags auf Abwesenheitstagen (Premium).
+     * @nullable
+     */
+  absenceHolidaySurchargePay?: number | null;
 }

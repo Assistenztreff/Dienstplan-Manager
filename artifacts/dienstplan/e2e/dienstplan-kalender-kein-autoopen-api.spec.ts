@@ -27,6 +27,7 @@ async function loginAsAdmin(page: Page): Promise<void> {
   expect(res.ok(), `Login (${res.status()})`).toBe(true);
 }
 
+
 const CALENDAR_VISIBLE_SELECTOR = "[data-radix-popover-content]";
 
 // DatePickerField verwendet intern einen Dialog (kein Radix-Popover).

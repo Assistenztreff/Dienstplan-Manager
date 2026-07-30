@@ -146,6 +146,109 @@ describe("computeHoursBalanceRow — Zuschlagsberechnung (Prozentsätze)", () =>
     expect(result.holidaySurchargeHours).toBe(4);
   });
 
+  it("weist Abwesenheits-Zuschläge separat aus (SV-pflichtig, § 11 BUrlG / § 2 EFZG)", () => {
+    // Aufbau: Ein normaler Arbeitsdienst + ein 24h-Urlaubsdienst mit Sonntags-
+    // und Nachtanteilen. Die absence-Felder müssen genau den Abwesenheitsanteil
+    // ausweisen, der Restanteil (Arbeit) ergibt sich als Differenz.
+    const shifts: BalanceShift[] = [
+      // Arbeitstag: 4 Nachtstunden (Arbeit)
+      {
+        type: "active",
+        startTime: local(2026, 6, 1, 20),
+        endTime: local(2026, 6, 2, 4),
+        nightHours: 4,
+        sundayHours: 0,
+        holidayHours: 0,
+      },
+      // 24h-Urlaubsdienst: 6 Nacht- + 8 Sonntagsstunden (Abwesenheit)
+      {
+        type: "vacation",
+        startTime: local(2026, 6, 7, 9),
+        endTime: local(2026, 6, 8, 9),
+        nightHours: 6,
+        sundayHours: 8,
+        holidayHours: 0,
+        valuedHours: 24,
+      },
+      // 24h-Kranktag: 4 Feiertagsstunden (Abwesenheit)
+      {
+        type: "sick",
+        startTime: local(2026, 6, 9, 0),
+        endTime: local(2026, 6, 9, 23, 59),
+        nightHours: 0,
+        sundayHours: 0,
+        holidayHours: 4,
+        valuedHours: 8,
+      },
+    ];
+    const result = row({ shifts });
+
+    // Gesamtsummen (Arbeit + Abwesenheit)
+    expect(result.nightHours).toBe(10); // 4 Arbeit + 6 Urlaub
+    expect(result.sundayHours).toBe(8); // nur Urlaub
+    expect(result.holidayHours).toBe(4); // nur Krank
+    // Zuschlagsstunden gesamt
+    expect(result.nightSurchargeHours).toBe(2.5); // 25% von 10
+    expect(result.sundaySurchargeHours).toBe(4); // 50% von 8
+    expect(result.holidaySurchargeHours).toBe(4); // 100% von 4
+
+    // Abwesenheits-Anteile separat (SV-pflichtig)
+    expect(result.absenceNightHours).toBe(6);
+    expect(result.absenceNightSurchargeHours).toBe(1.5); // 25% von 6
+    expect(result.absenceSundayHours).toBe(8);
+    expect(result.absenceSundaySurchargeHours).toBe(4); // 50% von 8
+    expect(result.absenceHolidayHours).toBe(4);
+    expect(result.absenceHolidaySurchargeHours).toBe(4); // 100% von 4
+
+    // Arbeitstag-Anteil ergibt sich als Differenz (§ 3b EStG steuerfrei)
+    expect(result.nightHours - result.absenceNightHours).toBe(4); // Arbeit-Nacht
+    expect(result.nightSurchargeHours - result.absenceNightSurchargeHours).toBe(1); // 25% von 4
+    expect(result.sundayHours - result.absenceSundayHours).toBe(0); // kein Arbeit-Sonntag
+    expect(result.holidayHours - result.absenceHolidayHours).toBe(0); // kein Arbeit-Feiertag
+  });
+
+  it("Abwesenheits-Felder sind 0, wenn nur Arbeitsdienste vorhanden", () => {
+    const shifts: BalanceShift[] = [
+      { type: "active", startTime: local(2026, 6, 1, 0), endTime: local(2026, 6, 1, 8), nightHours: 4, sundayHours: 2, holidayHours: 1 },
+    ];
+    const result = row({ shifts });
+    expect(result.absenceNightHours).toBe(0);
+    expect(result.absenceNightSurchargeHours).toBe(0);
+    expect(result.absenceSundayHours).toBe(0);
+    expect(result.absenceSundaySurchargeHours).toBe(0);
+    expect(result.absenceHolidayHours).toBe(0);
+    expect(result.absenceHolidaySurchargeHours).toBe(0);
+    // Pay-Felder ohne Lohn sind null
+    expect(result.absenceNightSurchargePay).toBeNull();
+    expect(result.absenceSundaySurchargePay).toBeNull();
+    expect(result.absenceHolidaySurchargePay).toBeNull();
+  });
+
+  it("Abwesenheits-Zuschläge berechnen korrekten Geldwert (SV-pflichtig)", () => {
+    // Stundenlohn 20 €; Urlaubstag mit 9 Sonntagsstunden → Sonntagszuschlag
+    // SV-pflichtig: 50% von 9 = 4.5 h × 20 = 90 €.
+    const result = computeHoursBalanceRow({
+      userId: 1,
+      userName: "Test",
+      shifts: [
+        // Arbeitstag ohne Sonntag
+        { type: "active", startTime: local(2026, 6, 1, 8), endTime: local(2026, 6, 1, 16), nightHours: 0, sundayHours: 0, holidayHours: 0 },
+        // Urlaubstag mit 9 Sonntagsstunden
+        { type: "vacation", startTime: local(2026, 6, 7, 9), endTime: local(2026, 6, 8, 9), nightHours: 0, sundayHours: 9, holidayHours: 0, valuedHours: 24 },
+      ],
+      timeEntries: [],
+      allowance: STD_ALLOWANCE,
+      contract: null,
+      hourlyWage: 20,
+    });
+    expect(result.absenceSundaySurchargeHours).toBe(4.5); // 50% von 9
+    expect(result.absenceSundaySurchargePay).toBe(90); // 4.5 × 20
+    // Gesamter Sonntagszuschlag = nur Abwesenheit (kein Arbeits-Sonntag)
+    expect(result.sundaySurchargePay).toBe(90);
+    // Arbeitstag-Anteil = 0
+    expect((result.sundaySurchargePay ?? 0) - (result.absenceSundaySurchargePay ?? 0)).toBe(0);
+  });
+
   it("zahlt Zuschläge einer 24h-Dienst-Abwesenheit fort (Geldwert), auch ohne Ist-Zeit", () => {
     // 24h-Urlaubsdienst mit 7 Nacht- und 9 Sonntagsstunden, Stundenlohn 20.
     // Keine erfassten Ist-Zeiten -> Grundlohn = Lohnfortzahlung (24h Urlaub),

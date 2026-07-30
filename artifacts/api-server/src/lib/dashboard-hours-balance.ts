@@ -172,6 +172,19 @@ export interface HoursBalanceRow {
   sundaySurchargePay: number | null;
   holidaySurchargePay: number | null;
   totalPay: number | null;
+  // Abwesenheits-Anteile der Zuschläge (SV-pflichtig nach § 11 BUrlG / § 2 EFZG).
+  // Stunden auf Urlaubs-/Kranktagen sind sozialversicherungspflichtig und
+  // müssen separat von den § 3b EStG steuerfreien Arbeitstag-Zuschlägen
+  // ausgewiesen werden.
+  absenceNightHours: number;
+  absenceNightSurchargeHours: number;
+  absenceSundayHours: number;
+  absenceSundaySurchargeHours: number;
+  absenceHolidayHours: number;
+  absenceHolidaySurchargeHours: number;
+  absenceNightSurchargePay: number | null;
+  absenceSundaySurchargePay: number | null;
+  absenceHolidaySurchargePay: number | null;
 }
 
 function shiftHours(s: BalanceShift): number {
@@ -579,5 +592,19 @@ export function computeHoursBalanceRow(params: {
     sundaySurchargePay,
     holidaySurchargePay,
     totalPay,
+    // Abwesenheits-Anteile der Zuschläge (§ 11 BUrlG / § 2 EFZG):
+    // Diese Stunden entstehen auf Urlaubs-/Krankheitstagen und sind
+    // SV-pflichtig (im Gegensatz zu § 3b EStG steuerfreien Arbeitstag-
+    // Zuschlägen). Separat ausgewiesen, damit das PDF den Unterschied
+    // für die Lohnbuchhaltung sichtbar macht.
+    absenceNightHours: round2(absenceNightHours),
+    absenceNightSurchargeHours: round2(absenceNightSurchargeHours),
+    absenceSundayHours: round2(absenceSundayHours),
+    absenceSundaySurchargeHours: round2(absenceSundaySurchargeHours),
+    absenceHolidayHours: round2(absenceHolidayHours),
+    absenceHolidaySurchargeHours: round2(absenceHolidaySurchargeHours),
+    absenceNightSurchargePay: wage != null ? round2(absenceNightSurchargeHours * wage) : null,
+    absenceSundaySurchargePay: wage != null ? round2(absenceSundaySurchargeHours * wage) : null,
+    absenceHolidaySurchargePay: wage != null ? round2(absenceHolidaySurchargeHours * wage) : null,
   };
 }

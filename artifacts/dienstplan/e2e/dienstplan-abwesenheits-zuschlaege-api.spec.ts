@@ -13,7 +13,7 @@
  * 1. Dienstleister (Premium) + Assistent + Vertrag.
  * 2. Sonntag im aktuellen Monat suchen (Fallback: bekanntes Feiertag-Datum).
  * 3. Urlaubsschicht (full-day) auf dem Sonntag anlegen (type=vacation, FIX).
- * 4. GET /api/hours-balance?month&year&userId → sundayHours > 0, surchargePay > 0.
+ * 4. GET /api/dashboard/hours-balance?month&year&userId → sundayHours > 0, absenceSundaySurchargeHours > 0.
  * 5. Kranktag auf dem Sonntag: dasselbe Ergebnis.
  * 6. Arbeitstag (work) auf dem Sonntag: Positivprüfung — hier ist surchargePay
  *    bereits ein etabliertes Verhalten, nicht Gegenstand dieser Absicherung.
@@ -139,8 +139,8 @@ test(`Urlaubstag am Sonntag (${SUNDAY_KEY}) → sundayHours > 0 (#542)`, async (
     "Urlaubstag am Sonntag muss sundayHours > 0 liefern",
   ).toBeGreaterThan(0);
   expect(
-    bal.surchargePay ?? 0,
-    "Urlaubstag am Sonntag muss Zuschlagsgehalt > 0 liefern",
+    bal.absenceSundaySurchargeHours ?? 0,
+    "Urlaubstag am Sonntag muss absenceSundaySurchargeHours > 0 liefern",
   ).toBeGreaterThan(0);
 });
 
@@ -153,8 +153,8 @@ test(`Kranktag am Sonntag (${SUNDAY_KEY}) → sundayHours > 0 (#542)`, async () 
     "Kranktag am Sonntag muss sundayHours > 0 liefern (§2 EFZG)",
   ).toBeGreaterThan(0);
   expect(
-    bal.surchargePay ?? 0,
-    "Kranktag am Sonntag muss Zuschlagsgehalt > 0 liefern",
+    bal.absenceSundaySurchargeHours ?? 0,
+    "Kranktag am Sonntag muss absenceSundaySurchargeHours > 0 liefern (§2 EFZG)",
   ).toBeGreaterThan(0);
 });
 

@@ -3087,6 +3087,36 @@ components:
         abgesagtArbeitnehmerStunden:
           type: number
           description: Vom Arbeitnehmer abgesagte Stunden (Typ abgesagt_an; unbezahlt, reine Info — zählen nicht in Soll/Erfüllt/Lohn).
+        # Abwesenheits-Anteile der Zuschläge (SV-pflichtig nach § 11 BUrlG / § 2 EFZG):
+        # Der Gesamtwert (nightHours etc.) enthält BEIDE Anteile (Arbeit + Abwesenheit);
+        # diese Felder isolieren den Abwesenheitsanteil für die Lohnbuchhaltung.
+        absenceNightHours:
+          type: number
+          description: Nachtstunden aus Urlaubs-/Kranktagen (Anteil von nightHours, der auf Abwesenheitsschichten entfällt).
+        absenceNightSurchargeHours:
+          type: number
+          description: Nachtzuschlag-Stunden aus Urlaubs-/Kranktagen (SV-pflichtig).
+        absenceSundayHours:
+          type: number
+          description: Sonntagsstunden aus Urlaubs-/Kranktagen (Anteil von sundayHours, der auf Abwesenheitsschichten entfällt).
+        absenceSundaySurchargeHours:
+          type: number
+          description: Sonntagszuschlag-Stunden aus Urlaubs-/Kranktagen (SV-pflichtig).
+        absenceHolidayHours:
+          type: number
+          description: Feiertagsstunden aus Urlaubs-/Kranktagen (Anteil von holidayHours, der auf Abwesenheitsschichten entfällt).
+        absenceHolidaySurchargeHours:
+          type: number
+          description: Feiertagszuschlag-Stunden aus Urlaubs-/Kranktagen (SV-pflichtig).
+        absenceNightSurchargePay:
+          type: ["number", "null"]
+          description: Geldwert des SV-pflichtigen Nachtzuschlags auf Abwesenheitstagen (Premium).
+        absenceSundaySurchargePay:
+          type: ["number", "null"]
+          description: Geldwert des SV-pflichtigen Sonntagszuschlags auf Abwesenheitstagen (Premium).
+        absenceHolidaySurchargePay:
+          type: ["number", "null"]
+          description: Geldwert des SV-pflichtigen Feiertagszuschlags auf Abwesenheitstagen (Premium).
 
     MonthClosingEntry:
       type: object

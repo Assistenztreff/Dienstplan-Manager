@@ -1466,7 +1466,16 @@ export const GetHoursBalanceResponseItem = zod.object({
   "freistellungTage": zod.number().optional().describe('Anzahl der bezahlten Freistellungs-Tage (FIX-Einträge vom Typ freistellung; Lohnfortzahlung wie Krankheit).'),
   "freistellungStunden": zod.number().optional().describe('Gewertete Stunden der bezahlten Freistellung (zählen in Erfüllt und Grundlohn).'),
   "abgesagtArbeitgeberStunden": zod.number().optional().describe('Vom Arbeitgeber abgesagte Stunden (Typ abgesagt_ag; bezahlt nach Lohnausfallprinzip — zählen in Erfüllt und Grundlohn).'),
-  "abgesagtArbeitnehmerStunden": zod.number().optional().describe('Vom Arbeitnehmer abgesagte Stunden (Typ abgesagt_an; unbezahlt, reine Info — zählen nicht in Soll\/Erfüllt\/Lohn).')
+  "abgesagtArbeitnehmerStunden": zod.number().optional().describe('Vom Arbeitnehmer abgesagte Stunden (Typ abgesagt_an; unbezahlt, reine Info — zählen nicht in Soll\/Erfüllt\/Lohn).'),
+  "absenceNightHours": zod.number().optional().describe('Nachtstunden aus Urlaubs-\/Kranktagen (Anteil von nightHours, der auf Abwesenheitsschichten entfällt).'),
+  "absenceNightSurchargeHours": zod.number().optional().describe('Nachtzuschlag-Stunden aus Urlaubs-\/Kranktagen (SV-pflichtig).'),
+  "absenceSundayHours": zod.number().optional().describe('Sonntagsstunden aus Urlaubs-\/Kranktagen (Anteil von sundayHours, der auf Abwesenheitsschichten entfällt).'),
+  "absenceSundaySurchargeHours": zod.number().optional().describe('Sonntagszuschlag-Stunden aus Urlaubs-\/Kranktagen (SV-pflichtig).'),
+  "absenceHolidayHours": zod.number().optional().describe('Feiertagsstunden aus Urlaubs-\/Kranktagen (Anteil von holidayHours, der auf Abwesenheitsschichten entfällt).'),
+  "absenceHolidaySurchargeHours": zod.number().optional().describe('Feiertagszuschlag-Stunden aus Urlaubs-\/Kranktagen (SV-pflichtig).'),
+  "absenceNightSurchargePay": zod.number().nullish().describe('Geldwert des SV-pflichtigen Nachtzuschlags auf Abwesenheitstagen (Premium).'),
+  "absenceSundaySurchargePay": zod.number().nullish().describe('Geldwert des SV-pflichtigen Sonntagszuschlags auf Abwesenheitstagen (Premium).'),
+  "absenceHolidaySurchargePay": zod.number().nullish().describe('Geldwert des SV-pflichtigen Feiertagszuschlags auf Abwesenheitstagen (Premium).')
 })
 export const GetHoursBalanceResponse = zod.array(GetHoursBalanceResponseItem)
 
