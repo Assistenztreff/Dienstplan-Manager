@@ -21,6 +21,7 @@ import { useAuth } from "@/context/auth";
 import { DienstStatus, type SchichtVorlage } from "@/types/dienstplan";
 import { formatDays, formatDaysWithUnit, formatHours } from "@/lib/utils";
 import { useTimeTrackingEnabled } from "@/hooks/use-time-tracking-enabled";
+import { MeineStundenKarte } from "@/components/meine-stunden-karte";
 
 // Beispielhafte Einbindung der zentralen Planungstypen (siehe @/types/dienstplan):
 // belegt die Importierbarkeit aus der Dashboard-Ansicht, ohne bestehendes
@@ -490,7 +491,12 @@ export default function Dashboard() {
             <MonthClosingReminder teamId={selectedTeamId} />
           )}
 
-          {!isAdmin && <AssistantVacationCard />}
+          {!isAdmin && (
+            <>
+              <MeineStundenKarte />
+              <AssistantVacationCard />
+            </>
+          )}
 
           {timeTrackingEnabled && (summary.uncountedPendingHours ?? 0) > 0 && (
             <UncountedPendingNotice

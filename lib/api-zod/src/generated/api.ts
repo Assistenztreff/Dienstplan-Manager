@@ -1481,6 +1481,71 @@ export const GetHoursBalanceResponse = zod.array(GetHoursBalanceResponseItem)
 
 
 /**
+ * Liefert die Soll/Ist-Stundenbilanz des angemeldeten Assistenten für den angegebenen Monat. Nur für Assistenten verfügbar (Admins erhalten 403). Wage-Felder werden gesetzt, wenn der Arbeitgeber Premium hat und ein Stundenlohn hinterlegt ist; sonst null.
+
+ * @summary Eigene Stunden-Übersicht für Assistenten (authentifizierter Nutzer)
+ */
+export const GetMyHoursBalanceQueryParams = zod.object({
+  "month": zod.coerce.number().optional(),
+  "year": zod.coerce.number().optional()
+})
+
+export const GetMyHoursBalanceResponse = zod.union([zod.object({
+  "userId": zod.number(),
+  "userName": zod.string(),
+  "plannedHours": zod.number(),
+  "actualHours": zod.number(),
+  "balance": zod.number(),
+  "workedHours": zod.number(),
+  "sickHours": zod.number(),
+  "vacationDaysTaken": zod.number().describe('Genommene Urlaubstage des gewählten Monats (Anzahl der Urlaubs-Schichten in diesem Monat).'),
+  "vacationDaysUsed": zod.number().describe('Abgeleiteter Jahres-Verbrauch in Tagen (vacationHoursUsed \/ hoursPerDay des Team-Kontos, gerundet auf 0,1).'),
+  "vacationDaysRemaining": zod.number().describe('Resturlaub in Tagen (vacationDays - vacationDaysUsed), abgeleitet aus der Stunden-Buchhaltung.'),
+  "valuedHours": zod.number(),
+  "vacationFulfilledHours": zod.number(),
+  "totalFulfilledHours": zod.number(),
+  "nightHours": zod.number(),
+  "nightSurchargeHours": zod.number(),
+  "sundayHours": zod.number(),
+  "sundaySurchargeHours": zod.number(),
+  "holidayHours": zod.number(),
+  "holidaySurchargeHours": zod.number(),
+  "nightPercent": zod.number(),
+  "sundayPercent": zod.number(),
+  "holidayPercent": zod.number(),
+  "billingMethod": zod.enum(['SOLL', 'IST']).describe('Angewandte Abrechnungsart dieser Zeile (SOLL = Plan, IST = Ist-Zeiten).'),
+  "hourlyWage": zod.number().nullish().describe('Stundenlohn der Assistenzkraft (Premium-Lohnauswertung); null wenn nicht gesetzt\/kein Zugriff.'),
+  "basePay": zod.number().nullish().describe('Grundvergütung nach Abrechnungsart (billingMethod) = Summe(Stundenlohn \* bewertete Stunden je Dienst, ggf. prozentual) + Festbeträge, plus Lohnfortzahlung (Stundenlohn \* erfüllte Urlaubs-\/Krankstunden). Nur Premium.'),
+  "nightSurchargePay": zod.number().nullish().describe('Geldwert des Nachtzuschlags (Zuschlagsstunden nach Abrechnungsart inkl. Abwesenheits-Fortzahlung \* Stundenlohn). Nur Premium.'),
+  "sundaySurchargePay": zod.number().nullish().describe('Geldwert des Sonntagszuschlags (Zuschlagsstunden nach Abrechnungsart inkl. Abwesenheits-Fortzahlung \* Stundenlohn). Nur Premium.'),
+  "holidaySurchargePay": zod.number().nullish().describe('Geldwert des Feiertagszuschlags (Zuschlagsstunden nach Abrechnungsart inkl. Abwesenheits-Fortzahlung \* Stundenlohn). Nur Premium.'),
+  "totalPay": zod.number().nullish().describe('Gesamtvergütung = basePay + Zuschläge. Nur Premium.'),
+  "pausenzeitStunden": zod.number().optional().describe('Erfasste unbezahlte Pausenzeiten in Stunden (Summe pauseMinutes der FIX-Arbeitsdienste; reine Info, reduziert nicht die gewerteten Stunden).'),
+  "teamsitzungStunden": zod.number().optional().describe('Teamsitzungs-Stunden (FIX-Team-Tage × konfigurierte Stunden).'),
+  "teamsitzungEuro": zod.number().optional().describe('Vergütung der Teamsitzungen in Euro (Stundenlohn × Teamsitzungs-Stunden).'),
+  "bereitschaftenAnzahl": zod.number().optional().describe('Anzahl der Bereitschafts-Dienste im Monat (FIX-Schichten mit Schichtmodell „Bereitschaft\").'),
+  "bereitschaftsStunden": zod.number().optional().describe('Stunden der Bereitschafts-Dienste im Monat (FIX-Schichten mit Schichtmodell „Bereitschaft\").'),
+  "vertretungenAnzahl": zod.number().optional().describe('Anzahl der als Vertretung markierten FIX-Arbeitsdienste im Monat.'),
+  "vertretungsStunden": zod.number().optional().describe('Roh-Stunden der als Vertretung markierten FIX-Arbeitsdienste (Info; zählen zusätzlich normal in Soll\/Erfüllt).'),
+  "urlaubsabgeltungEuro": zod.number().optional().describe('Urlaubsabgeltung in Euro (Stundenlohn × gewertete Stunden der FIX-Einträge vom Typ urlaubsabgeltung; fließt NICHT in totalPay ein, reine Auszahlungs-Info).'),
+  "kindKrankTage": zod.number().optional().describe('Anzahl der Kind-krank-Tage (FIX-Einträge vom Typ kind_krank; unbezahlt, zählen nicht in Soll\/Erfüllt\/Lohn).'),
+  "freistellungTage": zod.number().optional().describe('Anzahl der bezahlten Freistellungs-Tage (FIX-Einträge vom Typ freistellung; Lohnfortzahlung wie Krankheit).'),
+  "freistellungStunden": zod.number().optional().describe('Gewertete Stunden der bezahlten Freistellung (zählen in Erfüllt und Grundlohn).'),
+  "abgesagtArbeitgeberStunden": zod.number().optional().describe('Vom Arbeitgeber abgesagte Stunden (Typ abgesagt_ag; bezahlt nach Lohnausfallprinzip — zählen in Erfüllt und Grundlohn).'),
+  "abgesagtArbeitnehmerStunden": zod.number().optional().describe('Vom Arbeitnehmer abgesagte Stunden (Typ abgesagt_an; unbezahlt, reine Info — zählen nicht in Soll\/Erfüllt\/Lohn).'),
+  "absenceNightHours": zod.number().optional().describe('Nachtstunden aus Urlaubs-\/Kranktagen (Anteil von nightHours, der auf Abwesenheitsschichten entfällt).'),
+  "absenceNightSurchargeHours": zod.number().optional().describe('Nachtzuschlag-Stunden aus Urlaubs-\/Kranktagen (SV-pflichtig).'),
+  "absenceSundayHours": zod.number().optional().describe('Sonntagsstunden aus Urlaubs-\/Kranktagen (Anteil von sundayHours, der auf Abwesenheitsschichten entfällt).'),
+  "absenceSundaySurchargeHours": zod.number().optional().describe('Sonntagszuschlag-Stunden aus Urlaubs-\/Kranktagen (SV-pflichtig).'),
+  "absenceHolidayHours": zod.number().optional().describe('Feiertagsstunden aus Urlaubs-\/Kranktagen (Anteil von holidayHours, der auf Abwesenheitsschichten entfällt).'),
+  "absenceHolidaySurchargeHours": zod.number().optional().describe('Feiertagszuschlag-Stunden aus Urlaubs-\/Kranktagen (SV-pflichtig).'),
+  "absenceNightSurchargePay": zod.number().nullish().describe('Geldwert des SV-pflichtigen Nachtzuschlags auf Abwesenheitstagen (Premium).'),
+  "absenceSundaySurchargePay": zod.number().nullish().describe('Geldwert des SV-pflichtigen Sonntagszuschlags auf Abwesenheitstagen (Premium).'),
+  "absenceHolidaySurchargePay": zod.number().nullish().describe('Geldwert des SV-pflichtigen Feiertagszuschlags auf Abwesenheitstagen (Premium).')
+}),zod.null()])
+
+
+/**
  * @summary Abschluss-Status eines Monats (inkl. Historie und offenen IST-Einträgen)
  */
 export const GetMonthClosingsQueryParams = zod.object({

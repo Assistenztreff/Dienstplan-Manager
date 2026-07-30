@@ -42,6 +42,7 @@ import type {
   GetHoursBalanceParams,
   GetMonthClosingDiffParams,
   GetMonthClosingsParams,
+  GetMyHoursBalanceParams,
   HealthStatus,
   HoursBalance,
   InviteResult,
@@ -4096,6 +4097,92 @@ export function useGetHoursBalance<TData = Awaited<ReturnType<typeof getHoursBal
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetHoursBalanceQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetMyHoursBalanceUrl = (params?: GetMyHoursBalanceParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/dashboard/my-hours-balance?${stringifiedParams}` : `/api/dashboard/my-hours-balance`
+}
+
+/**
+ * Liefert die Soll/Ist-Stundenbilanz des angemeldeten Assistenten für den angegebenen Monat. Nur für Assistenten verfügbar (Admins erhalten 403). Wage-Felder werden gesetzt, wenn der Arbeitgeber Premium hat und ein Stundenlohn hinterlegt ist; sonst null.
+
+ * @summary Eigene Stunden-Übersicht für Assistenten (authentifizierter Nutzer)
+ */
+export const getMyHoursBalance = async (params?: GetMyHoursBalanceParams, options?: RequestInit): Promise<HoursBalance | null> => {
+
+  return customFetch<HoursBalance | null>(getGetMyHoursBalanceUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMyHoursBalanceQueryKey = (params?: GetMyHoursBalanceParams,) => {
+    return [
+    `/api/dashboard/my-hours-balance`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetMyHoursBalanceQueryOptions = <TData = Awaited<ReturnType<typeof getMyHoursBalance>>, TError = ErrorType<unknown>>(params?: GetMyHoursBalanceParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyHoursBalance>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMyHoursBalanceQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyHoursBalance>>> = ({ signal }) => getMyHoursBalance(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMyHoursBalance>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMyHoursBalanceQueryResult = NonNullable<Awaited<ReturnType<typeof getMyHoursBalance>>>
+export type GetMyHoursBalanceQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Eigene Stunden-Übersicht für Assistenten (authentifizierter Nutzer)
+ */
+
+export function useGetMyHoursBalance<TData = Awaited<ReturnType<typeof getMyHoursBalance>>, TError = ErrorType<unknown>>(
+ params?: GetMyHoursBalanceParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyHoursBalance>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMyHoursBalanceQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

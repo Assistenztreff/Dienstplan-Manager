@@ -1232,6 +1232,35 @@ paths:
                 items:
                   $ref: "#/components/schemas/HoursBalance"
 
+  /dashboard/my-hours-balance:
+    get:
+      operationId: getMyHoursBalance
+      tags: [dashboard]
+      summary: Eigene Stunden-Übersicht für Assistenten (authentifizierter Nutzer)
+      description: >
+        Liefert die Soll/Ist-Stundenbilanz des angemeldeten Assistenten für
+        den angegebenen Monat. Nur für Assistenten verfügbar (Admins erhalten 403).
+        Wage-Felder werden gesetzt, wenn der Arbeitgeber Premium hat und ein
+        Stundenlohn hinterlegt ist; sonst null.
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: integer
+        - name: year
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Eigene Stundenbilanz (null wenn kein Vertrag / keine Mitgliedschaft)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/HoursBalance"
+                  - type: "null"
+
   /month-closings:
     get:
       operationId: getMonthClosings

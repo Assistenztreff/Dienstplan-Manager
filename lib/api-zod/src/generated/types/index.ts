@@ -38,6 +38,7 @@ export * from './getDashboardSummaryParams';
 export * from './getHoursBalanceParams';
 export * from './getMonthClosingDiffParams';
 export * from './getMonthClosingsParams';
+export * from './getMyHoursBalanceParams';
 export * from './healthStatus';
 export * from './hoursBalance';
 export * from './hoursBalanceBillingMethod';

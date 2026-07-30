@@ -1641,6 +1641,11 @@ year?: number;
 teamId?: number;
 };
 
+export type GetMyHoursBalanceParams = {
+month?: number;
+year?: number;
+};
+
 export type GetMonthClosingsParams = {
 month: number;
 year: number;
