@@ -54,6 +54,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { MonthYearPicker } from "@/components/month-year-picker";
 
 type Shift = {
   id: number;
@@ -1053,7 +1054,9 @@ function DienstplanHeader({
   canBulkEdit,
   isSelectionMode,
   onToggleSelection,
-  monthLabel,
+  month,
+  year,
+  onMonthSelect,
   onPrevMonth,
   onNextMonth,
 }: {
@@ -1074,7 +1077,9 @@ function DienstplanHeader({
   canBulkEdit: boolean;
   isSelectionMode: boolean;
   onToggleSelection: () => void;
-  monthLabel: string;
+  month: number;
+  year: number;
+  onMonthSelect: (month: number, year: number) => void;
   onPrevMonth: () => void;
   onNextMonth: () => void;
 }) {
@@ -1091,7 +1096,7 @@ function DienstplanHeader({
     confirmableCount,
     canBasicExport,
     canBulkEdit,
-    monthLabel,
+    `${month}/${year}`,
   ].join("|");
   const { measureRef, tier } = useHeaderTier(
     contentKey,
@@ -1271,16 +1276,16 @@ function DienstplanHeader({
       >
         <ChevronLeft className="h-4 w-4" />
       </Button>
-      <span
-        className={
+      <MonthYearPicker
+        month={month}
+        year={year}
+        onChange={onMonthSelect}
+        triggerClassName={
           stacked
             ? "min-w-0 truncate whitespace-nowrap text-center text-lg font-normal tracking-tight text-foreground"
             : "whitespace-nowrap text-center text-sm font-medium md:text-base"
         }
-        data-testid="month-label"
-      >
-        {monthLabel}
-      </span>
+      />
       <Button
         variant="ghost"
         size="icon"
@@ -1626,7 +1631,9 @@ export default function Dienstplan() {
       canBulkEdit={canBulkEdit}
       isSelectionMode={isSelectionMode}
       onToggleSelection={toggleSelectionMode}
-      monthLabel={format(currentDate, "MMMM yyyy", { locale: de })}
+      month={month}
+      year={year}
+      onMonthSelect={(m, y) => goToMonth(new Date(y, m - 1, 1))}
       onPrevMonth={prevMonth}
       onNextMonth={nextMonth}
     />

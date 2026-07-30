@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { MonthYearPicker } from "@/components/month-year-picker";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { toast } from "sonner";
@@ -64,9 +65,6 @@ export function StatementExportDialog({
   const toIndex = monthIndex(toDate);
   const rangeInvalid = toIndex < fromIndex;
   const monthCount = rangeInvalid ? 0 : toIndex - fromIndex + 1;
-
-  const fromLabel = format(fromDate, "MMMM yyyy", { locale: de });
-  const toLabel = format(toDate, "MMMM yyyy", { locale: de });
 
   const stepFrom = (delta: number) =>
     setFromDate((d) => new Date(d.getFullYear(), d.getMonth() + delta, 1));
@@ -254,9 +252,13 @@ export function StatementExportDialog({
                 <Button variant="outline" size="icon" onClick={() => stepFrom(-1)} disabled={isExporting}>
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <span className="font-medium text-sm flex-1 text-center" data-testid="export-from-label">
-                  {fromLabel}
-                </span>
+                <MonthYearPicker
+                  month={fromDate.getMonth() + 1}
+                  year={fromDate.getFullYear()}
+                  onChange={(m, y) => setFromDate(new Date(y, m - 1, 1))}
+                  testId="export-from-label"
+                  triggerClassName="font-medium text-sm flex-1 text-center"
+                />
                 <Button variant="outline" size="icon" onClick={() => stepFrom(1)} disabled={isExporting}>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
@@ -269,9 +271,13 @@ export function StatementExportDialog({
                 <Button variant="outline" size="icon" onClick={() => stepTo(-1)} disabled={isExporting}>
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <span className="font-medium text-sm flex-1 text-center" data-testid="export-to-label">
-                  {toLabel}
-                </span>
+                <MonthYearPicker
+                  month={toDate.getMonth() + 1}
+                  year={toDate.getFullYear()}
+                  onChange={(m, y) => setToDate(new Date(y, m - 1, 1))}
+                  testId="export-to-label"
+                  triggerClassName="font-medium text-sm flex-1 text-center"
+                />
                 <Button variant="outline" size="icon" onClick={() => stepTo(1)} disabled={isExporting}>
                   <ChevronRight className="h-4 w-4" />
                 </Button>

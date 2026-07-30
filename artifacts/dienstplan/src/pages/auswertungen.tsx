@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Download, Lock, Table2, LayoutGrid } from "lucide-react";
+import { MonthYearPicker } from "@/components/month-year-picker";
 import type { LucideIcon } from "lucide-react";
 import {
   Select,
@@ -120,7 +121,9 @@ function AuswertungenHeader({
   exportDisabled,
   exportTitle,
   onExport,
-  monthLabel,
+  month,
+  year,
+  onMonthSelect,
   onPrevMonth,
   onNextMonth,
 }: {
@@ -133,7 +136,9 @@ function AuswertungenHeader({
   exportDisabled: boolean;
   exportTitle?: string;
   onExport: () => void;
-  monthLabel: string;
+  month: number;
+  year: number;
+  onMonthSelect: (month: number, year: number) => void;
   onPrevMonth: () => void;
   onNextMonth: () => void;
 }) {
@@ -147,7 +152,7 @@ function AuswertungenHeader({
     assistants.length,
     String(selectedAssistant),
     selectedTeamId ?? "none",
-    monthLabel,
+    `${month}/${year}`,
   ].join("|");
   const { measureRef, tier } = useHeaderTier(contentKey, [view, exportDisabled].join("|"));
   const showLabels = tier === "labels";
@@ -238,16 +243,16 @@ function AuswertungenHeader({
       >
         <ChevronLeft className="h-4 w-4" />
       </Button>
-      <span
-        className={
+      <MonthYearPicker
+        month={month}
+        year={year}
+        onChange={onMonthSelect}
+        triggerClassName={
           stacked
             ? "min-w-0 truncate whitespace-nowrap text-center text-lg font-normal tracking-tight text-foreground"
             : "whitespace-nowrap text-center text-sm font-medium md:text-base"
         }
-        data-testid="month-label"
-      >
-        {monthLabel}
-      </span>
+      />
       <Button
         variant="ghost"
         size="icon"
@@ -388,8 +393,6 @@ export default function Auswertungen() {
   const prevMonth = () => setCurrentDate(new Date(year, month - 2, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month, 1));
 
-  const monthLabel = format(currentDate, "MMMM yyyy", { locale: de });
-
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-300">
       {/* Kompakter Sticky-Header im Dienstplan-Stil: alles in EINER Zeile.
@@ -405,7 +408,9 @@ export default function Auswertungen() {
         exportDisabled={!canPayrollExport || isLoading || !visibleBalances || visibleBalances.length === 0}
         exportTitle={canPayrollExport ? undefined : PLAN_FEATURE_MESSAGES.payrollExport}
         onExport={() => setExportOpen(true)}
-        monthLabel={monthLabel}
+        month={month}
+        year={year}
+        onMonthSelect={(m, y) => setCurrentDate(new Date(y, m - 1, 1))}
         onPrevMonth={prevMonth}
         onNextMonth={nextMonth}
       />
