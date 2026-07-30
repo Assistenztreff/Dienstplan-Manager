@@ -488,6 +488,9 @@ export default function Auswertungen() {
               recalcByUser={recalcByUser}
               prevMonthLabel={prevOfShownLabel}
               onSelectAssistant={setSelectedAssistant}
+              canExportCsv={canPayrollExport}
+              month={month}
+              year={year}
             />
           ) : (
           visibleBalances.map((balance: any) => {

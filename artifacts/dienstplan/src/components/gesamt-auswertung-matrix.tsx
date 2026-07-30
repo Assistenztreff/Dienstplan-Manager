@@ -5,6 +5,10 @@ import {
   nameInitials,
 } from "@/lib/shift-model-colors";
 import { formatDays } from "@/lib/utils";
+import { FileDown } from "lucide-react";
+import { buildMatrixCsv, downloadCsv } from "@/lib/matrix-csv";
+import { Button } from "@/components/ui/button";
+import { format } from "date-fns";
 
 // Ein Eintrag aus GET /dashboard/hours-balance (nur die hier genutzten Felder).
 export type MatrixBalance = {
@@ -89,12 +93,21 @@ export function GesamtAuswertungMatrix({
   recalcByUser,
   prevMonthLabel,
   onSelectAssistant,
+  canExportCsv,
+  month,
+  year,
 }: {
   balances: MatrixBalance[];
   recalcByUser?: Map<number, MatrixRecalc>;
   prevMonthLabel?: string;
   /** Klick auf einen Spaltenkopf: setzt den bestehenden Auswahlfilter auf diese Person. */
   onSelectAssistant?: (userId: number) => void;
+  /** CSV-Export erlaubt (Premium-Gate: payrollExport). */
+  canExportCsv?: boolean;
+  /** Monat der angezeigten Auswertung (für den Dateinamen). */
+  month?: number;
+  /** Jahr der angezeigten Auswertung (für den Dateinamen). */
+  year?: number;
 }) {
   const personColors = useMemo(
     () => buildPersonColorAssignment(balances.map((b) => b.userId)),
@@ -465,9 +478,29 @@ export function GesamtAuswertungMatrix({
         <h3 className="text-base font-semibold text-foreground">
           Gesamtübersicht – Alle Assistenzkräfte
         </h3>
-        <span className="text-xs text-muted-foreground font-medium">
-          {balances.length === 1 ? "1 Assistenzkraft" : `${balances.length} Assistenzkräfte`}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted-foreground font-medium">
+            {balances.length === 1 ? "1 Assistenzkraft" : `${balances.length} Assistenzkräfte`}
+          </span>
+          {canExportCsv && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 h-8 text-xs"
+              data-testid="matrix-csv-export"
+              title="Stundenbilanz als CSV exportieren (Excel/DATEV)"
+              onClick={() => {
+                const csv = buildMatrixCsv(balances, recalcByUser, prevMonthLabel);
+                const yearStr = year ?? new Date().getFullYear();
+                const monthStr = month != null ? String(month).padStart(2, "0") : format(new Date(), "MM");
+                downloadCsv(csv, `stundenbilanz-${yearStr}-${monthStr}.csv`);
+              }}
+            >
+              <FileDown className="h-3.5 w-3.5" />
+              CSV
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="overflow-x-auto">
