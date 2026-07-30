@@ -91,6 +91,10 @@ function hoursFromShift(startTime: string, endTime: string): number {
   return Math.round((mins / 60) * 100) / 100;
 }
 
+/** Rendert eine Seite des Stundennachweises und gibt zurück, ob FIX-Schichten
+ *  vorhanden waren (true) oder nur der "Keine Schichten"-Platzhalter gedruckt
+ *  wurde (false). Der Rückgabewert steuert das Abort-Verhalten in
+ *  exportStatementSectionsPdf. */
 async function renderStatementPage(
   doc: any,
   autoTable: any,
@@ -101,7 +105,7 @@ async function renderStatementPage(
   year: number,
   monthLabel: string,
   teamId?: number | null,
-) {
+): Promise<boolean> {
   // --- Header ---
   if (logo) {
     const logoW = 48;
@@ -299,6 +303,8 @@ async function renderStatementPage(
     doc.setFontSize(10);
     doc.text("Keine Schichten in diesem Monat.", 14, tableY + 10);
   }
+
+  return detailRows.length > 0;
 }
 
 export type StatementSection = {
@@ -447,12 +453,17 @@ export function renderRecalculationPage(
  * Kern-Export: rendert pro Section eine eigene Seite (Kennzahlen + Schichtdetails).
  * Wird sowohl vom Einzel-/Monats-Export als auch vom Zeitraum-Export genutzt.
  */
+/** Erzeugt den Premium-Stundennachweis als PDF und gibt `true` zurück, wenn
+ *  mindestens eine Seite tatsächliche FIX-Schichten oder Nachberechnungen
+ *  enthielt. Gibt `false` zurück wenn für alle Assistentinnen im gewählten
+ *  Zeitraum keine bestätigten (FIX) Einträge vorliegen — analog zum Abort-Pfad
+ *  des Free-Plan-Exports (exportSimpleMonthPdf). */
 export async function exportStatementSectionsPdf({
   sections,
   teamId,
   filename,
   recalculations,
-}: ExportStatementSectionsOptions) {
+}: ExportStatementSectionsOptions): Promise<boolean> {
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
 
@@ -460,12 +471,13 @@ export async function exportStatementSectionsPdf({
   const pageWidth = doc.internal.pageSize.getWidth();
   const logo = await loadLogoImage(teamId);
   let firstPage = true;
+  let hasAnyFixContent = false;
 
   for (const section of sections) {
     if (!firstPage) doc.addPage();
     firstPage = false;
 
-    await renderStatementPage(
+    const hadContent = await renderStatementPage(
       doc,
       autoTable,
       pageWidth,
@@ -476,6 +488,7 @@ export async function exportStatementSectionsPdf({
       section.monthLabel,
       teamId,
     );
+    if (hadContent) hasAnyFixContent = true;
   }
 
   for (const recalc of recalculations ?? []) {
@@ -483,11 +496,15 @@ export async function exportStatementSectionsPdf({
     if (!firstPage) doc.addPage();
     firstPage = false;
     renderRecalculationPage(doc, autoTable, recalc);
+    hasAnyFixContent = true;
   }
 
-  addSignatureFooter(doc, pageWidth);
+  // Kein einziger bestätigter Eintrag im gesamten Zeitraum → PDF nicht speichern.
+  if (!hasAnyFixContent) return false;
 
+  addSignatureFooter(doc, pageWidth);
   doc.save(filename);
+  return true;
 }
 
 // Unterschriftsfeld + Footer auf jeder Seite — geteilt zwischen dem

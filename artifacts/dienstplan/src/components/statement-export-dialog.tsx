@@ -193,12 +193,18 @@ export function StatementExportDialog({
         ? assistantName.replace(/[^\p{L}\p{N}]+/gu, "_").replace(/^_+|_+$/g, "")
         : "Alle";
 
-      await exportStatementSectionsPdf({
+      const exported = await exportStatementSectionsPdf({
         sections,
         teamId,
         filename: `Stundennachweis_${namePart}_${rangePart}.pdf`,
         recalculations,
       });
+      if (!exported) {
+        toast.error(
+          "Keine bestätigten Dienste oder Abwesenheiten in diesem Monat.",
+        );
+        return;
+      }
       onClose();
     } catch (err) {
       toast.error("PDF-Export fehlgeschlagen.");
