@@ -4,14 +4,18 @@
  * Zeigt: geleistete Stunden (IST) vs. Soll, Urlaubstage, Krankheitsstunden.
  * Falls der Arbeitgeber Premium hat und ein Stundenlohn hinterlegt ist, werden
  * zusätzlich Grundlohn und Gesamtlohn angezeigt.
+ *
+ * Über Prev/Next-Pfeile kann der Assistent auch abgeschlossene Vormonate
+ * einsehen (#676).  Der Vorwärts-Pfeil ist auf den aktuellen Monat begrenzt.
  */
 
+import { useState } from "react";
 import { useGetMyHoursBalance } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Clock, ChevronRight, Info } from "lucide-react";
-import { format } from "date-fns";
+import { Clock, ChevronRight, ChevronLeft, Info } from "lucide-react";
+import { format, subMonths, addMonths, isSameMonth } from "date-fns";
 import { de } from "date-fns/locale";
 import { useLocation } from "wouter";
 import { formatDays, formatHours } from "@/lib/utils";
@@ -46,11 +50,19 @@ function StatRow({
 export function MeineStundenKarte() {
   const [, navigate] = useLocation();
   const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
-  const monthLabel = format(now, "MMMM yyyy", { locale: de });
+  const [selectedDate, setSelectedDate] = useState<Date>(now);
+
+  const month = selectedDate.getMonth() + 1;
+  const year = selectedDate.getFullYear();
+  const monthLabel = format(selectedDate, "MMMM yyyy", { locale: de });
+  const isCurrentMonth = isSameMonth(selectedDate, now);
 
   const { data, isLoading, isError } = useGetMyHoursBalance({ month, year });
+
+  const handlePrevMonth = () => setSelectedDate((d) => subMonths(d, 1));
+  const handleNextMonth = () => {
+    if (!isCurrentMonth) setSelectedDate((d) => addMonths(d, 1));
+  };
 
   if (isLoading) {
     return (
@@ -94,9 +106,39 @@ export function MeineStundenKarte() {
       data-testid="meine-stunden-karte"
     >
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base font-semibold text-foreground">
-          <Clock className="h-4 w-4 text-muted-foreground" />
-          Meine Stunden – {monthLabel}
+        <CardTitle className="flex items-center justify-between gap-2 text-base font-semibold text-foreground">
+          <span className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            Meine Stunden
+          </span>
+          {/* Monatswechsel-Navigation */}
+          <span className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={handlePrevMonth}
+              aria-label="Vormonat"
+              data-testid="meine-stunden-prev-month"
+              className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span
+              className="min-w-[9rem] text-center text-sm font-normal text-muted-foreground"
+              data-testid="meine-stunden-monat-label"
+            >
+              {monthLabel}
+            </span>
+            <button
+              type="button"
+              onClick={handleNextMonth}
+              disabled={isCurrentMonth}
+              aria-label="Nächster Monat"
+              data-testid="meine-stunden-next-month"
+              className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </span>
         </CardTitle>
       </CardHeader>
 
