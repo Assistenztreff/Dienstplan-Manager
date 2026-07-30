@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useMutationState } from "@tanstack/react-query";
 import { WifiOff } from "lucide-react";
 
 /**
@@ -7,9 +7,12 @@ import { WifiOff } from "lucide-react";
  *
  * Die PWA-App-Shell lädt auch ohne Netz aus dem Cache — API-Aufrufe schlagen
  * dann aber fehl. Statt roher Fehlerzustände zeigt dieses Banner einen
- * freundlichen Hinweis. Beim Wieder-Online-Gehen werden alle React-Query-
- * Abfragen neu geladen (Retries sind global deaktiviert, ohne diesen Anstoß
- * blieben fehlgeschlagene Abfragen dauerhaft leer).
+ * freundlichen Hinweis. Beim Wieder-Online-Gehen werden:
+ *
+ * 1. Alle React-Query-Abfragen neu geladen (Retries sind global deaktiviert,
+ *    ohne diesen Anstoß blieben fehlgeschlagene Abfragen dauerhaft leer).
+ * 2. Pausierte Mutations automatisch wiederholt (networkMode: 'offlineFirst'
+ *    queued sie statt sie sofort scheitern zu lassen).
  */
 function subscribe(onChange: () => void): () => void {
   window.addEventListener("online", onChange);
@@ -28,11 +31,17 @@ export function OfflineBanner() {
   const isOnline = useIsOnline();
   const queryClient = useQueryClient();
 
-  // Wieder online: alle Abfragen neu laden, damit fehlgeschlagene Daten
-  // (retry: false) automatisch nachgeholt werden.
+  // Anzahl aktuell pausierter Mutations (gestartet während offline).
+  const pendingCount = useMutationState({
+    filters: { status: "pending" },
+    select: (mutation) => (mutation.state.isPaused ? 1 : 0) as 0 | 1,
+  }).reduce((sum, v) => sum + v, 0);
+
+  // Wieder online: Abfragen aktualisieren und pausierte Mutations absenden.
   useEffect(() => {
     if (isOnline) {
       void queryClient.invalidateQueries();
+      void queryClient.resumePausedMutations();
     }
   }, [isOnline, queryClient]);
 
@@ -47,7 +56,16 @@ export function OfflineBanner() {
     >
       <WifiOff className="h-4 w-4 shrink-0" aria-hidden="true" />
       <span>
-        Keine Verbindung — Ihre Daten werden angezeigt, sobald Sie wieder online sind.
+        {pendingCount > 0 ? (
+          <>
+            Keine Verbindung —{" "}
+            <span data-testid="offline-banner-pending">{pendingCount}</span>{" "}
+            {pendingCount === 1 ? "Änderung wird" : "Änderungen werden"} übertragen,
+            sobald Sie wieder online sind.
+          </>
+        ) : (
+          "Keine Verbindung — Ihre Daten werden angezeigt, sobald Sie wieder online sind."
+        )}
       </span>
     </div>
   );

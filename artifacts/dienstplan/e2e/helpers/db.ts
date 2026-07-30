@@ -49,6 +49,22 @@ async function withDbClient<T>(fn: (client: pg.Client) => Promise<T>): Promise<T
  * Verwendet für Specs, die prüfen, ob ein deaktiviertes Konto sofort aus allen
  * Zugangswegen ausgeschlossen wird (z. B. Kalender-Feed-404, Session-Revoke).
  */
+/** Setzt den Kalender-Token eines Nutzers direkt in der (Test-)DB. */
+export async function dbSetCalendarToken(
+  email: string,
+  token: string | null,
+): Promise<void> {
+  await withDbClient(async (client) => {
+    const res = await client.query(
+      "UPDATE users SET calendar_token = $1 WHERE email = $2",
+      [token, email],
+    );
+    if (res.rowCount === 0) {
+      throw new Error(`Kein Nutzer mit E-Mail "${email}" gefunden.`);
+    }
+  });
+}
+
 export async function dbSetUserActive(email: string, isActive: boolean): Promise<void> {
   await withDbClient(async (client) => {
     const res = await client.query(

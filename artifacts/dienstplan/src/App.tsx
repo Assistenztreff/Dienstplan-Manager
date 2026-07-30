@@ -114,6 +114,13 @@ const queryClient: QueryClient = new QueryClient({
       retry: false,
       refetchOnWindowFocus: false,
     },
+    mutations: {
+      // Mutations, die gestartet werden während das Gerät offline ist, werden
+      // pausiert statt sofort zu scheitern. Das OfflineBanner ruft
+      // resumePausedMutations() auf, sobald die Verbindung wiederhergestellt
+      // ist, und überträgt die ausstehenden Änderungen automatisch.
+      networkMode: "offlineFirst",
+    },
   },
 });
 

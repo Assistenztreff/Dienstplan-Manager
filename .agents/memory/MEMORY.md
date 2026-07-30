@@ -101,3 +101,4 @@
 - [makeShiftTimes Math.min Falle](make-shift-times-min-trap.md) — relative Tag-Berechnung mit Math.min(tag+offset, 25) kollabiert auf Tag 25 wenn tag>25; stattdessen feste Tage (z. B. 5 und 6) hartcodieren.
 - [Shared Header-Tier-Logik](header-tier-shared.md) — HeaderTier/useIsMobileViewport/useHeaderTier leben in src/lib/header-tier.ts; beide Seiten importieren von dort; lokale Deklaration erzeugt TS2440 bei gleichzeitigem Import.
 - [Offline Bootstrap bewahrt Auth](offline-auth-bootstrap.md) — auth.tsx bootstrap fängt TypeError separat: Netzwerkfehler leeren NICHT den Auth-Zustand; nur echte 4xx/5xx tun das; OfflineBanner + MutationCache/QueryCache onError ergänzen die Kette.
+- [Offline Mutation Replay](offline-mutation-replay.md) — networkMode:'offlineFirst' + resumePausedMutations() müssen gemeinsam gesetzt sein; keines allein genügt; Pending-Zähler via useMutationState in OfflineBanner.
