@@ -52,6 +52,7 @@
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "catalog:",
     "@tanstack/react-query": "catalog:",
+    "@types/jszip": "^3.4.1",
     "@types/node": "catalog:",
     "@types/pg": "^8.20.0",
     "@types/react": "catalog:",
@@ -93,6 +94,7 @@
   },
   "dependencies": {
     "jspdf": "^4.2.1",
-    "jspdf-autotable": "^5.0.8"
+    "jspdf-autotable": "^5.0.8",
+    "jszip": "^3.10.1"
   }
 }

@@ -851,6 +851,43 @@ export async function exportSimpleMonthPdf({
   return true;
 }
 
+/**
+ * Erzeugt den Stundennachweis für EINE Assistenzkraft als Uint8Array-Blob
+ * (statt als Datei-Download). Wird vom ZIP-Sammel-Export genutzt.
+ *
+ * Gibt `null` zurück, wenn der Assistent keine bestätigten Dienste hat —
+ * konsistent mit dem Abort-Verhalten von exportStatementSectionsPdf.
+ */
+export async function generateLohnnachweisPdfBlob(
+  balance: any,
+  month: number,
+  year: number,
+  monthLabel: string,
+  teamId?: number | null,
+): Promise<Uint8Array | null> {
+  const { jsPDF } = await import("jspdf");
+  const autoTable = (await import("jspdf-autotable")).default;
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const logo = await loadLogoImage(teamId);
+
+  const hadContent = await renderStatementPage(
+    doc,
+    autoTable,
+    pageWidth,
+    logo,
+    balance,
+    month,
+    year,
+    monthLabel,
+    teamId,
+  );
+  if (!hadContent) return null;
+
+  addSignatureFooter(doc, pageWidth);
+  return new Uint8Array(doc.output("arraybuffer") as ArrayBuffer);
+}
+
 export type ExportHoursStatementOptions = {
   balances: any[];
   month: number;

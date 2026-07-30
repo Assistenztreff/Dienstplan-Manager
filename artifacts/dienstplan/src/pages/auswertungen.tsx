@@ -9,7 +9,7 @@ import type { MonthClosingDiff } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Download, Lock, Table2, LayoutGrid } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Lock, Table2, LayoutGrid, Archive } from "lucide-react";
 import { MonthYearPicker } from "@/components/month-year-picker";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -39,6 +39,7 @@ import { formatDays } from "@/lib/utils";
 import { MonthClosingCard, RecalculationSection, PayrollTotalsCard } from "@/components/month-closing";
 import { GesamtAuswertungMatrix } from "@/components/gesamt-auswertung-matrix";
 import { StatementExportDialog } from "@/components/statement-export-dialog";
+import { downloadLohnnachweiseAsZip } from "@/lib/pdf-zip-export";
 
 function formatEur(n: number): string {
   return n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
@@ -121,6 +122,10 @@ function AuswertungenHeader({
   exportDisabled,
   exportTitle,
   onExport,
+  zipExportDisabled,
+  zipExportTitle,
+  onZipExport,
+  zipProgress,
   month,
   year,
   onMonthSelect,
@@ -136,6 +141,10 @@ function AuswertungenHeader({
   exportDisabled: boolean;
   exportTitle?: string;
   onExport: () => void;
+  zipExportDisabled: boolean;
+  zipExportTitle?: string;
+  onZipExport: () => void;
+  zipProgress: { done: number; total: number } | null;
   month: number;
   year: number;
   onMonthSelect: (month: number, year: number) => void;
@@ -231,6 +240,28 @@ function AuswertungenHeader({
     </Button>
   );
 
+  const zipLabel = zipProgress
+    ? `${zipProgress.done} von ${zipProgress.total} PDFs…`
+    : showLabels
+    ? "ZIP Export"
+    : undefined;
+
+  const zipButton = (
+    <Button
+      variant="outline"
+      size="sm"
+      className={showLabels ? "gap-1.5" : `h-9 shrink-0 px-0 ${stacked ? "w-8" : "w-9"}`}
+      onClick={onZipExport}
+      disabled={zipExportDisabled}
+      title={zipExportTitle ?? "Alle Lohnnachweise als ZIP herunterladen"}
+      aria-label="ZIP Export"
+      data-testid="export-zip-button"
+    >
+      <Archive className="h-4 w-4" />
+      {zipLabel && <span className="whitespace-nowrap">{zipLabel}</span>}
+    </Button>
+  );
+
   const monthSwitcher = (
     <div className={`flex items-center gap-0.5 ${stacked ? "min-w-0" : "shrink-0"}`}>
       <Button
@@ -282,6 +313,7 @@ function AuswertungenHeader({
           <div className="flex w-full flex-nowrap items-center gap-1">
             {viewToggle}
             {exportButton}
+            {zipButton}
             <div className="ml-auto flex min-w-0 items-center">{monthSwitcher}</div>
           </div>
         </div>
@@ -293,6 +325,7 @@ function AuswertungenHeader({
           <div className="ml-auto flex flex-nowrap items-center gap-1.5">
             {viewToggle}
             {exportButton}
+            {zipButton}
             {monthSwitcher}
           </div>
         </div>
@@ -304,6 +337,8 @@ function AuswertungenHeader({
 export default function Auswertungen() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [exportOpen, setExportOpen] = useState(false);
+  const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null);
+  const isZipExporting = zipProgress !== null;
 
   const { currentUser } = useAuth();
   const isAdmin = isAdminRole(currentUser?.role);
@@ -393,6 +428,27 @@ export default function Auswertungen() {
   const prevMonth = () => setCurrentDate(new Date(year, month - 2, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month, 1));
 
+  async function handleZipExport() {
+    if (!Array.isArray(balances) || balances.length === 0) return;
+    setZipProgress({ done: 0, total: balances.length });
+    try {
+      await downloadLohnnachweiseAsZip({
+        balances,
+        month,
+        year,
+        teamId: selectedTeamId,
+        onProgress: (done, total) => setZipProgress({ done, total }),
+      });
+    } catch (err) {
+      if (!navigator.onLine) return;
+      const { toast } = await import("sonner");
+      toast.error("ZIP-Export fehlgeschlagen.");
+      console.error(err);
+    } finally {
+      setZipProgress(null);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-300">
       {/* Kompakter Sticky-Header im Dienstplan-Stil: alles in EINER Zeile.
@@ -408,6 +464,16 @@ export default function Auswertungen() {
         exportDisabled={!canPayrollExport || isLoading || !visibleBalances || visibleBalances.length === 0}
         exportTitle={canPayrollExport ? undefined : PLAN_FEATURE_MESSAGES.payrollExport}
         onExport={() => setExportOpen(true)}
+        zipExportDisabled={
+          !canPayrollExport ||
+          isLoading ||
+          !Array.isArray(balances) ||
+          balances.length === 0 ||
+          isZipExporting
+        }
+        zipExportTitle={canPayrollExport ? undefined : PLAN_FEATURE_MESSAGES.payrollExport}
+        onZipExport={handleZipExport}
+        zipProgress={zipProgress}
         month={month}
         year={year}
         onMonthSelect={(m, y) => setCurrentDate(new Date(y, m - 1, 1))}
