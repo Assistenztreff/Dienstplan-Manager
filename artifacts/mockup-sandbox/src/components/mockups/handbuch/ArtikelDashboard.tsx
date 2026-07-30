@@ -1,7 +1,7 @@
 import React from "react";
 import { ChevronRight, CalendarDays, BarChart3 } from "lucide-react";
 import "./_group.css";
-import { DocsHeader, DocsSidebar, SeeAlsoLink } from "./_shared/Chrome";
+import { DocsHeader, DocsSidebar, SeeAlsoLink, handbuchUrl } from "./_shared/Chrome";
 import dashboardPng from "./_assets/dashboard-desktop.png";
 import dashboardMobilPng from "./_assets/dashboard-mobil.png";
 
@@ -16,9 +16,9 @@ export function ArtikelDashboard() {
 
         <main className="flex-1 min-w-0 px-6 py-8 md:px-12 lg:py-12">
           <nav className="flex items-center gap-2 text-sm text-slate-500 mb-8 font-medium">
-            <a href="#" className="hover:text-[var(--color-brand-dark)] handbuch-focus rounded px-1 -ml-1">Handbuch</a>
+            <a href={handbuchUrl("Start")} className="hover:text-[var(--color-brand-dark)] handbuch-focus rounded px-1 -ml-1">Handbuch</a>
             <ChevronRight className="h-4 w-4" />
-            <a href="#" className="hover:text-[var(--color-brand-dark)] handbuch-focus rounded px-1">Modul-Übersicht</a>
+            <a href={handbuchUrl("Start")} className="hover:text-[var(--color-brand-dark)] handbuch-focus rounded px-1">Modul-Übersicht</a>
             <ChevronRight className="h-4 w-4" />
             <span className="text-[var(--color-brand-dark)]">Dashboard</span>
           </nav>
@@ -68,8 +68,8 @@ export function ArtikelDashboard() {
               Von hier aus geht es meist direkt weiter in diese Bereiche:
             </p>
             <div className="grid sm:grid-cols-2 gap-4 not-prose">
-              <SeeAlsoLink title="Dienstplan" href="#" icon={CalendarDays} />
-              <SeeAlsoLink title="Auswertungen" href="#" icon={BarChart3} />
+              <SeeAlsoLink title="Dienstplan" href={handbuchUrl("ArtikelDienstplan")} icon={CalendarDays} />
+              <SeeAlsoLink title="Auswertungen" href={handbuchUrl("ArtikelAuswertungen")} icon={BarChart3} />
             </div>
           </article>
         </main>

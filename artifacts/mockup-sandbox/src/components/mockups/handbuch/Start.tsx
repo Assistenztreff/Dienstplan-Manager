@@ -1,7 +1,7 @@
 import React from "react";
 import { Search, User, Building2, FileText, ArrowRight } from "lucide-react";
 import "./_group.css";
-import { DocsHeader } from "./_shared/Chrome";
+import { DocsHeader, handbuchUrl } from "./_shared/Chrome";
 
 export function Start() {
   return (
@@ -31,7 +31,7 @@ export function Start() {
         {/* Einstiegspunkte */}
         <section className="py-16 px-6 max-w-5xl mx-auto w-full">
           <div className="grid md:grid-cols-2 gap-8">
-            <a href="#" className="group relative overflow-hidden rounded-2xl border-2 border-slate-100 bg-white p-8 transition-all hover:border-[var(--color-brand-dark)] hover:shadow-xl handbuch-focus">
+            <a href={handbuchUrl("ArtikelDashboard")} className="group relative overflow-hidden rounded-2xl border-2 border-slate-100 bg-white p-8 transition-all hover:border-[var(--color-brand-dark)] hover:shadow-xl handbuch-focus">
               <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
                 <User className="w-32 h-32 text-[var(--color-brand-dark)]" />
               </div>
@@ -47,7 +47,7 @@ export function Start() {
               </span>
             </a>
 
-            <a href="#" className="group relative overflow-hidden rounded-2xl border-2 border-slate-100 bg-white p-8 transition-all hover:border-[var(--color-brand-dark)] hover:shadow-xl handbuch-focus">
+            <a href={handbuchUrl("ArtikelTeamVerwaltung")} className="group relative overflow-hidden rounded-2xl border-2 border-slate-100 bg-white p-8 transition-all hover:border-[var(--color-brand-dark)] hover:shadow-xl handbuch-focus">
               <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
                 <Building2 className="w-32 h-32 text-[var(--color-brand-dark)]" />
               </div>
@@ -70,17 +70,17 @@ export function Start() {
           <div className="max-w-5xl mx-auto">
             <h3 className="text-xl font-bold text-[var(--color-brand-dark)] mb-8 text-center">Häufig gesuchte Themen</h3>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[
-                "Dienstplan für den ganzen Monat freigeben",
-                "Wie funktioniert die Zeiterfassung?",
-                "Zuschläge für Nacht- und Sonntagsarbeit",
-                "Krankmeldung und Ersatz finden",
-                "Neuen Assistenten einladen",
-                "Stundennachweis als PDF exportieren"
-              ].map((topic, idx) => (
-                <a key={idx} href="#" className="flex items-start gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:border-[var(--color-brand-cyan)] hover:shadow-md transition-all handbuch-focus group">
+              {([
+                ["Dienstplan für den ganzen Monat freigeben", handbuchUrl("ArtikelDienstplan")],
+                ["Wie funktioniert die Zeiterfassung?", handbuchUrl("Mobil")],
+                ["Zuschläge für Nacht- und Sonntagsarbeit", handbuchUrl("ArtikelEinstellungen")],
+                ["Krankmeldung und Ersatz finden", handbuchUrl("ArtikelAbwesenheiten")],
+                ["Neuen Assistenten einladen", handbuchUrl("ArtikelAssistenten")],
+                ["Stundennachweis als PDF exportieren", handbuchUrl("ArtikelAuswertungen")],
+              ] as [string, string][]).map(([topic, href], idx) => (
+                <a key={idx} href={href} className="flex items-start gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:border-[var(--color-brand-cyan)] hover:shadow-md transition-all handbuch-focus group">
                   <FileText className="h-5 w-5 text-slate-400 group-hover:text-[var(--color-brand-cyan)] shrink-0" />
-                  <span className="font-medium text-slate-700 group-hover:text-[var(--color-brand-dark)] leading-snug">{topic}</span>
+                  <span className="font-medium text-slate-700 group-hover:text-[var(--color-brand-dark)] leading-snug">{topic as string}</span>
                 </a>
               ))}
             </div>

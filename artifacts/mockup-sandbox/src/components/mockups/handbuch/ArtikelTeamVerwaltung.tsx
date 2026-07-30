@@ -1,7 +1,7 @@
 import React from "react";
 import { ChevronRight, Users, Settings, Briefcase } from "lucide-react";
 import "./_group.css";
-import { DocsHeader, DocsSidebar, SeeAlsoLink, DienstleisterBadge } from "./_shared/Chrome";
+import { DocsHeader, DocsSidebar, SeeAlsoLink, DienstleisterBadge, handbuchUrl } from "./_shared/Chrome";
 import teamVerwaltungPng from "./_assets/team-verwaltung-desktop.png";
 
 export function ArtikelTeamVerwaltung() {
@@ -15,9 +15,9 @@ export function ArtikelTeamVerwaltung() {
 
         <main className="flex-1 min-w-0 px-6 py-8 md:px-12 lg:py-12">
           <nav className="flex items-center gap-2 text-sm text-slate-500 mb-8 font-medium">
-            <a href="#" className="hover:text-[var(--color-brand-dark)] handbuch-focus rounded px-1 -ml-1">Handbuch</a>
+            <a href={handbuchUrl("Start")} className="hover:text-[var(--color-brand-dark)] handbuch-focus rounded px-1 -ml-1">Handbuch</a>
             <ChevronRight className="h-4 w-4" />
-            <a href="#" className="hover:text-[var(--color-brand-dark)] handbuch-focus rounded px-1">Für Dienstleister</a>
+            <a href={handbuchUrl("Start")} className="hover:text-[var(--color-brand-dark)] handbuch-focus rounded px-1">Für Dienstleister</a>
             <ChevronRight className="h-4 w-4" />
             <span className="text-[var(--color-brand-dark)]">Team-Verwaltung</span>
           </nav>
@@ -69,8 +69,8 @@ export function ArtikelTeamVerwaltung() {
               So strukturieren Sie Ihr Unternehmen effektiv im AssistenzPlaner:
             </p>
             <div className="grid sm:grid-cols-2 gap-4 not-prose">
-              <SeeAlsoLink title="Rollen verstehen" href="#" icon={Settings} />
-              <SeeAlsoLink title="Assistenten verwalten" href="#" icon={Users} />
+              <SeeAlsoLink title="Rollen verstehen" href={handbuchUrl("Start")} icon={Settings} />
+              <SeeAlsoLink title="Assistenten verwalten" href={handbuchUrl("ArtikelAssistenten")} icon={Users} />
             </div>
           </article>
         </main>

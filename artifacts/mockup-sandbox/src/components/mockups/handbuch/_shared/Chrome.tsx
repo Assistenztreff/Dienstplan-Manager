@@ -2,6 +2,16 @@ import React from "react";
 import { BookOpen, Search, Star, Building2, Menu, X, ArrowRight } from "lucide-react";
 import "../_group.css";
 
+// ---------------------------------------------------------------------------
+// Hilfsfunktion: Baut Preview-URLs innerhalb des Mockup-Sandboxes.
+// import.meta.env.BASE_URL ist z. B. "/__mockup/" — wir entfernen den
+// abschließenden Slash, damit die resultierenden Pfade sauber werden.
+// ---------------------------------------------------------------------------
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+export function handbuchUrl(component: string): string {
+  return `${BASE}/preview/handbuch/${component}`;
+}
+
 export function PremiumBadge({ inline }: { inline?: boolean }) {
   return (
     <span className={`inline-flex items-center gap-0.5 rounded bg-[var(--color-brand-yellow)] font-bold text-[var(--color-brand-dark)] shadow-sm shrink-0 ${inline ? 'px-1.5 py-0.5 text-[10px] uppercase tracking-wider' : 'px-1.5 py-0.5 text-[10px] uppercase tracking-wider'}`}>
@@ -37,25 +47,25 @@ export const CHAPTERS: Array<{
   {
     title: "Erste Schritte",
     items: [
-      { title: "Registrierung & Einstieg", href: "#" },
-      { title: "Rollen verstehen", href: "#" },
+      { title: "Registrierung & Einstieg", href: handbuchUrl("Start") },
+      { title: "Rollen verstehen", href: handbuchUrl("Start") },
     ]
   },
   {
     title: "Modul-Übersicht",
     items: [
-      { title: "Dashboard", href: "#", id: "dashboard" },
-      { title: "Dienstplan", href: "#", id: "dienstplan" },
-      { title: "Assistenten", href: "#", id: "assistenten" },
-      { title: "Zeiterfassung", href: "#", id: "zeiterfassung" },
-      { title: "Abwesenheiten", href: "#", id: "abwesenheiten" },
-      { 
-        title: "Auswertungen", 
-        href: "#",
+      { title: "Dashboard", href: handbuchUrl("ArtikelDashboard"), id: "dashboard" },
+      { title: "Dienstplan", href: handbuchUrl("ArtikelDienstplan"), id: "dienstplan" },
+      { title: "Assistenten", href: handbuchUrl("ArtikelAssistenten"), id: "assistenten" },
+      { title: "Zeiterfassung", href: handbuchUrl("Mobil"), id: "zeiterfassung" },
+      { title: "Abwesenheiten", href: handbuchUrl("ArtikelAbwesenheiten"), id: "abwesenheiten" },
+      {
+        title: "Auswertungen",
+        href: handbuchUrl("ArtikelAuswertungen"),
         id: "auswertungen",
         children: [
-          { title: "Premium-Lohnauswertung", href: "#", isPremium: true },
-          { title: "PDF-Stundennachweis", href: "#", isPremium: true },
+          { title: "Premium-Lohnauswertung", href: handbuchUrl("ArtikelAuswertungen"), isPremium: true },
+          { title: "PDF-Stundennachweis", href: handbuchUrl("ArtikelAuswertungen"), isPremium: true },
         ]
       },
     ]
@@ -63,16 +73,16 @@ export const CHAPTERS: Array<{
   {
     title: "Verwaltung",
     items: [
-      { title: "Team-Verwaltung", href: "#", id: "team-verwaltung", isDienstleister: true },
-      { 
-        title: "Einstellungen", 
-        href: "#",
+      { title: "Team-Verwaltung", href: handbuchUrl("ArtikelTeamVerwaltung"), id: "team-verwaltung", isDienstleister: true },
+      {
+        title: "Einstellungen",
+        href: handbuchUrl("ArtikelEinstellungen"),
         id: "einstellungen",
         children: [
-          { title: "Schichtmodelle", href: "#" },
-          { title: "Zuschläge", href: "#" },
-          { title: "Kalender-Abo", href: "#" },
-          { title: "eigenes Logo", href: "#", isPremium: true },
+          { title: "Schichtmodelle", href: handbuchUrl("ArtikelEinstellungen") },
+          { title: "Zuschläge", href: handbuchUrl("ArtikelEinstellungen") },
+          { title: "Kalender-Abo", href: handbuchUrl("ArtikelEinstellungen") },
+          { title: "eigenes Logo", href: handbuchUrl("ArtikelEinstellungen"), isPremium: true },
         ]
       }
     ]
@@ -84,7 +94,7 @@ export function DocsHeader({ mobileMenuOpen, setMobileMenuOpen }: { mobileMenuOp
     <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-[var(--color-brand-hellblau)] bg-[var(--color-brand-white)] px-4 lg:px-8 shrink-0">
       <div className="flex items-center gap-4">
         {setMobileMenuOpen && (
-          <button 
+          <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="lg:hidden p-2 -ml-2 text-[var(--color-brand-dark)] handbuch-focus rounded-md hover:bg-[var(--color-brand-hellblau)]"
             aria-label="Menü umschalten"
@@ -92,7 +102,7 @@ export function DocsHeader({ mobileMenuOpen, setMobileMenuOpen }: { mobileMenuOp
             {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>
         )}
-        <a href="#" className="flex items-center gap-2 font-serif text-xl font-bold text-[var(--color-brand-dark)] handbuch-focus rounded">
+        <a href={handbuchUrl("Start")} className="flex items-center gap-2 font-serif text-xl font-bold text-[var(--color-brand-dark)] handbuch-focus rounded">
           <BookOpen className="h-6 w-6 text-[var(--color-brand-cyan)]" />
           AssistenzPlaner <span className="font-light hidden sm:inline">Handbuch</span>
         </a>
@@ -100,13 +110,13 @@ export function DocsHeader({ mobileMenuOpen, setMobileMenuOpen }: { mobileMenuOp
       <div className="flex items-center gap-4 lg:gap-6">
         <div className="relative hidden md:block w-64 lg:w-80">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input 
-            type="search" 
-            placeholder="Handbuch durchsuchen..." 
+          <input
+            type="search"
+            placeholder="Handbuch durchsuchen..."
             className="h-10 w-full rounded-full border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm text-[var(--color-brand-dark)] placeholder:text-slate-500 focus:border-[var(--color-brand-cyan)] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-cyan)]/20"
           />
         </div>
-        <a href="#" className="handbuch-link font-semibold handbuch-focus rounded hidden sm:inline-block px-2 py-1">
+        <a href={handbuchUrl("Start")} className="handbuch-link font-semibold handbuch-focus rounded hidden sm:inline-block px-2 py-1">
           Zur App
         </a>
       </div>
@@ -120,14 +130,14 @@ export function DocsSidebar({ activeId }: { activeId?: string }) {
       <div className="mb-8 md:hidden">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input 
-            type="search" 
-            placeholder="Suchen..." 
+          <input
+            type="search"
+            placeholder="Suchen..."
             className="h-10 w-full rounded-full border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm text-[var(--color-brand-dark)] focus:border-[var(--color-brand-cyan)] focus:bg-white focus:outline-none"
           />
         </div>
       </div>
-      
+
       {CHAPTERS.map((section, idx) => (
         <div key={idx} className="mb-8">
           <h4 className="mb-3 px-3 text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -136,8 +146,8 @@ export function DocsSidebar({ activeId }: { activeId?: string }) {
           <div className="space-y-1">
             {section.items.map((item, iIdx) => (
               <div key={iIdx}>
-                <a 
-                  href={item.href} 
+                <a
+                  href={item.href}
                   className={`handbuch-sidebar-link handbuch-focus ${item.id === activeId ? 'active' : ''}`}
                 >
                   <span className="flex-1">{item.title}</span>
@@ -146,8 +156,8 @@ export function DocsSidebar({ activeId }: { activeId?: string }) {
                 {item.children && (
                   <div className="ml-4 mt-1 space-y-1 border-l border-slate-200 pl-2">
                     {item.children.map((child, cIdx) => (
-                      <a 
-                        key={cIdx} 
+                      <a
+                        key={cIdx}
                         href={child.href}
                         className="handbuch-sidebar-link handbuch-focus text-[13px] py-1.5 flex items-center gap-2"
                       >
@@ -162,11 +172,11 @@ export function DocsSidebar({ activeId }: { activeId?: string }) {
           </div>
         </div>
       ))}
-      
+
       <div className="mt-8 rounded-xl bg-[var(--color-brand-hellblau)] p-4 border border-[var(--color-brand-cyan)]/20">
         <h4 className="font-bold text-[var(--color-brand-dark)] text-sm mb-2">Brauchen Sie Hilfe?</h4>
         <p className="text-xs text-slate-600 mb-3">Unser Support-Team ist für Sie da.</p>
-        <a href="#" className="inline-flex w-full justify-center items-center rounded-md bg-[var(--color-brand-white)] px-3 py-2 text-sm font-semibold text-[var(--color-brand-dark)] shadow-sm border border-slate-200 hover:border-[var(--color-brand-dark)] handbuch-focus transition-colors">
+        <a href={handbuchUrl("Start")} className="inline-flex w-full justify-center items-center rounded-md bg-[var(--color-brand-white)] px-3 py-2 text-sm font-semibold text-[var(--color-brand-dark)] shadow-sm border border-slate-200 hover:border-[var(--color-brand-dark)] handbuch-focus transition-colors">
           Kontakt aufnehmen
         </a>
       </div>

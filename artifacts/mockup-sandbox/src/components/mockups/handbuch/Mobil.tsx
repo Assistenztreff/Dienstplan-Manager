@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { ChevronRight, CalendarDays, BarChart3, Settings, Building2, Search, ArrowRight, X } from "lucide-react";
 import "./_group.css";
-import { DocsHeader, DocsSidebar, SeeAlsoLink } from "./_shared/Chrome";
+import { DocsHeader, DocsSidebar, SeeAlsoLink, handbuchUrl } from "./_shared/Chrome";
 import einstellungenMobilPng from "./_assets/einstellungen-mobil.png";
 
 export function Mobil() {
@@ -23,9 +23,9 @@ export function Mobil() {
       {/* Main Content behind the sheet, visibly pushed back or just under */}
       <main className={`flex-1 px-5 py-6 transition-opacity duration-300 overflow-y-auto ${mobileMenuOpen ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
         <nav className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500 mb-6 font-medium">
-          <a href="#" className="hover:text-[var(--color-brand-dark)]">Handbuch</a>
+          <a href={handbuchUrl("Start")} className="hover:text-[var(--color-brand-dark)]">Handbuch</a>
           <ChevronRight className="h-3 w-3" />
-          <a href="#" className="hover:text-[var(--color-brand-dark)]">Arbeitgeber</a>
+          <a href={handbuchUrl("Start")} className="hover:text-[var(--color-brand-dark)]">Arbeitgeber</a>
           <ChevronRight className="h-3 w-3" />
           <span className="text-[var(--color-brand-dark)] truncate">Zeiterfassung</span>
         </nav>
@@ -92,8 +92,8 @@ export function Mobil() {
 
           <h2 className="text-2xl mt-8 mb-4">Siehe auch</h2>
           <div className="flex flex-col gap-3 not-prose mb-8">
-            <SeeAlsoLink title="Einstellungen" href="#" icon={Settings} />
-            <SeeAlsoLink title="Auswertungen & Lohn" href="#" icon={BarChart3} />
+            <SeeAlsoLink title="Einstellungen" href={handbuchUrl("ArtikelEinstellungen")} icon={Settings} />
+            <SeeAlsoLink title="Auswertungen & Lohn" href={handbuchUrl("ArtikelAuswertungen")} icon={BarChart3} />
           </div>
         </article>
       </main>

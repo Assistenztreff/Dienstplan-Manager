@@ -1,7 +1,7 @@
 import React from "react";
 import { ChevronRight, Clock, CalendarOff } from "lucide-react";
 import "./_group.css";
-import { DocsHeader, DocsSidebar, SeeAlsoLink, PremiumBadge } from "./_shared/Chrome";
+import { DocsHeader, DocsSidebar, SeeAlsoLink, PremiumBadge, handbuchUrl } from "./_shared/Chrome";
 import auswertungenPng from "./_assets/auswertungen-desktop.png";
 
 export function ArtikelAuswertungen() {
@@ -15,9 +15,9 @@ export function ArtikelAuswertungen() {
 
         <main className="flex-1 min-w-0 px-6 py-8 md:px-12 lg:py-12">
           <nav className="flex items-center gap-2 text-sm text-slate-500 mb-8 font-medium">
-            <a href="#" className="hover:text-[var(--color-brand-dark)] handbuch-focus rounded px-1 -ml-1">Handbuch</a>
+            <a href={handbuchUrl("Start")} className="hover:text-[var(--color-brand-dark)] handbuch-focus rounded px-1 -ml-1">Handbuch</a>
             <ChevronRight className="h-4 w-4" />
-            <a href="#" className="hover:text-[var(--color-brand-dark)] handbuch-focus rounded px-1">Modul-Übersicht</a>
+            <a href={handbuchUrl("Start")} className="hover:text-[var(--color-brand-dark)] handbuch-focus rounded px-1">Modul-Übersicht</a>
             <ChevronRight className="h-4 w-4" />
             <span className="text-[var(--color-brand-dark)]">Auswertungen</span>
           </nav>
@@ -58,8 +58,8 @@ export function ArtikelAuswertungen() {
               Die Zahlen der Auswertung speisen sich aus diesen Bereichen:
             </p>
             <div className="grid sm:grid-cols-2 gap-4 not-prose">
-              <SeeAlsoLink title="Zeiterfassung" href="#" icon={Clock} />
-              <SeeAlsoLink title="Abwesenheiten" href="#" icon={CalendarOff} />
+              <SeeAlsoLink title="Zeiterfassung" href={handbuchUrl("Mobil")} icon={Clock} />
+              <SeeAlsoLink title="Abwesenheiten" href={handbuchUrl("ArtikelAbwesenheiten")} icon={CalendarOff} />
             </div>
           </article>
         </main>

@@ -6,9 +6,14 @@
 // bei Zahlungs-/Kundenstreitigkeiten belegbar, wann ein Konto auf Premium
 // bzw. zurueck auf Free gestellt wurde. Eintraege werden NIE geaendert oder
 // geloescht (Append-only-Historie).
+//
+// Indizes (#383):
+//   - account_id   → Filtern nach Konto (häufigster WHERE-Anker)
+//   - changed_by   → JOIN auf den ausfuehrenden Superadmin
+//   - created_at   → ORDER BY + Datumsbereichs-Filter
 // ---------------------------------------------------------------------------
 
-import { pgTable, serial, integer, timestamp, text } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, timestamp, text, index } from "drizzle-orm/pg-core";
 import { usersTable, planEnum } from "./users";
 
 export const planChangesTable = pgTable(
@@ -30,6 +35,11 @@ export const planChangesTable = pgTable(
       .references(() => usersTable.id),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
+  (t) => [
+    index("plan_changes_account_id_idx").on(t.accountId),
+    index("plan_changes_changed_by_idx").on(t.changedBy),
+    index("plan_changes_created_at_idx").on(t.createdAt),
+  ],
 );
 
 export type PlanChange = typeof planChangesTable.$inferSelect;

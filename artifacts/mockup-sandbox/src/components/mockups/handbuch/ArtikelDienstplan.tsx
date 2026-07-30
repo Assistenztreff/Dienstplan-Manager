@@ -1,7 +1,7 @@
 import React from "react";
 import { ChevronRight, CalendarDays, CalendarOff, Settings } from "lucide-react";
 import "./_group.css";
-import { DocsHeader, DocsSidebar, SeeAlsoLink } from "./_shared/Chrome";
+import { DocsHeader, DocsSidebar, SeeAlsoLink, handbuchUrl } from "./_shared/Chrome";
 import monatsansichtPng from "./_assets/dienstplan-monatsansicht-desktop.png";
 import dienstDialogPng from "./_assets/dienst-dialog-desktop.png";
 
@@ -19,9 +19,9 @@ export function ArtikelDienstplan() {
         <main className="flex-1 min-w-0 px-6 py-8 md:px-12 lg:py-12">
           {/* Breadcrumbs */}
           <nav className="flex items-center gap-2 text-sm text-slate-500 mb-8 font-medium">
-            <a href="#" className="hover:text-[var(--color-brand-dark)] handbuch-focus rounded px-1 -ml-1">Handbuch</a>
+            <a href={handbuchUrl("Start")} className="hover:text-[var(--color-brand-dark)] handbuch-focus rounded px-1 -ml-1">Handbuch</a>
             <ChevronRight className="h-4 w-4" />
-            <a href="#" className="hover:text-[var(--color-brand-dark)] handbuch-focus rounded px-1">Für private Arbeitgeber</a>
+            <a href={handbuchUrl("Start")} className="hover:text-[var(--color-brand-dark)] handbuch-focus rounded px-1">Für private Arbeitgeber</a>
             <ChevronRight className="h-4 w-4" />
             <span className="text-[var(--color-brand-dark)]">Dienstplan</span>
           </nav>
@@ -81,8 +81,8 @@ export function ArtikelDienstplan() {
               Der Dienstplan ist eng mit anderen Funktionen des AssistenzPlaners verzahnt. Hier finden Sie weiterführende Themen:
             </p>
             <div className="grid sm:grid-cols-2 gap-4 not-prose">
-              <SeeAlsoLink title="Krankheit & Urlaub verwalten" href="#" icon={CalendarOff} />
-              <SeeAlsoLink title="Schichtmodelle anlegen" href="#" icon={Settings} />
+              <SeeAlsoLink title="Krankheit & Urlaub verwalten" href={handbuchUrl("ArtikelAbwesenheiten")} icon={CalendarOff} />
+              <SeeAlsoLink title="Schichtmodelle anlegen" href={handbuchUrl("ArtikelEinstellungen")} icon={Settings} />
             </div>
           </article>
         </main>
