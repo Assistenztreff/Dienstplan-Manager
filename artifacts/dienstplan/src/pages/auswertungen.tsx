@@ -1,5 +1,5 @@
 import { isAdminRole } from "@/lib/roles";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   useGetHoursBalance,
   useListUsers,
@@ -33,6 +33,7 @@ import { hasAccess } from "@/lib/entitlements";
 import { PlanUpgradeLink } from "@/components/plan-limit-banner";
 import { useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 import { PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
+import { type HeaderTier, useIsMobileViewport, useHeaderTier } from "@/lib/header-tier";
 import { formatDays } from "@/lib/utils";
 import { MonthClosingCard, RecalculationSection, PayrollTotalsCard } from "@/components/month-closing";
 import { GesamtAuswertungMatrix } from "@/components/gesamt-auswertung-matrix";
@@ -42,10 +43,7 @@ function formatEur(n: number): string {
   return n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
 }
 
-// --- Kompakter Sticky-Header im Dienstplan-Stil ------------------------------
-// Gleiche Optik/Mechanik wie der Dienstplan-Header (Tier-Measurement:
-// labels → icons → stack), bewusst lokal dupliziert, damit der
-// Dienstplan-Header unverändert bleibt (Out-of-Scope der Angleichung).
+// --- Lokale Hilfsfunktionen --------------------------------------------------
 
 function usePersistentState<T extends string>(
   key: string,
@@ -108,65 +106,6 @@ function ViewToggle({
       })}
     </div>
   );
-}
-
-type HeaderTier = "labels" | "icons" | "stack";
-
-const MOBILE_STACK_QUERY = "(max-width: 639px)";
-
-function useIsMobileViewport() {
-  const [isMobile, setIsMobile] = useState<boolean>(() =>
-    typeof window !== "undefined" ? window.matchMedia(MOBILE_STACK_QUERY).matches : false,
-  );
-  useLayoutEffect(() => {
-    const mql = window.matchMedia(MOBILE_STACK_QUERY);
-    const onChange = () => setIsMobile(mql.matches);
-    onChange();
-    mql.addEventListener("change", onChange);
-    return () => mql.removeEventListener("change", onChange);
-  }, []);
-  return isMobile;
-}
-
-function useHeaderTier(contentKey: string, remeasureKey = "") {
-  const measureRef = useRef<HTMLDivElement | null>(null);
-  const isMobile = useIsMobileViewport();
-  const [tier, setTier] = useState<HeaderTier>("labels");
-  const tierRef = useRef<HeaderTier>(tier);
-  tierRef.current = tier;
-  const failedAt = useRef<{ labels: number; icons: number }>({ labels: 0, icons: 0 });
-
-  useLayoutEffect(() => {
-    failedAt.current = { labels: 0, icons: 0 };
-    setTier("labels");
-  }, [contentKey]);
-
-  useLayoutEffect(() => {
-    if (isMobile) return;
-    const el = measureRef.current;
-    if (!el) return;
-    const check = () => {
-      const t = tierRef.current;
-      const width = el.clientWidth;
-      if (width === 0) return;
-      if (t !== "stack" && el.scrollWidth > width + 1) {
-        failedAt.current[t] = Math.max(failedAt.current[t], width);
-        setTier(t === "labels" ? "icons" : "stack");
-        return;
-      }
-      if (t === "stack" && width > failedAt.current.icons + 48) {
-        setTier("icons");
-      } else if (t === "icons" && failedAt.current.labels > 0 && width > failedAt.current.labels + 48) {
-        setTier("labels");
-      }
-    };
-    check();
-    const ro = new ResizeObserver(check);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [tier, contentKey, remeasureKey, isMobile]);
-
-  return { measureRef, tier: isMobile ? ("stack" as const) : tier };
 }
 
 type AuswertungView = "matrix" | "cards";

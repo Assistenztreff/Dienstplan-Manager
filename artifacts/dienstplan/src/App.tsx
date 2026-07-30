@@ -1,6 +1,7 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
-import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApiError } from "@workspace/api-client-react";
+import { toast } from "sonner";
 import { resyncAuthAfter401 } from "@/context/auth";
 import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
@@ -56,6 +57,16 @@ import { Loader2 } from "lucide-react";
 let lastResyncAt = 0;
 const RESYNC_COOLDOWN_MS = 15_000;
 
+// Netzwerkfehler (fetch TypeError) von echten API-Fehlern unterscheiden.
+function isNetworkError(error: unknown): boolean {
+  return error instanceof TypeError;
+}
+
+// Deduplizierungs-Schlüssel, damit offline-Toasts nicht für jede Abfrage
+// einzeln erscheinen (nur eine Meldung alle 10 Sekunden).
+let lastOfflineToastAt = 0;
+const OFFLINE_TOAST_COOLDOWN_MS = 10_000;
+
 const queryClient: QueryClient = new QueryClient({
   queryCache: new QueryCache({
     onError: (error) => {
@@ -67,6 +78,33 @@ const queryClient: QueryClient = new QueryClient({
         lastResyncAt = now;
         void resync.then((ok) => {
           if (ok) void queryClient.invalidateQueries();
+        });
+        return;
+      }
+      // Netzwerkfehler: nur anzeigen, wenn das Banner noch nicht sichtbar ist
+      // (navigator.onLine true, aber API nicht erreichbar).
+      if (isNetworkError(error) && navigator.onLine) {
+        const now = Date.now();
+        if (now - lastOfflineToastAt < OFFLINE_TOAST_COOLDOWN_MS) return;
+        lastOfflineToastAt = now;
+        toast.info("Verbindung zum Server unterbrochen", {
+          description: "Bitte prüfen Sie Ihre Internetverbindung.",
+        });
+      }
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: (error) => {
+      // Netzwerkfehler bei Mutations: Das Offline-Banner zeigt bereits einen
+      // Hinweis wenn navigator.onLine===false. Kein zusätzlicher Toast nötig.
+      if (isNetworkError(error) && !navigator.onLine) return;
+      // Netzwerkfehler bei online (API nicht erreichbar): zentrale Meldung.
+      if (isNetworkError(error) && navigator.onLine) {
+        const now = Date.now();
+        if (now - lastOfflineToastAt < OFFLINE_TOAST_COOLDOWN_MS) return;
+        lastOfflineToastAt = now;
+        toast.info("Verbindung zum Server unterbrochen", {
+          description: "Bitte prüfen Sie Ihre Internetverbindung.",
         });
       }
     },

@@ -1,5 +1,5 @@
 import { isAdminRole } from "@/lib/roles";
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams, useLocation } from "wouter";
 import {
@@ -32,6 +32,7 @@ import {
   type PersonColorAssignment,
 } from "@/lib/shift-model-colors";
 import { hasAccess, getLimit } from "@/lib/entitlements";
+import { type HeaderTier, useIsMobileViewport, useHeaderTier } from "@/lib/header-tier";
 import { toast } from "sonner";
 import { useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 import {
@@ -560,6 +561,8 @@ function AgendaView({
   selectionMode = false,
   selectedDates,
   onToggleDate,
+  onPrevMonth,
+  onNextMonth,
 }: {
   days: Date[];
   shifts: Shift[];
@@ -571,10 +574,32 @@ function AgendaView({
   selectionMode?: boolean;
   selectedDates?: string[];
   onToggleDate?: (day: Date) => void;
+  /** Monatswechsel per Tastatur: ← / PageUp → vorheriger Monat */
+  onPrevMonth?: () => void;
+  /** Monatswechsel per Tastatur: → / PageDown → nächster Monat */
+  onNextMonth?: () => void;
 }) {
   const selectedDateSet = new Set(selectedDates ?? []);
   return (
-    <div className="space-y-1">
+    <div
+      className="space-y-1"
+      tabIndex={onPrevMonth || onNextMonth ? 0 : undefined}
+      aria-label="Monatsansicht — ArrowLeft/ArrowRight für Monatswechsel"
+      onKeyDown={
+        onPrevMonth || onNextMonth
+          ? (e) => {
+              if (e.key === "ArrowLeft" || e.key === "PageUp") {
+                e.preventDefault();
+                onPrevMonth?.();
+              } else if (e.key === "ArrowRight" || e.key === "PageDown") {
+                e.preventDefault();
+                onNextMonth?.();
+              }
+            }
+          : undefined
+      }
+      data-testid="agenda-view"
+    >
       {days.map((day) => {
         const dayShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), day));
         const isCurrentDay = isToday(day);
@@ -1008,65 +1033,6 @@ function ViewToggle({
       })}
     </div>
   );
-}
-
-type HeaderTier = "labels" | "icons" | "stack";
-
-const MOBILE_STACK_QUERY = "(max-width: 639px)";
-
-function useIsMobileViewport() {
-  const [isMobile, setIsMobile] = useState<boolean>(() =>
-    typeof window !== "undefined" ? window.matchMedia(MOBILE_STACK_QUERY).matches : false,
-  );
-  useLayoutEffect(() => {
-    const mql = window.matchMedia(MOBILE_STACK_QUERY);
-    const onChange = () => setIsMobile(mql.matches);
-    onChange();
-    mql.addEventListener("change", onChange);
-    return () => mql.removeEventListener("change", onChange);
-  }, []);
-  return isMobile;
-}
-
-function useHeaderTier(contentKey: string, remeasureKey = "") {
-  const measureRef = useRef<HTMLDivElement | null>(null);
-  const isMobile = useIsMobileViewport();
-  const [tier, setTier] = useState<HeaderTier>("labels");
-  const tierRef = useRef<HeaderTier>(tier);
-  tierRef.current = tier;
-  const failedAt = useRef<{ labels: number; icons: number }>({ labels: 0, icons: 0 });
-
-  useLayoutEffect(() => {
-    failedAt.current = { labels: 0, icons: 0 };
-    setTier("labels");
-  }, [contentKey]);
-
-  useLayoutEffect(() => {
-    if (isMobile) return;
-    const el = measureRef.current;
-    if (!el) return;
-    const check = () => {
-      const t = tierRef.current;
-      const width = el.clientWidth;
-      if (width === 0) return;
-      if (t !== "stack" && el.scrollWidth > width + 1) {
-        failedAt.current[t] = Math.max(failedAt.current[t], width);
-        setTier(t === "labels" ? "icons" : "stack");
-        return;
-      }
-      if (t === "stack" && width > failedAt.current.icons + 48) {
-        setTier("icons");
-      } else if (t === "icons" && failedAt.current.labels > 0 && width > failedAt.current.labels + 48) {
-        setTier("labels");
-      }
-    };
-    check();
-    const ro = new ResizeObserver(check);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [tier, contentKey, remeasureKey, isMobile]);
-
-  return { measureRef, tier: isMobile ? ("stack" as const) : tier };
 }
 
 function DienstplanHeader({
@@ -1707,6 +1673,8 @@ export default function Dienstplan() {
             selectionMode={isSelectionMode}
             selectedDates={selectedDates}
             onToggleDate={toggleDate}
+            onPrevMonth={prevMonth}
+            onNextMonth={nextMonth}
           />
         ) : (
           <MonthGrid
@@ -1753,7 +1721,20 @@ export default function Dienstplan() {
             onFocusDateHandled={() => setMonthGridFocusDate(null)}
           />
         ) : (
-          <Card className="w-full overflow-x-auto border-border/50 shadow-sm">
+          <Card
+            className="w-full overflow-x-auto border-border/50 shadow-sm"
+            tabIndex={0}
+            aria-label="Tabellenansicht — ArrowLeft/ArrowRight für Monatswechsel"
+            onKeyDown={(e) => {
+              if (e.key === "ArrowLeft" || e.key === "PageUp") {
+                e.preventDefault();
+                prevMonth();
+              } else if (e.key === "ArrowRight" || e.key === "PageDown") {
+                e.preventDefault();
+                nextMonth();
+              }
+            }}
+          >
             <table className="min-w-full table-fixed text-sm">
               <thead>
                 <tr className="h-px border-b bg-muted/50">

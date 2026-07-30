@@ -151,8 +151,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           storeSession(null);
         }
         return false;
-      } catch {
-        if (!cancelled) {
+      } catch (error) {
+        // Netzwerkfehler (TypeError bei fetch) bedeuten, dass der Nutzer offline
+        // ist oder der Server vorübergehend nicht erreichbar ist — in diesem Fall
+        // den angemeldeten Zustand NICHT leeren. Stattdessen bleibt der zuletzt
+        // bekannte Nutzer gesetzt und das OfflineBanner zeigt den Hinweis.
+        // Nur bei einem 4xx/5xx (kein TypeError) wird der Zustand geleert.
+        const isNetworkError = error instanceof TypeError;
+        if (!isNetworkError && !cancelled) {
           setCurrentUser(null);
           storeSession(null);
         }
