@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Download, Lock, Table2, LayoutGrid, Archive } from "lucide-react";
 import { MonthYearPicker } from "@/components/month-year-picker";
+import { PageStickyHeader } from "@/components/page-sticky-header";
 import type { LucideIcon } from "lucide-react";
 import {
   Select,
@@ -262,75 +263,27 @@ function AuswertungenHeader({
     </Button>
   );
 
-  const monthSwitcher = (
-    <div className={`flex items-center gap-0.5 ${stacked ? "min-w-0" : "shrink-0"}`}>
-      <Button
-        variant="ghost"
-        size="icon"
-        className={stacked ? "h-8 w-6 shrink-0" : "h-8 w-8"}
-        onClick={onPrevMonth}
-        aria-label="Vorheriger Monat"
-        data-testid="month-prev"
-      >
-        <ChevronLeft className="h-4 w-4" />
-      </Button>
-      <MonthYearPicker
-        month={month}
-        year={year}
-        onChange={onMonthSelect}
-        triggerClassName={
-          stacked
-            ? "min-w-0 truncate whitespace-nowrap text-center text-lg font-normal tracking-tight text-foreground"
-            : "whitespace-nowrap text-center text-sm font-medium md:text-base"
-        }
-      />
-      <Button
-        variant="ghost"
-        size="icon"
-        className={stacked ? "h-8 w-6 shrink-0" : "h-8 w-8"}
-        onClick={onNextMonth}
-        aria-label="Nächster Monat"
-        data-testid="month-next"
-      >
-        <ChevronRight className="h-4 w-4" />
-      </Button>
-    </div>
-  );
-
   return (
-    <div className="sticky top-0 z-40 -mx-4 -mt-4 mb-1 border-b border-border/40 bg-white/95 px-4 py-3 backdrop-blur md:-mx-6 md:-mt-6 md:px-6">
-      {stacked ? (
-        <div ref={measureRef} className="flex w-full flex-col gap-2.5">
-          <div className="flex w-full flex-nowrap items-center gap-2">
-            {title}
-            <div className="shrink">
-              <TeamSwitcher />
-            </div>
-            {assistantFilter && (
-              <div className="ml-auto w-full min-w-0 max-w-[190px] shrink">{assistantFilter}</div>
-            )}
-          </div>
-          <div className="flex w-full flex-nowrap items-center gap-1">
-            {viewToggle}
-            {exportButton}
-            {zipButton}
-            <div className="ml-auto flex min-w-0 items-center">{monthSwitcher}</div>
-          </div>
-        </div>
-      ) : (
-        <div ref={measureRef} className="flex w-full flex-nowrap items-center gap-2">
-          {title}
-          <TeamSwitcher />
-          {assistantFilter}
-          <div className="ml-auto flex flex-nowrap items-center gap-1.5">
-            {viewToggle}
-            {exportButton}
-            {zipButton}
-            {monthSwitcher}
-          </div>
-        </div>
-      )}
-    </div>
+    <PageStickyHeader
+      stacked={stacked}
+      measureRef={measureRef}
+      month={month}
+      year={year}
+      onMonthSelect={onMonthSelect}
+      onPrevMonth={onPrevMonth}
+      onNextMonth={onNextMonth}
+      prevMonthTestId="month-prev"
+      nextMonthTestId="month-next"
+      title={title}
+      assistantFilter={assistantFilter}
+      actions={
+        <>
+          {viewToggle}
+          {exportButton}
+          {zipButton}
+        </>
+      }
+    />
   );
 }
 
