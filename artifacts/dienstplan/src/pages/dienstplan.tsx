@@ -15,7 +15,7 @@ import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, Check, CheckSquare, X, CalendarPlus, Trash2, Pencil, ChevronDown, Users, Lock, Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, Check, CheckSquare, X, CalendarPlus, Trash2, Pencil, ChevronDown, Users, Lock, Download, MessageSquare } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ShiftDialog } from "@/components/shift-dialog";
 import { BulkDeleteDialog } from "@/components/bulk-delete-dialog";
@@ -23,6 +23,12 @@ import { BulkEditDialog } from "@/components/bulk-edit-dialog";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   buildPersonColorAssignment,
   userBadgeClass,
@@ -517,6 +523,24 @@ function ShiftBadge({
           Bestätigen
         </button>
       )}
+      {shift.notes && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                data-testid={`shift-note-icon-${shift.id}`}
+                className="mt-0.5 inline-flex items-center gap-0.5 text-[10px] opacity-70 cursor-default"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MessageSquare className="h-2.5 w-2.5 shrink-0" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-[240px] break-words text-xs">
+              {shift.notes}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
     </div>
   );
 }
@@ -645,14 +669,25 @@ function AgendaView({
             <div className="bg-card px-3 py-2 space-y-1.5">
               {dayShifts.length > 0 ? (
                 dayShifts.map((shift) => (
-                  <ShiftBadge
-                    key={shift.id}
-                    shift={shift}
-                    showName={canEdit}
-                    modelMap={modelMap}
-                    onClick={canEdit && !selectionMode ? (e) => { e.stopPropagation(); onShiftClick(shift); } : undefined}
-                    onConfirm={canEdit && !selectionMode ? onConfirmShift : undefined}
-                  />
+                  <div key={shift.id}>
+                    <ShiftBadge
+                      shift={shift}
+                      showName={canEdit}
+                      modelMap={modelMap}
+                      onClick={canEdit && !selectionMode ? (e) => { e.stopPropagation(); onShiftClick(shift); } : undefined}
+                      onConfirm={canEdit && !selectionMode ? onConfirmShift : undefined}
+                    />
+                    {shift.notes && (
+                      <p
+                        data-testid={`agenda-shift-note-${shift.id}`}
+                        className="mt-0.5 px-1 text-[11px] text-muted-foreground leading-snug"
+                      >
+                        {shift.notes.length > 80
+                          ? shift.notes.slice(0, 80) + "…"
+                          : shift.notes}
+                      </p>
+                    )}
+                  </div>
                 ))
               ) : (
                 <p className="text-xs text-muted-foreground">

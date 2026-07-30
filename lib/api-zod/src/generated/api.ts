@@ -380,6 +380,8 @@ export const ListShiftsResponse = zod.array(ListShiftsResponseItem)
 /**
  * @summary Schicht anlegen
  */
+export const createShiftBodyNotesMax = 500;
+
 export const createShiftBodyPauseMinutesMin = 0;
 export const createShiftBodyPauseMinutesMax = 1440;
 
@@ -393,7 +395,7 @@ export const CreateShiftBody = zod.object({
   "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team', 'kind_krank', 'freistellung', 'abgesagt_ag', 'abgesagt_an', 'urlaubsabgeltung']),
   "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX']).optional().describe('Optionaler Planungsstatus (Default FIX): VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.'),
   "shiftModelId": zod.number().nullish(),
-  "notes": zod.string().optional(),
+  "notes": zod.string().max(createShiftBodyNotesMax).optional().describe('Optionale Notiz \/ Kommentar zur Schicht (max. 500 Zeichen).'),
   "einsatzTeamId": zod.number().nullish().describe('Aushilfe-Einsatz: ID eines anderen eigenen Teams, für das der Einsatz erfolgt. Muss ein erlaubtes Team des Aufrufers sein und darf nicht das Team der Schicht selbst sein; bei Abwesenheiten nicht erlaubt.'),
   "isVertretung": zod.boolean().optional().describe('Vertretung: Arbeitsdienst als kurzfristige Vertretung markieren (nur für Arbeitsdienste; bei Abwesenheiten\/Team-Einträgen serverseitig zurückgesetzt).'),
   "pauseMinutes": zod.number().min(createShiftBodyPauseMinutesMin).max(createShiftBodyPauseMinutesMax).optional().describe('Unbezahlte Pausenminuten (Info-Kennzahl; reduziert NICHT die gewerteten Stunden).')
@@ -455,6 +457,8 @@ export const UpdateShiftParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const updateShiftBodyNotesMax = 500;
+
 export const updateShiftBodyPauseMinutesMin = 0;
 export const updateShiftBodyPauseMinutesMax = 1440;
 
@@ -467,7 +471,7 @@ export const UpdateShiftBody = zod.object({
   "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team', 'kind_krank', 'freistellung', 'abgesagt_ag', 'abgesagt_an', 'urlaubsabgeltung']).optional(),
   "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX']).optional().describe('Planungsstatus: VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt.'),
   "shiftModelId": zod.number().nullish(),
-  "notes": zod.string().nullish(),
+  "notes": zod.string().max(updateShiftBodyNotesMax).nullish().describe('Notiz \/ Kommentar setzen oder mit null löschen (max. 500 Zeichen).'),
   "einsatzTeamId": zod.number().nullish().describe('Aushilfe-Einsatz setzen oder mit null entfernen. Gleiche Regeln wie beim Anlegen (eigenes anderes Team, keine Abwesenheiten).'),
   "isVertretung": zod.boolean().optional().describe('Vertretung setzen\/entfernen (nur für Arbeitsdienste; bei Abwesenheiten\/Team-Einträgen serverseitig zurückgesetzt).'),
   "pauseMinutes": zod.number().min(updateShiftBodyPauseMinutesMin).max(updateShiftBodyPauseMinutesMax).optional().describe('Unbezahlte Pausenminuten (Info-Kennzahl; reduziert NICHT die gewerteten Stunden).')

@@ -19,6 +19,10 @@ export interface ShiftInput {
   planningStatus?: ShiftInputPlanningStatus;
   /** @nullable */
   shiftModelId?: number | null;
+  /**
+     * Optionale Notiz / Kommentar zur Schicht (max. 500 Zeichen).
+     * @maxLength 500
+     */
   notes?: string;
   /**
      * Aushilfe-Einsatz: ID eines anderen eigenen Teams, für das der Einsatz erfolgt. Muss ein erlaubtes Team des Aufrufers sein und darf nicht das Team der Schicht selbst sein; bei Abwesenheiten nicht erlaubt.

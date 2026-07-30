@@ -2288,6 +2288,8 @@ components:
           type: ["integer", "null"]
         notes:
           type: string
+          maxLength: 500
+          description: Optionale Notiz / Kommentar zur Schicht (max. 500 Zeichen).
         einsatzTeamId:
           type: ["integer", "null"]
           description: >-
@@ -2338,6 +2340,8 @@ components:
           type: ["integer", "null"]
         notes:
           type: ["string", "null"]
+          maxLength: 500
+          description: Notiz / Kommentar setzen oder mit null löschen (max. 500 Zeichen).
         einsatzTeamId:
           type: ["integer", "null"]
           description: >-

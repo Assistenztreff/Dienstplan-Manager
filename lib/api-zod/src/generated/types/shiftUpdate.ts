@@ -18,7 +18,11 @@ export interface ShiftUpdate {
   planningStatus?: ShiftUpdatePlanningStatus;
   /** @nullable */
   shiftModelId?: number | null;
-  /** @nullable */
+  /**
+     * Notiz / Kommentar setzen oder mit null löschen (max. 500 Zeichen).
+     * @maxLength 500
+     * @nullable
+     */
   notes?: string | null;
   /**
      * Aushilfe-Einsatz setzen oder mit null entfernen. Gleiche Regeln wie beim Anlegen (eigenes anderes Team, keine Abwesenheiten).

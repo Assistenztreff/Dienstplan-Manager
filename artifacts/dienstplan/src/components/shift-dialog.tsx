@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -48,6 +49,8 @@ import { readableApiError, planUpgradeMessage } from "@/lib/api-error";
 import { warnIfMonthClosed } from "@/lib/month-closing-warning";
 import { computeAutoPauseMinutes } from "@/lib/pause";
 import { useTeam } from "@/context/team";
+import { useAuth } from "@/context/auth";
+import { isAdminRole } from "@/lib/roles";
 
 type Assistant = { id: number; name: string };
 
@@ -252,6 +255,8 @@ export function ShiftDialog({
   // Aushilfe-Einsatz: nur für Dienstleister mit mehreren Teams relevant —
   // wählbar sind alle EIGENEN Teams außer dem aktuell angezeigten (teamId).
   const { teams } = useTeam();
+  const { currentUser } = useAuth();
+  const isAdminUser = isAdminRole(currentUser?.role);
   const einsatzTeams = teams.filter((t) => t.id !== teamId);
 
   const allModels = models ?? [];
@@ -518,6 +523,9 @@ export function ShiftDialog({
       // Identische Start-/Endzeit ist erlaubt und bedeutet ein 24h-Dienst
       // (Ende am Folgetag); eine kleinere Endzeit bedeutet "endet am Folgetag"
       // (Nachtdienst über Mitternacht). Beides wird in handleSave aufgelöst.
+    }
+    if (form.notes.length > 500) {
+      errs.notes = `Notiz darf maximal 500 Zeichen lang sein (aktuell ${form.notes.length}).`;
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -1332,14 +1340,25 @@ export function ShiftDialog({
             </div>
           )}
 
-          {/* Hinweise */}
+          {/* Notiz / Kommentar */}
           <div className="space-y-1.5">
-            <Label>Hinweise</Label>
-            <Input
+            <div className="flex items-center justify-between">
+              <Label>Notiz / Kommentar</Label>
+              {isAdminUser && (
+                <span className={`text-xs tabular-nums ${form.notes.length > 500 ? "text-destructive font-medium" : "text-muted-foreground"}`}>
+                  {form.notes.length}/500
+                </span>
+              )}
+            </div>
+            <Textarea
               data-testid="shift-dialog-notes"
               value={form.notes}
               onChange={(e) => set("notes", e.target.value)}
-              placeholder="Optional"
+              placeholder={isAdminUser ? "Optional – interne Notiz zur Schicht" : ""}
+              maxLength={600}
+              rows={2}
+              disabled={!isAdminUser}
+              className={!isAdminUser ? "resize-none opacity-70" : "resize-none"}
             />
             {errors.notes && <p className="text-xs text-destructive">{errors.notes}</p>}
           </div>
