@@ -71,6 +71,11 @@ test.beforeAll(async () => {
   expect(userRes.status(), "Assistent anlegen").toBe(201);
   assistantId = ((await userRes.json()) as { id: number }).id;
 
+  // Stundenlohn setzen, damit surchargePay = sundaySurchargeHours × hourlyWage > 0.
+  await acc.ctx.patch(`/api/users/${assistantId}`, {
+    data: { hourlyWage: 15 },
+  });
+
   await acc.ctx.post("/api/contracts", {
     data: {
       userId: assistantId,
@@ -116,7 +121,7 @@ async function createShift(type: string): Promise<number> {
 /** hours-balance für den aktuellen Monat lesen. */
 async function getBalance(): Promise<Record<string, number>> {
   const res = await acc.ctx.get(
-    `/api/hours-balance?month=${MONTH}&year=${YEAR}&userId=${assistantId}`,
+    `/api/dashboard/hours-balance?month=${MONTH}&year=${YEAR}&userId=${assistantId}`,
   );
   expect(res.status(), `hours-balance (${res.status()}): ${await res.text()}`).toBe(200);
   const rows = (await res.json()) as Array<Record<string, number>>;
