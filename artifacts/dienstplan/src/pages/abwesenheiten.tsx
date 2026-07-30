@@ -28,8 +28,8 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Plane, Stethoscope, Info } from "lucide-react";
-import { eachDayOfInterval, format } from "date-fns";
+import { Plus, Trash2, Plane, Stethoscope, Info, ChevronLeft, ChevronRight } from "lucide-react";
+import { eachDayOfInterval, format, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
 import { de } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { planUpgradeMessage, readableApiError, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
@@ -182,6 +182,23 @@ export default function Abwesenheiten() {
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+
+  // Schneller Monatssprung: Navigiert Von/Bis-Datum auf den gesamten Monat.
+  const [currentNavMonth, setCurrentNavMonth] = useState<Date>(() => startOfMonth(new Date()));
+
+  function goToPrevMonth() {
+    const newMonth = subMonths(currentNavMonth, 1);
+    setCurrentNavMonth(newMonth);
+    setFrom(format(startOfMonth(newMonth), "yyyy-MM-dd"));
+    setTo(format(endOfMonth(newMonth), "yyyy-MM-dd"));
+  }
+
+  function goToNextMonth() {
+    const newMonth = addMonths(currentNavMonth, 1);
+    setCurrentNavMonth(newMonth);
+    setFrom(format(startOfMonth(newMonth), "yyyy-MM-dd"));
+    setTo(format(endOfMonth(newMonth), "yyyy-MM-dd"));
+  }
   const [saving, setSaving] = useState(false);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
 
@@ -345,6 +362,41 @@ export default function Abwesenheiten() {
         <p className="text-muted-foreground mt-1 text-sm">
           Urlaub und Krankheit als Zeitraum erfassen und verwalten
         </p>
+      </div>
+
+      {/* Schneller Monatssprung: Setzt Von/Bis auf den gesamten gewählten Monat. */}
+      <div
+        className="flex items-center justify-between gap-2"
+        data-testid="absence-month-nav"
+      >
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={goToPrevMonth}
+          className="gap-1.5"
+          data-testid="absence-prev-month"
+          aria-label="Vorheriger Monat"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          <span className="hidden sm:inline">Vorheriger Monat</span>
+        </Button>
+        <span
+          className="text-base font-semibold tabular-nums"
+          data-testid="absence-month-label"
+        >
+          {format(currentNavMonth, "MMMM yyyy", { locale: de })}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={goToNextMonth}
+          className="gap-1.5"
+          data-testid="absence-next-month"
+          aria-label="Nächster Monat"
+        >
+          <span className="hidden sm:inline">Nächster Monat</span>
+          <ChevronRight className="h-4 w-4" />
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
