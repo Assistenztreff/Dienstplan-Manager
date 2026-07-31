@@ -58,7 +58,8 @@ async function main() {
   console.log(`  ID:       ${result.rows[0].id}`);
   console.log(`  Name:     ${name}`);
   console.log(`  E-Mail:   ${email}`);
-  console.log(`  Passwort: ${password}`);
+  console.log(`  Passwort: ${"*".repeat(password.length)} (über ADMIN_PASSWORD gesetzt oder Standardwert)`);
+  console.warn(`\nSICHERHEIT: Das Passwort wird nicht angezeigt. Bitte das Passwort nach dem ersten Login sofort ändern.`);
   console.log(`\nBitte das Passwort nach dem ersten Login ändern.`);
 
   await client.end();
