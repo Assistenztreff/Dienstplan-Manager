@@ -63,13 +63,13 @@ const PLATFORM_LINKS = [
 // - Klick/Fokus: zusätzlich ein dicker dunkelblauer Rahmen mit Abstand um das
 //   gelbe Kästchen (Barrierefreiheits-Hilfe).
 const PLATFORM_LINK_CLASSES =
-  "items-center rounded-full border border-transparent px-4 text-base font-semibold underline decoration-1 underline-offset-4 transition-colors hover:border-brand-dark hover:bg-brand-yellow hover:no-underline active:border-brand-dark active:bg-brand-yellow active:no-underline active:outline active:outline-[3px] active:outline-offset-2 active:outline-brand-dark focus-visible:border-brand-dark focus-visible:bg-brand-yellow focus-visible:no-underline focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark";
+  "items-center rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-dark underline decoration-1 underline-offset-4 transition-colors hover:border hover:border-brand-dark hover:bg-brand-yellow hover:no-underline active:border active:border-brand-dark active:bg-brand-yellow active:no-underline active:outline active:outline-[3px] active:outline-offset-5 active:outline-brand-dark focus-visible:border focus-visible:border-brand-dark focus-visible:bg-brand-yellow focus-visible:no-underline focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-5 focus-visible:outline-brand-dark";
 
 // Pillen-Button rechts (Registrieren bzw. Logout): dunkelblau, weiße Schrift;
 // Hover/Tap = gelb mit dunkler Schrift und dünnem dunkelblauem Rahmen;
 // Klick/Fokus = zusätzlich dicker dunkelblauer Rahmen mit Abstand.
 const PLATFORM_PILL_CLASSES =
-  "flex h-9 items-center rounded-full border border-brand-dark bg-brand-dark px-5 text-sm font-semibold text-brand-white shadow-sm transition-colors hover:bg-brand-yellow hover:text-brand-dark active:bg-brand-yellow active:text-brand-dark active:outline active:outline-[3px] active:outline-offset-2 active:outline-brand-dark focus-visible:bg-brand-yellow focus-visible:text-brand-dark focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark";
+  "flex h-8 items-center rounded-full border border-brand-dark bg-brand-dark px-5 text-sm font-semibold text-brand-white shadow-sm transition-colors hover:bg-brand-yellow hover:text-brand-dark active:bg-brand-yellow active:text-brand-dark active:outline active:outline-[3px] active:outline-offset-5 active:outline-brand-dark focus-visible:bg-brand-yellow focus-visible:text-brand-dark focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark";
 
 export function PlatformHeaderPlaceholder() {
   const { currentUser, logout } = useAuth();
@@ -128,7 +128,7 @@ export function PlatformHeaderPlaceholder() {
                 <Link
                   key={label}
                   href={href}
-                  className={`flex h-12 ${PLATFORM_LINK_CLASSES}`}
+                  className="flex h-6 items-center rounded-lg px-3 py-1.5 font-semibold text-brand-dark underline decoration-1 underline-offset-4 transition-colors hover:border hover:border-brand-dark hover:bg-brand-yellow hover:no-underline active:border active:border-brand-dark active:bg-brand-yellow active:no-underline active:outline-[3px] active:outline-offset-5 active:outline-brand-dark focus-visible:border focus-visible:border-brand-dark focus-visible:bg-brand-yellow focus-visible:no-underline focus-visible:outline-[3px] focus-visible:outline-offset-5 focus-visible:outline-brand-dark text-lg"
                 >
                   {label}
                 </Link>
@@ -138,7 +138,7 @@ export function PlatformHeaderPlaceholder() {
                   href={href}
                   target="_blank"
                   rel="noreferrer"
-                  className={`flex h-12 ${PLATFORM_LINK_CLASSES}`}
+                  className="flex h-6 items-center rounded-lg px-3 py-1.5 font-semibold text-brand-dark underline decoration-1 underline-offset-4 transition-colors hover:border hover:border-brand-dark hover:bg-brand-yellow hover:no-underline active:border active:border-brand-dark active:bg-brand-yellow active:no-underline active:outline-[3px] active:outline-offset-5 active:outline-brand-dark focus-visible:border focus-visible:border-brand-dark focus-visible:bg-brand-yellow focus-visible:no-underline focus-visible:outline-[3px] focus-visible:outline-offset-5 focus-visible:outline-brand-dark text-lg"
                 >
                   {label}
                 </a>
@@ -154,7 +154,7 @@ export function PlatformHeaderPlaceholder() {
                   AssistenzTreff). Darunter uebernimmt der Hamburger. */}
               <Link
                 href="/einstellungen"
-                className={`hidden h-12 md:flex ${PLATFORM_LINK_CLASSES}`}
+                className="hidden h-12 md:flex items-center rounded-lg px-3 py-1.5 font-semibold text-brand-dark underline decoration-1 underline-offset-4 transition-colors hover:border hover:border-brand-dark hover:bg-brand-yellow hover:no-underline active:border active:border-brand-dark active:bg-brand-yellow active:no-underline active:outline-[3px] active:outline-offset-5 active:outline-brand-dark focus-visible:border focus-visible:border-brand-dark focus-visible:bg-brand-yellow focus-visible:no-underline focus-visible:outline-[3px] focus-visible:outline-offset-5 focus-visible:outline-brand-dark text-lg"
                 data-testid="platform-header-profil"
               >
                 Profil
@@ -163,7 +163,7 @@ export function PlatformHeaderPlaceholder() {
                 type="button"
                 onClick={() => void handleLogout()}
                 disabled={loggingOut}
-                className={`ml-1 hidden sm:ml-2 md:flex ${PLATFORM_PILL_CLASSES}`}
+                className="ml-1 sm:ml-2 md:flex flex h-9 items-center rounded-full border border-brand-dark bg-brand-dark px-5 font-semibold text-brand-white shadow-sm transition-colors hover:bg-brand-yellow hover:text-brand-dark active:bg-brand-yellow active:text-brand-dark active:outline-[3px] active:outline-offset-5 active:outline-brand-dark focus-visible:bg-brand-yellow focus-visible:text-brand-dark focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark text-lg pl-[20px] pr-[20px] pt-[0px] pb-[0px]"
                 data-testid="platform-header-logout"
               >
                 {loggingOut ? "Wird abgemeldet..." : "Logout"}
@@ -199,14 +199,14 @@ export function PlatformHeaderPlaceholder() {
             <>
               <Link
                 href="/login"
-                className={`hidden h-12 sm:flex ${PLATFORM_LINK_CLASSES}`}
+                className="hidden h-12 sm:flex items-center rounded-lg px-3 py-1.5 font-semibold text-brand-dark underline decoration-1 underline-offset-4 transition-colors hover:border hover:border-brand-dark hover:bg-brand-yellow hover:no-underline active:border active:border-brand-dark active:bg-brand-yellow active:no-underline active:outline-[3px] active:outline-offset-5 active:outline-brand-dark focus-visible:border focus-visible:border-brand-dark focus-visible:bg-brand-yellow focus-visible:no-underline focus-visible:outline-[3px] focus-visible:outline-offset-5 focus-visible:outline-brand-dark text-lg"
                 data-testid="platform-header-login"
               >
                 Login
               </Link>
               <Link
                 href="/registrierung"
-                className={`ml-1 sm:ml-2 ${PLATFORM_PILL_CLASSES}`}
+                className="ml-1 sm:ml-2 flex h-8 items-center rounded-full border border-brand-dark bg-brand-dark px-5 font-semibold text-brand-white shadow-sm transition-colors hover:bg-brand-yellow hover:text-brand-dark active:bg-brand-yellow active:text-brand-dark active:outline-[3px] active:outline-offset-5 active:outline-brand-dark focus-visible:bg-brand-yellow focus-visible:text-brand-dark focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark text-lg"
                 data-testid="platform-header-registrieren"
               >
                 Registrieren

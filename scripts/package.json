@@ -17,6 +17,7 @@
     "seed-platform-errors": "tsx ./src/seed-platform-errors.ts",
     "cleanup-test-accounts": "tsx ./src/cleanup-test-accounts.ts",
     "cleanup-test-platform-errors": "tsx ./src/cleanup-test-platform-errors.ts",
+    "anonymize-staging": "tsx ./src/anonymize-staging.ts",
     "migrate-teams": "tsx ./src/migrate-teams.ts",
     "migrate-prod": "tsx ./src/migrate-prod.ts",
     "pre-push-sql": "tsx ./src/pre-push-sql.ts",
