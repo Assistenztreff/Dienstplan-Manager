@@ -14,5 +14,13 @@
   "devDependencies": {
     "prettier": "^3.8.3",
     "typescript": "~5.9.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "brace-expansion": ">=5.0.8",
+      "fast-uri": ">=3.1.4",
+      "linkify-it": ">=5.0.2",
+      "postcss": ">=8.5.18"
+    }
   }
 }
