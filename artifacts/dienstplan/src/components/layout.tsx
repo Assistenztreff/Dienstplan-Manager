@@ -206,7 +206,7 @@ export function PlatformHeaderPlaceholder() {
               </Link>
               <Link
                 href="/registrierung"
-                className="ml-1 sm:ml-2 flex h-8 items-center rounded-full border border-brand-dark bg-brand-dark px-5 font-semibold text-brand-white shadow-sm transition-colors hover:bg-brand-yellow hover:text-brand-dark active:bg-brand-yellow active:text-brand-dark active:outline-[3px] active:outline-offset-5 active:outline-brand-dark focus-visible:bg-brand-yellow focus-visible:text-brand-dark focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark text-lg"
+                className="ml-1 sm:ml-2 flex h-9 items-center rounded-full border border-brand-dark bg-brand-dark px-5 font-semibold text-brand-white shadow-sm transition-colors hover:bg-brand-yellow hover:text-brand-dark active:bg-brand-yellow active:text-brand-dark active:outline-[3px] active:outline-offset-5 active:outline-brand-dark focus-visible:bg-brand-yellow focus-visible:text-brand-dark focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark text-lg"
                 data-testid="platform-header-registrieren"
               >
                 Registrieren
