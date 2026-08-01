@@ -4,6 +4,8 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
 
 ## User preferences
 
+- **DESIGN-GUIDELINES.md** (Repo-Root) ist die verbindliche Quelle für Tonalität, feste Begriffe, UI-Textregeln und das Barrierefreiheits-Farbsystem. Bei jeder Aufgabe mit sichtbaren Texten oder UI-Elementen ZUERST dort nachschlagen, bevor Text oder Farben festgelegt werden. Die Datei muss noch vom Auftraggeber befüllt werden — bis dahin gilt die bestehende Memory-Notiz `accessible-color-system.md` für Farbentscheidungen.
+
 - **Kosteneffizient & ressourcenschonend arbeiten** — Kosten-/Zeitverbrauch ist dem Auftraggeber genauso wichtig wie fertiger Code:
   - Größere Änderungen erst kurz skizzieren und bestätigen lassen (Plan-/Discuss-Modus), dann bauen; kleine, klar abgegrenzte Schritte statt mehrerer Features gleichzeitig.
   - Keine kompletten Test-Suiten/E2E-Läufe „just in case" — nur gezielt die Tests der aktuellen Änderung. Kostenintensive Vorgänge (voller E2E-Lauf, Deployment, DB-Neuaufbau, große Rebuilds) vorher ankündigen; bei Unsicherheit nachfragen statt automatisch ausführen.

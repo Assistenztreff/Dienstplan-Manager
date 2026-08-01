@@ -73,6 +73,7 @@
 - [TeamSwitcher auto-select](team-switcher-auto-select.md) — no "Alle Teams"; dienstleister e2e fixtures must live in the FIRST team or specs switch explicitly; first load fires one unscoped fetch.
 - [Header tier measurement](header-tier-measurement.md) — narrower toggle states use a remeasureKey (never reset to labels); no min-w-0 wrapper around min-width selects or overlap replaces measurable overflow.
 - [Barrierefreies Farbsystem](accessible-color-system.md) — assistenz-Palette/getBarrierefreieFarbe sind die zentrale Farbquelle; text-primary (Hellgelb) nie als Textfarbe; Abwesenheiten nicht aus Personen-Palette.
+- [DESIGN-GUIDELINES Pflicht](design-guidelines-lookup.md) — DESIGN-GUIDELINES.md im Repo-Root ist verbindlich für Tonalität, Begriffe, UI-Text und Farbsystem; vor jedem UI-Auftrag lesen.
 - [Vacation guard vs. multi-team contracts](vacation-contract-team-scope.md) — vacation coverage is team-scoped, but booking picks the latest-startDate contract user-globally; fixtures need in-team contracts.
 - [Codegen-Drift-Guard per Fingerprint](codegen-drift-guard-fingerprint.md) — Guards über generierte Verzeichnisse via Vorher/Nachher-Hash, nie git diff (uncommitted ≠ Drift; index.lock killt git).
 - [drizzle push missing FKs](drizzle-push-missing-fks.md) — non-interactive push can create a table without its FK constraints (guard fails); repair via idempotent ALTER TABLE, re-push won't fix it.
