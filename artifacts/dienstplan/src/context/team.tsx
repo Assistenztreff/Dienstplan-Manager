@@ -7,7 +7,17 @@ type Team = { id: number; name: string };
 
 type TeamContextType = {
   teams: Team[];
+  /**
+   * true für Dienstleister-Admins (eigene Teams) UND für Teamleiter (zugewiesene
+   * Teams). Steuert die Sichtbarkeit des Team-Switchers und die Team-Scoping-Logik.
+   */
   isDienstleister: boolean;
+  /**
+   * true wenn der Nutzer ausschließlich als Teamleiter agiert (keine eigenen Teams,
+   * nur zugewiesene). Ermöglicht differenzierte UI-Entscheidungen (z.B. kein
+   * "Team anlegen"-Button).
+   */
+  isTeamleiterOnly: boolean;
   hasTeams: boolean;
   selectedTeamId: number | null;
   setSelectedTeamId: (id: number | null) => void;
@@ -26,6 +36,7 @@ const STORAGE_KEY = "dienstplan.selectedTeamId";
 const TeamContext = createContext<TeamContextType>({
   teams: [],
   isDienstleister: false,
+  isTeamleiterOnly: false,
   hasTeams: false,
   selectedTeamId: null,
   setSelectedTeamId: () => {},
@@ -41,11 +52,17 @@ function readStored(): number | null {
 
 export function TeamProvider({ children }: { children: React.ReactNode }) {
   const { currentUser } = useAuth();
-  const isDienstleister =
+  const isActualDienstleister =
     isAdminRole(currentUser?.role) && currentUser?.accountType === "dienstleister";
+  // Teamleiter sind Nutzer mit is_teamleiter=true (kann assistant ODER admin sein,
+  // aber nicht der Eigentümer eines eigenen Mandanten).
+  const isTeamleiterUser = currentUser?.isTeamleiter === true && !isActualDienstleister;
+
+  // Beide Gruppen bekommen den Team-Switcher und die Team-Scoping-Logik.
+  const showTeamSwitcher = isActualDienstleister || isTeamleiterUser;
 
   const { data: teamsData, isLoading: teamsLoading } = useListTeams({
-    query: { enabled: !!isDienstleister },
+    query: { enabled: !!showTeamSwitcher },
   } as Parameters<typeof useListTeams>[0]);
 
   const teams = useMemo(() => ((teamsData ?? []) as Team[]), [teamsData]);
@@ -58,12 +75,12 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
     else localStorage.setItem(STORAGE_KEY, String(id));
   };
 
-  // Auswahl bereinigen: kein Dienstleister (mehr) → keine Team-Auswahl.
-  // Für Dienstleister mit Teams gibt es KEINEN "Alle Teams"-Zustand mehr —
-  // fehlt eine (gültige) Auswahl (Erstnutzung, gewähltes Team gelöscht),
-  // wird automatisch das erste eigene Team gewählt.
+  // Auswahl bereinigen: kein Team-Switcher-Nutzer (mehr) → keine Team-Auswahl.
+  // Für Dienstleister und Teamleiter mit Teams gibt es KEINEN "Alle Teams"-Zustand
+  // mehr — fehlt eine (gültige) Auswahl (Erstnutzung, gewähltes Team gelöscht),
+  // wird automatisch das erste Team gewählt.
   useEffect(() => {
-    if (!isDienstleister) {
+    if (!showTeamSwitcher) {
       if (selectedTeamId !== null) setSelectedTeamId(null);
       return;
     }
@@ -72,14 +89,14 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
       setSelectedTeamId(teams[0].id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDienstleister, teams, selectedTeamId]);
+  }, [showTeamSwitcher, teams, selectedTeamId]);
 
-  // Scope settled? Nicht-Dienstleister: sofort (immer Konto-Scope). Dienst-
-  // leister: Teams geladen und — falls Teams existieren — die Auto-Auswahl
+  // Scope settled? Kein Switcher-Nutzer: sofort (immer Konto-Scope). Switcher-
+  // Nutzer: Teams geladen und — falls Teams existieren — die Auto-Auswahl
   // bereits auf ein gültiges Team gezeigt (der Effekt oben läuft einen Render
   // später; bis dahin gilt der Scope als "noch nicht bereit").
   const isTeamScopeReady =
-    !isDienstleister ||
+    !showTeamSwitcher ||
     (!teamsLoading &&
       (teams.length === 0 ||
         (selectedTeamId !== null && teams.some((t) => t.id === selectedTeamId))));
@@ -88,9 +105,10 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
     <TeamContext.Provider
       value={{
         teams,
-        isDienstleister: !!isDienstleister,
+        isDienstleister: !!showTeamSwitcher,
+        isTeamleiterOnly: isTeamleiterUser,
         hasTeams: teams.length > 0,
-        selectedTeamId: isDienstleister ? selectedTeamId : null,
+        selectedTeamId: showTeamSwitcher ? selectedTeamId : null,
         setSelectedTeamId,
         isTeamScopeReady,
       }}

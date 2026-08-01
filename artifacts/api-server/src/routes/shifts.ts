@@ -21,11 +21,13 @@ import {
   UpdateShiftBody,
   DeleteShiftParams,
 } from "@workspace/api-zod";
-import { requireAuth, requireAdmin } from "../middleware/auth";
+import { requireAuth, requireAdmin, requireTeamleiterOrAdmin, isAdminLikeRole } from "../middleware/auth";
 import {
   resolveReadTeamScope,
   resolveWriteTeamId,
   getAllowedTeamIds,
+  getEffectiveAdminTeamIds,
+  getTeamleiterTeamIds,
   parseTeamIdParam,
   isUserMemberOfTeam,
   isShiftModelInTeam,
@@ -520,10 +522,21 @@ router.get("/shifts", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const effectiveUserId =
-    req.session.role === "assistant" ? req.session.userId! : query.data.userId;
+  // Teamleiter (assistant-Rolle, aber is_teamleiter=true) erhalten Admin-Sicht
+  // auf alle Schichten ihrer Teamleiter-Teams — nicht nur eigene Schichten.
+  const tlTeamIds = isAdminLikeRole(req.session.role!)
+    ? null
+    : await getTeamleiterTeamIds(req.session.userId!);
+  const isTeamleiterUser = tlTeamIds != null && tlTeamIds.length > 0;
 
-  const teamScope = await resolveReadTeamScope(req.session.userId!, parseTeamIdParam(req));
+  const effectiveUserId =
+    req.session.role === "assistant" && !isTeamleiterUser ? req.session.userId! : query.data.userId;
+
+  const teamScope = await resolveReadTeamScope(
+    req.session.userId!,
+    parseTeamIdParam(req),
+    isTeamleiterUser ? tlTeamIds! : undefined,
+  );
   if (teamScope === null) {
     res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
     return;
@@ -677,7 +690,7 @@ function shiftModelTimesForDay(
   return { startTime, endTime };
 }
 
-router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
+router.post("/shifts", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
   const body = CreateShiftBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "Invalid request body" });
@@ -687,7 +700,15 @@ router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
   // Team-Scope + Member-Invariante MÜSSEN vor allen inhaltlichen Prüfungen
   // stehen (Überschneidung/Doppel-Abwesenheit), sonst könnte ein fremder Admin
   // per 409-Antwort Schichtzeiten/Abwesenheiten teamfremder Nutzer ausspähen.
-  const write = await resolveWriteTeamId(req.session.userId!, body.data.teamId ?? undefined);
+  // Teamleiter erhalten nur Zugriff auf ihre Teamleiter-Teams (effectiveTeams).
+  const effectiveTeams = isAdminLikeRole(req.session.role!)
+    ? undefined
+    : (await getTeamleiterTeamIds(req.session.userId!)) || undefined;
+  const write = await resolveWriteTeamId(
+    req.session.userId!,
+    body.data.teamId ?? undefined,
+    effectiveTeams?.length ? effectiveTeams : undefined,
+  );
   if (!write.ok) {
     if (write.reason === "forbidden") {
       res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
@@ -799,7 +820,7 @@ router.post("/shifts", requireAdmin, async (req, res): Promise<void> => {
       res.status(400).json({ error: "Einsatz-Team muss ein anderes Team sein" });
       return;
     }
-    const allowedForEinsatz = await getAllowedTeamIds(req.session.userId!);
+    const allowedForEinsatz = await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!);
     if (!allowedForEinsatz.includes(body.data.einsatzTeamId)) {
       res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
       return;
@@ -934,7 +955,7 @@ router.get("/shifts/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(shiftDto);
 });
 
-router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
+router.patch("/shifts/:id", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
   const params = UpdateShiftParams.safeParse({ id: Number(req.params["id"]) });
   const body = UpdateShiftBody.safeParse(req.body);
   if (!params.success || !body.success) {
@@ -952,7 +973,7 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
     return;
   }
 
-  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+  const allowedTeams = await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!);
   if (oldShift.teamId == null || !allowedTeams.includes(oldShift.teamId)) {
     res.status(404).json({ error: "Not found" });
     return;
@@ -1217,7 +1238,7 @@ router.patch("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
   res.json(withUser);
 });
 
-router.delete("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
+router.delete("/shifts/:id", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
   const params = DeleteShiftParams.safeParse({ id: Number(req.params["id"]) });
   if (!params.success) {
     res.status(400).json({ error: "Invalid id" });
@@ -1235,7 +1256,7 @@ router.delete("/shifts/:id", requireAdmin, async (req, res): Promise<void> => {
     return;
   }
 
-  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+  const allowedTeams = await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!);
   if (shift.teamId == null || !allowedTeams.includes(shift.teamId)) {
     res.status(404).json({ error: "Not found" });
     return;

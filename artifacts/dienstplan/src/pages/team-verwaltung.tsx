@@ -6,6 +6,7 @@ import {
   useDeleteTeam,
   useListTeamMembers,
   useMoveTeamMember,
+  useUpdateTeamMemberFlags,
   getListTeamsQueryKey,
   getListTeamMembersQueryKey,
   getListUsersQueryKey,
@@ -18,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -25,10 +27,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, Building2, ArrowRightLeft, Lock } from "lucide-react";
+import { Plus, Pencil, Trash2, Building2, ArrowRightLeft, Lock, UserCog } from "lucide-react";
 import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/auth";
+import { isAdminRole } from "@/lib/roles";
 import { isWithinLimit, getLimit } from "@/lib/entitlements";
 import { readableApiError, planUpgradeMessage } from "@/lib/api-error";
 
@@ -48,6 +51,8 @@ type Member = {
   role: "admin" | "assistant";
   teamCount: number;
   createdAt: string;
+  isTeamleiter: boolean;
+  canViewPayroll: boolean;
 };
 
 function roleLabel(role: "admin" | "assistant"): string {
@@ -283,6 +288,158 @@ function TransferDialog({ team, teams, onClose }: TransferDialogProps) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Teamleiter-Rollen-Dialog: is_teamleiter und can_view_payroll je Mitglied
+// setzen. Nur für vollständige Admins (nicht Teamleiter selbst) sichtbar.
+// ---------------------------------------------------------------------------
+
+type TeamleiterDialogProps = {
+  team: Team;
+  onClose: () => void;
+};
+
+function TeamleiterDialog({ team, onClose }: TeamleiterDialogProps) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { data: membersData, isLoading } = useListTeamMembers(team.id);
+  const members = (membersData ?? []) as Member[];
+
+  // Optimistische lokale Kopie für sofortiges Toggle-Feedback.
+  const [localFlags, setLocalFlags] = useState<
+    Record<number, { isTeamleiter: boolean; canViewPayroll: boolean }>
+  >(() =>
+    Object.fromEntries(
+      (membersData as Member[] ?? []).map((m) => [
+        m.userId,
+        { isTeamleiter: m.isTeamleiter ?? false, canViewPayroll: m.canViewPayroll ?? false },
+      ]),
+    ),
+  );
+
+  // Synchronisiert localFlags wenn Mitgliederdaten geladen werden.
+  const [syncDone, setSyncDone] = useState(false);
+  if (!isLoading && !syncDone && members.length > 0) {
+    const flags: typeof localFlags = {};
+    for (const m of members) {
+      flags[m.userId] = {
+        isTeamleiter: m.isTeamleiter ?? false,
+        canViewPayroll: m.canViewPayroll ?? false,
+      };
+    }
+    setLocalFlags(flags);
+    setSyncDone(true);
+  }
+
+  const updateFlags = useUpdateTeamMemberFlags({
+    mutation: {
+      onSuccess: async () => {
+        await queryClient.invalidateQueries({ queryKey: getListTeamMembersQueryKey(team.id) });
+      },
+      onError: (err: unknown) => {
+        toast({
+          title: "Fehler beim Speichern",
+          description: readableApiError(err, "Bitte erneut versuchen."),
+          variant: "destructive",
+        });
+      },
+    },
+  });
+
+  async function toggle(
+    userId: number,
+    field: "isTeamleiter" | "canViewPayroll",
+    value: boolean,
+  ) {
+    const current = localFlags[userId] ?? { isTeamleiter: false, canViewPayroll: false };
+    const next = { ...current, [field]: value };
+    // canViewPayroll hat nur Wirkung wenn isTeamleiter=true.
+    if (field === "isTeamleiter" && !value) next.canViewPayroll = false;
+    setLocalFlags((prev) => ({ ...prev, [userId]: next }));
+    await updateFlags.mutateAsync({ id: team.id, userId, data: next });
+  }
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-xl flex items-center gap-2">
+            <UserCog className="h-5 w-5 text-muted-foreground" />
+            Teamleiter-Rollen: {team.name}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-1 py-2">
+          {isLoading ? (
+            <div className="space-y-2 py-2">
+              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 w-full rounded-md" />)}
+            </div>
+          ) : members.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              Keine Mitglieder in diesem Team.
+            </p>
+          ) : (
+            <ul className="divide-y divide-border/40">
+              {members.map((m) => {
+                const flags = localFlags[m.userId] ?? {
+                  isTeamleiter: m.isTeamleiter ?? false,
+                  canViewPayroll: m.canViewPayroll ?? false,
+                };
+                return (
+                  <li key={m.userId} className="py-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">{m.name}</span>
+                      <span className="text-xs text-muted-foreground">{m.email}</span>
+                      {flags.isTeamleiter && (
+                        <Badge variant="secondary" className="text-xs">Teamleiter</Badge>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2 pl-1">
+                      <div className="flex items-center gap-3">
+                        <Switch
+                          id={`tl-${m.userId}`}
+                          checked={flags.isTeamleiter}
+                          disabled={updateFlags.isPending}
+                          onCheckedChange={(v) => void toggle(m.userId, "isTeamleiter", v)}
+                        />
+                        <Label htmlFor={`tl-${m.userId}`} className="text-sm cursor-pointer">
+                          Als Teamleiter festlegen
+                          <span className="block text-xs text-muted-foreground font-normal">
+                            Kann Schichten, Verträge und Zeiterfassung in diesem Team verwalten
+                          </span>
+                        </Label>
+                      </div>
+                      {flags.isTeamleiter && (
+                        <div className="flex items-center gap-3 pl-8">
+                          <Switch
+                            id={`cp-${m.userId}`}
+                            checked={flags.canViewPayroll}
+                            disabled={updateFlags.isPending}
+                            onCheckedChange={(v) => void toggle(m.userId, "canViewPayroll", v)}
+                          />
+                          <Label htmlFor={`cp-${m.userId}`} className="text-sm cursor-pointer">
+                            Darf Lohn-/Personaldaten sehen
+                            <span className="block text-xs text-muted-foreground font-normal">
+                              Gibt Zugang zu Stundenlohn, Sozialversicherungs- und Steuerdaten
+                            </span>
+                          </Label>
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        <DialogFooter className="gap-2 pt-2">
+          <Button onClick={onClose}>Schließen</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function TeamVerwaltung() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -293,7 +450,11 @@ export default function TeamVerwaltung() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTeam, setEditTeam] = useState<Team | undefined>();
   const [transferTeam, setTransferTeam] = useState<Team | undefined>();
+  const [teamleiterTeam, setTeamleiterTeam] = useState<Team | undefined>();
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+
+  // Teamleiter-Rollen-Button nur für vollständige Admins (dienstleister).
+  const isFullAdmin = isAdminRole(currentUser?.role) && currentUser?.accountType === "dienstleister";
 
   const teams: Team[] = (data ?? []) as Team[];
 
@@ -412,6 +573,18 @@ export default function TeamVerwaltung() {
                     <ArrowRightLeft className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">Überführen</span>
                   </Button>
+                  {isFullAdmin && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={() => setTeamleiterTeam(team)}
+                      title="Teamleiter-Rollen verwalten"
+                    >
+                      <UserCog className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Rollen</span>
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
@@ -454,6 +627,13 @@ export default function TeamVerwaltung() {
           team={transferTeam}
           teams={teams}
           onClose={() => setTransferTeam(undefined)}
+        />
+      )}
+
+      {teamleiterTeam && (
+        <TeamleiterDialog
+          team={teamleiterTeam}
+          onClose={() => setTeamleiterTeam(undefined)}
         />
       )}
     </div>

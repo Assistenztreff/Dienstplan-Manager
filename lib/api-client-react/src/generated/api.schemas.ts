@@ -342,7 +342,16 @@ export interface TeamMember {
   role: TeamMemberRole;
   /** Anzahl der Teams dieses Dienstleisters, in denen der Nutzer Mitglied ist */
   teamCount: number;
+  /** Gibt dem Mitglied Admin-Level-Zugriff auf genau dieses Team */
+  isTeamleiter: boolean;
+  /** Erlaubt dem Teamleiter Zugriff auf Lohn- und sensible Personalfelder */
+  canViewPayroll: boolean;
   createdAt: string;
+}
+
+export interface TeamMemberFlagsInput {
+  isTeamleiter?: boolean;
+  canViewPayroll?: boolean;
 }
 
 export interface TeamMemberInput {
@@ -1477,6 +1486,8 @@ export interface AuthUser {
   role: AuthUserRole;
   accountType: AuthUserAccountType;
   plan: AuthUserPlan;
+  /** true, wenn der Nutzer in mindestens einem Team als Teamleiter eingetragen ist. Ermöglicht dem Frontend den Team-Switcher auch für Nicht-Dienstleister anzuzeigen. */
+  isTeamleiter?: boolean;
 }
 
 export interface LoginInput {

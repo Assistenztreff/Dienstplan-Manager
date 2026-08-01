@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { db } from "@workspace/db";
-import { usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { usersTable, teamMembersTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 
 declare module "express-session" {
   interface SessionData {
@@ -94,6 +94,51 @@ export async function requireSuperadmin(
     return;
   }
   next();
+}
+
+/**
+ * Erlaubt Zugriff für Admin-artige Rollen ODER für Nutzer, die in mindestens
+ * einem Team als Teamleiter eingetragen sind. Der Teamleiter-Status wird frisch
+ * aus der DB gelesen, damit ein Rechteentzug sofort beim nächsten Request greift.
+ */
+export async function requireTeamleiterOrAdmin(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  if (!req.session.userId) {
+    res.status(401).json({ error: "Nicht angemeldet" });
+    return;
+  }
+  const [user] = await db
+    .select({ isActive: usersTable.isActive })
+    .from(usersTable)
+    .where(eq(usersTable.id, req.session.userId));
+  if (!user || !user.isActive) {
+    req.session.destroy(() => {});
+    res.status(401).json({ error: "Konto deaktiviert oder nicht gefunden" });
+    return;
+  }
+  if (isAdminLikeRole(req.session.role)) {
+    next();
+    return;
+  }
+  // Für Nicht-Admins: prüfen, ob Teamleiter in mindestens einem Team.
+  const [tlRow] = await db
+    .select({ id: teamMembersTable.teamId })
+    .from(teamMembersTable)
+    .where(
+      and(
+        eq(teamMembersTable.userId, req.session.userId),
+        eq(teamMembersTable.isTeamleiter, true),
+      ),
+    )
+    .limit(1);
+  if (tlRow) {
+    next();
+    return;
+  }
+  res.status(403).json({ error: "Keine Berechtigung" });
 }
 
 /**

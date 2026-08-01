@@ -102,3 +102,4 @@
 - [Shared Header-Tier-Logik](header-tier-shared.md) — HeaderTier/useIsMobileViewport/useHeaderTier leben in src/lib/header-tier.ts; beide Seiten importieren von dort; lokale Deklaration erzeugt TS2440 bei gleichzeitigem Import.
 - [Offline Bootstrap bewahrt Auth](offline-auth-bootstrap.md) — auth.tsx bootstrap fängt TypeError separat: Netzwerkfehler leeren NICHT den Auth-Zustand; nur echte 4xx/5xx tun das; OfflineBanner + MutationCache/QueryCache onError ergänzen die Kette.
 - [Offline Mutation Replay](offline-mutation-replay.md) — networkMode:'offlineFirst' + resumePausedMutations() müssen gemeinsam gesetzt sein; keines allein genügt; Pending-Zähler via useMutationState in OfflineBanner.
+- [Teamleiter-Feature Implementierungsmuster](teamleiter-feature-patterns.md) — is_teamleiter+canViewPayroll auf team_members; overrideAllowedIds in resolveRead/WriteTeamId; zod nicht in api-server, nur über @workspace/api-zod.

@@ -17,7 +17,7 @@ import {
   UpdateContractBody,
   DeleteContractParams,
 } from "@workspace/api-zod";
-import { requireAdmin, requireAuth, isAdminLikeRole } from "../middleware/auth";
+import { requireAdmin, requireAuth, requireTeamleiterOrAdmin, isAdminLikeRole } from "../middleware/auth";
 import { recalcVacationHoursUsed, resolveDailyRateInfo } from "../lib/vacation-hours";
 import { requirePlanFeatureViaTeamOwner } from "../lib/plan";
 import { resolveAllowanceOps } from "../lib/allowance-resolve";
@@ -26,6 +26,7 @@ import {
   resolveReadTeamScope,
   resolveWriteTeamId,
   getAllowedTeamIds,
+  getEffectiveAdminTeamIds,
   parseTeamIdParam,
   isUserMemberOfTeam,
 } from "../lib/teams";
@@ -94,13 +95,20 @@ router.get("/contracts", requireAuth, async (req, res): Promise<void> => {
   res.json(rows);
 });
 
-router.post("/contracts", requireAdmin, async (req, res): Promise<void> => {
+router.post("/contracts", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
   const body = CreateContractBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "Invalid request body" });
     return;
   }
-  const write = await resolveWriteTeamId(req.session.userId!, body.data.teamId ?? undefined);
+  const effectiveTeams = isAdminLikeRole(req.session.role!)
+    ? undefined
+    : (await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!));
+  const write = await resolveWriteTeamId(
+    req.session.userId!,
+    body.data.teamId ?? undefined,
+    effectiveTeams?.length ? effectiveTeams : undefined,
+  );
   if (!write.ok) {
     if (write.reason === "forbidden") {
       res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
@@ -135,13 +143,13 @@ router.post("/contracts", requireAdmin, async (req, res): Promise<void> => {
   res.status(201).json(withUser);
 });
 
-router.get("/contracts/:id", requireAdmin, async (req, res): Promise<void> => {
+router.get("/contracts/:id", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
   const params = GetContractParams.safeParse({ id: Number(req.params["id"]) });
   if (!params.success) {
     res.status(400).json({ error: "Invalid id" });
     return;
   }
-  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+  const allowedTeams = await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!);
   const [row] = await db
     .select(CONTRACT_SELECT)
     .from(contractsTable)
@@ -154,7 +162,7 @@ router.get("/contracts/:id", requireAdmin, async (req, res): Promise<void> => {
   res.json(row);
 });
 
-router.patch("/contracts/:id", requireAdmin, async (req, res): Promise<void> => {
+router.patch("/contracts/:id", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
   const params = UpdateContractParams.safeParse({ id: Number(req.params["id"]) });
   const body = UpdateContractBody.safeParse(req.body);
   if (!params.success || !body.success) {
@@ -169,7 +177,7 @@ router.patch("/contracts/:id", requireAdmin, async (req, res): Promise<void> => 
     updateValues["endDate"] = toDateString(body.data.endDate);
   }
 
-  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+  const allowedTeams = await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!);
 
   // Bestehenden Vertrag laden (team-gescoped, IDOR-sicher), um Beginn/Ende
   // kombiniert validieren zu können — auch wenn nur eines der Felder kommt.
@@ -220,13 +228,13 @@ router.patch("/contracts/:id", requireAdmin, async (req, res): Promise<void> => 
   res.json(withUser);
 });
 
-router.delete("/contracts/:id", requireAdmin, async (req, res): Promise<void> => {
+router.delete("/contracts/:id", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
   const params = DeleteContractParams.safeParse({ id: Number(req.params["id"]) });
   if (!params.success) {
     res.status(400).json({ error: "Invalid id" });
     return;
   }
-  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+  const allowedTeams = await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!);
   const deleted = await db
     .delete(contractsTable)
     .where(and(eq(contractsTable.id, params.data.id), inArray(contractsTable.teamId, allowedTeams)))

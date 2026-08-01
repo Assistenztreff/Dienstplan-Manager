@@ -100,6 +100,7 @@ export * from './shiftUpdateType';
 export * from './team';
 export * from './teamInput';
 export * from './teamMember';
+export * from './teamMemberFlagsInput';
 export * from './teamMemberInput';
 export * from './teamMemberMoveInput';
 export * from './teamMemberRole';

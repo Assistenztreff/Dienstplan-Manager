@@ -3,6 +3,11 @@ import { teamsTable, teamMembersTable, shiftModelsTable } from "@workspace/db";
 import { eq, asc, and, inArray } from "drizzle-orm";
 import type { Request } from "express";
 
+/** Intern – vermeidet zirkulären Import zu middleware/auth.ts. */
+function isAdminLikeRole(role: string): boolean {
+  return role === "admin" || role === "superadmin";
+}
+
 /**
  * Liefert das Standard-Team-Kontext eines Nutzers für neu erstellte Datensätze.
  * Bevorzugt ein vom Nutzer besessenes Team (Admin), sonst die erste
@@ -52,12 +57,16 @@ export async function getAllowedTeamIds(userId: number): Promise<number[]> {
  * - requestedTeamId gesetzt & NICHT erlaubt → null (fremdes Team, 403).
  * - requestedTeamId leer → alle erlaubten Teams.
  * Leeres Array bedeutet: erlaubt, aber kein Team → keine Daten.
+ *
+ * `overrideAllowedIds` überschreibt die DB-Abfrage — wird von Teamleitern
+ * genutzt, um den Lesezugriff auf ihre Teamleiter-Teams zu beschränken.
  */
 export async function resolveReadTeamScope(
   userId: number,
   requestedTeamId?: number,
+  overrideAllowedIds?: number[],
 ): Promise<number[] | null> {
-  const allowed = await getAllowedTeamIds(userId);
+  const allowed = overrideAllowedIds ?? await getAllowedTeamIds(userId);
   if (requestedTeamId != null) {
     return allowed.includes(requestedTeamId) ? [requestedTeamId] : null;
   }
@@ -72,15 +81,26 @@ export type WriteTeamResult =
  * Bestimmt das Ziel-Team für einen Schreibzugriff.
  * - requestedTeamId gesetzt: muss erlaubt sein, sonst "forbidden".
  * - sonst: Standard-Team via resolveTeamId; fehlt es → "none".
+ *
+ * `overrideAllowedIds` überschreibt die DB-Abfrage — Teamleiter übergeben
+ * hier ihre Teamleiter-Teams, damit der Schreibzugriff auf diese beschränkt
+ * bleibt und nicht auf alle Mitglied-Teams ausgeweitet wird.
  */
 export async function resolveWriteTeamId(
   userId: number,
   requestedTeamId?: number,
+  overrideAllowedIds?: number[],
 ): Promise<WriteTeamResult> {
+  const allowed = overrideAllowedIds ?? await getAllowedTeamIds(userId);
   if (requestedTeamId != null) {
-    const allowed = await getAllowedTeamIds(userId);
     if (!allowed.includes(requestedTeamId)) return { ok: false, reason: "forbidden" };
     return { ok: true, teamId: requestedTeamId };
+  }
+  // Kein requestedTeamId: erstes erlaubtes Team (oder Standard via resolveTeamId).
+  if (overrideAllowedIds != null) {
+    const def = overrideAllowedIds[0] ?? null;
+    if (def == null) return { ok: false, reason: "none" };
+    return { ok: true, teamId: def };
   }
   const def = await resolveTeamId(userId);
   if (def == null) return { ok: false, reason: "none" };
@@ -141,6 +161,101 @@ export async function isShiftModelInTeam(
     .where(and(eq(shiftModelsTable.id, shiftModelId), eq(shiftModelsTable.teamId, teamId)))
     .limit(1);
   return !!row;
+}
+
+/**
+ * Teams, in denen der Nutzer explizit als Teamleiter eingetragen ist.
+ * Basis für den team-beschränkten Admin-Zugriff.
+ */
+export async function getTeamleiterTeamIds(userId: number): Promise<number[]> {
+  const rows = await db
+    .select({ id: teamMembersTable.teamId })
+    .from(teamMembersTable)
+    .where(and(eq(teamMembersTable.userId, userId), eq(teamMembersTable.isTeamleiter, true)));
+  return rows.map((r) => r.id).sort((a, b) => a - b);
+}
+
+/**
+ * Gibt zurück, ob der Nutzer in mindestens einem Team als Teamleiter
+ * eingetragen ist. Wird für Middleware-Checks und isTeamleiter im AuthUser
+ * verwendet.
+ */
+export async function hasAnyTeamleiterRole(userId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: teamMembersTable.teamId })
+    .from(teamMembersTable)
+    .where(and(eq(teamMembersTable.userId, userId), eq(teamMembersTable.isTeamleiter, true)))
+    .limit(1);
+  return !!row;
+}
+
+/**
+ * Gibt zurück, ob der Nutzer im angegebenen Team als Teamleiter eingetragen
+ * ist. Basis für IDOR-Schutz auf Team-Operationen durch Teamleiter.
+ */
+export async function isTeamleiterOfTeam(userId: number, teamId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: teamMembersTable.id })
+    .from(teamMembersTable)
+    .where(
+      and(
+        eq(teamMembersTable.userId, userId),
+        eq(teamMembersTable.teamId, teamId),
+        eq(teamMembersTable.isTeamleiter, true),
+      ),
+    )
+    .limit(1);
+  return !!row;
+}
+
+/**
+ * Gibt zurück, ob der Nutzer im angegebenen Team can_view_payroll=true hat.
+ * Wird für die serverseitige Filterung sensibler Personalfelder verwendet.
+ */
+export async function canViewPayrollInTeam(userId: number, teamId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ canViewPayroll: teamMembersTable.canViewPayroll })
+    .from(teamMembersTable)
+    .where(and(eq(teamMembersTable.userId, userId), eq(teamMembersTable.teamId, teamId)))
+    .limit(1);
+  return row?.canViewPayroll ?? false;
+}
+
+/**
+ * Gibt die effektiven Admin-Level-Teams zurück:
+ * - Für Admin-artige Rollen: alle erlaubten Teams (besessene + Mitgliedschaften).
+ * - Für Teamleiter (nicht Admin-Rolle): nur Teams mit is_teamleiter=true.
+ * Basis aller Datenzugriffe auf Admin-Ebene.
+ */
+export async function getEffectiveAdminTeamIds(
+  userId: number,
+  role: string,
+): Promise<number[]> {
+  if (isAdminLikeRole(role)) {
+    return getAllowedTeamIds(userId);
+  }
+  return getTeamleiterTeamIds(userId);
+}
+
+/**
+ * Prüft, ob ein Team dem Aufrufer gehört ODER der Aufrufer dort Teamleiter ist.
+ * Basis für IDOR-Schutz auf Team-Mitgliederverwaltung durch Teamleiter.
+ */
+export async function hasTeamAdminAccess(
+  teamId: number,
+  userId: number,
+  role: string,
+): Promise<boolean> {
+  if (isAdminLikeRole(role)) {
+    // Admin: muss Eigentümer sein
+    const [team] = await db
+      .select({ id: teamsTable.id })
+      .from(teamsTable)
+      .where(and(eq(teamsTable.id, teamId), eq(teamsTable.ownerId, userId)));
+    return !!team;
+  }
+  // Teamleiter: muss is_teamleiter=true haben
+  return isTeamleiterOfTeam(userId, teamId);
 }
 
 /** Liest den optionalen ?teamId Query-Parameter (mit NaN-Schutz). */

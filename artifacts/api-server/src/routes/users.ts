@@ -10,9 +10,12 @@ import {
   DeleteUserParams,
   GetUserParams,
 } from "@workspace/api-zod";
-import { requireAdmin, requireAuth, isAdminLikeRole } from "../middleware/auth";
+import { requireAdmin, requireAuth, requireTeamleiterOrAdmin, isAdminLikeRole } from "../middleware/auth";
 import {
   getAllowedTeamIds,
+  getEffectiveAdminTeamIds,
+  getTeamleiterTeamIds,
+  canViewPayrollInTeam,
   parseTeamIdParam,
   resolveWriteTeamId,
   isUserInAllowedTeams,
@@ -61,64 +64,81 @@ const SAFE_USER_SELECT = {
   createdAt: usersTable.createdAt,
 };
 
-router.get("/users", requireAdmin, async (req, res): Promise<void> => {
+/**
+ * Reduzierter Feldumfang für Teamleiter ohne canViewPayroll-Recht:
+ * Lohn-/SV-/Steuerdaten werden nicht geliefert.
+ */
+const BASIC_USER_SELECT = {
+  id: usersTable.id,
+  name: usersTable.name,
+  email: usersTable.email,
+  role: usersTable.role,
+  accountType: usersTable.accountType,
+  phone: usersTable.phone,
+  address: usersTable.address,
+  isActive: usersTable.isActive,
+  createdAt: usersTable.createdAt,
+};
+
+router.get("/users", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
   const query = ListUsersQueryParams.safeParse(req.query);
   if (!query.success) {
     res.status(400).json({ error: "Invalid query parameters" });
     return;
   }
-  // Strikte Datentrennung: Nutzer werden auf die erlaubten Teams des Anfragers
-  // gescoped. Mit teamId = genau dieses (erlaubte) Team; ohne teamId = Vereinigung
-  // aller erlaubten Teams (eigene + Mitgliedschaften). Mehrfach-Mitgliedschaften
-  // werden dedupliziert.
-  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+
+  // Teamleiter erhalten nur ihre Teamleiter-Teams als Scope — nicht alle
+  // Mitglied-Teams (das wäre zu weit). Admins bekommen den vollen Konto-Scope.
+  const userId = req.session.userId!;
+  const role = req.session.role!;
+  const isTeamleiterOnly = !isAdminLikeRole(role);
+  const allowedTeams = isTeamleiterOnly
+    ? await getTeamleiterTeamIds(userId)
+    : await getAllowedTeamIds(userId);
+
   const teamId = parseTeamIdParam(req);
   if (teamId != null && !allowedTeams.includes(teamId)) {
     res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
     return;
   }
-  // Bewusste Bootstrap-Ausnahme – ausschließlich für privat-Konten: Hat ein
-  // privat-Admin (Einzel-Assistenznehmer, kein Mandant) weder ein eigenes Team
-  // noch eine Mitgliedschaft UND fragt kein teamId an, fällt die Antwort auf den
-  // globalen Pool zurück. Sonst wäre die Liste bei Erst-Einrichtung leer – der
-  // Admin könnte sich nicht einmal selbst sehen oder Nutzer anlegen/zuordnen.
-  // Der Konto-Typ wird frisch aus der DB gelesen (wie requireDienstleister),
-  // damit ein Wechsel sofort greift. WICHTIG: Für dienstleister-Konten gilt IMMER
-  // strikte Team-Trennung – sie bekommen niemals den globalen Pool, auch nicht bei
-  // null Teams (sie sehen dann eine leere Liste, bis sie ein Team anlegen). Sobald
-  // ein privat-Admin ≥1 Team hat, greift ebenfalls wieder strikte Trennung.
-  // WICHTIG: Die Ausnahme gilt NUR für die echte Rolle "admin" – superadmin
-  // (via isAdminLikeRole zugelassen) darf NIE auf den globalen Pool fallen,
-  // sonst läse ein Betreiber-Konto ohne Teams plattformweit alle Nutzer.
-  if (teamId == null && allowedTeams.length === 0) {
+
+  // Payroll-Gating für Teamleiter: ohne canViewPayroll für das angefragte (oder
+  // jedes im Scope liegende) Team werden Lohn-/SV-Daten herausgefiltert.
+  // Admins bekommen immer den vollen Datensatz.
+  let userSelect: typeof SAFE_USER_SELECT | typeof BASIC_USER_SELECT = SAFE_USER_SELECT;
+  if (isTeamleiterOnly) {
+    const scopeTeamId = teamId ?? allowedTeams[0];
+    const canPayroll = scopeTeamId != null ? await canViewPayrollInTeam(userId, scopeTeamId) : false;
+    if (!canPayroll) userSelect = BASIC_USER_SELECT;
+  }
+
+  // Bewusste Bootstrap-Ausnahme – ausschließlich für privat-Konten (kein Teamleiter):
+  // Hat ein privat-Admin weder ein eigenes Team noch eine Mitgliedschaft UND fragt
+  // kein teamId an, fällt die Antwort auf den globalen Pool zurück. Sonst wäre die
+  // Liste bei Erst-Einrichtung leer. WICHTIG: Für dienstleister-Konten und superadmins
+  // gilt immer strikte Team-Trennung.
+  if (!isTeamleiterOnly && teamId == null && allowedTeams.length === 0) {
     const [requester] = await db
       .select({ accountType: usersTable.accountType, role: usersTable.role })
       .from(usersTable)
-      .where(eq(usersTable.id, req.session.userId!));
+      .where(eq(usersTable.id, userId));
     if (requester?.accountType === "privat" && requester.role === "admin") {
-      // Bootstrap-Ausnahme NUR für den Anfrager selbst — NIEMALS die gesamte
-      // usersTable. Ein Konto ohne Team (Erst-Einrichtung ODER nachträglich
-      // durch Konto-Typ-Wechsel + Team-Löschung) darf sich sonst plattformweit
-      // alle Nutzer inkl. Lohn-/SV-Daten anderer Mandanten anzeigen lassen.
-      // Diese Zeile reicht aus, damit der Admin sich selbst sieht; das Anlegen
-      // neuer Nutzer läuft unabhängig über POST /users.
       const [self] = await db
-        .select(SAFE_USER_SELECT)
+        .select(userSelect)
         .from(usersTable)
-        .where(eq(usersTable.id, req.session.userId!));
+        .where(eq(usersTable.id, userId));
       let rows = self ? [self] : [];
-      if (query.data.role) {
-        rows = rows.filter((u) => u.role === query.data.role);
-      }
+      if (query.data.role) rows = rows.filter((u) => u.role === query.data.role);
       res.json(rows);
       return;
     }
   }
+
   const teamScope = teamId != null ? [teamId] : allowedTeams;
   const joined =
     teamScope.length > 0
       ? await db
-          .select(SAFE_USER_SELECT)
+          .select(userSelect)
           .from(usersTable)
           .innerJoin(teamMembersTable, eq(teamMembersTable.userId, usersTable.id))
           .where(inArray(teamMembersTable.teamId, teamScope))
@@ -249,21 +269,61 @@ router.get("/users/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const requestedId = params.data.id;
-  if (!isAdminLikeRole(req.session.role) && req.session.userId !== requestedId) {
-    res.status(403).json({ error: "Keine Berechtigung" });
-    return;
+  const sessionUserId = req.session.userId!;
+  const sessionRole = req.session.role!;
+
+  if (!isAdminLikeRole(sessionRole) && sessionUserId !== requestedId) {
+    // Teamleiter-Ausnahme: Teamleiter dürfen Nutzer in ihren Teamleiter-Teams lesen.
+    const tlTeamIds = await getTeamleiterTeamIds(sessionUserId);
+    if (tlTeamIds.length === 0) {
+      res.status(403).json({ error: "Keine Berechtigung" });
+      return;
+    }
+    // Prüfen ob der angefragte Nutzer in einem der Teamleiter-Teams Mitglied ist.
+    const [membership] = await db
+      .select({ id: teamMembersTable.id })
+      .from(teamMembersTable)
+      .where(
+        and(
+          eq(teamMembersTable.userId, requestedId),
+          inArray(teamMembersTable.teamId, tlTeamIds),
+        ),
+      )
+      .limit(1);
+    if (!membership) {
+      res.status(403).json({ error: "Keine Berechtigung" });
+      return;
+    }
   }
-  // IDOR-Schutz: ein Admin darf fremde Nutzer nur lesen, wenn sie Mitglied
+  // IDOR-Schutz: Admin darf fremde Nutzer nur lesen, wenn sie Mitglied
   // eines seiner erlaubten Teams sind. Eigener Datensatz immer erlaubt.
-  if (req.session.userId !== requestedId) {
-    const allowed = await isUserInAllowedTeams(req.session.userId!, requestedId);
+  if (isAdminLikeRole(sessionRole) && sessionUserId !== requestedId) {
+    const allowed = await isUserInAllowedTeams(sessionUserId, requestedId);
     if (!allowed) {
       res.status(404).json({ error: "Not found" });
       return;
     }
   }
+  // Payroll-Gating: Teamleiter ohne canViewPayroll bekommen BASIC_USER_SELECT.
+  const isTeamleiterOnly = !isAdminLikeRole(sessionRole);
+  let userSelect: typeof SAFE_USER_SELECT | typeof BASIC_USER_SELECT = SAFE_USER_SELECT;
+  if (isTeamleiterOnly && sessionUserId !== requestedId) {
+    // Erstes Teamleiter-Team des Anfragenden für den Payroll-Check ermitteln.
+    const [tlMembership] = await db
+      .select({ teamId: teamMembersTable.teamId })
+      .from(teamMembersTable)
+      .where(
+        and(
+          eq(teamMembersTable.userId, sessionUserId),
+          eq(teamMembersTable.isTeamleiter, true),
+        ),
+      )
+      .limit(1);
+    const canPayroll = tlMembership ? await canViewPayrollInTeam(sessionUserId, tlMembership.teamId) : false;
+    if (!canPayroll) userSelect = BASIC_USER_SELECT;
+  }
   const [user] = await db
-    .select(SAFE_USER_SELECT)
+    .select(userSelect)
     .from(usersTable)
     .where(eq(usersTable.id, requestedId));
   if (!user) {
