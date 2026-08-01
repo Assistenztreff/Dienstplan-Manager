@@ -32,7 +32,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Lock as LockIcon, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Lock as LockIcon, AlertTriangle, CheckCircle2, ChevronDown } from "lucide-react";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import { toast } from "sonner";
@@ -140,9 +141,10 @@ export function MonthClosingCard({
           variant={closed ? "outline" : "default"}
           onClick={() => setConfirmOpen(true)}
           disabled={!closable || createClosing.isPending}
-          className="shrink-0"
+          className={`shrink-0 gap-1.5 ${closed ? "border-amber-400 text-amber-800 hover:bg-amber-50 hover:text-amber-900" : ""}`}
           data-testid="month-closing-button"
         >
+          {closed && <AlertTriangle className="h-4 w-4" />}
           {closed ? "Erneut abschließen" : "Monat abschließen"}
         </Button>
       </CardContent>
@@ -154,12 +156,22 @@ export function MonthClosingCard({
               {closed ? "Monat erneut abschließen?" : "Monat abschließen?"}
             </DialogTitle>
             <DialogDescription>
-              Die aktuelle Lohnauswertung wird als verbindliche Referenz eingefroren.
-              Bearbeitungen bleiben weiterhin möglich — Änderungen nach dem Abschluss
-              werden in der Auswertung des Folgemonats als Nachberechnung ausgewiesen.
-              {closed ? " Der bisherige Abschluss bleibt in der Historie erhalten." : ""}
+              {closed
+                ? "Nutzen Sie diese Funktion nur für Korrekturen vor der Weitergabe an das Lohnbüro (Frist: 7 Tage vor Monatsende)."
+                : "Die aktuelle Lohnauswertung wird als verbindliche Referenz eingefroren. Bearbeitungen bleiben weiterhin möglich — Änderungen nach dem Abschluss werden in der Auswertung des Folgemonats als Nachberechnung ausgewiesen."}
             </DialogDescription>
           </DialogHeader>
+          {closed && (
+            <div
+              className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+              data-testid="month-closing-reclose-warning"
+            >
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>
+                Wurde der Monat beim Steuerberater bereits abgerechnet? Dann schließen Sie den Monat <strong>nicht erneut</strong> ab — Änderungen in den letzten 7 Tagen des Monats führen sonst zu keiner Nachberechnung im Folgemonat.
+              </span>
+            </div>
+          )}
           {pending > 0 && (
             <div
               className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
@@ -181,9 +193,10 @@ export function MonthClosingCard({
             <Button
               onClick={doClose}
               disabled={createClosing.isPending}
+              className={closed ? "bg-amber-500 hover:bg-amber-600 text-white" : ""}
               data-testid="month-closing-confirm"
             >
-              {closed ? "Erneut abschließen" : "Abschließen"}
+              {closed ? "Jetzt erneut abschließen" : "Abschließen"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -316,6 +329,8 @@ export function RecalculationSection({
   year: number;
   teamId: number | null;
 }) {
+  const [open, setOpen] = useState(true);
+
   // Vormonat des angezeigten Monats.
   const prev = new Date(year, month - 2, 1);
   const prevMonth = prev.getMonth() + 1;
@@ -330,101 +345,121 @@ export function RecalculationSection({
   if (!data?.closed || data.rows.length === 0) return null;
 
   return (
-    <Card className="border-amber-300/60 shadow-sm" data-testid="recalculation-section">
-      <CardContent className="p-5 md:p-6">
-        <div className="flex items-start gap-2 mb-1">
-          <AlertTriangle className="h-5 w-5 text-amber-700 mt-0.5 shrink-0" />
-          <div>
-            <h3 className="text-lg font-semibold">Nachberechnung {prevLabel}</h3>
-            <p className="text-sm text-muted-foreground">
-              Der Monat {prevLabel} wurde nach dem Abschluss
-              {data.closedAt ? ` (${formatClosedAt(data.closedAt)})` : ""} geändert.
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <Card className="border-amber-300/60 shadow-sm" data-testid="recalculation-section">
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="w-full text-left"
+            aria-expanded={open}
+          >
+            <div className="p-5 md:p-6 flex items-center justify-between gap-3">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-700 mt-0.5 shrink-0" />
+                <div>
+                  <h3 className="text-lg font-semibold">Nachberechnung {prevLabel}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Der Monat {prevLabel} wurde nach dem Abschluss
+                    {data.closedAt ? ` (${formatClosedAt(data.closedAt)})` : ""} geändert.
+                    {!open && " Aufklappen für Details."}
+                  </p>
+                </div>
+              </div>
+              <ChevronDown
+                className={`h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+              />
+            </div>
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <CardContent className="px-5 pb-5 md:px-6 md:pb-6 pt-0">
+            <p className="text-sm text-muted-foreground mb-4">
               Differenz zwischen gemeldeter und aktueller Auswertung:
             </p>
-          </div>
-        </div>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-muted-foreground border-b">
-                <th className="py-2 pr-3 font-medium">Assistenzkraft</th>
-                <th className="py-2 pr-3 font-medium text-right">Gemeldet</th>
-                <th className="py-2 pr-3 font-medium text-right">Aktuell</th>
-                <th className="py-2 pr-3 font-medium text-right">Differenz</th>
-                <th className="py-2 font-medium text-right">davon Urlaub / Krankheit</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.rows.map((row) => (
-                <tr key={row.userId} className="border-b last:border-0 align-top" data-testid={`recalc-row-${row.userId}`}>
-                  <td className="py-2 pr-3 font-medium">{row.userName}</td>
-                  <td className="py-2 pr-3 text-right whitespace-nowrap">
-                    {row.reportedHours.toLocaleString("de-DE", { maximumFractionDigits: 2 })} h
-                    {row.reportedPay != null && (
-                      <div className="text-xs text-muted-foreground">{euro(row.reportedPay)}</div>
-                    )}
-                  </td>
-                  <td className="py-2 pr-3 text-right whitespace-nowrap">
-                    {row.currentHours.toLocaleString("de-DE", { maximumFractionDigits: 2 })} h
-                    {row.currentPay != null && (
-                      <div className="text-xs text-muted-foreground">{euro(row.currentPay)}</div>
-                    )}
-                  </td>
-                  <td className="py-2 pr-3 text-right whitespace-nowrap font-medium">
-                    <span className={row.diffHours !== 0 ? (row.diffHours > 0 ? "text-green-700" : "text-red-700") : ""}>
-                      {signed(row.diffHours, "h")}
-                    </span>
-                    {row.diffPay != null && (
-                      <div className={`text-xs ${row.diffPay > 0 ? "text-green-700" : row.diffPay < 0 ? "text-red-700" : "text-muted-foreground"}`}>
-                        {row.diffPay > 0 ? "+" : ""}
-                        {euro(row.diffPay)}
-                      </div>
-                    )}
-                  </td>
-                  {/* Abwesenheits-Ausweis: Urlaubs-/Krankheitsstunden
-                      (Lohnfortzahlung) im aktuellen Stand des Vormonats. */}
-                  <td className="py-2 text-right whitespace-nowrap" data-testid={`recalc-absence-${row.userId}`}>
-                    {(row.vacationHours ?? 0) > 0 && (
-                      <div>
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="h-2 w-2 rounded-full bg-amber-400 inline-block" />
-                          <span className="text-muted-foreground">Urlaub</span>
-                          <span className="font-medium">
-                            {(row.vacationHours ?? 0).toLocaleString("de-DE", { maximumFractionDigits: 2 })} h
-                          </span>
-                        </span>
-                        {row.vacationPay != null && (
-                          <div className="text-xs text-muted-foreground">{euro(row.vacationPay)}</div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-muted-foreground border-b">
+                    <th className="py-2 pr-3 font-medium">Assistenzkraft</th>
+                    <th className="py-2 pr-3 font-medium text-right">Gemeldet</th>
+                    <th className="py-2 pr-3 font-medium text-right">Aktuell</th>
+                    <th className="py-2 pr-3 font-medium text-right">Differenz</th>
+                    <th className="py-2 font-medium text-right">davon Urlaub / Krankheit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.rows.map((row) => (
+                    <tr key={row.userId} className="border-b last:border-0 align-top" data-testid={`recalc-row-${row.userId}`}>
+                      <td className="py-2 pr-3 font-medium">{row.userName}</td>
+                      <td className="py-2 pr-3 text-right whitespace-nowrap">
+                        {row.reportedHours.toLocaleString("de-DE", { maximumFractionDigits: 2 })} h
+                        {row.reportedPay != null && (
+                          <div className="text-xs text-muted-foreground">{euro(row.reportedPay)}</div>
                         )}
-                      </div>
-                    )}
-                    {(row.sickHours ?? 0) > 0 && (
-                      <div className={(row.vacationHours ?? 0) > 0 ? "mt-1" : ""}>
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="h-2 w-2 rounded-full bg-gray-400 inline-block" />
-                          <span className="text-muted-foreground">Krankheit</span>
-                          <span className="font-medium">
-                            {(row.sickHours ?? 0).toLocaleString("de-DE", { maximumFractionDigits: 2 })} h
-                          </span>
-                        </span>
-                        {row.sickPay != null && (
-                          <div className="text-xs text-muted-foreground">{euro(row.sickPay)}</div>
+                      </td>
+                      <td className="py-2 pr-3 text-right whitespace-nowrap">
+                        {row.currentHours.toLocaleString("de-DE", { maximumFractionDigits: 2 })} h
+                        {row.currentPay != null && (
+                          <div className="text-xs text-muted-foreground">{euro(row.currentPay)}</div>
                         )}
-                      </div>
-                    )}
-                    {(row.vacationHours ?? 0) === 0 && (row.sickHours ?? 0) === 0 && (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <p className="text-xs text-muted-foreground mt-3">
-          Die Nachberechnung ist bei der Abrechnung dieses Monats zu berücksichtigen.
-        </p>
-      </CardContent>
-    </Card>
+                      </td>
+                      <td className="py-2 pr-3 text-right whitespace-nowrap font-medium">
+                        <span className={row.diffHours !== 0 ? (row.diffHours > 0 ? "text-green-700" : "text-red-700") : ""}>
+                          {signed(row.diffHours, "h")}
+                        </span>
+                        {row.diffPay != null && (
+                          <div className={`text-xs ${row.diffPay > 0 ? "text-green-700" : row.diffPay < 0 ? "text-red-700" : "text-muted-foreground"}`}>
+                            {row.diffPay > 0 ? "+" : ""}
+                            {euro(row.diffPay)}
+                          </div>
+                        )}
+                      </td>
+                      {/* Abwesenheits-Ausweis: Urlaubs-/Krankheitsstunden
+                          (Lohnfortzahlung) im aktuellen Stand des Vormonats. */}
+                      <td className="py-2 text-right whitespace-nowrap" data-testid={`recalc-absence-${row.userId}`}>
+                        {(row.vacationHours ?? 0) > 0 && (
+                          <div>
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="h-2 w-2 rounded-full bg-amber-400 inline-block" />
+                              <span className="text-muted-foreground">Urlaub</span>
+                              <span className="font-medium">
+                                {(row.vacationHours ?? 0).toLocaleString("de-DE", { maximumFractionDigits: 2 })} h
+                              </span>
+                            </span>
+                            {row.vacationPay != null && (
+                              <div className="text-xs text-muted-foreground">{euro(row.vacationPay)}</div>
+                            )}
+                          </div>
+                        )}
+                        {(row.sickHours ?? 0) > 0 && (
+                          <div className={(row.vacationHours ?? 0) > 0 ? "mt-1" : ""}>
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="h-2 w-2 rounded-full bg-gray-400 inline-block" />
+                              <span className="text-muted-foreground">Krankheit</span>
+                              <span className="font-medium">
+                                {(row.sickHours ?? 0).toLocaleString("de-DE", { maximumFractionDigits: 2 })} h
+                              </span>
+                            </span>
+                            {row.sickPay != null && (
+                              <div className="text-xs text-muted-foreground">{euro(row.sickPay)}</div>
+                            )}
+                          </div>
+                        )}
+                        {(row.vacationHours ?? 0) === 0 && (row.sickHours ?? 0) === 0 && (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">
+              Die Nachberechnung ist bei der Abrechnung dieses Monats zu berücksichtigen.
+            </p>
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
   );
 }

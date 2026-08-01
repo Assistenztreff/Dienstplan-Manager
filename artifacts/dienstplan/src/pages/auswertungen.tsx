@@ -220,7 +220,6 @@ function AuswertungenHeader({
       showLabels={showLabels}
       options={[
         { value: "matrix", label: "Übersicht", icon: Table2 },
-        { value: "cards", label: "Karten", icon: LayoutGrid },
       ]}
     />
   );
@@ -516,7 +515,6 @@ export default function Auswertungen() {
               recalcByUser={recalcByUser}
               prevMonthLabel={prevOfShownLabel}
               onSelectAssistant={setSelectedAssistant}
-              canExportCsv={canPayrollExport}
               month={month}
               year={year}
             />
