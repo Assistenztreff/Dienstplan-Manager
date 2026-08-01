@@ -32,6 +32,26 @@ async function computeIsTeamleiter(userId: number): Promise<boolean> {
   return !!row;
 }
 
+/**
+ * Prüft frisch aus der DB, ob der Nutzer in mindestens einem Teamleiter-Team
+ * auch can_view_payroll=true hat. Globales Flag für die Auth-Antwort —
+ * die feingranulare Team-Prüfung (canViewPayrollInTeam) bleibt serverseitig.
+ */
+async function computeCanViewPayroll(userId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: teamMembersTable.teamId })
+    .from(teamMembersTable)
+    .where(
+      and(
+        eq(teamMembersTable.userId, userId),
+        eq(teamMembersTable.isTeamleiter, true),
+        eq(teamMembersTable.canViewPayroll, true),
+      ),
+    )
+    .limit(1);
+  return !!row;
+}
+
 router.post("/auth/login", async (req, res) => {
   const { email, password } = req.body as { email?: string; password?: string };
   if (!email || !password) {
@@ -292,7 +312,10 @@ if (process.env.NODE_ENV !== "production") {
       }
       req.session.userId = target.id;
       req.session.role = target.role;
-      const isTeamleiterTarget = await computeIsTeamleiter(target.id);
+      const [isTeamleiterTarget, canViewPayrollTarget] = await Promise.all([
+        computeIsTeamleiter(target.id),
+        computeCanViewPayroll(target.id),
+      ]);
       res.json({
         id: target.id,
         name: target.name,
@@ -301,6 +324,7 @@ if (process.env.NODE_ENV !== "production") {
         accountType: target.accountType,
         plan: target.plan,
         isTeamleiter: isTeamleiterTarget,
+        canViewPayroll: canViewPayrollTarget,
       });
       return;
     }
@@ -344,8 +368,11 @@ router.get("/auth/me", async (req, res) => {
     return res.status(401).json({ error: "Benutzer nicht gefunden" });
   }
   const { isActive: _isActive, ...publicUser } = user;
-  const isTeamleiter = await computeIsTeamleiter(user.id);
-  return res.json({ ...publicUser, isTeamleiter });
+  const [isTeamleiter, canViewPayroll] = await Promise.all([
+    computeIsTeamleiter(user.id),
+    computeCanViewPayroll(user.id),
+  ]);
+  return res.json({ ...publicUser, isTeamleiter, canViewPayroll });
 });
 
 router.post("/auth/set-password", async (req, res) => {

@@ -346,23 +346,9 @@ router.patch(
     }
     const updates = { ...body.data };
 
-    // Privat-Konten dürfen canViewPayroll NICHT setzen — dieses Flag steuert
-    // den Zugang zu Lohn-/SV-Daten und ist nur für Dienstleister relevant.
-    // AccountType frisch aus DB lesen (keine Session-Cache-Abhängigkeit).
-    const [callerAccount] = await db
-      .select({ accountType: usersTable.accountType })
-      .from(usersTable)
-      .where(eq(usersTable.id, ownerId));
-    if (callerAccount?.accountType !== "dienstleister" && "canViewPayroll" in updates) {
-      delete (updates as Record<string, unknown>)["canViewPayroll"];
-      // Falls nur canViewPayroll geschickt wurde und sonst nichts übrig bleibt.
-      if (Object.keys(updates).length === 0) {
-        res
-          .status(403)
-          .json({ error: "canViewPayroll kann nur von Dienstleister-Konten gesetzt werden" });
-        return;
-      }
-    }
+    // Alle Konto-Admins (auch privat) dürfen beide Flags für Mitglieder ihres Teams setzen.
+    // canViewPayroll gibt der Person Zugang zu Lohn-/SV-Daten — beim Privat-Konto ist
+    // das eine bewusste Entscheidung des Eigentümers (UI zeigt Hinweistext).
 
     if (Object.keys(updates).length === 0) {
       res.status(400).json({ error: "Keine Felder zum Aktualisieren angegeben" });

@@ -13,6 +13,11 @@ export type AuthUser = {
    * Wird vom Server mitgeliefert; undefined = alter Token vor dem Feature-Release.
    */
   isTeamleiter?: boolean;
+  /**
+   * true wenn der Nutzer in mindestens einem Teamleiter-Team auch canViewPayroll=true hat.
+   * Globales Flag; feingranulare Team-Prüfung erfolgt serverseitig.
+   */
+  canViewPayroll?: boolean;
 };
 
 type AuthContextType = {

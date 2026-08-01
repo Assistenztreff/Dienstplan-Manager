@@ -7,6 +7,8 @@ import {
   useListTeamMembers,
   useMoveTeamMember,
   useUpdateTeamMemberFlags,
+  useAddTeamMember,
+  useRemoveTeamMember,
   getListTeamsQueryKey,
   getListTeamMembersQueryKey,
   getListUsersQueryKey,
@@ -27,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, Building2, ArrowRightLeft, Lock, UserCog } from "lucide-react";
+import { Plus, Pencil, Trash2, Building2, ArrowRightLeft, Lock, UserCog, Users } from "lucide-react";
 import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/auth";
@@ -295,8 +297,7 @@ function TransferDialog({ team, teams, onClose }: TransferDialogProps) {
 
 type TeamleiterDialogProps = {
   team: Team;
-  /** Ob der eingeloggte Admin ein Dienstleister-Konto hat.
-   * Nur dann wird der canViewPayroll-Toggle angezeigt (Lohnbuchhaltung). */
+  /** Ob der eingeloggte Admin ein Dienstleister-Konto hat (steuert Hinweistext). */
   isDienstleister: boolean;
   onClose: () => void;
 };
@@ -411,7 +412,7 @@ function TeamleiterDialog({ team, isDienstleister, onClose }: TeamleiterDialogPr
                           </span>
                         </Label>
                       </div>
-                      {flags.isTeamleiter && isDienstleister && (
+                      {flags.isTeamleiter && (
                         <div className="flex items-center gap-3 pl-8">
                           <Switch
                             id={`cp-${m.userId}`}
@@ -422,7 +423,9 @@ function TeamleiterDialog({ team, isDienstleister, onClose }: TeamleiterDialogPr
                           <Label htmlFor={`cp-${m.userId}`} className="text-sm cursor-pointer">
                             Darf Lohn-/Personaldaten sehen
                             <span className="block text-xs text-muted-foreground font-normal">
-                              Gibt Zugang zu Stundenlohn, Sozialversicherungs- und Steuerdaten
+                              {isDienstleister
+                                ? "Gibt Zugang zu Stundenlohn, Sozialversicherungs- und Steuerdaten"
+                                : "Damit sieht diese Person auch Stundenlöhne, Verträge und persönliche Daten der anderen Teammitglieder."}
                             </span>
                           </Label>
                         </div>
@@ -443,6 +446,170 @@ function TeamleiterDialog({ team, isDienstleister, onClose }: TeamleiterDialogPr
   );
 }
 
+// ---------------------------------------------------------------------------
+// MemberManagementDialog: Mitglieder eines Teams anzeigen, hinzufügen und
+// entfernen. Für Teamleiter (die kein Team-Eigentümer sind) sichtbar.
+// ---------------------------------------------------------------------------
+
+type MemberManagementDialogProps = {
+  team: Team;
+  allTeams: Team[];
+  onClose: () => void;
+};
+
+function MemberManagementDialog({ team, allTeams, onClose }: MemberManagementDialogProps) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [sourceTeamId, setSourceTeamId] = useState<string | undefined>(
+    allTeams.find((t) => t.id !== team.id)?.id.toString(),
+  );
+  const [isAdding, setIsAdding] = useState(false);
+  const [isRemoving, setIsRemoving] = useState<number | null>(null);
+
+  const { data: currentMembersRaw, isLoading } = useListTeamMembers(team.id);
+  const currentMembers = (currentMembersRaw ?? []) as Member[];
+
+  const sourceId = sourceTeamId != null ? Number(sourceTeamId) : undefined;
+  const { data: sourceMembersRaw } = useListTeamMembers(sourceId ?? 0, {
+    query: { enabled: sourceId != null },
+  } as Parameters<typeof useListTeamMembers>[1]);
+  const sourceMembers = (sourceMembersRaw ?? []) as Member[];
+
+  const currentMemberIds = new Set(currentMembers.map((m) => m.userId));
+  const otherTeams = allTeams.filter((t) => t.id !== team.id);
+  const addCandidates = sourceMembers.filter((m) => !currentMemberIds.has(m.userId));
+
+  const addMember = useAddTeamMember();
+  const removeMember = useRemoveTeamMember();
+
+  async function handleAdd(userId: number) {
+    setIsAdding(true);
+    try {
+      await addMember.mutateAsync({ id: team.id, data: { userId } });
+      await queryClient.invalidateQueries({ queryKey: getListTeamMembersQueryKey(team.id) });
+    } catch (err) {
+      toast({
+        title: "Hinzufügen fehlgeschlagen",
+        description: readableApiError(err, "Bitte erneut versuchen."),
+        variant: "destructive",
+      });
+    } finally {
+      setIsAdding(false);
+    }
+  }
+
+  async function handleRemove(userId: number) {
+    setIsRemoving(userId);
+    try {
+      await removeMember.mutateAsync({ id: team.id, userId });
+      await queryClient.invalidateQueries({ queryKey: getListTeamMembersQueryKey(team.id) });
+    } catch (err) {
+      toast({
+        title: "Entfernen fehlgeschlagen",
+        description: readableApiError(err, "Bitte erneut versuchen."),
+        variant: "destructive",
+      });
+    } finally {
+      setIsRemoving(null);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-xl flex items-center gap-2">
+            <Users className="h-5 w-5 text-muted-foreground" />
+            Mitglieder: {team.name}
+          </DialogTitle>
+        </DialogHeader>
+
+        {/* Aktuelle Mitglieder */}
+        <div className="space-y-1 py-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+            Aktuelle Mitglieder
+          </p>
+          {isLoading ? (
+            <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full rounded-md" />)}</div>
+          ) : currentMembers.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-3 text-center">Noch keine Mitglieder.</p>
+          ) : (
+            <ul className="divide-y divide-border/40 rounded-lg border border-border/50">
+              {currentMembers.map((m) => (
+                <li key={m.userId} className="flex items-center justify-between gap-2 px-3 py-2">
+                  <div>
+                    <span className="text-sm font-medium">{m.name}</span>
+                    <span className="ml-2 text-xs text-muted-foreground">{m.email}</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0 text-destructive hover:text-destructive"
+                    disabled={isRemoving === m.userId}
+                    onClick={() => void handleRemove(m.userId)}
+                  >
+                    {isRemoving === m.userId ? "…" : "Entfernen"}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Aus anderen Teams hinzufügen */}
+        {otherTeams.length > 0 && (
+          <div className="space-y-2 border-t border-border/40 pt-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Aus anderem Team hinzufügen
+            </p>
+            {otherTeams.length > 1 && (
+              <Select value={sourceTeamId} onValueChange={setSourceTeamId}>
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue placeholder="Team auswählen" />
+                </SelectTrigger>
+                <SelectContent>
+                  {otherTeams.map((t) => (
+                    <SelectItem key={t.id} value={t.id.toString()}>{t.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {addCandidates.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Alle Mitglieder des anderen Teams sind bereits hier eingetragen.
+              </p>
+            ) : (
+              <ul className="divide-y divide-border/40 rounded-lg border border-border/50">
+                {addCandidates.map((m) => (
+                  <li key={m.userId} className="flex items-center justify-between gap-2 px-3 py-2">
+                    <div>
+                      <span className="text-sm font-medium">{m.name}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">{m.email}</span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      disabled={isAdding}
+                      onClick={() => void handleAdd(m.userId)}
+                    >
+                      Hinzufügen
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        <DialogFooter className="pt-2">
+          <Button onClick={onClose}>Schließen</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function TeamVerwaltung() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -454,11 +621,12 @@ export default function TeamVerwaltung() {
   const [editTeam, setEditTeam] = useState<Team | undefined>();
   const [transferTeam, setTransferTeam] = useState<Team | undefined>();
   const [teamleiterTeam, setTeamleiterTeam] = useState<Team | undefined>();
+  const [memberTeam, setMemberTeam] = useState<Team | undefined>();
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
-  // Teamleiter-Rollen-Button für alle Konto-Admins (auch privat).
-  // canViewPayroll-Toggle im Dialog ist nur für Dienstleister-Konten sichtbar.
+  // isTeamleiter = eingeloggte Person ist Teamleiter, kein Admin.
   const isFullAdmin = isAdminRole(currentUser?.role);
+  const isTeamleiterMode = !isFullAdmin && currentUser?.isTeamleiter === true;
   const isDienstleister = currentUser?.accountType === "dienstleister";
 
   const teams: Team[] = (data ?? []) as Team[];
@@ -512,10 +680,13 @@ export default function TeamVerwaltung() {
         <div>
           <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Team-Verwaltung</h2>
           <p className="text-muted-foreground mt-1 text-sm">
-            Teams für die Organisation von Assistenten und Dienstplänen verwalten
+            {isTeamleiterMode
+              ? "Mitglieder der dir zugewiesenen Teams verwalten"
+              : "Teams für die Organisation von Assistenten und Dienstplänen verwalten"}
           </p>
         </div>
-        {canAddTeam ? (
+        {/* Neues Team nur für Admins — Teamleiter dürfen keine Teams anlegen */}
+        {!isTeamleiterMode && (canAddTeam ? (
           <Button onClick={openCreate} className="gap-2">
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Neues Team</span>
@@ -531,11 +702,11 @@ export default function TeamVerwaltung() {
             <span className="hidden sm:inline">Neues Team</span>
             <span className="sm:hidden">Neu</span>
           </Button>
-        )}
+        ))}
       </div>
 
       {/* Limit-Hinweis (Free-Plan). Bei Premium ist teamLimit null. */}
-      {!canAddTeam && teamLimit !== null && (
+      {!isTeamleiterMode && !canAddTeam && teamLimit !== null && (
         <PlanLimitBanner>
           Im Free-Plan ist maximal {teamLimit} Team möglich. Für mehrere Teams ist ein Upgrade auf
           Premium nötig.
@@ -568,49 +739,67 @@ export default function TeamVerwaltung() {
                   <div className="min-w-0 flex-1">
                     <span className="font-medium truncate">{team.name}</span>
                   </div>
+
+                  {/* Mitglieder-Button: für Admins und Teamleiter */}
                   <Button
                     variant="outline"
                     size="sm"
                     className="gap-1.5"
-                    onClick={() => setTransferTeam(team)}
-                    data-testid={`transfer-team-${team.id}`}
+                    onClick={() => setMemberTeam(team)}
+                    title="Mitglieder dieses Teams verwalten"
                   >
-                    <ArrowRightLeft className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Überführen</span>
+                    <Users className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Mitglieder</span>
                   </Button>
-                  {isFullAdmin && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5"
-                      onClick={() => setTeamleiterTeam(team)}
-                      title="Teamleiter-Rollen verwalten"
-                    >
-                      <UserCog className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Rollen</span>
-                    </Button>
+
+                  {/* Admin-Only-Buttons: Überführen, Rollen, Bearbeiten, Löschen */}
+                  {!isTeamleiterMode && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => setTransferTeam(team)}
+                        data-testid={`transfer-team-${team.id}`}
+                      >
+                        <ArrowRightLeft className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Überführen</span>
+                      </Button>
+                      {isFullAdmin && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => setTeamleiterTeam(team)}
+                          title="Teamleiter-Rollen verwalten"
+                        >
+                          <UserCog className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Rollen</span>
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => openEdit(team)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Bearbeiten</span>
+                      </Button>
+                      <Button
+                        variant={confirmDelete === team.id ? "destructive" : "ghost"}
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => handleDelete(team.id)}
+                        onBlur={() => setConfirmDelete(null)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">
+                          {confirmDelete === team.id ? "Wirklich?" : "Löschen"}
+                        </span>
+                      </Button>
+                    </>
                   )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={() => openEdit(team)}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Bearbeiten</span>
-                  </Button>
-                  <Button
-                    variant={confirmDelete === team.id ? "destructive" : "ghost"}
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={() => handleDelete(team.id)}
-                    onBlur={() => setConfirmDelete(null)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">
-                      {confirmDelete === team.id ? "Wirklich?" : "Löschen"}
-                    </span>
-                  </Button>
                 </li>
               ))}
             </ul>
@@ -618,10 +807,12 @@ export default function TeamVerwaltung() {
         </CardContent>
       </Card>
 
-      <p className="text-xs text-muted-foreground">
-        Teams strukturieren Assistenten und Dienstpläne. Ein Team kann nur gelöscht werden, wenn
-        ihm keine Mitglieder oder Daten mehr zugeordnet sind.
-      </p>
+      {!isTeamleiterMode && (
+        <p className="text-xs text-muted-foreground">
+          Teams strukturieren Assistenten und Dienstpläne. Ein Team kann nur gelöscht werden, wenn
+          ihm keine Mitglieder oder Daten mehr zugeordnet sind.
+        </p>
+      )}
 
       {dialogOpen && (
         <TeamDialog open={dialogOpen} onClose={closeDialog} editTeam={editTeam} />
@@ -640,6 +831,14 @@ export default function TeamVerwaltung() {
           team={teamleiterTeam}
           isDienstleister={isDienstleister}
           onClose={() => setTeamleiterTeam(undefined)}
+        />
+      )}
+
+      {memberTeam && (
+        <MemberManagementDialog
+          team={memberTeam}
+          allTeams={teams}
+          onClose={() => setMemberTeam(undefined)}
         />
       )}
     </div>

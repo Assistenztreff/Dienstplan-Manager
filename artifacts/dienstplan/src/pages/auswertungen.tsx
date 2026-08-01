@@ -419,12 +419,21 @@ export default function Auswertungen() {
         onExport={() => setExportOpen(true)}
         zipExportDisabled={
           !canPayrollExport ||
+          // Teamleiter ohne canViewPayroll dürfen den Lohn-ZIP nicht exportieren
+          // (ZIP-Export ist für Lohnbüro-Weitergabe; lohnfreie Variante genügt nicht).
+          (currentUser?.isTeamleiter === true && !currentUser?.canViewPayroll) ||
           isLoading ||
           !Array.isArray(balances) ||
           balances.length === 0 ||
           isZipExporting
         }
-        zipExportTitle={canPayrollExport ? undefined : PLAN_FEATURE_MESSAGES.payrollExport}
+        zipExportTitle={
+          currentUser?.isTeamleiter && !currentUser?.canViewPayroll
+            ? "Lohn-ZIP-Export erfordert die Lohndaten-Berechtigung im Team"
+            : canPayrollExport
+              ? undefined
+              : PLAN_FEATURE_MESSAGES.payrollExport
+        }
         onZipExport={handleZipExport}
         zipProgress={zipProgress}
         month={month}
