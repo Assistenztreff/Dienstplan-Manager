@@ -7,7 +7,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { requireAuth, requireAdmin, requireTeamleiterOrAdmin, isAdminLikeRole } from "../middleware/auth";
 import { requirePlanFeature, userHasFeatureViaTeamOwner, getLenientTimeTrackingTeamIds } from "../lib/plan";
 import { resolveAllowanceOps, type ResolvedAllowanceOps } from "../lib/allowance-resolve";
-import { resolveReadTeamScope, parseTeamIdParam, getAllowedTeamIds, getEffectiveAdminTeamIds, getTeamleiterTeamIds } from "../lib/teams";
+import { resolveReadTeamScope, parseTeamIdParam, getAllowedTeamIds, getEffectiveAdminTeamIds, getTeamleiterTeamIds, canViewPayrollInTeam } from "../lib/teams";
 import {
   LOW_VACATION_THRESHOLD,
   HORIZON_DAYS,
@@ -597,6 +597,31 @@ router.get("/dashboard/hours-balance", requireTeamleiterOrAdmin, requirePlanFeat
     res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
     return;
   }
+
+  // Teamleiter ohne canViewPayroll: alle Geld-/Lohnfelder aus jeder Zeile
+  // entfernen. Reine Stundenwerte bleiben erhalten (Dienstplanung braucht sie).
+  if (!isAdminLikeRole(role) && requestedTeamId != null) {
+    const hasPayroll = await canViewPayrollInTeam(userId, requestedTeamId);
+    if (!hasPayroll) {
+      const stripped = result.map((row) => ({
+        ...row,
+        hourlyWage: null,
+        basePay: null,
+        nightSurchargePay: null,
+        sundaySurchargePay: null,
+        holidaySurchargePay: null,
+        totalPay: null,
+        teamsitzungEuro: 0,
+        urlaubsabgeltungEuro: 0,
+        absenceNightSurchargePay: null,
+        absenceSundaySurchargePay: null,
+        absenceHolidaySurchargePay: null,
+      }));
+      res.json(stripped);
+      return;
+    }
+  }
+
   res.json(result);
 });
 

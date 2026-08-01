@@ -22,18 +22,19 @@ import { isAdminRole } from "@/lib/roles";
 import { useTimeTrackingEnabled } from "@/hooks/use-time-tracking-enabled";
 import { DevUserSwitcher } from "./dev-user-switcher";
 
-// Interne Navigationspunkte der Dienstplan-App. Rollen-/Konto-Typ-Sichtbarkeit
-// bleibt unveraendert: adminOnly nur fuer Admins, dienstleisterOnly nur fuer
-// Dienstleister-Konten.
+// Interne Navigationspunkte der Dienstplan-App.
+// adminOnly: nur für Konto-Admins (admin/superadmin).
+// dienstleisterOnly: zusätzlich nur für Dienstleister-Konto-Typ.
+// teamleiterAllowed: Teamleiter dürfen diesen Punkt trotz adminOnly sehen.
 const ALL_NAV_ITEMS = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard, adminOnly: false, dienstleisterOnly: false },
-  { href: "/dienstplan", label: "Dienstplan", icon: CalendarDays, adminOnly: false, dienstleisterOnly: false },
-  { href: "/assistenten", label: "Assistenten", icon: Users, adminOnly: true, dienstleisterOnly: false },
-  { href: "/zeiterfassung", label: "Zeiterfassung", icon: Clock, adminOnly: false, dienstleisterOnly: false },
-  { href: "/abwesenheiten", label: "Abwesenheiten", icon: CalendarOff, adminOnly: true, dienstleisterOnly: false },
-  { href: "/auswertungen", label: "Auswertungen", icon: BarChart3, adminOnly: true, dienstleisterOnly: false },
-  { href: "/team-verwaltung", label: "Team-Verwaltung", icon: Building2, adminOnly: true, dienstleisterOnly: true },
-  { href: "/einstellungen", label: "Einstellungen", icon: Settings, adminOnly: false, dienstleisterOnly: false },
+  { href: "/", label: "Dashboard", icon: LayoutDashboard, adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
+  { href: "/dienstplan", label: "Dienstplan", icon: CalendarDays, adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
+  { href: "/assistenten", label: "Assistenten", icon: Users, adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true },
+  { href: "/zeiterfassung", label: "Zeiterfassung", icon: Clock, adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
+  { href: "/abwesenheiten", label: "Abwesenheiten", icon: CalendarOff, adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true },
+  { href: "/auswertungen", label: "Auswertungen", icon: BarChart3, adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true },
+  { href: "/team-verwaltung", label: "Team-Verwaltung", icon: Building2, adminOnly: true, dienstleisterOnly: true, teamleiterAllowed: false },
+  { href: "/einstellungen", label: "Einstellungen", icon: Settings, adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
 ];
 
 // ---------------------------------------------------------------------------
@@ -299,7 +300,7 @@ function MobileFullMenu({
 
   const navItems = ALL_NAV_ITEMS.filter(
     (item) =>
-      (!item.adminOnly || isAdminRole(currentUser?.role)) &&
+      (!item.adminOnly || isAdminRole(currentUser?.role) || (item.teamleiterAllowed && currentUser?.isTeamleiter)) &&
       (!item.dienstleisterOnly || currentUser?.accountType === "dienstleister") &&
       (item.href !== "/zeiterfassung" || timeTrackingEnabled),
   );
@@ -490,7 +491,7 @@ function AppSubNavigation() {
 
   const navItems = ALL_NAV_ITEMS.filter(
     (item) =>
-      (!item.adminOnly || isAdminRole(currentUser?.role)) &&
+      (!item.adminOnly || isAdminRole(currentUser?.role) || (item.teamleiterAllowed && currentUser?.isTeamleiter)) &&
       (!item.dienstleisterOnly || currentUser?.accountType === "dienstleister") &&
       (item.href !== "/zeiterfassung" || timeTrackingEnabled),
   );

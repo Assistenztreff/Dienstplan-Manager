@@ -295,10 +295,13 @@ function TransferDialog({ team, teams, onClose }: TransferDialogProps) {
 
 type TeamleiterDialogProps = {
   team: Team;
+  /** Ob der eingeloggte Admin ein Dienstleister-Konto hat.
+   * Nur dann wird der canViewPayroll-Toggle angezeigt (Lohnbuchhaltung). */
+  isDienstleister: boolean;
   onClose: () => void;
 };
 
-function TeamleiterDialog({ team, onClose }: TeamleiterDialogProps) {
+function TeamleiterDialog({ team, isDienstleister, onClose }: TeamleiterDialogProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: membersData, isLoading } = useListTeamMembers(team.id);
@@ -408,7 +411,7 @@ function TeamleiterDialog({ team, onClose }: TeamleiterDialogProps) {
                           </span>
                         </Label>
                       </div>
-                      {flags.isTeamleiter && (
+                      {flags.isTeamleiter && isDienstleister && (
                         <div className="flex items-center gap-3 pl-8">
                           <Switch
                             id={`cp-${m.userId}`}
@@ -453,8 +456,10 @@ export default function TeamVerwaltung() {
   const [teamleiterTeam, setTeamleiterTeam] = useState<Team | undefined>();
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
-  // Teamleiter-Rollen-Button nur für vollständige Admins (dienstleister).
-  const isFullAdmin = isAdminRole(currentUser?.role) && currentUser?.accountType === "dienstleister";
+  // Teamleiter-Rollen-Button für alle Konto-Admins (auch privat).
+  // canViewPayroll-Toggle im Dialog ist nur für Dienstleister-Konten sichtbar.
+  const isFullAdmin = isAdminRole(currentUser?.role);
+  const isDienstleister = currentUser?.accountType === "dienstleister";
 
   const teams: Team[] = (data ?? []) as Team[];
 
@@ -633,6 +638,7 @@ export default function TeamVerwaltung() {
       {teamleiterTeam && (
         <TeamleiterDialog
           team={teamleiterTeam}
+          isDienstleister={isDienstleister}
           onClose={() => setTeamleiterTeam(undefined)}
         />
       )}

@@ -21,6 +21,7 @@ import {
 } from "@workspace/api-zod";
 import {
   requireDienstleister,
+  requireAdmin,
   requireTeamleiterOrAdmin,
   requireAuth,
   isAdminLikeRole,
@@ -322,11 +323,12 @@ router.post("/teams/:id/members", requireTeamleiterOrAdmin, async (req, res): Pr
 
 /**
  * PATCH /teams/:id/members/:userId — Setzt isTeamleiter und/oder canViewPayroll.
- * Nur Konto-Admins (Eigentümer) dürfen diese Flags setzen.
+ * Konto-Admins (auch privat) dürfen isTeamleiter setzen; canViewPayroll ist
+ * AUSSCHLIESSLICH Dienstleister-Konten vorbehalten (Lohnbuchhaltung).
  */
 router.patch(
   "/teams/:id/members/:userId",
-  requireDienstleister,
+  requireAdmin,
   async (req, res): Promise<void> => {
     const teamId = Number(req.params["id"]);
     const targetUserId = Number(req.params["userId"]);
@@ -342,7 +344,26 @@ router.patch(
       res.status(400).json({ error: "Invalid request body" });
       return;
     }
-    const updates = body.data;
+    const updates = { ...body.data };
+
+    // Privat-Konten dürfen canViewPayroll NICHT setzen — dieses Flag steuert
+    // den Zugang zu Lohn-/SV-Daten und ist nur für Dienstleister relevant.
+    // AccountType frisch aus DB lesen (keine Session-Cache-Abhängigkeit).
+    const [callerAccount] = await db
+      .select({ accountType: usersTable.accountType })
+      .from(usersTable)
+      .where(eq(usersTable.id, ownerId));
+    if (callerAccount?.accountType !== "dienstleister" && "canViewPayroll" in updates) {
+      delete (updates as Record<string, unknown>)["canViewPayroll"];
+      // Falls nur canViewPayroll geschickt wurde und sonst nichts übrig bleibt.
+      if (Object.keys(updates).length === 0) {
+        res
+          .status(403)
+          .json({ error: "canViewPayroll kann nur von Dienstleister-Konten gesetzt werden" });
+        return;
+      }
+    }
+
     if (Object.keys(updates).length === 0) {
       res.status(400).json({ error: "Keine Felder zum Aktualisieren angegeben" });
       return;
