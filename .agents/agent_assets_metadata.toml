@@ -23,3 +23,10 @@ id = "K9rp504CwAm3tCEH9MTYE"
 uri = "file://exports/dienstplan-app-quellcode.zip"
 type = "unspecified"
 title = "Dienstplan-App Quellcode (ZIP für die Agentur)"
+
+[[outputs]]
+id = "KShnz94-6tEtv2okX_IEs"
+uri = "file://docs/features/teamleiter-konzept.md"
+type = "text"
+title = "Teamleiter-Konzept"
+description = "Feature-Konzept: Teamleiter-Konten – Berechtigungsmatrix, offene Fragen und Aufwandsschätzung"
