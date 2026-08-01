@@ -12,6 +12,11 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
   - Am Sessionende: kurze Zusammenfassung (was gemacht, wie viele Anläufe, Probleme).
   - Keine automatischen Deployments ohne Rückfrage; keine Komplettüberarbeitung, wenn ein gezielter Fix reicht.
 
+## Design & Sprache
+
+- Für Tonalität, feste Begriffe, UI-Textregeln (Buttons, Fehlermeldungen, leere Zustände) und das Barrierefreiheits-Farbsystem gilt verbindlich `DESIGN-GUIDELINES.md` im Repo-Root. Bei jeder Aufgabe mit sichtbaren Texten oder UI-Elementen zuerst dort nachschlagen.
+- Personen-/Statusfarben AUSSCHLIESSLICH über `getBarrierefreieFarbe()` beziehen — nie neue Farbwerte hart codieren (WCAG-AA-Kontrast ist dort bereits geprüft).
+
 ## Stack & Betrieb
 
 - **Single Responsive Web App (PWA)** — EINE React-Codebasis, KEINE native App; Geräteanpassung nur über Tailwind-Breakpoints.
