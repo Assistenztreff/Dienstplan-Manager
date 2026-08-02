@@ -48,6 +48,8 @@ import { readableApiError, planUpgradeMessage, planFeatureMessage, PLAN_FEATURE_
 import { hasAccess, getLimit, isWithinLimit } from "@/lib/entitlements";
 import { PlanLimitBanner, PlanUpgradeLink } from "@/components/plan-limit-banner";
 import { useToast } from "@/hooks/use-toast";
+import { useAssistantPalette } from "@/lib/use-assistant-palette";
+import { PERSON_SLOTS_LIGHT, PERSON_SLOTS_DARK } from "@/lib/barrierefreie-farben";
 
 type CompensationType = "regular" | "percentage" | "flat";
 
@@ -658,6 +660,83 @@ function ProfileCard() {
 
       {editOpen && <EditProfileDialog open={editOpen} onClose={() => setEditOpen(false)} />}
       {pwOpen && <ChangePasswordDialog open={pwOpen} onClose={() => setPwOpen(false)} />}
+    </Card>
+  );
+}
+
+function AssistantPaletteCard() {
+  const [palette, setPalette] = useAssistantPalette();
+
+  const PALETTES = [
+    {
+      id: "light" as const,
+      label: "Hell",
+      description: "Helle Farben mit schwarzer Schrift (WCAG-AA)",
+      slots: PERSON_SLOTS_LIGHT,
+      text: "#000000",
+    },
+    {
+      id: "dark" as const,
+      label: "Dunkel – Golden-Winkel",
+      description: "Dunkle Farben mit weißer Schrift (WCAG-AA)",
+      slots: PERSON_SLOTS_DARK,
+      text: "#ffffff",
+    },
+  ] as const;
+
+  return (
+    <Card className="border-border/50 shadow-sm">
+      <CardContent className="p-4 space-y-3">
+        <div>
+          <h3 className="font-serif text-lg font-bold text-foreground">Assistenzkraft-Farben</h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Wählen Sie, welche Farbpalette im Monatskalender für die Unterscheidung der
+            Assistenzkräfte verwendet wird. Die Slot-Nummern bleiben beim Wechsel stabil.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {PALETTES.map((p) => {
+            const active = palette === p.id;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setPalette(p.id)}
+                className={[
+                  "text-left rounded-xl border-2 p-3 transition-colors",
+                  active
+                    ? "border-[#092948] bg-[#092948]/5"
+                    : "border-border hover:border-[#092948]/40",
+                ].join(" ")}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold">{p.label}</span>
+                  {active && (
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#092948] bg-[#092948]/10 rounded-full px-2 py-0.5">
+                      Aktiv
+                    </span>
+                  )}
+                </div>
+                {/* Farbvorschau: erste 6 Slots */}
+                <div className="flex gap-[3px] flex-wrap">
+                  {p.slots.slice(0, 6).map((slot, idx) => (
+                    <span
+                      key={idx}
+                      title={`Slot ${idx + 1}`}
+                      style={{ backgroundColor: slot.bg, color: slot.text, borderColor: slot.border }}
+                      className="inline-flex items-center justify-center rounded-[3px] border text-[9px] font-bold w-7 h-5"
+                    >
+                      {idx + 1}
+                    </span>
+                  ))}
+                  <span className="text-[9px] text-muted-foreground self-center pl-1">+6 weitere</span>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1.5">{p.description}</p>
+              </button>
+            );
+          })}
+        </div>
+      </CardContent>
     </Card>
   );
 }
@@ -1357,6 +1436,8 @@ export default function Einstellungen() {
 
 
       {isDienstleister && <LogoSettingsCard />}
+
+      {isAdmin && <AssistantPaletteCard />}
 
       {/* Sprungziel für Verweise aus anderen Seiten (z. B. Hinweis auf der
           Zeiterfassungs-Seite bei deaktivierter Zeiterfassung). */}

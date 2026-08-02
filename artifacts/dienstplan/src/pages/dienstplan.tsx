@@ -37,7 +37,8 @@ import {
   nameInitials,
   type PersonColorAssignment,
 } from "@/lib/shift-model-colors";
-import { type PersonSlot, PERSON_SLOTS } from "@/lib/barrierefreie-farben";
+import { type PersonSlot, getPersonSlots } from "@/lib/barrierefreie-farben";
+import { useAssistantPalette } from "@/lib/use-assistant-palette";
 import { hasAccess, getLimit } from "@/lib/entitlements";
 import { type HeaderTier, useIsMobileViewport, useHeaderTier } from "@/lib/header-tier";
 import { toast } from "sonner";
@@ -746,22 +747,44 @@ function MonthGrid({
   const selectedShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), selectedDay));
   const numWeeks = Math.ceil((blanks.length + days.length) / 7);
 
-  // ── Kategoriale Personen-Slot-Farben (neue 8-Slot-Palette) ───────────────
-  // Abgeleitet aus dem bestehenden PersonColorAssignment (selbe sort-Reihenfolge),
-  // aber als Inline-Style-Objekte (Hex-Farben) statt Tailwind-Klassen.
+  // ── Aktive Assistenzkraft-Palette (Einstellung aus localStorage) ─────────
+  const [assistantPalette] = useAssistantPalette();
+  const activeSlots = getPersonSlots(assistantPalette);
+
+  // ── Kategoriale Personen-Slot-Farben ──────────────────────────────────────
+  // Zuweisung: Assistenzkraft sortiert nach ID (= Anlagereihenfolge) → Slot 1, 2, ...
+  // Bei >12 Assistenzkräften: wrap-around ab Slot 1 (zweite Runde).
   const personSlots = useMemo<Map<number, PersonSlot>>(() => {
     if (!personColors) return new Map();
     const sortedIds = [...personColors.keys()].sort((a, b) => a - b);
-    return new Map(sortedIds.map((id, idx) => [id, PERSON_SLOTS[idx % PERSON_SLOTS.length]!]));
-  }, [personColors]);
+    return new Map(sortedIds.map((id, idx) => [id, activeSlots[idx % activeSlots.length]!]));
+  }, [personColors, activeSlots]);
 
   function getPersonSlot(userId: number): PersonSlot {
     const slot = personSlots.get(userId);
     if (slot) return slot;
-    if (!Number.isFinite(userId)) return PERSON_SLOTS[0]!;
+    if (!Number.isFinite(userId)) return activeSlots[0]!;
     const hash = Math.abs(Math.trunc(userId) * 2654435761);
-    return PERSON_SLOTS[hash % PERSON_SLOTS.length]!;
+    return activeSlots[hash % activeSlots.length]!;
   }
+
+  // ── Dynamische Zeilenhöhe abhängig von max. Einträgen pro Tag ─────────────
+  // Spec §3: 1–2 Einträge → scrollfrei; erst ab 3 Einträgen darf die Ansicht
+  // nach unten wachsen. "Einträge" = Schichten + Abwesenheitstypen.
+  const maxDayEntries = useMemo(() => {
+    let max = 0;
+    for (const day of days) {
+      const dayShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), day));
+      const nonAbs = dayShifts.filter((s) => !isAbsenceShift(s)).length;
+      const absTypes = new Set(dayShifts.filter((s) => isAbsenceShift(s)).map((s) => s.type)).size;
+      max = Math.max(max, nonAbs + absTypes);
+    }
+    return max;
+  }, [shifts, days]);
+
+  // Bei ≤2 Einträgen: feste Viewport-Höhe (alle Wochen passen ohne Scrollen).
+  // Bei ≥3 Einträgen: Zellen wachsen mit Inhalt → Seite kann scrollen.
+  const useDynamicRows = maxDayEntries >= 3;
 
   // ── Sticky-Header-Höhe messen (ResizeObserver) ────────────────────────────
   // Der Dienstplan-Header klebt bei top:0; die Wochenzeile klebt direkt darunter.
@@ -868,12 +891,18 @@ function MonthGrid({
       </div>
 
       {/* ── Kalender-Grid ─────────────────────────────────────────────────── */}
+      {/* Spec §3: Bei ≤2 Einträgen/Tag → feste Viewport-Höhe (scrollfrei);
+          Bei ≥3 Einträgen → auto-Zeilen, Seite darf wachsen/scrollen. */}
       <div
-        className="grid grid-cols-7 gap-px overflow-hidden rounded-b-lg border border-t-0 border-border/30 bg-border/20"
-        style={{
-          ...(gridHeight ? { height: gridHeight } : {}),
-          gridTemplateRows: `repeat(${numWeeks}, 1fr)`,
-        }}
+        className="grid grid-cols-7 gap-px rounded-b-lg border border-t-0 border-border/30 bg-border/20"
+        style={
+          useDynamicRows
+            ? { gridTemplateColumns: "repeat(7, 1fr)", overflow: "visible" }
+            : {
+                ...(gridHeight ? { height: gridHeight, overflow: "hidden" } : {}),
+                gridTemplateRows: `repeat(${numWeeks}, 1fr)`,
+              }
+        }
         data-testid="month-grid"
       >
         {blanks.map((_, i) => (
