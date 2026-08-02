@@ -679,120 +679,226 @@ export type ExportSimpleMonthOptions = {
   filename?: string;
 };
 
-function renderSimpleMonthPage(
+// ---------------------------------------------------------------------------
+// Hilfsfunktionen für das neue Zwei-Seiten-Übersichts-Layout
+// ---------------------------------------------------------------------------
+
+function getDaysInMonth(year: number, month: number): Date[] {
+  const days: Date[] = [];
+  const d = new Date(year, month - 1, 1);
+  while (d.getMonth() === month - 1) {
+    days.push(new Date(d));
+    d.setDate(d.getDate() + 1);
+  }
+  return days;
+}
+
+const WEEKDAY_ABBR = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+
+/** Einfacher Footer ohne Unterschriftsfeld (für die Übersichtsseiten). */
+function addSimpleFooter(doc: any, pageWidth: number) {
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const createdLabel = `Erstellt am ${format(new Date(), "dd.MM.yyyy", { locale: de })}`;
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(120);
+    doc.text(createdLabel, 14, pageHeight - 8);
+    doc.text(`Seite ${i} von ${pageCount}`, pageWidth - 14, pageHeight - 8, { align: "right" });
+    doc.setTextColor(0);
+  }
+}
+
+/** Kompakter Text für eine Schicht in einer Tabellenzelle. */
+function shiftCellText(s: SimpleMonthShift): string {
+  if (ABSENCE_TYPES.has(s.type)) return SHIFT_TYPE_LABELS[s.type] ?? s.type;
+  if (s.type === "team") return "Teamsitzung";
+  const start = format(new Date(s.startTime), "HH:mm");
+  const end = format(new Date(s.endTime), "HH:mm");
+  const h = hoursFromShift(s.startTime, s.endTime);
+  return `${start}–${end}\n${h} h`;
+}
+
+/**
+ * Seite 1: Kalenderübersicht — alle Tage des Monats als Zeilen,
+ * je eine Spalte pro Assistenzkraft.
+ */
+function renderCalendarOverviewPage(
   doc: any,
   autoTable: any,
   pageWidth: number,
   logo: LoadedImage | null,
-  userName: string,
-  shifts: SimpleMonthShift[],
+  sections: Array<{ user: { id: number; name: string }; rows: SimpleMonthShift[] }>,
   monthLabel: string,
-) {
-  // --- Header ---
+  year: number,
+  month: number,
+): void {
   if (logo) {
-    const logoW = 48;
+    const logoW = 40;
     const logoH = logoW / logo.aspect;
-    doc.addImage(logo.dataUrl, logoImageFormat(logo.dataUrl), pageWidth - 14 - logoW, 12, logoW, logoH);
+    doc.addImage(logo.dataUrl, logoImageFormat(logo.dataUrl), pageWidth - 14 - logoW, 7, logoW, logoH);
+  }
+  doc.setFontSize(15);
+  doc.setFont("helvetica", "bold");
+  doc.text("Monatsübersicht", 14, 15);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Monat: ${monthLabel}`, 14, 21);
+
+  // Lookup: userId → dateKey → shifts[]
+  const byUserByDay = new Map<number, Map<string, SimpleMonthShift[]>>();
+  for (const section of sections) {
+    const byDay = new Map<string, SimpleMonthShift[]>();
+    for (const shift of section.rows) {
+      const day = format(new Date(shift.startTime), "yyyy-MM-dd");
+      if (!byDay.has(day)) byDay.set(day, []);
+      byDay.get(day)!.push(shift);
+    }
+    byUserByDay.set(section.user.id, byDay);
   }
 
-  doc.setFontSize(18);
-  doc.setFont("helvetica", "bold");
-  doc.text("Monatsübersicht", 14, 20);
+  const days = getDaysInMonth(year, month);
 
-  doc.setFontSize(12);
-  doc.setFont("helvetica", "normal");
-  doc.text(`Assistent: ${userName}`, 14, 32);
-  doc.text(`Monat: ${monthLabel}`, 14, 39);
-
-  doc.setFontSize(9);
-  doc.setTextColor(100);
-  doc.text(
-    "Einfacher Monats-Export: geplante, bestätigte Dienste und Abwesenheiten — ohne Zeiterfassung.",
-    14,
-    45,
-  );
-  doc.setTextColor(0);
-
-  // Team-Eintraege (Teamsitzung) sind ganztaegige Marker — ihre nominelle
-  // Dauer (00:00–23:59) darf NICHT als geplante Stunden zaehlen; die
-  // Stunden-Gutschrift erfolgt nur in der Premium-Auswertung (hours-balance).
-  const workShifts = shifts.filter((s) => !ABSENCE_TYPES.has(s.type) && s.type !== "team");
-  const teamDays = shifts.filter((s) => s.type === "team").length;
-  const vacationDays = shifts.filter((s) => s.type === "vacation").length;
-  const sickDays = shifts.filter((s) => s.type === "sick").length;
-  const plannedHours =
-    Math.round(
-      workShifts.reduce((sum, s) => sum + hoursFromShift(s.startTime, s.endTime), 0) * 100,
-    ) / 100;
-
-  const summaryRows = [
-    ["Geplante Stunden (bestätigte Dienste)", `${plannedHours} h`],
-    ["Anzahl Dienste", `${workShifts.length}`],
-    ["Urlaubstage", `${vacationDays} ${vacationDays === 1 ? "Tag" : "Tage"}`],
-    ["Krankheitstage", `${sickDays} ${sickDays === 1 ? "Tag" : "Tage"}`],
-    ...(teamDays > 0
-      ? [["Teamsitzungen", `${teamDays} ${teamDays === 1 ? "Tag" : "Tage"}`]]
-      : []),
-  ];
-
-  autoTable(doc, {
-    startY: 50,
-    head: [["Kennzahl", "Wert"]],
-    body: summaryRows,
-    theme: "grid",
-    headStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
-    columnStyles: { 0: { fontStyle: "bold" }, 1: { halign: "right" } },
-    styles: { fontSize: 10 },
-    margin: { left: 14, right: 14 },
+  const head = [["Datum", ...sections.map((s) => s.user.name)]];
+  const body = days.map((day) => {
+    const dateKey = format(day, "yyyy-MM-dd");
+    const dateLabel = `${WEEKDAY_ABBR[day.getDay()]}, ${format(day, "dd.MM.")}`;
+    const cells = sections.map((section) => {
+      const dayShifts = byUserByDay.get(section.user.id)?.get(dateKey) ?? [];
+      if (dayShifts.length === 0) return "";
+      return dayShifts
+        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+        .map(shiftCellText)
+        .join("\n");
+    });
+    return [dateLabel, ...cells];
   });
 
-  // --- Detail table (chronologisch, Abwesenheiten ganztaegig ohne Uhrzeit) ---
-  const detailRows = [...shifts]
-    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
-    .map((s) => {
-      const date = format(new Date(s.startTime), "dd.MM.yyyy", { locale: de });
-      const type = SHIFT_TYPE_LABELS[s.type] ?? s.type;
-      if (ABSENCE_TYPES.has(s.type)) {
-        return [date, type, "ganztägig", "1 Tag"];
-      }
-      if (s.type === "team") {
-        return [date, type, "ganztägig", "—"];
-      }
-      const timeRange = `${format(new Date(s.startTime), "HH:mm")} – ${format(new Date(s.endTime), "HH:mm")}`;
-      return [date, type, timeRange, `${hoursFromShift(s.startTime, s.endTime)} h`];
-    });
+  const contentWidth = pageWidth - 28; // 14 mm Rand je Seite
+  const dateColW = 20;
+  const assistantColW = Math.max(18, (contentWidth - dateColW) / sections.length);
 
-  const tableY = (doc as any).lastAutoTable?.finalY
-    ? (doc as any).lastAutoTable.finalY + 10
-    : 100;
-
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
-  doc.text("Dienste und Abwesenheiten", 14, tableY);
-
-  if (detailRows.length > 0) {
-    autoTable(doc, {
-      startY: tableY + 5,
-      head: [["Datum", "Typ", "Uhrzeit", "Umfang"]],
-      body: detailRows,
-      theme: "striped",
-      headStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
-      columnStyles: { 3: { halign: "right" } },
-      styles: { fontSize: 9 },
-      margin: { left: 14, right: 14, bottom: 40 },
-    });
-  } else {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text("Keine bestätigten Dienste oder Abwesenheiten in diesem Monat.", 14, tableY + 10);
+  const columnStyles: Record<number, any> = {
+    0: { cellWidth: dateColW, fontStyle: "bold", halign: "left" },
+  };
+  for (let i = 1; i <= sections.length; i++) {
+    columnStyles[i] = { cellWidth: assistantColW, halign: "center" };
   }
+
+  autoTable(doc, {
+    startY: 26,
+    head,
+    body,
+    theme: "grid",
+    headStyles: {
+      fillColor: [40, 40, 40],
+      textColor: 255,
+      fontStyle: "bold",
+      fontSize: 7,
+      halign: "center",
+    },
+    columnStyles,
+    styles: { fontSize: 7, cellPadding: 1.5, overflow: "linebreak" },
+    margin: { left: 14, right: 14, bottom: 16 },
+    didParseCell: (data: any) => {
+      if (data.section === "body") {
+        const day = days[data.row.index];
+        if (day && (day.getDay() === 0 || day.getDay() === 6)) {
+          data.cell.styles.fillColor = [242, 242, 242];
+          data.cell.styles.textColor = [100, 100, 100];
+        }
+      }
+    },
+  });
 }
 
 /**
- * Einfacher Monats-Export (Free): eine Seite pro Assistent mit bestätigten
- * (FIX) Diensten und Abwesenheiten (Urlaub/Krank) — ohne Zeiterfassungsdaten.
- * Fuer Team-Admins (alle bzw. gefilterte Assistenten) und Assistenzkraefte
- * (nur die eigenen Dienste, serverseitig gescoped).
+ * Seite 2: Kennzahlen-Übersicht — KPIs als Zeilen,
+ * je eine Spalte pro Assistenzkraft.
+ */
+function renderKennzahlenOverviewPage(
+  doc: any,
+  autoTable: any,
+  pageWidth: number,
+  logo: LoadedImage | null,
+  sections: Array<{ user: { id: number; name: string }; rows: SimpleMonthShift[] }>,
+  monthLabel: string,
+): void {
+  if (logo) {
+    const logoW = 40;
+    const logoH = logoW / logo.aspect;
+    doc.addImage(logo.dataUrl, logoImageFormat(logo.dataUrl), pageWidth - 14 - logoW, 7, logoW, logoH);
+  }
+  doc.setFontSize(15);
+  doc.setFont("helvetica", "bold");
+  doc.text("Kennzahlen-Übersicht", 14, 15);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Monat: ${monthLabel}`, 14, 21);
+
+  const stats = sections.map(({ rows }) => {
+    const workShifts = rows.filter((s) => !ABSENCE_TYPES.has(s.type) && s.type !== "team");
+    const vacationDays = rows.filter((s) => s.type === "vacation").length;
+    const sickDays = rows.filter((s) => s.type === "sick").length;
+    const teamDays = rows.filter((s) => s.type === "team").length;
+    const plannedHours =
+      Math.round(
+        workShifts.reduce((sum, s) => sum + hoursFromShift(s.startTime, s.endTime), 0) * 100,
+      ) / 100;
+    return { plannedHours, serviceCount: workShifts.length, vacationDays, sickDays, teamDays };
+  });
+
+  const head = [["Kennzahl", ...sections.map((s) => s.user.name)]];
+  const body: string[][] = [
+    ["Geplante Stunden (bestätigte Dienste)", ...stats.map((s) => `${s.plannedHours} h`)],
+    ["Anzahl Dienste", ...stats.map((s) => `${s.serviceCount}`)],
+    ["Urlaubstage", ...stats.map((s) => `${s.vacationDays} ${s.vacationDays === 1 ? "Tag" : "Tage"}`)],
+    ["Krankheitstage", ...stats.map((s) => `${s.sickDays} ${s.sickDays === 1 ? "Tag" : "Tage"}`)],
+    ...(stats.some((s) => s.teamDays > 0)
+      ? [["Teamsitzungen", ...stats.map((s) => `${s.teamDays} ${s.teamDays === 1 ? "Tag" : "Tage"}`)] as string[]]
+      : []),
+  ];
+
+  const contentWidth = pageWidth - 28;
+  const kennzahlColW = Math.min(80, contentWidth * 0.35);
+  const assistantColW = Math.max(18, (contentWidth - kennzahlColW) / sections.length);
+
+  const columnStyles: Record<number, any> = {
+    0: { cellWidth: kennzahlColW, fontStyle: "bold" },
+  };
+  for (let i = 1; i <= sections.length; i++) {
+    columnStyles[i] = { cellWidth: assistantColW, halign: "center" };
+  }
+
+  autoTable(doc, {
+    startY: 26,
+    head,
+    body,
+    theme: "grid",
+    headStyles: {
+      fillColor: [40, 40, 40],
+      textColor: 255,
+      fontStyle: "bold",
+      fontSize: 9,
+      halign: "center",
+    },
+    columnStyles,
+    styles: { fontSize: 9, cellPadding: 3 },
+    margin: { left: 14, right: 14, bottom: 16 },
+  });
+}
+
+/**
+ * Einfacher Monats-Export (Free): kompakte Zwei-Seiten-Übersicht.
+ *
+ * Seite 1 — Kalenderübersicht: alle Tage des Monats als Zeilen,
+ *   je eine Spalte pro Assistenzkraft mit ihren bestätigten Diensten/Abwesenheiten.
+ * Seite 2 — Kennzahlen: KPIs (Stunden, Dienste, Urlaub, Krank) als Zeilen,
+ *   je eine Spalte pro Assistenzkraft für den schnellen Quervergleich.
+ *
+ * Basiert ausschließlich auf FIX-Schichten (keine Zeiterfassung).
  */
 export async function exportSimpleMonthPdf({
   shifts,
@@ -803,8 +909,7 @@ export async function exportSimpleMonthPdf({
   teamId,
   filename,
 }: ExportSimpleMonthOptions): Promise<boolean> {
-  // Nur verbindlich bestaetigte (FIX) Eintraege — Entwuerfe/Vorschlaege bleiben
-  // unverbindlich (gleiche Regel wie beim Premium-Stundennachweis).
+  // Nur verbindlich bestaetigte (FIX) Eintraege.
   const fixShifts = shifts.filter((s) => (s.planningStatus ?? "FIX") === "FIX");
 
   const byUser = new Map<number, SimpleMonthShift[]>();
@@ -813,37 +918,28 @@ export async function exportSimpleMonthPdf({
     byUser.get(s.userId)!.push(s);
   }
 
-  // Nur Assistenten mit mindestens einem Eintrag — sonst entstehen beim
-  // "Alle"-Export viele leere Seiten.
-  const sections = users
-    .map((u) => ({ user: u, rows: byUser.get(u.id) ?? [] }))
-    .filter((s) => s.rows.length > 0);
+  // Alle übergebenen Nutzer behalten — auch ohne Einträge erscheinen sie als
+  // leere Spalten (gibt dem Dienstleister den vollständigen Teamüberblick).
+  const sections = users.map((u) => ({ user: u, rows: byUser.get(u.id) ?? [] }));
 
-  if (sections.length === 0) return false;
+  // Abbrechen nur, wenn wirklich niemand einen Eintrag hat.
+  if (sections.every((s) => s.rows.length === 0)) return false;
 
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
 
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const logo = await loadLogoImage(teamId);
-  let firstPage = true;
 
-  for (const section of sections) {
-    if (!firstPage) doc.addPage();
-    firstPage = false;
-    renderSimpleMonthPage(
-      doc,
-      autoTable,
-      pageWidth,
-      logo,
-      section.user.name,
-      section.rows,
-      monthLabel,
-    );
-  }
+  // Seite 1: Kalenderübersicht (Datum × Assistenzkraft)
+  renderCalendarOverviewPage(doc, autoTable, pageWidth, logo, sections, monthLabel, year, month);
 
-  addSignatureFooter(doc, pageWidth);
+  // Seite 2: Kennzahlen-Übersicht (KPI × Assistenzkraft)
+  doc.addPage();
+  renderKennzahlenOverviewPage(doc, autoTable, pageWidth, logo, sections, monthLabel);
+
+  addSimpleFooter(doc, pageWidth);
 
   doc.save(
     filename ?? `Monatsuebersicht_${year}_${String(month).padStart(2, "0")}.pdf`,
