@@ -938,15 +938,15 @@ function MonthGrid({
                 today ? "ring-1 ring-inset ring-amber-400/60" : "",
               ].filter(Boolean).join(" ")}
             >
-              {/* Datumszahl */}
+              {/* Datumszahl — abgerundetes Rechteck als Kontrast-Badge */}
               <span
                 className={[
-                  "self-end text-[9px] leading-none font-medium px-1 py-0.5",
+                  "self-end text-[11px] leading-none font-semibold px-1.5 py-0.5 rounded-md",
                   today
-                    ? "rounded-full bg-[#092948] text-white font-bold"
+                    ? "bg-[#092948] text-white"
                     : isWeekend
-                      ? "text-slate-400"
-                      : "text-foreground/60",
+                      ? "bg-slate-200/70 text-slate-500"
+                      : "bg-muted/50 text-foreground/70",
                 ].join(" ")}
               >
                 {format(day, "d")}
@@ -957,21 +957,22 @@ function MonthGrid({
                 <div className="flex flex-col gap-[1px] mb-0.5">{absenceBars}</div>
               )}
 
-              {/* Schicht-Pillen (max. 2) */}
+              {/* Schicht-Pillen (max. 2) — doppelte Höhe für bessere Lesbarkeit */}
               {visiblePills.length > 0 && (
-                <div className="flex flex-col gap-[2px] min-w-0 px-0.5">
+                <div className="flex flex-col gap-[3px] min-w-0 px-0.5">
                   {visiblePills.map((s) => {
                     const isTeam = s.type === "team";
                     const slot = getPersonSlot(s.userId);
                     const isDraft = (s.planningStatus ?? "FIX") === "VORLAEUFIG";
                     const chipClickable = canEdit && !selectionMode;
+                    const timeRange = `${format(new Date(s.startTime), "HH:mm")}–${format(new Date(s.endTime), "HH:mm")}`;
                     return (
                       <span
                         key={s.id}
                         data-testid={`day-chip-${s.id}`}
                         role={chipClickable ? "button" : undefined}
                         tabIndex={chipClickable ? -1 : undefined}
-                        title={`${s.user?.name ?? ""} · ${format(new Date(s.startTime), "HH:mm")}`.trim()}
+                        title={`${s.user?.name ?? ""} · ${timeRange}`.trim()}
                         onClick={chipClickable ? (e) => { e.stopPropagation(); onShiftClick(s); } : undefined}
                         onKeyDown={chipClickable ? (e) => {
                           if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onShiftClick(s); }
@@ -983,17 +984,19 @@ function MonthGrid({
                           opacity: isDraft ? 0.6 : 1,
                         }}
                         className={[
-                          "flex items-center gap-0.5 truncate rounded-[3px] border",
-                          "px-[3px] py-[1px] text-[8px] leading-tight font-medium",
+                          "flex flex-col items-start gap-0 truncate rounded-[4px] border",
+                          "px-[4px] py-[3px] leading-tight font-medium",
                           isDraft ? "border-dashed" : "",
                           chipClickable ? "cursor-pointer" : "",
                         ].filter(Boolean).join(" ")}
                       >
-                        <span className="font-bold shrink-0">
-                          {isTeam ? "T" : (s.user?.name ? nameInitials(s.user.name) : "?")}
+                        {/* Zeile 1: Initialen */}
+                        <span className="text-[10px] font-bold shrink-0 leading-none">
+                          {isTeam ? "Team" : (s.user?.name ? nameInitials(s.user.name) : "?")}
                         </span>
-                        <span className="hidden sm:inline truncate">
-                          {format(new Date(s.startTime), "HH:mm")}
+                        {/* Zeile 2: Von–bis Uhrzeit */}
+                        <span className="text-[9px] leading-none opacity-90 truncate w-full">
+                          {isTeam ? "Teamdienst" : timeRange}
                         </span>
                       </span>
                     );
