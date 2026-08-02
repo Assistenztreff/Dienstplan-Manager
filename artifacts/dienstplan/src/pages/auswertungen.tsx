@@ -42,7 +42,8 @@ import { GesamtAuswertungMatrix } from "@/components/gesamt-auswertung-matrix";
 // PDF-Export wird zurückgestellt — Dialog + Handler bleiben im Code (unsichtbar).
 import { StatementExportDialog } from "@/components/statement-export-dialog";
 import { downloadLohnnachweiseAsZip } from "@/lib/pdf-zip-export";
-import { ExportAuswahlCard } from "@/components/export-auswahl-card";
+import { ExportPopoverButton } from "@/components/export-auswahl-card";
+import type { MatrixBalance, MatrixRecalc } from "@/components/gesamt-auswertung-matrix";
 
 function formatEur(n: number): string {
   return n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
@@ -127,6 +128,10 @@ function AuswertungenHeader({
   onMonthSelect,
   onPrevMonth,
   onNextMonth,
+  exportBalances,
+  exportRecalcByUser,
+  exportPrevMonthLabel,
+  exportDisabled,
 }: {
   isAdmin: boolean;
   assistants: Assistant[];
@@ -139,6 +144,10 @@ function AuswertungenHeader({
   onMonthSelect: (month: number, year: number) => void;
   onPrevMonth: () => void;
   onNextMonth: () => void;
+  exportBalances: MatrixBalance[];
+  exportRecalcByUser?: Map<number, MatrixRecalc>;
+  exportPrevMonthLabel?: string;
+  exportDisabled?: boolean;
 }) {
   const { selectedTeamId } = useTeam();
   const personColors = useMemo(
@@ -212,6 +221,19 @@ function AuswertungenHeader({
     />
   );
 
+  const exportButton = isAdmin && (
+    <ExportPopoverButton
+      showLabels={showLabels}
+      stacked={stacked}
+      balances={exportBalances}
+      recalcByUser={exportRecalcByUser}
+      prevMonthLabel={exportPrevMonthLabel}
+      month={month}
+      year={year}
+      disabled={exportDisabled}
+    />
+  );
+
   return (
     <PageStickyHeader
       stacked={stacked}
@@ -225,7 +247,12 @@ function AuswertungenHeader({
       nextMonthTestId="month-next"
       title={title}
       assistantFilter={assistantFilter}
-      actions={viewToggle || undefined}
+      actions={
+        <>
+          {viewToggle}
+          {exportButton}
+        </>
+      }
     />
   );
 }
@@ -362,6 +389,15 @@ export default function Auswertungen() {
         onMonthSelect={(m, y) => setCurrentDate(new Date(y, m - 1, 1))}
         onPrevMonth={prevMonth}
         onNextMonth={nextMonth}
+        exportBalances={Array.isArray(visibleBalances) ? visibleBalances : []}
+        exportRecalcByUser={recalcByUser}
+        exportPrevMonthLabel={prevOfShownLabel}
+        exportDisabled={
+          !canPayrollExport ||
+          isLoading ||
+          !Array.isArray(visibleBalances) ||
+          visibleBalances.length === 0
+        }
       />
 
       {/* Transparenz: Entwürfe/Vorschläge bleiben im Dienstplan sichtbar,
@@ -399,18 +435,7 @@ export default function Auswertungen() {
               assistantFilter={selectedAssistant}
             />
           )}
-          {/* Export-Auswahl: DATEV-konformes Excel (Lohnexport + Zeitkonto),
-              wahlweise als einzelne Dateien oder gemeinsam als ZIP. */}
-          {canPayrollExport && (
-            <ExportAuswahlCard
-              balances={Array.isArray(visibleBalances) ? visibleBalances : []}
-              recalcByUser={recalcByUser}
-              prevMonthLabel={prevOfShownLabel}
-              month={month}
-              year={year}
-              disabled={isLoading || !Array.isArray(visibleBalances) || visibleBalances.length === 0}
-            />
-          )}
+          {/* Export via Header-Popover (ExportPopoverButton in AuswertungenHeader) */}
         </div>
       )}
 
