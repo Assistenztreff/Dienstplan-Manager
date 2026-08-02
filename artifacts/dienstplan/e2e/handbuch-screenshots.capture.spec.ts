@@ -40,10 +40,7 @@ test.skip(
   "Nur für den manuellen Screenshot-Lauf (HANDBUCH_SCREENSHOTS=1, npm-Skript screenshots:handbuch).",
 );
 
-const OUT_DIR = path.resolve(
-  process.cwd(),
-  "../mockup-sandbox/src/components/mockups/handbuch/_assets",
-);
+const OUT_DIR = path.resolve(process.cwd(), "public/handbuch");
 
 const DESKTOP = { width: 1440, height: 900 };
 const MOBILE = { width: 390, height: 844 };

@@ -8,8 +8,8 @@ import { test, expect } from "@playwright/test";
  *    Modul-Übersicht, Verwaltung) mit Badges/"folgt"-Markierungen; vorhandene
  *    Kapitel (Dienstplan, Team-Verwaltung) sind direkt anklickbar.
  * 2. Artikel-Seiten unterhalb der Desktop-Breite: die Kapitelliste ist über
- *    einen aufklappbaren Bereich erreichbar (die Desktop-Seitenleiste ist
- *    dort ausgeblendet) und ihre Links funktionieren.
+ *    einen ausklappbaren Drawer (von links) erreichbar — die Desktop-Seitenleiste
+ *    ist dort ausgeblendet — und ihre Links funktionieren.
  *
  * Das Handbuch ist öffentlich (kein Login nötig); der Dev-Auto-Login wird
  * wie in dienstplan-auth-tastatur.spec.ts mit 401 beantwortet, damit der
@@ -71,7 +71,7 @@ test("Startseite zeigt das vollständige Inhaltsverzeichnis, Kapitel-Links funkt
   await expect(page.getByRole("heading", { level: 1, name: "Dienstplan" })).toBeVisible();
 });
 
-test("Artikel-Seite: Kapitelliste ist im Mobil-Viewport aufklappbar und verlinkt", async ({
+test("Artikel-Seite: Kapitelliste ist im Mobil-Viewport per Drawer erreichbar und verlinkt", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 400, height: 800 });
@@ -80,17 +80,23 @@ test("Artikel-Seite: Kapitelliste ist im Mobil-Viewport aufklappbar und verlinkt
   // Desktop-Seitenleiste ist unterhalb lg ausgeblendet …
   await expect(page.locator("aside nav[aria-label='Handbuch-Kapitel']")).toBeHidden();
 
-  // … stattdessen gibt es den aufklappbaren Bereich über dem Artikel.
-  const mobil = page.getByTestId("handbuch-kapitel-mobil");
-  await expect(mobil).toBeVisible();
+  // … stattdessen gibt es den Drawer-Button.
+  const btn = page.getByTestId("handbuch-kapitel-mobil");
+  await expect(btn).toBeVisible();
 
-  // Zugeklappt: Kapitel-Links noch nicht sichtbar.
-  const teamLink = mobil.getByRole("link", { name: "Team-Verwaltung" });
-  await expect(teamLink).toBeHidden();
+  // Drawer noch geschlossen: nicht im DOM.
+  await expect(page.getByTestId("handbuch-drawer")).toHaveCount(0);
 
-  await mobil.getByText("Kapitel-Übersicht").click();
+  // Drawer öffnen.
+  await btn.getByText("Kapitel-Übersicht").click();
+
+  const drawer = page.getByTestId("handbuch-drawer");
+  await expect(drawer).toBeVisible();
+
+  // Kapitel-Links im Drawer sichtbar und funktionsfähig.
+  const teamLink = drawer.getByRole("link", { name: "Team-Verwaltung" });
   await expect(teamLink).toBeVisible();
-  await expect(mobil.getByText("Nur Dienstleister")).toBeAttached();
+  await expect(drawer.getByText("Nur Dienstleister")).toBeAttached();
 
   await teamLink.click();
   await expect(page).toHaveURL(/\/handbuch\/team-verwaltung$/);
@@ -106,6 +112,6 @@ test("Artikel-Seite: Desktop-Seitenleiste bleibt im Desktop-Viewport unveränder
   await page.goto("/handbuch/dienstplan");
 
   await expect(page.locator("aside nav[aria-label='Handbuch-Kapitel']")).toBeVisible();
-  // Der mobile Aufklapp-Bereich ist ab lg ausgeblendet.
+  // Der mobile Drawer-Button ist ab lg ausgeblendet.
   await expect(page.getByTestId("handbuch-kapitel-mobil")).toBeHidden();
 });

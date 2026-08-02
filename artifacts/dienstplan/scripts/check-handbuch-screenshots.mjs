@@ -24,10 +24,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const APP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const FINGERPRINT_FILE = path.resolve(
-  APP_DIR,
-  "../mockup-sandbox/src/components/mockups/handbuch/_assets/handbuch-screenshots.fingerprint.json",
-);
+const FINGERPRINT_FILE = path.join(APP_DIR, "public/handbuch/handbuch-screenshots.fingerprint.json");
 
 /** Screenshot-relevante Eingaben: alles, was im Browser gerendert wird. */
 const INPUT_DIRS = ["src", "public"];

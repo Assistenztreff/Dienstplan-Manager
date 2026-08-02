@@ -7,11 +7,13 @@ import {
   CalendarOff,
   ChevronRight,
   FileText,
+  Menu,
   Search,
   Settings,
   Star,
   User,
   Users,
+  X,
 } from "lucide-react";
 import platformLogoUrl from "@assets/assistenzplaner-logo-getrimmt.png";
 import { useAuth } from "@/context/auth";
@@ -333,7 +335,7 @@ function HinweisBox({ titel, children }: { titel: string; children: React.ReactN
 }
 
 // Gemeinsames Artikel-Geruest: Breadcrumbs, Kapitel-Seitenleiste links,
-// Inhaltsverzeichnis rechts (ab xl).
+// Inhaltsverzeichnis rechts (ab xl). Mobil: Drawer von links + Suchleiste.
 function ArtikelShell({
   activeId,
   bereich,
@@ -347,8 +349,67 @@ function ArtikelShell({
   toc: Array<{ id: string; label: string }>;
   children: React.ReactNode;
 }) {
+  const [drawerOffen, setDrawerOffen] = useState(false);
+  const [suchbegriff, setSuchbegriff] = useState("");
+
+  // Suche über alle Kapitel-Einträge inkl. Kinder.
+  const suchergebnisse = useMemo(() => {
+    const q = suchbegriff.trim().toLowerCase();
+    if (q.length < 2) return [] as Array<{ title: string; href: string }>;
+    const ergebnisse: Array<{ title: string; href: string }> = [];
+    for (const section of KAPITEL) {
+      for (const item of section.items) {
+        if (item.href && item.title.toLowerCase().includes(q)) {
+          ergebnisse.push({ title: item.title, href: item.href });
+        }
+        if (item.children) {
+          for (const child of item.children) {
+            if (child.href && child.title.toLowerCase().includes(q)) {
+              ergebnisse.push({ title: child.title, href: child.href });
+            }
+          }
+        }
+      }
+    }
+    return ergebnisse.slice(0, 6);
+  }, [suchbegriff]);
+
+  const schliessen = () => {
+    setDrawerOffen(false);
+    setSuchbegriff("");
+  };
+
   return (
     <HandbuchShell>
+      {/* Mobiler Drawer: von links ausklappbar (ab lg durch feste Seitenleiste ersetzt). */}
+      {drawerOffen && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/30 lg:hidden"
+            onClick={() => setDrawerOffen(false)}
+            aria-hidden="true"
+          />
+          <aside
+            data-testid="handbuch-drawer"
+            className="fixed left-0 top-0 z-50 flex h-full w-72 flex-col bg-slate-50 shadow-xl lg:hidden"
+          >
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3">
+              <span className="font-bold text-brand-dark">Kapitel</span>
+              <button
+                onClick={() => setDrawerOffen(false)}
+                aria-label="Navigation schließen"
+                className={`rounded p-1 text-slate-500 hover:bg-slate-200 hover:text-brand-dark ${FOCUS_CLASSES}`}
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+            <nav aria-label="Handbuch-Kapitel" className="flex-1 overflow-y-auto px-4 py-4 pb-20">
+              <KapitelListe activeId={activeId} />
+            </nav>
+          </aside>
+        </>
+      )}
+
       <div className="relative mx-auto flex w-full max-w-[1400px] flex-1">
         <aside className="sticky top-0 hidden max-h-screen w-72 shrink-0 self-start overflow-hidden border-r border-slate-200 bg-slate-50/50 lg:block">
           <HandbuchSidebar activeId={activeId} />
@@ -357,21 +418,52 @@ function ArtikelShell({
         {/* Bewusst KEIN <main>: das Layout (eingeloggt) bzw. die
             HandbuchShell (ausgeloggt) stellt bereits die main-Landmarke. */}
         <div className="min-w-0 flex-1 px-6 py-8 md:px-12 lg:py-12">
-          {/* Mobil/Tablet: Kapitelliste als aufklappbarer Bereich ueber dem
-              Artikel — die Desktop-Seitenleiste ist erst ab lg sichtbar. */}
-          <details
-            className="mb-8 rounded-xl border border-slate-200 bg-slate-50/50 lg:hidden"
-            data-testid="handbuch-kapitel-mobil"
-          >
-            <summary
-              className={`cursor-pointer select-none rounded-xl px-4 py-3 text-sm font-bold text-brand-dark ${FOCUS_CLASSES}`}
+          {/* Steuerleiste: Drawer-Button (nur mobil/tablet) + Suchfeld (alle Breiten).
+              Desktop: Suchfeld rechtsbündig über dem Artikel; Drawer-Button ausgeblendet. */}
+          <div className="mb-6 flex items-center gap-3">
+            <button
+              type="button"
+              data-testid="handbuch-kapitel-mobil"
+              onClick={() => setDrawerOffen(true)}
+              aria-label="Kapitel-Navigation öffnen"
+              className={`flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-brand-dark shadow-sm transition-colors hover:border-brand-dark hover:bg-brand-hellblau/30 lg:hidden ${FOCUS_CLASSES}`}
             >
+              <Menu className="h-4 w-4" aria-hidden="true" />
               Kapitel-Übersicht
-            </summary>
-            <nav aria-label="Handbuch-Kapitel" className="border-t border-slate-200 px-4 py-4">
-              <KapitelListe activeId={activeId} />
-            </nav>
-          </details>
+            </button>
+
+            {/* Suchfeld: auf Mobilgeräten füllt es den Restplatz neben dem Button;
+                auf Desktop ist es rechtsbündig und auf max-w-sm begrenzt. */}
+            <div className="relative flex-1 lg:ml-auto lg:flex-none lg:w-80">
+              <Search
+                className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                aria-hidden="true"
+              />
+              <input
+                type="search"
+                value={suchbegriff}
+                onChange={(e) => setSuchbegriff(e.target.value)}
+                placeholder="Im Handbuch suchen …"
+                aria-label="Im Handbuch suchen"
+                className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm text-brand-dark placeholder:text-slate-400 transition-colors hover:border-slate-300 focus:border-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-dark/20"
+              />
+              {suchergebnisse.length > 0 && (
+                <div className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+                  {suchergebnisse.map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={schliessen}
+                      className={`flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 transition-colors first:pt-3 last:pb-3 hover:bg-brand-hellblau/40 hover:text-brand-dark ${FOCUS_CLASSES}`}
+                    >
+                      <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+                      {item.title}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
 
           <nav
             aria-label="Pfadnavigation"
