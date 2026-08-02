@@ -9,7 +9,7 @@ import type { MonthClosingDiff } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Download, Lock, Table2, LayoutGrid, Archive } from "lucide-react";
+import { Lock, Table2 } from "lucide-react";
 import { MonthYearPicker } from "@/components/month-year-picker";
 import { PageStickyHeader } from "@/components/page-sticky-header";
 import type { LucideIcon } from "lucide-react";
@@ -39,8 +39,10 @@ import { type HeaderTier, useIsMobileViewport, useHeaderTier } from "@/lib/heade
 import { formatDays } from "@/lib/utils";
 import { MonthClosingCard, RecalculationSection, PayrollTotalsCard } from "@/components/month-closing";
 import { GesamtAuswertungMatrix } from "@/components/gesamt-auswertung-matrix";
+// PDF-Export wird zurückgestellt — Dialog + Handler bleiben im Code (unsichtbar).
 import { StatementExportDialog } from "@/components/statement-export-dialog";
 import { downloadLohnnachweiseAsZip } from "@/lib/pdf-zip-export";
+import { ExportAuswahlCard } from "@/components/export-auswahl-card";
 
 function formatEur(n: number): string {
   return n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
@@ -120,13 +122,6 @@ function AuswertungenHeader({
   onSelectAssistant,
   view,
   onView,
-  exportDisabled,
-  exportTitle,
-  onExport,
-  zipExportDisabled,
-  zipExportTitle,
-  onZipExport,
-  zipProgress,
   month,
   year,
   onMonthSelect,
@@ -139,13 +134,6 @@ function AuswertungenHeader({
   onSelectAssistant: (v: number | "all") => void;
   view: AuswertungView;
   onView: (v: AuswertungView) => void;
-  exportDisabled: boolean;
-  exportTitle?: string;
-  onExport: () => void;
-  zipExportDisabled: boolean;
-  zipExportTitle?: string;
-  onZipExport: () => void;
-  zipProgress: { done: number; total: number } | null;
   month: number;
   year: number;
   onMonthSelect: (month: number, year: number) => void;
@@ -164,7 +152,7 @@ function AuswertungenHeader({
     selectedTeamId ?? "none",
     `${month}/${year}`,
   ].join("|");
-  const { measureRef, tier } = useHeaderTier(contentKey, [view, exportDisabled].join("|"));
+  const { measureRef, tier } = useHeaderTier(contentKey, view);
   const showLabels = tier === "labels";
   const stacked = tier === "stack";
 
@@ -224,44 +212,6 @@ function AuswertungenHeader({
     />
   );
 
-  const exportButton = (
-    <Button
-      variant="outline"
-      size="sm"
-      className={showLabels ? "gap-1.5" : `h-9 shrink-0 px-0 ${stacked ? "w-8" : "w-9"}`}
-      onClick={onExport}
-      disabled={exportDisabled}
-      title={exportTitle ?? "Stundennachweis als PDF exportieren"}
-      aria-label="PDF Export"
-      data-testid="export-pdf-button"
-    >
-      <Download className="h-4 w-4" />
-      {showLabels && <span>PDF Export</span>}
-    </Button>
-  );
-
-  const zipLabel = zipProgress
-    ? `${zipProgress.done} von ${zipProgress.total} PDFs…`
-    : showLabels
-    ? "ZIP Export"
-    : undefined;
-
-  const zipButton = (
-    <Button
-      variant="outline"
-      size="sm"
-      className={showLabels ? "gap-1.5" : `h-9 shrink-0 px-0 ${stacked ? "w-8" : "w-9"}`}
-      onClick={onZipExport}
-      disabled={zipExportDisabled}
-      title={zipExportTitle ?? "Alle Lohnnachweise als ZIP herunterladen"}
-      aria-label="ZIP Export"
-      data-testid="export-zip-button"
-    >
-      <Archive className="h-4 w-4" />
-      {zipLabel && <span className="whitespace-nowrap">{zipLabel}</span>}
-    </Button>
-  );
-
   return (
     <PageStickyHeader
       stacked={stacked}
@@ -275,13 +225,7 @@ function AuswertungenHeader({
       nextMonthTestId="month-next"
       title={title}
       assistantFilter={assistantFilter}
-      actions={
-        <>
-          {viewToggle}
-          {exportButton}
-          {zipButton}
-        </>
-      }
+      actions={viewToggle || undefined}
     />
   );
 }
@@ -413,28 +357,6 @@ export default function Auswertungen() {
         onSelectAssistant={setSelectedAssistant}
         view={view}
         onView={setView}
-        exportDisabled={!canPayrollExport || isLoading || !visibleBalances || visibleBalances.length === 0}
-        exportTitle={canPayrollExport ? undefined : PLAN_FEATURE_MESSAGES.payrollExport}
-        onExport={() => setExportOpen(true)}
-        zipExportDisabled={
-          !canPayrollExport ||
-          // Teamleiter ohne canViewPayroll dürfen den Lohn-ZIP nicht exportieren
-          // (ZIP-Export ist für Lohnbüro-Weitergabe; lohnfreie Variante genügt nicht).
-          (currentUser?.isTeamleiter === true && !currentUser?.canViewPayroll) ||
-          isLoading ||
-          !Array.isArray(balances) ||
-          balances.length === 0 ||
-          isZipExporting
-        }
-        zipExportTitle={
-          currentUser?.isTeamleiter && !currentUser?.canViewPayroll
-            ? "Lohn-ZIP-Export erfordert die Lohndaten-Berechtigung im Team"
-            : canPayrollExport
-              ? undefined
-              : PLAN_FEATURE_MESSAGES.payrollExport
-        }
-        onZipExport={handleZipExport}
-        zipProgress={zipProgress}
         month={month}
         year={year}
         onMonthSelect={(m, y) => setCurrentDate(new Date(y, m - 1, 1))}
@@ -475,6 +397,18 @@ export default function Auswertungen() {
               teamId={selectedTeamId}
               balances={visibleBalances}
               assistantFilter={selectedAssistant}
+            />
+          )}
+          {/* Export-Auswahl: DATEV-konformes Excel (Lohnexport + Zeitkonto),
+              wahlweise als einzelne Dateien oder gemeinsam als ZIP. */}
+          {canPayrollExport && (
+            <ExportAuswahlCard
+              balances={Array.isArray(visibleBalances) ? visibleBalances : []}
+              recalcByUser={recalcByUser}
+              prevMonthLabel={prevOfShownLabel}
+              month={month}
+              year={year}
+              disabled={isLoading || !Array.isArray(visibleBalances) || visibleBalances.length === 0}
             />
           )}
         </div>
