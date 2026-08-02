@@ -129,3 +129,26 @@ export function getBarrierefreiePaarung(keyString: string): AssistenzPaarung | n
 export function getBarrierefreieFarbe(keyString: string): string {
   return getBarrierefreiePaarung(keyString)?.badge ?? FALLBACK;
 }
+
+// ── Neue kategoriale 8-Slot-Palette für Assistenzkräfte im Monatskalender ──
+// Feste Reihenfolge für optimale Unterscheidbarkeit (auch bei Farbfehlsichtigkeit).
+// Slot-Reihenfolge und Hex-Werte 1:1 aus den Design-Vorgaben; Textkontrast manuell geprüft.
+export type PersonSlot = {
+  /** Hintergrundfarbe der Kalender-Pille (Inline-Style). */
+  bg: string;
+  /** Textfarbe auf der Pille – Weiß (#fff) oder Dunkelblau (#092948). */
+  text: string;
+  /** Rahmenfarbe (leicht abgedunkelte Variante von bg). */
+  border: string;
+};
+
+export const PERSON_SLOTS: PersonSlot[] = [
+  { bg: "#2a78d6", text: "#ffffff", border: "#1a5aab" }, // 1 Blau
+  { bg: "#eb6834", text: "#ffffff", border: "#c45222" }, // 2 Orange
+  { bg: "#1baf7a", text: "#ffffff", border: "#118555" }, // 3 Türkis
+  { bg: "#eda100", text: "#092948", border: "#b87e00" }, // 4 Gelb
+  { bg: "#e87ba4", text: "#092948", border: "#c45580" }, // 5 Magenta
+  { bg: "#008300", text: "#ffffff", border: "#005f00" }, // 6 Grün
+  { bg: "#4a3aa7", text: "#ffffff", border: "#332878" }, // 7 Violett
+  { bg: "#e34948", text: "#ffffff", border: "#b83433" }, // 8 Rot
+];
