@@ -159,7 +159,8 @@ export async function buildZeitkontBuffer(
   month: number,
   year: number,
 ): Promise<ArrayBuffer> {
-  const XLSX = (await import("xlsx")).default;
+  // Interop-sicher: im Vite-Dev-Modus hat das xlsx-Modul keinen default-Export.
+  const XLSX = await import("xlsx").then((m) => m.default ?? m);
   const cols = buildColumns(balances);
 
   const monthLabel = new Date(year, month - 1, 1).toLocaleDateString("de-DE", {
@@ -201,7 +202,8 @@ export async function downloadZeitkontXlsx(
   month: number,
   year: number,
 ): Promise<void> {
-  const XLSX = (await import("xlsx")).default;
+  // Interop-sicher: im Vite-Dev-Modus hat das xlsx-Modul keinen default-Export.
+  const XLSX = await import("xlsx").then((m) => m.default ?? m);
   const cols = buildColumns(balances);
 
   const monthLabel = new Date(year, month - 1, 1).toLocaleDateString("de-DE", {

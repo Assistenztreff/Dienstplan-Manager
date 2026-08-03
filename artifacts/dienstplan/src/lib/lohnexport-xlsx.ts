@@ -280,7 +280,8 @@ export async function buildLohnexportBuffer(
   month: number,
   year: number,
 ): Promise<ArrayBuffer> {
-  const XLSX = (await import("xlsx")).default;
+  // Interop-sicher: im Vite-Dev-Modus hat das xlsx-Modul keinen default-Export.
+  const XLSX = await import("xlsx").then((m) => m.default ?? m);
   const cols = makeColumns(balances, recalcByUser, prevMonthLabel);
 
   const monthLabel = new Date(year, month - 1, 1).toLocaleDateString("de-DE", {
@@ -336,7 +337,8 @@ export async function downloadLohnexportXlsx(
   month: number,
   year: number,
 ): Promise<void> {
-  const XLSX = (await import("xlsx")).default;
+  // Interop-sicher: im Vite-Dev-Modus hat das xlsx-Modul keinen default-Export.
+  const XLSX = await import("xlsx").then((m) => m.default ?? m);
   const cols = makeColumns(balances, recalcByUser, prevMonthLabel);
 
   const monthLabel = new Date(year, month - 1, 1).toLocaleDateString("de-DE", {

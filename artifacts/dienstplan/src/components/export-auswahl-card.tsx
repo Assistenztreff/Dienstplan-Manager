@@ -78,11 +78,12 @@ function ExportContent({ balances, recalcByUser, prevMonthLabel, month, year, di
     setIsPending(true);
     try {
       if (hasZip) {
-        const [{ buildLohnexportBuffer }, { buildZeitkontBuffer }, { default: JSZip }] =
+        const [{ buildLohnexportBuffer }, { buildZeitkontBuffer }, JSZip] =
           await Promise.all([
             import("@/lib/lohnexport-xlsx"),
             import("@/lib/zeitkonto-xlsx"),
-            import("jszip"),
+            // Interop-sicher: CJS-Pakete haben im Vite-Dev-Modus ggf. keinen default-Export.
+            import("jszip").then((m) => m.default ?? m),
           ]);
         const [lohnBuf, zeitBuf] = await Promise.all([
           buildLohnexportBuffer(balances, recalcByUser, prevMonthLabel, month, year),
@@ -117,8 +118,12 @@ function ExportContent({ balances, recalcByUser, prevMonthLabel, month, year, di
             : "Datei heruntergeladen",
       );
       onDone?.();
-    } catch {
-      if (!navigator.onLine) return;
+    } catch (err) {
+      console.error("Export fehlgeschlagen:", err);
+      if (!navigator.onLine) {
+        toast.error("Keine Internetverbindung. Bitte später erneut versuchen.");
+        return;
+      }
       toast.error("Export fehlgeschlagen. Bitte erneut versuchen.");
     } finally {
       setIsPending(false);
