@@ -22,5 +22,8 @@
       "linkify-it": ">=5.0.2",
       "postcss": ">=8.5.18"
     }
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1"
   }
 }
