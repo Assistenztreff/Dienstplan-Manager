@@ -282,7 +282,7 @@ async function findDuplicateAbsence(
 function duplicateAbsenceResponseBody(existingId: number, type: string) {
   return {
     error:
-      "Für diesen Assistenten besteht an diesem Tag bereits eine Abwesenheit dieses Typs.",
+      "Für diese Assistenzkraft besteht an diesem Tag bereits eine Abwesenheit dieses Typs.",
     code: "absence_duplicate" as const,
     existingShiftId: existingId,
     type,
@@ -499,7 +499,7 @@ async function findOverlappingShifts(
 // damit das Frontend zeitzonenkorrekt formatieren kann).
 function overlapResponseBody(conflicts: ShiftConflict[]) {
   return {
-    error: "Diese Schicht überschneidet sich mit einer bestehenden Schicht desselben Assistenten.",
+    error: "Diese Schicht überschneidet sich mit einer bestehenden Schicht derselben Assistenzkraft.",
     code: "shift_overlap" as const,
     conflicts: conflicts.map((c) => ({
       id: c.id,
@@ -998,7 +998,7 @@ router.patch("/shifts/:id", requireTeamleiterOrAdmin, async (req, res): Promise<
     if (!(await userHasFeature(req.session.userId!, "bulkEdit"))) {
       res.status(403).json({
         error:
-          "Das Tauschen des Assistenten (Massenbearbeitung) ist im Premium-Tarif enthalten.",
+          "Das Tauschen der Assistenzkraft (Massenbearbeitung) ist im Premium-Tarif enthalten.",
         code: "plan_feature_required",
         feature: "bulkEdit",
       });

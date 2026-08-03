@@ -230,9 +230,9 @@ export function StatementExportDialog({
                     <span className="font-medium text-foreground">{assistantName}</span> als PDF.
                   </>
                 ) : (
-                  <>Gesamt-Nachweis aller Assistenten als PDF.</>
+                  <>Gesamt-Nachweis aller Assistenzkräfte als PDF.</>
                 )}{" "}
-                Waehle den gewuenschten Zeitraum – pro Assistent und Monat entsteht eine Seite.
+                Waehle den gewuenschten Zeitraum – pro Assistenzkraft und Monat entsteht eine Seite.
               </>
             )}
           </p>

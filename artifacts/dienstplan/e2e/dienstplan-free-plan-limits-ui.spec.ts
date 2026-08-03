@@ -75,19 +75,19 @@ test.describe("Free-Limit Assistenten (UI)", () => {
     await adoptSession(page, free);
 
     await page.goto("/assistenten");
-    await expect(page.getByRole("heading", { name: "Assistenten" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Assistenzkräfte" })).toBeVisible();
 
     // Aktuelle UX am Limit: Der "Neu"-Button ist proaktiv DEAKTIVIERT und
     // traegt den Upgrade-Hinweis als title (kein Dialog + 403 mehr noetig).
     const newButton = page.getByRole("button", { name: "Neu", exact: true });
     await expect(newButton).toBeVisible();
     await expect(newButton, "Am Limit muss der Anlegen-Button gesperrt sein").toBeDisabled();
-    await expect(newButton).toHaveAttribute("title", /max\. 6 Assistenten/i);
+    await expect(newButton).toHaveAttribute("title", /max\. 6 Assistenzkräfte/i);
     await expect(newButton).toHaveAttribute("title", /Premium/i);
 
     // Zusaetzlich zeigt die Seite einen sichtbaren Limit-Hinweis (Banner).
     await expect(page.getByTestId("plan-limit-banner")).toBeVisible();
-    await expect(page.getByTestId("plan-limit-banner")).toContainText(/maximal 6 Assistenten/i);
+    await expect(page.getByTestId("plan-limit-banner")).toContainText(/maximal 6 Assistenzkräfte/i);
   });
 });
 

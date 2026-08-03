@@ -29,7 +29,7 @@ import { DevUserSwitcher } from "./dev-user-switcher";
 const ALL_NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
   { href: "/dienstplan", label: "Dienstplan", icon: CalendarDays, adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
-  { href: "/assistenten", label: "Assistenten", icon: Users, adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true },
+  { href: "/assistenten", label: "Assistenzkräfte", icon: Users, adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true },
   { href: "/zeiterfassung", label: "Zeiterfassung", icon: Clock, adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
   { href: "/abwesenheiten", label: "Abwesenheiten", icon: CalendarOff, adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true },
   { href: "/auswertungen", label: "Auswertungen", icon: BarChart3, adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true },

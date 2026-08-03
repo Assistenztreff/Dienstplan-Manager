@@ -19,19 +19,19 @@ export function ArtikelAssistenten() {
             <ChevronRight className="h-4 w-4" />
             <a href={handbuchUrl("Start")} className="hover:text-[var(--color-brand-dark)] handbuch-focus rounded px-1">Modul-Übersicht</a>
             <ChevronRight className="h-4 w-4" />
-            <span className="text-[var(--color-brand-dark)]">Assistenten</span>
+            <span className="text-[var(--color-brand-dark)]">Assistenzkräfte</span>
           </nav>
 
           <article className="handbuch-content">
-            <h1 className="text-4xl md:text-5xl font-bold text-[var(--color-brand-dark)] mb-6">Assistenten</h1>
+            <h1 className="text-4xl md:text-5xl font-bold text-[var(--color-brand-dark)] mb-6">Assistenzkräfte</h1>
             <p className="text-xl text-slate-500 mb-10 leading-relaxed">
               Hier verwalten Sie Ihr Assistenzteam: Sie laden neue Assistenzkräfte ein, hinterlegen
               Verträge mit Wochenstunden und behalten den Überblick über alle aktiven Mitglieder.
             </p>
 
-            <h2 id="einladen">Assistenten einladen</h2>
+            <h2 id="einladen">Assistenzkräfte einladen</h2>
             <p>
-              Über die Schaltfläche "Assistent einladen" verschicken Sie einen persönlichen Einladungslink.
+              Über die Schaltfläche "Assistenzkraft einladen" verschicken Sie einen persönlichen Einladungslink.
               Die eingeladene Person legt selbst ein Passwort fest und sieht danach nur den eigenen Plan
               und die eigenen Stunden — niemals die Daten anderer Teammitglieder.
             </p>
@@ -39,11 +39,11 @@ export function ArtikelAssistenten() {
             <figure className="my-8 rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
               <img
                 src={assistentenPng}
-                alt="Die Assistenten-Übersicht mit der Liste aller Teammitglieder, ihren Verträgen und der Schaltfläche zum Einladen"
+                alt="Die Assistenzkräfte-Übersicht mit der Liste aller Teammitglieder, ihren Verträgen und der Schaltfläche zum Einladen"
                 className="mx-auto w-full max-w-2xl rounded-lg border border-slate-200 bg-white shadow-sm"
                 loading="lazy"
               />
-              <figcaption className="mt-3 text-sm text-slate-500">Die Assistenten-Übersicht mit Verträgen und Einladungs-Funktion</figcaption>
+              <figcaption className="mt-3 text-sm text-slate-500">Die Assistenzkräfte-Übersicht mit Verträgen und Einladungs-Funktion</figcaption>
             </figure>
 
             <h2 id="vertraege">Verträge und Wochenstunden</h2>
@@ -59,7 +59,7 @@ export function ArtikelAssistenten() {
 
             <h2 id="siehe-auch">Siehe auch</h2>
             <p className="mb-6">
-              Diese Themen hängen eng mit der Assistenten-Verwaltung zusammen:
+              Diese Themen hängen eng mit der Assistenzkräfte-Verwaltung zusammen:
             </p>
             <div className="grid sm:grid-cols-2 gap-4 not-prose">
               <SeeAlsoLink title="Dienstplan" href={handbuchUrl("ArtikelDienstplan")} icon={CalendarDays} />
@@ -72,7 +72,7 @@ export function ArtikelAssistenten() {
           <div className="sticky top-24">
             <h4 className="font-bold text-[var(--color-brand-dark)] text-sm mb-4 uppercase tracking-wider">Auf dieser Seite</h4>
             <ul className="space-y-3 text-sm">
-              <li><a href="#einladen" className="text-[var(--color-brand-cyan)] font-medium handbuch-focus rounded px-1 -ml-1">Assistenten einladen</a></li>
+              <li><a href="#einladen" className="text-[var(--color-brand-cyan)] font-medium handbuch-focus rounded px-1 -ml-1">Assistenzkräfte einladen</a></li>
               <li><a href="#vertraege" className="text-slate-500 hover:text-[var(--color-brand-dark)] handbuch-focus rounded px-1 -ml-1 transition-colors">Verträge und Wochenstunden</a></li>
               <li><a href="#siehe-auch" className="text-slate-500 hover:text-[var(--color-brand-dark)] handbuch-focus rounded px-1 -ml-1 transition-colors">Siehe auch</a></li>
             </ul>

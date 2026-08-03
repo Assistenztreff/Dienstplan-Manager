@@ -185,13 +185,13 @@ function AuswertungenHeader({
             : "h-9 w-auto min-w-[7.5rem] max-w-[190px] shrink gap-2 truncate"
         }
         data-testid="assistant-select"
-        aria-label="Assistent filtern"
+        aria-label="Assistenzkraft filtern"
       >
-        <SelectValue placeholder="Alle Assistenten" />
+        <SelectValue placeholder="Alle Assistenzkräfte" />
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="all" data-testid="assistant-option-all">
-          Alle Assistenten
+          Alle Assistenzkräfte
         </SelectItem>
         {assistants.map((a) => (
           <SelectItem key={a.id} value={String(a.id)} data-testid={`assistant-option-${a.id}`}>

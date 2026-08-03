@@ -34,12 +34,12 @@ export function ArtikelTeamVerwaltung() {
 
             <h2 id="teams-anlegen">Neue Teams anlegen</h2>
             <p>
-              Ein Team entspricht in der Regel einem Klienten, bei dem rund um die Uhr oder stundenweise Assistenz 
+              Ein Team entspricht in der Regel einem Klienten, bei dem rund um die Uhr oder stundenweise Assistenz
               geleistet wird. Über die Schaltfläche "Neues Team" können Sie einen Arbeitsort erstellen.
             </p>
             <p>
-              Für jedes Team wird ein separater Dienstplan generiert. Assistenten können mehreren Teams zugeordnet 
-              werden, sodass sie flexibel in verschiedenen Einsatzorten aushelfen können, ohne dass es zu 
+              Für jedes Team wird ein separater Dienstplan generiert. Assistenzkräfte können mehreren Teams zugeordnet
+              werden, sodass sie flexibel in verschiedenen Einsatzorten aushelfen können, ohne dass es zu
               Doppelbelegungen im Kalender kommt.
             </p>
 
@@ -55,12 +55,12 @@ export function ArtikelTeamVerwaltung() {
 
             <h2 id="rollen-rechte">Rollen und Rechte verteilen</h2>
             <p>
-              Nicht jeder Mitarbeiter sollte alles sehen dürfen. Sie können in der Team-Verwaltung sogenannte 
-              <strong>Team-Admins</strong> ernennen. Diese Personen können den Dienstplan für ihr spezifisches Team 
+              Nicht jeder Mitarbeiter sollte alles sehen dürfen. Sie können in der Team-Verwaltung sogenannte
+              <strong>Team-Admins</strong> ernennen. Diese Personen können den Dienstplan für ihr spezifisches Team
               schreiben und Urlaubsanträge genehmigen, sehen aber keine Auswertungen oder Pläne von anderen Klienten.
             </p>
             <p>
-              Die Rolle <strong>Superadmin</strong> bleibt der Geschäftsführung vorbehalten und erlaubt den Zugriff 
+              Die Rolle <strong>Superadmin</strong> bleibt der Geschäftsführung vorbehalten und erlaubt den Zugriff
               auf globale Einstellungen, Lohnberichte und alle Dienstpläne übergreifend.
             </p>
 
@@ -70,7 +70,7 @@ export function ArtikelTeamVerwaltung() {
             </p>
             <div className="grid sm:grid-cols-2 gap-4 not-prose">
               <SeeAlsoLink title="Rollen verstehen" href={handbuchUrl("Start")} icon={Settings} />
-              <SeeAlsoLink title="Assistenten verwalten" href={handbuchUrl("ArtikelAssistenten")} icon={Users} />
+              <SeeAlsoLink title="Assistenzkräfte verwalten" href={handbuchUrl("ArtikelAssistenten")} icon={Users} />
             </div>
           </article>
         </main>

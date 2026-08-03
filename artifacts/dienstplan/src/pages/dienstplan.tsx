@@ -950,8 +950,9 @@ function MonthGrid({
               aria-label={format(day, "EEEE, d. MMMM yyyy", { locale: de })}
               onClick={() => {
                 if (selectionMode) { onToggleDate?.(day); return; }
-                // Leere Zelle: direkt öffnen (kein Zwei-Stufen-Klick).
-                if (isEmpty) { if (canEdit) onAddShift(day); return; }
+                // Leere Zelle: direkt öffnen (kein Zwei-Stufen-Klick);
+                // Tag dabei trotzdem markieren, damit das Tagesdetail folgt.
+                if (isEmpty) { onSelectDay(day); if (canEdit) onAddShift(day); return; }
                 // Zelle mit Einträgen: erst auswählen, beim 2. Klick öffnen.
                 if (selected) { if (canEdit) onAddShift(day); return; }
                 onSelectDay(day);
@@ -1246,13 +1247,13 @@ function DienstplanHeader({
             : "h-9 w-auto min-w-[7.5rem] max-w-[190px] shrink gap-2 truncate"
         }
         data-testid="assistant-select"
-        aria-label="Assistent filtern"
+        aria-label="Assistenzkraft filtern"
       >
-        <SelectValue placeholder="Alle Assistenten" />
+        <SelectValue placeholder="Alle Assistenzkräfte" />
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="all" data-testid="assistant-option-all">
-          Alle Assistenten
+          Alle Assistenzkräfte
         </SelectItem>
         {assistants.map((a) => (
           <SelectItem key={a.id} value={String(a.id)} data-testid={`assistant-option-${a.id}`}>
@@ -1823,7 +1824,7 @@ export default function Dienstplan() {
               <thead>
                 <tr className="h-px border-b bg-muted/50">
                   <th className="p-3 text-left font-medium sticky left-0 bg-muted/50 backdrop-blur-sm z-10 w-48">
-                    {isAdmin ? "Assistent" : "Schicht"}
+                    {isAdmin ? "Assistenzkraft" : "Schicht"}
                   </th>
                   {days.map((day) => {
                     const colSelected =

@@ -80,7 +80,7 @@ const PLANNING_STATUS_OPTIONS: { value: PlanningStatus; label: string; hint: str
   {
     value: "ANGEBOTEN",
     label: "Vorschlag",
-    hint: "Dem Assistenten angeboten, wartet auf Bestätigung — zählt noch nicht in Auswertungen und Stundennachweis.",
+    hint: "Der Assistenzkraft angeboten, wartet auf Bestätigung — zählt noch nicht in Auswertungen und Stundennachweis.",
   },
   {
     value: "FIX",
@@ -510,12 +510,12 @@ export function ShiftDialog({
   // deaktivierten Selects (das je nach Datenlage nur die userId zeigt) den
   // vollen Namen aus der Assistentenliste auflösen und schreibgeschützt anzeigen.
   const editAssistantName = isEditing
-    ? assistants.find((a) => a.id === editShift?.userId)?.name ?? `Assistent #${editShift?.userId}`
+    ? assistants.find((a) => a.id === editShift?.userId)?.name ?? `Assistenzkraft #${editShift?.userId}`
     : undefined;
 
   function validate(): boolean {
     const errs: Partial<Record<keyof FormState, string>> = {};
-    if (!form.userId) errs.userId = "Assistent auswählen";
+    if (!form.userId) errs.userId = "Assistenzkraft auswählen";
     if (!form.date) errs.date = "Datum angeben";
     if (!isAbsence && !isTeam) {
       if (!form.startTime) errs.startTime = "Startzeit angeben";
@@ -876,7 +876,7 @@ export function ShiftDialog({
 
           {/* Assistent */}
           <div className="space-y-1.5">
-            <Label>Assistent *</Label>
+            <Label>Assistenzkraft *</Label>
             {isEditing ? (
               <Input
                 data-testid="shift-dialog-user"
@@ -898,7 +898,7 @@ export function ShiftDialog({
                       errors.userId && "border-destructive",
                     )}
                   >
-                    {selectedAssistant ? selectedAssistant.name : "Assistent auswählen..."}
+                    {selectedAssistant ? selectedAssistant.name : "Assistenzkraft auswählen..."}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
@@ -906,7 +906,7 @@ export function ShiftDialog({
                   <Command>
                     <CommandInput placeholder="Name suchen..." />
                     <CommandList>
-                      <CommandEmpty>Keine Assistenten gefunden.</CommandEmpty>
+                      <CommandEmpty>Keine Assistenzkräfte gefunden.</CommandEmpty>
                       <CommandGroup>
                         {assistants.map(renderAssistantItem)}
                       </CommandGroup>

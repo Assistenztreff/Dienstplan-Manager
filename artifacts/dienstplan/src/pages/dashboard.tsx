@@ -108,7 +108,7 @@ function WarningsSection({
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-foreground">
                 {lowVacationAssistants.length}{" "}
-                {lowVacationAssistants.length === 1 ? "Assistent" : "Assistenten"} mit wenig Resturlaub
+                {lowVacationAssistants.length === 1 ? "Assistenzkraft" : "Assistenzkräfte"} mit wenig Resturlaub
                 <span className="font-normal text-muted-foreground"> (Schwelle: {lowVacationThreshold} Tage)</span>
               </p>
               <ul className="mt-1 space-y-0.5">
@@ -439,7 +439,7 @@ export default function Dashboard() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard
-              title="Aktive Assistenten"
+              title="Aktive Assistenzkräfte"
               to="/assistenten"
               testId="kpi-active-assistants"
             >

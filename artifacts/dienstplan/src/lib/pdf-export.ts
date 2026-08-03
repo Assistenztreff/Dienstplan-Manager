@@ -125,7 +125,7 @@ async function renderStatementPage(
 
   doc.setFontSize(12);
   doc.setFont("helvetica", "normal");
-  doc.text(`Assistent: ${balance.userName}`, 14, 32);
+  doc.text(`Assistenzkraft: ${balance.userName}`, 14, 32);
   doc.text(`Monat: ${monthLabel}`, 14, 39);
 
   // --- Summary box ---

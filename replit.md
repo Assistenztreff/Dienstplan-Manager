@@ -3,6 +3,7 @@
 Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermodell.
 
 ## User preferences
+- **Geschlechtsneutrales Wording (verbindlich)**: Nie „Assistent"/„Assistenten" in nutzersichtbaren Texten. Singular = „Assistenzkraft" (feminin: die/eine/keine Assistenzkraft), Plural = „Assistenzkräfte". Gilt für UI, Toasts, Fehlermeldungen, PDFs, Handbuch und E-Mails; Code-Bezeichner, Routen (`/assistenten`), Rollenwerte (`assistant`) und data-testids bleiben unverändert.
 
 - **DESIGN-GUIDELINES.md** (Repo-Root) ist die verbindliche Quelle für Tonalität, feste Begriffe, UI-Textregeln und das Barrierefreiheits-Farbsystem. Bei jeder Aufgabe mit sichtbaren Texten oder UI-Elementen ZUERST dort nachschlagen, bevor Text oder Farben festgelegt werden. Die Datei muss noch vom Auftraggeber befüllt werden — bis dahin gilt die bestehende Memory-Notiz `accessible-color-system.md` für Farbentscheidungen.
 

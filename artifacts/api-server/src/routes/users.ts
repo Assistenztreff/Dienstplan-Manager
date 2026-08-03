@@ -206,7 +206,7 @@ router.post("/users", requireAdmin, async (req, res): Promise<void> => {
     if (!(await userWithinLimit(ownerId, "maxAssistants", existingAssistants.length))) {
       const max = await getUserLimit(ownerId, "maxAssistants");
       res.status(403).json({
-        error: `Im Free-Tarif sind maximal ${max} Assistenten moeglich. Bitte upgrade auf Premium fuer unbegrenzte Assistenten.`,
+        error: `Im Free-Tarif sind maximal ${max} Assistenzkräfte moeglich. Bitte upgrade auf Premium fuer unbegrenzte Assistenzkräfte.`,
         code: "plan_limit_reached",
         limit: "maxAssistants",
       });

@@ -399,7 +399,7 @@ export default function OperatorDashboard() {
                     <th className="px-4 py-3 font-medium">Konto</th>
                     <th className="px-4 py-3 font-medium">Typ</th>
                     <th className="px-4 py-3 font-medium">Teams</th>
-                    <th className="px-4 py-3 font-medium">Assistenten</th>
+                    <th className="px-4 py-3 font-medium">Assistenzkräfte</th>
                     <th className="px-4 py-3 font-medium">Plan</th>
                     <th className="px-4 py-3 font-medium text-right">Aktion</th>
                   </tr>

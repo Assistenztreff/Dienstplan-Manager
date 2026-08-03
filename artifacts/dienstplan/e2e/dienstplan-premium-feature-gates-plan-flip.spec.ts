@@ -395,13 +395,13 @@ test.describe("Premium-Feature-Gates: Sperr-Hinweise im Frontend (UI)", () => {
     await adoptSession(page, free);
 
     await page.goto("/assistenten");
-    await expect(page.getByRole("heading", { name: "Assistenten" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Assistenzkräfte" })).toBeVisible();
 
     // Auf schmalen Viewports (Config: 400px) sind die Button-Beschriftungen
     // ausgeblendet (`hidden sm:inline`) — daher über das title-Attribut suchen,
     // das im Free-Tarif den Premium-Hinweis trägt.
     const inviteButton = page
-      .locator('button[title*="Einladungslinks für Assistenten sind ein Premium-Feature"]')
+      .locator('button[title*="Einladungslinks für Assistenzkräfte sind ein Premium-Feature"]')
       .first();
     await expect(inviteButton).toBeVisible();
     await expect(inviteButton, "Einladen muss im Free-Tarif gesperrt sein").toBeDisabled();

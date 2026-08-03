@@ -58,7 +58,7 @@ type Member = {
 };
 
 function roleLabel(role: "admin" | "assistant"): string {
-  return role === "admin" ? "Assistenznehmer" : "Assistent";
+  return role === "admin" ? "Assistenznehmer" : "Assistenzkraft";
 }
 
 type TeamDialogProps = {
@@ -682,7 +682,7 @@ export default function TeamVerwaltung() {
           <p className="text-muted-foreground mt-1 text-sm">
             {isTeamleiterMode
               ? "Mitglieder der dir zugewiesenen Teams verwalten"
-              : "Teams für die Organisation von Assistenten und Dienstplänen verwalten"}
+              : "Teams für die Organisation von Assistenzkräften und Dienstplänen verwalten"}
           </p>
         </div>
         {/* Neues Team nur für Admins — Teamleiter dürfen keine Teams anlegen */}
@@ -809,7 +809,7 @@ export default function TeamVerwaltung() {
 
       {!isTeamleiterMode && (
         <p className="text-xs text-muted-foreground">
-          Teams strukturieren Assistenten und Dienstpläne. Ein Team kann nur gelöscht werden, wenn
+          Teams strukturieren Assistenzkräfte und Dienstpläne. Ein Team kann nur gelöscht werden, wenn
           ihm keine Mitglieder oder Daten mehr zugeordnet sind.
         </p>
       )}

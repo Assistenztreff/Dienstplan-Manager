@@ -250,7 +250,7 @@ export default function Abwesenheiten() {
   async function handleSave() {
     setError(null);
     if (!userId) {
-      setError("Bitte einen Assistenten auswählen.");
+      setError("Bitte eine Assistenzkraft auswählen.");
       return;
     }
     if (!from || !to) {
@@ -413,10 +413,10 @@ export default function Abwesenheiten() {
             <h3 className="font-semibold">Abwesenheit eintragen</h3>
 
             <div className="space-y-1.5">
-              <Label>Assistent</Label>
+              <Label>Assistenzkraft</Label>
               <Select value={userId} onValueChange={setUserId}>
                 <SelectTrigger data-testid="absence-user">
-                  <SelectValue placeholder="Assistent auswählen" />
+                  <SelectValue placeholder="Assistenzkraft auswählen" />
                 </SelectTrigger>
                 <SelectContent>
                   {assistants.map((u) => (
@@ -520,7 +520,7 @@ export default function Abwesenheiten() {
                   <Skeleton className="h-10 w-full" />
                 </div>
               ) : assistants.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Keine Assistenten vorhanden.</p>
+                <p className="text-sm text-muted-foreground">Keine Assistenzkräfte vorhanden.</p>
               ) : (
                 <div className="space-y-2.5">
                   {assistants.map((u) => {

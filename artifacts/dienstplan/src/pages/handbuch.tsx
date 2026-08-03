@@ -58,7 +58,7 @@ const KAPITEL: Array<{ title: string; items: KapitelEintrag[] }> = [
     items: [
       { title: "Dashboard", href: "/handbuch/dashboard", id: "dashboard" },
       { title: "Dienstplan", href: "/handbuch/dienstplan", id: "dienstplan" },
-      { title: "Assistenten", href: "/handbuch/assistenten", id: "assistenten" },
+      { title: "Assistenzkräfte", href: "/handbuch/assistenten", id: "assistenten" },
       { title: "Zeiterfassung", href: "/handbuch/zeiterfassung", id: "zeiterfassung" },
       { title: "Abwesenheiten", href: "/handbuch/abwesenheiten", id: "abwesenheiten" },
       {
@@ -719,9 +719,9 @@ export function HandbuchDienstplan() {
 
       <h2 id="monatsansicht">Die Monatsansicht</h2>
       <p>
-        In der tabellarischen Monatsansicht sehen Sie alle Assistenten untereinander und die Tage
+        In der tabellarischen Monatsansicht sehen Sie alle Assistenzkräfte untereinander und die Tage
         des Monats als Spalten. Diese Ansicht eignet sich besonders gut, um den kompletten Plan für
-        den nächsten Monat aufzubauen. Jeder Assistent hat eine eigene Zeile, sodass Sie auf einen
+        den nächsten Monat aufzubauen. Jede Assistenzkraft hat eine eigene Zeile, sodass Sie auf einen
         Blick erkennen, wer wann eingeteilt ist.
       </p>
       <p>
@@ -796,7 +796,7 @@ export function HandbuchTeamVerwaltung() {
         Arbeitsort erstellen.
       </p>
       <p>
-        Für jedes Team wird ein separater Dienstplan generiert. Assistenten können mehreren Teams
+        Für jedes Team wird ein separater Dienstplan generiert. Assistenzkräfte können mehreren Teams
         zugeordnet werden, sodass sie flexibel in verschiedenen Einsatzorten aushelfen können,
         ohne dass es zu Doppelbelegungen im Kalender kommt.
       </p>
@@ -819,7 +819,7 @@ export function HandbuchTeamVerwaltung() {
       <p className="mb-6">So strukturieren Sie Ihr Unternehmen effektiv im AssistenzPlaner:</p>
       <div className="grid gap-4 sm:grid-cols-2">
         <SeeAlsoLink title="Rollen verstehen" href="/handbuch/rollen" icon={Settings} />
-        <SeeAlsoLink title="Assistenten verwalten" href="/handbuch/assistenten" icon={Users} />
+        <SeeAlsoLink title="Assistenzkräfte verwalten" href="/handbuch/assistenten" icon={Users} />
       </div>
     </ArtikelShell>
   );
@@ -895,7 +895,7 @@ export function HandbuchRegistrierung() {
       <h2 id="einladung-annehmen">Als Assistenzkraft per Einladung</h2>
       <p>
         Assistenzkräfte registrieren sich nicht selbst — sie werden eingeladen. Ihr
-        Assistenznehmer oder Dienstleister legt Sie im Bereich &bdquo;Assistenten&ldquo; an und
+        Assistenznehmer oder Dienstleister legt Sie im Bereich &bdquo;Assistenzkräfte&ldquo; an und
         erzeugt dort über &bdquo;Teammitglied einladen&ldquo; einen persönlichen Einladungslink.
       </p>
       <p>
@@ -935,7 +935,7 @@ export function HandbuchRollen() {
       toc={[
         { id: "rollen-ueberblick", label: "Die Rollen im Überblick" },
         { id: "assistenznehmer", label: "Was Assistenznehmer sehen" },
-        { id: "assistenten-sicht", label: "Was Assistenten sehen" },
+        { id: "assistenten-sicht", label: "Was Assistenzkräfte sehen" },
         { id: "kontotypen", label: "Privat oder Gewerblich?" },
         { id: "siehe-auch", label: "Siehe auch" },
       ]}
@@ -952,28 +952,28 @@ export function HandbuchRollen() {
       <h2 id="rollen-ueberblick">Die Rollen im Überblick</h2>
       <p>
         Im AssistenzPlaner gibt es zwei Rollen: <strong>Assistenznehmer</strong> und{" "}
-        <strong>Assistent</strong>. Der Assistenznehmer ist die verwaltende Rolle — er erstellt
+        <strong>Assistenzkraft</strong>. Der Assistenznehmer ist die verwaltende Rolle — er erstellt
         den Dienstplan, lädt Teammitglieder ein, pflegt Verträge und gibt Zeiterfassungen frei.
-        Assistenten sind die Mitglieder des Teams: Sie sehen ihren eigenen Plan, erfassen ihre
+        Assistenzkräfte sind die Mitglieder des Teams: Sie sehen ihren eigenen Plan, erfassen ihre
         Arbeitszeiten und verwalten ihr Profil.
       </p>
       <p>
         Welche Rolle eine Person hat, sehen Sie als Verwaltung in der Mitglieder-Liste — zum
         Beispiel in der Team-Verwaltung, wo neben jedem Namen &bdquo;Assistenznehmer&ldquo; oder
-        &bdquo;Assistent&ldquo; steht.
+        &bdquo;Assistenzkraft&ldquo; steht.
       </p>
 
       <HinweisBox titel="Tipp: Rollen werden automatisch vergeben">
         <p>
           Sie müssen Rollen nicht von Hand zuweisen. Wer sich selbst registriert, ist
-          Assistenznehmer. Wer über einen Einladungslink dazukommt, ist Assistent.
+          Assistenznehmer. Wer über einen Einladungslink dazukommt, ist Assistenzkraft.
         </p>
       </HinweisBox>
 
       <h2 id="assistenznehmer">Was Assistenznehmer sehen</h2>
       <p>
         Als Assistenznehmer steht Ihnen das App-Menü in voller Breite zur Verfügung: Dashboard,
-        Dienstplan, Assistenten, Zeiterfassung, Abwesenheiten, Auswertungen und Einstellungen.
+        Dienstplan, Assistenzkräfte, Zeiterfassung, Abwesenheiten, Auswertungen und Einstellungen.
         Sie legen Dienste an und geben sie frei, genehmigen Abwesenheiten, prüfen Zeiteinträge und
         werten Stunden und Lohn aus.
       </p>
@@ -983,20 +983,20 @@ export function HandbuchRollen() {
         organisieren.
       </p>
 
-      <h2 id="assistenten-sicht">Was Assistenten sehen</h2>
+      <h2 id="assistenten-sicht">Was Assistenzkräfte sehen</h2>
       <p>
-        Assistenten sehen ein schlankeres Menü: Dashboard, Dienstplan, Zeiterfassung und
+        Assistenzkräfte sehen ein schlankeres Menü: Dashboard, Dienstplan, Zeiterfassung und
         Einstellungen. Im Dienstplan sehen sie die freigegebenen Dienste, in der Zeiterfassung
         tragen sie ihre tatsächlichen Arbeitszeiten ein. In den Einstellungen verwalten sie ihr
         Profil und ihr persönliches Kalender-Abo.
       </p>
       <p>
-        Die Verwaltungsbereiche — Assistenten, Abwesenheiten, Auswertungen — sind für Assistenten
+        Die Verwaltungsbereiche — Assistenzkräfte, Abwesenheiten, Auswertungen — sind für Assistenzkräfte
         nicht sichtbar. So bleibt der Blick frei für das, was für den eigenen Arbeitsalltag
         zählt.
       </p>
 
-      <ScreenshotPlatzhalter label="Screenshot: App-Menü (Assistenznehmer vs. Assistent)" />
+      <ScreenshotPlatzhalter label="Screenshot: App-Menü (Assistenznehmer vs. Assistenzkraft)" />
 
       <h2 id="kontotypen">Privat oder Gewerblich?</h2>
       <p>
@@ -1033,7 +1033,7 @@ export function HandbuchDashboard() {
       toc={[
         { id: "kennzahlen", label: "Die Kennzahlen-Karten" },
         { id: "hinweise", label: "Der Bereich Hinweise" },
-        { id: "assistenten-dashboard", label: "Das Dashboard für Assistenten" },
+        { id: "assistenten-dashboard", label: "Das Dashboard für Assistenzkräfte" },
         { id: "siehe-auch", label: "Siehe auch" },
       ]}
     >
@@ -1049,13 +1049,13 @@ export function HandbuchDashboard() {
       <h2 id="kennzahlen">Die Kennzahlen-Karten</h2>
       <p>
         Im oberen Bereich sehen Sie als Verwaltung vier Karten: <strong>Aktive
-        Assistenten</strong>, <strong>Schichten heute</strong>, <strong>offene
+        Assistenzkräfte</strong>, <strong>Schichten heute</strong>, <strong>offene
         Zeiteinträge</strong> und die <strong>Stundenbilanz</strong> des Monats mit Ist- und
         Soll-Stunden.
       </p>
       <p>
         Die Karten sind gleichzeitig Schnellzugriffe: Ein Klick auf eine Karte führt Sie direkt in
-        den passenden Bereich — zum Beispiel von den aktiven Assistenten zur Assistenten-Seite
+        den passenden Bereich — zum Beispiel von den aktiven Assistenzkräften zur Assistenzkräfte-Seite
         oder von den offenen Zeiteinträgen zur Zeiterfassung.
       </p>
 
@@ -1064,7 +1064,7 @@ export function HandbuchDashboard() {
       <h2 id="hinweise">Der Bereich Hinweise</h2>
       <p>
         Unter den Kennzahlen fasst der Bereich <strong>Hinweise</strong> zusammen, wo etwas zu tun
-        ist: offene Zeiterfassungen, die noch bestätigt werden müssen, Assistenten mit wenig
+        ist: offene Zeiterfassungen, die noch bestätigt werden müssen, Assistenzkräfte mit wenig
         Resturlaub oder Tage, an denen noch keine Schicht geplant ist. Gibt es nichts zu tun,
         bleibt der Bereich leer — dann ist alles im grünen Bereich.
       </p>
@@ -1081,9 +1081,9 @@ export function HandbuchDashboard() {
         Team die Zahlen angezeigt werden.
       </p>
 
-      <h2 id="assistenten-dashboard">Das Dashboard für Assistenten</h2>
+      <h2 id="assistenten-dashboard">Das Dashboard für Assistenzkräfte</h2>
       <p>
-        Assistenten sehen auf dem Dashboard ihre persönliche Übersicht — darunter die eigene
+        Assistenzkräfte sehen auf dem Dashboard ihre persönliche Übersicht — darunter die eigene
         Stundenbilanz und die Karte <strong>Mein Resturlaub</strong> mit Anspruch, bereits
         genommenen und verbleibenden Urlaubstagen für das laufende Jahr. Verwaltungs-Kennzahlen
         wie offene Zeiteinträge anderer Teammitglieder erscheinen hier nicht.
@@ -1107,25 +1107,25 @@ export function HandbuchAssistenten() {
     <ArtikelShell
       activeId="assistenten"
       bereich="Modul-Übersicht"
-      titel="Assistenten"
+      titel="Assistenzkräfte"
       toc={[
-        { id: "uebersicht", label: "Die Assistenten-Übersicht" },
-        { id: "anlegen", label: "Assistenten anlegen und bearbeiten" },
+        { id: "uebersicht", label: "Die Assistenzkräfte-Übersicht" },
+        { id: "anlegen", label: "Assistenzkräfte anlegen und bearbeiten" },
         { id: "einladen", label: "Teammitglied einladen" },
         { id: "entfernen", label: "Entfernen und Löschen" },
         { id: "siehe-auch", label: "Siehe auch" },
       ]}
     >
       <h1 className="mb-6 text-4xl font-bold leading-tight text-brand-dark md:text-5xl">
-        Assistenten
+        Assistenzkräfte
       </h1>
       <p className="mb-10 text-xl leading-relaxed text-slate-500">
-        Im Bereich Assistenten verwalten Sie die Mitglieder Ihres Teams: Kontaktdaten, vertragliche
+        Im Bereich Assistenzkräfte verwalten Sie die Mitglieder Ihres Teams: Kontaktdaten, vertragliche
         Konditionen und den Zugang zur App. Der Bereich steht nur der Verwaltung zur Verfügung —
         Assistenzkräfte sehen ihn nicht.
       </p>
 
-      <h2 id="uebersicht">Die Assistenten-Übersicht</h2>
+      <h2 id="uebersicht">Die Assistenzkräfte-Übersicht</h2>
       <p>
         Jede Assistenzkraft erscheint als eigene Karte mit Namen, Kontaktdaten und den wichtigsten
         Vertragsdaten: Wochenstunden, Arbeitstage pro Woche, Urlaubsanspruch und Vertragsbeginn.
@@ -1133,9 +1133,9 @@ export function HandbuchAssistenten() {
         über die Team-Auswahl, welches Team angezeigt wird.
       </p>
 
-      <ScreenshotPlatzhalter label="Screenshot: Assistenten-Übersicht (Karten)" />
+      <ScreenshotPlatzhalter label="Screenshot: Assistenzkräfte-Übersicht (Karten)" />
 
-      <h2 id="anlegen">Assistenten anlegen und bearbeiten</h2>
+      <h2 id="anlegen">Assistenzkräfte anlegen und bearbeiten</h2>
       <p>
         Über die Schaltfläche &bdquo;Neu anlegen&ldquo; öffnen Sie den Dialog für eine neue
         Assistenzkraft. Er ist in drei Bereiche gegliedert:
@@ -1159,9 +1159,9 @@ export function HandbuchAssistenten() {
         zum Beispiel bei einer Vertragsänderung.
       </p>
 
-      <HinweisBox titel="Hinweis: Free-Tarif mit bis zu 6 Assistenten">
+      <HinweisBox titel="Hinweis: Free-Tarif mit bis zu 6 Assistenzkräften">
         <p>
-          Im Free-Tarif können Sie maximal 6 Assistenten anlegen. Ist die Grenze erreicht,
+          Im Free-Tarif können Sie maximal 6 Assistenzkräfte anlegen. Ist die Grenze erreicht,
           erscheint ein Hinweis mit der Möglichkeit, ein Premium-Upgrade anzufragen.
         </p>
       </HinweisBox>
@@ -1197,7 +1197,7 @@ export function HandbuchAssistenten() {
       </p>
 
       <h2 id="siehe-auch">Siehe auch</h2>
-      <p className="mb-6">So arbeiten Sie mit den angelegten Assistenten weiter:</p>
+      <p className="mb-6">So arbeiten Sie mit den angelegten Assistenzkräften weiter:</p>
       <div className="grid gap-4 sm:grid-cols-2">
         <SeeAlsoLink title="Dienstplan" href="/handbuch/dienstplan" icon={FileText} />
         <SeeAlsoLink title="Auswertungen" href="/handbuch/auswertungen" icon={Star} />
@@ -1422,8 +1422,8 @@ export function HandbuchAuswertungen() {
 
       <h2 id="ansichten">Übersicht und Karten</h2>
       <p>
-        Oben wählen Sie den Monat, das Team und über &bdquo;Assistent filtern&ldquo; entweder
-        &bdquo;Alle Assistenten&ldquo; oder eine einzelne Person. Zwei Ansichten stehen bereit:
+        Oben wählen Sie den Monat, das Team und über &bdquo;Assistenzkraft filtern&ldquo; entweder
+        &bdquo;Alle Assistenzkräfte&ldquo; oder eine einzelne Person. Zwei Ansichten stehen bereit:
         Die <strong>Übersicht</strong> zeigt alle Assistenzkräfte nebeneinander in einer
         Matrix-Tabelle, die <strong>Karten</strong>-Ansicht eine ausführliche Karte pro Person
         mit Fortschrittsbalken für geleistete und geplante Stunden.
@@ -1456,7 +1456,7 @@ export function HandbuchAuswertungen() {
 
       <h2 id="lohnauswertung">Premium-Lohnauswertung</h2>
       <p>
-        Ist bei den Assistenten ein Stundenlohn hinterlegt, rechnet die{" "}
+        Ist bei den Assistenzkräften ein Stundenlohn hinterlegt, rechnet die{" "}
         <strong>Lohnauswertung</strong> (Premium) die Stunden in Euro um: Grundlohn,
         Nachtzuschlag, Sonntagszuschlag, Feiertagszuschlag und die Bruttosumme &bdquo;GESAMT
         (brutto)&ldquo;. Die Zuschlagssätze pflegen Sie in den Einstellungen unter Zuschläge.
@@ -1475,9 +1475,9 @@ export function HandbuchAuswertungen() {
       <p>
         Über <strong>PDF Export</strong> (Premium) erzeugen Sie den Stundennachweis für die
         Lohnabrechnung: Ist eine einzelne Person gefiltert, als einzelnes PDF — bei
-        &bdquo;Alle Assistenten&ldquo; als Sammelnachweis mit allen Personen. Den Export für
+        &bdquo;Alle Assistenzkräfte&ldquo; als Sammelnachweis mit allen Personen. Den Export für
         eine einzelne Person erreichen Sie auch direkt über &bdquo;Nachweis&ldquo; auf der
-        jeweiligen Karte im Bereich Assistenten.
+        jeweiligen Karte im Bereich Assistenzkräfte.
       </p>
 
       <ScreenshotPlatzhalter label="Screenshot: Dialog Stundennachweis exportieren" />
@@ -1752,7 +1752,7 @@ export function HandbuchEinstellungen() {
         <SeeAlsoLink title="Auswertungen" href="/handbuch/auswertungen" icon={FileText} />
         <SeeAlsoLink title="Zeiterfassung" href="/handbuch/zeiterfassung" icon={CalendarDays} />
         <SeeAlsoLink title="Dienstplan" href="/handbuch/dienstplan" icon={Settings} />
-        <SeeAlsoLink title="Assistenten" href="/handbuch/assistenten" icon={Users} />
+        <SeeAlsoLink title="Assistenzkräfte" href="/handbuch/assistenten" icon={Users} />
       </div>
     </ArtikelShell>
   );
