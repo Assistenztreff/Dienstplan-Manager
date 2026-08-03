@@ -35,5 +35,5 @@ description = "Feature-Konzept: Teamleiter-Konten – Berechtigungsmatrix, offen
 id = "C-YujG9oOwHJFb2ESGBsA"
 uri = "file://artifacts/dienstplan/public/handbuch.pdf"
 type = "pdf"
-title = "Handbuch – AssistenzPlaner"
-description = "Alle 11 Kapitel als druckfertiges PDF (Startseite, Registrierung, Rollen, Dashboard, Dienstplan, Assistenten, Zeiterfassung, Abwesenheiten, Auswertungen, Team-Verwaltung, Einstellungen)"
+title = "Handbuch – AssistenzPlaner (aktualisiert)"
+description = "Alle 11 Kapitel als PDF, jetzt inkl. neuem Abschnitt 'Assistenzkraft-Farben' im Kapitel Einstellungen."

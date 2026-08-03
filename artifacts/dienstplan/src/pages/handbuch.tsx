@@ -1503,6 +1503,7 @@ export function HandbuchEinstellungen() {
         { id: "kalender-abo", label: "Kalender-Export & Abo" },
         { id: "schichtmodelle", label: "Schichtmodelle (Dienste)" },
         { id: "firmenlogo", label: "Firmenlogo (Premium)" },
+        { id: "assistenzkraft-farben", label: "Assistenzkraft-Farben" },
         { id: "zuschlaege", label: "Zuschläge & Abrechnungsart" },
         { id: "pausen", label: "Pausen & Pausenabzug" },
         { id: "weitere-schalter", label: "Weitere Schalter" },
@@ -1607,6 +1608,29 @@ export function HandbuchEinstellungen() {
         Wechseln Sie dazu im Team-Umschalter oben in das gewünschte Team, bevor Sie das Logo
         hochladen. Ohne Team-Logo gilt das Konto-Logo als Fallback.
       </p>
+
+      <h2 id="assistenzkraft-farben">Assistenzkraft-Farben</h2>
+      <p>
+        Die Karte <strong>Assistenzkraft-Farben</strong> bestimmt, mit welcher Farbpalette die
+        Assistenzkräfte im Monatskalender des Dienstplans unterschieden werden. Zwei Paletten
+        stehen zur Wahl:
+      </p>
+      <ul>
+        <li>
+          <strong>Hell</strong> — zwölf helle Farben mit schwarzer Schrift.
+        </li>
+        <li>
+          <strong>Dunkel</strong> — zwölf dunkle Farben mit weißer Schrift.
+        </li>
+      </ul>
+      <p>
+        Beide Paletten erfüllen die Kontrastanforderungen der Barrierefreiheit (WCAG&nbsp;AA). Jede
+        Assistenzkraft behält beim Wechsel ihre Slot-Nummer — nur die Optik ändert sich. Die
+        Auswahl wirkt sofort und rückwirkend auf alle Monate, da die Farben eine reine
+        Darstellungseinstellung sind.
+      </p>
+
+      <ScreenshotPlatzhalter label="Screenshot: Einstellungen – Assistenzkraft-Farben" />
 
       <h2 id="zuschlaege">Zuschläge &amp; Abrechnungsart</h2>
       <p>
