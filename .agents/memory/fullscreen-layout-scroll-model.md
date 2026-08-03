@@ -21,3 +21,6 @@ Die Dienstplan-Kopfzeile ist `sticky top-0 z-40 bg-white/95 backdrop-blur` und b
 - Seiten-Root und Sektions-Wrapper NICHT mit `overflow-hidden`/`min-h-0 flex-1` fesseln, sonst kein natürliches Wachstum. Auch den Loading-Branch gleich fließend halten.
 - Der Assistenten-Filter auf `/dienstplan` ist ein kompaktes shadcn-`<Select>` in der Kopfzeile (testids `assistant-select`, `assistant-option-all`, `assistant-option-<id>`); die Pillen-`AssistantFilter`-Komponente bleibt nur auf `auswertungen`/`zeiterfassung`.
 - E2E/Screenshots: gescrollt wird der innere Layout-Container; Playwrights `scrollIntoViewIfNeeded` funktioniert weiter.
+
+## PDF-Export via page.pdf()
+Das fixierte Scroll-Modell schneidet bei Playwright `page.pdf()` alles außer dem ersten Viewport ab. Vor dem Export alle Höhen-/Overflow-Sperren per Print-CSS aufheben, sonst fehlt der Großteil des Inhalts. Das Handbuch-PDF ist bewusst superadmin-only — nie in ein public/-Verzeichnis legen.

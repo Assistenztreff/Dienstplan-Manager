@@ -28,7 +28,9 @@ const KAPITEL = [
   { title: "Einstellungen", path: "/handbuch/einstellungen" },
 ];
 
-const OUT_DIR = path.join(__dirname, "../artifacts/dienstplan/public");
+// WICHTIG: NICHT in ein public/-Verzeichnis legen — das Handbuch-PDF ist nur
+// für Superadmins über GET /api/operator/handbuch-pdf abrufbar.
+const OUT_DIR = path.join(__dirname, "../artifacts/api-server/assets");
 const OUT_FILE = path.join(OUT_DIR, "handbuch.pdf");
 
 async function main() {
@@ -61,6 +63,13 @@ async function main() {
         nav, header, [data-dienstplan-header], .dev-bar,
         [aria-label="Handbuch-Navigation"], aside { display: none !important; }
         body { background: white !important; }
+        /* Das App-Layout fixiert die Hoehe (body scrollt nie, innerer Container
+           scrollt). Fuer den Druck ALLE Hoehen-Sperren aufheben, sonst enthaelt
+           das PDF nur die erste Viewport-Seite jedes Kapitels. */
+        html, body, #root { height: auto !important; min-height: 0 !important; overflow: visible !important; }
+        * { max-height: none !important; }
+        [class*="overflow-y-auto"], [class*="overflow-auto"], [class*="overflow-hidden"],
+        main, [role="main"] { overflow: visible !important; height: auto !important; }
         @media print { * { -webkit-print-color-adjust: exact !important; } }
       `,
     });

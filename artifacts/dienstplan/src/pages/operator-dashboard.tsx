@@ -64,7 +64,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { DatePickerField } from "@/components/date-picker-field";
 import { Label } from "@/components/ui/label";
-import { Users, Receipt, AlertTriangle, ShieldCheck, History, Check, CheckCheck, Undo2, ChevronDown, ChevronUp, Search } from "lucide-react";
+import { Users, Receipt, AlertTriangle, ShieldCheck, History, Check, CheckCheck, Undo2, ChevronDown, ChevronUp, Search, FileDown } from "lucide-react";
 import { readableApiError } from "@/lib/api-error";
 import { useToast } from "@/hooks/use-toast";
 
@@ -347,7 +347,7 @@ export default function OperatorDashboard() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <div className="rounded-lg bg-brand-dark p-2 text-brand-white">
           <ShieldCheck className="h-6 w-6" />
         </div>
@@ -357,6 +357,14 @@ export default function OperatorDashboard() {
             Interne Betreiber-Konsole — nur für Superadmins.
           </p>
         </div>
+        {/* Handbuch-PDF: bewusst nur hier verlinkt (Endpunkt ist superadmin-
+            gesichert) — das PDF darf nie öffentlich abrufbar sein. */}
+        <Button asChild variant="outline" className="ml-auto gap-2" data-testid="button-handbuch-pdf">
+          <a href={`${import.meta.env.BASE_URL}api/operator/handbuch-pdf`} download>
+            <FileDown className="h-4 w-4" />
+            Handbuch als PDF
+          </a>
+        </Button>
       </div>
 
       {/* ----------------------------------------------------------------- */}
