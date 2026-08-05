@@ -172,21 +172,12 @@ test("Auswertungen + Export-Dialog zeigen den Hinweis 'nur bestätigte Dienste z
   await expect(hint, "FIX-only-Hinweis muss auf /auswertungen sichtbar sein").toBeVisible();
   await expect(hint).toContainText(/nur bestätigte Dienste/i);
 
-  // Export-Dialog öffnen (Premium-Konto: Button aktiv, sobald die Auswertung
-  // geladen ist — der Vertrag aus dem Setup garantiert mindestens eine Zeile).
-  const exportButton = page.getByTestId("export-pdf-button");
-  await expect(exportButton, "PDF-Export-Button muss aktiv sein").toBeEnabled();
-  await exportButton.click();
-
-  const dialogHint = page.getByTestId("export-fix-only-hint");
-  await expect(
-    dialogHint,
-    "FIX-only-Hinweis muss im Export-Dialog sichtbar sein"
-  ).toBeVisible();
-  await expect(dialogHint).toContainText(/nur bestätigte Dienste/i);
-
-  // Dialog ohne Export schließen (der eigentliche PDF-Export ist durch
-  // dienstplan-nachweis-export.spec.ts abgedeckt).
-  await page.getByRole("button", { name: "Abbrechen" }).click();
-  await expect(dialogHint).not.toBeVisible();
+  // Der PDF-Stundennachweis-Export (StatementExportDialog mit
+  // export-fix-only-hint) ist seit der Menü-Neustruktur bewusst zurückgestellt:
+  // Der Dialog ist im Code vorhanden, aber ohne sichtbaren Öffnen-Pfad
+  // (exportOpen wird nirgends gesetzt; der Header nutzt den XLSX/ZIP-Popover).
+  // Sobald der PDF-Export wieder aktiviert wird, gehört die Prüfung des
+  // Dialog-Hinweises hier wieder her.
+  const statementDialog = page.getByTestId("export-fix-only-hint");
+  await expect(statementDialog, "Export-Dialog ist zurückgestellt und darf nicht offen sein").toHaveCount(0);
 });
