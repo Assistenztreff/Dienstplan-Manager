@@ -12,6 +12,7 @@ import {
   type ShiftInputType,
   type VacationBalance,
   type Contract,
+  type User,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,6 +36,7 @@ import { useToast } from "@/hooks/use-toast";
 import { planUpgradeMessage, readableApiError, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
 import { warnIfMonthClosed } from "@/lib/month-closing-warning";
 import { useAuth } from "@/context/auth";
+import { isAdminRole } from "@/lib/roles";
 import { hasAccess } from "@/lib/entitlements";
 import { PlanUpgradeLink } from "@/components/plan-limit-banner";
 import { MonthYearPicker } from "@/components/month-year-picker";
@@ -168,7 +170,22 @@ export default function Abwesenheiten() {
   // Resturlaub-Konto (Anspruch/genommen/verbleibend).
   const trackingLocked = !hasAccess(currentUser, "absenceTracking");
 
-  const { data: users, isLoading: usersLoading } = useListUsers();
+  // Verwaltungsrechte: Konto-Admins und Teamleiter sehen/verwalten ALLE
+  // Abwesenheiten ihres Scopes. Assistenzkräfte sehen die Seite ebenfalls,
+  // aber ausschließlich für die EIGENE Person (§3 der Menü-Neustrukturierung);
+  // der Server erzwingt dasselbe Scoping zusätzlich autoritativ.
+  const canManage = isAdminRole(currentUser?.role) || !!currentUser?.isTeamleiter;
+
+  // Die Nutzerliste ist ein Admin-/Teamleiter-Endpunkt (403 für Assistenz-
+  // kräfte) — für Assistenzkräfte gar nicht erst abfragen.
+  // Doppelter Cast (Optionen + Ergebnis): Die generierten Hooks verlieren die
+  // Datentyp-Inferenz, sobald Optionen ohne queryKey übergeben werden.
+  const { data: users, isLoading: usersLoading } = useListUsers(undefined, {
+    query: { enabled: canManage },
+  } as Parameters<typeof useListUsers>[1]) as {
+    data?: User[];
+    isLoading: boolean;
+  };
   const { data: contracts, isLoading: contractsLoading } = useListContracts();
   const { data: shiftModels } = useListShiftModels();
   const { data: vacationShifts, isLoading: vacationLoading } = useListShifts({ type: "vacation" });
@@ -208,6 +225,19 @@ export default function Abwesenheiten() {
     [users]
   );
 
+  // Assistenzkräfte ohne Verwaltungsrechte: alles ist auf die eigene Person
+  // fixiert — für Resturlaub-Panel und Namensauflösung genügt der eigene
+  // Datensatz (die Nutzerliste steht ihnen serverseitig nicht zu).
+  const displayUsers = useMemo(
+    () =>
+      canManage
+        ? assistants
+        : currentUser
+          ? [{ id: currentUser.id, name: currentUser.name }]
+          : [],
+    [canManage, assistants, currentUser],
+  );
+
   const allAbsences = useMemo<AbsenceShift[]>(
     () => [...(vacationShifts ?? []), ...(sickShifts ?? [])] as AbsenceShift[],
     [vacationShifts, sickShifts]
@@ -216,7 +246,7 @@ export default function Abwesenheiten() {
   const ranges = useMemo(() => buildRanges(allAbsences), [allAbsences]);
 
   const userName = (id: number) =>
-    assistants.find((u) => u.id === id)?.name ??
+    displayUsers.find((u) => u.id === id)?.name ??
     (users ?? []).find((u) => u.id === id)?.name ??
     "Unbekannt";
 
@@ -249,7 +279,9 @@ export default function Abwesenheiten() {
 
   async function handleSave() {
     setError(null);
-    if (!userId) {
+    // Ohne Verwaltungsrechte ist die Zielperson immer die eigene.
+    const effectiveUserId = canManage ? userId : String(currentUser?.id ?? "");
+    if (!effectiveUserId) {
       setError("Bitte eine Assistenzkraft auswählen.");
       return;
     }
@@ -264,7 +296,7 @@ export default function Abwesenheiten() {
       return;
     }
 
-    const uid = Number(userId);
+    const uid = Number(effectiveUserId);
     const days = eachDayOfInterval({ start, end });
 
     // Tage überspringen, an denen für diesen Assistenten bereits eine Abwesenheit
@@ -354,7 +386,8 @@ export default function Abwesenheiten() {
     }
   }
 
-  const isLoading = usersLoading || contractsLoading || vacationLoading || sickLoading;
+  const isLoading =
+    (canManage && usersLoading) || contractsLoading || vacationLoading || sickLoading;
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -414,18 +447,28 @@ export default function Abwesenheiten() {
 
             <div className="space-y-1.5">
               <Label>Assistenzkraft</Label>
-              <Select value={userId} onValueChange={setUserId}>
-                <SelectTrigger data-testid="absence-user">
-                  <SelectValue placeholder="Assistenzkraft auswählen" />
-                </SelectTrigger>
-                <SelectContent>
-                  {assistants.map((u) => (
-                    <SelectItem key={u.id} value={String(u.id)}>
-                      {u.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {canManage ? (
+                <Select value={userId} onValueChange={setUserId}>
+                  <SelectTrigger data-testid="absence-user">
+                    <SelectValue placeholder="Assistenzkraft auswählen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {assistants.map((u) => (
+                      <SelectItem key={u.id} value={String(u.id)}>
+                        {u.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                // Assistenzkräfte tragen nur für sich selbst ein — kein Auswahlfeld.
+                <p
+                  className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm"
+                  data-testid="absence-user-self"
+                >
+                  {currentUser?.name}
+                </p>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -519,11 +562,11 @@ export default function Abwesenheiten() {
                   <Skeleton className="h-10 w-full" />
                   <Skeleton className="h-10 w-full" />
                 </div>
-              ) : assistants.length === 0 ? (
+              ) : displayUsers.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Keine Assistenzkräfte vorhanden.</p>
               ) : (
                 <div className="space-y-2.5">
-                  {assistants.map((u) => {
+                  {displayUsers.map((u) => {
                     const contract = activeContractFor(u.id);
                     const entitlement = contract?.vacationDays ?? null;
                     // Urlaub wird stundengenau geführt (Point 7): 1 Tag = 8 h,
@@ -575,7 +618,8 @@ export default function Abwesenheiten() {
                           </span>
                         )}
                       </div>
-                      {contract && <WorkdaysHint contract={contract} />}
+                      {/* Vertrags-Datenpflege (PATCH) bleibt Verwaltungsrechten vorbehalten. */}
+                      {canManage && contract && <WorkdaysHint contract={contract} />}
                       </div>
                     );
                   })}

@@ -690,23 +690,57 @@ function shiftModelTimesForDay(
   return { startTime, endTime };
 }
 
-router.post("/shifts", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
+router.post("/shifts", requireAuth, async (req, res): Promise<void> => {
   const body = CreateShiftBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "Invalid request body" });
     return;
   }
 
+  // Berechtigungsstufen: Admins und Teamleiter dürfen Schichten UND
+  // Abwesenheiten für ihren Scope anlegen. Reine Assistenzkräfte dürfen seit
+  // der Menü-Neustrukturierung (§3) AUSSCHLIESSLICH eigene Abwesenheiten
+  // (Urlaub/Krank) eintragen — alles andere bleibt 403. Dieser Authz-Check
+  // steht bewusst VOR jeder inhaltlichen Prüfung (kein Daten-Orakel).
+  const isAdmin = isAdminLikeRole(req.session.role!);
+  const teamleiterTeams = isAdmin ? [] : await getTeamleiterTeamIds(req.session.userId!);
+  const isPrivileged = isAdmin || teamleiterTeams.length > 0;
+  if (!isPrivileged) {
+    if (!isAbsenceType(body.data.type) || body.data.userId !== req.session.userId) {
+      res.status(403).json({ error: "Keine Berechtigung" });
+      return;
+    }
+  }
+
   // Team-Scope + Member-Invariante MÜSSEN vor allen inhaltlichen Prüfungen
   // stehen (Überschneidung/Doppel-Abwesenheit), sonst könnte ein fremder Admin
   // per 409-Antwort Schichtzeiten/Abwesenheiten teamfremder Nutzer ausspähen.
   // Teamleiter erhalten nur Zugriff auf ihre Teamleiter-Teams (effectiveTeams).
-  const effectiveTeams = isAdminLikeRole(req.session.role!)
-    ? undefined
-    : (await getTeamleiterTeamIds(req.session.userId!)) || undefined;
+  // Für reine Assistenzkräfte bleibt effectiveTeams leer → resolveWriteTeamId
+  // fällt auf ihre Mitglieds-Teams (getAllowedTeamIds) bzw. das Standard-Team
+  // zurück; die Ziel-Person ist oben bereits auf sie selbst fixiert.
+  const effectiveTeams = isAdmin ? undefined : teamleiterTeams;
+
+  // Mehr-Team-Assistenzkräfte (§3): Ohne explizite teamId würde die Abwesenheit
+  // sonst stumpf im ERSTEN Mitglieds-Team landen. Ist ein Schichtmodell gewählt,
+  // ist dessen Team die eindeutig gemeinte Ziel-Absicht — wir leiten die teamId
+  // daraus ab (nur wenn die Assistenzkraft dort wirklich Mitglied ist; sonst
+  // greift unten die normale forbidden/Modell-Team-Prüfung).
+  let requestedTeamId = body.data.teamId ?? undefined;
+  if (!isPrivileged && requestedTeamId == null && body.data.shiftModelId != null) {
+    const [model] = await db
+      .select({ teamId: shiftModelsTable.teamId })
+      .from(shiftModelsTable)
+      .where(eq(shiftModelsTable.id, body.data.shiftModelId))
+      .limit(1);
+    if (model && (await getAllowedTeamIds(req.session.userId!)).includes(model.teamId)) {
+      requestedTeamId = model.teamId;
+    }
+  }
+
   const write = await resolveWriteTeamId(
     req.session.userId!,
-    body.data.teamId ?? undefined,
+    requestedTeamId,
     effectiveTeams?.length ? effectiveTeams : undefined,
   );
   if (!write.ok) {
@@ -1238,7 +1272,7 @@ router.patch("/shifts/:id", requireTeamleiterOrAdmin, async (req, res): Promise<
   res.json(withUser);
 });
 
-router.delete("/shifts/:id", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
+router.delete("/shifts/:id", requireAuth, async (req, res): Promise<void> => {
   const params = DeleteShiftParams.safeParse({ id: Number(req.params["id"]) });
   if (!params.success) {
     res.status(400).json({ error: "Invalid id" });
@@ -1256,10 +1290,23 @@ router.delete("/shifts/:id", requireTeamleiterOrAdmin, async (req, res): Promise
     return;
   }
 
+  // Admins/Teamleiter: Löschrecht im Admin-Scope (wie bisher). Reine
+  // Assistenzkräfte dürfen seit der Menü-Neustrukturierung (§3) NUR eigene
+  // Abwesenheiten (Urlaub/Krank) entfernen — konsistent 404 statt 403, damit
+  // fremde Schicht-IDs nicht ausspähbar sind.
   const allowedTeams = await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!);
-  if (shift.teamId == null || !allowedTeams.includes(shift.teamId)) {
-    res.status(404).json({ error: "Not found" });
-    return;
+  const isPrivilegedForTeam =
+    shift.teamId != null && allowedTeams.includes(shift.teamId);
+  if (!isPrivilegedForTeam) {
+    const ownAbsence =
+      isAbsenceType(shift.type) &&
+      shift.userId === req.session.userId &&
+      shift.teamId != null &&
+      (await getAllowedTeamIds(req.session.userId!)).includes(shift.teamId);
+    if (!ownAbsence) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
   }
 
   if (isAbsenceType(shift.type)) {

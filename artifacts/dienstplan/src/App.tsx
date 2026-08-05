@@ -194,13 +194,13 @@ function Router() {
         <Route path="/" component={Dashboard} />
         <Route path="/dienstplan" component={Dienstplan} />
         <Route path="/zeiterfassung" component={Zeiterfassung} />
-        {isAdminRole(currentUser.role) && (
-          <Route path="/abwesenheiten" component={Abwesenheiten} />
-        )}
-        {isAdminRole(currentUser.role) && (
+        {/* Abwesenheiten für alle Rollen: Assistenzkräfte sehen und verwalten
+            dort nur die EIGENEN Einträge (Scoping in der Seite + Server). */}
+        <Route path="/abwesenheiten" component={Abwesenheiten} />
+        {(isAdminRole(currentUser.role) || currentUser.isTeamleiter) && (
           <Route path="/assistenten" component={Assistenten} />
         )}
-        {isAdminRole(currentUser.role) && (
+        {(isAdminRole(currentUser.role) || currentUser.isTeamleiter) && (
           <Route path="/auswertungen" component={Auswertungen} />
         )}
         {/* Einstellungen auch fuer Assistenten: die Seite zeigt ihnen nur die
@@ -225,7 +225,10 @@ function Router() {
         <Route path="/handbuch/einstellungen" component={HandbuchEinstellungen} />
         {/* Preise & Premium: Ziel der Free-Limit-Hinweise (Upgrade-Anfrage). */}
         {isAdminRole(currentUser.role) && <Route path="/preise" component={Preise} />}
-        {isAdminRole(currentUser.role) && currentUser.accountType === "dienstleister" && (
+        {/* Team-Verwaltung: Admin ODER Teamleiter, bewusst UNABHÄNGIG vom
+            accountType (Teamleiter sind Assistenzkräfte in Dienstleister-
+            Teams; der Nav-Punkt war nie auf Dienstleister beschränkt). */}
+        {(isAdminRole(currentUser.role) || currentUser.isTeamleiter) && (
           <Route path="/team-verwaltung" component={TeamVerwaltung} />
         )}
         {/* Operator-Dashboard ausschliesslich fuer Superadmins (Betreiber). */}

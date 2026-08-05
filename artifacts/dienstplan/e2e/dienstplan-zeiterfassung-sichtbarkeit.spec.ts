@@ -47,17 +47,17 @@ async function openPageAs(
   return { page, close: () => context.close() };
 }
 
-/** Der Navigations-Link "Zeiterfassung" in der Desktop-Pillen-Navigation. */
+/** Der Navigations-Link "Erfassen" (Zeiterfassung) in der Desktop-Navigation. */
 function navLink(page: Page) {
   return page
     .getByTestId("app-subnav-desktop")
-    .getByRole("link", { name: "Zeiterfassung", exact: true });
+    .getByRole("link", { name: "Erfassen", exact: true });
 }
 
 /**
  * Öffnet eine Browser-Seite mit MOBILEM Viewport (Memory-Note
  * e2e-mobile-viewport-selectors: 400px versteckt die Desktop-Nav; das
- * App-Menü liegt im Off-Canvas-Drawer hinter dem "App-Menü öffnen"-Button).
+ * App-Menü liegt im Vollbild-Menü hinter dem Hamburger des Plattform-Headers).
  */
 async function openMobilePageAs(
   browser: import("@playwright/test").Browser,
@@ -71,25 +71,25 @@ async function openMobilePageAs(
   return { page, close: () => context.close() };
 }
 
-/** Der Navigations-Link "Zeiterfassung" im mobilen App-Menü-Drawer. */
+/** Der Navigations-Link "Erfassen" (Zeiterfassung) im mobilen Vollbild-Menü. */
 function drawerNavLink(page: Page) {
   return page
-    .getByTestId("app-menu-drawer")
-    .getByRole("link", { name: "Zeiterfassung", exact: true });
+    .getByTestId("mobile-full-menu")
+    .getByRole("link", { name: "Erfassen", exact: true });
 }
 
-/** Öffnet den mobilen Drawer und wartet, bis er gerendert ist (Anker: Dashboard-Link). */
+/** Öffnet das mobile Vollbild-Menü und wartet, bis es gerendert ist (Anker: Start-Link). */
 async function openDrawer(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "App-Menü öffnen" }).click();
+  await page.getByTestId("platform-header-hamburger").click();
   await expect(
-    page.getByTestId("app-menu-drawer").getByRole("link", { name: "Dashboard", exact: true }),
+    page.getByTestId("mobile-full-menu").getByRole("link", { name: "Start", exact: true }),
   ).toBeVisible({ timeout: 30_000 });
 }
 
-/** Wartet, bis die Navigation gerendert ist (Anker: Dashboard-Link). */
+/** Wartet, bis die Navigation gerendert ist (Anker: Start-Link). */
 async function waitForNav(page: Page): Promise<void> {
   await expect(
-    page.getByTestId("app-subnav-desktop").getByRole("link", { name: "Dashboard", exact: true }),
+    page.getByTestId("app-subnav-desktop").getByRole("link", { name: "Start", exact: true }),
   ).toBeVisible({ timeout: 30_000 });
 }
 
