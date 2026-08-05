@@ -701,7 +701,7 @@ export default function Zeiterfassung() {
                 <tr className="border-b bg-muted/30">
                   <th className="p-4 text-left font-medium text-muted-foreground">Datum</th>
                   {isAdmin && (
-                    <th className="p-4 text-left font-medium text-muted-foreground">Assistent</th>
+                    <th className="p-4 text-left font-medium text-muted-foreground">Assistenzkraft</th>
                   )}
                   <th className="p-4 text-left font-medium text-muted-foreground">Von - Bis</th>
                   <th className="p-4 text-left font-medium text-muted-foreground">Stunden</th>

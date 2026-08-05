@@ -31,7 +31,7 @@ const UPGRADE_CONTACT_EMAIL = "premium@assistenz-treff.de";
 
 // Anzeige-Reihenfolge + deutsche Labels fuer die Limits aus PLAN_CONFIG.
 const LIMIT_ROWS: { key: PlanLimit; label: string }[] = [
-  { key: "maxAssistants", label: "Assistenten" },
+  { key: "maxAssistants", label: "Assistenzkräfte" },
   { key: "maxTeams", label: "Teams" },
   { key: "maxShiftModels", label: "Dienste (Schichtmodelle)" },
   { key: "historyMonths", label: "Planungshorizont" },

@@ -17,7 +17,7 @@ import {
   UpdateContractBody,
   DeleteContractParams,
 } from "@workspace/api-zod";
-import { requireAdmin, requireAuth, isAdminLikeRole } from "../middleware/auth";
+import { requireAdmin, requireAuth, requireTeamleiterOrAdmin, isAdminLikeRole } from "../middleware/auth";
 import { recalcVacationHoursUsed, resolveDailyRateInfo } from "../lib/vacation-hours";
 import { requirePlanFeatureViaTeamOwner } from "../lib/plan";
 import { resolveAllowanceOps } from "../lib/allowance-resolve";
@@ -26,6 +26,9 @@ import {
   resolveReadTeamScope,
   resolveWriteTeamId,
   getAllowedTeamIds,
+  getEffectiveAdminTeamIds,
+  getTeamleiterTeamIds,
+  canViewPayrollInTeam,
   parseTeamIdParam,
   isUserMemberOfTeam,
 } from "../lib/teams";
@@ -68,11 +71,28 @@ router.get("/contracts", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid query parameters" });
     return;
   }
-  // Nicht-Admins (Assistenten) dürfen ausschließlich ihren eigenen Vertrag
-  // lesen — der userId-Filter wird zwingend auf die eigene Session gesetzt.
-  const filterUserId = isAdminLikeRole(req.session.role)
-    ? query.data.userId
-    : req.session.userId;
+  // Admins: voller Zugriff per Query-Parameter.
+  // Teamleiter mit canViewPayroll: dürfen alle Verträge im Team einsehen.
+  // Alle anderen (Assistenten, Teamleiter ohne canViewPayroll): nur eigener Vertrag.
+  let filterUserId: number | undefined;
+  if (isAdminLikeRole(req.session.role)) {
+    filterUserId = query.data.userId;
+  } else {
+    // Prüfen ob Teamleiter mit Payroll-Freigabe für das angefragte Team.
+    const requestedTeamId = parseTeamIdParam(req);
+    let hasPayroll = false;
+    if (requestedTeamId) {
+      hasPayroll = await canViewPayrollInTeam(req.session.userId!, requestedTeamId);
+    } else {
+      // Kein explizites Team: canViewPayroll in IRGEND einem Teamleiter-Team reicht.
+      const tlTeams = await getTeamleiterTeamIds(req.session.userId!);
+      if (tlTeams.length > 0) {
+        const checks = await Promise.all(tlTeams.map((id) => canViewPayrollInTeam(req.session.userId!, id)));
+        hasPayroll = checks.some(Boolean);
+      }
+    }
+    filterUserId = hasPayroll ? query.data.userId : req.session.userId;
+  }
 
   const teamScope = await resolveReadTeamScope(req.session.userId!, parseTeamIdParam(req));
   if (teamScope === null) {
@@ -94,13 +114,31 @@ router.get("/contracts", requireAuth, async (req, res): Promise<void> => {
   res.json(rows);
 });
 
-router.post("/contracts", requireAdmin, async (req, res): Promise<void> => {
+router.post("/contracts", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
   const body = CreateContractBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "Invalid request body" });
     return;
   }
-  const write = await resolveWriteTeamId(req.session.userId!, body.data.teamId ?? undefined);
+  // Teamleiter benötigen canViewPayroll um Verträge anderer Mitglieder anzulegen.
+  if (!isAdminLikeRole(req.session.role!)) {
+    const targetTeamId = body.data.teamId ?? undefined;
+    const tlTeams = await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!);
+    const checkTeamIds = targetTeamId ? [targetTeamId] : tlTeams;
+    const checks = await Promise.all(checkTeamIds.map((id) => canViewPayrollInTeam(req.session.userId!, id)));
+    if (!checks.some(Boolean)) {
+      res.status(403).json({ error: "Ohne canViewPayroll können keine Verträge angelegt werden" });
+      return;
+    }
+  }
+  const effectiveTeams = isAdminLikeRole(req.session.role!)
+    ? undefined
+    : (await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!));
+  const write = await resolveWriteTeamId(
+    req.session.userId!,
+    body.data.teamId ?? undefined,
+    effectiveTeams?.length ? effectiveTeams : undefined,
+  );
   if (!write.ok) {
     if (write.reason === "forbidden") {
       res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
@@ -135,13 +173,13 @@ router.post("/contracts", requireAdmin, async (req, res): Promise<void> => {
   res.status(201).json(withUser);
 });
 
-router.get("/contracts/:id", requireAdmin, async (req, res): Promise<void> => {
+router.get("/contracts/:id", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
   const params = GetContractParams.safeParse({ id: Number(req.params["id"]) });
   if (!params.success) {
     res.status(400).json({ error: "Invalid id" });
     return;
   }
-  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+  const allowedTeams = await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!);
   const [row] = await db
     .select(CONTRACT_SELECT)
     .from(contractsTable)
@@ -151,10 +189,25 @@ router.get("/contracts/:id", requireAdmin, async (req, res): Promise<void> => {
     res.status(404).json({ error: "Not found" });
     return;
   }
+  // Teamleiter ohne canViewPayroll dürfen nur ihren eigenen Vertrag lesen.
+  if (!isAdminLikeRole(req.session.role!) && row.userId !== req.session.userId) {
+    // teamId direkt aus DB lesen (CONTRACT_SELECT enthält es nicht).
+    const [contractMeta] = await db
+      .select({ teamId: contractsTable.teamId })
+      .from(contractsTable)
+      .where(eq(contractsTable.id, params.data.id));
+    const hasPayroll = contractMeta
+      ? await canViewPayrollInTeam(req.session.userId!, contractMeta.teamId)
+      : false;
+    if (!hasPayroll) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+  }
   res.json(row);
 });
 
-router.patch("/contracts/:id", requireAdmin, async (req, res): Promise<void> => {
+router.patch("/contracts/:id", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
   const params = UpdateContractParams.safeParse({ id: Number(req.params["id"]) });
   const body = UpdateContractBody.safeParse(req.body);
   if (!params.success || !body.success) {
@@ -169,7 +222,22 @@ router.patch("/contracts/:id", requireAdmin, async (req, res): Promise<void> => 
     updateValues["endDate"] = toDateString(body.data.endDate);
   }
 
-  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+  const allowedTeams = await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!);
+
+  // Teamleiter ohne canViewPayroll dürfen nur den eigenen Vertrag bearbeiten.
+  if (!isAdminLikeRole(req.session.role!)) {
+    const [contractMeta] = await db
+      .select({ teamId: contractsTable.teamId, userId: contractsTable.userId })
+      .from(contractsTable)
+      .where(and(eq(contractsTable.id, params.data.id), inArray(contractsTable.teamId, allowedTeams)));
+    if (contractMeta && contractMeta.userId !== req.session.userId) {
+      const hasPayroll = await canViewPayrollInTeam(req.session.userId!, contractMeta.teamId);
+      if (!hasPayroll) {
+        res.status(403).json({ error: "Ohne canViewPayroll können nur eigene Verträge bearbeitet werden" });
+        return;
+      }
+    }
+  }
 
   // Bestehenden Vertrag laden (team-gescoped, IDOR-sicher), um Beginn/Ende
   // kombiniert validieren zu können — auch wenn nur eines der Felder kommt.
@@ -220,13 +288,29 @@ router.patch("/contracts/:id", requireAdmin, async (req, res): Promise<void> => 
   res.json(withUser);
 });
 
-router.delete("/contracts/:id", requireAdmin, async (req, res): Promise<void> => {
+router.delete("/contracts/:id", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
   const params = DeleteContractParams.safeParse({ id: Number(req.params["id"]) });
   if (!params.success) {
     res.status(400).json({ error: "Invalid id" });
     return;
   }
-  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+  const allowedTeams = await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!);
+
+  // Teamleiter ohne canViewPayroll dürfen nur ihren eigenen Vertrag löschen.
+  if (!isAdminLikeRole(req.session.role!)) {
+    const [contractMeta] = await db
+      .select({ teamId: contractsTable.teamId, userId: contractsTable.userId })
+      .from(contractsTable)
+      .where(and(eq(contractsTable.id, params.data.id), inArray(contractsTable.teamId, allowedTeams)));
+    if (contractMeta && contractMeta.userId !== req.session.userId) {
+      const hasPayroll = await canViewPayrollInTeam(req.session.userId!, contractMeta.teamId);
+      if (!hasPayroll) {
+        res.status(403).json({ error: "Ohne canViewPayroll können nur eigene Verträge gelöscht werden" });
+        return;
+      }
+    }
+  }
+
   const deleted = await db
     .delete(contractsTable)
     .where(and(eq(contractsTable.id, params.data.id), inArray(contractsTable.teamId, allowedTeams)))

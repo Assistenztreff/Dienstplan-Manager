@@ -29,47 +29,47 @@ export function ArtikelDienstplan() {
           <article className="handbuch-content">
             <h1 className="text-4xl md:text-5xl font-bold text-[var(--color-brand-dark)] mb-6">Dienstplan</h1>
             <p className="text-xl text-slate-500 mb-10 leading-relaxed">
-              Der Dienstplan ist das Herzstück des AssistenzPlaners. Hier organisieren Sie alle Schichten, 
+              Der Dienstplan ist das Herzstück des AssistenzPlaners. Hier organisieren Sie alle Schichten,
               sehen Verfügbarkeiten Ihres Teams und reagieren auf Ausfälle.
             </p>
 
             <h2 id="monatsansicht">Die Monatsansicht</h2>
             <p>
-              In der tabellarischen Monatsansicht sehen Sie alle Assistenten untereinander und die Tage des 
-              Monats als Spalten. Diese Ansicht eignet sich besonders gut, um den kompletten Plan für den 
-              nächsten Monat aufzubauen. Jeder Assistent hat eine eigene Zeile, sodass Sie auf einen Blick 
+              In der tabellarischen Monatsansicht sehen Sie alle Assistenzkräfte untereinander und die Tage des
+              Monats als Spalten. Diese Ansicht eignet sich besonders gut, um den kompletten Plan für den
+              nächsten Monat aufzubauen. Jede Assistenzkraft hat eine eigene Zeile, sodass Sie auf einen Blick
               erkennen, wer wann eingeteilt ist.
             </p>
             <p>
-              Sie können Dienste ganz einfach per Klick in eine leere Zelle eintragen. Wenn Sie denselben Dienst 
+              Sie können Dienste ganz einfach per Klick in eine leere Zelle eintragen. Wenn Sie denselben Dienst
               für mehrere Tage eintragen möchten, können Sie die Kopieren-Funktion nutzen.
             </p>
 
             <figure className="my-8 rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
               <img
                 src={monatsansichtPng}
-                alt="Dienstplan in der tabellarischen Monatsansicht: Assistenten als Zeilen, Tage des Monats als Spalten, farbige Dienst-Blöcke mit Uhrzeiten"
+                alt="Dienstplan in der tabellarischen Monatsansicht: Assistenzkräfte als Zeilen, Tage des Monats als Spalten, farbige Dienst-Blöcke mit Uhrzeiten"
                 className="mx-auto w-full max-w-2xl rounded-lg border border-slate-200 bg-white shadow-sm"
                 loading="lazy"
               />
-              <figcaption className="mt-3 text-sm text-slate-500">Die Monatsansicht mit allen Assistenten und ihren Diensten</figcaption>
+              <figcaption className="mt-3 text-sm text-slate-500">Die Monatsansicht mit allen Assistenzkräften und ihren Diensten</figcaption>
             </figure>
 
             <h2 id="dienste-erstellen">Dienste erstellen und zuweisen</h2>
             <p>
-              Klicken Sie auf ein Datum bei einer Assistenzkraft, um einen neuen Dienst anzulegen. Sie können 
-              die Uhrzeiten frei wählen oder ein vordefiniertes Schichtmodell (z. B. "Frühdienst 06:00 - 14:00") nutzen, 
+              Klicken Sie auf ein Datum bei einer Assistenzkraft, um einen neuen Dienst anzulegen. Sie können
+              die Uhrzeiten frei wählen oder ein vordefiniertes Schichtmodell (z. B. "Frühdienst 06:00 - 14:00") nutzen,
               um Zeit zu sparen.
             </p>
             <p>
-              <strong>Status-Farben:</strong> Ein neu erstellter Dienst ist zunächst grau (Entwurf). Sobald Sie 
+              <strong>Status-Farben:</strong> Ein neu erstellter Dienst ist zunächst grau (Entwurf). Sobald Sie
               ihn freigeben, wird er für die Assistenzkraft sichtbar und leuchtet in Ihrem Plan grün (Fix).
             </p>
 
             <figure className="my-8 rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
               <img
                 src={dienstDialogPng}
-                alt="Dialog Neue Schicht anlegen mit Feldern für Assistent, Datum, Typ (Frühdienst), Status (Entwurf), Start- und Endzeit"
+                alt="Dialog Neue Schicht anlegen mit Feldern für Assistenzkraft, Datum, Typ (Frühdienst), Status (Entwurf), Start- und Endzeit"
                 className="mx-auto w-full max-w-md rounded-lg border border-slate-200 bg-white shadow-sm"
                 loading="lazy"
               />

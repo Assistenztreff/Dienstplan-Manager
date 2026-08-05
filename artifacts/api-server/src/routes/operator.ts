@@ -7,6 +7,8 @@
 // ---------------------------------------------------------------------------
 
 import { Router } from "express";
+import fs from "fs";
+import path from "path";
 import { db, usersTable, planChangesTable, platformErrorsTable } from "@workspace/db";
 import { eq, sql, asc, desc, or, and, gte, lte, ilike } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -375,6 +377,28 @@ router.get(
     const bookings = await client.listBookings();
     res.json({ source: client.source, bookings });
     return;
+  },
+);
+
+// GET /operator/handbuch-pdf — komplettes Benutzerhandbuch als PDF.
+// Bewusst NICHT öffentlich (kein public/-Verzeichnis, keine statische Route):
+// nur Superadmins können das PDF über das Operator-Dashboard herunterladen.
+// Die Datei wird per Script (scripts/generate-handbuch-pdf.mjs) erzeugt.
+router.get(
+  "/operator/handbuch-pdf",
+  requireSuperadmin,
+  (_req, res): void => {
+    const pdfPath = path.resolve(process.cwd(), "assets/handbuch.pdf");
+    if (!fs.existsSync(pdfPath)) {
+      res.status(404).json({
+        message:
+          "Handbuch-PDF nicht gefunden. Bitte per 'node scripts/generate-handbuch-pdf.mjs' neu erzeugen.",
+      });
+      return;
+    }
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", 'attachment; filename="handbuch-assistenzplaner.pdf"');
+    res.sendFile(pdfPath);
   },
 );
 

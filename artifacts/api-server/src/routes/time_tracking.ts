@@ -13,12 +13,14 @@ import {
   ConfirmTimeEntryBody,
   ConfirmTimeEntriesBatchBody,
 } from "@workspace/api-zod";
-import { requireAuth, requireAdmin } from "../middleware/auth";
+import { requireAuth, requireAdmin, requireTeamleiterOrAdmin, isAdminLikeRole } from "../middleware/auth";
 import { requirePlanFeature } from "../lib/plan";
 import {
   resolveTeamId,
   resolveReadTeamScope,
   getAllowedTeamIds,
+  getEffectiveAdminTeamIds,
+  getTeamleiterTeamIds,
   parseTeamIdParam,
   isUserMemberOfTeam,
 } from "../lib/teams";
@@ -74,10 +76,21 @@ router.get("/time-tracking", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const effectiveUserId =
-    req.session.role === "assistant" ? req.session.userId! : query.data.userId;
+  // Teamleiter (assistant-Rolle, aber is_teamleiter=true) sehen alle Einträge
+  // ihrer Teamleiter-Teams — nicht nur eigene.
+  const tlTeamIds = isAdminLikeRole(req.session.role!)
+    ? null
+    : await getTeamleiterTeamIds(req.session.userId!);
+  const isTeamleiterUser = tlTeamIds != null && tlTeamIds.length > 0;
 
-  const teamScope = await resolveReadTeamScope(req.session.userId!, parseTeamIdParam(req));
+  const effectiveUserId =
+    req.session.role === "assistant" && !isTeamleiterUser ? req.session.userId! : query.data.userId;
+
+  const teamScope = await resolveReadTeamScope(
+    req.session.userId!,
+    parseTeamIdParam(req),
+    isTeamleiterUser ? tlTeamIds! : undefined,
+  );
   if (teamScope === null) {
     res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
     return;
@@ -244,7 +257,7 @@ router.get("/time-tracking/:id", requireAuth, async (req, res): Promise<void> =>
   res.json(rowOut);
 });
 
-router.patch("/time-tracking/:id", requireAdmin, async (req, res): Promise<void> => {
+router.patch("/time-tracking/:id", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
   const params = UpdateTimeEntryParams.safeParse({ id: Number(req.params["id"]) });
   const body = UpdateTimeEntryBody.safeParse(req.body);
   if (!params.success || !body.success) {
@@ -258,7 +271,7 @@ router.patch("/time-tracking/:id", requireAdmin, async (req, res): Promise<void>
       new Date(body.data.actualEnd as unknown as string)
     );
   }
-  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+  const allowedTeams = await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!);
   // Zeile zuerst team-gescoped laden (404 bei fremd/fehlend), dann den
   // Konto-Schalter des Team-Eigentümers prüfen (403 bei deaktivierter
   // Zeiterfassung) — Bestandsdaten bleiben sichtbar, nur Änderungen blocken.
@@ -292,13 +305,13 @@ router.patch("/time-tracking/:id", requireAdmin, async (req, res): Promise<void>
   res.json(withUser);
 });
 
-router.delete("/time-tracking/:id", requireAdmin, async (req, res): Promise<void> => {
+router.delete("/time-tracking/:id", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
   const params = DeleteTimeEntryParams.safeParse({ id: Number(req.params["id"]) });
   if (!params.success) {
     res.status(400).json({ error: "Invalid id" });
     return;
   }
-  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+  const allowedTeams = await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!);
   // Erst team-gescoped laden (404), dann Konto-Schalter prüfen (403).
   const [existingRow] = await db
     .select({ teamId: timeTrackingTable.teamId })
@@ -330,14 +343,14 @@ router.delete("/time-tracking/:id", requireAdmin, async (req, res): Promise<void
 // behalten dort den Status "offen". Bestandsschutz: bereits bestätigte/
 // abgelehnte Einträge bleiben unverändert sichtbar — gegated wird nur die
 // NEUE Freigabe-Aktion.
-router.patch("/time-tracking/:id/confirm", requireAdmin, requirePlanFeature("strictTimeTracking"), async (req, res): Promise<void> => {
+router.patch("/time-tracking/:id/confirm", requireTeamleiterOrAdmin, requirePlanFeature("strictTimeTracking"), async (req, res): Promise<void> => {
   const params = ConfirmTimeEntryParams.safeParse({ id: Number(req.params["id"]) });
   const body = ConfirmTimeEntryBody.safeParse(req.body);
   if (!params.success || !body.success) {
     res.status(400).json({ error: "Invalid request" });
     return;
   }
-  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+  const allowedTeams = await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!);
   // Erst team-gescoped laden (404), dann Konto-Schalter prüfen (403) —
   // die Freigabe ist eine Schreibaktion und bei deaktivierter Zeiterfassung
   // gesperrt; bereits bestätigte Bestandsdaten bleiben unangetastet.
@@ -382,13 +395,13 @@ router.patch("/time-tracking/:id/confirm", requireAdmin, requirePlanFeature("str
 // bleiben unverändert. IDs außerhalb des erlaubten Team-Scopes werden still
 // übersprungen (kein Leak, welcher fremde Eintrag existiert); der Client
 // erfährt über confirmedCount, wie viele tatsächlich bestätigt wurden.
-router.post("/time-tracking/confirm-batch", requireAdmin, requirePlanFeature("strictTimeTracking"), async (req, res): Promise<void> => {
+router.post("/time-tracking/confirm-batch", requireTeamleiterOrAdmin, requirePlanFeature("strictTimeTracking"), async (req, res): Promise<void> => {
   const body = ConfirmTimeEntriesBatchBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "Invalid request body" });
     return;
   }
-  const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+  const allowedTeams = await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!);
   if (allowedTeams.length === 0) {
     res.json({ confirmedCount: 0 });
     return;

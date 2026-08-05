@@ -82,7 +82,7 @@ export function readableApiError(err: unknown, fallback: string): string {
  */
 const PLAN_LIMIT_MESSAGES: Record<string, string> = {
   maxAssistants:
-    "Free-Tarif: max. 6 Assistenten. Für unbegrenzte Assistenten auf Premium upgraden.",
+    "Free-Tarif: max. 6 Assistenzkräfte. Für unbegrenzte Assistenzkräfte auf Premium upgraden.",
   maxTeams:
     "Free-Tarif: max. 1 Team. Für mehrere Teams auf Premium upgraden.",
   maxShiftModels:
@@ -120,7 +120,7 @@ export function planLimitMessage(err: unknown): string | null {
  */
 export const PLAN_FEATURE_MESSAGES: Record<string, string> = {
   bulkEdit:
-    "Massenbearbeitung ist ein Premium-Feature. Für den Assistenten-Wechsel auf Premium upgraden.",
+    "Massenbearbeitung ist ein Premium-Feature. Für das Tauschen der Assistenzkraft auf Premium upgraden.",
   advancedPersonnelFile:
     "Lohn- und Sozialversicherungsdaten sind ein Premium-Feature. Für die erweiterte Personalakte auf Premium upgraden.",
   advancedAnalytics:
@@ -132,7 +132,7 @@ export const PLAN_FEATURE_MESSAGES: Record<string, string> = {
   calendarSync:
     "Der Kalender-Export (.ics) ist ein Premium-Feature. Für den Export in die eigene Kalender-App auf Premium upgraden.",
   caregiverLogin:
-    "Einladungslinks für Assistenten sind ein Premium-Feature. Damit Assistenzkräfte einen eigenen Zugang erhalten, auf Premium upgraden.",
+    "Einladungslinks für Assistenzkräfte sind ein Premium-Feature. Damit Assistenzkräfte einen eigenen Zugang erhalten, auf Premium upgraden.",
   absenceTracking:
     "Das Tracking von Urlaubs- und Krankheitstagen (Resturlaub-Konto) ist ein Premium-Feature. Abwesenheiten eintragen bleibt im Free-Tarif möglich — für die automatische Zählung auf Premium upgraden.",
 };

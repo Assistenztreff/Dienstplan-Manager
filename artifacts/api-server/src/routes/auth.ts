@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { usersTable, teamsTable, teamMembersTable } from "@workspace/db";
 import type { User } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth-utils";
 import { seedDefaultShiftModels } from "../lib/default-shift-models";
 import { checkRegisterRateLimit } from "../lib/register-rate-limit";
@@ -17,6 +17,40 @@ const USER_SELECT = {
   accountType: usersTable.accountType,
   plan: usersTable.plan,
 };
+
+/**
+ * Prüft frisch aus der DB, ob der Nutzer in mindestens einem Team als
+ * Teamleiter eingetragen ist. Wird allen Auth-Antworten als `isTeamleiter`
+ * beigefügt, damit das Frontend den Team-Switcher auch für Teamleiter zeigt.
+ */
+async function computeIsTeamleiter(userId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: teamMembersTable.teamId })
+    .from(teamMembersTable)
+    .where(and(eq(teamMembersTable.userId, userId), eq(teamMembersTable.isTeamleiter, true)))
+    .limit(1);
+  return !!row;
+}
+
+/**
+ * Prüft frisch aus der DB, ob der Nutzer in mindestens einem Teamleiter-Team
+ * auch can_view_payroll=true hat. Globales Flag für die Auth-Antwort —
+ * die feingranulare Team-Prüfung (canViewPayrollInTeam) bleibt serverseitig.
+ */
+async function computeCanViewPayroll(userId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: teamMembersTable.teamId })
+    .from(teamMembersTable)
+    .where(
+      and(
+        eq(teamMembersTable.userId, userId),
+        eq(teamMembersTable.isTeamleiter, true),
+        eq(teamMembersTable.canViewPayroll, true),
+      ),
+    )
+    .limit(1);
+  return !!row;
+}
 
 router.post("/auth/login", async (req, res) => {
   const { email, password } = req.body as { email?: string; password?: string };
@@ -131,6 +165,7 @@ router.post("/auth/register", async (req, res) => {
   req.session.userId = user.id;
   req.session.role = user.role;
 
+  // Frisch registrierte Nutzer können noch kein Teamleiter sein.
   return res.status(201).json({
     id: user.id,
     name: user.name,
@@ -138,6 +173,7 @@ router.post("/auth/register", async (req, res) => {
     role: user.role,
     accountType: user.accountType,
     plan: user.plan,
+    isTeamleiter: false,
   });
 });
 
@@ -276,6 +312,10 @@ if (process.env.NODE_ENV !== "production") {
       }
       req.session.userId = target.id;
       req.session.role = target.role;
+      const [isTeamleiterTarget, canViewPayrollTarget] = await Promise.all([
+        computeIsTeamleiter(target.id),
+        computeCanViewPayroll(target.id),
+      ]);
       res.json({
         id: target.id,
         name: target.name,
@@ -283,6 +323,8 @@ if (process.env.NODE_ENV !== "production") {
         role: target.role,
         accountType: target.accountType,
         plan: target.plan,
+        isTeamleiter: isTeamleiterTarget,
+        canViewPayroll: canViewPayrollTarget,
       });
       return;
     }
@@ -326,7 +368,11 @@ router.get("/auth/me", async (req, res) => {
     return res.status(401).json({ error: "Benutzer nicht gefunden" });
   }
   const { isActive: _isActive, ...publicUser } = user;
-  return res.json(publicUser);
+  const [isTeamleiter, canViewPayroll] = await Promise.all([
+    computeIsTeamleiter(user.id),
+    computeCanViewPayroll(user.id),
+  ]);
+  return res.json({ ...publicUser, isTeamleiter, canViewPayroll });
 });
 
 router.post("/auth/set-password", async (req, res) => {

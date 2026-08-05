@@ -64,7 +64,7 @@ export default defineConfig({
   // on-demand und löst dabei einen Full-Reload aus, der den laufenden Export
   // (doc.save) abbricht. Vorab einschließen -> Export funktioniert sofort.
   optimizeDeps: {
-    include: ["jspdf", "jspdf-autotable", "jszip"],
+    include: ["jspdf", "jspdf-autotable", "jszip", "xlsx"],
   },
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),

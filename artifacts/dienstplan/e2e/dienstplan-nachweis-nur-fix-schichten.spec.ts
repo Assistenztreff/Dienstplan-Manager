@@ -171,7 +171,7 @@ test.describe("Offizieller Nachweis zählt nur FIX-Schichten", () => {
   }) => {
     await loginViaUi(page, ADMIN_EMAIL, ADMIN_PASSWORD);
     await page.goto("/assistenten");
-    await expect(page.getByRole("heading", { name: "Assistenten", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Assistenzkräfte", exact: true })).toBeVisible();
 
     const card = page.getByTestId(`assistant-card-${assistant.id}`);
     await expect(card).toBeVisible();

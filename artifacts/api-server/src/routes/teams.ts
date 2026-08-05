@@ -19,9 +19,17 @@ import {
   AddTeamMemberBody,
   MoveTeamMemberBody,
 } from "@workspace/api-zod";
-import { requireDienstleister } from "../middleware/auth";
+import {
+  requireDienstleister,
+  requireAdmin,
+  requireTeamleiterOrAdmin,
+  requireAuth,
+  isAdminLikeRole,
+} from "../middleware/auth";
 import { userWithinLimit, getUserLimit } from "../lib/plan";
 import { seedDefaultShiftModels } from "../lib/default-shift-models";
+import { isTeamleiterOfTeam } from "../lib/teams";
+import { UpdateTeamMemberFlagsBody } from "@workspace/api-zod";
 
 const router = Router();
 
@@ -53,6 +61,41 @@ async function assertTeamOwnership(
 }
 
 /**
+ * Prüft für Team-Mitglieder-Operationen, ob der Aufrufer entweder der
+ * Eigentümer des Teams ODER ein Teamleiter dieses Teams ist. Gibt bei Erfolg
+ * die ownerId des Teams zurück (benötigt für selectMembers), sonst null.
+ */
+async function assertTeamAdminAccess(
+  teamId: number,
+  userId: number,
+  role: string,
+  res: Response,
+): Promise<number | null> {
+  const [teamRow] = await db
+    .select({ ownerId: teamsTable.ownerId })
+    .from(teamsTable)
+    .where(eq(teamsTable.id, teamId));
+  if (!teamRow) {
+    res.status(404).json({ error: "Not found" });
+    return null;
+  }
+  if (isAdminLikeRole(role)) {
+    // Admin muss Eigentümer sein.
+    if (teamRow.ownerId !== userId) {
+      res.status(404).json({ error: "Not found" });
+      return null;
+    }
+  } else {
+    // Nicht-Admin: muss is_teamleiter=true für dieses Team haben.
+    if (!(await isTeamleiterOfTeam(userId, teamId))) {
+      res.status(404).json({ error: "Not found" });
+      return null;
+    }
+  }
+  return teamRow.ownerId;
+}
+
+/**
  * Liefert Mitglieder als TeamMember-DTOs inkl. teamCount (Anzahl Teams DIESES
  * Dienstleisters, in denen der Nutzer Mitglied ist), damit Mehrfachzuweisung im
  * Frontend erkennbar ist. `where` filtert die einbezogenen Mitgliedschaften.
@@ -75,6 +118,8 @@ function selectMembers(
       email: usersTable.email,
       role: usersTable.role,
       teamCount,
+      isTeamleiter: teamMembersTable.isTeamleiter,
+      canViewPayroll: teamMembersTable.canViewPayroll,
       createdAt: teamMembersTable.createdAt,
     })
     .from(teamMembersTable)
@@ -83,13 +128,31 @@ function selectMembers(
     .orderBy(asc(usersTable.name));
 }
 
-router.get("/teams", requireDienstleister, async (req, res): Promise<void> => {
-  const rows = await db
-    .select(TEAM_SELECT)
-    .from(teamsTable)
-    .where(eq(teamsTable.ownerId, req.session.userId!))
-    .orderBy(asc(teamsTable.id));
-  res.json(rows);
+/**
+ * GET /teams — Admins sehen eigene Teams, Teamleiter sehen ihre zugewiesenen Teams.
+ */
+router.get("/teams", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.session.userId!;
+  const role = req.session.role!;
+
+  if (isAdminLikeRole(role)) {
+    // Admins: nur eigene Teams
+    const rows = await db
+      .select(TEAM_SELECT)
+      .from(teamsTable)
+      .where(eq(teamsTable.ownerId, userId))
+      .orderBy(asc(teamsTable.id));
+    res.json(rows);
+  } else {
+    // Teamleiter: Teams, in denen is_teamleiter=true
+    const rows = await db
+      .select(TEAM_SELECT)
+      .from(teamsTable)
+      .innerJoin(teamMembersTable, eq(teamMembersTable.teamId, teamsTable.id))
+      .where(and(eq(teamMembersTable.userId, userId), eq(teamMembersTable.isTeamleiter, true)))
+      .orderBy(asc(teamsTable.id));
+    res.json(rows);
+  }
 });
 
 router.post("/teams", requireDienstleister, async (req, res): Promise<void> => {
@@ -189,28 +252,38 @@ router.delete("/teams/:id", requireDienstleister, async (req, res): Promise<void
   res.status(204).send();
 });
 
-router.get("/teams/:id/members", requireDienstleister, async (req, res): Promise<void> => {
+/**
+ * GET /teams/:id/members — Admins und Teamleiter können Mitglieder ihres Teams sehen.
+ */
+router.get("/teams/:id/members", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
   const teamId = Number(req.params["id"]);
   if (!Number.isInteger(teamId)) {
     res.status(400).json({ error: "Invalid id" });
     return;
   }
-  const ownerId = req.session.userId!;
-  if (!(await assertTeamOwnership(teamId, ownerId, res))) return;
+  const userId = req.session.userId!;
+  const role = req.session.role!;
+  const ownerId = await assertTeamAdminAccess(teamId, userId, role, res);
+  if (ownerId === null) return;
 
   const rows = await selectMembers(ownerId, eq(teamMembersTable.teamId, teamId));
   res.json(rows);
 });
 
-router.post("/teams/:id/members", requireDienstleister, async (req, res): Promise<void> => {
+/**
+ * POST /teams/:id/members — Admins und Teamleiter können Mitglieder hinzufügen.
+ */
+router.post("/teams/:id/members", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
   const teamId = Number(req.params["id"]);
   const body = AddTeamMemberBody.safeParse(req.body);
   if (!Number.isInteger(teamId) || !body.success) {
     res.status(400).json({ error: "Invalid request" });
     return;
   }
-  const ownerId = req.session.userId!;
-  if (!(await assertTeamOwnership(teamId, ownerId, res))) return;
+  const userId = req.session.userId!;
+  const role = req.session.role!;
+  const ownerId = await assertTeamAdminAccess(teamId, userId, role, res);
+  if (ownerId === null) return;
 
   // Nur Nutzer annehmen, die bereits Mitglied EINES Teams DIESES Eigentümers
   // sind (Mehrfachzuweisung innerhalb des eigenen Kontos). Ohne diese Prüfung
@@ -248,22 +321,87 @@ router.post("/teams/:id/members", requireDienstleister, async (req, res): Promis
   res.status(201).json(member);
 });
 
-router.delete(
+/**
+ * PATCH /teams/:id/members/:userId — Setzt isTeamleiter und/oder canViewPayroll.
+ * Konto-Admins (auch privat) dürfen isTeamleiter setzen; canViewPayroll ist
+ * AUSSCHLIESSLICH Dienstleister-Konten vorbehalten (Lohnbuchhaltung).
+ */
+router.patch(
   "/teams/:id/members/:userId",
-  requireDienstleister,
+  requireAdmin,
   async (req, res): Promise<void> => {
     const teamId = Number(req.params["id"]);
-    const userId = Number(req.params["userId"]);
-    if (!Number.isInteger(teamId) || !Number.isInteger(userId)) {
+    const targetUserId = Number(req.params["userId"]);
+    if (!Number.isInteger(teamId) || !Number.isInteger(targetUserId)) {
       res.status(400).json({ error: "Invalid id" });
       return;
     }
     const ownerId = req.session.userId!;
     if (!(await assertTeamOwnership(teamId, ownerId, res))) return;
 
+    const body = UpdateTeamMemberFlagsBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: "Invalid request body" });
+      return;
+    }
+    const updates = { ...body.data };
+
+    // Alle Konto-Admins (auch privat) dürfen beide Flags für Mitglieder ihres Teams setzen.
+    // canViewPayroll gibt der Person Zugang zu Lohn-/SV-Daten — beim Privat-Konto ist
+    // das eine bewusste Entscheidung des Eigentümers (UI zeigt Hinweistext).
+
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({ error: "Keine Felder zum Aktualisieren angegeben" });
+      return;
+    }
+
+    // Mitgliedschaft muss existieren.
+    const [existing] = await db
+      .select({ id: teamMembersTable.id })
+      .from(teamMembersTable)
+      .where(
+        and(eq(teamMembersTable.teamId, teamId), eq(teamMembersTable.userId, targetUserId)),
+      );
+    if (!existing) {
+      res.status(404).json({ error: "Mitgliedschaft nicht gefunden" });
+      return;
+    }
+
+    // Flags aktualisieren.
+    const [updated] = await db
+      .update(teamMembersTable)
+      .set(updates)
+      .where(
+        and(eq(teamMembersTable.teamId, teamId), eq(teamMembersTable.userId, targetUserId)),
+      )
+      .returning({ id: teamMembersTable.id });
+
+    const [member] = await selectMembers(ownerId, eq(teamMembersTable.id, updated!.id));
+    res.json(member);
+  },
+);
+
+/**
+ * DELETE /teams/:id/members/:userId — Admins und Teamleiter können Mitglieder entfernen.
+ */
+router.delete(
+  "/teams/:id/members/:userId",
+  requireTeamleiterOrAdmin,
+  async (req, res): Promise<void> => {
+    const teamId = Number(req.params["id"]);
+    const targetUserId = Number(req.params["userId"]);
+    if (!Number.isInteger(teamId) || !Number.isInteger(targetUserId)) {
+      res.status(400).json({ error: "Invalid id" });
+      return;
+    }
+    const userId = req.session.userId!;
+    const role = req.session.role!;
+    const ownerId = await assertTeamAdminAccess(teamId, userId, role, res);
+    if (ownerId === null) return;
+
     const deleted = await db
       .delete(teamMembersTable)
-      .where(and(eq(teamMembersTable.teamId, teamId), eq(teamMembersTable.userId, userId)))
+      .where(and(eq(teamMembersTable.teamId, teamId), eq(teamMembersTable.userId, targetUserId)))
       .returning({ id: teamMembersTable.id });
     if (deleted.length === 0) {
       res.status(404).json({ error: "Not found" });
@@ -279,6 +417,8 @@ router.delete(
  * "zwischen den Teams" ohne Mitgliedschaft hängt (und damit aus allen
  * team-gescopten Listen verschwindet), falls ein Teilschritt fehlschlägt.
  * Beide Teams müssen dem Aufrufer gehören (IDOR → 404 wie überall).
+ * Überführen bleibt dem Konto-Admin vorbehalten (nicht Teamleiter), da es
+ * teamübergreifende Daten-Umhängung beinhaltet.
  */
 router.post(
   "/teams/:id/members/:userId/move",

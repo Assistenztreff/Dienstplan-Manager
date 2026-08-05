@@ -56,7 +56,7 @@ export const CHAPTERS: Array<{
     items: [
       { title: "Dashboard", href: handbuchUrl("ArtikelDashboard"), id: "dashboard" },
       { title: "Dienstplan", href: handbuchUrl("ArtikelDienstplan"), id: "dienstplan" },
-      { title: "Assistenten", href: handbuchUrl("ArtikelAssistenten"), id: "assistenten" },
+      { title: "Assistenzkräfte", href: handbuchUrl("ArtikelAssistenten"), id: "assistenten" },
       { title: "Zeiterfassung", href: handbuchUrl("Mobil"), id: "zeiterfassung" },
       { title: "Abwesenheiten", href: handbuchUrl("ArtikelAbwesenheiten"), id: "abwesenheiten" },
       {

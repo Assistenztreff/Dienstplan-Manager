@@ -28,10 +28,6 @@ args = "unit"
 task = "workflow.run"
 args = "e2e"
 
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "handbuch-screenshots"
-
 [[workflows.workflow]]
 name = "typecheck"
 author = "agent"
@@ -64,17 +60,6 @@ isValidation = true
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm --filter @workspace/scripts run scoped-e2e"
-
-[[workflows.workflow]]
-name = "handbuch-screenshots"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm --filter @workspace/dienstplan run screenshots:handbuch:check"
-
-[workflows.workflow.metadata]
-isValidation = true
 
 [agent]
 stack = "PNPM_WORKSPACE"

@@ -587,6 +587,43 @@ paths:
           description: Benutzer ist bereits Mitglied
 
   /teams/{id}/members/{userId}:
+    patch:
+      operationId: updateTeamMemberFlags
+      tags: [teams]
+      summary: Teamleiter-Flag und Lohndaten-Sichtbarkeit setzen
+      description: >-
+        Setzt isTeamleiter und/oder canViewPayroll für ein Team-Mitglied.
+        Nur Konto-Admins (Eigentümer) dürfen diese Flags ändern.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamMemberFlagsInput"
+      responses:
+        "200":
+          description: Aktualisiertes Mitglied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamMember"
+        "400":
+          description: Ungültige Anfrage
+        "403":
+          description: Keine Berechtigung
+        "404":
+          description: Mitgliedschaft nicht gefunden
     delete:
       operationId: removeTeamMember
       tags: [teams]
@@ -2076,7 +2113,7 @@ components:
 
     TeamMember:
       type: object
-      required: [id, teamId, userId, name, email, role, teamCount, createdAt]
+      required: [id, teamId, userId, name, email, role, teamCount, isTeamleiter, canViewPayroll, createdAt]
       properties:
         id:
           type: integer
@@ -2094,9 +2131,23 @@ components:
         teamCount:
           type: integer
           description: Anzahl der Teams dieses Dienstleisters, in denen der Nutzer Mitglied ist
+        isTeamleiter:
+          type: boolean
+          description: Gibt dem Mitglied Admin-Level-Zugriff auf genau dieses Team
+        canViewPayroll:
+          type: boolean
+          description: Erlaubt dem Teamleiter Zugriff auf Lohn- und sensible Personalfelder
         createdAt:
           type: string
           format: date-time
+
+    TeamMemberFlagsInput:
+      type: object
+      properties:
+        isTeamleiter:
+          type: boolean
+        canViewPayroll:
+          type: boolean
 
     TeamMemberInput:
       type: object
@@ -3385,6 +3436,12 @@ components:
         plan:
           type: string
           enum: [free, premium]
+        isTeamleiter:
+          type: boolean
+          description: >-
+            true, wenn der Nutzer in mindestens einem Team als Teamleiter eingetragen
+            ist. Ermöglicht dem Frontend den Team-Switcher auch für Nicht-Dienstleister
+            anzuzeigen.
 
     LoginInput:
       type: object

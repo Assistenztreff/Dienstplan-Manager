@@ -4,10 +4,10 @@ import { usersTable, shiftsTable, timeTrackingTable, contractsTable, allowanceSe
 import { computeShiftMetrics, type GermanState } from "@workspace/db";
 import { eq, and, sql, count, or, isNull, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { requireAuth, requireAdmin, isAdminLikeRole } from "../middleware/auth";
+import { requireAuth, requireAdmin, requireTeamleiterOrAdmin, isAdminLikeRole } from "../middleware/auth";
 import { requirePlanFeature, userHasFeatureViaTeamOwner, getLenientTimeTrackingTeamIds } from "../lib/plan";
 import { resolveAllowanceOps, type ResolvedAllowanceOps } from "../lib/allowance-resolve";
-import { resolveReadTeamScope, parseTeamIdParam, getAllowedTeamIds } from "../lib/teams";
+import { resolveReadTeamScope, parseTeamIdParam, getAllowedTeamIds, getEffectiveAdminTeamIds, getTeamleiterTeamIds, canViewPayrollInTeam } from "../lib/teams";
 import {
   LOW_VACATION_THRESHOLD,
   HORIZON_DAYS,
@@ -557,7 +557,7 @@ router.get("/dashboard/my-hours-balance", requireAuth, async (req, res): Promise
 // bleibt gewahrt: die ROHDATEN (Schichten, Zeiterfassung, Verträge) bleiben über
 // ihre regulären Listen-Endpunkte sichtbar — gesperrt wird nur diese abgeleitete
 // Premium-Auswertung.
-router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advancedAnalytics"), async (req, res): Promise<void> => {
+router.get("/dashboard/hours-balance", requireTeamleiterOrAdmin, requirePlanFeature("advancedAnalytics"), async (req, res): Promise<void> => {
   const monthYear = parseMonthYearParams(req);
   if (!monthYear) {
     res.status(400).json({ error: "Ungültiger month-/year-Parameter" });
@@ -565,18 +565,63 @@ router.get("/dashboard/hours-balance", requireAdmin, requirePlanFeature("advance
   }
   const { month, year } = monthYear;
 
+  // Teamleiter dürfen nur Auswertungen für ihre Teamleiter-Teams abrufen.
+  // Für Nicht-Admins wird eine explizite Team-ID verlangt (kein globaler Dump).
+  const userId = req.session.userId!;
+  const role = req.session.role!;
+  let requestedTeamId = parseTeamIdParam(req);
+  if (!isAdminLikeRole(role)) {
+    const tlTeamIds = await getTeamleiterTeamIds(userId);
+    if (tlTeamIds.length === 0) {
+      res.status(403).json({ error: "Keine Berechtigung" });
+      return;
+    }
+    if (requestedTeamId == null) {
+      // Kein teamId: Default auf erstes Teamleiter-Team.
+      requestedTeamId = tlTeamIds[0];
+    } else if (!tlTeamIds.includes(requestedTeamId)) {
+      res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
+      return;
+    }
+  }
+
   // Berechnung lebt in lib/hours-balance-service.ts, damit der Monatsabschluss
   // (month_closings) exakt dieselben Zahlen einfriert und vergleicht.
   const result = await computeHoursBalances(
-    req.session.userId!,
+    userId,
     month,
     year,
-    parseTeamIdParam(req),
+    requestedTeamId,
   );
   if (result === null) {
     res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
     return;
   }
+
+  // Teamleiter ohne canViewPayroll: alle Geld-/Lohnfelder aus jeder Zeile
+  // entfernen. Reine Stundenwerte bleiben erhalten (Dienstplanung braucht sie).
+  if (!isAdminLikeRole(role) && requestedTeamId != null) {
+    const hasPayroll = await canViewPayrollInTeam(userId, requestedTeamId);
+    if (!hasPayroll) {
+      const stripped = result.map((row) => ({
+        ...row,
+        hourlyWage: null,
+        basePay: null,
+        nightSurchargePay: null,
+        sundaySurchargePay: null,
+        holidaySurchargePay: null,
+        totalPay: null,
+        teamsitzungEuro: 0,
+        urlaubsabgeltungEuro: 0,
+        absenceNightSurchargePay: null,
+        absenceSundaySurchargePay: null,
+        absenceHolidaySurchargePay: null,
+      }));
+      res.json(stripped);
+      return;
+    }
+  }
+
   res.json(result);
 });
 

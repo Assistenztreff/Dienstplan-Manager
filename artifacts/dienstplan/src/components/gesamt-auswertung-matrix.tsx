@@ -5,9 +5,6 @@ import {
   nameInitials,
 } from "@/lib/shift-model-colors";
 import { formatDays } from "@/lib/utils";
-import { FileDown } from "lucide-react";
-import { buildMatrixCsv, downloadCsv } from "@/lib/matrix-csv";
-import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 
 // Ein Eintrag aus GET /dashboard/hours-balance (nur die hier genutzten Felder).
@@ -93,7 +90,6 @@ export function GesamtAuswertungMatrix({
   recalcByUser,
   prevMonthLabel,
   onSelectAssistant,
-  canExportCsv,
   month,
   year,
 }: {
@@ -102,8 +98,6 @@ export function GesamtAuswertungMatrix({
   prevMonthLabel?: string;
   /** Klick auf einen Spaltenkopf: setzt den bestehenden Auswahlfilter auf diese Person. */
   onSelectAssistant?: (userId: number) => void;
-  /** CSV-Export erlaubt (Premium-Gate: payrollExport). */
-  canExportCsv?: boolean;
   /** Monat der angezeigten Auswertung (für den Dateinamen). */
   month?: number;
   /** Jahr der angezeigten Auswertung (für den Dateinamen). */
@@ -482,24 +476,6 @@ export function GesamtAuswertungMatrix({
           <span className="text-xs text-muted-foreground font-medium">
             {balances.length === 1 ? "1 Assistenzkraft" : `${balances.length} Assistenzkräfte`}
           </span>
-          {canExportCsv && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 h-8 text-xs"
-              data-testid="matrix-csv-export"
-              title="Stundenbilanz als CSV exportieren (Excel/DATEV)"
-              onClick={() => {
-                const csv = buildMatrixCsv(balances, recalcByUser, prevMonthLabel);
-                const yearStr = year ?? new Date().getFullYear();
-                const monthStr = month != null ? String(month).padStart(2, "0") : format(new Date(), "MM");
-                downloadCsv(csv, `stundenbilanz-${yearStr}-${monthStr}.csv`);
-              }}
-            >
-              <FileDown className="h-3.5 w-3.5" />
-              CSV
-            </Button>
-          )}
         </div>
       </div>
 
@@ -509,7 +485,7 @@ export function GesamtAuswertungMatrix({
             <tr className="border-b border-border/60 bg-muted/50">
               <th
                 scope="col"
-                className="sticky left-0 z-10 bg-muted p-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider min-w-[180px] max-w-[240px]"
+                className="sticky left-0 z-10 bg-muted p-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider min-w-[180px] max-w-[240px] border-r border-border/50"
               >
                 Kategorie
               </th>
@@ -571,13 +547,17 @@ export function GesamtAuswertungMatrix({
                   : idx % 2 === 0
                     ? "bg-card"
                     : "bg-muted/20";
+              // Sticky-Zellen brauchen eine vollständig opake Hintergrundfarbe,
+              // damit sie beim horizontalen Scrollen nicht transparent wirken.
+              // Die transparenten /10 /20 /40-Varianten des rowStyle reichen
+              // nur für den vollen Tabellenbereich (kein Überlapp dort).
               const stickyBg = row.isTotal
-                ? "bg-primary/10"
+                ? "bg-card"
                 : row.highlight
-                  ? "bg-muted/40"
+                  ? "bg-muted"
                   : idx % 2 === 0
                     ? "bg-card"
-                    : "bg-muted/20";
+                    : "bg-background";
               return (
                 <tr
                   key={row.key}
@@ -586,7 +566,7 @@ export function GesamtAuswertungMatrix({
                 >
                   <th
                     scope="row"
-                    className={`sticky left-0 z-10 p-3 text-sm font-medium text-left ${stickyBg} ${allEmpty ? "text-muted-foreground" : "text-foreground"}`}
+                    className={`sticky left-0 z-10 p-3 text-sm font-medium text-left border-r border-border/50 ${stickyBg} ${allEmpty ? "text-muted-foreground" : "text-foreground"}`}
                   >
                     {row.label}
                     {row.info && (

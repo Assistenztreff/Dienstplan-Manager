@@ -129,7 +129,8 @@ export async function downloadLohnnachweiseAsZip({
   teamId,
   onProgress,
 }: DownloadLohnnachweiseAsZipOptions): Promise<void> {
-  const JSZip = (await import("jszip")).default;
+  // Interop-sicher: CJS-Pakete haben im Vite-Dev-Modus ggf. keinen default-Export.
+  const JSZip = await import("jszip").then((m) => m.default ?? m);
   const monthLabel = format(new Date(year, month - 1, 1), "MMMM yyyy", { locale: de });
   const monthStr = `${year}-${String(month).padStart(2, "0")}`;
 

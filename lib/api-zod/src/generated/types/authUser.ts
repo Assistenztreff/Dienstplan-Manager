@@ -16,4 +16,6 @@ export interface AuthUser {
   role: AuthUserRole;
   accountType: AuthUserAccountType;
   plan: AuthUserPlan;
+  /** true, wenn der Nutzer in mindestens einem Team als Teamleiter eingetragen ist. Ermöglicht dem Frontend den Team-Switcher auch für Nicht-Dienstleister anzuzeigen. */
+  isTeamleiter?: boolean;
 }

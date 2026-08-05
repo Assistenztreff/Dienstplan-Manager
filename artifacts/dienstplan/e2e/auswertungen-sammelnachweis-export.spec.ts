@@ -149,7 +149,7 @@ test("Auswertungen-Header exportiert den Sammel-Nachweis aller Assistenten mit e
   // Dialog ist offen und beschreibt den Gesamt-Nachweis.
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("Stundennachweis exportieren")).toBeVisible();
-  await expect(dialog.getByText("Gesamt-Nachweis aller Assistenten als PDF.")).toBeVisible();
+  await expect(dialog.getByText("Gesamt-Nachweis aller Assistenzkräfte als PDF.")).toBeVisible();
 
   // Von-/Bis-Monat starten auf dem aktuellen Monat; für den Vormonat beide
   // Stepper einen Monat zurück navigieren.

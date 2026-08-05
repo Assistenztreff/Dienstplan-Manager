@@ -477,7 +477,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-serif text-xl">
-            {isEditing ? "Assistenten bearbeiten" : "Neuen Assistenten anlegen"}
+            {isEditing ? "Assistenzkraft bearbeiten" : "Neue Assistenzkraft anlegen"}
           </DialogTitle>
         </DialogHeader>
 
@@ -756,7 +756,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
     >
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Assistenten loeschen?</AlertDialogTitle>
+          <AlertDialogTitle>Assistenzkraft loeschen?</AlertDialogTitle>
           <AlertDialogDescription>
             {editUser?.name ? `"${editUser.name}"` : "Diese Assistenzkraft"} wird
             unwiderruflich entfernt – samt Vertrag, geplanten Schichten und
@@ -902,8 +902,8 @@ export default function Assistenten() {
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Assistenten</h2>
-          <p className="text-muted-foreground mt-1 text-sm">Verwaltung der Mitarbeiter und Verträge</p>
+          <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Assistenzkräfte</h2>
+          <p className="text-muted-foreground mt-1 text-sm">Verwaltung der Assistenzkräfte und Verträge</p>
         </div>
         <div className="flex items-center gap-2">
           {/* Team-Auswahl (rendert nur fuer Dienstleister mit Teams) — die Liste
@@ -919,7 +919,7 @@ export default function Assistenten() {
           <Button
             disabled
             className="gap-2"
-            title={`Im Free-Plan sind max. ${assistantLimit} Assistenten möglich. Upgrade auf Premium für unbegrenzte Assistenten.`}
+            title={`Im Free-Plan sind max. ${assistantLimit} Assistenzkräfte möglich. Upgrade auf Premium für unbegrenzte Assistenzkräfte.`}
           >
             <Lock className="h-4 w-4" />
             <span className="hidden sm:inline">Neu anlegen</span>
@@ -932,8 +932,8 @@ export default function Assistenten() {
       {/* Limit-Hinweis (Free-Plan). Bei Premium ist assistantLimit null. */}
       {!canAddAssistant && assistantLimit !== null && (
         <PlanLimitBanner>
-          Im Free-Plan sind maximal {assistantLimit} Assistenten möglich. Für unbegrenzte
-          Assistenten ist ein Upgrade auf Premium nötig.
+          Im Free-Plan sind maximal {assistantLimit} Assistenzkräfte möglich. Für unbegrenzte
+          Assistenzkräfte ist ein Upgrade auf Premium nötig.
         </PlanLimitBanner>
       )}
       {isLoading ? (
@@ -1091,9 +1091,9 @@ export default function Assistenten() {
 
           {(!users || users.length === 0) && (
             <div className="col-span-full p-12 text-center border rounded-xl bg-card">
-              <p className="text-muted-foreground mb-4">Noch keine Assistenten angelegt.</p>
+              <p className="text-muted-foreground mb-4">Noch keine Assistenzkräfte angelegt.</p>
               <Button onClick={openCreate} variant="outline" className="gap-2">
-                <Plus className="h-4 w-4" /> Ersten Assistenten anlegen
+                <Plus className="h-4 w-4" /> Erste Assistenzkraft anlegen
               </Button>
             </div>
           )}

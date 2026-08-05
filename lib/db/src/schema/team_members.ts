@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, timestamp, unique } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, timestamp, unique, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -11,6 +11,20 @@ export const teamMembersTable = pgTable(
     id: serial("id").primaryKey(),
     teamId: integer("team_id").notNull().references(() => teamsTable.id, { onDelete: "cascade" }),
     userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+    /**
+     * Teamleiter-Flag: Gibt dem Mitglied Admin-Level-Zugriff auf genau dieses
+     * Team (Schichten, Zeiterfassung, Mitglieder verwalten) — teambeschränkt,
+     * kein globaler Admin-Zugriff. Default false; gesetzt vom Konto-Admin.
+     */
+    isTeamleiter: boolean("is_teamleiter").notNull().default(false),
+    /**
+     * Lohndaten-Sichtbarkeit: Erlaubt dem Teamleiter den Zugriff auf
+     * Stundenlöhne, Abrechnungsauswertungen und sensible Personalfelder
+     * (SV-Nummer, Steuer-ID, Bankdaten) der Teammitglieder. Default false.
+     * Bei gewerblichen Dienstleistern beim Ernennen zum Teamleiter auf true
+     * gesetzt; bei Privatpersonen standardmäßig aus (Assistenznehmer entscheidet).
+     */
+    canViewPayroll: boolean("can_view_payroll").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => ({

@@ -105,7 +105,7 @@ export function PageStickyHeader({
   );
 
   return (
-    <div className="sticky top-0 z-40 -mx-4 -mt-4 mb-1 border-b border-border/40 bg-white/95 px-4 py-3 backdrop-blur md:-mx-6 md:-mt-6 md:px-6">
+    <div data-dienstplan-header className="sticky top-0 z-40 -mx-4 -mt-4 mb-1 border-b border-border/40 bg-white/95 px-4 py-3 backdrop-blur md:-mx-6 md:-mt-6 md:px-6">
       {stacked ? (
         <div ref={measureRef} className="flex w-full flex-col gap-2.5">
           {/* Zeile 1: Titel · TeamSwitcher · AssistantFilter */}

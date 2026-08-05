@@ -73,6 +73,7 @@
 - [TeamSwitcher auto-select](team-switcher-auto-select.md) — no "Alle Teams"; dienstleister e2e fixtures must live in the FIRST team or specs switch explicitly; first load fires one unscoped fetch.
 - [Header tier measurement](header-tier-measurement.md) — narrower toggle states use a remeasureKey (never reset to labels); no min-w-0 wrapper around min-width selects or overlap replaces measurable overflow.
 - [Barrierefreies Farbsystem](accessible-color-system.md) — assistenz-Palette/getBarrierefreieFarbe sind die zentrale Farbquelle; text-primary (Hellgelb) nie als Textfarbe; Abwesenheiten nicht aus Personen-Palette.
+- [DESIGN-GUIDELINES Pflicht](design-guidelines-lookup.md) — DESIGN-GUIDELINES.md im Repo-Root ist verbindlich für Tonalität, Begriffe, UI-Text und Farbsystem; vor jedem UI-Auftrag lesen.
 - [Vacation guard vs. multi-team contracts](vacation-contract-team-scope.md) — vacation coverage is team-scoped, but booking picks the latest-startDate contract user-globally; fixtures need in-team contracts.
 - [Codegen-Drift-Guard per Fingerprint](codegen-drift-guard-fingerprint.md) — Guards über generierte Verzeichnisse via Vorher/Nachher-Hash, nie git diff (uncommitted ≠ Drift; index.lock killt git).
 - [drizzle push missing FKs](drizzle-push-missing-fks.md) — non-interactive push can create a table without its FK constraints (guard fails); repair via idempotent ALTER TABLE, re-push won't fix it.
@@ -102,3 +103,7 @@
 - [Shared Header-Tier-Logik](header-tier-shared.md) — HeaderTier/useIsMobileViewport/useHeaderTier leben in src/lib/header-tier.ts; beide Seiten importieren von dort; lokale Deklaration erzeugt TS2440 bei gleichzeitigem Import.
 - [Offline Bootstrap bewahrt Auth](offline-auth-bootstrap.md) — auth.tsx bootstrap fängt TypeError separat: Netzwerkfehler leeren NICHT den Auth-Zustand; nur echte 4xx/5xx tun das; OfflineBanner + MutationCache/QueryCache onError ergänzen die Kette.
 - [Offline Mutation Replay](offline-mutation-replay.md) — networkMode:'offlineFirst' + resumePausedMutations() müssen gemeinsam gesetzt sein; keines allein genügt; Pending-Zähler via useMutationState in OfflineBanner.
+- [Teamleiter-Feature Implementierungsmuster](teamleiter-feature-patterns.md) — is_teamleiter+canViewPayroll auf team_members; overrideAllowedIds in resolveRead/WriteTeamId; zod nicht in api-server, nur über @workspace/api-zod.
+- [MonthGrid Leere-Zelle-Klick](monthgrid-empty-cell-click.md) — leere Zellen öffnen den Dialog direkt; jeder Klick-Pfad muss onSelectDay mitsetzen, sonst e2e-selectDayCell rot.
+- [Assistenz-Abwesenheits-Selbstservice](assistant-absence-selfservice.md) — POST/DELETE /shifts für reine Assistenzkräfte: Authz vor Inhalt, 404 statt Orakel, teamId aus Schichtmodell ableiten (First-Team-Fallback bucht sonst falsch).
+- [xlsx dynamic import default](xlsx-dynamic-import-default.md) — `(await import("xlsx")).default` ist im Vite-Dev undefined; `m.default ?? m` nutzen, sonst scheitern Excel-Exporte still.

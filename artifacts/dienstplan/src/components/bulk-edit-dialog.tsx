@@ -192,7 +192,7 @@ export function BulkEditDialog({
       return false;
     }
     if (changeAssistant && newUserId === "") {
-      setError("Bitte einen neuen Assistenten auswählen.");
+      setError("Bitte eine neue Assistenzkraft auswählen.");
       return false;
     }
     if (changeTimes && (!startTime || !endTime)) {
@@ -328,7 +328,7 @@ export function BulkEditDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Alle Assistenten</SelectItem>
+                <SelectItem value="all">Alle Assistenzkräfte</SelectItem>
                 {assistants.map((a) => (
                   <SelectItem key={a.id} value={String(a.id)}>
                     {a.name}
@@ -353,7 +353,7 @@ export function BulkEditDialog({
                   }}
                   data-testid="bulk-edit-toggle-assistant"
                 />
-                Assistent tauschen
+                Assistenzkraft tauschen
               </label>
               {changeAssistant && (
                 <Select
@@ -365,7 +365,7 @@ export function BulkEditDialog({
                   }}
                 >
                   <SelectTrigger data-testid="bulk-edit-new-user">
-                    <SelectValue placeholder="Neuen Assistenten wählen..." />
+                    <SelectValue placeholder="Neue Assistenzkraft wählen..." />
                   </SelectTrigger>
                   <SelectContent>
                     {assistants.map((a) => (

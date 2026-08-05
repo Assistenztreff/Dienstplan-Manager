@@ -126,7 +126,7 @@ test.describe("Dienstplan-Kalender (Admin, mobile)", () => {
     // Der Assistenten-Filter ist ein kompaktes Select in der Kopfzeile.
     const trigger = page.getByTestId("assistant-select");
     await expect(trigger).toBeVisible();
-    await expect(trigger).toContainText("Alle Assistenten");
+    await expect(trigger).toContainText("Alle Assistenzkräfte");
 
     // Ersten konkreten Assistenten auswählen (erste Option nach "Alle").
     await trigger.click();
@@ -134,13 +134,13 @@ test.describe("Dienstplan-Kalender (Admin, mobile)", () => {
       .locator('[data-testid^="assistant-option-"]:not([data-testid="assistant-option-all"])')
       .first();
     await firstAssistant.click();
-    // Trigger zeigt jetzt einen konkreten Assistenten statt "Alle Assistenten".
-    await expect(trigger).not.toContainText("Alle Assistenten");
+    // Trigger zeigt jetzt einen konkreten Assistenten statt "Alle Assistenzkräfte".
+    await expect(trigger).not.toContainText("Alle Assistenzkräfte");
 
     // Auf "Alle" zurücksetzen.
     await trigger.click();
     await page.getByTestId("assistant-option-all").click();
-    await expect(trigger).toContainText("Alle Assistenten");
+    await expect(trigger).toContainText("Alle Assistenzkräfte");
   });
 
   test("Tagesauswahl im Monatsgitter aktualisiert das Tagesdetail", async ({ page }) => {

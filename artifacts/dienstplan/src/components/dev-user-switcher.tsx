@@ -17,7 +17,7 @@ export function DevUserSwitcher() {
 }
 
 function roleLabel(u: AuthUser): string {
-  if (u.role === "assistant") return "Assistent";
+  if (u.role === "assistant") return "Assistenzkraft";
   return u.accountType === "dienstleister" ? "Admin · Dienstleister" : "Admin · Privat";
 }
 

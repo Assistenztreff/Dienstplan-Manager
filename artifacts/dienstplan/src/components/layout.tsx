@@ -3,17 +3,16 @@ import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
   CalendarDays,
-  Users,
   Clock,
-  CalendarOff,
   BarChart3,
   Settings,
-  Building2,
   Menu,
   X,
+  ChevronDown,
   ShieldCheck,
   LogOut,
   ArrowUp,
+  type LucideIcon,
 } from "lucide-react";
 import platformLogoUrl from "@assets/assistenzplaner-logo-getrimmt.png";
 import { useAuth } from "@/context/auth";
@@ -22,19 +21,98 @@ import { isAdminRole } from "@/lib/roles";
 import { useTimeTrackingEnabled } from "@/hooks/use-time-tracking-enabled";
 import { DevUserSwitcher } from "./dev-user-switcher";
 
-// Interne Navigationspunkte der Dienstplan-App. Rollen-/Konto-Typ-Sichtbarkeit
-// bleibt unveraendert: adminOnly nur fuer Admins, dienstleisterOnly nur fuer
-// Dienstleister-Konten.
-const ALL_NAV_ITEMS = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard, adminOnly: false, dienstleisterOnly: false },
-  { href: "/dienstplan", label: "Dienstplan", icon: CalendarDays, adminOnly: false, dienstleisterOnly: false },
-  { href: "/assistenten", label: "Assistenten", icon: Users, adminOnly: true, dienstleisterOnly: false },
-  { href: "/zeiterfassung", label: "Zeiterfassung", icon: Clock, adminOnly: false, dienstleisterOnly: false },
-  { href: "/abwesenheiten", label: "Abwesenheiten", icon: CalendarOff, adminOnly: true, dienstleisterOnly: false },
-  { href: "/auswertungen", label: "Auswertungen", icon: BarChart3, adminOnly: true, dienstleisterOnly: false },
-  { href: "/team-verwaltung", label: "Team-Verwaltung", icon: Building2, adminOnly: true, dienstleisterOnly: true },
-  { href: "/einstellungen", label: "Einstellungen", icon: Settings, adminOnly: false, dienstleisterOnly: false },
+// Interne Navigationspunkte der Dienstplan-App (5 aufgabenbasierte
+// Hauptpunkte, Menü-Neustrukturierung 2026-08).
+// adminOnly: nur für Konto-Admins (admin/superadmin).
+// dienstleisterOnly: zusätzlich nur für Dienstleister-Konto-Typ.
+// teamleiterAllowed: Teamleiter dürfen diesen Punkt trotz adminOnly sehen.
+// Gruppen ("Planen"/"Verwalten") tragen KEINE eigenen Flags — sie erscheinen,
+// sobald mindestens ein Kind nach Filterung sichtbar bleibt. Jedes Kind
+// behält seine bisherigen Flag-Werte 1:1 (nur "Abwesenheiten" wurde per
+// §3-Entscheidung für alle Rollen geöffnet).
+type NavLeaf = {
+  href: string;
+  label: string;
+  adminOnly: boolean;
+  dienstleisterOnly: boolean;
+  teamleiterAllowed: boolean;
+};
+type NavEntry =
+  | (NavLeaf & { icon: LucideIcon })
+  | { label: string; icon: LucideIcon; children: NavLeaf[] };
+
+const ALL_NAV_ITEMS: NavEntry[] = [
+  { href: "/", label: "Start", icon: LayoutDashboard, adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
+  {
+    label: "Planen",
+    icon: CalendarDays,
+    children: [
+      { href: "/dienstplan", label: "Dienstplan", adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
+      { href: "/abwesenheiten", label: "Abwesenheiten", adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
+    ],
+  },
+  { href: "/zeiterfassung", label: "Erfassen", icon: Clock, adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
+  { href: "/auswertungen", label: "Auswerten", icon: BarChart3, adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true },
+  {
+    label: "Verwalten",
+    icon: Settings,
+    children: [
+      { href: "/assistenten", label: "Assistenzkräfte", adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true },
+      { href: "/team-verwaltung", label: "Team-Verwaltung", adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true },
+      { href: "/einstellungen", label: "Einstellungen", adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
+    ],
+  },
 ];
+
+// Kennzeichnet Gruppen-Einträge (mit Kind-Tabs) gegenüber direkten Links.
+function isNavGroup(entry: NavEntry): entry is Extract<NavEntry, { children: NavLeaf[] }> {
+  return "children" in entry;
+}
+
+// URL-taugliche Kennung für data-testids ("Planen" → "planen").
+function navSlug(label: string): string {
+  return label.toLowerCase().replace(/[^a-zä-ü0-9]+/gi, "-");
+}
+
+// Bisherige Sichtbarkeits-Filterlogik, unverändert — jetzt zentral, damit
+// Desktop-Leiste, Tab-Zeile und Mobile-Menü identisch filtern und die Regel
+// rekursiv auf Gruppen-Kinder angewendet werden kann.
+function isLeafVisible(
+  item: NavLeaf,
+  currentUser: ReturnType<typeof useAuth>["currentUser"],
+  timeTrackingEnabled: boolean,
+): boolean {
+  return (
+    (!item.adminOnly || isAdminRole(currentUser?.role) || (item.teamleiterAllowed && !!currentUser?.isTeamleiter)) &&
+    (!item.dienstleisterOnly || currentUser?.accountType === "dienstleister") &&
+    (item.href !== "/zeiterfassung" || timeTrackingEnabled)
+  );
+}
+
+// Gefilterte Navigation: Gruppen behalten nur sichtbare Kinder und
+// verschwinden ganz, wenn kein Kind übrig bleibt.
+function visibleNavEntries(
+  currentUser: ReturnType<typeof useAuth>["currentUser"],
+  timeTrackingEnabled: boolean,
+): NavEntry[] {
+  const result: NavEntry[] = [];
+  for (const entry of ALL_NAV_ITEMS) {
+    if (isNavGroup(entry)) {
+      const children = entry.children.filter((c) => isLeafVisible(c, currentUser, timeTrackingEnabled));
+      if (children.length > 0) result.push({ ...entry, children });
+    } else if (isLeafVisible(entry, currentUser, timeTrackingEnabled)) {
+      result.push(entry);
+    }
+  }
+  return result;
+}
+
+// Aktiv-Logik: Ein direkter Link ist bei exakter Routen-Übereinstimmung aktiv;
+// eine Gruppe, sobald die aktuelle Route einem ihrer Kinder gehört (deckt auch
+// Direktaufrufe/Bookmarks von Kind-Routen ab, §7).
+function isGroupActive(entry: Extract<NavEntry, { children: NavLeaf[] }>, location: string): boolean {
+  return entry.children.some((c) => c.href === location);
+}
 
 // ---------------------------------------------------------------------------
 // PLATZHALTER: Plattform-Header (AssistenzTreff)
@@ -297,12 +375,17 @@ function MobileFullMenu({
     };
   }, [onClose]);
 
-  const navItems = ALL_NAV_ITEMS.filter(
-    (item) =>
-      (!item.adminOnly || isAdminRole(currentUser?.role)) &&
-      (!item.dienstleisterOnly || currentUser?.accountType === "dienstleister") &&
-      (item.href !== "/zeiterfassung" || timeTrackingEnabled),
+  const navItems = visibleNavEntries(currentUser, timeTrackingEnabled);
+
+  // Akkordeon-Zustand (§9): Die Gruppe, die die aktuelle Route enthält, ist
+  // beim Öffnen des Menüs bereits aufgeklappt; alle anderen zu.
+  const [openGroups, setOpenGroups] = useState<string[]>(() =>
+    navItems.filter((e) => isNavGroup(e) && isGroupActive(e, location)).map((e) => e.label),
   );
+  const toggleGroup = (label: string) =>
+    setOpenGroups((prev) =>
+      prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label],
+    );
 
   return (
     <div
@@ -333,6 +416,50 @@ function MobileFullMenu({
         {/* App-Navigation als Pillen-Buttons */}
         <nav aria-label="Dienstplan-App" className="mt-8 flex flex-col gap-4 px-6">
           {navItems.map((item) => {
+            if (isNavGroup(item)) {
+              const slug = navSlug(item.label);
+              const open = openGroups.includes(item.label);
+              const groupActive = isGroupActive(item, location);
+              return (
+                <div key={item.label} className="flex flex-col gap-3">
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(item.label)}
+                    aria-expanded={open}
+                    data-testid={`mobile-nav-group-${slug}`}
+                    className={`flex h-14 items-center justify-center gap-2 rounded-full border border-brand-dark text-lg font-semibold text-brand-dark shadow-sm transition-colors focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark ${
+                      groupActive && !open ? "bg-brand-yellow" : "bg-white hover:bg-brand-yellow"
+                    }`}
+                  >
+                    {item.label}
+                    <ChevronDown
+                      className={`h-5 w-5 transition-transform ${open ? "rotate-180" : ""}`}
+                      aria-hidden="true"
+                    />
+                  </button>
+                  {open && (
+                    <div className="flex flex-col gap-3 pl-6" data-testid={`mobile-nav-group-${slug}-items`}>
+                      {item.children.map((child) => {
+                        const isActive = location === child.href;
+                        return (
+                          <Link
+                            key={child.href}
+                            href={child.href}
+                            onClick={onClose}
+                            aria-current={isActive ? "page" : undefined}
+                            className={`flex h-12 items-center justify-center rounded-full border border-brand-dark text-base font-semibold text-brand-dark shadow-sm transition-colors focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark ${
+                              isActive ? "bg-brand-yellow" : "bg-white hover:bg-brand-yellow"
+                            }`}
+                          >
+                            {child.label}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
             const isActive = location === item.href;
             return (
               <Link
@@ -488,11 +615,13 @@ function AppSubNavigation() {
   // während des Ladens bleibt der Punkt verborgen (kein Aufblitzen).
   const { enabled: timeTrackingEnabled } = useTimeTrackingEnabled();
 
-  const navItems = ALL_NAV_ITEMS.filter(
-    (item) =>
-      (!item.adminOnly || isAdminRole(currentUser?.role)) &&
-      (!item.dienstleisterOnly || currentUser?.accountType === "dienstleister") &&
-      (item.href !== "/zeiterfassung" || timeTrackingEnabled),
+  const navItems = visibleNavEntries(currentUser, timeTrackingEnabled);
+
+  // Aktive Gruppe (falls die aktuelle Route zu einer Tab-Gruppe gehört):
+  // deren Kinder erscheinen als zweite Tab-Zeile unter der Hauptleiste (§7:
+  // funktioniert auch bei Direktaufruf einer Kind-URL).
+  const activeGroup = navItems.find(
+    (e): e is Extract<NavEntry, { children: NavLeaf[] }> => isNavGroup(e) && isGroupActive(e, location),
   );
 
   async function handleLogout() {
@@ -528,11 +657,17 @@ function AppSubNavigation() {
             className="flex flex-wrap items-center gap-x-1 gap-y-0"
           >
             {navItems.map((item) => {
-              const isActive = location === item.href;
+              // Gruppen: Klick führt zum ersten sichtbaren Kind; aktiv, sobald
+              // die aktuelle Route einem Kind gehört.
+              const href = isNavGroup(item) ? item.children[0].href : item.href;
+              const isActive = isNavGroup(item)
+                ? isGroupActive(item, location)
+                : location === item.href;
               return (
-                <Link key={item.href} href={item.href}>
+                <Link key={item.label} href={href}>
                   <span
                     aria-current={isActive ? "page" : undefined}
+                    data-testid={isNavGroup(item) ? `nav-group-${navSlug(item.label)}` : undefined}
                     className={`flex h-12 shrink-0 items-center gap-1.5 px-3 text-sm transition-colors cursor-pointer ${
                       isActive
                         ? "bg-brand-yellow text-brand-dark font-semibold"
@@ -560,6 +695,34 @@ function AppSubNavigation() {
                 Guard via import.meta.env.DEV in der Komponente selbst). */}
             <DevUserSwitcher />
           </nav>
+
+          {/* Zweite Ebene: Tab-Zeile der aktiven Gruppe (nur wenn die
+              aktuelle Route zu einer Gruppe gehört). Nicht sticky (§6). */}
+          {activeGroup && (
+            <nav
+              aria-label={`${activeGroup.label} – Unterbereiche`}
+              className="flex flex-wrap items-center gap-x-1 border-t border-slate-200"
+              data-testid="app-subnav-tabs"
+            >
+              {activeGroup.children.map((child) => {
+                const isActive = location === child.href;
+                return (
+                  <Link key={child.href} href={child.href}>
+                    <span
+                      aria-current={isActive ? "page" : undefined}
+                      className={`flex h-10 shrink-0 items-center border-b-2 px-3 text-sm transition-colors cursor-pointer ${
+                        isActive
+                          ? "border-brand-yellow bg-white font-semibold text-brand-dark"
+                          : "border-transparent font-medium text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                      }`}
+                    >
+                      {child.label}
+                    </span>
+                  </Link>
+                );
+              })}
+            </nav>
+          )}
         </div>
       </div>
     </>

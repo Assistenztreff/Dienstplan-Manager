@@ -37,6 +37,8 @@ import {
   nameInitials,
   type PersonColorAssignment,
 } from "@/lib/shift-model-colors";
+import { type PersonSlot, getPersonSlots } from "@/lib/barrierefreie-farben";
+import { useAssistantPalette } from "@/lib/use-assistant-palette";
 import { hasAccess, getLimit } from "@/lib/entitlements";
 import { type HeaderTier, useIsMobileViewport, useHeaderTier } from "@/lib/header-tier";
 import { toast } from "sonner";
@@ -743,19 +745,87 @@ function MonthGrid({
   const offset = (getDay(monthStart) + 6) % 7;
   const blanks = Array.from({ length: offset });
   const selectedShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), selectedDay));
+  const numWeeks = Math.ceil((blanks.length + days.length) / 7);
 
-  // Roving Tabindex (WAI-ARIA-Grid-Pattern): genau EINE Tageszelle ist in der
-  // Tab-Reihenfolge; Pfeiltasten bewegen den Fokus, Home/End springen zum
-  // Wochenanfang/-ende. Enter/Space feuern den nativen Button-Klick.
+  // ── Aktive Assistenzkraft-Palette (Einstellung aus localStorage) ─────────
+  const [assistantPalette] = useAssistantPalette();
+  const activeSlots = getPersonSlots(assistantPalette);
+
+  // ── Kategoriale Personen-Slot-Farben ──────────────────────────────────────
+  // Zuweisung: Assistenzkraft sortiert nach ID (= Anlagereihenfolge) → Slot 1, 2, ...
+  // Bei >12 Assistenzkräften: wrap-around ab Slot 1 (zweite Runde).
+  const personSlots = useMemo<Map<number, PersonSlot>>(() => {
+    if (!personColors) return new Map();
+    const sortedIds = [...personColors.keys()].sort((a, b) => a - b);
+    return new Map(sortedIds.map((id, idx) => [id, activeSlots[idx % activeSlots.length]!]));
+  }, [personColors, activeSlots]);
+
+  function getPersonSlot(userId: number): PersonSlot {
+    const slot = personSlots.get(userId);
+    if (slot) return slot;
+    if (!Number.isFinite(userId)) return activeSlots[0]!;
+    const hash = Math.abs(Math.trunc(userId) * 2654435761);
+    return activeSlots[hash % activeSlots.length]!;
+  }
+
+  // ── Dynamische Zeilenhöhe abhängig von max. Einträgen pro Tag ─────────────
+  // Spec §3: 1–2 Einträge → scrollfrei; erst ab 3 Einträgen darf die Ansicht
+  // nach unten wachsen. "Einträge" = Schichten + Abwesenheitstypen.
+  const maxDayEntries = useMemo(() => {
+    let max = 0;
+    for (const day of days) {
+      const dayShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), day));
+      const nonAbs = dayShifts.filter((s) => !isAbsenceShift(s)).length;
+      const absTypes = new Set(dayShifts.filter((s) => isAbsenceShift(s)).map((s) => s.type)).size;
+      max = Math.max(max, nonAbs + absTypes);
+    }
+    return max;
+  }, [shifts, days]);
+
+  // Bei ≤2 Einträgen: feste Viewport-Höhe (alle Wochen passen ohne Scrollen).
+  // Bei ≥3 Einträgen: Zellen wachsen mit Inhalt → Seite kann scrollen.
+  const useDynamicRows = maxDayEntries >= 3;
+
+  // ── Sticky-Header-Höhe messen (ResizeObserver) ────────────────────────────
+  // Der Dienstplan-Header klebt bei top:0; die Wochenzeile klebt direkt darunter.
+  // Das Grid-Container-Height = 100svh − headerH − weekdayRowH füllt den Rest.
+  const [headerH, setHeaderH] = useState(0);
+  const weekdayRowRef = useRef<HTMLDivElement>(null);
+  const [weekdayRowH, setWeekdayRowH] = useState(0);
+
+  useEffect(() => {
+    const el = document.querySelector("[data-dienstplan-header]") as HTMLElement | null;
+    if (!el) return;
+    const update = () => setHeaderH(el.getBoundingClientRect().height);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const el = weekdayRowRef.current;
+    if (!el) return;
+    const update = () => setWeekdayRowH(el.getBoundingClientRect().height);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Sobald beide Höhen bekannt sind, füllt das Grid den sichtbaren Bereich
+  // unterhalb der sticky Header (kleines gap-px-Puffer für den Rahmen).
+  const gridHeight =
+    headerH > 0 && weekdayRowH > 0
+      ? `calc(100svh - ${headerH + weekdayRowH}px - 0.5rem)`
+      : undefined;
+
+  // ── Roving Tabindex (WAI-ARIA-Grid-Pattern) ───────────────────────────────
   const cellRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [focusedIdx, setFocusedIdx] = useState<number | null>(null);
   useEffect(() => {
     setFocusedIdx(null);
   }, [monthStart.getTime()]);
-  // Zieltag nach Tastatur-Wechsel über die Monatsgrenze fokussieren. Der
-  // Merker lebt im Eltern-State (focusDate), weil MonthGrid während des
-  // Ladens des neuen Monats kurz unmountet. Nur die sichtbare Instanz
-  // (mobil ODER Desktop) übernimmt den Fokus und räumt den Merker ab.
   useEffect(() => {
     if (!focusDate) return;
     const idx = days.findIndex((d) => isSameDay(d, focusDate));
@@ -776,34 +846,15 @@ function MonthGrid({
   const handleCellKeyDown = (e: React.KeyboardEvent, idx: number) => {
     const col = (offset + idx) % 7;
     let target: number | null = null;
-    // Pfeiltasten dürfen über die Monatsgrenze in den Vor-/Folgemonat
-    // wechseln (WAI-ARIA-Grid-Pattern); Home/End bleiben in der Woche.
     let crossesBoundary = false;
     switch (e.key) {
-      case "ArrowRight":
-        target = idx + 1;
-        crossesBoundary = true;
-        break;
-      case "ArrowLeft":
-        target = idx - 1;
-        crossesBoundary = true;
-        break;
-      case "ArrowDown":
-        target = idx + 7;
-        crossesBoundary = true;
-        break;
-      case "ArrowUp":
-        target = idx - 7;
-        crossesBoundary = true;
-        break;
-      case "Home":
-        target = idx - col;
-        break;
-      case "End":
-        target = idx + (6 - col);
-        break;
-      default:
-        return;
+      case "ArrowRight": target = idx + 1; crossesBoundary = true; break;
+      case "ArrowLeft":  target = idx - 1; crossesBoundary = true; break;
+      case "ArrowDown":  target = idx + 7; crossesBoundary = true; break;
+      case "ArrowUp":    target = idx - 7; crossesBoundary = true; break;
+      case "Home":       target = idx - col; break;
+      case "End":        target = idx + (6 - col); break;
+      default: return;
     }
     e.preventDefault();
     if (crossesBoundary && (target < 0 || target > days.length - 1) && onNavigateMonth) {
@@ -813,6 +864,7 @@ function MonthGrid({
     moveFocus(target);
   };
 
+  // ── Abwesenheits-Balken pro Tag ───────────────────────────────────────────
   const absenceTypesByDay = new Map<string, Set<string>>();
   for (const s of shifts) {
     if (!isAbsenceShift(s)) continue;
@@ -824,172 +876,208 @@ function MonthGrid({
     day != null && (absenceTypesByDay.get(dayKey(day))?.has(type) ?? false);
 
   return (
-    <div className="space-y-3">
-      <div className="rounded-2xl bg-sky-50 border border-sky-100 p-2">
-        <div className="grid grid-cols-7 gap-1 mb-1">
-          {WEEKDAY_LABELS.map((d) => (
-            <div key={d} className="text-center text-[11px] font-medium text-muted-foreground py-1">
-              {d}
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-1" data-testid="month-grid">
-          {blanks.map((_, i) => (
-            <div key={`blank-${i}`} data-testid="month-grid-blank" />
-          ))}
-          {days.map((day, dayIdx) => {
-            const dayShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), day));
-            const selected = isSameDay(day, selectedDay);
-            const today = isToday(day);
-            const nonAbsence = dayShifts.filter((s) => !isAbsenceShift(s));
-            const dots = nonAbsence.slice(0, 3);
-            const hiddenCount = nonAbsence.length - dots.length;
-            const prevDay = dayIdx > 0 ? days[dayIdx - 1] : undefined;
-            const nextDay = dayIdx < days.length - 1 ? days[dayIdx + 1] : undefined;
-            const absenceBars = (["vacation", "sick"] as const)
-              .filter((type) => hasAbsence(day, type))
-              .map((type) => {
-                const isStart = !hasAbsence(prevDay, type);
-                const isEnd = !hasAbsence(nextDay, type);
-                return (
-                  <span
-                    key={type}
-                    data-testid={`absence-bar-${type}-${format(day, "yyyy-MM-dd")}`}
-                    className={`block h-1.5 w-full ${SHIFT_TYPE_DOTS[type]} ${
-                      isStart ? "rounded-l-full" : "-ml-0.5"
-                    } ${isEnd ? "rounded-r-full" : "-mr-0.5"}`}
-                  />
-                );
-              });
-            const bulkSelected = selectionMode && selectedDateSet.has(format(day, "yyyy-MM-dd"));
-            return (
-              <button
-                key={day.toISOString()}
-                type="button"
-                ref={(el) => {
-                  cellRefs.current[dayIdx] = el;
-                }}
-                tabIndex={dayIdx === tabbableIdx ? 0 : -1}
-                onKeyDown={(e) => handleCellKeyDown(e, dayIdx)}
-                onFocus={() => setFocusedIdx(dayIdx)}
-                data-testid={`day-cell-${format(day, "yyyy-MM-dd")}`}
-                data-selected={(selectionMode ? bulkSelected : selected) ? "true" : "false"}
-                aria-selected={selectionMode ? bulkSelected : selected}
-                aria-label={format(day, "EEEE, d. MMMM yyyy", { locale: de })}
-                onClick={() => {
-                  if (selectionMode) {
-                    onToggleDate?.(day);
-                    return;
-                  }
-                  // Zwei-Stufen-Klick: 1. Klick markiert den Tag (Tagesdetail
-                  // erscheint), erst der 2. Klick auf den bereits markierten
-                  // Tag öffnet den Schicht-Dialog (nur Admin) — identisch für
-                  // alle Tage, auch leere.
-                  if (selected) {
-                    if (canEdit) onAddShift(day);
-                    return;
-                  }
-                  onSelectDay(day);
-                }}
-                className={`aspect-square rounded-lg flex flex-col items-center justify-start pt-1.5 gap-1 border transition-colors ${
-                  bulkSelected
-                    ? "border-primary ring-2 ring-primary bg-primary/5"
-                    : selected && !selectionMode
-                      ? "border-primary ring-2 ring-primary bg-primary/15"
-                      : "bg-card border-transparent hover:bg-muted/40"
-                }`}
-              >
-                <span
-                  className={`text-xs leading-none flex items-center justify-center h-6 w-6 ${
-                    today
-                      ? "bg-primary text-primary-foreground rounded-full font-semibold"
-                      : "font-medium"
-                  }`}
-                >
-                  {format(day, "d")}
-                </span>
-                <span className="flex flex-col items-stretch gap-0.5 w-full min-w-0">
-                  {absenceBars}
-                  {dots.length > 0 && (
-                    <span className="flex md:hidden flex-wrap items-center justify-center gap-0.5">
-                      {dots.map((s) => (
-                        <span
-                          key={s.id}
-                          title={s.user?.name}
-                          className={`flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-bold leading-none text-white ${s.type === "team" ? "bg-sky-500" : userInitialsClass(s.userId, personColors)} ${shiftDotStatusClass(s)}`}
-                        >
-                          {s.user?.name ? nameInitials(s.user.name) : ""}
-                        </span>
-                      ))}
-                    </span>
-                  )}
-                  {dots.length > 0 && (
-                    <span className="hidden md:flex flex-col items-stretch gap-0.5 px-0.5">
-                      {dots.map((s) => {
-                        const chipClickable = canEdit && !selectionMode;
-                        return (
-                        <span
-                          key={s.id}
-                          data-testid={`day-chip-${s.id}`}
-                          title={`${s.user?.name ?? ""} · ${format(new Date(s.startTime), "HH:mm")}`.trim()}
-                          role={chipClickable ? "button" : undefined}
-                          tabIndex={chipClickable ? 0 : undefined}
-                          aria-label={
-                            chipClickable
-                              ? `Schicht bearbeiten: ${s.user?.name ?? ""} ${format(new Date(s.startTime), "HH:mm")}`.trim()
-                              : undefined
-                          }
-                          onClick={
-                            chipClickable
-                              ? (e) => {
-                                  e.stopPropagation();
-                                  onShiftClick(s);
-                                }
-                              : undefined
-                          }
-                          onKeyDown={
-                            chipClickable
-                              ? (e) => {
-                                  if (e.key === "Enter" || e.key === " ") {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    onShiftClick(s);
-                                  }
-                                }
-                              : undefined
-                          }
-                          className={`flex items-center justify-center gap-1 rounded border px-1 py-px text-[9px] leading-tight truncate ${s.type === "team" ? "bg-sky-200 text-sky-950 border-sky-600" : userBadgeClass(s.userId, personColors)} ${planningStatusBadgeOutline(s)} ${chipClickable ? "cursor-pointer hover:ring-1 hover:ring-primary/60" : ""}`}
-                        >
-                          <span className="font-bold">
-                            {s.user?.name ? nameInitials(s.user.name) : ""}
-                          </span>
-                          <span className="font-medium">
-                            {s.type === "team" ? "Team" : format(new Date(s.startTime), "HH:mm")}
-                          </span>
-                        </span>
-                        );
-                      })}
-                    </span>
-                  )}
-                  {hiddenCount > 0 && (
-                    <span
-                      data-testid={`day-more-${format(day, "yyyy-MM-dd")}`}
-                      className="text-[9px] font-semibold leading-none text-foreground/70 text-center"
-                    >
-                      +{hiddenCount}
-                      <span className="sr-only md:hidden"> weitere</span>
-                      <span className="hidden md:inline"> weitere</span>
-                    </span>
-                  )}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+    <div>
+      {/* ── Sticky Wochentag-Zeile (klebt direkt unter dem Dienstplan-Header) ─ */}
+      <div
+        ref={weekdayRowRef}
+        className="sticky z-20 grid grid-cols-7 border-b border-border/30 bg-background/95 backdrop-blur-sm"
+        style={{ top: headerH || 0 }}
+      >
+        {WEEKDAY_LABELS.map((d) => (
+          <div key={d} className="py-1 text-center text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+            {d}
+          </div>
+        ))}
       </div>
 
+      {/* ── Kalender-Grid ─────────────────────────────────────────────────── */}
+      {/* Spec §3: Bei ≤2 Einträgen/Tag → feste Viewport-Höhe (scrollfrei);
+          Bei ≥3 Einträgen → auto-Zeilen, Seite darf wachsen/scrollen. */}
       <div
-        className="rounded-lg border border-border/40 overflow-hidden"
+        className="grid grid-cols-7 gap-px rounded-b-lg border border-t-0 border-border/30 bg-border/20"
+        style={
+          useDynamicRows
+            ? { gridTemplateColumns: "repeat(7, 1fr)", overflow: "visible" }
+            : {
+                ...(gridHeight ? { height: gridHeight, overflow: "hidden" } : {}),
+                gridTemplateRows: `repeat(${numWeeks}, 1fr)`,
+              }
+        }
+        data-testid="month-grid"
+      >
+        {blanks.map((_, i) => (
+          <div key={`blank-${i}`} className="bg-muted/10" data-testid="month-grid-blank" />
+        ))}
+        {days.map((day, dayIdx) => {
+          const dayShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), day));
+          const selected = isSameDay(day, selectedDay);
+          const today = isToday(day);
+          const nonAbsence = dayShifts.filter((s) => !isAbsenceShift(s));
+          const visiblePills = nonAbsence.slice(0, 2);
+          const hiddenCount = nonAbsence.length - visiblePills.length;
+          const isEmpty = dayShifts.length === 0;
+          const prevDay = dayIdx > 0 ? days[dayIdx - 1] : undefined;
+          const nextDay = dayIdx < days.length - 1 ? days[dayIdx + 1] : undefined;
+          const bulkSelected = selectionMode && selectedDateSet.has(format(day, "yyyy-MM-dd"));
+          const dow = day.getDay();
+          const isWeekend = dow === 0 || dow === 6;
+
+          const absenceBars = (["vacation", "sick"] as const)
+            .filter((type) => hasAbsence(day, type))
+            .map((type) => {
+              const isStart = !hasAbsence(prevDay, type);
+              const isEnd = !hasAbsence(nextDay, type);
+              return (
+                <div
+                  key={type}
+                  data-testid={`absence-bar-${type}-${format(day, "yyyy-MM-dd")}`}
+                  className={`h-[3px] ${SHIFT_TYPE_DOTS[type]} ${isStart ? "rounded-l-full" : ""} ${isEnd ? "rounded-r-full" : ""}`}
+                />
+              );
+            });
+
+          return (
+            <button
+              key={day.toISOString()}
+              type="button"
+              ref={(el) => { cellRefs.current[dayIdx] = el; }}
+              tabIndex={dayIdx === tabbableIdx ? 0 : -1}
+              onKeyDown={(e) => handleCellKeyDown(e, dayIdx)}
+              onFocus={() => setFocusedIdx(dayIdx)}
+              data-testid={`day-cell-${format(day, "yyyy-MM-dd")}`}
+              data-selected={(selectionMode ? bulkSelected : selected) ? "true" : "false"}
+              aria-selected={selectionMode ? bulkSelected : selected}
+              aria-label={format(day, "EEEE, d. MMMM yyyy", { locale: de })}
+              onClick={() => {
+                if (selectionMode) { onToggleDate?.(day); return; }
+                // Leere Zelle: direkt öffnen (kein Zwei-Stufen-Klick);
+                // Tag dabei trotzdem markieren, damit das Tagesdetail folgt.
+                if (isEmpty) { onSelectDay(day); if (canEdit) onAddShift(day); return; }
+                // Zelle mit Einträgen: erst auswählen, beim 2. Klick öffnen.
+                if (selected) { if (canEdit) onAddShift(day); return; }
+                onSelectDay(day);
+              }}
+              className={[
+                "relative flex min-h-0 w-full flex-col items-stretch overflow-hidden p-0.5 transition-colors",
+                isWeekend ? "bg-slate-50/70" : "bg-card",
+                bulkSelected
+                  ? "ring-2 ring-inset ring-primary"
+                  : selected && !selectionMode
+                    ? "ring-2 ring-inset ring-primary/70 bg-primary/5"
+                    : "hover:bg-accent/20",
+                today ? "ring-1 ring-inset ring-amber-400/60" : "",
+              ].filter(Boolean).join(" ")}
+            >
+              {/* Datumszahl — abgerundetes Rechteck als Kontrast-Badge */}
+              <span
+                className={[
+                  "self-end text-[11px] leading-none font-semibold px-1.5 py-0.5 rounded-md",
+                  today
+                    ? "bg-[#092948] text-white"
+                    : isWeekend
+                      ? "bg-slate-200/70 text-slate-500"
+                      : "bg-muted/50 text-foreground/70",
+                ].join(" ")}
+              >
+                {format(day, "d")}
+              </span>
+
+              {/* Abwesenheits-Balken */}
+              {absenceBars.length > 0 && (
+                <div className="flex flex-col gap-[1px] mb-0.5">{absenceBars}</div>
+              )}
+
+              {/* Schicht-Pillen (max. 2) — doppelte Höhe für bessere Lesbarkeit */}
+              {visiblePills.length > 0 && (
+                <div className="flex flex-col gap-[3px] min-w-0 px-0.5">
+                  {visiblePills.map((s) => {
+                    const isTeam = s.type === "team";
+                    const slot = getPersonSlot(s.userId);
+                    const isDraft = (s.planningStatus ?? "FIX") === "VORLAEUFIG";
+                    const chipClickable = canEdit && !selectionMode;
+                    const timeRange = `${format(new Date(s.startTime), "HH:mm")}–${format(new Date(s.endTime), "HH:mm")}`;
+                    return (
+                      <span
+                        key={s.id}
+                        data-testid={`day-chip-${s.id}`}
+                        role={chipClickable ? "button" : undefined}
+                        tabIndex={chipClickable ? -1 : undefined}
+                        title={`${s.user?.name ?? ""} · ${timeRange}`.trim()}
+                        onClick={chipClickable ? (e) => { e.stopPropagation(); onShiftClick(s); } : undefined}
+                        onKeyDown={chipClickable ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onShiftClick(s); }
+                        } : undefined}
+                        style={{
+                          backgroundColor: isTeam ? "#bae6fd" : slot.bg,
+                          color:           isTeam ? "#075985" : slot.text,
+                          borderColor:     isTeam ? "#7dd3fc" : slot.border,
+                          opacity: isDraft ? 0.6 : 1,
+                        }}
+                        className={[
+                          "flex flex-col items-start gap-0 truncate rounded-[4px] border",
+                          "px-[4px] py-[3px] leading-tight font-medium",
+                          isDraft ? "border-dashed" : "",
+                          chipClickable ? "cursor-pointer" : "",
+                        ].filter(Boolean).join(" ")}
+                      >
+                        {/* Zeile 1: Initialen */}
+                        <span className="text-[10px] font-bold shrink-0 leading-none">
+                          {isTeam ? "Team" : (s.user?.name ? nameInitials(s.user.name) : "?")}
+                        </span>
+                        {/* Zeile 2: Von–bis Uhrzeit */}
+                        <span className="text-[9px] leading-none opacity-90 truncate w-full">
+                          {isTeam ? "Teamdienst" : timeRange}
+                        </span>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Überlauf-Zähler */}
+              {hiddenCount > 0 && (
+                <span
+                  data-testid={`day-more-${format(day, "yyyy-MM-dd")}`}
+                  className="self-start px-1 text-[7px] font-semibold text-muted-foreground/60 leading-none"
+                >
+                  +{hiddenCount}
+                </span>
+              )}
+
+              {/* „+" Hinzufügen-Indikator */}
+              {canEdit && !selectionMode && (
+                isEmpty ? (
+                  // Leere Zelle: dezentes „+" als visueller Hinweis (Klick läuft über Cell-Button)
+                  <span
+                    aria-hidden="true"
+                    className="flex flex-1 items-center justify-center text-[14px] font-light text-muted-foreground/25 leading-none select-none"
+                  >
+                    +
+                  </span>
+                ) : (
+                  // Belegte Zelle: kleines „+" zum Direkthinzufügen (stopPropagation)
+                  <span
+                    role="button"
+                    tabIndex={-1}
+                    aria-label={`Weiteren Dienst anlegen am ${format(day, "d. MMMM", { locale: de })}`}
+                    onClick={(e) => { e.stopPropagation(); onAddShift(day); }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onAddShift(day); }
+                    }}
+                    className="self-center text-[9px] text-muted-foreground/40 hover:text-primary leading-none cursor-pointer select-none"
+                  >
+                    +
+                  </span>
+                )
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Tagesdetail-Panel ──────────────────────────────────────────────── */}
+      <div
+        className="rounded-lg border border-border/40 overflow-hidden mt-2"
         role="region"
         aria-live="polite"
         aria-label={`Tagesdetails ${format(selectedDay, "EEEE, d. MMMM", { locale: de })}`}
@@ -1003,13 +1091,13 @@ function MonthGrid({
             <p className="text-xs text-muted-foreground">
               {selectedShifts.length === 0
                 ? "Keine Dienste geplant"
-                : `${selectedShifts.length} ${selectedShifts.length === 1 ? "Schicht" : "Schichten"}`}
+                : `${selectedShifts.length} ${selectedShifts.length === 1 ? "Dienst" : "Dienste"}`}
             </p>
           </div>
           {canEdit && !selectionMode && (
             <Button size="sm" variant="outline" className="gap-1 shrink-0" data-testid="add-shift" onClick={() => onAddShift(selectedDay)}>
               <Plus className="h-3.5 w-3.5" />
-              Schicht erstellen
+              Dienst anlegen
             </Button>
           )}
         </div>
@@ -1159,13 +1247,13 @@ function DienstplanHeader({
             : "h-9 w-auto min-w-[7.5rem] max-w-[190px] shrink gap-2 truncate"
         }
         data-testid="assistant-select"
-        aria-label="Assistent filtern"
+        aria-label="Assistenzkraft filtern"
       >
-        <SelectValue placeholder="Alle Assistenten" />
+        <SelectValue placeholder="Alle Assistenzkräfte" />
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="all" data-testid="assistant-option-all">
-          Alle Assistenten
+          Alle Assistenzkräfte
         </SelectItem>
         {assistants.map((a) => (
           <SelectItem key={a.id} value={String(a.id)} data-testid={`assistant-option-${a.id}`}>
@@ -1736,7 +1824,7 @@ export default function Dienstplan() {
               <thead>
                 <tr className="h-px border-b bg-muted/50">
                   <th className="p-3 text-left font-medium sticky left-0 bg-muted/50 backdrop-blur-sm z-10 w-48">
-                    {isAdmin ? "Assistent" : "Schicht"}
+                    {isAdmin ? "Assistenzkraft" : "Schicht"}
                   </th>
                   {days.map((day) => {
                     const colSelected =

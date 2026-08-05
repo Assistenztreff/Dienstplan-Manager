@@ -56,11 +56,11 @@ test("Assistenten/Vertrag: Vertragsbeginn-DatePicker öffnet nicht automatisch (
   test.setTimeout(40_000);
   await loginAsAdmin(page);
   await page.goto("/assistenten");
-  await expect(page.getByRole("heading", { name: "Assistenten" })).toBeVisible({
+  await expect(page.getByRole("heading", { name: "Assistenzkräfte" })).toBeVisible({
     timeout: 10_000,
   });
   // Neu-anlegen-Dialog öffnen.
-  const createBtn = page.getByRole("button", { name: /Assistent(in)? anlegen|Neuer Assistent/i });
+  const createBtn = page.getByRole("button", { name: /Assistenzkraft anlegen|Neue Assistenzkraft/i });
   if (await createBtn.isVisible()) {
     await createBtn.click();
     // Dialog ist offen — Kalender muss trotzdem geschlossen sein.

@@ -70,7 +70,7 @@ async function gotoAssistentenAsAdmin(page: Page): Promise<void> {
   expect(loginRes.ok(), `Admin-Login fehlgeschlagen (${loginRes.status()})`).toBe(true);
   await page.goto("/assistenten");
   await expect(
-    page.getByRole("heading", { name: "Assistenten", exact: true }),
+    page.getByRole("heading", { name: "Assistenzkräfte", exact: true }),
   ).toBeVisible({ timeout: 30000 });
 }
 
@@ -125,7 +125,7 @@ test("409 wegen eigener Teams erscheint als verständliche Meldung im Lösch-Dia
   // Bearbeiten-Dialog öffnen und Löschen anstoßen.
   await card.getByRole("button", { name: "Bearbeiten" }).click();
   await expect(
-    page.getByRole("heading", { name: "Assistenten bearbeiten" }),
+    page.getByRole("heading", { name: "Assistenzkraft bearbeiten" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Loeschen" }).click();
 

@@ -9,7 +9,7 @@ import type { MonthClosingDiff } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Download, Lock, Table2, LayoutGrid, Archive } from "lucide-react";
+import { Lock, Table2 } from "lucide-react";
 import { MonthYearPicker } from "@/components/month-year-picker";
 import { PageStickyHeader } from "@/components/page-sticky-header";
 import type { LucideIcon } from "lucide-react";
@@ -39,8 +39,11 @@ import { type HeaderTier, useIsMobileViewport, useHeaderTier } from "@/lib/heade
 import { formatDays } from "@/lib/utils";
 import { MonthClosingCard, RecalculationSection, PayrollTotalsCard } from "@/components/month-closing";
 import { GesamtAuswertungMatrix } from "@/components/gesamt-auswertung-matrix";
+// PDF-Export wird zurückgestellt — Dialog + Handler bleiben im Code (unsichtbar).
 import { StatementExportDialog } from "@/components/statement-export-dialog";
 import { downloadLohnnachweiseAsZip } from "@/lib/pdf-zip-export";
+import { ExportPopoverButton } from "@/components/export-auswahl-card";
+import type { MatrixBalance, MatrixRecalc } from "@/components/gesamt-auswertung-matrix";
 
 function formatEur(n: number): string {
   return n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
@@ -120,18 +123,15 @@ function AuswertungenHeader({
   onSelectAssistant,
   view,
   onView,
-  exportDisabled,
-  exportTitle,
-  onExport,
-  zipExportDisabled,
-  zipExportTitle,
-  onZipExport,
-  zipProgress,
   month,
   year,
   onMonthSelect,
   onPrevMonth,
   onNextMonth,
+  exportBalances,
+  exportRecalcByUser,
+  exportPrevMonthLabel,
+  exportDisabled,
 }: {
   isAdmin: boolean;
   assistants: Assistant[];
@@ -139,18 +139,15 @@ function AuswertungenHeader({
   onSelectAssistant: (v: number | "all") => void;
   view: AuswertungView;
   onView: (v: AuswertungView) => void;
-  exportDisabled: boolean;
-  exportTitle?: string;
-  onExport: () => void;
-  zipExportDisabled: boolean;
-  zipExportTitle?: string;
-  onZipExport: () => void;
-  zipProgress: { done: number; total: number } | null;
   month: number;
   year: number;
   onMonthSelect: (month: number, year: number) => void;
   onPrevMonth: () => void;
   onNextMonth: () => void;
+  exportBalances: MatrixBalance[];
+  exportRecalcByUser?: Map<number, MatrixRecalc>;
+  exportPrevMonthLabel?: string;
+  exportDisabled?: boolean;
 }) {
   const { selectedTeamId } = useTeam();
   const personColors = useMemo(
@@ -164,7 +161,7 @@ function AuswertungenHeader({
     selectedTeamId ?? "none",
     `${month}/${year}`,
   ].join("|");
-  const { measureRef, tier } = useHeaderTier(contentKey, [view, exportDisabled].join("|"));
+  const { measureRef, tier } = useHeaderTier(contentKey, view);
   const showLabels = tier === "labels";
   const stacked = tier === "stack";
 
@@ -188,13 +185,13 @@ function AuswertungenHeader({
             : "h-9 w-auto min-w-[7.5rem] max-w-[190px] shrink gap-2 truncate"
         }
         data-testid="assistant-select"
-        aria-label="Assistent filtern"
+        aria-label="Assistenzkraft filtern"
       >
-        <SelectValue placeholder="Alle Assistenten" />
+        <SelectValue placeholder="Alle Assistenzkräfte" />
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="all" data-testid="assistant-option-all">
-          Alle Assistenten
+          Alle Assistenzkräfte
         </SelectItem>
         {assistants.map((a) => (
           <SelectItem key={a.id} value={String(a.id)} data-testid={`assistant-option-${a.id}`}>
@@ -220,47 +217,21 @@ function AuswertungenHeader({
       showLabels={showLabels}
       options={[
         { value: "matrix", label: "Übersicht", icon: Table2 },
-        { value: "cards", label: "Karten", icon: LayoutGrid },
       ]}
     />
   );
 
-  const exportButton = (
-    <Button
-      variant="outline"
-      size="sm"
-      className={showLabels ? "gap-1.5" : `h-9 shrink-0 px-0 ${stacked ? "w-8" : "w-9"}`}
-      onClick={onExport}
+  const exportButton = isAdmin && (
+    <ExportPopoverButton
+      showLabels={showLabels}
+      stacked={stacked}
+      balances={exportBalances}
+      recalcByUser={exportRecalcByUser}
+      prevMonthLabel={exportPrevMonthLabel}
+      month={month}
+      year={year}
       disabled={exportDisabled}
-      title={exportTitle ?? "Stundennachweis als PDF exportieren"}
-      aria-label="PDF Export"
-      data-testid="export-pdf-button"
-    >
-      <Download className="h-4 w-4" />
-      {showLabels && <span>PDF Export</span>}
-    </Button>
-  );
-
-  const zipLabel = zipProgress
-    ? `${zipProgress.done} von ${zipProgress.total} PDFs…`
-    : showLabels
-    ? "ZIP Export"
-    : undefined;
-
-  const zipButton = (
-    <Button
-      variant="outline"
-      size="sm"
-      className={showLabels ? "gap-1.5" : `h-9 shrink-0 px-0 ${stacked ? "w-8" : "w-9"}`}
-      onClick={onZipExport}
-      disabled={zipExportDisabled}
-      title={zipExportTitle ?? "Alle Lohnnachweise als ZIP herunterladen"}
-      aria-label="ZIP Export"
-      data-testid="export-zip-button"
-    >
-      <Archive className="h-4 w-4" />
-      {zipLabel && <span className="whitespace-nowrap">{zipLabel}</span>}
-    </Button>
+    />
   );
 
   return (
@@ -280,7 +251,6 @@ function AuswertungenHeader({
         <>
           {viewToggle}
           {exportButton}
-          {zipButton}
         </>
       }
     />
@@ -414,24 +384,20 @@ export default function Auswertungen() {
         onSelectAssistant={setSelectedAssistant}
         view={view}
         onView={setView}
-        exportDisabled={!canPayrollExport || isLoading || !visibleBalances || visibleBalances.length === 0}
-        exportTitle={canPayrollExport ? undefined : PLAN_FEATURE_MESSAGES.payrollExport}
-        onExport={() => setExportOpen(true)}
-        zipExportDisabled={
-          !canPayrollExport ||
-          isLoading ||
-          !Array.isArray(balances) ||
-          balances.length === 0 ||
-          isZipExporting
-        }
-        zipExportTitle={canPayrollExport ? undefined : PLAN_FEATURE_MESSAGES.payrollExport}
-        onZipExport={handleZipExport}
-        zipProgress={zipProgress}
         month={month}
         year={year}
         onMonthSelect={(m, y) => setCurrentDate(new Date(y, m - 1, 1))}
         onPrevMonth={prevMonth}
         onNextMonth={nextMonth}
+        exportBalances={Array.isArray(visibleBalances) ? visibleBalances : []}
+        exportRecalcByUser={recalcByUser}
+        exportPrevMonthLabel={prevOfShownLabel}
+        exportDisabled={
+          !canPayrollExport ||
+          isLoading ||
+          !Array.isArray(visibleBalances) ||
+          visibleBalances.length === 0
+        }
       />
 
       {/* Transparenz: Entwürfe/Vorschläge bleiben im Dienstplan sichtbar,
@@ -469,6 +435,7 @@ export default function Auswertungen() {
               assistantFilter={selectedAssistant}
             />
           )}
+          {/* Export via Header-Popover (ExportPopoverButton in AuswertungenHeader) */}
         </div>
       )}
 
@@ -507,7 +474,6 @@ export default function Auswertungen() {
               recalcByUser={recalcByUser}
               prevMonthLabel={prevOfShownLabel}
               onSelectAssistant={setSelectedAssistant}
-              canExportCsv={canPayrollExport}
               month={month}
               year={year}
             />

@@ -141,7 +141,7 @@ export function BulkDeleteDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Assistent</Label>
+            <Label>Assistenzkraft</Label>
             <Select
               value={userId === "all" ? "all" : String(userId)}
               onValueChange={(v) => setUserId(v === "all" ? "all" : Number(v))}
@@ -150,7 +150,7 @@ export function BulkDeleteDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Alle Assistenten</SelectItem>
+                <SelectItem value="all">Alle Assistenzkräfte</SelectItem>
                 {assistants.map((a) => (
                   <SelectItem key={a.id} value={String(a.id)}>
                     {a.name}

@@ -23,3 +23,17 @@ id = "K9rp504CwAm3tCEH9MTYE"
 uri = "file://exports/dienstplan-app-quellcode.zip"
 type = "unspecified"
 title = "Dienstplan-App Quellcode (ZIP für die Agentur)"
+
+[[outputs]]
+id = "KShnz94-6tEtv2okX_IEs"
+uri = "file://docs/features/teamleiter-konzept.md"
+type = "text"
+title = "Teamleiter-Konzept"
+description = "Feature-Konzept: Teamleiter-Konten – Berechtigungsmatrix, offene Fragen und Aufwandsschätzung"
+
+[[outputs]]
+id = "C-YujG9oOwHJFb2ESGBsA"
+uri = "file://artifacts/dienstplan/public/handbuch.pdf"
+type = "pdf"
+title = "Handbuch – AssistenzPlaner (aktualisiert)"
+description = "Alle 11 Kapitel als PDF, jetzt inkl. neuem Abschnitt 'Assistenzkraft-Farben' im Kapitel Einstellungen."

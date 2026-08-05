@@ -237,7 +237,7 @@ test.describe("Downgrade auf Free: Bestandsdaten bleiben im UI sichtbar", () => 
     await adoptSession(page, acc);
 
     await page.goto("/assistenten");
-    await expect(page.getByRole("heading", { name: "Assistenten" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Assistenzkräfte" })).toBeVisible();
 
     for (let i = 0; i < assistantIds.length; i++) {
       await expect(

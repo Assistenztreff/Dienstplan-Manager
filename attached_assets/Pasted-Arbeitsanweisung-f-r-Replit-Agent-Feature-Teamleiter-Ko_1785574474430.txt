@@ -1,0 +1,84 @@
+Arbeitsanweisung für Replit-Agent: Feature „Teamleiter-Konten”
+Erstellt: 01. August 2026
+Geschätzter Aufwand: 3–5 Tage (+ Tests), da Team-Infrastruktur größtenteils schon existiert 
+
+1. Ziel in einem Satz
+Einzelne Personen sollen volle Verwaltungsrechte für ein oder mehrere bestimmte Teams bekommen können – über ihren eigenen, separaten Account, ohne globalen Admin-Zugriff auf alle Teams des Kontos.
+
+2. Grundprinzip (bitte genau so umsetzen)
+Wir bauen keine vier verschiedenen Rollen und keinen neuen Account-Typ. Stattdessen ein einziges, generisches Muster:
+	•	Jede Person hat immer einen eigenen Account mit eigenem Login. Es gibt keine geteilten Zugänge zu einem Konto (weder beim Assistenznehmer noch beim Dienstleister). Grund: Nachvollziehbarkeit, wer welche Änderung gemacht hat, und die Möglichkeit, Zugriff einzeln zu entziehen.
+	•	Rechte ergeben sich ausschließlich aus der Team-Mitgliedschaft und einem Rollen-Flag pro Team – nicht aus dem Account-Typ.
+	•	Es gibt genau zwei Stufen pro Team-Mitgliedschaft:
+	•	Team-Admin / Teamleiter = Verwaltungszugriff auf genau dieses Team (wie der heutige Admin, aber teambeschränkt)
+	•	Mitglied = wie heute
+	•	Dazu ein einziges Zusatzrecht pro Mitgliedschaft: can_view_payroll (Sichtbarkeit von Lohn- und sensiblen Personaldaten, Details in Abschnitt 4). Mehr Rechtestufen gibt es bewusst nicht. (nur eigene Dienste sehen etc.)
+So bilden sich die beiden Anwendungsfälle darauf ab
+Privatperson / Arbeitgebermodell:
+	•	Der Assistenznehmer ist Team-Admin seines eigenen (einen) Teams → volle Rechte.
+	•	Möchte er, dass eine Assistenzkraft an seiner Stelle plant, bekommt diese Assistenzkraft über ihren eigenen zweiten Account ebenfalls den Teamleiter-Status für genau dieses eine Team. Beide arbeiten dann parallel am selben Dienstplan.
+Gewerblicher Assistenzdienst:
+	•	Ein Teamleiter bekommt einen normalen Account und wird vom Dienstleister-Admin einem oder mehreren Teams als Teamleiter zugewiesen (Beispiel: 20 Teams, 5 Teamleiter → jeder Teamleiter bekommt seine z. B. 4–5 Teams).
+	•	Beim Login sieht der Teamleiter nur seine zugewiesenen Teams im Team-Switcher und hat dort vollen Zugriff.
+
+3. Konkrete technische Umsetzung
+Bitte zuerst prüfen, was schon existiert, und nur das Fehlende ergänzen (nicht neu bauen). Erwartete Änderungen:
+	1.	Datenbank: Zwei Spalten in der Team-Mitgliedschaftstabelle (team_memberships o. ä.): is_teamleiter (Boolean, Default false) und can_view_payroll (Boolean, Default false; beim Zuweisen durch einen Dienstleister-Admin standardmäßig auf true gesetzt). Migration schreiben, bestehende Daten nicht verändern.
+	2.	Backend: Middleware-/Prüf-Variante „Admin-Rechte, aber nur für die Teams, in denen die Person is_teamleiter = true ist”. Alle team-bezogenen Routen müssen diese Prüfung anwenden – nicht nur die offensichtlichen. Ein Teamleiter darf per API oder manipulierter URL niemals auf ein Team zugreifen, das ihm nicht zugewiesen ist.
+	3.	Admin-UI: Im bestehenden Mitglieder-/Team-Verwaltungsbereich zwei Toggles pro Person und Team: „Als Teamleiter festlegen” und „Darf Lohn- und Personaldaten sehen”. Der Dienstleister-Admin kann so einer Person mehrere Teams als Teamleiter zuweisen; der Assistenznehmer im Privat-Account nutzt dieselben Toggles für sein eines Team.
+	4.	Frontend Team-Switcher: Für Teamleiter nur die zugewiesenen Teams anzeigen; für den Dienstleister-Admin unverändert alle Teams.
+
+3. Konkrete technische Umsetzung
+Bitte zuerst prüfen, was schon existiert, und nur das Fehlende ergänzen (nicht neu bauen). Erwartete Änderungen:
+	1.	Datenbank: Zwei Spalten in der Team-Mitgliedschaftstabelle (team_memberships o. ä.): is_teamleiter (Boolean, Default false) und can_view_payroll (Boolean, Default false; beim Zuweisen durch einen Dienstleister-Admin standardmäßig auf true gesetzt). Migration schreiben, bestehende Daten nicht verändern.
+	2.	Backend: Middleware-/Prüf-Variante „Admin-Rechte, aber nur für die Teams, in denen die Person is_teamleiter = true ist”. Alle team-bezogenen Routen müssen diese Prüfung anwenden – nicht nur die offensichtlichen. Ein Teamleiter darf per API oder manipulierter URL niemals auf ein Team zugreifen, das ihm nicht zugewiesen ist.
+	3.	Admin-UI: Im bestehenden Mitglieder-/Team-Verwaltungsbereich zwei Toggles pro Person und Team: „Als Teamleiter festlegen” und „Darf Lohn- und Personaldaten sehen”. Der Dienstleister-Admin kann so einer Person mehrere Teams als Teamleiter zuweisen; der Assistenznehmer im Privat-Account nutzt dieselben Toggles für sein eines Team.
+	4.	Frontend Team-Switcher: Für Teamleiter nur die zugewiesenen Teams anzeigen; für den Dienstleister-Admin unverändert alle Teams.
+
+3. Konkrete technische Umsetzung
+Bitte zuerst prüfen, was schon existiert, und nur das Fehlende ergänzen (nicht neu bauen). Erwartete Änderungen:
+	1.	Datenbank: Zwei Spalten in der Team-Mitgliedschaftstabelle (team_memberships o. ä.): is_teamleiter (Boolean, Default false) und can_view_payroll (Boolean, Default false; beim Zuweisen durch einen Dienstleister-Admin standardmäßig auf true gesetzt). Migration schreiben, bestehende Daten nicht verändern.
+	2.	Backend: Middleware-/Prüf-Variante „Admin-Rechte, aber nur für die Teams, in denen die Person is_teamleiter = true ist”. Alle team-bezogenen Routen müssen diese Prüfung anwenden – nicht nur die offensichtlichen. Ein Teamleiter darf per API oder manipulierter URL niemals auf ein Team zugreifen, das ihm nicht zugewiesen ist.
+	3.	Admin-UI: Im bestehenden Mitglieder-/Team-Verwaltungsbereich zwei Toggles pro Person und Team: „Als Teamleiter festlegen” und „Darf Lohn- und Personaldaten sehen”. Der Dienstleister-Admin kann so einer Person mehrere Teams als Teamleiter zuweisen; der Assistenznehmer im Privat-Account nutzt dieselben Toggles für sein eines Team.
+
+4. Wichtige Design-Entscheidungen
+	•	Keine geteilten Logins – siehe oben. Auch nicht als „einfachere” Variante mit gemeinsamem Dienstleister-Passwort. Jeder Teamleiter hat einen eigenen Account.
+	•	Lohn- und sensible Personaldaten (final entschieden – zwei getrennte Rechte): Das Recht, den Dienstplan zu verwalten, und das Recht, Lohn-/Personaldaten zu sehen, werden getrennt. Dafür bekommt die Team-Mitgliedschaft zusätzlich zum Teamleiter-Flag ein Boolean-Feld can_view_payroll:
+	•	Gewerblicher Assistenzdienst: can_view_payroll ist bei Teamleitern standardmäßig an – voller Zugriff wie das Dienstleister-Hauptkonto, inklusive Lohn-/Abrechnungsdaten und Dokumente, nur teambeschränkt.
+Fachlicher Hintergrund: Teamleiter haben in der Praxis ohnehin die kompletten Lohnunterlagen ihrer Teams, die sie an das Lohnbüro weiterleiten; bei interner Lohnabrechnung greifen die Lohnbuchhalter für die Gesamtabrechnung auf alle Daten zu.
+	•	Privatpersonen-Account (Arbeitgebermodell): Weist der Assistenznehmer einer Assistenzkraft aus seinem Team den Teamleiter-Status zu, ist can_view_payroll standardmäßig aus. Die Assistenzkraft kann dann planen (Schichten, Zeiterfassung, Mitglieder), sieht aber von den anderen Assistenzkräften keine Lohn- und datenschutzrelevanten Personaldaten. Der Assistenznehmer kann den Schalter bewusst einschalten, wenn er vollen Einblick geben will.
+	•	Was ohne can_view_payroll verborgen sein muss (serverseitig, nicht nur im Frontend ausgeblendet!):
+	•	Stundenlöhne, Zuschläge, Vergütungs-/Abrechnungsauswertungen anderer Teammitglieder
+	•	Im Tab „Assistenten”/Mitgliederprofil: Sozialversicherungsnummer, Steuer-ID, Krankenkasse, Stundenlohn, Bankverbindung und vergleichbare Personaldaten
+	•	Dokumente/Verträge der Assistenzkräfte
+	•	Die eigenen Daten und Auswertungen darf die Person weiterhin sehen (wie jedes normale Mitglied heute).
+	•	Globale Konto-Einstellungen: Ein Teamleiter (egal welcher Kontext) hat keinen Zugriff auf die globalen Einstellungen des Kontos (Kontoprofil, Abo/Zahlungsdaten, kontoweite Einstellungen, Anlegen/Löschen von Teams). Diese Bereiche sind für Teamleiter gar nicht erreichbar – weder in der Navigation noch per direktem API-Aufruf. Teamleiter-Rechte gelten ausschließlich innerhalb der zugewiesenen Teams.
+⚠️ Wichtig für die Umsetzung: Die Filterung sensibler Felder muss im Backend passieren (Felder aus den API-Antworten entfernen), nicht nur per ausgeblendeter UI – sonst sind die Daten über die API weiterhin abrufbar.
+	•	Rechteentzug: Wird is_teamleiter entfernt oder die Person aus dem Team genommen, muss der Zugriff sofort greifen (spätestens beim nächsten Request), nicht erst nach erneutem Login.
+
+5. E2E-Tests (Pflicht – zum Gegentesten, da kein manuelles Code-Review erfolgt)
+Zeitpunkt: Diese Tests werden erst nach Abschluss der gesamten Umsetzung als eigener Block geschrieben und gefahren – nicht parallel zur Entwicklung (siehe Punkt 7). Die Abnahme der Ergebnisse erfolgt gemeinsam mit dem Auftraggeber.
+Bitte End-to-End-Tests schreiben, die nicht nur den Happy Path, sondern gezielt die Sicherheits-Grenzfälle prüfen:
+	1.	Team-Isolation: Teamleiter A ist Team 1+2 zugewiesen. Test: A kann Team 3 (nicht zugewiesen) nicht sehen/bearbeiten – auch nicht über direkte API-Aufrufe oder manipulierte IDs/URLs.
+	2.	Voller Zugriff im eigenen Team: A kann in Team 1 Dienste anlegen/ändern/löschen, Zeiterfassungen bestätigen und Mitglieder verwalten.
+	3.	Team-Switcher-Filter: A sieht im Switcher nur Team 1+2, nicht alle Teams des Dienstleisters.
+	4.	Lohndaten-Sichtbarkeit (beide Richtungen):
+a) Teamleiter mit can_view_payroll sieht Lohn-/Abrechnungsdaten seiner zugewiesenen Teams – und von nicht zugewiesenen Teams nichts.
+b) Teamleiter ohne can_view_payroll (Privat-Fall): kann planen, aber Stundenlöhne, Auswertungen, SV-Nummer, Steuer-ID, Krankenkasse, Bankdaten und Dokumente der anderen Mitglieder sind weder in der UI sichtbar noch in den API-Antworten enthalten (direkten API-Aufruf testen!). Eigene Daten bleiben sichtbar.
+c) Globale Einstellungen: Teamleiter erreicht Konto-/Abo-/kontoweite Einstellungsseiten nicht und entsprechende API-Aufrufe werden abgelehnt.
+	5.	Sofortiger Rechteentzug: Nach Entfernen des Teamleiter-Status verliert A den Zugriff auf das betroffene Team beim nächsten Request.
+	6.	Assistenznehmer-Fall: Ein Assistenznehmer als Teamleiter seines eigenen Teams hat volle Rechte; eine zusätzlich berechtigte Assistenzkraft (eigener zweiter Account) kann denselben Dienstplan bearbeiten.
+Erwartete Lieferung nach den Tests: Eine kurze, lesbare Liste der geprüften Zugriffsszenarien mit Ergebnis (z. B. „Teamleiter A kann Team von Teamleiter B nicht sehen — bestanden”), damit die Absicherung auch ohne Programmierkenntnisse nachvollziehbar ist.
+
+6. Scope-Begrenzung (bitte NICHT bauen, um Aufwand/Kosten zu sparen)
+	•	Keine neuen Account-Typen.
+	•	Keine mehrstufige Rechtematrix mit 4+ Rollen – nur Teamleiter-Flag plus can_view_payroll.
+	•	Keine geteilten Logins / kein gemeinsamer Dienstleister-Zugang mit Team-Auswahl als Ersatz für echte Accounts.
+	•	Kein Umbau der bestehenden Team-Scoping-Logik, wenn sie bereits funktioniert – nur ergänzen.
+
+7. Vorgehen
+	1.	Kurz zurückmelden, was von Punkt 3 im Code schon existiert und was wirklich neu gebaut werden muss.
+	2.	Umsetzen (Lohndaten-Regelung ist final entschieden, siehe Punkt 4: gewerblich standardmäßig voller Zugriff, privat standardmäßig eingeschränkt über can_view_payroll – keine Rückfrage mehr nötig).
+	3.	Tests ruhen während der Umsetzung: Während der Implementierungsphase keine E2E-Tests schreiben oder fahren und keine Zeit in Testreparaturen stecken. Die Tests aus Punkt 5 sind ein eigener, abschließender Arbeitsblock. (Die schnellen automatischen Selbstchecks des Agents nach einem Task – „funktioniert die App noch?” – sind davon ausgenommen und dürfen weiterlaufen.)
+Dauerhaft verankern: Bitte folgende Regel in die replit.md des Projekts aufnehmen, damit sie über alle Tasks hinweg gilt: „Während der Implementierung keine E2E-Testsuiten schreiben oder fahren; umfassende E2E-Tests nur als eigener Abschlussblock auf ausdrückliche Aufforderung des Auftraggebers.”
+	4.	Gemeinsame Abnahme am Ende: Erst wenn die Umsetzung vollständig ist, die E2E-Tests aus Punkt 5 komplett schreiben, fahren und die Szenario-Liste vorlegen. Diese Liste wird dann gemeinsam mit dem Auftraggeber Schritt für Schritt durchgegangen (bewusst in einer eigenen Session mit frischem Kopf, nicht am Ende eines langen Arbeitstags). Erst nach dieser gemeinsamen Abnahme gilt das Feature als fertig.

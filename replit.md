@@ -3,6 +3,9 @@
 Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermodell.
 
 ## User preferences
+- **Geschlechtsneutrales Wording (verbindlich)**: Nie „Assistent"/„Assistenten" in nutzersichtbaren Texten. Singular = „Assistenzkraft" (feminin: die/eine/keine Assistenzkraft), Plural = „Assistenzkräfte". Gilt für UI, Toasts, Fehlermeldungen, PDFs, Handbuch und E-Mails; Code-Bezeichner, Routen (`/assistenten`), Rollenwerte (`assistant`) und data-testids bleiben unverändert.
+
+- **DESIGN-GUIDELINES.md** (Repo-Root) ist die verbindliche Quelle für Tonalität, feste Begriffe, UI-Textregeln und das Barrierefreiheits-Farbsystem. Bei jeder Aufgabe mit sichtbaren Texten oder UI-Elementen ZUERST dort nachschlagen, bevor Text oder Farben festgelegt werden. Die Datei muss noch vom Auftraggeber befüllt werden — bis dahin gilt die bestehende Memory-Notiz `accessible-color-system.md` für Farbentscheidungen.
 
 - **Kosteneffizient & ressourcenschonend arbeiten** — Kosten-/Zeitverbrauch ist dem Auftraggeber genauso wichtig wie fertiger Code:
   - Größere Änderungen erst kurz skizzieren und bestätigen lassen (Plan-/Discuss-Modus), dann bauen; kleine, klar abgegrenzte Schritte statt mehrerer Features gleichzeitig.
@@ -11,11 +14,6 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
   - **Meldepflicht** (gut sichtbar, z. B. „⚠️ Kostenwarnung:" / „🛑 Blockiert:"): Check schlägt ≥3× fehl; ein Vorgang läuft ungewöhnlich lange/teuer; ineffiziente Stellen im Code (doppelte API-Calls, überflüssige Rebuilds, unnötig große Abfragen) auch außerhalb der aktuellen Aufgabe; unklare Anforderungen lieber einmal nachfragen statt mehrfach raten.
   - Am Sessionende: kurze Zusammenfassung (was gemacht, wie viele Anläufe, Probleme).
   - Keine automatischen Deployments ohne Rückfrage; keine Komplettüberarbeitung, wenn ein gezielter Fix reicht.
-
-## Design & Sprache
-
-- Für Tonalität, feste Begriffe, UI-Textregeln (Buttons, Fehlermeldungen, leere Zustände) und das Barrierefreiheits-Farbsystem gilt verbindlich `DESIGN-GUIDELINES.md` im Repo-Root. Bei jeder Aufgabe mit sichtbaren Texten oder UI-Elementen zuerst dort nachschlagen.
-- Personen-/Statusfarben AUSSCHLIESSLICH über `getBarrierefreieFarbe()` beziehen — nie neue Farbwerte hart codieren (WCAG-AA-Kontrast ist dort bereits geprüft).
 
 ## Stack & Betrieb
 
@@ -30,6 +28,7 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
 ## Produktregeln
 
 - **Rollen**: `admin` (Assistenznehmer, Vollzugriff), `assistant` (nur eigene Daten), `superadmin` (Betreiber; NUR per DB/Skript, nie über Registrierung; nutzt App wie Admin via `isAdminLikeRole`, plus Operator-Dashboard). `requireDienstleister` bleibt an `account_type` gebunden.
+- **Teamleiter (geplant, noch nicht implementiert)**: Team-scoped Admin-Rechte ohne globalen Admin-Zugriff. Umsetzungskonzept: neue Spalte `is_teamleiter` in `team_memberships`; Teamleiter sieht im Team-Switcher nur zugewiesene Teams und hat dort vollen Zugriff. Zwei Kontexte: Privat = Assistenznehmer immer voll + optionale Assistenzkraft mit Teamleiterrechten; Dienstleister = Unternehmens-Teamleiter (voll, 1–n Teams) + Assistenznehmer/Assistenzkraft mit eingeschränktem Zugriff (Schichten/Zeiterfassung/Mitglieder, keine Lohn-/Vertragsdaten). Aufwand ca. 3–5 Tage. Konzeptdokument: `docs/features/teamleiter-konzept.md`.
 - **Konto-Typ** (`users.account_type`: `privat` | `dienstleister`): bei Registrierung fixiert, danach NICHT im UI änderbar. Privat = ein Assistenznehmer; Dienstleister = mehrere Teams.
 - **Planungsstatus** (Monatskalender): VORLAEUFIG / ANGEBOTEN / FIX. DB-Default FIX, neue Schichten im Dialog aber VORLAEUFIG (bewusst entkoppelt). **Nur FIX-Schichten zählen** in Auswertungen und PDF. Abwesenheiten Default FIX. Bestätigen einzeln oder monatsweise (PATCH `planningStatus: FIX` + `force: true`).
 - **Schichtmodelle** (`shift_models`) tragen selbst Standard-Zeiten + `default_weekdays` (1–7, Mo=1) — keine separaten Arbeitszeit-Vorlagen. Dialog füllt Zeiten vor; Bulk-Anlage gleicht Wochentage nur als Hinweis ab, Anlegen an „unpassenden" Tagen bleibt erlaubt. „+ Neuen Dienst" für Free UND Premium sichtbar (Limit greift erst beim Speichern).
@@ -108,6 +107,7 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
 
 ## Tests
 
+- **E2E-Tests während Implementierung: NICHT schreiben oder fahren.** Umfassende E2E-Tests werden nur als eigener Abschlussblock auf ausdrückliche Aufforderung des Auftraggebers erstellt und gefahren. Die schnellen automatischen Selbstchecks des Agents nach einem Task dürfen weiterlaufen.
 - `pnpm run typecheck` prüft auch `e2e/**/*` + `playwright.config.ts` (`tsconfig.e2e.json`) — Typfehler in Specs fallen sofort auf.
 - **Merge-Validierung** bei jedem Task-Abschluss (Kommandos laufen PARALLEL, Gesamt ≈ 7 min): `typecheck` + `unit` (Vitest dienstplan + db + api-server `test:unit`, alles DB-frei) + `e2e` (SERIELLE Kette, da alle die `_test`-DB bzw. denselben Postgres-Server teilen: api-server `test:db` = Retention-Test → scripts `test:db` = migrate-prod-Frisch-DB-Test (Wegwerf-DB `mpfresh_*`) → `test:e2e:api` = alle `*-api.spec.ts` → `test:e2e:smoke` = kuratiertes UI-Smoke-Subset aus `e2e/smoke-specs.txt`). Rote Specs/Unit-Tests blockieren den Merge. Smoke-Liste erweitern: eine Spec-Datei pro Zeile in `smoke-specs.txt`.
 - **Gestaffelte E2E-Kette** (Task #636): Das `e2e`-Validierungskommando läuft über `pnpm --filter @workspace/scripts run scoped-e2e` — es ermittelt per git (merge-base zu `main-repl/main`/`origin/main` + Arbeitsbaum) die geänderten Dateien und startet nur die betroffenen Blöcke. Kategorien (Regeln zentral in `scripts/src/lib/validation-scope.ts`, Tests daneben): **docs** (nur `*.md`, `.agents/**`, `.local/**`, `attached_assets/**`) = kein E2E-Block; **frontend** (nur `artifacts/dienstplan/src|public|index.html`, `artifacts/mockup-sandbox/**` ohne Build-Dateien) = nur `test:e2e:smoke`; **alles andere** (api-server, `lib/**`, `scripts/**`, e2e-Specs, Configs, Lockfiles, unbekannte Pfade, leerer/unklarer Diff) = volle Kette. Gemischte Änderungen eskalieren auf die strengste Kategorie. Typecheck/Unit/Handbuch-Screenshot-Check laufen immer. Debug: `-- --dry-run`, `VALIDATION_SCOPE=docs|frontend|full`, `VALIDATION_DIFF_BASE=<ref>`.

@@ -41,7 +41,7 @@ router.post("/users/:id/invite", requireAdmin, requirePlanFeature("caregiverLogi
     return;
   }
   if (user.role !== "assistant") {
-    res.status(400).json({ error: "Einladungen nur für Assistenten möglich" });
+    res.status(400).json({ error: "Einladungen nur für Assistenzkräfte möglich" });
     return;
   }
   if (!user.isActive) {
@@ -70,7 +70,7 @@ router.post("/users/:id/invite", requireAdmin, requirePlanFeature("caregiverLogi
     inviteUrl,
     token,
     expiresIn: "48 Stunden",
-    note: "Dieser Link ist temporär und dient zur ersten Anmeldung des Assistenten.",
+    note: "Dieser Link ist temporär und dient zur ersten Anmeldung der Assistenzkraft.",
   });
 });
 

@@ -76,6 +76,7 @@ import type {
   Team,
   TeamInput,
   TeamMember,
+  TeamMemberFlagsInput,
   TeamMemberInput,
   TeamMemberMoveInput,
   TeamUpdate,
@@ -2042,6 +2043,81 @@ export const useAddTeamMember = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getAddTeamMemberMutationOptions(options));
+    }
+
+export const getUpdateTeamMemberFlagsUrl = (id: number,
+    userId: number,) => {
+
+
+
+
+  return `/api/teams/${id}/members/${userId}`
+}
+
+/**
+ * Setzt isTeamleiter und/oder canViewPayroll für ein Team-Mitglied. Nur Konto-Admins (Eigentümer) dürfen diese Flags ändern.
+ * @summary Teamleiter-Flag und Lohndaten-Sichtbarkeit setzen
+ */
+export const updateTeamMemberFlags = async (id: number,
+    userId: number,
+    teamMemberFlagsInput: TeamMemberFlagsInput, options?: RequestInit): Promise<TeamMember> => {
+
+  return customFetch<TeamMember>(getUpdateTeamMemberFlagsUrl(id,userId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      teamMemberFlagsInput,)
+  }
+);}
+
+
+
+
+export const getUpdateTeamMemberFlagsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTeamMemberFlags>>, TError,{id: number;userId: number;data: BodyType<TeamMemberFlagsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateTeamMemberFlags>>, TError,{id: number;userId: number;data: BodyType<TeamMemberFlagsInput>}, TContext> => {
+
+const mutationKey = ['updateTeamMemberFlags'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateTeamMemberFlags>>, {id: number;userId: number;data: BodyType<TeamMemberFlagsInput>}> = (props) => {
+          const {id,userId,data} = props ?? {};
+
+          return  updateTeamMemberFlags(id,userId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateTeamMemberFlagsMutationResult = NonNullable<Awaited<ReturnType<typeof updateTeamMemberFlags>>>
+    export type UpdateTeamMemberFlagsMutationBody = BodyType<TeamMemberFlagsInput>
+    export type UpdateTeamMemberFlagsMutationError = ErrorType<void>
+
+    /**
+ * @summary Teamleiter-Flag und Lohndaten-Sichtbarkeit setzen
+ */
+export const useUpdateTeamMemberFlags = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTeamMemberFlags>>, TError,{id: number;userId: number;data: BodyType<TeamMemberFlagsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateTeamMemberFlags>>,
+        TError,
+        {id: number;userId: number;data: BodyType<TeamMemberFlagsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateTeamMemberFlagsMutationOptions(options));
     }
 
 export const getRemoveTeamMemberUrl = (id: number,

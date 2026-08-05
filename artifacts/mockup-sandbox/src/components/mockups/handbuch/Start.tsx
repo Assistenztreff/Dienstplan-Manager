@@ -75,7 +75,7 @@ export function Start() {
                 ["Wie funktioniert die Zeiterfassung?", handbuchUrl("Mobil")],
                 ["Zuschläge für Nacht- und Sonntagsarbeit", handbuchUrl("ArtikelEinstellungen")],
                 ["Krankmeldung und Ersatz finden", handbuchUrl("ArtikelAbwesenheiten")],
-                ["Neuen Assistenten einladen", handbuchUrl("ArtikelAssistenten")],
+                ["Neue Assistenzkraft einladen", handbuchUrl("ArtikelAssistenten")],
                 ["Stundennachweis als PDF exportieren", handbuchUrl("ArtikelAuswertungen")],
               ] as [string, string][]).map(([topic, href], idx) => (
                 <a key={idx} href={href} className="flex items-start gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:border-[var(--color-brand-cyan)] hover:shadow-md transition-all handbuch-focus group">

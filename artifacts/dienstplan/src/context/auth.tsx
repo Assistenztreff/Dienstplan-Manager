@@ -8,6 +8,16 @@ export type AuthUser = {
   accountType: "privat" | "dienstleister";
   /** SaaS-Abo-Stufe. "free" = abgespeckte Gratis-Version, "premium" = voller Funktionsumfang. */
   plan: "free" | "premium";
+  /**
+   * true wenn der Nutzer in mindestens einem Team als Teamleiter eingetragen ist.
+   * Wird vom Server mitgeliefert; undefined = alter Token vor dem Feature-Release.
+   */
+  isTeamleiter?: boolean;
+  /**
+   * true wenn der Nutzer in mindestens einem Teamleiter-Team auch canViewPayroll=true hat.
+   * Globales Flag; feingranulare Team-Prüfung erfolgt serverseitig.
+   */
+  canViewPayroll?: boolean;
 };
 
 type AuthContextType = {

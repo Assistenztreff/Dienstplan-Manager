@@ -160,7 +160,7 @@ test.describe("Dienstplan: Kopfzeile bleibt beim Scrollen sichtbar (Mobil 400px)
     // Scroll-Position voll sichtbar bleiben.
     await hamburger.click();
     await expect(fullMenu).toBeInViewport();
-    await expect(fullMenu.getByRole("link", { name: "Dashboard" })).toBeVisible();
+    await expect(fullMenu.getByRole("link", { name: "Start" })).toBeVisible();
 
     // Bei geoeffnetem Menue nach unten scrollen: Das Menue bleibt als
     // fixed-Element vollstaendig im Viewport ...

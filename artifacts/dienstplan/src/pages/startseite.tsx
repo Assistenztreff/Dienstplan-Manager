@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { Calendar, Users, Receipt } from "lucide-react";
 import { PlatformHeaderPlaceholder } from "@/components/layout";
 import tabelleShotUrl from "@/assets/startseite-tabelle-crop.jpg";
 
@@ -147,14 +148,13 @@ export default function Startseite() {
         {/* Zentraler Claim */}
         <section className="mx-auto max-w-4xl px-6 pb-16 pt-14 text-center md:pt-20">
           <h1 className="text-4xl font-extrabold leading-tight text-brand-dark md:text-5xl">
-            Dein Dienstplan. Deine Entscheidung. Dein Team.
+            Dein Dienstplan. Dein Team. Deine Entscheidung.
           </h1>
           <p className="mx-auto mt-6 max-w-3xl text-lg font-normal leading-relaxed text-brand-dark md:text-xl">
-            Mit dem Assistenz Planer behältst du die Kontrolle über deine persönliche
-            Assistenz – ganz gleich, wo du gerade bist. Dienste planen, Ausfälle regeln,
-            Team informieren: alles an einem Ort.
+            Ob Arbeitgebermodell oder Assistenzdienst: Dienste planen, Ausfälle regeln,
+            Stunden und Löhne automatisch auswerten – alles an einem Ort.
           </p>
-          <div className="mt-8 flex justify-center">
+          <div className="mt-8 flex flex-col items-center gap-3">
             <Link
               href="/registrierung"
               className="flex h-12 items-center rounded-full border border-brand-dark bg-brand-dark px-8 text-base font-semibold text-white shadow-md transition-colors hover:bg-brand-yellow hover:text-brand-dark focus-visible:bg-brand-yellow focus-visible:text-brand-dark focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark"
@@ -162,6 +162,82 @@ export default function Startseite() {
             >
               Jetzt kostenlos registrieren
             </Link>
+            <p className="text-sm text-brand-dark/70">
+              Die einfache Dienstplanung ist{" "}
+              <strong className="font-semibold text-brand-dark">dauerhaft kostenlos</strong>{" "}
+              – kein Abo nötig.
+            </p>
+          </div>
+        </section>
+
+        {/* Dreispaltige Feature-Karten — ragt leicht in den Hero-Bereich hinein */}
+        <section className="relative z-10 -mt-4 px-6 pb-4 md:-mt-8">
+          <div className="mx-auto grid max-w-5xl grid-cols-1 gap-5 md:grid-cols-3">
+            {/* Karte 1: Planen */}
+            <div className="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-md">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-assistenz-mint">
+                  <Calendar className="h-5 w-5 text-assistenz-mint-dark" aria-hidden="true" />
+                </span>
+                <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                  Planen
+                </span>
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-brand-dark">
+                  Der ganze Monat auf einen Blick
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                  Dienste anlegen, verschieben und mit einem Klick für den ganzen Monat
+                  bestätigen – in der Tabellenansicht siehst du alle Assistenzkräfte
+                  untereinander.
+                </p>
+              </div>
+            </div>
+
+            {/* Karte 2: Team einbinden */}
+            <div className="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-md">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-assistenz-green">
+                  <Users className="h-5 w-5 text-assistenz-yellow-dark" aria-hidden="true" />
+                </span>
+                <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                  Team einbinden
+                </span>
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-brand-dark">
+                  Eigener Zugang für jede Assistenzkraft
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                  Dein Team meldet sich selbst an – am Handy oder PC – und sieht die eigenen
+                  Dienste immer aktuell. Änderungen kommen sofort an, ganz ohne Gruppenchat
+                  und Zettel.
+                </p>
+              </div>
+            </div>
+
+            {/* Karte 3: Abrechnen */}
+            <div className="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-md">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-assistenz-peach">
+                  <Receipt className="h-5 w-5 text-[#b85c2a]" aria-hidden="true" />
+                </span>
+                <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                  Abrechnen
+                </span>
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-brand-dark">
+                  Stunden und Löhne automatisch ausgewertet
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                  Soll- und Ist-Stunden, Nacht-, Sonntags- und Feiertagszuschläge werden
+                  automatisch berechnet – inklusive PDF-Stundennachweis für Lohnbüro oder
+                  Steuerberater.
+                </p>
+              </div>
+            </div>
           </div>
         </section>
 
