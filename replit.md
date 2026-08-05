@@ -5,6 +5,8 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
 ## User preferences
 - **Geschlechtsneutrales Wording (verbindlich)**: Nie „Assistent"/„Assistenten" in nutzersichtbaren Texten. Singular = „Assistenzkraft" (feminin: die/eine/keine Assistenzkraft), Plural = „Assistenzkräfte". Gilt für UI, Toasts, Fehlermeldungen, PDFs, Handbuch und E-Mails; Code-Bezeichner, Routen (`/assistenten`), Rollenwerte (`assistant`) und data-testids bleiben unverändert.
 
+- **Keine automatischen Screenshots / Handbuch-Updates**: UI-Screenshots (vorher/nachher) und `screenshots:handbuch` nur noch auf ausdrücklichen Befehl des Auftraggebers am Ende einer Aufgabe — nie automatisch nach einer Änderung.
+
 - **DESIGN-GUIDELINES.md** (Repo-Root) ist die verbindliche Quelle für Tonalität, feste Begriffe, UI-Textregeln und das Barrierefreiheits-Farbsystem. Bei jeder Aufgabe mit sichtbaren Texten oder UI-Elementen ZUERST dort nachschlagen, bevor Text oder Farben festgelegt werden. Die Datei muss noch vom Auftraggeber befüllt werden — bis dahin gilt die bestehende Memory-Notiz `accessible-color-system.md` für Farbentscheidungen.
 
 - **Kosteneffizient & ressourcenschonend arbeiten** — Kosten-/Zeitverbrauch ist dem Auftraggeber genauso wichtig wie fertiger Code:
