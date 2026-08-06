@@ -5,6 +5,7 @@ import {
   useListContracts,
   useGetVacationBalance,
   useGetMonthClosings,
+  useListShifts,
 } from "@workspace/api-client-react";
 import type { MonthClosingStatus } from "@workspace/api-client-react";
 import { hasAccess } from "@/lib/entitlements";
@@ -359,6 +360,81 @@ function AssistantVacationCard() {
   );
 }
 
+// Hinweis-Kachel für laufende Abwesenheiten und Krankheitstage des laufenden
+// Monats — gleiches kompaktes Muster wie der Monatsabschluss-Hinweis. Die
+// Shift-Listen sind serverseitig automatisch gescopt (Admin: Team-Scope,
+// Assistenzkraft: eigene Einträge), daher keine zusätzliche Rollenlogik nötig.
+// Erscheint nur, wenn es tatsächlich etwas zu melden gibt.
+function AbsenceReminder() {
+  const [, navigate] = useLocation();
+  const now = new Date();
+  const month = now.getMonth();
+  const year = now.getFullYear();
+  const { data: vacationShifts } = useListShifts({ type: "vacation" });
+  const { data: sickShifts } = useListShifts({ type: "sick" });
+
+  if (!vacationShifts || !sickShifts) return null;
+
+  // Laufende Abwesenheiten: Einträge, die den heutigen Tag einschließen,
+  // gezählt je betroffener Person.
+  const ongoingUserIds = new Set<number>();
+  for (const s of [...vacationShifts, ...sickShifts]) {
+    if (new Date(s.startTime) <= now && now <= new Date(s.endTime)) {
+      ongoingUserIds.add(s.userId);
+    }
+  }
+
+  // Krankheitstage im laufenden Monat: eindeutige Kalendertage aller
+  // Krank-Einträge, die in diesen Monat hineinragen.
+  const sickDayKeys = new Set<string>();
+  for (const s of sickShifts) {
+    const start = new Date(s.startTime);
+    const end = new Date(s.endTime);
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      if (d.getMonth() === month && d.getFullYear() === year) {
+        sickDayKeys.add(d.toISOString().split("T")[0]);
+      }
+    }
+  }
+
+  const ongoing = ongoingUserIds.size;
+  const sickDays = sickDayKeys.size;
+  if (ongoing === 0 && sickDays === 0) return null;
+
+  const monthLabel = format(now, "MMMM", { locale: de });
+  const parts: string[] = [];
+  if (ongoing > 0) {
+    parts.push(`${ongoing} laufende ${ongoing === 1 ? "Abwesenheit" : "Abwesenheiten"}`);
+  }
+  if (sickDays > 0) {
+    parts.push(`${sickDays} ${sickDays === 1 ? "Krankheitstag" : "Krankheitstage"} im ${monthLabel}`);
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => navigate("/abwesenheiten")}
+      className="w-full text-left"
+      data-testid="absence-reminder"
+    >
+      <Card className="border-amber-200 bg-amber-50/40 shadow-sm transition-colors hover:border-amber-300">
+        <CardContent className="flex items-center gap-3 py-4">
+          <CalendarX className="h-5 w-5 text-amber-700 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-amber-900">
+              {parts.join(" · ")}
+            </p>
+            <p className="text-xs text-amber-800/80 mt-0.5">
+              Gemeldete Abwesenheiten und Krankmeldungen im Überblick — direkt zum Abwesenheitskalender.
+            </p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-amber-700 shrink-0" />
+        </CardContent>
+      </Card>
+    </button>
+  );
+}
+
 // Erinnerung an den Monatsabschluss: erscheint für Admins mit Premium
 // (advancedAnalytics), solange der Vormonat noch nicht abgeschlossen ist.
 // Fehler (z. B. 403 nach Downgrade) blenden die Karte einfach aus.
@@ -490,6 +566,8 @@ export default function Dashboard() {
           {isAdmin && hasAccess(currentUser, "advancedAnalytics") && (
             <MonthClosingReminder teamId={selectedTeamId} />
           )}
+
+          <AbsenceReminder />
 
           {!isAdmin && (
             <>

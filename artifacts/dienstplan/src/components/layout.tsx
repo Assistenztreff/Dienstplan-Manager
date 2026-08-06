@@ -1,18 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
-  LayoutDashboard,
-  CalendarDays,
-  Clock,
-  BarChart3,
-  Settings,
   Menu,
   X,
   ChevronDown,
   ShieldCheck,
   LogOut,
   ArrowUp,
-  type LucideIcon,
 } from "lucide-react";
 import platformLogoUrl from "@assets/assistenzplaner-logo-getrimmt.png";
 import { useAuth } from "@/context/auth";
@@ -37,28 +31,31 @@ type NavLeaf = {
   dienstleisterOnly: boolean;
   teamleiterAllowed: boolean;
 };
+// Icons sind Emojis (Icon-Design-Entscheidung icon-design-final.html):
+// Haus=Start, Kalender=Planen, Uhr=Erfassen, Balkendiagramm=Auswerten,
+// Zahnrad=Verwalten — bewusst als Emoji-Zeichen, nicht als Icon-Font/SVG.
 type NavEntry =
-  | (NavLeaf & { icon: LucideIcon })
-  | { label: string; icon: LucideIcon; children: NavLeaf[] };
+  | (NavLeaf & { icon: string })
+  | { label: string; icon: string; children: NavLeaf[] };
 
 const ALL_NAV_ITEMS: NavEntry[] = [
-  { href: "/", label: "Start", icon: LayoutDashboard, adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
+  { href: "/", label: "Start", icon: "🏠", adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
   {
     label: "Planen",
-    icon: CalendarDays,
+    icon: "📅",
     children: [
       { href: "/dienstplan", label: "Dienstplan", adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
       { href: "/abwesenheiten", label: "Abwesenheiten", adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
     ],
   },
-  { href: "/zeiterfassung", label: "Erfassen", icon: Clock, adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
-  { href: "/auswertungen", label: "Auswerten", icon: BarChart3, adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true },
+  { href: "/zeiterfassung", label: "Erfassen", icon: "🕐", adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
+  { href: "/auswertungen", label: "Auswerten", icon: "📊", adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true },
   {
     label: "Verwalten",
-    icon: Settings,
+    icon: "⚙️",
     children: [
       { href: "/assistenten", label: "Assistenzkräfte", adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true },
-      { href: "/team-verwaltung", label: "Team-Verwaltung", adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true },
+      { href: "/team-verwaltung", label: "Team-Verwaltung", adminOnly: true, dienstleisterOnly: true, teamleiterAllowed: true },
       { href: "/einstellungen", label: "Einstellungen", adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
     ],
   },
@@ -431,6 +428,7 @@ function MobileFullMenu({
                       groupActive && !open ? "bg-brand-yellow" : "bg-white hover:bg-brand-yellow"
                     }`}
                   >
+                    <span className="text-xl leading-none" aria-hidden="true">{item.icon}</span>
                     {item.label}
                     <ChevronDown
                       className={`h-5 w-5 transition-transform ${open ? "rotate-180" : ""}`}
@@ -471,6 +469,7 @@ function MobileFullMenu({
                   isActive ? "bg-brand-yellow" : "bg-white hover:bg-brand-yellow"
                 }`}
               >
+                <span className="text-xl leading-none" aria-hidden="true">{item.icon}</span>
                 {item.label}
               </Link>
             );
@@ -674,7 +673,7 @@ function AppSubNavigation() {
                         : "font-medium text-slate-600 hover:bg-slate-200 hover:text-slate-900"
                     }`}
                   >
-                    <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span className="text-base leading-none" aria-hidden="true">{item.icon}</span>
                     <span>{item.label}</span>
                   </span>
                 </Link>

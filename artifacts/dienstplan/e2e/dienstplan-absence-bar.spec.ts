@@ -1,35 +1,31 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
+import { selectDayCell } from "./helpers/shifts";
 
 /**
- * E2E-Test: Mehrtägige Abwesenheiten werden in der Desktop-Tabelle als EIN
- * durchgehender Balken dargestellt — mit Typ-Namen genau einmal (am Anfang),
- * sauberen Start-/End-Kappen und korrekt verbundenen Mittel-Tagen.
+ * E2E-Test: Abwesenheiten erscheinen seit der HANDOFF-Entscheidung (05.08.2026)
+ * NICHT mehr in den Kalenderzellen — weder als Balken im Monatsraster noch als
+ * durchgehende Balken in der Tabellenansicht. Die Zellen zeigen nur noch Dienste.
  *
- * Hintergrund: Jeder Tag einer Abwesenheit ist ein eigener Datensatz. Die
- * Segmente (AbsenceTableBar) werden über negative Ränder optisch zu einem
- * Balken verbunden; der Typ-Name (z. B. "Urlaub") erscheint nur am Starttag.
- * Eine künftige Änderung an Zell-Padding, Grid-Lücken oder der Abwesenheits-
- * Verknüpfung könnte diese Balken-Verbindung oder die Start/End-Kappen
- * unbemerkt zerstören — dieser Test schlägt dann fehl.
+ * Gleichzeitig bleiben Abwesenheiten über die Tagesleiste unter dem Kalender
+ * sichtbar, inkl. der neuen Filter-Leiste (Anzeigetyp: Alle/Dienste/Abwesenheiten,
+ * Zeitraum: Heute/Diese Woche/Dieser Monat/Nächste 2 Monate).
+ *
+ * Ersetzt den früheren Balken-Test (AbsenceTableBar/absence-bar-Testids wurden
+ * mit dem Feature entfernt).
  *
  * Deckt ab:
- * - Admin-Login über den echten Auth-Flow, Desktop-Tabellenansicht (Standard)
- * - Mehrtägiger Urlaub (3 Tage) + separater Krank-Lauf (2 Tage) via API
- * - Genau EIN beschrifteter Balken pro Lauf: Typ-Name nur am Starttag,
- *   Mittel-/End-Tage ohne Text
- * - Start-Tag = linke Kappe (rounded-l, keine linke Verbindung)
- * - End-Tag = rechte Kappe (rounded-r, keine rechte Verbindung)
- * - Mittel-Tag = beidseitig verbunden (negative Ränder, keine Rundung)
- * - Klick auf ein Balken-Segment öffnet den Bearbeiten-Dialog für GENAU
- *   diesen Tag (Datum stimmt)
+ * - Admin-Login über den echten Auth-Flow, Desktop-Viewport
+ * - Mehrtägiger Urlaub (3 Tage) + Krank-Lauf (2 Tage) + regulärer Dienst via API
+ * - Tabellenansicht: keine Abwesenheits-Badges in den Zellen, Dienst bleibt
+ * - Monatsraster: keine absence-bar-Testids mehr vorhanden
+ * - Tagesleiste: Abwesenheits-Badge sichtbar, Typfilter „Abwesenheiten"/„Dienste"
+ *   und Zeitraumfilter „Dieser Monat" greifen
  */
 
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "admin@dienstplan.local";
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "admin1234";
 
-// Desktop-Viewport: nur hier wird die Tabelle mit den AbsenceTableBar-Segmenten
-// gerendert (md:block). Die mobile Ansicht (md:hidden) nutzt stattdessen
-// Punkte/Balken ohne shift-badge-Testids.
+// Desktop-Viewport: Tabellenansicht ist hier der Standard, Monatsraster umschaltbar.
 test.use({ viewport: { width: 1280, height: 900 } });
 
 const MONTHS_DE = [
@@ -62,10 +58,6 @@ function dateKey(year: number, month: number, dayOfMonth: number): string {
   return `${year}-${mm}-${dd}`;
 }
 
-/**
- * Erzeugt eine ISO-Zeit aus Datum + Ortszeit. Spiegelt die Speicherweise der
- * App (lokale Zeit → toISOString), damit isSameDay im Browser exakt greift.
- */
 function localIso(dateStr: string, time: string): string {
   return new Date(`${dateStr}T${time}`).toISOString();
 }
@@ -87,8 +79,8 @@ async function createAssistant(page: Page): Promise<{ id: number; name: string }
   const unique = Date.now();
   const res = await page.request.post("/api/users", {
     data: {
-      name: `E2E Balken ${unique}`,
-      email: `e2e.bar.${unique}@dienstplan.test`,
+      name: `E2E Zellen ${unique}`,
+      email: `e2e.zellen.${unique}@dienstplan.test`,
       role: "assistant",
     },
   });
@@ -96,16 +88,15 @@ async function createAssistant(page: Page): Promise<{ id: number; name: string }
   return (await res.json()) as { id: number; name: string };
 }
 
-/** Legt eine ganztägige Abwesenheit (ein Tag = ein Datensatz) via API an. */
-async function createAbsenceDay(
+async function createShift(
   page: Page,
-  data: { userId: number; dateStr: string; type: "vacation" | "sick" },
+  data: { userId: number; dateStr: string; from: string; to: string; type: string },
 ): Promise<ApiShift> {
   const res = await page.request.post("/api/shifts", {
     data: {
       userId: data.userId,
-      startTime: localIso(data.dateStr, "00:00:00"),
-      endTime: localIso(data.dateStr, "23:59:59"),
+      startTime: localIso(data.dateStr, data.from),
+      endTime: localIso(data.dateStr, data.to),
       type: data.type,
       shiftModelId: null,
     },
@@ -117,17 +108,7 @@ async function createAbsenceDay(
   return (await res.json()) as ApiShift;
 }
 
-async function openDesktopCalendar(page: Page): Promise<Locator> {
-  await page.goto("/dienstplan");
-  await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible();
-  const desktop = page.getByTestId("dienstplan-desktop");
-  await expect(desktop).toBeVisible();
-  // Tabellenansicht ist auf dem Desktop der Standard.
-  await expect(page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-table")).toHaveAttribute("data-active", "true");
-  return desktop;
-}
-
-test("Mehrtägige Abwesenheiten bilden einen durchgehenden, einmal beschrifteten Balken", async ({
+test("Abwesenheiten erscheinen nicht mehr in Kalenderzellen, aber in der Tagesleiste mit Filtern", async ({
   page,
 }) => {
   await loginAsAdmin(page);
@@ -135,242 +116,108 @@ test("Mehrtägige Abwesenheiten bilden einen durchgehenden, einmal beschrifteten
   const createdShiftIds: number[] = [];
 
   try {
-    const desktop = await openDesktopCalendar(page);
+    await page.goto("/dienstplan");
+    await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible();
+    const desktop = page.getByTestId("dienstplan-desktop");
+    await expect(desktop).toBeVisible();
+    // Tabellenansicht ist auf dem Desktop der Standard.
+    await expect(
+      page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-table"),
+    ).toHaveAttribute("data-active", "true");
 
-    // Aktuell angezeigten Monat verwenden — keine langsame Monatsnavigation.
     const { year, month } = parseMonthLabel(
       await page.getByTestId("month-label").innerText(),
     );
 
-    // Zwei getrennte Läufe in unterschiedlichen Bereichen des Monats, damit sie
-    // sich nicht berühren und jeweils eigene Start-/End-Kappen haben.
-    const vacationDays = [6, 7, 8]; // 3-tägiger Urlaub
-    const sickDays = [20, 21]; // 2-tägiger Krank-Lauf
-
+    const vacationDays = [6, 7, 8];
+    const sickDays = [20, 21];
     const vacation: ApiShift[] = [];
     for (const d of vacationDays) {
-      const s = await createAbsenceDay(page, {
+      const s = await createShift(page, {
         userId: assistant.id,
         dateStr: dateKey(year, month, d),
+        from: "00:00:00",
+        to: "23:59:59",
         type: "vacation",
       });
       vacation.push(s);
       createdShiftIds.push(s.id);
     }
-
     const sick: ApiShift[] = [];
     for (const d of sickDays) {
-      const s = await createAbsenceDay(page, {
+      const s = await createShift(page, {
         userId: assistant.id,
         dateStr: dateKey(year, month, d),
+        from: "00:00:00",
+        to: "23:59:59",
         type: "sick",
       });
       sick.push(s);
       createdShiftIds.push(s.id);
     }
+    // Kontroll-Dienst: muss in den Zellen sichtbar bleiben.
+    const work = await createShift(page, {
+      userId: assistant.id,
+      dateStr: dateKey(year, month, 10),
+      from: "09:00:00",
+      to: "17:00:00",
+      type: "active",
+    });
+    createdShiftIds.push(work.id);
 
-    // Neu laden, damit die frisch angelegten Abwesenheiten im Kalender erscheinen.
     await page.reload();
     await expect(desktop).toBeVisible();
 
-    const badge = (id: number): Locator => desktop.getByTestId(`shift-badge-${id}`);
-
-    // --- Urlaub: 3-tägiger Balken -----------------------------------------
-    const [vStart, vMid, vEnd] = vacation;
-    await expect(badge(vStart.id)).toBeVisible();
-    await expect(badge(vMid.id)).toBeVisible();
-    await expect(badge(vEnd.id)).toBeVisible();
-
-    // Typ-Name erscheint GENAU EINMAL — nur am Starttag.
-    await expect(badge(vStart.id)).toHaveText("Urlaub");
-    await expect(badge(vMid.id)).toHaveText("");
-    await expect(badge(vEnd.id)).toHaveText("");
-
-    // Start-Tag = linke Kappe (rounded-l), keine linke Verbindung.
-    await expect(badge(vStart.id)).toHaveClass(/rounded-l/);
-    await expect(badge(vStart.id)).not.toHaveClass(/rounded-r/);
-    await expect(badge(vStart.id)).not.toHaveClass(/-ml-/);
-    // End-Tag = rechte Kappe (rounded-r), keine rechte Verbindung.
-    await expect(badge(vEnd.id)).toHaveClass(/rounded-r/);
-    await expect(badge(vEnd.id)).not.toHaveClass(/rounded-l/);
-    await expect(badge(vEnd.id)).not.toHaveClass(/-mr-/);
-    // Mittel-Tag = beidseitig verbunden (negative Ränder, keine Rundung).
-    await expect(badge(vMid.id)).toHaveClass(/-ml-/);
-    await expect(badge(vMid.id)).toHaveClass(/-mr-/);
-    await expect(badge(vMid.id)).not.toHaveClass(/rounded-l/);
-    await expect(badge(vMid.id)).not.toHaveClass(/rounded-r/);
-
-    // --- Krank: 2-tägiger Balken ------------------------------------------
-    const [sStart, sEnd] = sick;
-    await expect(badge(sStart.id)).toHaveText("Krankheit");
-    await expect(badge(sEnd.id)).toHaveText("");
-    // Start = linke Kappe, End = rechte Kappe; bei nur zwei Tagen gibt es keinen
-    // Mittel-Tag, beide Segmente sind aber zur Mitte hin verbunden.
-    await expect(badge(sStart.id)).toHaveClass(/rounded-l/);
-    await expect(badge(sStart.id)).not.toHaveClass(/rounded-r/);
-    await expect(badge(sEnd.id)).toHaveClass(/rounded-r/);
-    await expect(badge(sEnd.id)).not.toHaveClass(/rounded-l/);
-
-    // --- Klick öffnet den Bearbeiten-Dialog für GENAU diesen Tag ----------
-    // Mittel-Tag des Urlaubs anklicken: Dialog muss exakt dessen Datum zeigen.
-    await badge(vMid.id).click();
-    const editDialog = page.getByTestId("shift-dialog");
-    await expect(editDialog).toBeVisible();
-    await expect(editDialog.getByText("Schicht bearbeiten")).toBeVisible();
-    await expect(editDialog.getByTestId("shift-dialog-date")).toHaveAttribute(
-      "data-value",
-      dateKey(year, month, vacationDays[1]),
-    );
-
-    // Dialog schließen (Escape) und Gegenprobe mit dem End-Tag des Krank-Laufs.
-    await page.keyboard.press("Escape");
-    await expect(editDialog).toHaveCount(0);
-
-    await badge(sEnd.id).click();
-    const editDialog2 = page.getByTestId("shift-dialog");
-    await expect(editDialog2).toBeVisible();
-    await expect(editDialog2.getByTestId("shift-dialog-date")).toHaveAttribute(
-      "data-value",
-      dateKey(year, month, sickDays[1]),
-    );
-  } finally {
-    for (const id of createdShiftIds) {
-      await page.request.delete(`/api/shifts/${id}`);
+    // --- Tabellenansicht: Abwesenheiten NICHT mehr in den Zellen -----------
+    for (const s of [...vacation, ...sick]) {
+      await expect(
+        desktop.getByTestId(`shift-badge-${s.id}`),
+        `Abwesenheit ${s.id} darf nicht in der Tabellenzelle erscheinen`,
+      ).toHaveCount(0);
     }
-    await page.request.delete(`/api/users/${assistant.id}`);
-  }
-});
+    // Kontrolle: Der reguläre Dienst ist weiterhin in der Zelle sichtbar.
+    await expect(desktop.getByTestId(`shift-badge-${work.id}`)).toBeVisible();
 
-/**
- * Monatsgitter (MonthGrid): Mehrtägige Abwesenheiten werden auch im Kalender-
- * Gitter als EIN durchgehender Balken pro Tag/Typ dargestellt — verbunden über
- * negative Ränder, mit linker Kappe am Starttag und rechter Kappe am Endtag.
- *
- * Das Gitter rendert die Abwesenheiten als eigene Spans (kein AbsenceTableBar),
- * deshalb braucht es einen eigenen Test. Geprüft werden beide Ansichten, in
- * denen MonthGrid vorkommt: Desktop-Monatsansicht (md:block, umschaltbar) und
- * mobile Monatsansicht (md:hidden, Standard). Eine Änderung an den Grid-Lücken
- * oder der absenceTypesByDay-Verknüpfung würde die Balken-Verbindung oder die
- * Start/End-Rundung still zerstören — dann schlägt dieser Test fehl.
- */
-async function assertConnectedGridBars(
-  page: Page,
-  container: Locator,
-  data: {
-    year: number;
-    month: number;
-    vacationDays: number[];
-    sickDays: number[];
-  },
-): Promise<void> {
-  const { year, month, vacationDays, sickDays } = data;
-  const bar = (type: "vacation" | "sick", day: number): Locator =>
-    container.getByTestId(`absence-bar-${type}-${dateKey(year, month, day)}`);
-
-  // --- Urlaub: 3-tägiger Balken --------------------------------------------
-  const [vS, vM, vE] = vacationDays;
-  await expect(bar("vacation", vS)).toBeVisible();
-  await expect(bar("vacation", vM)).toBeVisible();
-  await expect(bar("vacation", vE)).toBeVisible();
-
-  // Start-Tag = linke Kappe (rounded-l), keine linke Verbindung.
-  await expect(bar("vacation", vS)).toHaveClass(/rounded-l-full/);
-  await expect(bar("vacation", vS)).not.toHaveClass(/-ml-/);
-  // End-Tag = rechte Kappe (rounded-r), keine rechte Verbindung.
-  await expect(bar("vacation", vE)).toHaveClass(/rounded-r-full/);
-  await expect(bar("vacation", vE)).not.toHaveClass(/-mr-/);
-  // Mittel-Tag = beidseitig verbunden (negative Ränder, keine Rundung).
-  await expect(bar("vacation", vM)).toHaveClass(/-ml-/);
-  await expect(bar("vacation", vM)).toHaveClass(/-mr-/);
-  await expect(bar("vacation", vM)).not.toHaveClass(/rounded-l-full/);
-  await expect(bar("vacation", vM)).not.toHaveClass(/rounded-r-full/);
-
-  // --- Krank: 2-tägiger Balken ---------------------------------------------
-  const [sS, sE] = sickDays;
-  await expect(bar("sick", sS)).toHaveClass(/rounded-l-full/);
-  await expect(bar("sick", sS)).not.toHaveClass(/rounded-r-full/);
-  await expect(bar("sick", sE)).toHaveClass(/rounded-r-full/);
-  await expect(bar("sick", sE)).not.toHaveClass(/rounded-l-full/);
-}
-
-async function seedAbsenceRuns(
-  page: Page,
-  data: {
-    userId: number;
-    year: number;
-    month: number;
-    vacationDays: number[];
-    sickDays: number[];
-  },
-  createdShiftIds: number[],
-): Promise<void> {
-  for (const d of data.vacationDays) {
-    const s = await createAbsenceDay(page, {
-      userId: data.userId,
-      dateStr: dateKey(data.year, data.month, d),
-      type: "vacation",
-    });
-    createdShiftIds.push(s.id);
-  }
-  for (const d of data.sickDays) {
-    const s = await createAbsenceDay(page, {
-      userId: data.userId,
-      dateStr: dateKey(data.year, data.month, d),
-      type: "sick",
-    });
-    createdShiftIds.push(s.id);
-  }
-}
-
-test("Monatsgitter: Mehrtägige Abwesenheiten bilden auch im Desktop- und Mobil-Gitter einen durchgehenden Balken", async ({
-  page,
-}) => {
-  await loginAsAdmin(page);
-  const assistant = await createAssistant(page);
-  const createdShiftIds: number[] = [];
-
-  try {
-    await openDesktopCalendar(page);
-    const { year, month } = parseMonthLabel(
-      await page.getByTestId("month-label").innerText(),
-    );
-
-    const vacationDays = [6, 7, 8]; // 3-tägiger Urlaub
-    const sickDays = [20, 21]; // 2-tägiger Krank-Lauf
-    await seedAbsenceRuns(
-      page,
-      { userId: assistant.id, year, month, vacationDays, sickDays },
-      createdShiftIds,
-    );
-
-    // --- Desktop-Monatsansicht: auf "Monat" umschalten -------------------
-    await page.reload();
-    const desktop = page.getByTestId("dienstplan-desktop");
-    await expect(desktop).toBeVisible();
+    // --- Monatsraster: keine absence-bar-Testids mehr ----------------------
     await page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-grid").click();
-    await expect(page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-grid")).toHaveAttribute(
-      "data-active",
-      "true",
-    );
+    await expect(
+      page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-grid"),
+    ).toHaveAttribute("data-active", "true");
     await expect(desktop.getByTestId("month-grid")).toBeVisible();
-    await assertConnectedGridBars(page, desktop, {
-      year,
-      month,
-      vacationDays,
-      sickDays,
-    });
+    await expect(desktop.locator('[data-testid^="absence-bar-"]')).toHaveCount(0);
 
-    // --- Mobile-Monatsansicht: Gitter ist dort der Standard --------------
-    await page.setViewportSize({ width: 390, height: 844 });
-    const mobile = page.getByTestId("dienstplan-mobile");
-    await expect(mobile).toBeVisible();
-    await expect(mobile.getByTestId("month-grid")).toBeVisible();
-    await assertConnectedGridBars(page, mobile, {
-      year,
-      month,
-      vacationDays,
-      sickDays,
-    });
+    // --- Tagesleiste: Abwesenheit bleibt sichtbar --------------------------
+    // Urlaubstag anklicken (Tag hat nur eine Abwesenheit → gilt als „leer",
+    // der Helper schließt den sich öffnenden Anlage-Dialog per Escape).
+    await selectDayCell(
+      page,
+      desktop.getByTestId(`day-cell-${dateKey(year, month, vacationDays[0])}`),
+    );
+    const dayPanel = desktop.getByTestId("day-detail-panel");
+    const vacBadge = dayPanel.getByTestId(`shift-badge-${vacation[0]!.id}`);
+    await expect(vacBadge).toBeVisible();
+    await expect(vacBadge).toContainText("Urlaub");
+
+    // Typfilter „Abwesenheiten": Badge bleibt.
+    await dayPanel.getByTestId("day-detail-type-filter").click();
+    await page.getByRole("option", { name: "Abwesenheiten" }).click();
+    await expect(vacBadge).toBeVisible();
+
+    // Typfilter „Dienste": Urlaub verschwindet aus der Liste.
+    await dayPanel.getByTestId("day-detail-type-filter").click();
+    await page.getByRole("option", { name: "Dienste" }).click();
+    await expect(vacBadge).toHaveCount(0);
+    await expect(dayPanel.getByText("Keine Dienste geplant").first()).toBeVisible();
+
+    // Zurück auf „Alle" + Zeitraum „Dieser Monat": alle 5 Abwesenheits-Tage
+    // (3 Urlaub + 2 Krank) erscheinen mit Datumsprefix in der Liste.
+    await dayPanel.getByTestId("day-detail-type-filter").click();
+    await page.getByRole("option", { name: "Alle" }).click();
+    await dayPanel.getByTestId("day-detail-range-filter").click();
+    await page.getByRole("option", { name: "Dieser Monat" }).click();
+    for (const s of [...vacation, ...sick]) {
+      await expect(dayPanel.getByTestId(`shift-badge-${s.id}`)).toBeVisible();
+    }
   } finally {
     for (const id of createdShiftIds) {
       await page.request.delete(`/api/shifts/${id}`);

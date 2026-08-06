@@ -40,6 +40,7 @@ import { isAdminRole } from "@/lib/roles";
 import { hasAccess } from "@/lib/entitlements";
 import { PlanUpgradeLink } from "@/components/plan-limit-banner";
 import { MonthYearPicker } from "@/components/month-year-picker";
+import { AbwesenheitsKalender } from "@/components/abwesenheits-kalender";
 import { formatDays, formatHours } from "@/lib/utils";
 import {
   buildRanges,
@@ -397,6 +398,9 @@ export default function Abwesenheiten() {
           Urlaub und Krankheit als Zeitraum erfassen und verwalten
         </p>
       </div>
+
+      {/* Abwesenheitskalender (Jahresansicht mit Direktanlage, HANDOFF 05.08.2026) */}
+      <AbwesenheitsKalender />
 
       {/* Schneller Monatssprung: Setzt Von/Bis auf den gesamten gewählten Monat. */}
       <div

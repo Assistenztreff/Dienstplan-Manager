@@ -1,0 +1,54 @@
+Nachbesserungsauftrag: Umsetzung weicht von den Arbeitsanweisungen ab
+
+Grundlage: Screenshots vom 05.08.2026 (Replit-Preview) UND direkte Code-Pruefung von main (Commit f0a4bc6, per git pull auf den lokalen Rechner geholt) - abgeglichen mit Dienstplan-Kalenderansicht-Kompaktierung-Replit-Auftrag.md, HANDOFF-abwesenheiten-menue.md und Arbeitsanweisung-Menue-Neustrukturierung-Replit.md.
+
+WICHTIG fuer Replit: Bevor irgendetwas weiter gebaut wird - pro Punkt unten zuerst in 1-2 Saetzen erklaeren, WARUM davon abgewichen wurde (laut eurer eigenen replit.md-Regel bei Abweichungen/Fehlern Pflicht), dann erst korrigieren. Nach jeder Korrektur: Screenshot-Vergleich vorher/nachher liefern (siehe replit-md-Ergaenzung-Scope-Disziplin.md, bereits in replit.md uebernommen).
+
+---
+
+Was schon richtig umgesetzt ist (zur Einordnung)
+
+- Die neue 5-Punkte-Menuestruktur (Start/Planen/Auswerten/Verwalten) ist da, inkl. Tab-Ebene "Dienstplan/Abwesenheiten" unter Planen - per Code bestaetigt in layout.tsx: teamleiterAllowed korrekt gesetzt, Team-Verwaltung korrekt dienstleisterOnly: false, Abwesenheiten korrekt fuer alle Rollen offen (Paragraf-3-Entscheidung). Struktur korrekt.
+- Toolbar-Funktionen "Alle bestaetigen", "Monats-PDF", "Mehrfachauswahl" sind vorhanden.
+- Die Doppelklick-Tagesauswahl + zentriertes "+"-Symbol in leeren/belegten Zellen ist eine bewusste, bereits abgestimmte Anpassung (Platzgrund durch das Pillen-Design, dient zusaetzlich der Mehrfachauswahl fuer Bulk-Bearbeiten/-Loeschen) - keine Abweichung, hier besteht kein Handlungsbedarf.
+
+Abweichungen (nach Prioritaet) - alle 4 zusaetzlich im Code auf main bestaetigt, nicht nur im Screenshot
+
+1. Pillen-Design komplett falsch umgesetzt - hoechste Prioritaet
+
+Screenshot + Code: Kalenderzellen zeigen vollflaechig farbige Bloecke (orange/gruen/lila/pink/etc.) mit 2-Buchstaben-Kuerzel + Uhrzeit in einer Zeile. Bestaetigt in artifacts/dienstplan/src/lib/barrierefreie-farben.ts: getBarrierefreieFarbe() liefert z. B. "bg-assistenz-mint text-assistenz-brand border-assistenz-brand/20" - eine volle Hintergrundfarbe, kein schmaler Balken.
+
+Soll laut Dienstplan-Kalenderansicht-Kompaktierung-Replit-Auftrag.md Paragraf 2.1: Weisser/hellgrauer Pillen-Hintergrund, NUR ein 3px breiter Farbbalken links (volle Hoehe) traegt die Personenfarbe. Zeile 1 = Nachname + Status-Icon (weisser Hintergrund). Zeile 2 = Uhrzeit-Icon + Uhrzeit (Zone #f1f1ee).
+
+Das ist keine Kleinigkeit - das gesamte barrierefreie Farbkonzept (Paragraf 7, WCAG-AA-gepruefte Slot-Paletten) funktioniert nur mit einem schmalen Farbbalken, nicht mit vollflaechiger Farbe. Bitte komplett neu nach Spec bauen, nicht anpassen.
+
+2. Emojis im Hauptmenue fehlen
+
+Screenshot + Code: Menuepunkte Start/Planen/Auswerten/Verwalten zeigen duenne Strichgrafik-Icons (Grid, Kalender, Chart, Zahnrad), keine Emojis. Bestaetigt in layout.tsx: importiert werden ausschliesslich lucide-react-Icons (LayoutDashboard, CalendarDays, Clock, BarChart3, Settings), keine Emoji-Zeichen im Code.
+
+Soll laut Icon-Design-Entscheidung (icon-design-final.html): Haus-Emoji Start, Kalender-Emoji Planen, Uhr-Emoji Erfassen, Balkendiagramm-Emoji Auswerten, Zahnrad-Emoji Verwalten - als Emoji, nicht als Icon-Font/SVG.
+
+3. Abwesenheitskalender fehlt komplett
+
+Screenshot + Code: Tab "Abwesenheiten" zeigt weiterhin die alte Liste (Formular "Abwesenheit eintragen" + "Resturlaub"-Tabelle je Assistenzkraft). Bestaetigt in artifacts/dienstplan/src/pages/abwesenheiten.tsx: keine Kachel-/Grid-Struktur, kein Filter-Leiste-Code, keine Popup-Direktanlage - nur die alte Ansicht.
+
+Soll laut HANDOFF-abwesenheiten-menue.md: Neuer Abwesenheitskalender mit 2 Zeilen x 6 quadratischen Monats-Kacheln, Filter-Leiste (Anzeigetyp x Zeitraum), Popup + eigene Seite, Direktanlage aus dem Kalender. Das gesamte Arbeitspaket wurde nicht umgesetzt, nur die alte Ansicht ist noch da.
+
+4. Dashboard zeigt keine Abwesenheiten/Krankheitstage
+
+Screenshot + Code: Dashboard-Hinweise zeigen nur "Monatsabschluss steht aus" und "14 Tage ohne geplante Schicht" - keine Kachel/Hinweis zu gemeldeten Krankheitstagen oder laufenden Abwesenheiten. Bestaetigt in artifacts/dienstplan/src/pages/dashboard.tsx: kein entsprechender Hinweis-Block im Code, nur KRANKHEIT als reines Status-Label an anderer Stelle.
+
+Soll: Dashboard-Hinweis-Konzept sollte Abwesenheiten/Krankmeldungen als eigenen Hinweis zeigen (war Teil der urspruenglichen Dashboard-Hinweise-Logik, siehe HANDOFF-naechste-session.md/Dashboard.md).
+
+---
+
+Empfehlung fuer das weitere Vorgehen
+
+1. Diesen Auftrag 1:1 an Replit als Korrektur-Auftrag geben, mit Verweis auf die drei referenzierten Original-Dokumente (nicht neu erklaeren lassen, sondern auf die exakten Passagen verweisen). Die Code-Fundstellen oben sind bewusst mitgeliefert, damit Replit nicht erst selbst suchen/gegenrecherchieren muss.
+2. Punkt 1 (Pillen) und Punkt 3 (Abwesenheitskalender) zuerst, das sind die groessten inhaltlichen Luecken.
+3. Vor der naechsten Freigabe: Screenshot-Vergleich einfordern, bevor du selbst wieder in der App nachschaust - spart dir das erneute manuelle Durchklicken.
+4. Da Push auf GitHub bei euch nur der Information dient (Publish erst nach fertigem Staging-Test), reicht ein GitHub-Push allein nicht als Fertigmeldung - bitte von Replit den tatsaechlichen Umsetzungsstand direkt im Staging-Preview bestaetigen lassen, nicht nur "gepusht".
+
+---
+
+Hinweis: Alle 4 Punkte sind doppelt abgesichert - sowohl ueber die Live-Screenshots als auch ueber direkte Pruefung des Quellcodes auf main (Commit f0a4bc6).

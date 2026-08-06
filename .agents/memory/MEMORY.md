@@ -107,3 +107,6 @@
 - [MonthGrid Leere-Zelle-Klick](monthgrid-empty-cell-click.md) — leere Zellen öffnen den Dialog direkt; jeder Klick-Pfad muss onSelectDay mitsetzen, sonst e2e-selectDayCell rot.
 - [Assistenz-Abwesenheits-Selbstservice](assistant-absence-selfservice.md) — POST/DELETE /shifts für reine Assistenzkräfte: Authz vor Inhalt, 404 statt Orakel, teamId aus Schichtmodell ableiten (First-Team-Fallback bucht sonst falsch).
 - [xlsx dynamic import default](xlsx-dynamic-import-default.md) — `(await import("xlsx")).default` ist im Vite-Dev undefined; `m.default ?? m` nutzen, sonst scheitern Excel-Exporte still.
+- [Urlaubs-POSTs in E2E langsam](e2e-vacation-post-slow.md) — ~5s pro vacation-POST (Urlaubskonto-Recalc); mehrtägige UI-Anlage braucht ≥30s-Timeout, Seeding besser per API.
+- [PDF-Stundennachweis-Export zurückgestellt](pdf-statement-export-deferred.md) — export-pdf-button existiert nicht mehr; StatementExportDialog/fix-only-hint unerreichbar; keine Specs darauf aufbauen.
+- [E2E-Lanes Build-Race auf dist/](e2e-lanes-dist-build-race.md) — parallele api-shards bauen in dasselbe api-server/dist; MODULE_NOT_FOUND dist/index.mjs = transienter Race, Kette neu starten.

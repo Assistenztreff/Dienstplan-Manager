@@ -15,7 +15,9 @@ type ApiShift = { id: number; userId: number; startTime: string };
 export async function selectDayCell(page: Page, cell: Locator): Promise<void> {
   const already = (await cell.getAttribute("data-selected")) === "true";
   if (!already) {
-    await cell.click();
+    // Obere linke Ecke: die Zellenmitte kann eine Pille treffen (deren Klick
+    // den Bearbeiten-Dialog öffnet statt den Tag zu markieren).
+    await cell.click({ position: { x: 4, y: 4 } });
   }
   const dialog = page.getByTestId("shift-dialog");
   const opened = await dialog
