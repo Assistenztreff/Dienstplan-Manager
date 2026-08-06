@@ -145,10 +145,36 @@ test("Klick auf Gruppe 'Verwalten' führt zum ersten sichtbaren Kind", async ({ 
     // Admin: erstes sichtbares Kind ist "Assistenzkräfte" (/assistenten).
     await expect(page).toHaveURL(/\/assistenten$/);
     const tabs = page.getByTestId("app-subnav-tabs");
-    await expect(tabs.getByRole("link", { name: "Team-Verwaltung", exact: true })).toBeVisible();
+    // Team-Verwaltung ist Dienstleister-only: Privat-Konten haben nur ihr
+    // eigenes Team und sehen den Punkt nicht.
+    await expect(tabs.getByRole("link", { name: "Team-Verwaltung", exact: true })).toHaveCount(0);
     await expect(tabs.getByRole("link", { name: "Einstellungen", exact: true })).toBeVisible();
   } finally {
     await close();
+  }
+});
+
+test("Team-Verwaltung ist bei Dienstleister-Konten im Menü sichtbar", async ({ browser }) => {
+  test.setTimeout(120_000);
+  // Positiv-Probe: Nur Dienstleister-Konten sehen den Menüpunkt (Privat-Konten
+  // werden im vorherigen Test abgedeckt).
+  const dl = await registerFreeAccount("dienstleister", "menustruktur.dl");
+  try {
+    const { page, close } = await openPageAs(browser, dl.ctx);
+    try {
+      await page.goto("/");
+      const group = desktopNav(page).getByTestId("nav-group-verwalten");
+      await expect(group).toBeVisible({ timeout: 30_000 });
+      await group.click();
+      const tabs = page.getByTestId("app-subnav-tabs");
+      await expect(
+        tabs.getByRole("link", { name: "Team-Verwaltung", exact: true }),
+      ).toBeVisible();
+    } finally {
+      await close();
+    }
+  } finally {
+    await deleteFreeAccount(dl);
   }
 });
 
