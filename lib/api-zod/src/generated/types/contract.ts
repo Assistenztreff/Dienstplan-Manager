@@ -11,8 +11,13 @@ export interface Contract {
   id: number;
   userId: number;
   weeklyHours: number;
-  /** Arbeitstage pro Woche (1–7); Basis für den Vertrags-Fallback der bwavg-Urlaubsbewertung. */
+  /** Arbeitstage pro Woche (0,5–7, Dezimalwerte erlaubt); Basis für den Vertrags-Fallback der bwavg-Urlaubsbewertung. */
   workdaysPerWeek?: number;
+  /**
+     * Zeitpunkt der letzten bewussten Arbeitstage-Festlegung; null = Migrations-Default, Datenpflege-Hinweis anzeigen.
+     * @nullable
+     */
+  workdaysConfirmedAt?: Date | null;
   vacationDays: number;
   /** Stundengenau verbrauchter Urlaub (Point 7). Pool = vacationDays * vacationHoursPerDay. */
   vacationHoursUsed?: number;

@@ -89,6 +89,10 @@ test("Abwesenheitskalender: Jahresansicht, Direktanlage per Klick und Löschen i
     }
 
     await page.goto("/abwesenheiten");
+    // Der Kalender ist seit #706 standardmäßig eingeklappt → erst ausklappen.
+    const toggle = page.getByTestId("toggle-abwesenheits-kalender");
+    await expect(page.getByTestId("abwesenheits-kalender")).toHaveCount(0);
+    await toggle.click();
     const kalender = page.getByTestId("abwesenheits-kalender");
     // Tage-Testids kommen in Desktop-Grid und Mobile-Akkordeon doppelt vor
     // (aktueller Monat startet aufgeklappt) — auf das Grid scopen.

@@ -1,3 +1,4 @@
+- [Arbeitstage-Rechner & workdaysConfirm](workdays-confirm-pattern.md) — Vorschau muss Server-Formel spiegeln; Bestätigungen als Steuerfeld, nie Ist-Wert erneut senden (Race).
 - [Externe Postgres-URL Kodierung & TLS](scaleway-db-url-tls.md) — normalizeDatabaseUrl repariert unkodierte Passwörter; selbstsignierte Zertifikate brauchen Opt-in DATABASE_SSL_NO_VERIFY=1 (kein stiller Downgrade).
 - [DATABASE_URL secret shadows managed DB](database-url-secret-shadowing.md) — a user's DATABASE_URL secret overrides the managed URL; malformed value = 500 on all DB ops; agent can't delete secrets, env change needs workflow restart.
 - [DB push & session table](db-push-session-table.md) — connect-pg-simple's session table must live in the Drizzle schema or `db push` (incl. non-interactive post-merge) tries to drop it as data loss.

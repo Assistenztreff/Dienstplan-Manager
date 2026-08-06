@@ -37,9 +37,10 @@ import {
  *
  * Geprueft:
  * 1. Die Karte zeigt die Zeile "1 Urlaubstag = 5,6 h (Vertragsdaten)".
- * 2. Nach Korrektur der Arbeitstage/Woche (5 -> 7) zeigt die Zeile den neuen
- *    Wert "1 Urlaubstag = 4 h (Vertragsdaten)" — die Anzeige haengt live an
- *    der Bilanz, nicht an einem eingefrorenen Wert.
+ * 2. Nach Korrektur auf DEZIMALE Arbeitstage/Woche (27,6 h ÷ 1,15 = exakt
+ *    24 h, seit #706 moeglich) zeigt die Zeile "1 Urlaubstag = 24 h
+ *    (Vertragsdaten)" — die Anzeige haengt live an der Bilanz, nicht an
+ *    einem eingefrorenen Wert.
  */
 
 let admin: FreeAccount;
@@ -147,11 +148,12 @@ test("Korrektur der Arbeitstage/Woche aendert die angezeigte Bewertung", async (
 }) => {
   test.setTimeout(60_000);
 
-  // 5 -> 7 Arbeitstage: 28 h / 7 = 4 h je Urlaubstag.
+  // Dezimalwerte (seit #706): 27,6 h / 1,15 Arbeitstage = exakt 24 h je
+  // Urlaubstag (24-h-Dienst-Szenario).
   const patch = await admin.ctx.patch(`/api/contracts/${contractId}`, {
-    data: { workdaysPerWeek: 7 },
+    data: { workdaysPerWeek: 1.15, weeklyHours: 27.6 },
   });
-  expect(patch.status(), "PATCH workdaysPerWeek sollte 200 liefern").toBe(200);
+  expect(patch.status(), "PATCH Dezimal-Arbeitstage sollte 200 liefern").toBe(200);
 
   await adoptAssistant(page);
   await page.goto("/");
@@ -162,5 +164,5 @@ test("Korrektur der Arbeitstage/Woche aendert die angezeigte Bewertung", async (
   await expect(
     line,
     "Anzeige muss dem korrigierten Vertrag folgen",
-  ).toHaveText("1 Urlaubstag = 4 h (Vertragsdaten)");
+  ).toHaveText("1 Urlaubstag = 24 h (Vertragsdaten)");
 });

@@ -46,7 +46,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Mail, Phone, MapPin, Calendar, Pencil, UserPlus, UserMinus, Send, Copy, Check, Download, Trash2, Lock } from "lucide-react";
+import { Plus, Mail, Phone, MapPin, Calendar, Pencil, UserPlus, UserMinus, Send, Copy, Check, Download, Trash2, Lock, Calculator } from "lucide-react";
+import { ArbeitstageRechnerDialog } from "@/components/arbeitstage-rechner-dialog";
+import { formatHours } from "@/lib/utils";
 import { PlanLimitBanner, PlanUpgradeLink } from "@/components/plan-limit-banner";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
@@ -315,6 +317,7 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [planError, setPlanError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [rechnerOpen, setRechnerOpen] = useState(false);
 
   function set(field: keyof FormState, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -330,13 +333,9 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = "Ungueltige E-Mail-Adresse";
     if (!form.address.trim()) errs.address = "Pflichtfeld";
     if (!form.weeklyHours || Number(form.weeklyHours) <= 0) errs.weeklyHours = "Muss groesser als 0 sein";
-    if (
-      !form.workdaysPerWeek ||
-      !Number.isInteger(Number(form.workdaysPerWeek)) ||
-      Number(form.workdaysPerWeek) < 1 ||
-      Number(form.workdaysPerWeek) > 7
-    )
-      errs.workdaysPerWeek = "Ganze Zahl zwischen 1 und 7";
+    const workdays = Number(form.workdaysPerWeek);
+    if (!form.workdaysPerWeek || !Number.isFinite(workdays) || workdays < 0.5 || workdays > 7)
+      errs.workdaysPerWeek = "Zahl zwischen 0,5 und 7";
     if (!form.vacationDays || Number(form.vacationDays) < 0) errs.vacationDays = "Muss mindestens 0 sein";
     if (!form.startDate) errs.startDate = "Pflichtfeld";
     setErrors(errs);
@@ -680,21 +679,45 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
               </div>
 
               <FieldRow label="Arbeitstage pro Woche *" error={errors.workdaysPerWeek}>
-                <div className="relative">
-                  <Input
-                    className="bg-card"
-                    type="number"
-                    min="1"
-                    max="7"
-                    step="1"
-                    value={form.workdaysPerWeek}
-                    onChange={(e) => set("workdaysPerWeek", e.target.value)}
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
-                    Tage
-                  </span>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      className="bg-card"
+                      type="number"
+                      min="0.5"
+                      max="7"
+                      step="any"
+                      value={form.workdaysPerWeek}
+                      onChange={(e) => set("workdaysPerWeek", e.target.value)}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                      Tage
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 shrink-0"
+                    onClick={() => setRechnerOpen(true)}
+                    aria-label="Arbeitstage berechnen"
+                    data-testid="workdays-rechner-open"
+                  >
+                    <Calculator className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Rechner</span>
+                  </Button>
                 </div>
               </FieldRow>
+              {/* Rechner füllt beide Vertragswerte konsistent vor (Arbeitstage
+                  + Wochenstunden); gespeichert wird erst über das Formular. */}
+              <ArbeitstageRechnerDialog
+                open={rechnerOpen}
+                onOpenChange={setRechnerOpen}
+                onApply={({ workdaysPerWeek, weeklyHours }) => {
+                  set("weeklyHours", String(weeklyHours));
+                  set("workdaysPerWeek", String(workdaysPerWeek));
+                }}
+              />
 
               <FieldRow label="Vertragsbeginn *" error={errors.startDate}>
                 <DatePickerField
@@ -998,11 +1021,11 @@ export default function Assistenten() {
                     <div className="space-y-2.5">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">Wochenstunden</span>
-                        <span className="font-medium">{activeContract.weeklyHours} h</span>
+                        <span className="font-medium">{formatHours(activeContract.weeklyHours)} h</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">Arbeitstage/Woche</span>
-                        <span className="font-medium">{activeContract.workdaysPerWeek ?? 5} Tage</span>
+                        <span className="font-medium">{formatHours(activeContract.workdaysPerWeek ?? 5)} Tage</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">Urlaubsanspruch</span>

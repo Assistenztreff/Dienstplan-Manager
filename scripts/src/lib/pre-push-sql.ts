@@ -70,6 +70,17 @@ export const PRE_PUSH_SQL: string[] = [
        UPDATE contracts SET billing_method = NULL WHERE billing_method IS NOT NULL;
      END IF;
    END $$;`,
+  // Arbeitstage/Woche: Dezimalwerte (real statt integer) + Bestätigungs-
+  // Zeitstempel für den Datenpflege-Hinweis. Typänderung nur, wenn die Spalte
+  // noch integer ist (push würde sonst interaktiv nach Datenverlust fragen).
+  `DO $$ BEGIN
+     IF EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'contracts' AND column_name = 'workdays_per_week'
+                  AND data_type = 'integer') THEN
+        ALTER TABLE contracts ALTER COLUMN workdays_per_week TYPE real;
+     END IF;
+   END $$;`,
+  `ALTER TABLE contracts ADD COLUMN IF NOT EXISTS workdays_confirmed_at timestamp;`,
 ];
 
 /** Alle Vorab-Schritte sequenziell gegen den übergebenen Client ausführen. */
