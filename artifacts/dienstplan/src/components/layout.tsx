@@ -433,16 +433,18 @@ function MobileFullMenu({
                     onClick={() => toggleGroup(item.label)}
                     aria-expanded={open}
                     data-testid={`mobile-nav-group-${slug}`}
-                    className={`flex h-14 items-center justify-start gap-2 pl-16 rounded-full border border-brand-dark text-lg font-semibold text-brand-dark shadow-sm transition-colors focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark ${
+                    className={`flex h-14 items-center justify-center rounded-full border border-brand-dark text-lg font-semibold text-brand-dark shadow-sm transition-colors focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark ${
                       groupActive && !open ? "bg-brand-yellow" : "bg-white hover:bg-brand-yellow"
                     }`}
                   >
-                    <item.icon className="h-6 w-6 shrink-0" />
-                    {item.label}
-                    <ChevronDown
-                      className={`h-5 w-5 transition-transform ${open ? "rotate-180" : ""}`}
-                      aria-hidden="true"
-                    />
+                    <span className="flex w-[138px] items-center justify-start gap-2">
+                      <item.icon className="h-6 w-6 shrink-0" />
+                      {item.label}
+                      <ChevronDown
+                        className={`h-5 w-5 transition-transform ${open ? "rotate-180" : ""}`}
+                        aria-hidden="true"
+                      />
+                    </span>
                   </button>
                   {open && (
                     <div className="flex flex-col gap-3 pl-6" data-testid={`mobile-nav-group-${slug}-items`}>
@@ -474,12 +476,14 @@ function MobileFullMenu({
                 href={item.href}
                 onClick={onClose}
                 aria-current={isActive ? "page" : undefined}
-                className={`flex h-14 items-center justify-start gap-2 pl-16 rounded-full border border-brand-dark text-lg font-semibold text-brand-dark shadow-sm transition-colors focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark ${
+                className={`flex h-14 items-center justify-center rounded-full border border-brand-dark text-lg font-semibold text-brand-dark shadow-sm transition-colors focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark ${
                   isActive ? "bg-brand-yellow" : "bg-white hover:bg-brand-yellow"
                 }`}
               >
-                <item.icon className="h-6 w-6 shrink-0" />
-                {item.label}
+                <span className="flex w-[138px] items-center justify-start gap-2">
+                  <item.icon className="h-6 w-6 shrink-0" />
+                  {item.label}
+                </span>
               </Link>
             );
           })}
