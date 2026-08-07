@@ -424,6 +424,66 @@ export interface ContractUpdate {
   notes?: string | null;
 }
 
+export interface HourBudget {
+  id: number;
+  teamId: number;
+  /** Genehmigte Assistenzstunden pro Monat (Zielvereinbarung, Bedarfsseite). */
+  monthlyHours: number;
+  /** Beginn der Gültigkeit (inklusive). */
+  startDate: string;
+  /**
+     * Ende der Gültigkeit (inklusive); null = unbefristet.
+     * @nullable
+     */
+  endDate?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
+}
+
+export interface HourBudgetInput {
+  /** Optionaler Team-Kontext; muss ein erlaubtes Team sein. */
+  teamId?: number;
+  /** @exclusiveMinimum 0 */
+  monthlyHours: number;
+  startDate: string;
+  endDate?: string;
+  notes?: string;
+}
+
+export interface HourBudgetUpdate {
+  /** @exclusiveMinimum 0 */
+  monthlyHours?: number;
+  startDate?: string;
+  /** @nullable */
+  endDate?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface HourBudgetBalance {
+  month: number;
+  year: number;
+  /** Genehmigte Stunden des Monats (0 ohne gültige Zielvereinbarung). */
+  approvedHours: number;
+  /** Verbrauchte Stunden des Monats (nur echte Arbeitsdienste, keine Abwesenheiten). */
+  consumedHours: number;
+  /** Verbleibende Stunden des Monats (genehmigt minus verbraucht). */
+  remainingHours: number;
+  /** Kumuliert genehmigte Stunden seit Jahresbeginn (Januar bis Auswertungsmonat). */
+  yearApprovedHours: number;
+  /** Kumuliert verbrauchte Stunden seit Jahresbeginn. */
+  yearConsumedHours: number;
+  /** Laufender Jahressaldo (genehmigt minus verbraucht; positiv = angespart). */
+  yearBalance: number;
+  /** Warnschwelle = 1,5 × Monatsbudget. */
+  warningThresholdHours: number;
+  /** true, sobald der Jahressaldo die Warnschwelle übersteigt (nur bei vorhandenem Monatsbudget). */
+  warningActive: boolean;
+  /** true, sobald im Scope mindestens eine Zielvereinbarung existiert (die Dashboard-Kachel blendet sich ohne Budget aus). */
+  hasBudgets: boolean;
+}
+
 export type ShiftType = typeof ShiftType[keyof typeof ShiftType];
 
 
@@ -1561,6 +1621,13 @@ userId?: number;
 teamId?: number;
 };
 
+export type ListHourBudgetsParams = {
+/**
+ * Optionaler Team-Kontext für die Datentrennung.
+ */
+teamId?: number;
+};
+
 export type ListShiftsParams = {
 userId?: number;
 month?: number;
@@ -1670,6 +1737,15 @@ teamId?: number;
 export type GetMyHoursBalanceParams = {
 month?: number;
 year?: number;
+};
+
+export type GetHourBudgetBalanceParams = {
+month?: number;
+year?: number;
+/**
+ * Optionaler Team-Kontext für die Datentrennung.
+ */
+teamId?: number;
 };
 
 export type GetMonthClosingsParams = {

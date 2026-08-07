@@ -93,10 +93,12 @@ export function DatePickerField({
         </button>
       )}
       {/* Zentriertes Kalender-Overlay statt ankerbasiertem Popover: auf
-          iPad/Mobil bleibt die Position damit immer vorhersehbar. */}
+          iPad/Mobil bleibt die Position damit immer vorhersehbar. Feste
+          Breite (statt w-auto), damit Monats-/Jahres-Dropdowns und die
+          Navigations-Pfeile nicht gequetscht wirken. */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
-          className="w-auto max-w-[calc(100vw-2rem)] p-4"
+          className="w-[min(22rem,calc(100vw-2rem))] p-4"
           data-testid={testId ? `${testId}-picker` : undefined}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >

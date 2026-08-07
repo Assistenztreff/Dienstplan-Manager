@@ -39,15 +39,21 @@ import type {
   GetAllowanceSettingsParams,
   GetBrandingSettingsParams,
   GetDashboardSummaryParams,
+  GetHourBudgetBalanceParams,
   GetHoursBalanceParams,
   GetMonthClosingDiffParams,
   GetMonthClosingsParams,
   GetMyHoursBalanceParams,
   HealthStatus,
+  HourBudget,
+  HourBudgetBalance,
+  HourBudgetInput,
+  HourBudgetUpdate,
   HoursBalance,
   InviteResult,
   LexwareBookingList,
   ListContractsParams,
+  ListHourBudgetsParams,
   ListOperatorErrorsParams,
   ListOperatorPlanChangesParams,
   ListShiftModelsParams,
@@ -933,6 +939,303 @@ export const useDeleteContract = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteContractMutationOptions(options));
+    }
+
+export const getListHourBudgetsUrl = (params?: ListHourBudgetsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/hour-budgets?${stringifiedParams}` : `/api/hour-budgets`
+}
+
+/**
+ * @summary Zielvereinbarungen (Monatsbudgets) auflisten — Premium advancedAnalytics
+ */
+export const listHourBudgets = async (params?: ListHourBudgetsParams, options?: RequestInit): Promise<HourBudget[]> => {
+
+  return customFetch<HourBudget[]>(getListHourBudgetsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListHourBudgetsQueryKey = (params?: ListHourBudgetsParams,) => {
+    return [
+    `/api/hour-budgets`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListHourBudgetsQueryOptions = <TData = Awaited<ReturnType<typeof listHourBudgets>>, TError = ErrorType<void>>(params?: ListHourBudgetsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listHourBudgets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListHourBudgetsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listHourBudgets>>> = ({ signal }) => listHourBudgets(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listHourBudgets>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListHourBudgetsQueryResult = NonNullable<Awaited<ReturnType<typeof listHourBudgets>>>
+export type ListHourBudgetsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Zielvereinbarungen (Monatsbudgets) auflisten — Premium advancedAnalytics
+ */
+
+export function useListHourBudgets<TData = Awaited<ReturnType<typeof listHourBudgets>>, TError = ErrorType<void>>(
+ params?: ListHourBudgetsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listHourBudgets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListHourBudgetsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateHourBudgetUrl = () => {
+
+
+
+
+  return `/api/hour-budgets`
+}
+
+/**
+ * @summary Zielvereinbarung anlegen — Premium advancedAnalytics
+ */
+export const createHourBudget = async (hourBudgetInput: HourBudgetInput, options?: RequestInit): Promise<HourBudget> => {
+
+  return customFetch<HourBudget>(getCreateHourBudgetUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      hourBudgetInput,)
+  }
+);}
+
+
+
+
+export const getCreateHourBudgetMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createHourBudget>>, TError,{data: BodyType<HourBudgetInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createHourBudget>>, TError,{data: BodyType<HourBudgetInput>}, TContext> => {
+
+const mutationKey = ['createHourBudget'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createHourBudget>>, {data: BodyType<HourBudgetInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createHourBudget(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateHourBudgetMutationResult = NonNullable<Awaited<ReturnType<typeof createHourBudget>>>
+    export type CreateHourBudgetMutationBody = BodyType<HourBudgetInput>
+    export type CreateHourBudgetMutationError = ErrorType<void>
+
+    /**
+ * @summary Zielvereinbarung anlegen — Premium advancedAnalytics
+ */
+export const useCreateHourBudget = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createHourBudget>>, TError,{data: BodyType<HourBudgetInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createHourBudget>>,
+        TError,
+        {data: BodyType<HourBudgetInput>},
+        TContext
+      > => {
+      return useMutation(getCreateHourBudgetMutationOptions(options));
+    }
+
+export const getUpdateHourBudgetUrl = (id: number,) => {
+
+
+
+
+  return `/api/hour-budgets/${id}`
+}
+
+/**
+ * @summary Zielvereinbarung ändern — Premium advancedAnalytics
+ */
+export const updateHourBudget = async (id: number,
+    hourBudgetUpdate: HourBudgetUpdate, options?: RequestInit): Promise<HourBudget> => {
+
+  return customFetch<HourBudget>(getUpdateHourBudgetUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      hourBudgetUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateHourBudgetMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateHourBudget>>, TError,{id: number;data: BodyType<HourBudgetUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateHourBudget>>, TError,{id: number;data: BodyType<HourBudgetUpdate>}, TContext> => {
+
+const mutationKey = ['updateHourBudget'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateHourBudget>>, {id: number;data: BodyType<HourBudgetUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateHourBudget(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateHourBudgetMutationResult = NonNullable<Awaited<ReturnType<typeof updateHourBudget>>>
+    export type UpdateHourBudgetMutationBody = BodyType<HourBudgetUpdate>
+    export type UpdateHourBudgetMutationError = ErrorType<void>
+
+    /**
+ * @summary Zielvereinbarung ändern — Premium advancedAnalytics
+ */
+export const useUpdateHourBudget = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateHourBudget>>, TError,{id: number;data: BodyType<HourBudgetUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateHourBudget>>,
+        TError,
+        {id: number;data: BodyType<HourBudgetUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateHourBudgetMutationOptions(options));
+    }
+
+export const getDeleteHourBudgetUrl = (id: number,) => {
+
+
+
+
+  return `/api/hour-budgets/${id}`
+}
+
+/**
+ * @summary Zielvereinbarung löschen — Premium advancedAnalytics
+ */
+export const deleteHourBudget = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteHourBudgetUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteHourBudgetMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteHourBudget>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteHourBudget>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteHourBudget'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteHourBudget>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteHourBudget(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteHourBudgetMutationResult = NonNullable<Awaited<ReturnType<typeof deleteHourBudget>>>
+
+    export type DeleteHourBudgetMutationError = ErrorType<void>
+
+    /**
+ * @summary Zielvereinbarung löschen — Premium advancedAnalytics
+ */
+export const useDeleteHourBudget = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteHourBudget>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteHourBudget>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteHourBudgetMutationOptions(options));
     }
 
 export const getListShiftsUrl = (params?: ListShiftsParams,) => {
@@ -4259,6 +4562,92 @@ export function useGetMyHoursBalance<TData = Awaited<ReturnType<typeof getMyHour
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetMyHoursBalanceQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetHourBudgetBalanceUrl = (params?: GetHourBudgetBalanceParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/dashboard/hour-budget-balance?${stringifiedParams}` : `/api/dashboard/hour-budget-balance`
+}
+
+/**
+ * Bilanz der genehmigten Assistenzstunden (Zielvereinbarung) für einen Monat: genehmigt / verbraucht / verbleibend plus laufender Jahressaldo (kumuliert genehmigt minus verbraucht seit Jahresbeginn). Verbrauch zählt nur echte Arbeitsdienste — Abwesenheitsstunden (Urlaub, Krankheit etc.) sind im Budget bereits enthalten. Warnschwelle: mehr als 1,5 angesparte Monatsbudgets.
+
+ * @summary Stundenbilanz zum Monatsbudget — Premium advancedAnalytics
+ */
+export const getHourBudgetBalance = async (params?: GetHourBudgetBalanceParams, options?: RequestInit): Promise<HourBudgetBalance> => {
+
+  return customFetch<HourBudgetBalance>(getGetHourBudgetBalanceUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetHourBudgetBalanceQueryKey = (params?: GetHourBudgetBalanceParams,) => {
+    return [
+    `/api/dashboard/hour-budget-balance`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetHourBudgetBalanceQueryOptions = <TData = Awaited<ReturnType<typeof getHourBudgetBalance>>, TError = ErrorType<void>>(params?: GetHourBudgetBalanceParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getHourBudgetBalance>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetHourBudgetBalanceQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getHourBudgetBalance>>> = ({ signal }) => getHourBudgetBalance(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getHourBudgetBalance>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetHourBudgetBalanceQueryResult = NonNullable<Awaited<ReturnType<typeof getHourBudgetBalance>>>
+export type GetHourBudgetBalanceQueryError = ErrorType<void>
+
+
+/**
+ * @summary Stundenbilanz zum Monatsbudget — Premium advancedAnalytics
+ */
+
+export function useGetHourBudgetBalance<TData = Awaited<ReturnType<typeof getHourBudgetBalance>>, TError = ErrorType<void>>(
+ params?: GetHourBudgetBalanceParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getHourBudgetBalance>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetHourBudgetBalanceQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

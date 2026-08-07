@@ -81,6 +81,25 @@ export const PRE_PUSH_SQL: string[] = [
      END IF;
    END $$;`,
   `ALTER TABLE contracts ADD COLUMN IF NOT EXISTS workdays_confirmed_at timestamp;`,
+  // hour_budgets (Zielvereinbarungen/Stundenbudget, Premium): neue Tabelle mit
+  // NOT NULL-FK auf teams — auf Bestands-DBs kann push dafür interaktiv
+  // nachfragen, daher vorab idempotent anlegen (inkl. FK-Guard).
+  `CREATE TABLE IF NOT EXISTS hour_budgets (
+     id serial PRIMARY KEY,
+     team_id integer NOT NULL,
+     monthly_hours real NOT NULL,
+     start_date date NOT NULL,
+     end_date date,
+     notes text,
+     created_at timestamp DEFAULT now() NOT NULL
+   );`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'hour_budgets_team_id_teams_id_fk') THEN
+       ALTER TABLE hour_budgets
+         ADD CONSTRAINT hour_budgets_team_id_teams_id_fk
+         FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE;
+     END IF;
+   END $$;`,
 ];
 
 /** Alle Vorab-Schritte sequenziell gegen den übergebenen Client ausführen. */

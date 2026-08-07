@@ -43,6 +43,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, GripVertical, Upload, ImageIcon, KeyRound, Mail, User as UserIcon, Lock, CalendarDays, Copy, RefreshCw } from "lucide-react";
 import { AllowanceSettingsForm } from "@/components/allowance-settings-form";
+import { HourBudgetSettingsCard } from "@/components/hour-budget-settings";
 import { logoSrcFromPath, ACCEPTED_LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/logo";
 import { readableApiError, planUpgradeMessage, planFeatureMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
 import { hasAccess, getLimit, isWithinLimit } from "@/lib/entitlements";
@@ -1449,6 +1450,10 @@ export default function Einstellungen() {
         Zuschläge gelten nur für Ihr Konto und werden bei der Auswertung angewandt. Änderungen wirken
         sich rückwirkend auf Ihre Auswertungen aus, ohne dass Schichten neu gespeichert werden müssen.
       </p>
+
+      {/* Monatliches Stundenbudget (Bedarfsseite): Premium-Feature —
+          Free-Konten sehen die Karte gesperrt mit Premium-Verweis. */}
+      <HourBudgetSettingsCard />
       </>
       )}
 

@@ -24,6 +24,7 @@ import { formatDays, formatDaysWithUnit, formatHours } from "@/lib/utils";
 import { useTimeTrackingEnabled } from "@/hooks/use-time-tracking-enabled";
 import { StatusBadge } from "@/components/status-badge";
 import { MeineStundenKarte } from "@/components/meine-stunden-karte";
+import { HourBudgetDashboardCard } from "@/components/hour-budget-card";
 
 // Beispielhafte Einbindung der zentralen Planungstypen (siehe @/types/dienstplan):
 // belegt die Importierbarkeit aus der Dashboard-Ansicht, ohne bestehendes
@@ -571,6 +572,13 @@ export default function Dashboard() {
           {/* Krankmeldungs-Kachel ist Premium (Arbeitsanweisung 06.08.2026,
               Punkt 2.1) — Free-Konten sehen sie nicht. */}
           {hasAccess(currentUser, "advancedAnalytics") && <AbsenceReminder />}
+
+          {/* Stundenbilanz-Kachel (Punkt 2.2, Premium): genehmigt/verbraucht/
+              verbleibend + Jahressaldo, Warnhinweis ab >1,5 angesparten
+              Monatsbudgets. Nur für Admins — die Bilanz ist Bedarfsseite. */}
+          {isAdmin && hasAccess(currentUser, "advancedAnalytics") && (
+            <HourBudgetDashboardCard teamId={selectedTeamId} />
+          )}
 
           {!isAdmin && (
             <>

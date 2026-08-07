@@ -331,6 +331,78 @@ export const DeleteContractParams = zod.object({
 
 
 /**
+ * @summary Zielvereinbarungen (Monatsbudgets) auflisten — Premium advancedAnalytics
+ */
+export const ListHourBudgetsQueryParams = zod.object({
+  "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext für die Datentrennung.')
+})
+
+export const ListHourBudgetsResponseItem = zod.object({
+  "id": zod.number(),
+  "teamId": zod.number(),
+  "monthlyHours": zod.number().describe('Genehmigte Assistenzstunden pro Monat (Zielvereinbarung, Bedarfsseite).'),
+  "startDate": zod.coerce.date().describe('Beginn der Gültigkeit (inklusive).'),
+  "endDate": zod.string().nullish().describe('Ende der Gültigkeit (inklusive); null = unbefristet.'),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListHourBudgetsResponse = zod.array(ListHourBudgetsResponseItem)
+
+
+/**
+ * @summary Zielvereinbarung anlegen — Premium advancedAnalytics
+ */
+export const createHourBudgetBodyMonthlyHoursExclusiveMin = 0;
+
+
+
+export const CreateHourBudgetBody = zod.object({
+  "teamId": zod.number().optional().describe('Optionaler Team-Kontext; muss ein erlaubtes Team sein.'),
+  "monthlyHours": zod.number().gt(createHourBudgetBodyMonthlyHoursExclusiveMin),
+  "startDate": zod.coerce.date(),
+  "endDate": zod.coerce.date().optional(),
+  "notes": zod.string().optional()
+})
+
+
+/**
+ * @summary Zielvereinbarung ändern — Premium advancedAnalytics
+ */
+export const UpdateHourBudgetParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateHourBudgetBodyMonthlyHoursExclusiveMin = 0;
+
+
+
+export const UpdateHourBudgetBody = zod.object({
+  "monthlyHours": zod.number().gt(updateHourBudgetBodyMonthlyHoursExclusiveMin).optional(),
+  "startDate": zod.coerce.date().optional(),
+  "endDate": zod.string().nullish(),
+  "notes": zod.string().nullish()
+})
+
+export const UpdateHourBudgetResponse = zod.object({
+  "id": zod.number(),
+  "teamId": zod.number(),
+  "monthlyHours": zod.number().describe('Genehmigte Assistenzstunden pro Monat (Zielvereinbarung, Bedarfsseite).'),
+  "startDate": zod.coerce.date().describe('Beginn der Gültigkeit (inklusive).'),
+  "endDate": zod.string().nullish().describe('Ende der Gültigkeit (inklusive); null = unbefristet.'),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Zielvereinbarung löschen — Premium advancedAnalytics
+ */
+export const DeleteHourBudgetParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
  * @summary Schichten auflisten
  */
 export const ListShiftsQueryParams = zod.object({
@@ -1585,6 +1657,32 @@ export const GetMyHoursBalanceResponse = zod.union([zod.object({
   "absenceSundaySurchargePay": zod.number().nullish().describe('Geldwert des SV-pflichtigen Sonntagszuschlags auf Abwesenheitstagen (Premium).'),
   "absenceHolidaySurchargePay": zod.number().nullish().describe('Geldwert des SV-pflichtigen Feiertagszuschlags auf Abwesenheitstagen (Premium).')
 }),zod.null()])
+
+
+/**
+ * Bilanz der genehmigten Assistenzstunden (Zielvereinbarung) für einen Monat: genehmigt / verbraucht / verbleibend plus laufender Jahressaldo (kumuliert genehmigt minus verbraucht seit Jahresbeginn). Verbrauch zählt nur echte Arbeitsdienste — Abwesenheitsstunden (Urlaub, Krankheit etc.) sind im Budget bereits enthalten. Warnschwelle: mehr als 1,5 angesparte Monatsbudgets.
+
+ * @summary Stundenbilanz zum Monatsbudget — Premium advancedAnalytics
+ */
+export const GetHourBudgetBalanceQueryParams = zod.object({
+  "month": zod.coerce.number().optional(),
+  "year": zod.coerce.number().optional(),
+  "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext für die Datentrennung.')
+})
+
+export const GetHourBudgetBalanceResponse = zod.object({
+  "month": zod.number(),
+  "year": zod.number(),
+  "approvedHours": zod.number().describe('Genehmigte Stunden des Monats (0 ohne gültige Zielvereinbarung).'),
+  "consumedHours": zod.number().describe('Verbrauchte Stunden des Monats (nur echte Arbeitsdienste, keine Abwesenheiten).'),
+  "remainingHours": zod.number().describe('Verbleibende Stunden des Monats (genehmigt minus verbraucht).'),
+  "yearApprovedHours": zod.number().describe('Kumuliert genehmigte Stunden seit Jahresbeginn (Januar bis Auswertungsmonat).'),
+  "yearConsumedHours": zod.number().describe('Kumuliert verbrauchte Stunden seit Jahresbeginn.'),
+  "yearBalance": zod.number().describe('Laufender Jahressaldo (genehmigt minus verbraucht; positiv = angespart).'),
+  "warningThresholdHours": zod.number().describe('Warnschwelle = 1,5 × Monatsbudget.'),
+  "warningActive": zod.boolean().describe('true, sobald der Jahressaldo die Warnschwelle übersteigt (nur bei vorhandenem Monatsbudget).'),
+  "hasBudgets": zod.boolean().describe('true, sobald im Scope mindestens eine Zielvereinbarung existiert (die Dashboard-Kachel blendet sich ohne Budget aus).')
+})
 
 
 /**
