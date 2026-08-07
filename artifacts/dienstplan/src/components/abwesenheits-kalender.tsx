@@ -5,8 +5,12 @@
  *   Abwesenheiten in Kategoriefarbe: Gelb = geplant, Rot = Ausfall, Grau = Absage.
  * - Smartphone: Akkordeon (ein Monat pro Zeile mit Zähler, aktueller Monat offen).
  * - Filter: Assistenzkraft (nur Verwaltung) + Farb-Chips (Legende + Filter).
- * - Direktanlage: Klick auf Tag (= Start), zweiter Klick (= Ende) öffnet den
- *   Anlage-Dialog für den Zeitraum; gleicher Tag = einzelner Tag.
+ * - Direktanlage mit Zwei-Stufen-Klick wie im Dienstplan: erster Klick wählt
+ *   den Tag, zweiter Klick auf denselben Tag öffnet den Anlage-Dialog, Klick
+ *   auf einen anderen Tag verschiebt nur die Auswahl.
+ * - Mehrfachauswahl (Umschalter neben der Legende): Tagesklicks togglen die
+ *   Auswahl, „Abwesenheit eintragen" öffnet den Dialog für den Zeitraum vom
+ *   frühesten bis zum spätesten gewählten Tag (inklusiv).
  * - Klick auf einen belegten Tag öffnet Details mit Löschen (rechtebasiert).
  * - Wird als eigene Seiten-Sektion (/abwesenheiten) UND als Popup (Dienstplan)
  *   verwendet — gleiches Layout an beiden Stellen.
@@ -48,7 +52,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChevronDown, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import { CheckSquare, ChevronDown, ChevronLeft, ChevronRight, Trash2, X } from "lucide-react";
 import { useAuth } from "@/context/auth";
 import { isAdminRole } from "@/lib/roles";
 import { useToast } from "@/hooks/use-toast";
@@ -149,8 +153,11 @@ export function AbwesenheitsKalender() {
   const [enabledCategories, setEnabledCategories] = useState<
     Record<AbsenceCategory, boolean>
   >({ geplant: true, ausfall: true, absage: true });
-  // Start-Anker für die Direktanlage per Zwei-Klick (yyyy-MM-dd).
-  const [anchor, setAnchor] = useState<string | null>(null);
+  // Gewählter Tag für die Direktanlage (Zwei-Stufen-Klick, yyyy-MM-dd).
+  const [selected, setSelected] = useState<string | null>(null);
+  // Mehrfachauswahl: tagweises An-/Abwählen für Zeitraum-Anlage.
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedDates, setSelectedDates] = useState<string[]>([]);
   const [createDraft, setCreateDraft] = useState<{ from: string; to: string } | null>(null);
   const [createUserId, setCreateUserId] = useState<string>("");
   const [createType, setCreateType] = useState<string>("vacation");
@@ -224,20 +231,46 @@ export function AbwesenheitsKalender() {
     );
     setCreateType("vacation");
     setCreateError(null);
-    setAnchor(null);
+    setSelected(null);
   }
 
+  // Zwei-Stufen-Klick wie im Dienstplan-Monatskalender: erster Klick wählt
+  // den Tag nur aus, zweiter Klick auf denselben Tag öffnet den Dialog,
+  // Klick auf einen anderen Tag verschiebt nur die Auswahl.
   function handleDayClick(dayKey: string, hasAbsences: boolean) {
+    if (selectionMode) {
+      // Mehrfachauswahl: Klicks öffnen keinen Dialog, sondern togglen Tage.
+      setSelectedDates((prev) =>
+        prev.includes(dayKey) ? prev.filter((d) => d !== dayKey) : [...prev, dayKey],
+      );
+      return;
+    }
     if (hasAbsences) {
-      setAnchor(null);
+      setSelected(null);
       setDayDetail(dayKey);
       return;
     }
-    if (!anchor) {
-      setAnchor(dayKey);
+    if (selected === dayKey) {
+      openCreate(dayKey, dayKey);
       return;
     }
-    openCreate(anchor, dayKey);
+    setSelected(dayKey);
+  }
+
+  function toggleSelectionMode() {
+    setSelected(null);
+    setSelectionMode((prev) => {
+      if (prev) setSelectedDates([]);
+      return !prev;
+    });
+  }
+
+  // Zeitraum-Anlage aus der Mehrfachauswahl: frühester bis spätester
+  // gewählter Tag, inklusiv (gleiche Range-Semantik wie bisher).
+  function openCreateFromSelection() {
+    if (selectedDates.length === 0) return;
+    const sorted = [...selectedDates].sort();
+    openCreate(sorted[0], sorted[sorted.length - 1]);
   }
 
   async function handleCreateSave() {
@@ -289,6 +322,8 @@ export function AbwesenheitsKalender() {
         description: `${toCreate.length} ${toCreate.length === 1 ? "Tag" : "Tage"} angelegt`,
       });
       setCreateDraft(null);
+      setSelectedDates([]);
+      setSelectionMode(false);
     } catch (err) {
       // Teilfehler: Serverdaten sofort nachladen — die bereits angelegten Tage
       // landen dadurch in `existing` und werden beim erneuten Speichern
@@ -366,7 +401,9 @@ export function AbwesenheitsKalender() {
           {days.map((day) => {
             const k = dayKeyOf(day);
             const cat = dominantCategory(k);
-            const isAnchor = anchor === k;
+            const isSelected = selectionMode
+              ? selectedDates.includes(k)
+              : selected === k;
             const hasAbsences = visibleAbsences(k).length > 0;
             return (
               <button
@@ -374,6 +411,8 @@ export function AbwesenheitsKalender() {
                 type="button"
                 data-testid={`abwkal-day-${k}`}
                 data-category={cat ?? undefined}
+                data-selected={isSelected ? "true" : undefined}
+                aria-pressed={selectionMode ? isSelected : undefined}
                 onClick={() => handleDayClick(k, hasAbsences)}
                 title={
                   hasAbsences
@@ -385,7 +424,7 @@ export function AbwesenheitsKalender() {
                 className={[
                   "aspect-square rounded-[3px] text-[10px] leading-none tabular-nums transition-colors",
                   cat ? `${CATEGORY_STYLE[cat].cell} font-semibold` : "hover:bg-accent/40 text-foreground/70",
-                  isAnchor ? "ring-2 ring-inset ring-primary" : "",
+                  isSelected ? "ring-2 ring-inset ring-primary" : "",
                 ].filter(Boolean).join(" ")}
               >
                 {format(day, "d")}
@@ -445,6 +484,19 @@ export function AbwesenheitsKalender() {
             {currentUser?.name}
           </span>
         )}
+        <Button
+          variant={selectionMode ? "default" : "outline"}
+          size="sm"
+          className="h-8 gap-1.5 px-2.5 text-xs"
+          onClick={toggleSelectionMode}
+          aria-pressed={selectionMode}
+          title={selectionMode ? "Auswahl beenden" : "Mehrfachauswahl: mehrere Tage an-/abwählen"}
+          aria-label={selectionMode ? "Auswahl beenden" : "Mehrfachauswahl"}
+          data-testid="abwkal-toggle-selection"
+        >
+          {selectionMode ? <X className="h-3.5 w-3.5" /> : <CheckSquare className="h-3.5 w-3.5" />}
+          Mehrfachauswahl
+        </Button>
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
           {(Object.keys(CATEGORY_STYLE) as AbsenceCategory[]).map((cat) => (
             <button
@@ -468,11 +520,33 @@ export function AbwesenheitsKalender() {
         </div>
       </div>
 
-      {anchor && (
-        <p className="text-xs text-muted-foreground" data-testid="abwkal-anchor-hint">
-          Starttag {format(new Date(`${anchor}T00:00:00`), "d. MMMM", { locale: de })} gewählt —
-          Endtag antippen (oder denselben Tag für einen einzelnen Tag).
+      {!selectionMode && selected && (
+        <p className="text-xs text-muted-foreground" data-testid="abwkal-selected-hint">
+          {format(new Date(`${selected}T00:00:00`), "EEEE, d. MMMM", { locale: de })} gewählt —
+          zum Eintragen denselben Tag erneut antippen.
         </p>
+      )}
+
+      {selectionMode && (
+        <div
+          className="flex flex-wrap items-center gap-2"
+          data-testid="abwkal-selection-bar"
+        >
+          <p className="text-xs text-muted-foreground">
+            {selectedDates.length === 0
+              ? "Mehrfachauswahl aktiv — Tage antippen, um sie an- oder abzuwählen."
+              : `${selectedDates.length} ${selectedDates.length === 1 ? "Tag" : "Tage"} ausgewählt`}
+          </p>
+          <Button
+            size="sm"
+            className="h-8 text-xs"
+            disabled={selectedDates.length === 0}
+            onClick={openCreateFromSelection}
+            data-testid="abwkal-create-from-selection"
+          >
+            Abwesenheit eintragen
+          </Button>
+        </div>
       )}
 
       {/* Desktop/Tablet: 2 Zeilen à 6 quadratische Monate */}
