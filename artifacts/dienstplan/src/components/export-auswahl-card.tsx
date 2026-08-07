@@ -2,10 +2,15 @@
  * Export-Auswahl — als schwebender Popover über einem Header-Button.
  *
  * ExportPopoverButton: Trigger-Button für den AuswertungenHeader.
- *   Öffnet einen Popover mit drei Download-Optionen:
- *   - Lohnexport (DATEV-konform) .xlsx
- *   - Zeitkonto (Soll/Ist) .xlsx
- *   - Beide Dateien als ZIP (exklusiv zu Einzelauswahl)
+ *   Öffnet einen Popover mit Download-Optionen:
+ *   - Stundenliste (Dienste, Urlaub, Krank — ohne Geldwerte) .xlsx
+ *     → einzige Option im Free-Tarif
+ *   - Lohnexport (DATEV-konform) .xlsx           → Premium
+ *   - Zeitkonto (Soll/Ist) .xlsx                 → Premium
+ *   - Beide Dateien als ZIP (exklusiv)           → Premium
+ *
+ * Im Free-Tarif (payrollLocked) bleiben die Premium-Optionen sichtbar, aber
+ * gesperrt (Lock-Icon + Upgrade-Hinweis) — Muster wie bei den Free-Limits.
  */
 
 import { useState } from "react";
@@ -14,6 +19,7 @@ import {
   FileSpreadsheet,
   Archive,
   Loader2,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -24,27 +30,34 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { toast } from "sonner";
+import { PlanUpgradeLink } from "@/components/plan-limit-banner";
 import type { MatrixBalance, MatrixRecalc } from "@/components/gesamt-auswertung-matrix";
+import type { StundenlisteShift } from "@/lib/stundenliste-xlsx";
 
-type ExportMode = "lohn" | "zeitkonto" | "zip";
+type ExportMode = "stundenliste" | "lohn" | "zeitkonto" | "zip";
 
 type ExportData = {
   balances: MatrixBalance[];
+  /** FIX-Dienste + Abwesenheiten des Monats (Quelle: GET /shifts, kein Premium-Gate). */
+  shifts?: StundenlisteShift[];
   recalcByUser?: Map<number, MatrixRecalc>;
   prevMonthLabel?: string;
   month: number;
   year: number;
   disabled?: boolean;
+  /** true im Free-Tarif: Lohn-/Zeitkonto-Exporte gesperrt, Stundenliste frei. */
+  payrollLocked?: boolean;
 };
 
 // ---------------------------------------------------------------------------
 // Kern-Logik (geteilt zwischen Popover und Card)
 // ---------------------------------------------------------------------------
 
-function ExportContent({ balances, recalcByUser, prevMonthLabel, month, year, disabled, onDone }: ExportData & { onDone?: () => void }) {
+function ExportContent({ balances, shifts, recalcByUser, prevMonthLabel, month, year, disabled, payrollLocked, onDone }: ExportData & { onDone?: () => void }) {
   const [selected, setSelected] = useState<Set<ExportMode>>(new Set());
   const [isPending, setIsPending] = useState(false);
 
+  const hasStundenliste = selected.has("stundenliste");
   const hasLohn = selected.has("lohn");
   const hasZeitk = selected.has("zeitkonto");
   const hasZip = selected.has("zip");
@@ -71,7 +84,13 @@ function ExportContent({ balances, recalcByUser, prevMonthLabel, month, year, di
     });
   }
 
-  const canExport = selected.size > 0 && !disabled && balances.length > 0;
+  // Die Stundenliste braucht Schichtdaten, die Premium-Exporte die Bilanzen.
+  const needsShifts = hasStundenliste;
+  const needsBalances = hasLohn || hasZeitk || hasZip;
+  const dataReady =
+    (!needsShifts || (shifts?.length ?? 0) > 0) &&
+    (!needsBalances || balances.length > 0);
+  const canExport = selected.size > 0 && !disabled && dataReady;
 
   async function handleExport() {
     if (!canExport) return;
@@ -101,6 +120,10 @@ function ExportContent({ balances, recalcByUser, prevMonthLabel, month, year, di
         a.click();
         URL.revokeObjectURL(url);
       } else {
+        if (hasStundenliste) {
+          const { downloadStundenlisteXlsx } = await import("@/lib/stundenliste-xlsx");
+          await downloadStundenlisteXlsx(shifts ?? [], month, year);
+        }
         if (hasLohn) {
           const { downloadLohnexportXlsx } = await import("@/lib/lohnexport-xlsx");
           await downloadLohnexportXlsx(balances, recalcByUser, prevMonthLabel, month, year);
@@ -133,21 +156,43 @@ function ExportContent({ balances, recalcByUser, prevMonthLabel, month, year, di
   return (
     <div className="space-y-1" data-testid="export-auswahl-content">
       <p className="text-[11px] text-muted-foreground pb-2 border-b border-border/50">
-        DATEV-konformes Excel — direkt für die Lohnbuchhaltung geeignet.
+        {payrollLocked
+          ? "Die Stundenliste zum Weitergeben an Dienstleister oder Lohnbüro."
+          : "DATEV-konformes Excel — direkt für die Lohnbuchhaltung geeignet."}
       </p>
 
-      {/* Lohnexport */}
+      {/* Stundenliste — einzige Option im Free-Tarif, in Premium zusätzlich. */}
+      <div className="flex items-center gap-2.5 py-1">
+        <Checkbox
+          id="export-stundenliste"
+          checked={hasStundenliste}
+          onCheckedChange={() => toggle("stundenliste")}
+          disabled={isPending || hasZip}
+          data-testid="export-check-stundenliste"
+        />
+        <Label
+          htmlFor="export-stundenliste"
+          className={`flex items-center gap-2 cursor-pointer text-sm leading-none ${hasZip ? "text-muted-foreground" : ""}`}
+        >
+          <FileSpreadsheet className="h-3.5 w-3.5 text-assistenz-brand shrink-0" />
+          <span>Stundenliste</span>
+          <span className="text-muted-foreground font-normal">.xlsx</span>
+          <span className="text-muted-foreground font-normal text-xs">(Dienste, Urlaub, Krank)</span>
+        </Label>
+      </div>
+
+      {/* Lohnexport — Premium */}
       <div className="flex items-center gap-2.5 py-1">
         <Checkbox
           id="export-lohn"
           checked={hasLohn}
           onCheckedChange={() => toggle("lohn")}
-          disabled={isPending || hasZip}
+          disabled={isPending || hasZip || payrollLocked}
           data-testid="export-check-lohn"
         />
         <Label
           htmlFor="export-lohn"
-          className={`flex items-center gap-2 cursor-pointer text-sm leading-none ${hasZip ? "text-muted-foreground" : ""}`}
+          className={`flex items-center gap-2 text-sm leading-none ${hasZip || payrollLocked ? "text-muted-foreground" : "cursor-pointer"}`}
         >
           <FileSpreadsheet className="h-3.5 w-3.5 text-green-700 shrink-0" />
           <span>Lohnexport</span>
@@ -155,46 +200,69 @@ function ExportContent({ balances, recalcByUser, prevMonthLabel, month, year, di
           <span className="text-[9px] uppercase tracking-wide bg-muted text-muted-foreground rounded px-1 py-0.5 ml-0.5">
             DATEV
           </span>
+          {payrollLocked && (
+            <Lock className="h-3 w-3 shrink-0" data-testid="export-lock-lohn" aria-label="Premium-Feature" />
+          )}
         </Label>
       </div>
 
-      {/* Zeitkonto */}
+      {/* Zeitkonto — Premium */}
       <div className="flex items-center gap-2.5 py-1">
         <Checkbox
           id="export-zeitkonto"
           checked={hasZeitk}
           onCheckedChange={() => toggle("zeitkonto")}
-          disabled={isPending || hasZip}
+          disabled={isPending || hasZip || payrollLocked}
           data-testid="export-check-zeitkonto"
         />
         <Label
           htmlFor="export-zeitkonto"
-          className={`flex items-center gap-2 cursor-pointer text-sm leading-none ${hasZip ? "text-muted-foreground" : ""}`}
+          className={`flex items-center gap-2 text-sm leading-none ${hasZip || payrollLocked ? "text-muted-foreground" : "cursor-pointer"}`}
         >
           <FileSpreadsheet className="h-3.5 w-3.5 text-blue-700 shrink-0" />
           <span>Zeitkonto (Soll/Ist)</span>
           <span className="text-muted-foreground font-normal">.xlsx</span>
+          {payrollLocked && (
+            <Lock className="h-3 w-3 shrink-0" data-testid="export-lock-zeitkonto" aria-label="Premium-Feature" />
+          )}
         </Label>
       </div>
 
-      {/* ZIP — exklusiv */}
+      {/* ZIP — exklusiv, Premium */}
       <div className="flex items-center gap-2.5 py-1 pt-2 border-t border-border/50 mt-1">
         <Checkbox
           id="export-zip"
           checked={hasZip}
           onCheckedChange={() => toggle("zip")}
-          disabled={isPending}
+          disabled={isPending || payrollLocked}
           data-testid="export-check-zip"
         />
         <Label
           htmlFor="export-zip"
-          className="flex items-center gap-2 cursor-pointer text-sm leading-none"
+          className={`flex items-center gap-2 text-sm leading-none ${payrollLocked ? "text-muted-foreground" : "cursor-pointer"}`}
         >
           <Archive className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           <span>Beide als ZIP</span>
           <span className="text-muted-foreground font-normal text-xs">(Lohnexport + Zeitkonto)</span>
+          {payrollLocked && (
+            <Lock className="h-3 w-3 shrink-0" data-testid="export-lock-zip" aria-label="Premium-Feature" />
+          )}
         </Label>
       </div>
+
+      {/* Premium-Verweis für gesperrte Exporte (Free-Tarif). */}
+      {payrollLocked && (
+        <div
+          className="mt-2 rounded-md border border-brand-yellow/40 bg-brand-yellow/10 px-3 py-2 text-xs text-foreground space-y-1.5"
+          data-testid="export-premium-hint"
+        >
+          <p>
+            Lohnexport, Zeitkonto und ZIP sind Teil von Premium. Die Stundenliste
+            kannst du auch im Free-Tarif exportieren.
+          </p>
+          <PlanUpgradeLink className="text-xs" />
+        </div>
+      )}
 
       <div className="pt-3">
         <Button

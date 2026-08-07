@@ -3,6 +3,7 @@ import {
   enableTimeTracking,
   deleteFreeAccount,
   registerFreeAccount,
+  setAccountPlan,
   type FreeAccount,
 } from "./helpers/teams";
 
@@ -87,7 +88,10 @@ test.beforeAll(async () => {
   test.setTimeout(120_000);
 
   // --- Arbeitgeber P: Assistent + Schicht + bereits gebuchte Ist-Zeit -------
+  // Premium, weil der Schalter "Zeiterfassung aktivieren" im Free-Tarif
+  // serverseitig gegen Aenderungen gesperrt ist ("timeTrackingSettings").
   employerP = await registerFreeAccount("privat", "ttcreateoracle-p");
+  await setAccountPlan(employerP.email, "premium");
   await enableTimeTracking(employerP.ctx);
   pAssistantId = await createAssistant(employerP, "p");
   pShiftId = await createShift(employerP, pAssistantId, P_START, P_END);
@@ -106,6 +110,7 @@ test.beforeAll(async () => {
 
   // --- Getrennter Arbeitgeber Q: eigener Assistent + eigene Schicht ---------
   employerQ = await registerFreeAccount("privat", "ttcreateoracle-q");
+  await setAccountPlan(employerQ.email, "premium");
   await enableTimeTracking(employerQ.ctx);
   qAssistantId = await createAssistant(employerQ, "q");
   qShiftId = await createShift(employerQ, qAssistantId, Q_START, Q_END);

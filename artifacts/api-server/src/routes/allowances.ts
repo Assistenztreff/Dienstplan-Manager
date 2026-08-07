@@ -5,6 +5,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import { UpdateAllowanceSettingsBody } from "@workspace/api-zod";
 import { requireAdmin } from "../middleware/auth";
 import { parseTeamIdParam } from "../lib/teams";
+import { userHasFeature } from "../lib/plan";
 import type { Request, Response } from "express";
 
 const router = Router();
@@ -140,7 +141,32 @@ router.put("/allowance-settings", requireAdmin, async (req, res): Promise<void> 
     });
     return;
   }
-  await ensureAccountSettings(ownerId);
+  const current = await ensureAccountSettings(ownerId);
+
+  // Plan-Gate (Premium-Feature "timeTrackingSettings"): Die drei Schalter
+  // Zeiterfassung aktivieren / Pausen vorbefüllen / Pausen abziehen duerfen im
+  // Free-Tarif nicht geaendert werden. Bestandsschutz: Der Client sendet immer
+  // das volle Formular — abgelehnt wird nur, wenn sich ein Wert TATSAECHLICH
+  // aendert; bereits aktive Werte bleiben wirksam und Speichern anderer
+  // Einstellungen (z. B. Bundesland) funktioniert weiterhin.
+  if (!(await userHasFeature(ownerId, "timeTrackingSettings"))) {
+    const gatedChange =
+      (body.data.timeTrackingEnabled !== undefined &&
+        body.data.timeTrackingEnabled !== current.timeTrackingEnabled) ||
+      (body.data.pauseAutoEnabled !== undefined &&
+        body.data.pauseAutoEnabled !== current.pauseAutoEnabled) ||
+      (body.data.deductPausesEnabled !== undefined &&
+        body.data.deductPausesEnabled !== current.deductPausesEnabled);
+    if (gatedChange) {
+      res.status(403).json({
+        error: "Diese Funktion ist im Premium-Tarif enthalten.",
+        code: "plan_feature_required",
+        feature: "timeTrackingSettings",
+      });
+      return;
+    }
+  }
+
   const [updated] = await db
     .update(allowanceSettingsTable)
     .set({ ...body.data, updatedAt: new Date() })
