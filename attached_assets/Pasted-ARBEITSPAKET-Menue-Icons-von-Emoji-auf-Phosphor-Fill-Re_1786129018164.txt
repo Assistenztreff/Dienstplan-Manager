@@ -1,0 +1,82 @@
+ARBEITSPAKET: Menue-Icons von Emoji auf Phosphor Fill (Rev. 3, 07.08.2026)
+ 
+Mitgeliefert: menue-icons.tsx (fertige Komponente, 1:1 uebernehmen).
+Aufwand: unter 1 Stunde. Nicht mit anderen offenen Punkten mischen.
+ 
+ 
+1. MOTIVE
+Die fuenf Emoji im Dienstplan-Menue werden durch SVG ersetzt:
+  Start     -> house-fill
+  Planen    -> calendar-dots-fill
+  Erfassen  -> clock-fill
+  Auswerten -> chart-bar-fill
+  Verwalten -> gear-fill
+(Phosphor Fill, MIT-Lizenz. Genau diese fuenf, keine anderen.)
+ 
+ 
+2. UMSETZUNG
+2.1 Neue Datei artifacts/dienstplan/src/components/menue-icons.tsx —
+    Inhalt 1:1 aus der mitgelieferten Datei. SVG-Pfade NICHT aendern.
+ 
+2.2 In components/layout.tsx:
+    - Import: { HouseIcon, CalendarDotsIcon, ClockIcon, ChartBarIcon,
+      GearIcon } from "./menue-icons"
+    - NavEntry: `icon: string` -> Komponententyp
+      (props: React.SVGProps<SVGSVGElement>) => JSX.Element
+    - ALL_NAV_ITEMS: "🏠"->HouseIcon, "📅"->CalendarDotsIcon,
+      "🕐"->ClockIcon, "📊"->ChartBarIcon, "⚙️"->GearIcon.
+      Alle uebrigen Felder unveraendert.
+    - Drei Render-Stellen (Zeilen 431, 472, 676):
+      <span className="text-xl ...">{item.icon}</span>
+      -> <item.icon className="h-6 w-6 shrink-0" />
+      (dritte Stelle: h-5 w-5). aria-hidden bringen die Icons selbst mit.
+ 
+2.3 Kommentarblock ueber ALL_NAV_ITEMS auf den neuen Stand anpassen.
+ 
+ 
+3. LAYOUT DER MENUELEISTE — UNVERAENDERT
+  - Leiste behaelt ihren grauen Hintergrund.
+  - Label steht RECHTS neben dem Icon (nicht darunter).
+  - Aktiver Punkt: gelber Block ueber die volle Hoehe der Menueleiste.
+  Alles wie im mitgelieferten Screenshot. Hier wird nichts umgebaut.
+ 
+ 
+4. ZUSTAENDE — NUR HIER WIRD GEAENDERT
+AKTIV:   gelber Block #ebf18b (volle Leistenhoehe, unveraendert),
+         Icon UND Label in #092948, Label fett.
+INAKTIV: kein Hintergrund, Icon UND Label in gedaempftem Blau
+         (z. B. #3d5a75), Label normale Schriftstaerke.
+         NICHT grau — grau liest sich als "nicht verfuegbar".
+         Kontrast gegen den grauen Leistenhintergrund mind. 4,5:1;
+         bei Bedarf dunkler waehlen.
+HOVER:   gelbe Flaeche mit ca. 10-15 % Deckkraft, volle Leistenhoehe.
+         Icon und Label bleiben im inaktiven Blau.
+ 
+Die Icons nutzen fill="currentColor" — es genuegt, die Textfarbe je
+Zustand zu setzen. Kein zweiter Icon-Satz, keine Sonderlogik im Icon.
+ 
+ 
+5. UNANGETASTET
+  - Menuestruktur, Gruppen, Tab-Ebene, Rollen-Flags.
+  - Hoehe, Hintergrund und Anordnung der Menueleiste (siehe 3).
+  - Status-Icons in den Schicht-Pillen (eigenes Paket).
+  - Alle lucide-react-Icons an anderen Stellen der App.
+  - Keine bunten Icons je Menuepunkt. Farbe bleibt Bedeutungstraeger
+    fuer Personenfarben und Dienststatus.
+ 
+ 
+6. ABNAHME
+  - Fuenf richtige Motive, kein Emoji mehr in layout.tsx.
+  - Aktiv: gelber Block volle Hoehe, Icon + Label #092948.
+  - Inaktiv: gedaempftes Blau, nicht grau, Kontrast >= 4,5:1.
+  - Hover: dezente gelbe Flaeche.
+  - Alle drei Render-Stellen umgestellt (Desktop, Tab-Zeile, Mobile).
+  - Screenreader liest nur das Label, keinen Icon-Namen.
+  - Kurze Textbeschreibung der Aenderungen, KEINE Screenshot-Vergleiche.
+ 
+ 
+7. RUECKFRAGE (nicht ungefragt aendern)
+Bei "Team-Verwaltung" steht dienstleisterOnly: true. Vereinbart war
+false (sichtbar fuer Admin ODER Teamleiter). War schon einmal korrigiert
+und ist zurueckgefallen. Bitte melden, ob das Absicht war.
+ 
