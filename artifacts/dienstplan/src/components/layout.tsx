@@ -433,7 +433,7 @@ function MobileFullMenu({
                     onClick={() => toggleGroup(item.label)}
                     aria-expanded={open}
                     data-testid={`mobile-nav-group-${slug}`}
-                    className={`flex h-14 items-center justify-center gap-2 rounded-full border border-brand-dark text-lg font-semibold text-brand-dark shadow-sm transition-colors focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark ${
+                    className={`flex h-14 items-center justify-start gap-2 pl-16 rounded-full border border-brand-dark text-lg font-semibold text-brand-dark shadow-sm transition-colors focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark ${
                       groupActive && !open ? "bg-brand-yellow" : "bg-white hover:bg-brand-yellow"
                     }`}
                   >
@@ -474,7 +474,7 @@ function MobileFullMenu({
                 href={item.href}
                 onClick={onClose}
                 aria-current={isActive ? "page" : undefined}
-                className={`flex h-14 items-center justify-center rounded-full border border-brand-dark text-lg font-semibold text-brand-dark shadow-sm transition-colors focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark ${
+                className={`flex h-14 items-center justify-start gap-2 pl-16 rounded-full border border-brand-dark text-lg font-semibold text-brand-dark shadow-sm transition-colors focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark ${
                   isActive ? "bg-brand-yellow" : "bg-white hover:bg-brand-yellow"
                 }`}
               >
