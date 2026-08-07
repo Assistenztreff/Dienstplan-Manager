@@ -12,6 +12,10 @@ The script is now plain `playwright test` (setup moved into the config), but the
 
 **How to apply:** run one spec directly from the artifact dir, no `--`:
 `cd artifacts/dienstplan && pnpm exec playwright test <spec-name-substring>`.
+The substring matches across ALL spec files: `dienstplan-assistant` pulls in 32 tests
+from 5 files (assistant-create-duplicate-email, assistant-delete, …) and blows the
+5-min shell cap. Anchor exact files: `playwright test "dienstplan-assistant\.spec"`,
+and keep batches ≤3 specs per foreground run (3 specs ≈ 2.7 min incl. stack boot).
 The playwright config itself runs setup-test-db at load time (managed stack only,
 main process only), so single-spec runs auto-provision the `<db>_test` DB; skip via
 `E2E_SKIP_DB_SETUP=1` for fast repeat runs without schema changes. The config's

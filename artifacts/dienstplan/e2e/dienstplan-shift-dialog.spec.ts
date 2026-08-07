@@ -186,9 +186,11 @@ test.describe("ShiftDialog: Schicht anlegen und bearbeiten (Admin, mobile)", () 
     const editEnd = "11:30";
 
     // In einem Entwurf liegt mittig in der Zeile der verschachtelte
-    // „Bestätigen“-Button. Der linke Farbbalken-/Namensbereich ist die
-    // tatsächliche Bearbeitungs-Klickfläche der Tagesleisten-Zeile.
-    await badge.click({ position: { x: 12, y: 14 } });
+    // „Bestätigen"-Button (stoppt das Bubbling und würde die Schicht
+    // bestätigen statt den Dialog zu öffnen). Der linke Farbbalken-/
+    // Namensbereich ist die tatsächliche Bearbeitungs-Klickfläche der
+    // Tagesleisten-Zeile — gezielt auf den Namen klicken.
+    await badge.getByText(assistant.name).click();
     const editDialog = page.getByTestId("shift-dialog");
     await expect(editDialog).toBeVisible();
     await expect(editDialog.getByText("Schicht bearbeiten")).toBeVisible();

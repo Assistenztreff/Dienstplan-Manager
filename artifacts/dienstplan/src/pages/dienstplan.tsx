@@ -566,7 +566,6 @@ function ShiftBadge({
     </div>
   );
 }
-
 function AgendaView({
   days,
   shifts,
@@ -1338,20 +1337,35 @@ function MonthGrid({
       </div>
 
       {/* ── Tagesdetail-Panel ──────────────────────────────────────────────── */}
+      {/* Kein overflow-hidden hier: die Menüleiste ist sticky und klebt beim
+          Seiten-Scroll unter dem Dienstplan-Header — ein overflow-Ancestor
+          würde position:sticky unwirksam machen. Eckenrundung tragen deshalb
+          Menüleiste (oben) und Listencontainer (unten) selbst. */}
       <div
         ref={detailPanelRef}
-        className="rounded-lg border border-border/40 overflow-hidden mt-2 bg-card"
+        className="rounded-lg border border-border/40 mt-2 bg-card"
         role="region"
         aria-live="polite"
         aria-label={`Tagesdetails ${format(selectedDay, "EEEE, d. MMMM", { locale: de })}`}
         data-testid="day-detail-panel"
       >
-        {/* ── Menüleiste (Vorlage v3.2 §1): Anzeigetyp- + Zeitraum-Dropdown
-            links, Datum fett, rechts „Dienst anlegen". Filter-Logik unverändert
-            (HANDOFF 05.08.2026), Standard „Alle / Heute". ── */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-border/30 px-4 py-2.5" data-testid="day-detail-filters">
+        {/* ── Menüleiste (Arbeitsanweisung 06.08.2026, Punkt 4; Vorlage
+            tagesleiste-jahreskalender-v3_2, Punkt 1): Dropdown Anzeigetyp,
+            Dropdown Zeitraum, Datum fett, rechts „Dienst anlegen".
+            Sticky unterhalb der Dienstplan-Kopfleiste (zweite Sticky-Ebene,
+            Höhe wie die Wochentag-Zeile über headerH versetzt); bg-card als
+            undurchsichtige Fläche, damit Einträge darunter weiterscrollen. ── */}
+        <div
+          className="sticky z-30 flex flex-wrap items-center gap-2.5 rounded-t-lg border-b border-[#eeeeee] bg-card px-4 py-3"
+          style={{ top: headerH || 0 }}
+          data-testid="day-detail-menu"
+        >
           <Select value={detailType} onValueChange={(v) => setDetailType(v as typeof detailType)}>
-            <SelectTrigger className="h-8 w-[140px] text-xs" data-testid="day-detail-type-filter" aria-label="Anzeigetyp">
+            <SelectTrigger
+              className="h-auto w-auto gap-1.5 rounded-lg border-[#d8d8d4] bg-card px-2.5 py-1.5 text-[12.5px] font-semibold text-[#092948] shadow-none"
+              data-testid="day-detail-type-menu"
+              aria-label="Anzeigetyp"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1361,7 +1375,11 @@ function MonthGrid({
             </SelectContent>
           </Select>
           <Select value={detailRange} onValueChange={(v) => setDetailRange(v as typeof detailRange)}>
-            <SelectTrigger className="h-8 w-[160px] text-xs" data-testid="day-detail-range-filter" aria-label="Zeitraum">
+            <SelectTrigger
+              className="h-auto w-auto gap-1.5 rounded-lg border-[#d8d8d4] bg-card px-2.5 py-1.5 text-[12.5px] font-semibold text-[#092948] shadow-none"
+              data-testid="day-detail-range-menu"
+              aria-label="Zeitraum"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1371,9 +1389,11 @@ function MonthGrid({
               <SelectItem value="zweiMonate">Nächste 2 Monate</SelectItem>
             </SelectContent>
           </Select>
-          <p className="min-w-0 text-[13px] font-bold text-[#092948]" data-testid="day-detail-header">
-            {format(selectedDay, "EEEE, d. MMMM yyyy", { locale: de })}
-            <span className="ml-2 whitespace-nowrap text-[11px] font-normal text-muted-foreground">
+          <div className="min-w-0">
+            <p className="text-[13px] font-extrabold text-[#092948]" data-testid="day-detail-header">
+              {format(selectedDay, "EEEE, d. MMMM yyyy", { locale: de })}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
               {detailShifts.length === 0
                 ? detailType === "abwesenheiten"
                   ? "Keine Abwesenheiten"
@@ -1383,8 +1403,8 @@ function MonthGrid({
                       ? detailShifts.length === 1 ? "Abwesenheit" : "Abwesenheiten"
                       : detailShifts.length === 1 ? "Dienst" : "Dienste"
                   }`}
-            </span>
-          </p>
+            </p>
+          </div>
           {canEdit && !selectionMode && (
             <Button size="sm" variant="outline" className="gap-1 shrink-0 ml-auto" data-testid="add-shift" onClick={() => onAddShift(selectedDay)}>
               <Plus className="h-3.5 w-3.5" />
@@ -1394,13 +1414,17 @@ function MonthGrid({
         </div>
         {/* ── Eintragsliste: einzeilige Zeilen mit 3-px-Farbbalken
             (Arbeitspaket 07.08.2026, Punkt 5); bei Zeitraum > 1 Tag mit
-            Tagesüberschriften gruppiert. ── */}
-        <div className="max-h-64 overflow-y-auto overscroll-contain bg-card">
+            Tagesüberschriften gruppiert. Kein inneres Scroll-Fenster:
+            die Liste läuft in voller Länge im normalen Seiten-Scroll. ── */}
+        <div className="rounded-b-lg bg-card">
           {detailGroups.length > 0 ? (
             detailGroups.map((group) => (
-              <div key={group.key}>
+              <div key={group.key} data-testid={`day-detail-group-${group.key}`}>
                 {detailRange !== "tag" && (
-                  <div className="border-b border-[#f1f1ee] bg-muted/40 px-4 py-1.5 text-[11px] font-bold text-[#092948]">
+                  // Tagesüberschriften: mindestens so groß/fett wie das Datum
+                  // in der Kopfzeile — beim Scrollen durch lange Zeiträume
+                  // sind sie der einzige Orientierungsanker.
+                  <div className="border-b border-[#f1f1ee] bg-muted/40 px-4 py-2 text-[13px] font-extrabold text-[#092948]">
                     {format(group.day, "EEEE, d. MMMM", { locale: de })}
                   </div>
                 )}

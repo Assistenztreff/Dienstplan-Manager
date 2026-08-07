@@ -31,3 +31,7 @@ scroll container by only ~97px — not enough for the platform header + app
 menu bar (~110px) to leave the viewport, so "scrolled away" assertions fail
 spuriously. Use a shorter phone viewport (e.g. 400x700) and force the grid
 view via localStorage so scrollable height never depends on seeded shifts.
+
+## Zeilen-Klick trifft eingebetteten Button (Zentrum-Klick-Falle)
+`locator.click()` klickt die ELEMENT-MITTE. Bei kompakten Listenzeilen (z. B. Tagesleisten-Zeile mit eingebettetem "Bestätigen"-Button) liegt der Button am 402-px-Viewport genau im Zeilenzentrum — der Klick landet auf dem Button (stopPropagation), bestätigt die Schicht und der Zeilen-onClick (Dialog öffnen) feuert nie. Symptom: Dialog-toBeVisible-Timeout, Snapshot zeigt plötzlich "bestätigt".
+**How to apply:** Zeilen-Klicks in Specs auf ein eindeutiges Kind zielen (z. B. `row.getByText(name).click()`) statt auf die Zeile selbst, sobald die Zeile interaktive Kinder enthält.

@@ -28,3 +28,7 @@ resolves). The regular `playwright test` runner picks the executable up via
 - Playwright's `isVisible()` ignores `opacity: 0` — elements faded out via
   opacity still report visible. Assert on `getComputedStyle(...).opacity` /
   `pointerEvents` for fade-toggled UI.
+- `page.request.get("/api/...")` throws `Invalid URL` in ad-hoc scripts — use
+  absolute URLs (`https://${REPLIT_DEV_DOMAIN}/api/...`). And the app only boots
+  if BOTH artifact workflows run (web + api-server); with the API down the page
+  hangs before any testid appears (check `/api/auth/me` → 401 = API up).

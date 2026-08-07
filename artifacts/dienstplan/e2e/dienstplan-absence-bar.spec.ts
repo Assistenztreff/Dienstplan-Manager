@@ -199,25 +199,62 @@ test("Abwesenheiten erscheinen nicht mehr in Kalenderzellen, aber in der Tagesle
     await expect(vacBadge).toContainText("Urlaub");
 
     // Typfilter „Abwesenheiten": Badge bleibt.
-    await dayPanel.getByTestId("day-detail-type-filter").click();
+    await dayPanel.getByTestId("day-detail-type-menu").click();
     await page.getByRole("option", { name: "Abwesenheiten" }).click();
     await expect(vacBadge).toBeVisible();
 
     // Typfilter „Dienste": Urlaub verschwindet aus der Liste.
-    await dayPanel.getByTestId("day-detail-type-filter").click();
+    await dayPanel.getByTestId("day-detail-type-menu").click();
     await page.getByRole("option", { name: "Dienste" }).click();
     await expect(vacBadge).toHaveCount(0);
     await expect(dayPanel.getByText("Keine Dienste geplant").first()).toBeVisible();
 
     // Zurück auf „Alle" + Zeitraum „Dieser Monat": alle 5 Abwesenheits-Tage
     // (3 Urlaub + 2 Krank) erscheinen mit Datumsprefix in der Liste.
-    await dayPanel.getByTestId("day-detail-type-filter").click();
+    await dayPanel.getByTestId("day-detail-type-menu").click();
     await page.getByRole("option", { name: "Alle" }).click();
-    await dayPanel.getByTestId("day-detail-range-filter").click();
+    await dayPanel.getByTestId("day-detail-range-menu").click();
     await page.getByRole("option", { name: "Dieser Monat" }).click();
     for (const s of [...vacation, ...sick]) {
       await expect(dayPanel.getByTestId(`shift-badge-${s.id}`)).toBeVisible();
     }
+
+    // --- Menüleiste oben (Task #710) ---------------------------------------
+    // Beide Dropdowns + Datum + „Dienst anlegen" sind in der Kopfzeile sichtbar.
+    const menu = dayPanel.getByTestId("day-detail-menu");
+    await expect(menu.getByTestId("day-detail-type-menu")).toBeVisible();
+    await expect(menu.getByTestId("day-detail-range-menu")).toBeVisible();
+    await expect(menu.getByTestId("day-detail-header")).toBeVisible();
+    await expect(menu.getByTestId("add-shift")).toBeVisible();
+
+    // Zeiträume über einen Tag gruppieren die Liste nach Datum (Tagesüberschriften).
+    await expect(
+      dayPanel.getByTestId(`day-detail-group-${dateKey(year, month, vacationDays[0]!)}`),
+      "Zeitraum Dieser Monat muss Tagesüberschriften gruppieren",
+    ).toBeVisible();
+
+    // Zeitraum über die Menüleiste zurück auf „Heute": nur der gewählte Tag bleibt.
+    await menu.getByTestId("day-detail-range-menu").click();
+    await page.getByRole("option", { name: "Heute" }).click();
+    await expect(vacBadge).toBeVisible();
+    await expect(dayPanel.getByTestId(`shift-badge-${sick[0]!.id}`)).toHaveCount(0);
+
+    // Die doppelte Filterzeile unten ist entfernt (Nutzerkorrektur): die
+    // Menüleiste oben ist die einzige Steuerung, kein zweites Dropdown-Paar.
+    await expect(dayPanel.getByTestId("day-detail-filters")).toHaveCount(0);
+    await expect(dayPanel.getByTestId("day-detail-type-filter")).toHaveCount(0);
+    await expect(dayPanel.getByTestId("day-detail-range-filter")).toHaveCount(0);
+
+    // Typfilter über die Menüleiste: Auswahl wirkt auf die Liste und wird
+    // am Trigger angezeigt.
+    await menu.getByTestId("day-detail-type-menu").click();
+    await page.getByRole("option", { name: "Dienste" }).click();
+    await expect(vacBadge).toHaveCount(0);
+    await expect(menu.getByTestId("day-detail-type-menu")).toContainText("Dienste");
+    await menu.getByTestId("day-detail-type-menu").click();
+    await page.getByRole("option", { name: "Abwesenheiten" }).click();
+    await expect(vacBadge).toBeVisible();
+    await expect(menu.getByTestId("day-detail-type-menu")).toContainText("Abwesenheiten");
   } finally {
     for (const id of createdShiftIds) {
       await page.request.delete(`/api/shifts/${id}`);
