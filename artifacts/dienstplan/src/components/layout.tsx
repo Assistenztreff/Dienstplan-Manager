@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { ComponentType, SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Menu,
@@ -14,6 +15,13 @@ import { useToast } from "@/hooks/use-toast";
 import { isAdminRole } from "@/lib/roles";
 import { useTimeTrackingEnabled } from "@/hooks/use-time-tracking-enabled";
 import { DevUserSwitcher } from "./dev-user-switcher";
+import {
+  HouseIcon,
+  CalendarDotsIcon,
+  ClockIcon,
+  ChartBarIcon,
+  GearIcon,
+} from "./menue-icons";
 
 // Interne Navigationspunkte der Dienstplan-App (5 aufgabenbasierte
 // Hauptpunkte, Menü-Neustrukturierung 2026-08).
@@ -31,31 +39,32 @@ type NavLeaf = {
   dienstleisterOnly: boolean;
   teamleiterAllowed: boolean;
 };
-// Icons sind Emojis (Icon-Design-Entscheidung icon-design-final.html):
+// Icons sind Phosphor Fill SVGs:
 // Haus=Start, Kalender=Planen, Uhr=Erfassen, Balkendiagramm=Auswerten,
-// Zahnrad=Verwalten — bewusst als Emoji-Zeichen, nicht als Icon-Font/SVG.
+// Zahnrad=Verwalten — alle nutzen currentColor und erben die Zustandsfarbe.
+type NavIcon = ComponentType<SVGProps<SVGSVGElement>>;
 type NavEntry =
-  | (NavLeaf & { icon: string })
-  | { label: string; icon: string; children: NavLeaf[] };
+  | (NavLeaf & { icon: NavIcon })
+  | { label: string; icon: NavIcon; children: NavLeaf[] };
 
 const ALL_NAV_ITEMS: NavEntry[] = [
-  { href: "/", label: "Start", icon: "🏠", adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
+  { href: "/", label: "Start", icon: HouseIcon, adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
   {
     label: "Planen",
-    icon: "📅",
+    icon: CalendarDotsIcon,
     children: [
       { href: "/dienstplan", label: "Dienstplan", adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
       { href: "/abwesenheiten", label: "Abwesenheiten", adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
     ],
   },
-  { href: "/zeiterfassung", label: "Erfassen", icon: "🕐", adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
-  { href: "/auswertungen", label: "Auswerten", icon: "📊", adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true },
+  { href: "/zeiterfassung", label: "Erfassen", icon: ClockIcon, adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
+  { href: "/auswertungen", label: "Auswerten", icon: ChartBarIcon, adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true },
   {
     label: "Verwalten",
-    icon: "⚙️",
+    icon: GearIcon,
     children: [
       { href: "/assistenten", label: "Assistenzkräfte", adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true },
-      { href: "/team-verwaltung", label: "Team-Verwaltung", adminOnly: true, dienstleisterOnly: true, teamleiterAllowed: true },
+      { href: "/team-verwaltung", label: "Team-Verwaltung", adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true },
       { href: "/einstellungen", label: "Einstellungen", adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
     ],
   },
@@ -428,7 +437,7 @@ function MobileFullMenu({
                       groupActive && !open ? "bg-brand-yellow" : "bg-white hover:bg-brand-yellow"
                     }`}
                   >
-                    <span className="text-xl leading-none" aria-hidden="true">{item.icon}</span>
+                    <item.icon className="h-6 w-6 shrink-0" />
                     {item.label}
                     <ChevronDown
                       className={`h-5 w-5 transition-transform ${open ? "rotate-180" : ""}`}
@@ -469,7 +478,7 @@ function MobileFullMenu({
                   isActive ? "bg-brand-yellow" : "bg-white hover:bg-brand-yellow"
                 }`}
               >
-                <span className="text-xl leading-none" aria-hidden="true">{item.icon}</span>
+                <item.icon className="h-6 w-6 shrink-0" />
                 {item.label}
               </Link>
             );
@@ -670,10 +679,10 @@ function AppSubNavigation() {
                     className={`flex h-12 shrink-0 items-center gap-1.5 px-3 text-sm transition-colors cursor-pointer ${
                       isActive
                         ? "bg-brand-yellow text-brand-dark font-semibold"
-                        : "font-medium text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                        : "font-normal text-[#3d5a75] hover:bg-brand-yellow/15 hover:text-[#3d5a75]"
                     }`}
                   >
-                    <span className="text-base leading-none" aria-hidden="true">{item.icon}</span>
+                    <item.icon className="h-5 w-5 shrink-0" />
                     <span>{item.label}</span>
                   </span>
                 </Link>
