@@ -734,7 +734,7 @@ function DayDetailRow({
   const clickable = !!onClick && !mirror;
   return (
     <div
-      data-testid={`shift-badge-${shift.id}`}
+      data-testid={`day-detail-shift-${shift.id}`}
       data-planning-status={status}
       title={
         mirror && einsatzLabel

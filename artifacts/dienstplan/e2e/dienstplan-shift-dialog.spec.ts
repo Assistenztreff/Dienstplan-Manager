@@ -175,7 +175,9 @@ test.describe("ShiftDialog: Schicht anlegen und bearbeiten (Admin, mobile)", () 
     const shiftId = created!.id;
 
     // Die Schicht erscheint im Tagesdetail des ausgewählten Tags.
-    const badge = mobile.getByTestId(`shift-badge-${shiftId}`);
+    // Der Eintrag ist zugleich als Kalender-Pille und in der Tagesleiste
+    // sichtbar. Für den Bearbeitungsfluss gezielt die Tagesleiste wählen.
+    const badge = mobile.getByTestId(`day-detail-shift-${shiftId}`);
     await expect(badge).toBeVisible();
     await expect(badge).toContainText(`${createStart}–${createEnd}`);
 
@@ -183,7 +185,10 @@ test.describe("ShiftDialog: Schicht anlegen und bearbeiten (Admin, mobile)", () 
     const editStart = "06:05";
     const editEnd = "11:30";
 
-    await badge.click();
+    // In einem Entwurf liegt mittig in der Zeile der verschachtelte
+    // „Bestätigen“-Button. Der linke Farbbalken-/Namensbereich ist die
+    // tatsächliche Bearbeitungs-Klickfläche der Tagesleisten-Zeile.
+    await badge.click({ position: { x: 12, y: 14 } });
     const editDialog = page.getByTestId("shift-dialog");
     await expect(editDialog).toBeVisible();
     await expect(editDialog.getByText("Schicht bearbeiten")).toBeVisible();
@@ -198,7 +203,7 @@ test.describe("ShiftDialog: Schicht anlegen und bearbeiten (Admin, mobile)", () 
     await expect(editDialog).toHaveCount(0);
 
     // Die aktualisierte Zeit erscheint im Kalender.
-    const updatedBadge = mobile.getByTestId(`shift-badge-${shiftId}`);
+    const updatedBadge = mobile.getByTestId(`day-detail-shift-${shiftId}`);
     await expect(updatedBadge).toBeVisible();
     await expect(updatedBadge).toContainText(`${editStart}–${editEnd}`);
 

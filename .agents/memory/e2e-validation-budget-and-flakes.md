@@ -1,0 +1,15 @@
+---
+name: E2E-Gesamtsuite: Laufzeit, Flakes und Validierungsbudget
+description: Regeln für die lange Playwright-Kette, parallele Ausführung, Poll-Budget, Locks und gezielte UI-Validierung
+---
+
+Die volle E2E-Kette dauert typischerweise 36–45 Minuten und kann die Poll-Grenze einer Completion-Validation überschreiten. Sie läuft heute als parallele, DB-isolierte API-Shards plus serieller Smoke-Block; ein Fehler in einem Block lässt die gesamte Workflow-Validierung rot werden.
+
+**Why:** Mehrere historische Einträge beschrieben verschiedene Symptome derselben Rahmenbedingung: Ein globaler Timeout kann eine langsame, aber lebende Suite treffen; `POLL_BUDGET_EXCEEDED` kann Prozesse weiterlaufen lassen; überlappende Läufe können den Lock halten; UI-Änderungen brauchen bei aktualisierten Handbuchbildern eine Capture-Regeneration.
+
+**How to apply:**
+- Für eine konkrete Änderung zuerst gezielte Specs laufen lassen; bei einem Fehler im Smoke-Block den einzelnen Spec reproduzieren, dann den vollständigen Smoke-Block — nicht reflexhaft die Vollsuite.
+- Eine erfolgreiche Vollsuite als separaten Workflow-Nachweis dokumentieren und bei bekannter Poll-Grenze den Completion-Check mit belastbaren Teilnachweisen überspringen.
+- Bei angeblich hängendem Lauf Prozess/Lock-PID prüfen; bei tatsächlich abgebrochenem Poll-Lauf Zombies beenden und einen stale Lock erst dann entfernen. `acquireRunLock` wartet bis `E2E_LOCK_WAIT_MS` (15 Minuten) auf einen lebenden Inhaber.
+- `playwright.config` nicht aus Teardown-Code importieren: Konfigurations-Import hat Seiteneffekte (u. a. Lock-Setup).
+- Handbuchrelevante UI-Änderungen: Capture nur auf ausdrücklichen Auftrag des Nutzers ausführen; dann Fingerprint aktualisieren, sonst blockiert der Validierungsgate.
