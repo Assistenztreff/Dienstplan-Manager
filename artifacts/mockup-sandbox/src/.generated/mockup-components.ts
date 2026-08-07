@@ -6,8 +6,6 @@ export const modules: ModuleMap = {
   "./components/mockups/dienstplan-layouts/Cockpit.tsx": () => import("../components/mockups/dienstplan-layouts/Cockpit.tsx"),
   "./components/mockups/dienstplan-layouts/MonatsBuehne.tsx": () => import("../components/mockups/dienstplan-layouts/MonatsBuehne.tsx"),
   "./components/mockups/dienstplan-layouts/Wochenband.tsx": () => import("../components/mockups/dienstplan-layouts/Wochenband.tsx"),
-  "./components/mockups/dienstplan-leiste/AktionenUnten.tsx": () => import("../components/mockups/dienstplan-leiste/AktionenUnten.tsx"),
-  "./components/mockups/dienstplan-leiste/MonatOben.tsx": () => import("../components/mockups/dienstplan-leiste/MonatOben.tsx"),
   "./components/mockups/handbuch/ArtikelAbwesenheiten.tsx": () => import("../components/mockups/handbuch/ArtikelAbwesenheiten.tsx"),
   "./components/mockups/handbuch/ArtikelAssistenten.tsx": () => import("../components/mockups/handbuch/ArtikelAssistenten.tsx"),
   "./components/mockups/handbuch/ArtikelAuswertungen.tsx": () => import("../components/mockups/handbuch/ArtikelAuswertungen.tsx"),
@@ -25,5 +23,7 @@ export const modules: ModuleMap = {
   "./components/mockups/startseite/MobileDashboard.tsx": () => import("../components/mockups/startseite/MobileDashboard.tsx"),
   "./components/mockups/startseite/MobileMenu.tsx": () => import("../components/mockups/startseite/MobileMenu.tsx"),
   "./components/mockups/startseite/MobileStartseite.tsx": () => import("../components/mockups/startseite/MobileStartseite.tsx"),
-  "./components/mockups/startseite/Startseite.tsx": () => import("../components/mockups/startseite/Startseite.tsx")
+  "./components/mockups/startseite/Startseite.tsx": () => import("../components/mockups/startseite/Startseite.tsx"),
+  "./components/mockups/dienstplan-leiste/AktionenUnten.tsx": () => import("../components/mockups/dienstplan-leiste/AktionenUnten.tsx"),
+  "./components/mockups/dienstplan-leiste/MonatOben.tsx": () => import("../components/mockups/dienstplan-leiste/MonatOben.tsx")
 };
