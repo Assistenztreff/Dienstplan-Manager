@@ -209,3 +209,75 @@ test("Desktop-Monatsgitter (Assistent): 1. Klick markiert, 2. Klick öffnet NICH
     await close();
   }
 });
+
+/** Legt eine Mittags-Schicht (UTC, zeitzonensicher) für den Assistenten an. */
+async function seedShiftOn(day: { year: number; month1: number; dayA: number }): Promise<number> {
+  const mm = String(day.month1).padStart(2, "0");
+  const dd = String(day.dayA).padStart(2, "0");
+  const shiftRes = await acc.ctx.post("/api/shifts", {
+    data: {
+      userId: assistantId,
+      type: "active",
+      startTime: `${day.year}-${mm}-${dd}T10:00:00.000Z`,
+      endTime: `${day.year}-${mm}-${dd}T16:00:00.000Z`,
+    },
+  });
+  expect(shiftRes.ok(), "Seed-Schicht anlegen fehlgeschlagen").toBe(true);
+  return ((await shiftRes.json()) as { id: number }).id;
+}
+
+test("Desktop-Tagesleiste (Admin): Zeile ist per Tastatur erreichbar und öffnet mit Enter den Dialog", async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  const target = pickTargetDays();
+  const shiftId = await seedShiftOn(target);
+  const { page, close } = await openDesktopCalendar(browser, acc.ctx);
+  try {
+    const desktop = page.getByTestId("dienstplan-desktop");
+    // Klick oben links aufs Datum — die Pillen dürfen den Klick nicht abfangen.
+    await desktop.getByTestId(dayCellId(target.year, target.month1, target.dayA)).click({
+      position: { x: 8, y: 8 },
+    });
+    const row = desktop.getByTestId(`shift-badge-${shiftId}`);
+    await expect(row).toBeVisible();
+    await expect(row).toHaveAttribute("role", "button");
+    await row.focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByTestId("shift-dialog"),
+      "Enter auf der Zeile muss den Schicht-Dialog öffnen",
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("shift-dialog")).toHaveCount(0);
+  } finally {
+    await close();
+    await acc.ctx.delete(`/api/shifts/${shiftId}`);
+  }
+});
+
+test("Desktop-Tagesleiste (Assistent): Name sichtbar, Zeile ohne Bearbeitungsrecht nicht klickbar", async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  if (!assistantCtx) throw new Error("Assistenten-Kontext nicht initialisiert");
+  const actx = assistantCtx;
+  const target = pickTargetDays();
+  const shiftId = await seedShiftOn(target);
+  const { page, close } = await openDesktopCalendar(browser, actx);
+  try {
+    const desktop = page.getByTestId("dienstplan-desktop");
+    await desktop.getByTestId(dayCellId(target.year, target.month1, target.dayA)).click({
+      position: { x: 8, y: 8 },
+    });
+    const row = desktop.getByTestId(`shift-badge-${shiftId}`);
+    await expect(row).toBeVisible();
+    // Der Name gehört zum Zeilen-Layout — auch ohne Bearbeitungsrecht.
+    await expect(row).toContainText("Zweiklick Desktop Assistent");
+    // Aber ohne Bearbeitungsrecht ist die Zeile kein interaktives Element.
+    await expect(row).not.toHaveAttribute("role", "button");
+  } finally {
+    await close();
+    await acc.ctx.delete(`/api/shifts/${shiftId}`);
+  }
+});

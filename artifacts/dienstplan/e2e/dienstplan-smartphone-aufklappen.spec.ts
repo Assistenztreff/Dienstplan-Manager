@@ -122,7 +122,9 @@ test("Eingeklappt: Mini-Balken + Zähler statt Pillen, Tap wählt nur und zeigt 
   // 3.4: Kopfzeile hat Datum links und Plus rechts; Zellenklick wählt nur.
   const cellA = mobile.getByTestId(`day-cell-${DAY_A}`);
   await expect(mobile.getByTestId(`day-add-${DAY_A}`)).toBeVisible();
-  await cellA.click({ position: { x: 20, y: 60 } });
+  // Klickpunkt oben links: die Zelle ist seit Arbeitspaket 07.08.2026 (Punkt 4)
+  // quadratisch (bei 400 px Viewport ~56 px hoch) — y=60 läge in der Zeile darunter.
+  await cellA.click({ position: { x: 20, y: 20 } });
   await expect(cellA).toHaveAttribute("data-selected", "true");
   await expect(mobile.getByTestId("day-detail-header")).toContainText("12.");
   await expect(

@@ -694,6 +694,137 @@ function AgendaView({
   );
 }
 
+/** Einzeilige Tagesleisten-Zeile (Arbeitspaket 07.08.2026, Punkt 5):
+ *  3-px-Farbbalken links in der Assistenzfarbe (gemeinsamer Nenner mit der
+ *  Kalender-Pille), dann Name, Eintragsart („Dienst · bestätigt" /
+ *  „Abwesenheit · Urlaub"), bei Entwurf ein kompakter „Bestätigen"-Button
+ *  direkt daneben, rechtsbündig die Uhrzeit bzw. „ganztägig".
+ *  Keine flächenhafte Einfärbung mehr. */
+function DayDetailRow({
+  shift,
+  barColor,
+  modelMap,
+  onClick,
+  onConfirm,
+}: {
+  shift: Shift;
+  barColor: string;
+  modelMap: Map<number, ShiftModelInfo>;
+  onClick?: () => void;
+  onConfirm?: (shift: Shift) => void;
+}) {
+  const { selectedTeamId } = useTeam();
+  const mirror = isMirrorShift(shift, selectedTeamId);
+  const isAbsence = isAbsenceShift(shift);
+  const isTeam = shift.type === "team";
+  const status = shift.planningStatus ?? "FIX";
+  const label = shiftLabel(shift, modelMap);
+  const einsatzLabel =
+    shift.einsatzTeamId != null
+      ? mirror
+        ? `Aushilfe aus ${shift.homeTeamName ?? "anderem Team"}`
+        : `Aushilfe für ${shift.einsatzTeamName ?? "anderes Team"}`
+      : null;
+  const statusText = status === "FIX" ? "bestätigt" : (PLANNING_STATUS_LABELS[status] ?? status);
+  const timeLabel = isAbsence
+    ? "ganztägig"
+    : isTeam
+      ? ""
+      : `${format(new Date(shift.startTime), "HH:mm")}–${format(new Date(shift.endTime), "HH:mm")}`;
+  const clickable = !!onClick && !mirror;
+  return (
+    <div
+      data-testid={`shift-badge-${shift.id}`}
+      data-planning-status={status}
+      title={
+        mirror && einsatzLabel
+          ? `${label} · ${einsatzLabel} (wird im Stammteam bearbeitet)`
+          : `${shift.user?.name ? `${shift.user.name} · ` : ""}${label}`
+      }
+      // Wie die Kalenderzellen (3.4): div mit role=button + Enter/Space; die
+      // verschachtelten Bestätigen-/Notiz-Buttons stoppen das Bubbling.
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onClick={clickable ? onClick : undefined}
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                onClick?.();
+              }
+            }
+          : undefined
+      }
+      className={`relative flex items-center gap-2.5 border-b border-[#f1f1ee] py-[9px] pl-4 pr-3 text-[12.5px] last:border-b-0 ${
+        clickable
+          ? "cursor-pointer transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+          : ""
+      }`}
+    >
+      {/* 3-px-Farbbalken links — identisch zur Kalender-Pille */}
+      <span aria-hidden="true" className="absolute bottom-0 left-0 top-0 w-[3px]" style={{ backgroundColor: barColor }} />
+      {/* Name gehört zum Zeilen-Layout (Punkt 5) — für alle sichtbar, die die
+          Zeile sehen dürfen; Autorisierung gilt nur für Aktionen. */}
+      {shift.user && (
+        <span className="min-w-[110px] shrink truncate font-semibold text-[#151515]">{shift.user.name}</span>
+      )}
+      <span className="flex min-w-0 items-center gap-1 text-[#555555]">
+        {isAbsence ? (
+          <span className="truncate">Abwesenheit · {label}</span>
+        ) : (
+          <span className="truncate">
+            {isTeam ? "Teamdienst" : "Dienst"} ·{" "}
+            {status !== "FIX" && <StatusBadge kind="draft" compact className="mr-0.5 align-[-2px]" />}
+            {statusText}
+            {shift.isVertretung ? " · Vertretung" : ""}
+            {einsatzLabel ? ` · ${einsatzLabel}` : ""}
+          </span>
+        )}
+      </span>
+      {onConfirm && !mirror && isConfirmableShift(shift) && (
+        <button
+          type="button"
+          data-testid={`shift-confirm-${shift.id}`}
+          title="Als verbindlich bestätigen"
+          onClick={(e) => {
+            e.stopPropagation();
+            onConfirm(shift);
+          }}
+          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#d8d8d4] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#092948] transition-colors hover:border-[#092948]"
+        >
+          <Check className="h-3 w-3" />
+          Bestätigen
+        </button>
+      )}
+      {shift.notes && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                data-testid={`shift-note-icon-${shift.id}`}
+                className="inline-flex shrink-0 cursor-default items-center text-[#555555]/70"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MessageSquare className="h-3 w-3 shrink-0" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-[240px] break-words text-xs">
+              {shift.notes}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+      {timeLabel && (
+        <span className="ml-auto shrink-0 whitespace-nowrap tabular-nums text-[11.5px] text-[#555555]">
+          {timeLabel}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function MonthGrid({
   days,
   monthStart,
@@ -769,6 +900,20 @@ function MonthGrid({
       })
       .sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime));
   }, [shifts, selectedDay, detailRange, detailType]);
+
+  // Gruppierung nach Tag für Zeiträume > 1 Tag (Tagesüberschriften).
+  // detailShifts ist bereits nach startTime sortiert → Gruppen sind fortlaufend.
+  const detailGroups = useMemo(() => {
+    const groups: { key: string; day: Date; shifts: Shift[] }[] = [];
+    for (const s of detailShifts) {
+      const d = new Date(s.startTime);
+      const key = dayKey(d);
+      const last = groups[groups.length - 1];
+      if (last && last.key === key) last.shifts.push(s);
+      else groups.push({ key, day: d, shifts: [s] });
+    }
+    return groups;
+  }, [detailShifts]);
   const numWeeks = Math.ceil((blanks.length + days.length) / 7);
 
   // ── Aktive Assistenzkraft-Palette (Einstellung aus localStorage) ─────────
@@ -910,11 +1055,13 @@ function MonthGrid({
       {/* ── Sticky Wochentag-Zeile (klebt direkt unter dem Dienstplan-Header) ─ */}
       <div
         ref={weekdayRowRef}
-        className="sticky z-20 grid grid-cols-7 border-b border-border/30 bg-background/95 backdrop-blur-sm"
+        className="sticky z-20 grid grid-cols-7 border-b border-border/30 bg-[#f1f1ee]"
         style={{ top: headerH || 0 }}
       >
         {WEEKDAY_LABELS.map((d) => (
-          <div key={d} className="py-1 text-center text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+          // Arbeitspaket 07.08.2026, Punkt 1: graues Band, Kürzel größer +
+          // schwarz, auf dem Smartphone in derselben Größe wie am Desktop.
+          <div key={d} className="py-1 text-center text-[11px] font-semibold uppercase tracking-wider text-[#151515]">
             {d}
           </div>
         ))}
@@ -926,17 +1073,21 @@ function MonthGrid({
       <div
         className="grid grid-cols-7 gap-px rounded-b-lg border border-t-0 border-border/30 bg-border/20"
         style={
-          useDynamicRows
-            ? { gridTemplateColumns: "repeat(7, 1fr)", overflow: "visible" }
-            : {
-                ...(gridHeight ? { height: gridHeight, overflow: "hidden" } : {}),
-                gridTemplateRows: `repeat(${numWeeks}, 1fr)`,
-              }
+          variant !== "full"
+            ? // Smartphone (Punkt 4): keine feste Grid-Höhe — die Zellen sind
+              // quadratisch (1:1) als Mindestmaß und Zeilen wachsen mit Inhalt.
+              { gridTemplateColumns: "repeat(7, 1fr)" }
+            : useDynamicRows
+              ? { gridTemplateColumns: "repeat(7, 1fr)", overflow: "visible" }
+              : {
+                  ...(gridHeight ? { height: gridHeight, overflow: "hidden" } : {}),
+                  gridTemplateRows: `repeat(${numWeeks}, 1fr)`,
+                }
         }
         data-testid="month-grid"
       >
         {blanks.map((_, i) => (
-          <div key={`blank-${i}`} className="bg-muted/10" data-testid="month-grid-blank" />
+          <div key={`blank-${i}`} className="rounded-[5px] bg-muted/10" data-testid="month-grid-blank" />
         ))}
         {days.map((day, dayIdx) => {
           const dayShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), day));
@@ -944,7 +1095,9 @@ function MonthGrid({
           const today = isToday(day);
           const nonAbsence = dayShifts.filter((s) => !isAbsenceShift(s));
           const absences = dayShifts.filter((s) => isAbsenceShift(s));
-          const visiblePills = nonAbsence.slice(0, 2);
+          // Arbeitspaket 07.08.2026, Punkt 3: bis zu 4 Pillen sichtbar
+          // (Desktop und Smartphone aufgeklappt gleich), danach „+n".
+          const visiblePills = nonAbsence.slice(0, 4);
           const hiddenCount = nonAbsence.length - visiblePills.length;
           // Eingeklappte Smartphone-Zelle (3.3): ein Streifen je Abwesenheits-
           // Kategorie in Dominanzreihenfolge ausfall > geplant > absage.
@@ -987,9 +1140,20 @@ function MonthGrid({
                   detailPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
                 }
               }}
+              // Punkt 4 (Smartphone): quadratische Zellen (1:1) als Mindestmaß —
+              // die Wochenzeile wächst erst, wenn Pillen nicht mehr passen.
+              // min-w-0 ist dabei Pflicht: Bei aspect-ratio auf einem Grid-Item mit
+              // align-self:stretch überträgt CSS die Inhalts-HÖHE über das Verhältnis
+              // als automatische Mindest-BREITE zurück auf die Spalte (Rückkopplung)
+              // und bläht das Grid auf. min-w-0 deaktiviert dieses Automatic Minimum;
+              // overflow-x: clip clippt Reste horizontal, ohne die Block-Achse zu
+              // unterdrücken (overflow:hidden würde das Zeilenwachstum killen).
+              style={variant !== "full" ? { aspectRatio: "1 / 1", overflowX: "clip" } : undefined}
               className={[
-                "relative flex min-h-0 w-full flex-col items-stretch overflow-hidden p-0.5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
-                isWeekend ? "bg-slate-50/70" : "bg-card",
+                "relative flex w-full flex-col items-stretch rounded-[5px] p-0.5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
+                variant === "full" ? "min-h-0 overflow-hidden" : "min-w-0",
+                // Punkt 1: Zelle innen weiß, leicht abgerundete Ecken.
+                "bg-white",
                 bulkSelected
                   ? "ring-2 ring-inset ring-primary"
                   : selected && !selectionMode
@@ -1004,7 +1168,8 @@ function MonthGrid({
                 <span
                   className={[
                     "leading-none font-semibold rounded-md",
-                    variant === "full" ? "text-[11px] px-1.5 py-0.5" : "text-[9px] px-1 py-px",
+                    // Punkt 2: Datum 1–2 px größer; Smartphone = Desktop-Größe.
+                    "text-[12px] px-1.5 py-0.5",
                     today
                       ? "bg-[#092948] text-white"
                       : isWeekend
@@ -1028,9 +1193,8 @@ function MonthGrid({
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") e.stopPropagation();
                     }}
-                    className={`flex shrink-0 cursor-pointer select-none items-center justify-center rounded-[3px] border border-[#d8d8d4] bg-white p-0 font-bold leading-none text-[#092948] hover:border-[#092948] ${
-                      variant === "full" ? "h-3 w-3 text-[9px]" : "h-2.5 w-2.5 text-[8px]"
-                    }`}
+                    // Punkt 2: Plus 1–2 px größer; Smartphone = Desktop-Größe.
+                    className="flex h-3.5 w-3.5 shrink-0 cursor-pointer select-none items-center justify-center rounded-[3px] border border-[#d8d8d4] bg-white p-0 text-[10px] font-bold leading-none text-[#092948] hover:border-[#092948]"
                   >
                     +
                   </button>
@@ -1075,7 +1239,7 @@ function MonthGrid({
                   )}
                 </>
               ) : visiblePills.length > 0 && (
-                /* Schicht-Pillen (max. 2) — zweizeiliges Design gemäß Spec §2.1:
+                /* Schicht-Pillen (max. 4) — zweizeiliges Design gemäß Spec §2.1:
                    Farbbalken links (Slot-Farbe), Zeile 1 = Name + Status-Badge
                    auf Weiß, Zeile 2 = Uhr-Badge + Uhrzeit auf #f1f1ee.
                    3.2: Aufgeklapptes Smartphone = kompakte Pille mit Initialen. */
@@ -1176,38 +1340,16 @@ function MonthGrid({
       {/* ── Tagesdetail-Panel ──────────────────────────────────────────────── */}
       <div
         ref={detailPanelRef}
-        className="rounded-lg border border-border/40 overflow-hidden mt-2"
+        className="rounded-lg border border-border/40 overflow-hidden mt-2 bg-card"
         role="region"
         aria-live="polite"
         aria-label={`Tagesdetails ${format(selectedDay, "EEEE, d. MMMM", { locale: de })}`}
         data-testid="day-detail-panel"
       >
-        <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-muted/40">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold" data-testid="day-detail-header">
-              {format(selectedDay, "EEEE, d. MMMM", { locale: de })}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {detailShifts.length === 0
-                ? detailType === "abwesenheiten"
-                  ? "Keine Abwesenheiten"
-                  : "Keine Dienste geplant"
-                : `${detailShifts.length} ${
-                    detailType === "abwesenheiten"
-                      ? detailShifts.length === 1 ? "Abwesenheit" : "Abwesenheiten"
-                      : detailShifts.length === 1 ? "Dienst" : "Dienste"
-                  }`}
-            </p>
-          </div>
-          {canEdit && !selectionMode && (
-            <Button size="sm" variant="outline" className="gap-1 shrink-0" data-testid="add-shift" onClick={() => onAddShift(selectedDay)}>
-              <Plus className="h-3.5 w-3.5" />
-              Dienst anlegen
-            </Button>
-          )}
-        </div>
-        {/* Filter-Leiste: Anzeigetyp + Zeitraum (HANDOFF 05.08.2026) */}
-        <div className="flex items-center gap-2 px-3 py-2 border-t border-border/30 bg-muted/20" data-testid="day-detail-filters">
+        {/* ── Menüleiste (Vorlage v3.2 §1): Anzeigetyp- + Zeitraum-Dropdown
+            links, Datum fett, rechts „Dienst anlegen". Filter-Logik unverändert
+            (HANDOFF 05.08.2026), Standard „Alle / Heute". ── */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/30 px-4 py-2.5" data-testid="day-detail-filters">
           <Select value={detailType} onValueChange={(v) => setDetailType(v as typeof detailType)}>
             <SelectTrigger className="h-8 w-[140px] text-xs" data-testid="day-detail-type-filter" aria-label="Anzeigetyp">
               <SelectValue />
@@ -1229,29 +1371,53 @@ function MonthGrid({
               <SelectItem value="zweiMonate">Nächste 2 Monate</SelectItem>
             </SelectContent>
           </Select>
+          <p className="min-w-0 text-[13px] font-bold text-[#092948]" data-testid="day-detail-header">
+            {format(selectedDay, "EEEE, d. MMMM yyyy", { locale: de })}
+            <span className="ml-2 whitespace-nowrap text-[11px] font-normal text-muted-foreground">
+              {detailShifts.length === 0
+                ? detailType === "abwesenheiten"
+                  ? "Keine Abwesenheiten"
+                  : "Keine Dienste geplant"
+                : `${detailShifts.length} ${
+                    detailType === "abwesenheiten"
+                      ? detailShifts.length === 1 ? "Abwesenheit" : "Abwesenheiten"
+                      : detailShifts.length === 1 ? "Dienst" : "Dienste"
+                  }`}
+            </span>
+          </p>
+          {canEdit && !selectionMode && (
+            <Button size="sm" variant="outline" className="gap-1 shrink-0 ml-auto" data-testid="add-shift" onClick={() => onAddShift(selectedDay)}>
+              <Plus className="h-3.5 w-3.5" />
+              Dienst anlegen
+            </Button>
+          )}
         </div>
-        <div className="bg-card px-3 py-2 space-y-1.5 max-h-48 overflow-y-auto overscroll-contain">
-          {detailShifts.length > 0 ? (
-            detailShifts.map((shift) => (
-              <div key={shift.id} className="flex items-start gap-2">
+        {/* ── Eintragsliste: einzeilige Zeilen mit 3-px-Farbbalken
+            (Arbeitspaket 07.08.2026, Punkt 5); bei Zeitraum > 1 Tag mit
+            Tagesüberschriften gruppiert. ── */}
+        <div className="max-h-64 overflow-y-auto overscroll-contain bg-card">
+          {detailGroups.length > 0 ? (
+            detailGroups.map((group) => (
+              <div key={group.key}>
                 {detailRange !== "tag" && (
-                  <span className="shrink-0 w-12 pt-1 text-[10px] font-semibold tabular-nums text-muted-foreground">
-                    {format(new Date(shift.startTime), "EE d.", { locale: de })}
-                  </span>
+                  <div className="border-b border-[#f1f1ee] bg-muted/40 px-4 py-1.5 text-[11px] font-bold text-[#092948]">
+                    {format(group.day, "EEEE, d. MMMM", { locale: de })}
+                  </div>
                 )}
-                <div className="min-w-0 flex-1">
-                  <ShiftBadge
+                {group.shifts.map((shift) => (
+                  <DayDetailRow
+                    key={shift.id}
                     shift={shift}
-                    showName={canEdit}
+                    barColor={shift.type === "team" ? "#0284c7" : getPersonSlot(shift.userId).bg}
                     modelMap={modelMap}
-                    onClick={canEdit && !selectionMode ? (e) => { e.stopPropagation(); onShiftClick(shift); } : undefined}
+                    onClick={canEdit && !selectionMode ? () => onShiftClick(shift) : undefined}
                     onConfirm={canEdit && !selectionMode ? onConfirmShift : undefined}
                   />
-                </div>
+                ))}
               </div>
             ))
           ) : (
-            <p className="text-xs text-muted-foreground">
+            <p className="px-4 py-3 text-xs text-muted-foreground">
               {detailType === "abwesenheiten" ? "Keine Abwesenheiten" : "Keine Dienste geplant"}
             </p>
           )}

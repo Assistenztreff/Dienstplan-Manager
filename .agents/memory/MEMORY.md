@@ -111,3 +111,5 @@
 - [Urlaubs-POSTs in E2E langsam](e2e-vacation-post-slow.md) — ~5s pro vacation-POST (Urlaubskonto-Recalc); mehrtägige UI-Anlage braucht ≥30s-Timeout, Seeding besser per API.
 - [PDF-Stundennachweis-Export zurückgestellt](pdf-statement-export-deferred.md) — export-pdf-button existiert nicht mehr; StatementExportDialog/fix-only-hint unerreichbar; keine Specs darauf aufbauen.
 - [E2E-Lanes Build-Race auf dist/](e2e-lanes-dist-build-race.md) — parallele api-shards bauen in dasselbe api-server/dist; MODULE_NOT_FOUND dist/index.mjs = transienter Race, Kette neu starten.
+- [aspect-ratio auf Grid-Items](aspect-ratio-grid-blowout.md) — aspect-ratio+stretch überträgt Inhaltshöhe als Mindestbreite auf die Spalte (Grid-Blowout); Fix min-w-0, nie overflow:hidden wenn Zeilen wachsen sollen.
+- [Ad-hoc-Screenshot-Skripte Dev-Stack](dev-screenshot-scripts.md) — view-toggle-grid explizit klicken; API via curl statt node-fetch (dev-login 401); Overlap-tolerantes Seeding mit Cleanup.
