@@ -8,8 +8,10 @@ import { registerFreeAccount, deleteFreeAccount, type FreeAccount } from "./help
  * - Roving Tabindex: genau EINE Tageszelle traegt tabindex=0, alle anderen -1.
  * - Pfeiltasten bewegen den Fokus zwischen Tageszellen (links/rechts = +-1 Tag,
  *   hoch/runter = +-7 Tage), Home/End springen zum Wochenanfang/-ende.
- * - Enter loest das Zwei-Stufen-Verhalten aus: 1. Enter markiert den Tag
- *   (aria-selected), 2. Enter auf dem markierten Tag oeffnet den Schicht-Dialog.
+ * - Enter waehlt den fokussierten Tag aus (aria-selected) — seit
+ *   Arbeitsanweisung 3.4 (06.08.2026) oeffnet Enter KEINEN Dialog mehr;
+ *   das Anlegen erfolgt ueber das Plus in der Zellen-Kopfzeile bzw. den
+ *   „Dienst anlegen"-Button in der Tagesleiste.
  */
 
 const PASSWORD = "free12345"; // registerFreeAccount vergibt dieses Passwort.
@@ -84,7 +86,7 @@ test("Monatskalender: Pfeiltasten/Home/End bewegen den Fokus, Enter waehlt und o
       "Home und End muessen Anfang/Ende derselben Kalenderwoche treffen",
     ).toBe(6);
 
-    // Enter (1. Mal): Tag wird markiert (Zwei-Stufen-Verhalten, Stufe 1).
+    // Enter (1. Mal): Tag wird markiert (3.4: reine Auswahl, kein Dialog).
     await page.keyboard.press("Enter");
     const focusedId = await activeTestId();
     await expect(desktop.getByTestId(focusedId)).toHaveAttribute("data-selected", "true");
@@ -96,11 +98,17 @@ test("Monatskalender: Pfeiltasten/Home/End bewegen den Fokus, Enter waehlt und o
       "Roving Tabindex muss auch nach Navigation genau eine Zelle umfassen",
     ).toHaveCount(1);
 
-    // Enter (2. Mal) auf dem markierten Tag: Schicht-Dialog oeffnet (Admin).
+    // Enter (2. Mal) auf dem markierten Tag: weiterhin nur Auswahl (3.4) —
+    // das Anlegen geht ueber den „Dienst anlegen"-Button in der Tagesleiste.
     await page.keyboard.press("Enter");
     await expect(
       page.getByTestId("shift-dialog"),
-      "Zweites Enter auf dem markierten Tag muss den Schicht-Dialog oeffnen",
+      "Enter darf seit 3.4 keinen Dialog mehr oeffnen — nur das Plus/die Tagesleiste legt an",
+    ).toHaveCount(0);
+    await desktop.getByRole("button", { name: "Dienst anlegen" }).first().click();
+    await expect(
+      page.getByTestId("shift-dialog"),
+      "Der Tagesleisten-Button muss den Schicht-Dialog oeffnen",
     ).toBeVisible();
   } finally {
     await context.close();

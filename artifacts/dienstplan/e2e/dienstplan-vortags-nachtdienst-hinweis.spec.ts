@@ -29,6 +29,7 @@ const VACATION_DATE_KEY = format(new Date(YEAR, MONTH - 1, 5), "yyyy-MM-dd");
 
 let acc: FreeAccount;
 let assistantId: number;
+let assistantName: string;
 let shiftId: number;
 
 test.beforeAll(async () => {
@@ -36,9 +37,10 @@ test.beforeAll(async () => {
   acc = await registerFreeAccount("dienstleister", "vortnacht");
   await setAccountPlan(acc.email, "premium");
 
+  assistantName = `E2E VortNacht ${Date.now()}`;
   const userRes = await acc.ctx.post("/api/users", {
     data: {
-      name: `E2E VortNacht ${Date.now()}`,
+      name: assistantName,
       email: `e2e.vortnacht.${Date.now()}@dienstplan.test`,
       role: "assistant",
     },
@@ -101,10 +103,23 @@ test(
       .locator(`[data-testid="day-cell-${VACATION_DATE_KEY}"]`)
       .first();
     await vacationCell.waitFor({ state: "visible", timeout: 10_000 });
+    // 3.4: Zellenklick wählt nur aus; der Dialog öffnet über das Plus.
     await vacationCell.click();
+    await page
+      .locator(`[data-testid="day-add-${VACATION_DATE_KEY}"]`)
+      .first()
+      .click();
 
     const dialog = page.locator('[data-testid="shift-dialog"]');
     await dialog.waitFor({ state: "visible", timeout: 8_000 });
+
+    // Der Vortags-Hinweis hängt an der im Dialog gewählten Assistenzkraft —
+    // der Anlege-Dialog füllt sie nicht aus dem Seitenfilter vor.
+    const userSelect = dialog.locator('[data-testid="shift-dialog-user"]');
+    await userSelect.click();
+    const userOption = page.getByRole("option", { name: assistantName });
+    await userOption.waitFor({ state: "visible", timeout: 5_000 });
+    await userOption.click();
 
     const typeSelect = dialog.locator('[data-testid="shift-dialog-type"]');
     await typeSelect.click();

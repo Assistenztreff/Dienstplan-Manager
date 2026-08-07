@@ -185,7 +185,7 @@ test.describe("Dienstplan-Sicht als Assistent (eingeschränkte Rechte)", () => {
 
     await desktop.getByTestId(dayCellId(OWN_DAY)).click();
     await expect(desktop.getByTestId("day-detail-header")).toContainText(`${OWN_DAY}.`);
-    await expect(desktop.getByTestId("day-detail-header").locator("..")).toContainText("1 Schicht");
+    await expect(desktop.getByTestId("day-detail-header").locator("..")).toContainText("1 Dienst");
     await expect(desktop.getByText("08:00–16:00").first()).toBeVisible();
 
     await desktop.getByTestId(dayCellId(FOREIGN_DAY)).click();

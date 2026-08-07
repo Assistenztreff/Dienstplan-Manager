@@ -16,11 +16,12 @@ export type StatusBadgeKind =
 
 const KIND_CONFIG: Record<
   StatusBadgeKind,
-  { circle: number; bg: string; ring?: string; symbol: (s: number) => ReactElement }
+  { circle: number; compactCircle: number; bg: string; ring?: string; compactRing?: string; symbol: (s: number) => ReactElement }
 > = {
   // Entwurf: Kreis 16px #b5790a, weißer Stift 9px
   draft: {
     circle: 16,
+    compactCircle: 10,
     bg: "#b5790a",
     symbol: (s) => (
       <svg width={s} height={s} viewBox="0 0 20 20" fill="#fff" stroke="none" aria-hidden="true">
@@ -31,6 +32,7 @@ const KIND_CONFIG: Record<
   // Bestätigt: Kreis 16px #1e8f4e, weißer Haken 9px (stroke 3)
   confirmed: {
     circle: 16,
+    compactCircle: 10,
     bg: "#1e8f4e",
     symbol: (s) => (
       <svg
@@ -51,8 +53,10 @@ const KIND_CONFIG: Record<
   // Warnung: Kreis 17px #c23b34, weißes Dreieck 10px, Außenring
   warning: {
     circle: 17,
+    compactCircle: 10,
     bg: "#c23b34",
     ring: "0 0 0 2px #fff, 0 0 0 3.5px #f3c9c5",
+    compactRing: "0 0 0 1.2px #fff, 0 0 0 2px #f3c9c5",
     symbol: (s) => (
       <svg width={s} height={s} viewBox="0 0 20 20" fill="#fff" stroke="none" aria-hidden="true">
         <path d="M10 3L18 16.5H2z" />
@@ -62,6 +66,7 @@ const KIND_CONFIG: Record<
   // Vertretung: Kreis 15px #0f6e8c, weißes Rotations-Symbol 9px (stroke 2.4)
   vertretung: {
     circle: 15,
+    compactCircle: 9,
     bg: "#0f6e8c",
     symbol: (s) => (
       <svg
@@ -82,6 +87,7 @@ const KIND_CONFIG: Record<
   // Uhr: Kreis 15px #444, weiße Uhr 9px (stroke 2)
   clock: {
     circle: 15,
+    compactCircle: 9,
     bg: "#444444",
     symbol: (s) => (
       <svg
@@ -100,22 +106,27 @@ const KIND_CONFIG: Record<
   },
 };
 
-/** Innensymbol etwas über halber Kreisgröße (Vorlage: 9–10px in 15–17px). */
-function symbolSize(circle: number): number {
-  return Math.round(circle * 0.6);
+/** Innensymbol etwas über halber Kreisgröße (Vorlage: 9–10px in 15–17px,
+ *  kompakt 5–6px in 9–10px wie badge-warn-sm der Smartphone-Vorlage). */
+function symbolSize(circle: number, compact: boolean): number {
+  return Math.round(circle * (compact ? 0.55 : 0.6));
 }
 
 export function StatusBadge({
   kind,
   label,
   className,
+  compact = false,
 }: {
   kind: StatusBadgeKind;
   /** aria-label für Screenreader; ohne Angabe gilt das Badge als dekorativ. */
   label?: string;
   className?: string;
+  /** Kompakt-Größe für die Smartphone-Pille (Arbeitsanweisung 3.2/3.3). */
+  compact?: boolean;
 }) {
   const cfg = KIND_CONFIG[kind];
+  const circle = compact ? cfg.compactCircle : cfg.circle;
   return (
     <span
       role={label ? "img" : undefined}
@@ -123,14 +134,14 @@ export function StatusBadge({
       aria-hidden={label ? undefined : true}
       className={`inline-flex shrink-0 items-center justify-center rounded-full${className ? ` ${className}` : ""}`}
       style={{
-        width: cfg.circle,
-        height: cfg.circle,
+        width: circle,
+        height: circle,
         backgroundColor: cfg.bg,
-        boxShadow: cfg.ring,
+        boxShadow: compact ? cfg.compactRing ?? cfg.ring : cfg.ring,
       }}
       data-status-badge={kind}
     >
-      {cfg.symbol(symbolSize(cfg.circle))}
+      {cfg.symbol(symbolSize(circle, compact))}
     </span>
   );
 }

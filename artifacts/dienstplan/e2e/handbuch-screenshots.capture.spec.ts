@@ -265,14 +265,14 @@ test("Dienst-Dialog-Screenshot (Desktop, Zwei-Stufen-Klick)", async ({ browser }
     const desktop = page.getByTestId("dienstplan-desktop");
     await expect(desktop.getByTestId("month-grid")).toBeVisible();
 
-    // Zieltag: ein Tag mit Dienst, der nicht "heute" ist (1. Klick markiert,
-    // 2. Klick öffnet den Schicht-Dialog).
+    // Zieltag: ein Tag mit Dienst, der nicht "heute" ist (Klick markiert,
+    // das Plus in der Zellen-Kopfzeile öffnet den Schicht-Dialog — 3.4).
     const today = new Date().getDate();
     const target = [9, 16, 11, 4].find((d) => d !== today) ?? 9;
     const cell = desktop.getByTestId(`day-cell-${year}-${p2(month1)}-${p2(target)}`);
     await cell.click();
     await expect(cell).toHaveAttribute("data-selected", "true");
-    await cell.click();
+    await desktop.getByTestId(`day-add-${year}-${p2(month1)}-${p2(target)}`).click();
     const dialog = page.getByTestId("shift-dialog");
     await expect(dialog).toBeVisible();
     await page.waitForTimeout(500);

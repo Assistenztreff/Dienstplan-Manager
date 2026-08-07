@@ -105,7 +105,7 @@
 - [Offline Bootstrap bewahrt Auth](offline-auth-bootstrap.md) — auth.tsx bootstrap fängt TypeError separat: Netzwerkfehler leeren NICHT den Auth-Zustand; nur echte 4xx/5xx tun das; OfflineBanner + MutationCache/QueryCache onError ergänzen die Kette.
 - [Offline Mutation Replay](offline-mutation-replay.md) — networkMode:'offlineFirst' + resumePausedMutations() müssen gemeinsam gesetzt sein; keines allein genügt; Pending-Zähler via useMutationState in OfflineBanner.
 - [Teamleiter-Feature Implementierungsmuster](teamleiter-feature-patterns.md) — is_teamleiter+canViewPayroll auf team_members; overrideAllowedIds in resolveRead/WriteTeamId; zod nicht in api-server, nur über @workspace/api-zod.
-- [MonthGrid Leere-Zelle-Klick](monthgrid-empty-cell-click.md) — leere Zellen öffnen den Dialog direkt; jeder Klick-Pfad muss onSelectDay mitsetzen, sonst e2e-selectDayCell rot.
+- [MonthGrid Klick-Verhalten (3.4)](monthgrid-empty-cell-click.md) — Zellenklick/Enter wählt nur; Anlegen NUR über day-add-Plus/Tagesleiste; Zelle = div role=button, Plus echter Button (Bubbling-Stopp).
 - [Assistenz-Abwesenheits-Selbstservice](assistant-absence-selfservice.md) — POST/DELETE /shifts für reine Assistenzkräfte: Authz vor Inhalt, 404 statt Orakel, teamId aus Schichtmodell ableiten (First-Team-Fallback bucht sonst falsch).
 - [xlsx dynamic import default](xlsx-dynamic-import-default.md) — `(await import("xlsx")).default` ist im Vite-Dev undefined; `m.default ?? m` nutzen, sonst scheitern Excel-Exporte still.
 - [Urlaubs-POSTs in E2E langsam](e2e-vacation-post-slow.md) — ~5s pro vacation-POST (Urlaubskonto-Recalc); mehrtägige UI-Anlage braucht ≥30s-Timeout, Seeding besser per API.
