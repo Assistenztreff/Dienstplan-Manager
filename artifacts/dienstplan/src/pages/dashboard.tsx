@@ -22,6 +22,7 @@ import { useAuth } from "@/context/auth";
 import { DienstStatus, type SchichtVorlage } from "@/types/dienstplan";
 import { formatDays, formatDaysWithUnit, formatHours } from "@/lib/utils";
 import { useTimeTrackingEnabled } from "@/hooks/use-time-tracking-enabled";
+import { StatusBadge } from "@/components/status-badge";
 import { MeineStundenKarte } from "@/components/meine-stunden-karte";
 
 // Beispielhafte Einbindung der zentralen Planungstypen (siehe @/types/dienstplan):
@@ -419,7 +420,7 @@ function AbsenceReminder() {
     >
       <Card className="border-amber-200 bg-amber-50/40 shadow-sm transition-colors hover:border-amber-300">
         <CardContent className="flex items-center gap-3 py-4">
-          <CalendarX className="h-5 w-5 text-amber-700 shrink-0" />
+          <StatusBadge kind="warning" label="Warnung" />
           <div className="flex-1">
             <p className="text-sm font-medium text-amber-900">
               {parts.join(" · ")}
@@ -567,7 +568,9 @@ export default function Dashboard() {
             <MonthClosingReminder teamId={selectedTeamId} />
           )}
 
-          <AbsenceReminder />
+          {/* Krankmeldungs-Kachel ist Premium (Arbeitsanweisung 06.08.2026,
+              Punkt 2.1) — Free-Konten sehen sie nicht. */}
+          {hasAccess(currentUser, "advancedAnalytics") && <AbsenceReminder />}
 
           {!isAdmin && (
             <>

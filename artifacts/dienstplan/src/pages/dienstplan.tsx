@@ -15,7 +15,8 @@ import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, Check, CheckSquare, X, CalendarPlus, Trash2, Pencil, ChevronDown, Users, Lock, Download, MessageSquare, Clock, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, Check, CheckSquare, X, CalendarPlus, Trash2, Pencil, ChevronDown, Users, Lock, Download, MessageSquare } from "lucide-react";
+import { StatusBadge } from "@/components/status-badge";
 import type { LucideIcon } from "lucide-react";
 import { ShiftDialog } from "@/components/shift-dialog";
 import { BulkDeleteDialog } from "@/components/bulk-delete-dialog";
@@ -503,8 +504,11 @@ function ShiftBadge({
       )}
       {statusLabel && (
         <div
-          className={`mb-0.5 inline-flex items-center rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide ${PLANNING_STATUS_BADGE_CLASSES[shift.planningStatus ?? ""] ?? ""}`}
+          className={`mb-0.5 inline-flex items-center gap-1 rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide ${PLANNING_STATUS_BADGE_CLASSES[shift.planningStatus ?? ""] ?? ""}`}
         >
+          <StatusBadge
+            kind={shift.planningStatus === "FIX" ? "confirmed" : "draft"}
+          />
           {statusLabel}
         </div>
       )}
@@ -1002,26 +1006,23 @@ function MonthGrid({
                           className="absolute left-0 top-0 bottom-0 w-[3px]"
                           style={{ backgroundColor: barColor }}
                         />
-                        {/* Zeile 1: Nachname + Status-Icon (weiß) */}
+                        {/* Zeile 1: Nachname + Status-Badge Variante C (weiß) */}
                         <span className="flex items-center justify-between gap-1 bg-white pl-[7px] pr-1 py-[2px] leading-none">
                           <span className="text-[10px] font-bold text-[#151515] truncate">
                             {nameLabel}
                           </span>
                           {status === "FIX" ? (
-                            <Check
-                              aria-label="Bestätigt"
-                              className="h-2.5 w-2.5 shrink-0 text-[#1e8f4e]"
-                            />
+                            <StatusBadge kind="confirmed" label="Bestätigt" />
                           ) : (
-                            <Pencil
-                              aria-label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
-                              className="h-2.5 w-2.5 shrink-0 text-[#b5790a]"
+                            <StatusBadge
+                              kind="draft"
+                              label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
                             />
                           )}
                         </span>
-                        {/* Zeile 2: Uhr-Icon + Uhrzeit (+ Vertretung rechts) auf Grauweiß */}
+                        {/* Zeile 2: Uhr-Badge + Uhrzeit (+ Vertretung rechts) auf Grauweiß */}
                         <span className="flex items-center gap-[3px] bg-[#f1f1ee] pl-[7px] pr-1 py-[2px] leading-none">
-                          <Clock aria-hidden="true" className="h-2.5 w-2.5 shrink-0 text-[#444444]" />
+                          <StatusBadge kind="clock" />
                           <span className="text-[9px] text-[#444444] truncate">
                             {isTeam ? "Teamdienst" : timeRange}
                           </span>
@@ -1030,7 +1031,7 @@ function MonthGrid({
                               className="ml-auto inline-flex items-center gap-[2px] shrink-0 text-[#0f6e8c]"
                               title="Vertretung"
                             >
-                              <RefreshCw aria-label="Vertretung" className="h-2.5 w-2.5" />
+                              <StatusBadge kind="vertretung" label="Vertretung" />
                               <span className="hidden min-[900px]:inline text-[8px] font-semibold">Vertretung</span>
                             </span>
                           )}
