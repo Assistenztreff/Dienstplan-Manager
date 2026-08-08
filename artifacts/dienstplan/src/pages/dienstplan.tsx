@@ -1599,9 +1599,9 @@ function DienstplanHeader({
   const stacked = tier === "stack";
 
   const title = (
-    <h2 className={`text-lg md:text-xl font-serif font-bold text-foreground ${stacked ? "min-w-0 shrink truncate" : "shrink-0"}`}>
+    <h1 className={`text-lg md:text-xl font-serif font-bold text-foreground ${stacked ? "min-w-0 shrink truncate" : "shrink-0"}`}>
       Dienstplan
-    </h2>
+    </h1>
   );
 
   const assistantFilter = isAdmin && assistants.length > 0 && (
@@ -2243,9 +2243,12 @@ export default function Dienstplan() {
             }}
           >
             <table className="min-w-full table-fixed text-sm">
+              <caption className="sr-only">
+                Dienstplan für {format(new Date(year, month - 1, 1), "MMMM yyyy", { locale: de })}
+              </caption>
               <thead>
                 <tr className="h-px border-b bg-muted/50">
-                  <th className="p-3 text-left font-medium sticky left-0 bg-muted/50 backdrop-blur-sm z-10 w-48">
+                  <th scope="col" className="p-3 text-left font-medium sticky left-0 bg-muted/50 backdrop-blur-sm z-10 w-48">
                     {isAdmin ? "Assistenzkraft" : "Schicht"}
                   </th>
                   {days.map((day) => {
@@ -2254,6 +2257,7 @@ export default function Dienstplan() {
                     return (
                     <th
                       key={day.toISOString()}
+                      scope="col"
                       data-testid={isSelectionMode ? `col-header-${format(day, "yyyy-MM-dd")}` : undefined}
                       data-selected={colSelected ? "true" : "false"}
                       onClick={isSelectionMode && isAdmin ? () => toggleDate(day) : undefined}
@@ -2295,7 +2299,7 @@ export default function Dienstplan() {
                       key={assistant.id}
                       className="border-b last:border-0 hover:bg-muted/20 transition-colors"
                     >
-                      <td className="px-3 py-1.5 font-medium sticky left-0 bg-card hover:bg-muted/20 transition-colors z-10 shadow-[1px_0_0_0_hsl(var(--border))]">
+                      <th scope="row" className="px-3 py-1.5 font-medium sticky left-0 bg-card hover:bg-muted/20 transition-colors z-10 shadow-[1px_0_0_0_hsl(var(--border))]">
                         {isAdmin ? (
                           <span className="inline-flex items-center gap-2">
                             <span className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${userDotClass(assistant.id, personColors)}`} />
@@ -2304,7 +2308,7 @@ export default function Dienstplan() {
                         ) : (
                           "Meine Schichten"
                         )}
-                      </td>
+                      </th>
                       {days.map((day, dayIdx) => {
                         const dayShifts = assistantShifts.filter(
                           (s) => isSameDay(new Date(s.startTime), day)

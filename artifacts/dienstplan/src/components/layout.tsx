@@ -789,6 +789,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-dvh w-full flex-col overflow-hidden bg-brand-white font-sans text-foreground">
+      <a
+        href="#hauptinhalt"
+        className="sr-only fixed left-4 top-4 z-[60] rounded-md bg-brand-dark px-4 py-2 font-semibold text-brand-white focus:not-sr-only focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+      >
+        Zum Hauptinhalt springen
+      </a>
       {/* Kopf-Leisten + Inhalt + Footer scrollen gemeinsam in EINEM
           Scroll-Container. Beim Runterscrollen verschwinden Plattform-Header
           und Menueleiste nach oben; sticky Kopfzeilen der Seiten (Dienstplan)
@@ -810,6 +816,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <AppSubNavigation />
 
           <main
+            id="hauptinhalt"
+            tabIndex={-1}
             className={`w-full flex-1 ${
               location.startsWith("/handbuch")
                 ? "" // Handbuch: farbige Flaechen bis an den Rand, ohne Innenabstand

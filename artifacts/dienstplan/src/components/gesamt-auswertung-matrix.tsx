@@ -481,6 +481,9 @@ export function GesamtAuswertungMatrix({
 
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
+          <caption className="sr-only">
+            Gesamtübersicht der Stunden und Vergütung aller Assistenzkräfte
+          </caption>
           <thead>
             <tr className="border-b border-border/60 bg-muted/50">
               <th

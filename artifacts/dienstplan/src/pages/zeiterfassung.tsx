@@ -558,7 +558,7 @@ export default function Zeiterfassung() {
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-3xl font-serif font-bold text-foreground">Zeiterfassung</h2>
+          <h1 className="text-3xl font-serif font-bold text-foreground">Zeiterfassung</h1>
           <p className="text-muted-foreground mt-1">
             {isAdmin ? "Geleistete Stunden prüfen und genehmigen" : "Meine geleisteten Stunden"}
           </p>
@@ -587,7 +587,7 @@ export default function Zeiterfassung() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-1.5" data-testid="status-filter">
+      <div className="flex flex-wrap gap-1.5" data-testid="status-filter" role="group" aria-label="Zeiteinträge nach Status filtern">
         {STATUS_FILTERS.map((f) => {
           const active = (statusFilter ?? null) === f.value;
           return (
@@ -596,6 +596,7 @@ export default function Zeiterfassung() {
               type="button"
               data-testid={`status-filter-${f.value ?? "all"}`}
               data-active={active ? "true" : "false"}
+              aria-pressed={active}
               onClick={() => setStatus(f.value)}
               className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
                 active
@@ -697,17 +698,18 @@ export default function Zeiterfassung() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
+              <caption className="sr-only">Erfasste Zeiten und ihr Bearbeitungsstatus</caption>
               <thead>
                 <tr className="border-b bg-muted/30">
-                  <th className="p-4 text-left font-medium text-muted-foreground">Datum</th>
+                  <th scope="col" className="p-4 text-left font-medium text-muted-foreground">Datum</th>
                   {isAdmin && (
-                    <th className="p-4 text-left font-medium text-muted-foreground">Assistenzkraft</th>
+                    <th scope="col" className="p-4 text-left font-medium text-muted-foreground">Assistenzkraft</th>
                   )}
-                  <th className="p-4 text-left font-medium text-muted-foreground">Von - Bis</th>
-                  <th className="p-4 text-left font-medium text-muted-foreground">Stunden</th>
-                  <th className="p-4 text-left font-medium text-muted-foreground">Status</th>
+                  <th scope="col" className="p-4 text-left font-medium text-muted-foreground">Von - Bis</th>
+                  <th scope="col" className="p-4 text-left font-medium text-muted-foreground">Stunden</th>
+                  <th scope="col" className="p-4 text-left font-medium text-muted-foreground">Status</th>
                   {isAdmin && (
-                    <th className="p-4 text-right font-medium text-muted-foreground">Aktion</th>
+                    <th scope="col" className="p-4 text-right font-medium text-muted-foreground">Aktion</th>
                   )}
                 </tr>
               </thead>
@@ -738,6 +740,7 @@ export default function Zeiterfassung() {
                               className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200"
                               disabled={isConfirming || !canConfirm}
                               title={canConfirm ? "Bestätigen" : PLAN_FEATURE_MESSAGES.strictTimeTracking}
+                              aria-label={`Zeiteintrag vom ${format(new Date(entry.actualStart), "dd.MM.yyyy", { locale: de })} bestätigen`}
                               onClick={() => handleConfirm(entry.id, "confirmed")}
                             >
                               <Check className="h-4 w-4" />
@@ -748,6 +751,7 @@ export default function Zeiterfassung() {
                               className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
                               disabled={isConfirming || !canConfirm}
                               title={canConfirm ? "Ablehnen" : PLAN_FEATURE_MESSAGES.strictTimeTracking}
+                              aria-label={`Zeiteintrag vom ${format(new Date(entry.actualStart), "dd.MM.yyyy", { locale: de })} ablehnen`}
                               onClick={() => handleConfirm(entry.id, "rejected")}
                             >
                               <X className="h-4 w-4" />

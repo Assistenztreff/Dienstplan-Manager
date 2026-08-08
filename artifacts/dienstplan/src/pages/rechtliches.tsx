@@ -248,19 +248,19 @@ export function Barrierefreiheit() {
       <section>
         <h2>Umgesetzte Maßnahmen</h2>
         <ul>
-          <li>Kontrastreiche, barrierefreie Farbpalette in der gesamten Anwendung</li>
+          <li>Strukturierte Bereiche, Überschriften und ein Sprunglink zum Hauptinhalt</li>
           <li>Bedienbarkeit per Tastatur inklusive sichtbarer Fokus-Markierungen</li>
           <li>Großzügige Klick- und Touch-Flächen</li>
-          <li>Responsive Darstellung für Bildschirmleser und mobile Geräte</li>
-          <li>Beschriftete Formularfelder und aussagekräftige Link-Texte</li>
+          <li>Beschriftete Formularfelder, verständliche Statusmeldungen und aussagekräftige Link-Texte</li>
+          <li>Tabellen mit Überschriften und Beschreibungen für Screenreader</li>
         </ul>
       </section>
       <section>
         <h2>Bekannte Einschränkungen</h2>
         <p>
-          Einzelne komplexe Ansichten (z. B. der Monatskalender und PDF-Exporte) sind
-          möglicherweise noch nicht vollständig barrierefrei. Wir arbeiten fortlaufend an
-          Verbesserungen.
+          Einzelne komplexe Ansichten, insbesondere der Monatskalender und PDF-Exporte,
+          werden weiterhin schrittweise verbessert. Für Kalenderansichten stehen
+          Tastaturbedienung und zusätzliche Screenreader-Beschreibungen im Fokus.
         </p>
       </section>
       <section>
@@ -275,7 +275,7 @@ export function Barrierefreiheit() {
         </p>
       </section>
       <section>
-        <p className="text-xs text-slate-500">Diese Erklärung wurde am 24. Juli 2026 erstellt.</p>
+        <p className="text-xs text-slate-500">Diese Erklärung wurde am 8. August 2026 aktualisiert.</p>
       </section>
     </LegalPageShell>
   );

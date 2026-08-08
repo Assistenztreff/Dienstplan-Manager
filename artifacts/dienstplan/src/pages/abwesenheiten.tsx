@@ -421,7 +421,7 @@ export default function Abwesenheiten() {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div>
-        <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Abwesenheiten</h2>
+        <h1 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Abwesenheiten</h1>
         <p className="text-muted-foreground mt-1 text-sm">
           Urlaub und Krankheit als Zeitraum erfassen und verwalten
         </p>
@@ -429,23 +429,24 @@ export default function Abwesenheiten() {
 
       {/* Abwesenheitskalender (Jahresansicht mit Direktanlage, HANDOFF 05.08.2026) —
           einklappbar, damit Resturlaub und Listen schneller erreichbar sind. */}
-      <section>
+      <section aria-labelledby="abwesenheitskalender-ueberschrift">
         <button
           type="button"
           onClick={toggleKalender}
           aria-expanded={kalenderOffen}
+          aria-controls="abwesenheitskalender"
           className="flex w-full items-center gap-2 rounded-md px-2 py-2.5 text-left transition-colors hover:bg-muted/50"
           data-testid="toggle-abwesenheits-kalender"
         >
           <ChevronRight
             className={`h-5 w-5 shrink-0 transition-transform ${kalenderOffen ? "rotate-90" : ""}`}
           />
-          <span className="font-semibold">Abwesenheitskalender</span>
+          <span id="abwesenheitskalender-ueberschrift" className="font-semibold">Abwesenheitskalender</span>
           <span className="text-sm text-muted-foreground">
             Jahresübersicht mit Direktanlage
           </span>
         </button>
-        {kalenderOffen && <AbwesenheitsKalender />}
+        {kalenderOffen && <div id="abwesenheitskalender"><AbwesenheitsKalender /></div>}
       </section>
 
       {/* Schneller Monatssprung: Setzt Von/Bis auf den gesamten gewählten Monat. */}
@@ -492,14 +493,14 @@ export default function Abwesenheiten() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Erfassung */}
         <Card className="border-border/50 shadow-sm lg:col-span-1">
-          <CardContent className="p-5 space-y-4">
-            <h3 className="font-semibold">Abwesenheit eintragen</h3>
+          <CardContent className="p-5 space-y-4" aria-labelledby="abwesenheit-eintragen">
+            <h2 id="abwesenheit-eintragen" className="font-semibold">Abwesenheit eintragen</h2>
 
             <div className="space-y-1.5">
-              <Label>Assistenzkraft</Label>
+              <Label htmlFor="absence-user">Assistenzkraft</Label>
               {canManage ? (
                 <Select value={userId} onValueChange={setUserId}>
-                  <SelectTrigger data-testid="absence-user">
+                  <SelectTrigger id="absence-user" data-testid="absence-user">
                     <SelectValue placeholder="Assistenzkraft auswählen" />
                   </SelectTrigger>
                   <SelectContent>
@@ -522,9 +523,9 @@ export default function Abwesenheiten() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Art</Label>
+              <Label htmlFor="absence-type">Art</Label>
               <Select value={type} onValueChange={(v) => setType(v as AbsenceType)}>
-                <SelectTrigger data-testid="absence-type">
+                  <SelectTrigger id="absence-type" data-testid="absence-type">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -535,12 +536,12 @@ export default function Abwesenheiten() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Dienst (optional)</Label>
+              <Label htmlFor="absence-shift-model">Dienst (optional)</Label>
               <Select
                 value={shiftModelId || "none"}
                 onValueChange={(v) => setShiftModelId(v === "none" ? "" : v)}
               >
-                <SelectTrigger data-testid="absence-shift-model">
+                  <SelectTrigger id="absence-shift-model" data-testid="absence-shift-model">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -580,7 +581,7 @@ export default function Abwesenheiten() {
               </div>
             </div>
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
 
             <Button
               onClick={handleSave}
