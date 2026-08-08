@@ -7,8 +7,6 @@ import {
   useListTeamMembers,
   useMoveTeamMember,
   useUpdateTeamMemberFlags,
-  useAddTeamMember,
-  useRemoveTeamMember,
   getListTeamsQueryKey,
   getListTeamMembersQueryKey,
   getListUsersQueryKey,
@@ -29,7 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, Building2, ArrowRightLeft, Lock, UserCog, Users } from "lucide-react";
+import { Plus, Pencil, Trash2, Building2, ArrowRightLeft, Lock, UserCog } from "lucide-react";
 import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/auth";
@@ -446,170 +444,6 @@ function TeamleiterDialog({ team, isDienstleister, onClose }: TeamleiterDialogPr
   );
 }
 
-// ---------------------------------------------------------------------------
-// MemberManagementDialog: Mitglieder eines Teams anzeigen, hinzufügen und
-// entfernen. Für Teamleiter (die kein Team-Eigentümer sind) sichtbar.
-// ---------------------------------------------------------------------------
-
-type MemberManagementDialogProps = {
-  team: Team;
-  allTeams: Team[];
-  onClose: () => void;
-};
-
-function MemberManagementDialog({ team, allTeams, onClose }: MemberManagementDialogProps) {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const [sourceTeamId, setSourceTeamId] = useState<string | undefined>(
-    allTeams.find((t) => t.id !== team.id)?.id.toString(),
-  );
-  const [isAdding, setIsAdding] = useState(false);
-  const [isRemoving, setIsRemoving] = useState<number | null>(null);
-
-  const { data: currentMembersRaw, isLoading } = useListTeamMembers(team.id);
-  const currentMembers = (currentMembersRaw ?? []) as Member[];
-
-  const sourceId = sourceTeamId != null ? Number(sourceTeamId) : undefined;
-  const { data: sourceMembersRaw } = useListTeamMembers(sourceId ?? 0, {
-    query: { enabled: sourceId != null },
-  } as Parameters<typeof useListTeamMembers>[1]);
-  const sourceMembers = (sourceMembersRaw ?? []) as Member[];
-
-  const currentMemberIds = new Set(currentMembers.map((m) => m.userId));
-  const otherTeams = allTeams.filter((t) => t.id !== team.id);
-  const addCandidates = sourceMembers.filter((m) => !currentMemberIds.has(m.userId));
-
-  const addMember = useAddTeamMember();
-  const removeMember = useRemoveTeamMember();
-
-  async function handleAdd(userId: number) {
-    setIsAdding(true);
-    try {
-      await addMember.mutateAsync({ id: team.id, data: { userId } });
-      await queryClient.invalidateQueries({ queryKey: getListTeamMembersQueryKey(team.id) });
-    } catch (err) {
-      toast({
-        title: "Hinzufügen fehlgeschlagen",
-        description: readableApiError(err, "Bitte erneut versuchen."),
-        variant: "destructive",
-      });
-    } finally {
-      setIsAdding(false);
-    }
-  }
-
-  async function handleRemove(userId: number) {
-    setIsRemoving(userId);
-    try {
-      await removeMember.mutateAsync({ id: team.id, userId });
-      await queryClient.invalidateQueries({ queryKey: getListTeamMembersQueryKey(team.id) });
-    } catch (err) {
-      toast({
-        title: "Entfernen fehlgeschlagen",
-        description: readableApiError(err, "Bitte erneut versuchen."),
-        variant: "destructive",
-      });
-    } finally {
-      setIsRemoving(null);
-    }
-  }
-
-  return (
-    <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="font-serif text-xl flex items-center gap-2">
-            <Users className="h-5 w-5 text-muted-foreground" />
-            Mitglieder: {team.name}
-          </DialogTitle>
-        </DialogHeader>
-
-        {/* Aktuelle Mitglieder */}
-        <div className="space-y-1 py-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-            Aktuelle Mitglieder
-          </p>
-          {isLoading ? (
-            <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full rounded-md" />)}</div>
-          ) : currentMembers.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-3 text-center">Noch keine Mitglieder.</p>
-          ) : (
-            <ul className="divide-y divide-border/40 rounded-lg border border-border/50">
-              {currentMembers.map((m) => (
-                <li key={m.userId} className="flex items-center justify-between gap-2 px-3 py-2">
-                  <div>
-                    <span className="text-sm font-medium">{m.name}</span>
-                    <span className="ml-2 text-xs text-muted-foreground">{m.email}</span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="shrink-0 text-destructive hover:text-destructive"
-                    disabled={isRemoving === m.userId}
-                    onClick={() => void handleRemove(m.userId)}
-                  >
-                    {isRemoving === m.userId ? "…" : "Entfernen"}
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Aus anderen Teams hinzufügen */}
-        {otherTeams.length > 0 && (
-          <div className="space-y-2 border-t border-border/40 pt-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Aus anderem Team hinzufügen
-            </p>
-            {otherTeams.length > 1 && (
-              <Select value={sourceTeamId} onValueChange={setSourceTeamId}>
-                <SelectTrigger className="h-8 text-sm">
-                  <SelectValue placeholder="Team auswählen" />
-                </SelectTrigger>
-                <SelectContent>
-                  {otherTeams.map((t) => (
-                    <SelectItem key={t.id} value={t.id.toString()}>{t.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            {addCandidates.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Alle Mitglieder des anderen Teams sind bereits hier eingetragen.
-              </p>
-            ) : (
-              <ul className="divide-y divide-border/40 rounded-lg border border-border/50">
-                {addCandidates.map((m) => (
-                  <li key={m.userId} className="flex items-center justify-between gap-2 px-3 py-2">
-                    <div>
-                      <span className="text-sm font-medium">{m.name}</span>
-                      <span className="ml-2 text-xs text-muted-foreground">{m.email}</span>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="shrink-0"
-                      disabled={isAdding}
-                      onClick={() => void handleAdd(m.userId)}
-                    >
-                      Hinzufügen
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-
-        <DialogFooter className="pt-2">
-          <Button onClick={onClose}>Schließen</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export default function TeamVerwaltung() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -621,7 +455,6 @@ export default function TeamVerwaltung() {
   const [editTeam, setEditTeam] = useState<Team | undefined>();
   const [transferTeam, setTransferTeam] = useState<Team | undefined>();
   const [teamleiterTeam, setTeamleiterTeam] = useState<Team | undefined>();
-  const [memberTeam, setMemberTeam] = useState<Team | undefined>();
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
   // isTeamleiter = eingeloggte Person ist Teamleiter, kein Admin.
@@ -740,18 +573,6 @@ export default function TeamVerwaltung() {
                     <span className="font-medium truncate">{team.name}</span>
                   </div>
 
-                  {/* Mitglieder-Button: für Admins und Teamleiter */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={() => setMemberTeam(team)}
-                    title="Mitglieder dieses Teams verwalten"
-                  >
-                    <Users className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Mitglieder</span>
-                  </Button>
-
                   {/* Admin-Only-Buttons: Überführen, Rollen, Bearbeiten, Löschen */}
                   {!isTeamleiterMode && (
                     <>
@@ -834,13 +655,6 @@ export default function TeamVerwaltung() {
         />
       )}
 
-      {memberTeam && (
-        <MemberManagementDialog
-          team={memberTeam}
-          allTeams={teams}
-          onClose={() => setMemberTeam(undefined)}
-        />
-      )}
     </div>
   );
 }
