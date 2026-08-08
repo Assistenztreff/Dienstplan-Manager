@@ -1,10 +1,15 @@
 ---
-name: MonthGrid Leere-Zelle-Klickmodell
-description: Leere Tageszellen öffnen den Schicht-Dialog direkt (kein Zwei-Stufen-Klick); Auswahl muss trotzdem gesetzt werden
+name: MonthGrid Klick-Verhalten (seit Arbeitsanweisung 3.4)
+description: Zellenklick/Enter wählt nur aus; Anlegen ausschließlich über das day-add-Plus bzw. den Tagesleisten-Button; Zelle ist div role="button".
 ---
 
-Im MonthGrid öffnet ein Klick auf eine LEERE Tageszelle den Schicht-Dialog direkt; nur Zellen mit Einträgen nutzen das Zwei-Stufen-Modell (1. Klick markiert, 2. Klick öffnet).
+Seit der Arbeitsanweisung 06.08.2026 (Punkt 3.4) gilt im MonthGrid:
 
-**Why:** Beim MonthGrid-Redesign ging verloren, dass der Leere-Zellen-Klick auch `onSelectDay(day)` setzt — dadurch blieb `data-selected="false"`, das Tagesdetail folgte nicht dem Klick, und 8 shift-dialog-E2E-Specs (Helper `selectDayCell` erwartet Markierung) waren still rot auf main.
+- Klick oder Enter/Space auf eine Tageszelle (auch leere, auch wiederholt) WÄHLT den Tag nur aus — nie einen Dialog öffnen.
+- Das Anlegen erfolgt ausschließlich über das Plus in der Zellen-Kopfzeile (`data-testid="day-add-<iso>"`) oder den „Dienst anlegen"-Button der Tagesleiste.
+- Die Zelle ist ein `div role="button"` (Roving Tabindex), das Plus ein echter `<button>` — niemals interaktive Elemente in einen nativen `<button>`-Zellencontainer verschachteln. Der Plus-Keydown stoppt nur das Bubbling; Enter/Space-Aktivierung läuft nativ über den Klick.
+- Der alte Zwei-Stufen-Klick (2. Klick öffnet Dialog) und das Direkt-Öffnen bei leeren Zellen existieren nicht mehr.
 
-**How to apply:** Jeder Klick-Pfad, der einen Tag betrifft (direkt öffnen, zweiter Klick, Tastatur), muss die Auswahl mitführen. Der E2E-Helper `selectDayCell` toleriert den direkt öffnenden Dialog (Escape), verlässt sich aber darauf, dass die Zelle danach markiert ist. Bei rätselhaften `data-selected`-Fehlschlägen zuerst prüfen, ob die Zelle leer war.
+**Why:** Anweisung 3.4 trennt Auswahl und Anlage explizit (Done-Kriterium „Klick auf Datum wählt nur; nur Plus legt an"). Code-Review-Befund: `span role="button"` in nativem `<button>` ist invalides HTML und tastatur-unzugänglich.
+
+**How to apply:** Specs, die einen Dialog aus dem Grid öffnen wollen, klicken `day-add-<iso>` (nicht zweimal die Zelle). Auswahl-Assertions laufen über `data-selected` auf `day-cell-<iso>`. Neue interaktive Elemente in der Zelle müssen echte Buttons außerhalb bzw. mit Bubbling-Stopp sein.

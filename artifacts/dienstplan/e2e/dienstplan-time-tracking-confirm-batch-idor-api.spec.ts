@@ -85,7 +85,10 @@ test.beforeAll(async () => {
   test.setTimeout(120_000);
 
   // --- Arbeitgeber P mit Assistent + offener Ist-Zeit -----------------------
+  // Premium VOR dem Aktivieren: der Schalter "Zeiterfassung aktivieren" ist im
+  // Free-Tarif serverseitig gegen Aenderungen gesperrt ("timeTrackingSettings").
   employerP = await registerFreeAccount("privat", "batchidor-p");
+  await setAccountPlan(employerP.email, "premium");
   await enableTimeTracking(employerP.ctx);
   const pAssistantId = await createAssistant(employerP, "p");
   pEntryId = await createTimeEntry(
@@ -97,6 +100,7 @@ test.beforeAll(async () => {
 
   // --- Getrennter Arbeitgeber Q mit eigenem Assistent + zwei Ist-Zeiten -----
   employerQ = await registerFreeAccount("privat", "batchidor-q");
+  await setAccountPlan(employerQ.email, "premium");
   await enableTimeTracking(employerQ.ctx);
   const qAssistantId = await createAssistant(employerQ, "q");
   qEntryId1 = await createTimeEntry(
@@ -112,9 +116,9 @@ test.beforeAll(async () => {
     "2026-07-08T16:00:00.000Z",
   );
 
-  // Q auf Premium heben (strictTimeTracking-Gate), damit die Batch-Route
-  // erreicht wird und der Test die TENANT-Grenze beweist, nicht das Plan-Gate.
-  await setAccountPlan(employerQ.email, "premium");
+  // Beide Konten sind von Anfang an Premium: Die Batch-Route ist
+  // strictTimeTracking-gegated — so beweist der Test die TENANT-Grenze
+  // (stilles Ueberspringen fremder IDs), nicht das Plan-Gate.
 });
 
 test.afterAll(async () => {

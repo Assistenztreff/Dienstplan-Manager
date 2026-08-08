@@ -40,6 +40,7 @@ const CONTRACT_SELECT = {
   userId: contractsTable.userId,
   weeklyHours: contractsTable.weeklyHours,
   workdaysPerWeek: contractsTable.workdaysPerWeek,
+  workdaysConfirmedAt: contractsTable.workdaysConfirmedAt,
   vacationDays: contractsTable.vacationDays,
   vacationHoursUsed: contractsTable.vacationHoursUsed,
   startDate: contractsTable.startDate,
@@ -158,6 +159,11 @@ router.post("/contracts", requireTeamleiterOrAdmin, async (req, res): Promise<vo
     .values({
       ...body.data,
       teamId: write.teamId,
+      // Explizit gesetzte Arbeitstage zählen als bewusste Festlegung
+      // (Datenpflege-Hinweis entfällt dann).
+      ...(body.data.workdaysPerWeek != null
+        ? { workdaysConfirmedAt: new Date() }
+        : {}),
       startDate: toDateString(body.data.startDate),
       endDate: body.data.endDate ? toDateString(body.data.endDate) : undefined,
     })
@@ -215,6 +221,15 @@ router.patch("/contracts/:id", requireTeamleiterOrAdmin, async (req, res): Promi
     return;
   }
   const updateValues: Record<string, unknown> = { ...body.data };
+  // workdaysConfirm ist kein Spaltenwert: true = bestehende Arbeitstage als
+  // geprüft bestätigen (nur Zeitstempel setzen, kein Wert wird angetastet —
+  // konfliktfest gegenüber parallelen Wert-Updates).
+  delete updateValues["workdaysConfirm"];
+  // Jede bewusste Arbeitstage-Änderung (Formular, Rechner-Dialog) oder
+  // Bestätigung (Hinweis-Schließen) bestätigt den Wert.
+  if (body.data.workdaysPerWeek !== undefined || body.data.workdaysConfirm === true) {
+    updateValues["workdaysConfirmedAt"] = new Date();
+  }
   if (body.data.startDate !== undefined) {
     updateValues["startDate"] = toDateString(body.data.startDate);
   }

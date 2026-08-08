@@ -16,6 +16,8 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
   - **Meldepflicht** (gut sichtbar, z. B. „⚠️ Kostenwarnung:" / „🛑 Blockiert:"): Check schlägt ≥3× fehl; ein Vorgang läuft ungewöhnlich lange/teuer; ineffiziente Stellen im Code (doppelte API-Calls, überflüssige Rebuilds, unnötig große Abfragen) auch außerhalb der aktuellen Aufgabe; unklare Anforderungen lieber einmal nachfragen statt mehrfach raten.
   - Am Sessionende: kurze Zusammenfassung (was gemacht, wie viele Anläufe, Probleme).
   - Keine automatischen Deployments ohne Rückfrage; keine Komplettüberarbeitung, wenn ein gezielter Fix reicht.
+  - **Proaktive Spar-Hinweise (verbindlich)**: Sobald eine Kosteneffizienz-Optimierung erkennbar wird (z. B. eine aufgeblähte Memory-Datei, doppelte Validierungsläufe oder teure wiederkehrende Muster), aktiv und sofort darauf hinweisen — nicht still für später vormerken.
+  - **Modus-Empfehlung bei jedem neuen Auftrag (verbindlich)**: Zu Beginn eines Arbeitsauftrags kurz nennen, welcher Modus am besten passt (Agent-Modus Lite/Economy/Power sowie Build-Session vs. Plan-Modus vs. isolierte Tasks) — mit Begründung in einem Satz.
 
 ## Stack & Betrieb
 

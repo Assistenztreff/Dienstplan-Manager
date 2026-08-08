@@ -15,6 +15,7 @@ import calendarRouter from "./calendar";
 import teamsRouter from "./teams";
 import operatorRouter from "./operator";
 import authRouter from "./auth";
+import hourBudgetsRouter from "./hour_budgets";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use(invitationsRouter);
 router.use(calendarRouter);
 router.use(teamsRouter);
 router.use(operatorRouter);
+router.use(hourBudgetsRouter);
 
 export default router;

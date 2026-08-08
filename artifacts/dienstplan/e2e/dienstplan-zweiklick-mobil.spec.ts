@@ -15,17 +15,21 @@ import {
 } from "./helpers/teams";
 
 /**
- * Zwei-Stufen-Klick in der MOBILEN Monatsgitter-Ansicht (Standalone-Betrieb).
+ * Tageszellen-Klicklogik in der MOBILEN Monatsgitter-Ansicht (Arbeitsanweisung 3.4).
  *
- * Der Zwei-Stufen-Klick (1. Klick markiert den Tag, 2. Klick auf den bereits
- * markierten Tag öffnet als Admin den Schicht-Dialog) ist desktop-seitig in
- * dienstplan-zweiklick-desktop.spec.ts abgedeckt — dieser Spec prüft die
- * mobile Ansicht (400px), in der echte Smartphone-Nutzer landen.
+ * Seit der Arbeitsanweisung 06.08.2026 (Punkt 3.4) wählt der Klick auf Zelle
+ * oder Datum den Tag nur aus; der Schicht-Dialog öffnet ausschließlich über
+ * das Plus in der Zellen-Kopfzeile (day-add-<iso>). Die frühere
+ * Zwei-Stufen-Logik (2. Klick öffnet den Dialog) entfällt. Die Desktop-
+ * Monatsgitter-Ansicht ist in dienstplan-zweiklick-desktop.spec.ts abgedeckt.
+ * Mobil startet das Monatsraster eingeklappt (Mini-Balken, Punkt 3.3) — die
+ * Kopfzeile mit Datum links und Plus rechts gilt dort genauso.
  *
  * Deckt ab (mobil 400px):
- * - Admin: 1. Klick markiert nur (kein Dialog), 2. Klick öffnet shift-dialog.
- * - Admin: Klick auf einen ANDEREN Tag ist wieder Stufe 1.
- * - Assistent: 1. Klick markiert, 2. Klick öffnet NICHTS (kein Dialog).
+ * - Admin: Zellenklick markiert nur (1. UND 2. Klick — kein Dialog).
+ * - Admin: Plus in der Kopfzeile öffnet den shift-dialog.
+ * - Admin: Klick auf einen ANDEREN Tag ist wieder reine Auswahl.
+ * - Assistent: Klicks markieren, öffnen NICHTS (kein Dialog).
  *
  * Setup wie in dienstplan-zweiklick-desktop.spec.ts: frisches Free-Konto;
  * Assistenten-Login über den Einladungsflow (Owner kurz auf Premium heben,
@@ -133,7 +137,7 @@ async function openMobileCalendar(
   return { page, close: () => context.close() };
 }
 
-test("Mobil (Admin): 1. Klick markiert nur, 2. Klick öffnet den Schicht-Dialog", async ({
+test("Mobil (Admin): Zellenklick markiert nur, Plus öffnet den Schicht-Dialog", async ({
   browser,
 }) => {
   test.setTimeout(120_000);
@@ -143,16 +147,22 @@ test("Mobil (Admin): 1. Klick markiert nur, 2. Klick öffnet den Schicht-Dialog"
     const mobile = page.getByTestId("dienstplan-mobile");
     const dialog = page.getByTestId("shift-dialog");
 
-    // --- 1. Klick: Tag wird markiert, KEIN Dialog. ---
+    // --- Klick auf Zelle/Datum: Tag wird markiert, KEIN Dialog (3.4). ---
     const cellA = mobile.getByTestId(dayCellId(year, month1, dayA));
     await cellA.click();
     await expect(cellA).toHaveAttribute("data-selected", "true");
     await expect(mobile.getByTestId("day-detail-header")).toContainText(`${dayA}.`);
-    await expect(dialog, "Der 1. Klick darf noch keinen Dialog öffnen").toHaveCount(0);
+    await expect(dialog, "Der Zellenklick darf keinen Dialog öffnen (3.4)").toHaveCount(0);
 
-    // --- 2. Klick auf den bereits markierten Tag: Dialog öffnet sich. ---
+    // --- Auch der 2. Klick auf den markierten Tag bleibt reine Auswahl. ---
     await cellA.click();
-    await expect(dialog, "Der 2. Klick muss als Admin den Schicht-Dialog öffnen").toBeVisible();
+    await expect(dialog, "Nur das Plus legt an — kein Dialog beim 2. Klick").toHaveCount(0);
+
+    // --- Plus in der Zellen-Kopfzeile öffnet den Schicht-Dialog. ---
+    await mobile
+      .getByTestId(dayCellId(year, month1, dayA).replace("day-cell-", "day-add-"))
+      .click();
+    await expect(dialog, "Das Plus muss den Schicht-Dialog öffnen").toBeVisible();
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
 

@@ -135,6 +135,8 @@ export const PLAN_FEATURE_MESSAGES: Record<string, string> = {
     "Einladungslinks für Assistenzkräfte sind ein Premium-Feature. Damit Assistenzkräfte einen eigenen Zugang erhalten, auf Premium upgraden.",
   absenceTracking:
     "Das Tracking von Urlaubs- und Krankheitstagen (Resturlaub-Konto) ist ein Premium-Feature. Abwesenheiten eintragen bleibt im Free-Tarif möglich — für die automatische Zählung auf Premium upgraden.",
+  timeTrackingSettings:
+    "Die Schalter für Zeiterfassung und Pausen sind ein Premium-Feature. Bereits aktive Einstellungen bleiben wirksam — für Änderungen auf Premium upgraden.",
 };
 
 /**

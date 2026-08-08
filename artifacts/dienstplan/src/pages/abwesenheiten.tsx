@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Plane, Stethoscope, Info, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Trash2, Plane, Stethoscope, Info, ChevronLeft, ChevronRight, Calculator, X } from "lucide-react";
 import { eachDayOfInterval, format, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
 import { de } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
@@ -41,6 +41,7 @@ import { hasAccess } from "@/lib/entitlements";
 import { PlanUpgradeLink } from "@/components/plan-limit-banner";
 import { MonthYearPicker } from "@/components/month-year-picker";
 import { AbwesenheitsKalender } from "@/components/abwesenheits-kalender";
+import { ArbeitstageRechnerDialog } from "@/components/arbeitstage-rechner-dialog";
 import { formatDays, formatHours } from "@/lib/utils";
 import {
   buildRanges,
@@ -57,16 +58,23 @@ const TYPE_LABEL: Record<AbsenceType, string> = {
 
 // Datenpflege-Hinweis: Zeigt an, wenn ein Urlaubstag aktuell aus VERTRAGSDATEN
 // (Wochenstunden ÷ Arbeitstage/Woche) bewertet wird, weil (noch) kein
-// 13-Wochen-Schnitt vorliegt. Bestandsverträge stehen nach der Migration oft
-// pauschal auf 5 Arbeitstage/Woche — in der persönlichen Assistenz sind aber
-// 7-Tage-Modelle häufig. Der Wert lässt sich direkt aus dem Hinweis heraus
-// korrigieren (PATCH auf den Vertrag).
-function WorkdaysHint({ contract }: { contract: Contract }) {
+// 13-Wochen-Schnitt vorliegt UND die Arbeitstage noch nie bewusst festgelegt
+// wurden (workdaysConfirmedAt == null → Migrations-Default). Der Rechner-
+// Dialog übernimmt die Korrektur; das X bestätigt den Ist-Wert (beides setzt
+// serverseitig workdaysConfirmedAt → der Hinweis bleibt dauerhaft weg, ist
+// aber über den „Neu berechnen"-Button in der Urlaubszeile jederzeit
+// wiedererreichbar).
+function WorkdaysHint({
+  contract,
+  onOpenRechner,
+}: {
+  contract: Contract;
+  onOpenRechner: () => void;
+}) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const updateContract = useUpdateContract();
-  const [value, setValue] = useState<string>("");
-  const [saving, setSaving] = useState(false);
+  const [closing, setClosing] = useState(false);
 
   const { data: balance } = useGetVacationBalance(contract.id, {
     query: { retry: false },
@@ -75,86 +83,84 @@ function WorkdaysHint({ contract }: { contract: Contract }) {
   };
 
   if (!balance || balance.dailyHoursSource !== "contract") return null;
+  if (contract.workdaysConfirmedAt != null) return null;
 
   const workdays = balance.contractWorkdaysPerWeek ?? 5;
   const weekly = balance.contractWeeklyHours;
-  const selected = value || String(workdays);
 
-  async function handleSave() {
-    setSaving(true);
+  async function invalidateContractQueries() {
+    await queryClient.invalidateQueries({
+      predicate: (q) => {
+        const k = q.queryKey[0];
+        return (
+          k === "/api/contracts" ||
+          k === `/api/contracts/${contract.id}/vacation-balance`
+        );
+      },
+    });
+  }
+
+  async function handleClose() {
+    setClosing(true);
     try {
+      // Reine Bestätigung ohne Wert-Update (workdaysConfirm): setzt nur
+      // serverseitig workdaysConfirmedAt und tastet keine Vertragswerte an —
+      // konfliktfest gegenüber parallelen Änderungen.
       await updateContract.mutateAsync({
         id: contract.id,
-        data: { workdaysPerWeek: Number(selected) },
+        data: { workdaysConfirm: true },
       });
-      await queryClient.invalidateQueries({
-        predicate: (q) => {
-          const k = q.queryKey[0];
-          return (
-            k === "/api/contracts" ||
-            k === `/api/contracts/${contract.id}/vacation-balance`
-          );
-        },
-      });
-      toast({
-        title: "Arbeitstage aktualisiert",
-        description: `Der Vertrag rechnet jetzt mit ${selected} Arbeitstagen pro Woche.`,
-      });
-      setValue("");
+      await invalidateContractQueries();
     } catch {
       if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
-      toast({ title: "Speichern fehlgeschlagen", variant: "destructive" });
+      toast({ title: "Schließen fehlgeschlagen", variant: "destructive" });
     } finally {
-      setSaving(false);
+      setClosing(false);
     }
   }
 
   return (
     <div
-      className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+      className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border border-amber-300/60 bg-amber-50 px-3 py-1.5 text-xs text-amber-900"
       data-testid={`workdays-hint-${contract.id}`}
     >
-      <span className="flex items-start gap-1.5">
-        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <span className="flex items-center gap-1.5 min-w-0">
+        <Info className="h-3.5 w-3.5 shrink-0" />
         <span>
-          Urlaubstage werden derzeit aus den Vertragsdaten bewertet
+          Urlaubstage werden aus den Vertragsdaten bewertet
           {weekly != null && (
             <>
               {" "}
-              ({formatHours(weekly)} Wochenstunden ÷ {workdays}{" "}
+              ({formatHours(weekly)} Wochenstunden ÷ {formatHours(workdays)}{" "}
               {workdays === 1 ? "Arbeitstag" : "Arbeitstage"}/Woche ={" "}
               {balance.dailyHours != null ? formatHours(balance.dailyHours) : balance.dailyHours} h/Tag)
             </>
           )}
-          , da noch kein 13-Wochen-Schnitt vorliegt. Bitte prüfen, ob die
-          Arbeitstage pro Woche stimmen (Migrations-Standard: 5).
+          . Bitte prüfe die Arbeitstage pro Woche.
         </span>
       </span>
-      <span className="flex items-center gap-2">
-        <Select value={selected} onValueChange={setValue}>
-          <SelectTrigger
-            className="h-7 w-[72px] text-xs"
-            data-testid={`workdays-select-${contract.id}`}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {[1, 2, 3, 4, 5, 6, 7].map((n) => (
-              <SelectItem key={n} value={String(n)}>
-                {n}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <span className="flex items-center gap-1 ml-auto">
         <Button
           size="sm"
           variant="outline"
           className="h-7 px-2 text-xs"
-          disabled={saving || Number(selected) === workdays}
-          onClick={handleSave}
-          data-testid={`workdays-save-${contract.id}`}
+          onClick={onOpenRechner}
+          disabled={closing}
+          data-testid={`workdays-rechner-open-${contract.id}`}
         >
-          {saving ? "Speichern..." : "Übernehmen"}
+          Rechner öffnen
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          onClick={handleClose}
+          disabled={closing}
+          aria-label="Hinweis schließen und Wert bestätigen"
+          title="Hinweis schließen und Wert bestätigen"
+          data-testid={`workdays-hint-close-${contract.id}`}
+        >
+          <X className="h-3.5 w-3.5" />
         </Button>
       </span>
     </div>
@@ -220,6 +226,28 @@ export default function Abwesenheiten() {
   }
   const [saving, setSaving] = useState(false);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  // Vertrag, für den der Arbeitstage-Rechner geöffnet ist (null = zu).
+  const [rechnerContract, setRechnerContract] = useState<Contract | null>(null);
+  // Abwesenheitskalender standardmäßig eingeklappt; Zustand pro Gerät merken.
+  const [kalenderOffen, setKalenderOffen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("abwesenheitskalender-offen") === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  function toggleKalender() {
+    setKalenderOffen((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem("abwesenheitskalender-offen", next ? "1" : "0");
+      } catch {
+        /* Speicher voll/deaktiviert — Zustand gilt dann nur für die Sitzung. */
+      }
+      return next;
+    });
+  }
 
   const assistants = useMemo(
     () => (users ?? []).filter((u) => u.role === "assistant"),
@@ -399,8 +427,26 @@ export default function Abwesenheiten() {
         </p>
       </div>
 
-      {/* Abwesenheitskalender (Jahresansicht mit Direktanlage, HANDOFF 05.08.2026) */}
-      <AbwesenheitsKalender />
+      {/* Abwesenheitskalender (Jahresansicht mit Direktanlage, HANDOFF 05.08.2026) —
+          einklappbar, damit Resturlaub und Listen schneller erreichbar sind. */}
+      <section>
+        <button
+          type="button"
+          onClick={toggleKalender}
+          aria-expanded={kalenderOffen}
+          className="flex w-full items-center gap-2 rounded-md px-2 py-2.5 text-left transition-colors hover:bg-muted/50"
+          data-testid="toggle-abwesenheits-kalender"
+        >
+          <ChevronRight
+            className={`h-5 w-5 shrink-0 transition-transform ${kalenderOffen ? "rotate-90" : ""}`}
+          />
+          <span className="font-semibold">Abwesenheitskalender</span>
+          <span className="text-sm text-muted-foreground">
+            Jahresübersicht mit Direktanlage
+          </span>
+        </button>
+        {kalenderOffen && <AbwesenheitsKalender />}
+      </section>
 
       {/* Schneller Monatssprung: Setzt Von/Bis auf den gesamten gewählten Monat. */}
       <div
@@ -592,6 +638,7 @@ export default function Abwesenheiten() {
                         data-testid={`vacation-balance-row-${u.id}`}
                       >
                         <span className="font-medium">{u.name}</span>
+                        <span className="flex items-center gap-1">
                         {entitlement === null ? (
                           <span className="text-muted-foreground text-xs">
                             Kein Vertrag
@@ -621,9 +668,30 @@ export default function Abwesenheiten() {
                             genommen)
                           </span>
                         )}
+                        {/* Arbeitstage-Rechner jederzeit wieder erreichbar —
+                            auch nachdem der Hinweis bestätigt wurde. */}
+                        {canManage && contract && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0"
+                            aria-label="Arbeitstage neu berechnen"
+                            title="Arbeitstage neu berechnen"
+                            onClick={() => setRechnerContract(contract)}
+                            data-testid={`workdays-recalc-${u.id}`}
+                          >
+                            <Calculator className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        </span>
                       </div>
                       {/* Vertrags-Datenpflege (PATCH) bleibt Verwaltungsrechten vorbehalten. */}
-                      {canManage && contract && <WorkdaysHint contract={contract} />}
+                      {canManage && contract && (
+                        <WorkdaysHint
+                          contract={contract}
+                          onOpenRechner={() => setRechnerContract(contract)}
+                        />
+                      )}
                       </div>
                     );
                   })}
@@ -703,6 +771,14 @@ export default function Abwesenheiten() {
           </Card>
         </div>
       </div>
+
+      <ArbeitstageRechnerDialog
+        contract={rechnerContract ?? undefined}
+        open={rechnerContract !== null}
+        onOpenChange={(open) => {
+          if (!open) setRechnerContract(null);
+        }}
+      />
     </div>
   );
 }

@@ -46,6 +46,7 @@ const FEATURE_ROWS: { key: PlanFeature; label: string }[] = [
   { key: "payrollExport", label: "Lohn-Export als PDF" },
   { key: "advancedAnalytics", label: "Soll/Ist-Auswertungen & Stundenkonto" },
   { key: "strictTimeTracking", label: "Strikte Arbeitszeiterfassung" },
+  { key: "timeTrackingSettings", label: "Zeiterfassungs- & Pausen-Einstellungen änderbar" },
   { key: "calendarSync", label: "Export in die eigene Kalender-App" },
   { key: "caregiverLogin", label: "Zugang für Assistenzkräfte (Team-Ansicht)" },
   { key: "absenceTracking", label: "Urlaubs- & Krankheits-Tracking (Resturlaub-Konto)" },

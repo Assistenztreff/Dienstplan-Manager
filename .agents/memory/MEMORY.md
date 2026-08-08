@@ -1,3 +1,4 @@
+- [Arbeitstage-Rechner & workdaysConfirm](workdays-confirm-pattern.md) — Vorschau muss Server-Formel spiegeln; Bestätigungen als Steuerfeld, nie Ist-Wert erneut senden (Race).
 - [Externe Postgres-URL Kodierung & TLS](scaleway-db-url-tls.md) — normalizeDatabaseUrl repariert unkodierte Passwörter; selbstsignierte Zertifikate brauchen Opt-in DATABASE_SSL_NO_VERIFY=1 (kein stiller Downgrade).
 - [DATABASE_URL secret shadows managed DB](database-url-secret-shadowing.md) — a user's DATABASE_URL secret overrides the managed URL; malformed value = 500 on all DB ops; agent can't delete secrets, env change needs workflow restart.
 - [DB push & session table](db-push-session-table.md) — connect-pg-simple's session table must live in the Drizzle schema or `db push` (incl. non-interactive post-merge) tries to drop it as data loss.
@@ -24,7 +25,7 @@
 - [Bodyless POST req.body undefined](dev-login-bodyless-post.md) — auto-fired bodyless POSTs (dev-login) leave req.body undefined; destructure with `?? {}` or adding optional body params crashes the default path.
 - [Plan entitlements enforcement](plan-entitlements-enforcement.md) — Free/Premium limits live in a shared lib, enforced server-side with the plan read fresh from DB; maxShiftModels=5 matches the 5 seeded defaults (Free starts AT the cap).
 - [Running a single e2e spec](e2e-single-spec-filter.md) — `test:e2e -- <file>` runs ALL specs (the npm script's extra `--` kills Playwright's filter); use `pnpm exec playwright test <name>` from the artifact dir.
-- [Full e2e suite baseline green](full-e2e-suite-red-locally.md) — suite is green (171/3 skip); global 60s timeout vs. load flakes, hung-vs-slow triage, sibling-spec data tolerance.
+- [E2E-Gesamtsuite: Laufzeit, Flakes & Validierungsbudget](e2e-validation-budget-and-flakes.md) — volle Suite dauert ~36–45 Min: langsam vs. hängend unterscheiden, Poll-Budget/Zombies beachten, bei UI-Änderungen gezielt prüfen.
 - [Sonner toasts need mounted Toaster](sonner-toaster-mount.md) — pages using `toast` from "sonner" render nothing unless the sonner `<Toaster>` is mounted in App root alongside the shadcn one.
 - [E2E mobile-viewport selectors](e2e-mobile-viewport-selectors.md) — 400px viewport hides `hidden sm:inline` button labels; getByRole-by-name fails, select via data-testid or title attribute.
 - [Dev-Seeder vs. manual DB state](dev-seeder-vs-manual-db-state.md) — auto-fired dev-login "ensure" seeding silently reverts scripted DB rearrangements; make ensure-paths bootstrap-only.
@@ -62,7 +63,6 @@
 - [Freizeitausgleich absence classification](freizeitausgleich-absence-classification.md) — a new absence shift type must be added to EVERY inline work/absence predicate (multiple, not shared); shift-derived per-contract balances must be team-scoped.
 - [Allowance account-global vs team fields](allowance-account-global-fields.md) — team-scope PUT must whitelist only surcharge/state/billing; account-global ops (autoApprove, vacation*, ersatzruhetagEnabled) resolve from override-row defaults for teams WITH an override (pre-existing).
 - [Layout & Scroll-Modell](fullscreen-layout-scroll-model.md) — body scrollt nie; innerer Container scrollt. /dienstplan full-bleed + natürliches Scrollen (NICHT mehr viewport-fixiert); Kopfzeile sticky, Filter = Select.
-- [E2E run lock at config load](e2e-run-lock.md) — PID lockfile guards the port-orphan reaper from a parallel run; never import playwright.config from teardown (side effects re-run).
 - [Dialog-Mobil-Scroll](dialog-mobile-scroll.md) — ohne max-h+overflow auf DialogContent sind Footer-Buttons mobil unerreichbar, da der Body nicht mehr scrollt.
 - [View-toggle selectors after sticky-header move](e2e-view-toggle-sticky-header.md) — toggles live in the sticky header, not the mobile/desktop content containers; anchor e2e locators on view-toggles-mobile/desktop.
 - [Backdating audit rows for e2e](plan-change-backdate-e2e.md) — plan_changes.created_at is always server-set; time-window specs seed flips with unique notes, then backdate via script; UI preset tests need timezoneId UTC.
@@ -85,28 +85,22 @@
 - [Private E2E-Test-DBs](private-test-dbs.md) — Standard: eigene `<dbname>_test_<suffix>`-DB pro Umgebung via deriveTestDbTarget; Lock entfällt; Aufräumen über DB-Kommentar, nie Registry-Tabellen.
 - [migrate-prod & drizzle dry-run](migrate-prod-dry-run.md) — prod schema sync via migrate-prod; `push --strict --verbose` without TTY = safe dry-run (prints statements, applies nothing, exits 0 — check prompt text).
 - [401 self-heal in web client](query-401-self-heal.md) — DB restore wipes sessions; stale cookies loop 401 with "logged-in" UI. Client resyncs via QueryCache onError; suspect stale session before missing data.
-- [Handbuch screenshot regeneration](handbuch-screenshot-capture.md) — env-gated capture spec + fingerprint staleness check in merge validation; private-DB escape hatch for lock contention.
-- [Completion-Validation Poll-Budget](completion-validation-poll-budget.md) — volle e2e-Suite (~36 Min) sprengt das Validierungs-Budget; e2e als Workflow grün laufen lassen, dann skip_validation_reason mit Nachweis.
-- [Validation poll budget vs. E2E-Kette](validation-poll-budget-e2e.md) — >45-min-e2e-Validierung stirbt an POLL_BUDGET_EXCEEDED und hinterlässt stale run.locks; Lock-PID prüfen/löschen, ggf. dokumentierter Skip.
-- [Validation-Poll-Budget & Zombie-Läufe](validation-poll-budget-zombie-runs.md) — POLL_BUDGET_EXCEEDED lässt die e2e-Kette als Zombie weiterlaufen (hält run.lock); vor Retry Playwright-Zombies killen.
 - [Unpaid info-only shift types](unpaid-info-shift-types.md) — info categories keep valuedHours (no surcharges); Soll/Lohn exclusion lives only in the hours-balance INFO_ONLY filter.
 - [Absence surcharge calculation](absence-surcharge-calculation.md) — §11 BUrlG/§2 EFZG: full-day vacation/sick on Sunday/holiday now get surcharges from plannedHours; nightHours=0 (no time window); SV-pflichtig (PDF separation is follow-up #658).
-- [E2E-Run-Lock wartet statt Abbruch](e2e-run-lock.md) — Validierungs-/Merge-Läufe überlappen; acquireRunLock wartet bis E2E_LOCK_WAIT_MS (15 Min) auf lebende Inhaber. Handbuch-UI-Änderung ⇒ screenshots:handbuch neu laufen lassen (Fingerprint-Gate in Validierung).
 - [Parallele scoped-e2e-Lanes](parallel-scoped-e2e-lanes.md) — volle Kette laeuft als parallele Lanes (API-Spec-Shards mit eigener DB+Ports, port-gebundene Locks, Marker pro DB); Smoke danach seriell.
 - [Gestaffelte Merge-E2E](scoped-e2e-validation.md) — e2e-Validierung läuft über scoped-e2e (git-Diff→Kategorie docs/frontend/full); Regeln zentral in scripts/src/lib/validation-scope.ts; im Zweifel volle Kette.
 - [Team-Scope-Readiness vor Writes](team-scope-ready-gate.md) — Karten, die Konto- vs. Team-Zeile schreiben, müssen auf isTeamScopeReady warten; sonst Write in falschen Scope während der Team-Auto-Auswahl.
 - [Pausen-Abzug zur Lesezeit](pause-deduction-read-time.md) — deductPausesEnabled wirkt nur in computeHoursBalanceRow (nie in gespeicherten valuedHours); Assistenten-Pausenregel via /time-tracking-status.
 - [DB-backed register rate limit](register-rate-limit-db.md) — shared counters belong in Postgres (Autoscale = multi-instance) + per-IP advisory xact-lock; test:db must run DB files serially and re-point APP_DATABASE_URL too.
-- [UpdateAllowanceSettingsBody Pflichtfelder](allowance-settings-put-required-fields.md) — hat non-optional nightPercent/nightStart/nightEnd/sundayPercent/holidayPercent; PUT gibt 400 ohne sie → erst GET lesen, dann mit Spread + Änderungen zurückschicken.
-- [Admin-Deaktivierung killt Session](admin-deactivation-kills-session.md) — nach PATCH isActive=false ist requireAuth sofort 401; E2E-Tests müssen Assistenten-Tokens verwenden (nicht Admin-eigene) wenn Admin-Session nach Deaktivierung noch gebraucht wird.
-- [makeShiftTimes Math.min Falle](make-shift-times-min-trap.md) — relative Tag-Berechnung mit Math.min(tag+offset, 25) kollabiert auf Tag 25 wenn tag>25; stattdessen feste Tage (z. B. 5 und 6) hartcodieren.
 - [Shared Header-Tier-Logik](header-tier-shared.md) — HeaderTier/useIsMobileViewport/useHeaderTier leben in src/lib/header-tier.ts; beide Seiten importieren von dort; lokale Deklaration erzeugt TS2440 bei gleichzeitigem Import.
 - [Offline Bootstrap bewahrt Auth](offline-auth-bootstrap.md) — auth.tsx bootstrap fängt TypeError separat: Netzwerkfehler leeren NICHT den Auth-Zustand; nur echte 4xx/5xx tun das; OfflineBanner + MutationCache/QueryCache onError ergänzen die Kette.
 - [Offline Mutation Replay](offline-mutation-replay.md) — networkMode:'offlineFirst' + resumePausedMutations() müssen gemeinsam gesetzt sein; keines allein genügt; Pending-Zähler via useMutationState in OfflineBanner.
 - [Teamleiter-Feature Implementierungsmuster](teamleiter-feature-patterns.md) — is_teamleiter+canViewPayroll auf team_members; overrideAllowedIds in resolveRead/WriteTeamId; zod nicht in api-server, nur über @workspace/api-zod.
-- [MonthGrid Leere-Zelle-Klick](monthgrid-empty-cell-click.md) — leere Zellen öffnen den Dialog direkt; jeder Klick-Pfad muss onSelectDay mitsetzen, sonst e2e-selectDayCell rot.
+- [MonthGrid Klick-Verhalten (3.4)](monthgrid-empty-cell-click.md) — Zellenklick/Enter wählt nur; Anlegen NUR über day-add-Plus/Tagesleiste; Zelle = div role=button, Plus echter Button (Bubbling-Stopp).
 - [Assistenz-Abwesenheits-Selbstservice](assistant-absence-selfservice.md) — POST/DELETE /shifts für reine Assistenzkräfte: Authz vor Inhalt, 404 statt Orakel, teamId aus Schichtmodell ableiten (First-Team-Fallback bucht sonst falsch).
 - [xlsx dynamic import default](xlsx-dynamic-import-default.md) — `(await import("xlsx")).default` ist im Vite-Dev undefined; `m.default ?? m` nutzen, sonst scheitern Excel-Exporte still.
 - [Urlaubs-POSTs in E2E langsam](e2e-vacation-post-slow.md) — ~5s pro vacation-POST (Urlaubskonto-Recalc); mehrtägige UI-Anlage braucht ≥30s-Timeout, Seeding besser per API.
 - [PDF-Stundennachweis-Export zurückgestellt](pdf-statement-export-deferred.md) — export-pdf-button existiert nicht mehr; StatementExportDialog/fix-only-hint unerreichbar; keine Specs darauf aufbauen.
 - [E2E-Lanes Build-Race auf dist/](e2e-lanes-dist-build-race.md) — parallele api-shards bauen in dasselbe api-server/dist; MODULE_NOT_FOUND dist/index.mjs = transienter Race, Kette neu starten.
+- [aspect-ratio auf Grid-Items](aspect-ratio-grid-blowout.md) — aspect-ratio+stretch überträgt Inhaltshöhe als Mindestbreite auf die Spalte (Grid-Blowout); Fix min-w-0, nie overflow:hidden wenn Zeilen wachsen sollen.
+- [Ad-hoc-Screenshot-Skripte Dev-Stack](dev-screenshot-scripts.md) — view-toggle-grid explizit klicken; API via curl statt node-fetch (dev-login 401); Overlap-tolerantes Seeding mit Cleanup.

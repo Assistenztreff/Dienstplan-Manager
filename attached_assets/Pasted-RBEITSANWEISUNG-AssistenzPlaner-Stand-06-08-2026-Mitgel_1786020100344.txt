@@ -1,0 +1,201 @@
+RBEITSANWEISUNG AssistenzPlaner - Stand 06.08.2026
+ 
+Mitgeliefert (bitte als verbindliche Design-Vorlage verwenden, nicht aus dem
+Text nachbauen):
+  - icon-varianten-und-emoji-menu.html
+  - pille-responsive_1.html
+  - smartphone-aufklappen-v3-vollstaendig.html
+  - tagesleiste-jahreskalender-v3_2.html
+ 
+WICHTIG: Wo unten "IST" steht, habe ich den aktuellen Code auf main
+(Commit f55b5f8) selbst geprueft. Was dort als "bereits umgesetzt"
+markiert ist, bitte NICHT anfassen. Bei Unklarheit vorher nachfragen,
+nicht raten.
+ 
+ 
+=====================================================================
+1. FREE-VERSION
+=====================================================================
+ 
+1.1 Menue "Auswerten" - Free
+Die Free-Version bekommt einen einfachen Stunden-Export der gearbeiteten
+Dienste, Krankheitstage und Urlaubstage. Viele Assistenznehmer fuehren
+einfache Stundenlisten, die sie an ihren Dienstleister oder das Lohnbuero
+weitergeben - genau das soll Free abdecken.
+ 
+Der Export-Button funktioniert in Free ausschliesslich mit einer einfachen
+Stundenlisten-Tabelle. Alle weitergehenden Lohnauswertungen bleiben Premium.
+ 
+1.2 Menue "Einstellungen" - folgende Punkte in Free NICHT bedienbar
+(nur Premium):
+  - Zeiterfassung aktivieren
+  - Pausen automatisch vorbefuellen
+  - Pausen von bezahlten Stunden abziehen
+ 
+Bitte als gesperrte, aber sichtbare Schalter umsetzen (nicht ausblenden),
+mit Verweis auf Premium - so wie es bei den bestehenden Free-Limits
+(z. B. max. 5 Dienste) schon geloest ist.
+ 
+ 
+=====================================================================
+2. GLOBAL / DASHBOARD
+=====================================================================
+ 
+2.1 Gemeldete Krankmeldungen als Warnhinweis
+IST: Die Hinweis-Kachel fuer laufende Abwesenheiten und Krankheitstage
+existiert bereits im Dashboard. Was fehlt: das Warn-Icon.
+ 
+Bitte die Warn-Icons aus icon-varianten-und-emoji-menu.html, VARIANTE C
+(farbige Kreis-Badge: gefuellter Farbkreis, weisses Symbol innen)
+verwenden. Diese Kachel ist Premium.
+ 
+2.2 Stundenbilanz im Monat (neu)
+Die Stundenbilanz soll zeigen, wie viele Assistenzstunden im Monat laut
+Zielvereinbarung genehmigt sind und wie viele davon bereits verbraucht
+wurden. Abwesenheitsstunden (Urlaub, Krankheit) zaehlen NICHT als
+Verbrauch - sie sind in der Budgetkalkulation der Zielvereinbarung
+bereits enthalten.
+ 
+Angezeigt werden drei Werte: genehmigt / verbraucht / verbleibend.
+Nicht verbrauchte Stunden koennen in der Regel in den Folgemonaten
+verbraucht werden.
+ 
+Erfassung der genehmigten Stunden (so bitte umsetzen):
+  - Als Monatsbudget pro Assistenznehmer bzw. Team, NICHT pro
+    Assistenzkraft. Die genehmigten Stunden sind die Bedarfsseite; die
+    Vertraege der Assistenzkraefte sind die Angebotsseite - beides
+    laeuft in der Praxis auseinander und darf nicht voneinander
+    abgeleitet werden.
+  - Mit Gueltigkeitszeitraum (von/bis), damit eine neue Zielvereinbarung
+    die alte abloest statt sie zu ueberschreiben. Das wird fuer
+    Nachberechnungen und Monatsabschluesse gebraucht.
+  - Zusaetzlich zum Monatswert einen laufenden Jahressaldo anzeigen.
+    Grund: zu viel angespartes Budget faellt sonst erst nach etwa einem
+    Jahr auf, wenn es zu spaet ist.
+  - Warnschwelle einbauen (Vorschlag: mehr als 1,5 Monatsbudgets
+    angespart) - gleicher Warnhinweis-Stil wie bei den Krankmeldungen
+    unter 2.1.
+ 
+ 
+=====================================================================
+3. DIENSTPLAN - DESIGN
+=====================================================================
+ 
+3.1 Globale Status-Icons
+Die Status-Icons in den Schicht-Pillen (Entwurf, Bestaetigt, Warnung,
+Vertretung, Uhr) auf VARIANTE C aus icon-varianten-und-emoji-menu.html
+umstellen: farbige Kreis-Badge, weisses Symbol im gefuellten Farbkreis.
+ 
+IST: aktuell noch duenne Strich-Icons (lucide Check / Pencil / Clock).
+Diese Icon-Einstellung soll GLOBAL gelten, nicht nur an einer Stelle.
+ 
+3.2 Pillendesign
+Pillendesign aus pille-responsive_1.html uebernehmen (Desktop / Tablet /
+Smartphone).
+ 
+IST: Der Pillen-Aufbau selbst ist inzwischen korrekt umgesetzt - 3px
+Farbbalken links, Zeile 1 weiss mit Nachname + Status-Icon, Zeile 2
+#f1f1ee mit Uhr + Uhrzeit. Bitte hier nur noch die responsiven
+Groessen/Abstufungen aus pille-responsive_1.html angleichen und die
+Icons auf Variante C umstellen (siehe 3.1). Den Grundaufbau NICHT
+neu bauen.
+ 
+3.3 Smartphone-Ansicht Dienstplan
+Button oben rechts zum Auf- und Zuklappen.
+ 
+Aufgeklappter Modus:
+  - Pillen sehen aus wie in smartphone-aufklappen-v3-vollstaendig.html
+  - Aus Platzgruenden werden die Initialen der Assistenzkraefte
+    angezeigt (nicht der volle Nachname)
+  - Klick auf eine Pille oeffnet das Schichtdialog-Fenster fuer genau
+    diese Assistenzkraft
+ 
+Eingeklappter Modus:
+  - Farbcode-Anzeige pro Tag
+  - Klick auf einen Tag scrollt den Screen nach unten zur Tagesansicht
+ 
+3.4 Tageszellen: Datum und Plus-Symbol
+  - Datum nach LINKS (steht aktuell rechts)
+  - Plus-Symbol nach RECHTS in dieselbe Kopfzeile der Zelle, dient dem
+    Anlegen eines neuen Dienstes
+  - Die bisherige Plus-Funktion UNTERHALB der Zelle wird entfernt
+  - Auswahl einzelner Tage: Klick auf das Datum oder die Datumsleiste
+  - NUR das Plus-Symbol rechts legt einen neuen Dienst an
+  - Mehrfachauswahl bleibt unveraendert. Ist die Mehrfachauswahl
+    eingeschaltet, sind Tageszellen auf der ganzen Flaeche anwaehlbar,
+    ohne dass sich ein Schichtdialog oeffnet.
+ 
+ 
+=====================================================================
+4. TAGESLEISTE (unter dem Dienstplan)
+=====================================================================
+ 
+Die Tagesleiste so kompakt gestalten wie in tagesleiste-jahreskalender-v3_2.html
+(dortiger Punkt 1). Keine farbigen Bloecke fuer Dienste oder Abwesenheiten -
+stattdessen eine einzeilige Menueleiste und je Eintrag eine Zeile, genau wie
+in der HTML.
+ 
+Erste Zeile, von links nach rechts:
+  1. Dropdown Anzeigetyp: Alle (voreingestellt) / Dienste / Abwesenheiten
+  2. Dropdown Zeitraum: Heute (voreingestellt) / Diese Woche /
+     Diesen Monat / Naechste 2 Monate
+  3. Daneben das aktuelle Datum
+  4. Rechts der Button "Dienst anlegen"
+ 
+Der bestehende Filter unten links in der Tagesleiste bleibt unveraendert.
+ 
+ 
+=====================================================================
+5. MENUE ABWESENHEITEN
+=====================================================================
+ 
+5.1 Aufruf aus dem Dienstplan
+Der Button "Abwesenheiten" im Menue Dienstplan oeffnet den Jahreskalender
+in der Kalender- UND Tabellenansicht als Popup (Desktop und Tablet).
+Spaltenlogik nach verfuegbarer Breite:
+  zuerst 6-spaltig -> passt das nicht, 3-spaltig -> danach Akkordeon.
+ 
+5.2 Im Menue Abwesenheiten selbst
+Dort erscheint der Jahreskalender NICHT als Popup, sondern - wie bereits
+implementiert - direkt in die Seite integriert. Das bitte so lassen.
+ 
+5.3 FEHLER: Klick-Logik im Abwesenheitskalender
+Aktuelles Fehlverhalten: Waehle ich z. B. den 11.02. mit einem Klick aus
+und klicke danach auf einen anderen Tag, wird dieser zweite Tag nicht
+ausgewaehlt, sondern es oeffnet sich sofort das Popup "Abwesenheit
+eintragen".
+ 
+Ursache liegt in handleDayClick in components/abwesenheits-kalender.tsx:
+Ist bereits ein Anker-Tag gesetzt, loest der naechste Klick direkt
+openCreate aus.
+ 
+Soll-Regel: Ein Klick auf eine Tageszelle waehlt den Tag aus. Erst der
+ZWEITE Klick auf den bereits ausgewaehlten Tag oeffnet "Abwesenheit
+eintragen". Ein Klick auf einen anderen Tag verschiebt nur die Auswahl.
+Das ist dieselbe Zwei-Stufen-Logik wie im Dienstplan-Kalender - bitte
+dort abschauen, damit sich beide Kalender gleich anfuehlen.
+ 
+5.4 FEHLT: Mehrfachauswahl im Abwesenheitskalender
+Es fehlt die Mehrfachauswahl wie im Dienstplan-Menue. Sie wird gebraucht,
+wenn fuer eine Assistenzkraft Urlaub oder Krankheit ueber mehrere Tage
+eingetragen werden muss.
+ 
+Platzierung: in derselben Zeile wie die Jahreszahl, links neben dem
+Farbcode fuer Geplant (orange), Auswahl (rot) und Absage (grau).
+ 
+ 
+=====================================================================
+6. VORGEHEN
+=====================================================================
+ 
+1. Vor dem Bauen: kurz zurueckmelden, welche Punkte ihr wie umsetzen
+   wollt (Plan-Modus). Erst nach meiner Bestaetigung bauen.
+2. Nichts aendern, was oben nicht steht. Insbesondere nicht: den
+   Pillen-Grundaufbau, den bestehenden Filter unten links in der
+   Tagesleiste, die Menuestruktur, die Integration des Jahreskalenders
+   in die Seite Abwesenheiten.
+3. Bei jeder Abweichung von dieser Anweisung vorher erklaeren, warum -
+   nicht hinterher.
+4. Nach Fertigstellung: Screenshot-Vergleich vorher/nachher je Punkt,
+   plus kurze Zusammenfassung der geaenderten Dateien.
+5. Erst nach abgeschlossenem Staging-Test publishen.

@@ -15,7 +15,8 @@ import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, Check, CheckSquare, X, CalendarPlus, Trash2, Pencil, ChevronDown, Users, Lock, Download, MessageSquare, Clock, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, Check, CheckSquare, X, CalendarPlus, Trash2, Pencil, ChevronDown, ChevronUp, Users, Lock, Download, MessageSquare } from "lucide-react";
+import { StatusBadge } from "@/components/status-badge";
 import type { LucideIcon } from "lucide-react";
 import { ShiftDialog } from "@/components/shift-dialog";
 import { BulkDeleteDialog } from "@/components/bulk-delete-dialog";
@@ -64,7 +65,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { MonthYearPicker } from "@/components/month-year-picker";
 import { PageStickyHeader } from "@/components/page-sticky-header";
-import { AbwesenheitsKalender } from "@/components/abwesenheits-kalender";
+import { AbwesenheitsKalender, ABSENCE_CATEGORY, type AbsenceCategory } from "@/components/abwesenheits-kalender";
 import {
   Dialog,
   DialogContent,
@@ -246,6 +247,14 @@ function lastName(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return parts.length > 0 ? parts[parts.length - 1]! : name.trim();
 }
+
+/** Kategoriefarben der Abwesenheits-Streifen in eingeklappten Smartphone-Zellen
+ *  (Arbeitsanweisung 3.3, Vorlage: geplant gelb / ausfall rot / absage grau). */
+const ABSENCE_CATEGORY_HEX: Record<AbsenceCategory, string> = {
+  geplant: "#e5b73b",
+  ausfall: "#c23b34",
+  absage: "#8a8a86",
+};
 
 type AbsenceRange = {
   userId: number;
@@ -503,8 +512,11 @@ function ShiftBadge({
       )}
       {statusLabel && (
         <div
-          className={`mb-0.5 inline-flex items-center rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide ${PLANNING_STATUS_BADGE_CLASSES[shift.planningStatus ?? ""] ?? ""}`}
+          className={`mb-0.5 inline-flex items-center gap-1 rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide ${PLANNING_STATUS_BADGE_CLASSES[shift.planningStatus ?? ""] ?? ""}`}
         >
+          <StatusBadge
+            kind={shift.planningStatus === "FIX" ? "confirmed" : "draft"}
+          />
           {statusLabel}
         </div>
       )}
@@ -554,7 +566,6 @@ function ShiftBadge({
     </div>
   );
 }
-
 function AgendaView({
   days,
   shifts,
@@ -682,6 +693,137 @@ function AgendaView({
   );
 }
 
+/** Einzeilige Tagesleisten-Zeile (Arbeitspaket 07.08.2026, Punkt 5):
+ *  3-px-Farbbalken links in der Assistenzfarbe (gemeinsamer Nenner mit der
+ *  Kalender-Pille), dann Name, Eintragsart („Dienst · bestätigt" /
+ *  „Abwesenheit · Urlaub"), bei Entwurf ein kompakter „Bestätigen"-Button
+ *  direkt daneben, rechtsbündig die Uhrzeit bzw. „ganztägig".
+ *  Keine flächenhafte Einfärbung mehr. */
+function DayDetailRow({
+  shift,
+  barColor,
+  modelMap,
+  onClick,
+  onConfirm,
+}: {
+  shift: Shift;
+  barColor: string;
+  modelMap: Map<number, ShiftModelInfo>;
+  onClick?: () => void;
+  onConfirm?: (shift: Shift) => void;
+}) {
+  const { selectedTeamId } = useTeam();
+  const mirror = isMirrorShift(shift, selectedTeamId);
+  const isAbsence = isAbsenceShift(shift);
+  const isTeam = shift.type === "team";
+  const status = shift.planningStatus ?? "FIX";
+  const label = shiftLabel(shift, modelMap);
+  const einsatzLabel =
+    shift.einsatzTeamId != null
+      ? mirror
+        ? `Aushilfe aus ${shift.homeTeamName ?? "anderem Team"}`
+        : `Aushilfe für ${shift.einsatzTeamName ?? "anderes Team"}`
+      : null;
+  const statusText = status === "FIX" ? "bestätigt" : (PLANNING_STATUS_LABELS[status] ?? status);
+  const timeLabel = isAbsence
+    ? "ganztägig"
+    : isTeam
+      ? ""
+      : `${format(new Date(shift.startTime), "HH:mm")}–${format(new Date(shift.endTime), "HH:mm")}`;
+  const clickable = !!onClick && !mirror;
+  return (
+    <div
+      data-testid={`day-detail-shift-${shift.id}`}
+      data-planning-status={status}
+      title={
+        mirror && einsatzLabel
+          ? `${label} · ${einsatzLabel} (wird im Stammteam bearbeitet)`
+          : `${shift.user?.name ? `${shift.user.name} · ` : ""}${label}`
+      }
+      // Wie die Kalenderzellen (3.4): div mit role=button + Enter/Space; die
+      // verschachtelten Bestätigen-/Notiz-Buttons stoppen das Bubbling.
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onClick={clickable ? onClick : undefined}
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                onClick?.();
+              }
+            }
+          : undefined
+      }
+      className={`relative flex items-center gap-2.5 border-b border-[#f1f1ee] py-[9px] pl-4 pr-3 text-[12.5px] last:border-b-0 ${
+        clickable
+          ? "cursor-pointer transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+          : ""
+      }`}
+    >
+      {/* 3-px-Farbbalken links — identisch zur Kalender-Pille */}
+      <span aria-hidden="true" className="absolute bottom-0 left-0 top-0 w-[3px]" style={{ backgroundColor: barColor }} />
+      {/* Name gehört zum Zeilen-Layout (Punkt 5) — für alle sichtbar, die die
+          Zeile sehen dürfen; Autorisierung gilt nur für Aktionen. */}
+      {shift.user && (
+        <span className="min-w-[110px] shrink truncate font-semibold text-[#151515]">{shift.user.name}</span>
+      )}
+      <span className="flex min-w-0 items-center gap-1 text-[#555555]">
+        {isAbsence ? (
+          <span className="truncate">Abwesenheit · {label}</span>
+        ) : (
+          <span className="truncate">
+            {isTeam ? "Teamdienst" : "Dienst"} ·{" "}
+            {status !== "FIX" && <StatusBadge kind="draft" compact className="mr-0.5 align-[-2px]" />}
+            {statusText}
+            {shift.isVertretung ? " · Vertretung" : ""}
+            {einsatzLabel ? ` · ${einsatzLabel}` : ""}
+          </span>
+        )}
+      </span>
+      {onConfirm && !mirror && isConfirmableShift(shift) && (
+        <button
+          type="button"
+          data-testid={`shift-confirm-${shift.id}`}
+          title="Als verbindlich bestätigen"
+          onClick={(e) => {
+            e.stopPropagation();
+            onConfirm(shift);
+          }}
+          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#d8d8d4] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#092948] transition-colors hover:border-[#092948]"
+        >
+          <Check className="h-3 w-3" />
+          Bestätigen
+        </button>
+      )}
+      {shift.notes && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                data-testid={`shift-note-icon-${shift.id}`}
+                className="inline-flex shrink-0 cursor-default items-center text-[#555555]/70"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MessageSquare className="h-3 w-3 shrink-0" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-[240px] break-words text-xs">
+              {shift.notes}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+      {timeLabel && (
+        <span className="ml-auto shrink-0 whitespace-nowrap tabular-nums text-[11.5px] text-[#555555]">
+          {timeLabel}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function MonthGrid({
   days,
   monthStart,
@@ -699,6 +841,7 @@ function MonthGrid({
   onNavigateMonth,
   focusDate,
   onFocusDateHandled,
+  variant = "full",
 }: {
   days: Date[];
   monthStart: Date;
@@ -716,6 +859,10 @@ function MonthGrid({
   onNavigateMonth?: (targetDate: Date) => void;
   focusDate?: Date | null;
   onFocusDateHandled?: () => void;
+  /** Darstellungsdichte (Arbeitsanweisung 3.2/3.3): full = Desktop/Tablet,
+   *  compact = aufgeklapptes Smartphone (kompakte Initialen-Pillen),
+   *  collapsed = eingeklapptes Smartphone (Mini-Balken + Zähler). */
+  variant?: "full" | "compact" | "collapsed";
 }) {
   const personColors = usePersonColors();
   const selectedDateSet = new Set(selectedDates ?? []);
@@ -752,6 +899,20 @@ function MonthGrid({
       })
       .sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime));
   }, [shifts, selectedDay, detailRange, detailType]);
+
+  // Gruppierung nach Tag für Zeiträume > 1 Tag (Tagesüberschriften).
+  // detailShifts ist bereits nach startTime sortiert → Gruppen sind fortlaufend.
+  const detailGroups = useMemo(() => {
+    const groups: { key: string; day: Date; shifts: Shift[] }[] = [];
+    for (const s of detailShifts) {
+      const d = new Date(s.startTime);
+      const key = dayKey(d);
+      const last = groups[groups.length - 1];
+      if (last && last.key === key) last.shifts.push(s);
+      else groups.push({ key, day: d, shifts: [s] });
+    }
+    return groups;
+  }, [detailShifts]);
   const numWeeks = Math.ceil((blanks.length + days.length) / 7);
 
   // ── Aktive Assistenzkraft-Palette (Einstellung aus localStorage) ─────────
@@ -800,6 +961,8 @@ function MonthGrid({
   const [headerH, setHeaderH] = useState(0);
   const weekdayRowRef = useRef<HTMLDivElement>(null);
   const [weekdayRowH, setWeekdayRowH] = useState(0);
+  // 3.3: Im eingeklappten Smartphone-Modus scrollt der Tages-Tap zur Tagesleiste.
+  const detailPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = document.querySelector("[data-dienstplan-header]") as HTMLElement | null;
@@ -829,7 +992,7 @@ function MonthGrid({
       : undefined;
 
   // ── Roving Tabindex (WAI-ARIA-Grid-Pattern) ───────────────────────────────
-  const cellRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const cellRefs = useRef<(HTMLElement | null)[]>([]);
   const [focusedIdx, setFocusedIdx] = useState<number | null>(null);
   useEffect(() => {
     setFocusedIdx(null);
@@ -862,6 +1025,20 @@ function MonthGrid({
       case "ArrowUp":    target = idx - 7; crossesBoundary = true; break;
       case "Home":       target = idx - col; break;
       case "End":        target = idx + (6 - col); break;
+      case "Enter":
+      case " ": {
+        // Enter/Space auf der Zelle = wie Klick: Tag wählen (3.4 — Anlegen nur
+        // über das Plus). Nötig, weil die Zelle ein div role="button" ist;
+        // ein nativer Button würde Enter/Space selbst als Klick auslösen.
+        e.preventDefault();
+        const d = days[idx];
+        if (selectionMode) { onToggleDate?.(d); return; }
+        onSelectDay(d);
+        if (variant === "collapsed") {
+          detailPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+        return;
+      }
       default: return;
     }
     e.preventDefault();
@@ -877,11 +1054,13 @@ function MonthGrid({
       {/* ── Sticky Wochentag-Zeile (klebt direkt unter dem Dienstplan-Header) ─ */}
       <div
         ref={weekdayRowRef}
-        className="sticky z-20 grid grid-cols-7 border-b border-border/30 bg-background/95 backdrop-blur-sm"
+        className="sticky z-20 grid grid-cols-7 border-b border-border/30 bg-[#f1f1ee]"
         style={{ top: headerH || 0 }}
       >
         {WEEKDAY_LABELS.map((d) => (
-          <div key={d} className="py-1 text-center text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+          // Arbeitspaket 07.08.2026, Punkt 1: graues Band, Kürzel größer +
+          // schwarz, auf dem Smartphone in derselben Größe wie am Desktop.
+          <div key={d} className="py-1 text-center text-[11px] font-semibold uppercase tracking-wider text-[#151515]">
             {d}
           </div>
         ))}
@@ -893,28 +1072,45 @@ function MonthGrid({
       <div
         className="grid grid-cols-7 gap-px rounded-b-lg border border-t-0 border-border/30 bg-border/20"
         style={
-          useDynamicRows
-            ? { gridTemplateColumns: "repeat(7, 1fr)", overflow: "visible" }
-            : {
-                ...(gridHeight ? { height: gridHeight, overflow: "hidden" } : {}),
-                gridTemplateRows: `repeat(${numWeeks}, 1fr)`,
-              }
+          variant !== "full"
+            ? // Smartphone (Punkt 4): keine feste Grid-Höhe — die Zellen sind
+              // quadratisch (1:1) als Mindestmaß und Zeilen wachsen mit Inhalt.
+              { gridTemplateColumns: "repeat(7, 1fr)" }
+            : useDynamicRows
+              ? { gridTemplateColumns: "repeat(7, 1fr)", overflow: "visible" }
+              : {
+                  ...(gridHeight ? { height: gridHeight, overflow: "hidden" } : {}),
+                  gridTemplateRows: `repeat(${numWeeks}, 1fr)`,
+                }
         }
         data-testid="month-grid"
       >
         {blanks.map((_, i) => (
-          <div key={`blank-${i}`} className="bg-muted/10" data-testid="month-grid-blank" />
+          <div key={`blank-${i}`} className="rounded-[5px] bg-muted/10" data-testid="month-grid-blank" />
         ))}
         {days.map((day, dayIdx) => {
           const dayShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), day));
           const selected = isSameDay(day, selectedDay);
           const today = isToday(day);
           const nonAbsence = dayShifts.filter((s) => !isAbsenceShift(s));
-          const visiblePills = nonAbsence.slice(0, 2);
+          const absences = dayShifts.filter((s) => isAbsenceShift(s));
+          // Arbeitspaket 07.08.2026, Punkt 3: bis zu 4 Pillen sichtbar
+          // (Desktop und Smartphone aufgeklappt gleich), danach „+n".
+          const visiblePills = nonAbsence.slice(0, 4);
           const hiddenCount = nonAbsence.length - visiblePills.length;
-          // Zellen zeigen nur Dienste — ein Tag mit ausschließlich Abwesenheiten
-          // gilt im Kalender als leer (Direkt-Anlage per Klick, wie leere Tage).
-          const isEmpty = nonAbsence.length === 0;
+          // Eingeklappte Smartphone-Zelle (3.3): ein Streifen je Abwesenheits-
+          // Kategorie in Dominanzreihenfolge ausfall > geplant > absage.
+          const absenceCategories = (["ausfall", "geplant", "absage"] as const).filter(
+            (cat) => absences.some((s) => ABSENCE_CATEGORY[s.type] === cat),
+          );
+          const countLabel = [
+            nonAbsence.length > 0
+              ? `${nonAbsence.length} ${nonAbsence.length === 1 ? "Dienst" : "Dienste"}`
+              : "",
+            absences.length > 0 ? `${absences.length} Abw.` : "",
+          ]
+            .filter(Boolean)
+            .join(" · ");
           const prevDay = dayIdx > 0 ? days[dayIdx - 1] : undefined;
           const nextDay = dayIdx < days.length - 1 ? days[dayIdx + 1] : undefined;
           const bulkSelected = selectionMode && selectedDateSet.has(format(day, "yyyy-MM-dd"));
@@ -922,9 +1118,9 @@ function MonthGrid({
           const isWeekend = dow === 0 || dow === 6;
 
           return (
-            <button
+            <div
               key={day.toISOString()}
-              type="button"
+              role="button"
               ref={(el) => { cellRefs.current[dayIdx] = el; }}
               tabIndex={dayIdx === tabbableIdx ? 0 : -1}
               onKeyDown={(e) => handleCellKeyDown(e, dayIdx)}
@@ -935,16 +1131,28 @@ function MonthGrid({
               aria-label={format(day, "EEEE, d. MMMM yyyy", { locale: de })}
               onClick={() => {
                 if (selectionMode) { onToggleDate?.(day); return; }
-                // Leere Zelle: direkt öffnen (kein Zwei-Stufen-Klick);
-                // Tag dabei trotzdem markieren, damit das Tagesdetail folgt.
-                if (isEmpty) { onSelectDay(day); if (canEdit) onAddShift(day); return; }
-                // Zelle mit Einträgen: erst auswählen, beim 2. Klick öffnen.
-                if (selected) { if (canEdit) onAddShift(day); return; }
+                // 3.4: Klick auf Zelle/Datum wählt den Tag nur aus — das Anlegen
+                // erfolgt ausschließlich über das Plus in der Zellen-Kopfzeile.
                 onSelectDay(day);
+                // 3.3: Eingeklappt scrollt der Tap zur Tagesansicht (Tagesleiste).
+                if (variant === "collapsed") {
+                  detailPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }
               }}
+              // Punkt 4 (Smartphone): quadratische Zellen (1:1) als Mindestmaß —
+              // die Wochenzeile wächst erst, wenn Pillen nicht mehr passen.
+              // min-w-0 ist dabei Pflicht: Bei aspect-ratio auf einem Grid-Item mit
+              // align-self:stretch überträgt CSS die Inhalts-HÖHE über das Verhältnis
+              // als automatische Mindest-BREITE zurück auf die Spalte (Rückkopplung)
+              // und bläht das Grid auf. min-w-0 deaktiviert dieses Automatic Minimum;
+              // overflow-x: clip clippt Reste horizontal, ohne die Block-Achse zu
+              // unterdrücken (overflow:hidden würde das Zeilenwachstum killen).
+              style={variant !== "full" ? { aspectRatio: "1 / 1", overflowX: "clip" } : undefined}
               className={[
-                "relative flex min-h-0 w-full flex-col items-stretch overflow-hidden p-0.5 transition-colors",
-                isWeekend ? "bg-slate-50/70" : "bg-card",
+                "relative flex w-full flex-col items-stretch rounded-[5px] p-0.5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
+                variant === "full" ? "min-h-0 overflow-hidden" : "min-w-0",
+                // Punkt 1: Zelle innen weiß, leicht abgerundete Ecken.
+                "bg-white",
                 bulkSelected
                   ? "ring-2 ring-inset ring-primary"
                   : selected && !selectionMode
@@ -953,33 +1161,105 @@ function MonthGrid({
                 today ? "ring-1 ring-inset ring-amber-400/60" : "",
               ].filter(Boolean).join(" ")}
             >
-              {/* Datumszahl — abgerundetes Rechteck als Kontrast-Badge */}
-              <span
-                className={[
-                  "self-end text-[11px] leading-none font-semibold px-1.5 py-0.5 rounded-md",
-                  today
-                    ? "bg-[#092948] text-white"
-                    : isWeekend
-                      ? "bg-slate-200/70 text-slate-500"
-                      : "bg-muted/50 text-foreground/70",
-                ].join(" ")}
-              >
-                {format(day, "d")}
+              {/* Kopfzeile (3.4): Datum LINKS, Plus RECHTS in derselben Zeile.
+                  Nur das Plus legt einen neuen Dienst an; der Zellenklick wählt. */}
+              <span className="flex items-center justify-between gap-1">
+                <span
+                  className={[
+                    "leading-none font-semibold rounded-md",
+                    // Punkt 2: Datum 1–2 px größer; Smartphone = Desktop-Größe.
+                    "text-[12px] px-1.5 py-0.5",
+                    today
+                      ? "bg-[#092948] text-white"
+                      : isWeekend
+                        ? "bg-slate-200/70 text-slate-500"
+                        : "bg-muted/50 text-foreground/70",
+                  ].join(" ")}
+                >
+                  {format(day, "d")}
+                </span>
+                {canEdit && !selectionMode && (
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    aria-label={`Neuen Dienst anlegen am ${format(day, "d. MMMM", { locale: de })}`}
+                    title="Dienst anlegen"
+                    data-testid={`day-add-${format(day, "yyyy-MM-dd")}`}
+                    onClick={(e) => { e.stopPropagation(); onAddShift(day); }}
+                    // Enter/Space lösen bei nativen Buttons den Klick selbst aus —
+                    // hier nur das Bubbling zur Zelle stoppen, damit deren
+                    // Enter-Handler (Tag wählen) nicht zusätzlich feuert.
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") e.stopPropagation();
+                    }}
+                    // Punkt 2: Plus 1–2 px größer; Smartphone = Desktop-Größe.
+                    className="flex h-3.5 w-3.5 shrink-0 cursor-pointer select-none items-center justify-center rounded-[3px] border border-[#d8d8d4] bg-white p-0 text-[10px] font-bold leading-none text-[#092948] hover:border-[#092948]"
+                  >
+                    +
+                  </button>
+                )}
               </span>
 
-              {/* Schicht-Pillen (max. 2) — zweizeiliges Design gemäß Spec §2.1:
-                  3-px-Farbbalken links (Slot-Farbe), Zeile 1 = Nachname + Status-
-                  Icon auf Weiß, Zeile 2 = Uhr-Icon + Uhrzeit auf #f1f1ee. */}
-              {visiblePills.length > 0 && (
-                <div className="flex flex-col gap-[3px] min-w-0 px-0.5">
+              {/* 3.3 eingeklappt: Mini-Balken je Dienst (Personenfarbe),
+                  Abwesenheitsstreifen je Kategorie + Zähler — keine Pillen. */}
+              {variant === "collapsed" ? (
+                <>
+                  {nonAbsence.length > 0 && (
+                    <span
+                      aria-hidden="true"
+                      className="mt-[3px] flex flex-col gap-[2px] px-[1px]"
+                      data-testid={`day-bars-${format(day, "yyyy-MM-dd")}`}
+                    >
+                      {nonAbsence.slice(0, 4).map((s) => (
+                        <span
+                          key={s.id}
+                          className="h-[5px] rounded-[2px]"
+                          style={{ backgroundColor: s.type === "team" ? "#0284c7" : getPersonSlot(s.userId).bg }}
+                        />
+                      ))}
+                    </span>
+                  )}
+                  {absenceCategories.map((cat) => (
+                    <span
+                      key={cat}
+                      aria-hidden="true"
+                      className="mx-[1px] mt-[2px] h-[3px] rounded-[2px]"
+                      style={{ backgroundColor: ABSENCE_CATEGORY_HEX[cat] }}
+                      data-testid={`day-strip-${format(day, "yyyy-MM-dd")}`}
+                    />
+                  ))}
+                  {countLabel && (
+                    <span
+                      className="mt-[2px] px-[1px] text-[9px] leading-tight text-[#666666]"
+                      data-testid={`day-count-${format(day, "yyyy-MM-dd")}`}
+                    >
+                      {countLabel}
+                    </span>
+                  )}
+                </>
+              ) : visiblePills.length > 0 && (
+                /* Schicht-Pillen (max. 4) — zweizeiliges Design gemäß Spec §2.1:
+                   Farbbalken links (Slot-Farbe), Zeile 1 = Name + Status-Badge
+                   auf Weiß, Zeile 2 = Uhr-Badge + Uhrzeit auf #f1f1ee.
+                   3.2: Aufgeklapptes Smartphone = kompakte Pille mit Initialen. */
+                <div className={`flex flex-col min-w-0 px-0.5 ${variant === "compact" ? "gap-[2px]" : "gap-[3px]"}`}>
                   {visiblePills.map((s) => {
                     const isTeam = s.type === "team";
                     const slot = getPersonSlot(s.userId);
                     const status = s.planningStatus ?? "FIX";
                     const chipClickable = canEdit && !selectionMode;
+                    const compact = variant === "compact";
                     const timeRange = `${format(new Date(s.startTime), "HH:mm")}–${format(new Date(s.endTime), "HH:mm")}`;
+                    // Tablet/Smartphone: Minuten „:00" weglassen (Vorlage 3.2: „19–09").
+                    const shortRange = timeRange.replace(/:00/g, "");
                     const barColor = isTeam ? "#0284c7" : slot.bg;
-                    const nameLabel = isTeam ? "Team" : (s.user?.name ? lastName(s.user.name) : "?");
+                    const nameLabel = isTeam
+                      ? "Team"
+                      : s.user?.name
+                        ? compact
+                          ? nameInitials(s.user.name)
+                          : lastName(s.user.name)
+                        : "?";
                     return (
                       <span
                         key={s.id}
@@ -992,45 +1272,45 @@ function MonthGrid({
                           if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onShiftClick(s); }
                         } : undefined}
                         className={[
-                          "relative flex flex-col items-stretch overflow-hidden rounded-[6px] border border-[#e6e6e2]",
+                          "relative flex flex-col items-stretch overflow-hidden border border-[#e6e6e2]",
+                          compact ? "rounded-[5px]" : "rounded-[6px]",
                           chipClickable ? "cursor-pointer" : "",
                         ].filter(Boolean).join(" ")}
                       >
-                        {/* Farbbalken links (3 px, volle Höhe) — einzige Stelle mit der Slot-Farbe */}
+                        {/* Farbbalken links (volle Höhe) — einzige Stelle mit der Slot-Farbe */}
                         <span
                           aria-hidden="true"
-                          className="absolute left-0 top-0 bottom-0 w-[3px]"
+                          className={`absolute left-0 top-0 bottom-0 ${compact ? "w-[2.5px]" : "w-[3px]"}`}
                           style={{ backgroundColor: barColor }}
                         />
-                        {/* Zeile 1: Nachname + Status-Icon (weiß) */}
-                        <span className="flex items-center justify-between gap-1 bg-white pl-[7px] pr-1 py-[2px] leading-none">
-                          <span className="text-[10px] font-bold text-[#151515] truncate">
+                        {/* Zeile 1: Name (kompakt: Initialen) + Status-Badge Variante C (weiß) */}
+                        <span className={`flex items-center justify-between gap-1 bg-white py-[2px] leading-none ${compact ? "pl-[6px] pr-[5px]" : "pl-[7px] pr-1"}`}>
+                          <span className={`${compact ? "text-[8.5px]" : "text-[10px]"} font-bold text-[#151515] truncate`}>
                             {nameLabel}
                           </span>
                           {status === "FIX" ? (
-                            <Check
-                              aria-label="Bestätigt"
-                              className="h-2.5 w-2.5 shrink-0 text-[#1e8f4e]"
-                            />
+                            <StatusBadge kind="confirmed" label="Bestätigt" compact={compact} />
                           ) : (
-                            <Pencil
-                              aria-label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
-                              className="h-2.5 w-2.5 shrink-0 text-[#b5790a]"
+                            <StatusBadge
+                              kind="draft"
+                              label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
+                              compact={compact}
                             />
                           )}
                         </span>
-                        {/* Zeile 2: Uhr-Icon + Uhrzeit (+ Vertretung rechts) auf Grauweiß */}
-                        <span className="flex items-center gap-[3px] bg-[#f1f1ee] pl-[7px] pr-1 py-[2px] leading-none">
-                          <Clock aria-hidden="true" className="h-2.5 w-2.5 shrink-0 text-[#444444]" />
-                          <span className="text-[9px] text-[#444444] truncate">
-                            {isTeam ? "Teamdienst" : timeRange}
+                        {/* Zeile 2: Uhr-Badge + Uhrzeit (+ Vertretung rechts) auf Grauweiß */}
+                        <span className={`flex items-center gap-[3px] bg-[#f1f1ee] py-[2px] leading-none ${compact ? "pl-[6px] pr-[5px]" : "pl-[7px] pr-1"}`}>
+                          <StatusBadge kind="clock" compact={compact} />
+                          <span className={`${compact ? "text-[8.5px]" : "text-[9px]"} text-[#444444] truncate`}>
+                            <span className="min-[900px]:hidden">{isTeam ? "Teamdienst" : shortRange}</span>
+                            <span className="hidden min-[900px]:inline">{isTeam ? "Teamdienst" : timeRange}</span>
                           </span>
                           {s.isVertretung && (
                             <span
                               className="ml-auto inline-flex items-center gap-[2px] shrink-0 text-[#0f6e8c]"
                               title="Vertretung"
                             >
-                              <RefreshCw aria-label="Vertretung" className="h-2.5 w-2.5" />
+                              <StatusBadge kind="vertretung" label="Vertretung" compact={compact} />
                               <span className="hidden min-[900px]:inline text-[8px] font-semibold">Vertretung</span>
                             </span>
                           )}
@@ -1041,8 +1321,8 @@ function MonthGrid({
                 </div>
               )}
 
-              {/* Überlauf-Zähler */}
-              {hiddenCount > 0 && (
+              {/* Überlauf-Zähler (nur Pillen-Modi; eingeklappt zählt der Zähler-Text) */}
+              {variant !== "collapsed" && hiddenCount > 0 && (
                 <span
                   data-testid={`day-more-${format(day, "yyyy-MM-dd")}`}
                   className="self-start px-1 text-[7px] font-semibold text-muted-foreground/60 leading-none"
@@ -1051,51 +1331,69 @@ function MonthGrid({
                 </span>
               )}
 
-              {/* „+" Hinzufügen-Indikator */}
-              {canEdit && !selectionMode && (
-                isEmpty ? (
-                  // Leere Zelle: dezentes „+" als visueller Hinweis (Klick läuft über Cell-Button)
-                  <span
-                    aria-hidden="true"
-                    className="flex flex-1 items-center justify-center text-[14px] font-light text-muted-foreground/25 leading-none select-none"
-                  >
-                    +
-                  </span>
-                ) : (
-                  // Belegte Zelle: kleines „+" zum Direkthinzufügen (stopPropagation)
-                  <span
-                    role="button"
-                    tabIndex={-1}
-                    aria-label={`Weiteren Dienst anlegen am ${format(day, "d. MMMM", { locale: de })}`}
-                    onClick={(e) => { e.stopPropagation(); onAddShift(day); }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onAddShift(day); }
-                    }}
-                    className="self-center text-[9px] text-muted-foreground/40 hover:text-primary leading-none cursor-pointer select-none"
-                  >
-                    +
-                  </span>
-                )
-              )}
-            </button>
+            </div>
           );
         })}
       </div>
 
       {/* ── Tagesdetail-Panel ──────────────────────────────────────────────── */}
+      {/* Kein overflow-hidden hier: die Menüleiste ist sticky und klebt beim
+          Seiten-Scroll unter dem Dienstplan-Header — ein overflow-Ancestor
+          würde position:sticky unwirksam machen. Eckenrundung tragen deshalb
+          Menüleiste (oben) und Listencontainer (unten) selbst. */}
       <div
-        className="rounded-lg border border-border/40 overflow-hidden mt-2"
+        ref={detailPanelRef}
+        className="rounded-lg border border-border/40 mt-2 bg-card"
         role="region"
         aria-live="polite"
         aria-label={`Tagesdetails ${format(selectedDay, "EEEE, d. MMMM", { locale: de })}`}
         data-testid="day-detail-panel"
       >
-        <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-muted/40">
+        {/* ── Menüleiste (Arbeitsanweisung 06.08.2026, Punkt 4; Vorlage
+            tagesleiste-jahreskalender-v3_2, Punkt 1): Dropdown Anzeigetyp,
+            Dropdown Zeitraum, Datum fett, rechts „Dienst anlegen".
+            Sticky unterhalb der Dienstplan-Kopfleiste (zweite Sticky-Ebene,
+            Höhe wie die Wochentag-Zeile über headerH versetzt); bg-card als
+            undurchsichtige Fläche, damit Einträge darunter weiterscrollen. ── */}
+        <div
+          className="sticky z-30 flex flex-wrap items-center gap-2.5 rounded-t-lg border-b border-[#eeeeee] bg-card px-4 py-3"
+          style={{ top: headerH || 0 }}
+          data-testid="day-detail-menu"
+        >
+          <Select value={detailType} onValueChange={(v) => setDetailType(v as typeof detailType)}>
+            <SelectTrigger
+              className="h-auto w-auto gap-1.5 rounded-lg border-[#d8d8d4] bg-card px-2.5 py-1.5 text-[12.5px] font-semibold text-[#092948] shadow-none"
+              data-testid="day-detail-type-menu"
+              aria-label="Anzeigetyp"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="alle">Alle</SelectItem>
+              <SelectItem value="dienste">Dienste</SelectItem>
+              <SelectItem value="abwesenheiten">Abwesenheiten</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={detailRange} onValueChange={(v) => setDetailRange(v as typeof detailRange)}>
+            <SelectTrigger
+              className="h-auto w-auto gap-1.5 rounded-lg border-[#d8d8d4] bg-card px-2.5 py-1.5 text-[12.5px] font-semibold text-[#092948] shadow-none"
+              data-testid="day-detail-range-menu"
+              aria-label="Zeitraum"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="tag">Heute</SelectItem>
+              <SelectItem value="woche">Diese Woche</SelectItem>
+              <SelectItem value="monat">Dieser Monat</SelectItem>
+              <SelectItem value="zweiMonate">Nächste 2 Monate</SelectItem>
+            </SelectContent>
+          </Select>
           <div className="min-w-0">
-            <p className="text-sm font-semibold" data-testid="day-detail-header">
-              {format(selectedDay, "EEEE, d. MMMM", { locale: de })}
+            <p className="text-[13px] font-extrabold text-[#092948]" data-testid="day-detail-header">
+              {format(selectedDay, "EEEE, d. MMMM yyyy", { locale: de })}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               {detailShifts.length === 0
                 ? detailType === "abwesenheiten"
                   ? "Keine Abwesenheiten"
@@ -1108,58 +1406,42 @@ function MonthGrid({
             </p>
           </div>
           {canEdit && !selectionMode && (
-            <Button size="sm" variant="outline" className="gap-1 shrink-0" data-testid="add-shift" onClick={() => onAddShift(selectedDay)}>
+            <Button size="sm" variant="outline" className="gap-1 shrink-0 ml-auto" data-testid="add-shift" onClick={() => onAddShift(selectedDay)}>
               <Plus className="h-3.5 w-3.5" />
               Dienst anlegen
             </Button>
           )}
         </div>
-        {/* Filter-Leiste: Anzeigetyp + Zeitraum (HANDOFF 05.08.2026) */}
-        <div className="flex items-center gap-2 px-3 py-2 border-t border-border/30 bg-muted/20" data-testid="day-detail-filters">
-          <Select value={detailType} onValueChange={(v) => setDetailType(v as typeof detailType)}>
-            <SelectTrigger className="h-8 w-[140px] text-xs" data-testid="day-detail-type-filter" aria-label="Anzeigetyp">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="alle">Alle</SelectItem>
-              <SelectItem value="dienste">Dienste</SelectItem>
-              <SelectItem value="abwesenheiten">Abwesenheiten</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={detailRange} onValueChange={(v) => setDetailRange(v as typeof detailRange)}>
-            <SelectTrigger className="h-8 w-[160px] text-xs" data-testid="day-detail-range-filter" aria-label="Zeitraum">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="tag">Heute</SelectItem>
-              <SelectItem value="woche">Diese Woche</SelectItem>
-              <SelectItem value="monat">Dieser Monat</SelectItem>
-              <SelectItem value="zweiMonate">Nächste 2 Monate</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="bg-card px-3 py-2 space-y-1.5 max-h-48 overflow-y-auto overscroll-contain">
-          {detailShifts.length > 0 ? (
-            detailShifts.map((shift) => (
-              <div key={shift.id} className="flex items-start gap-2">
+        {/* ── Eintragsliste: einzeilige Zeilen mit 3-px-Farbbalken
+            (Arbeitspaket 07.08.2026, Punkt 5); bei Zeitraum > 1 Tag mit
+            Tagesüberschriften gruppiert. Kein inneres Scroll-Fenster:
+            die Liste läuft in voller Länge im normalen Seiten-Scroll. ── */}
+        <div className="rounded-b-lg bg-card">
+          {detailGroups.length > 0 ? (
+            detailGroups.map((group) => (
+              <div key={group.key} data-testid={`day-detail-group-${group.key}`}>
                 {detailRange !== "tag" && (
-                  <span className="shrink-0 w-12 pt-1 text-[10px] font-semibold tabular-nums text-muted-foreground">
-                    {format(new Date(shift.startTime), "EE d.", { locale: de })}
-                  </span>
+                  // Tagesüberschriften: mindestens so groß/fett wie das Datum
+                  // in der Kopfzeile — beim Scrollen durch lange Zeiträume
+                  // sind sie der einzige Orientierungsanker.
+                  <div className="border-b border-[#f1f1ee] bg-muted/40 px-4 py-2 text-[13px] font-extrabold text-[#092948]">
+                    {format(group.day, "EEEE, d. MMMM", { locale: de })}
+                  </div>
                 )}
-                <div className="min-w-0 flex-1">
-                  <ShiftBadge
+                {group.shifts.map((shift) => (
+                  <DayDetailRow
+                    key={shift.id}
                     shift={shift}
-                    showName={canEdit}
+                    barColor={shift.type === "team" ? "#0284c7" : getPersonSlot(shift.userId).bg}
                     modelMap={modelMap}
-                    onClick={canEdit && !selectionMode ? (e) => { e.stopPropagation(); onShiftClick(shift); } : undefined}
+                    onClick={canEdit && !selectionMode ? () => onShiftClick(shift) : undefined}
                     onConfirm={canEdit && !selectionMode ? onConfirmShift : undefined}
                   />
-                </div>
+                ))}
               </div>
             ))
           ) : (
-            <p className="text-xs text-muted-foreground">
+            <p className="px-4 py-3 text-xs text-muted-foreground">
               {detailType === "abwesenheiten" ? "Keine Abwesenheiten" : "Keine Dienste geplant"}
             </p>
           )}
@@ -1225,6 +1507,8 @@ function DienstplanHeader({
   canBulkEdit,
   isSelectionMode,
   onToggleSelection,
+  mobileGridExpanded,
+  onToggleMobileGridExpanded,
   month,
   year,
   onMonthSelect,
@@ -1248,6 +1532,8 @@ function DienstplanHeader({
   canBulkEdit: boolean;
   isSelectionMode: boolean;
   onToggleSelection: () => void;
+  mobileGridExpanded: boolean;
+  onToggleMobileGridExpanded: () => void;
   month: number;
   year: number;
   onMonthSelect: (month: number, year: number) => void;
@@ -1455,6 +1741,21 @@ function DienstplanHeader({
       actions={
         <>
           {viewToggles}
+          {/* 3.3: Auf-/Zuklappen des Smartphone-Monatsrasters (oben rechts) */}
+          {mobileView === "grid" && (
+            <Button
+              variant="outline"
+              size="sm"
+              className={`md:hidden ${showLabels ? "gap-1.5" : "h-9 w-9 shrink-0 px-0"}`}
+              onClick={onToggleMobileGridExpanded}
+              title={mobileGridExpanded ? "Monatsraster zuklappen" : "Monatsraster aufklappen"}
+              aria-label={mobileGridExpanded ? "Monatsraster zuklappen" : "Monatsraster aufklappen"}
+              data-testid="toggle-mobile-expand"
+            >
+              {mobileGridExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              {showLabels && <span>{mobileGridExpanded ? "Zuklappen" : "Aufklappen"}</span>}
+            </Button>
+          )}
           {confirmAllButton}
           {exportButton}
           {selectionButton}
@@ -1522,6 +1823,11 @@ export default function Dienstplan() {
     "grid",
     ["list", "grid"],
   );
+  // 3.3: Smartphone-Monatsraster startet bei jedem Aufruf eingeklappt
+  // (Mini-Balken + Zähler); der Header-Button klappt für die laufende Ansicht
+  // auf (kompakte Initialen-Pillen). Bewusst nicht persistiert — die Vorlage
+  // sieht den eingeklappten Zustand als festen Startpunkt vor.
+  const [mobileExpanded, setMobileExpanded] = useState<"collapsed" | "expanded">("collapsed");
   const [desktopView, setDesktopView] = usePersistentState<"table" | "grid">(
     "dienstplan.desktopView",
     "table",
@@ -1773,6 +2079,10 @@ export default function Dienstplan() {
       onSelectAssistant={setSelectedAssistant}
       mobileView={mobileView}
       onMobileView={setMobileView}
+      mobileGridExpanded={mobileExpanded === "expanded"}
+      onToggleMobileGridExpanded={() =>
+        setMobileExpanded(mobileExpanded === "expanded" ? "collapsed" : "expanded")
+      }
       desktopView={desktopView}
       onDesktopView={setDesktopView}
       confirmableCount={confirmableShifts.length}
@@ -1857,6 +2167,7 @@ export default function Dienstplan() {
             onNavigateMonth={navigateMonthWithFocus}
             focusDate={monthGridFocusDate}
             onFocusDateHandled={() => setMonthGridFocusDate(null)}
+            variant={mobileExpanded === "expanded" ? "compact" : "collapsed"}
           />
         )}
         </div>

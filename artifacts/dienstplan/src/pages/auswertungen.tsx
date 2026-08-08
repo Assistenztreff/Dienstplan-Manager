@@ -3,6 +3,7 @@ import { useMemo, useRef, useState } from "react";
 import {
   useGetHoursBalance,
   useListUsers,
+  useListShifts,
   useGetMonthClosingDiff,
 } from "@workspace/api-client-react";
 import type { MonthClosingDiff } from "@workspace/api-client-react";
@@ -43,6 +44,7 @@ import { GesamtAuswertungMatrix } from "@/components/gesamt-auswertung-matrix";
 import { StatementExportDialog } from "@/components/statement-export-dialog";
 import { downloadLohnnachweiseAsZip } from "@/lib/pdf-zip-export";
 import { ExportPopoverButton } from "@/components/export-auswahl-card";
+import type { StundenlisteShift } from "@/lib/stundenliste-xlsx";
 import type { MatrixBalance, MatrixRecalc } from "@/components/gesamt-auswertung-matrix";
 
 function formatEur(n: number): string {
@@ -129,6 +131,8 @@ function AuswertungenHeader({
   onPrevMonth,
   onNextMonth,
   exportBalances,
+  exportShifts,
+  exportPayrollLocked,
   exportRecalcByUser,
   exportPrevMonthLabel,
   exportDisabled,
@@ -145,6 +149,8 @@ function AuswertungenHeader({
   onPrevMonth: () => void;
   onNextMonth: () => void;
   exportBalances: MatrixBalance[];
+  exportShifts?: StundenlisteShift[];
+  exportPayrollLocked?: boolean;
   exportRecalcByUser?: Map<number, MatrixRecalc>;
   exportPrevMonthLabel?: string;
   exportDisabled?: boolean;
@@ -226,6 +232,8 @@ function AuswertungenHeader({
       showLabels={showLabels}
       stacked={stacked}
       balances={exportBalances}
+      shifts={exportShifts}
+      payrollLocked={exportPayrollLocked}
       recalcByUser={exportRecalcByUser}
       prevMonthLabel={exportPrevMonthLabel}
       month={month}
@@ -285,6 +293,18 @@ export default function Auswertungen() {
       ...teamParam,
     },
     { query: { enabled: !analyticsLocked } } as any,
+  ) as any;
+
+  // Stundenliste (Free-Export): FIX-Dienste + Abwesenheiten aus der
+  // Schichtliste — bewusst kein Premium-Gate, damit Free-Konten ihre
+  // Stundenliste an Dienstleister oder Lohnbüro weitergeben koennen.
+  const { data: exportShifts } = useListShifts(
+    {
+      month,
+      year,
+      ...teamParam,
+    },
+    { query: { enabled: isAdmin } } as any,
   ) as any;
 
   const { data: users, isLoading: usersLoading } = useListUsers(
@@ -390,13 +410,18 @@ export default function Auswertungen() {
         onPrevMonth={prevMonth}
         onNextMonth={nextMonth}
         exportBalances={Array.isArray(visibleBalances) ? visibleBalances : []}
+        exportShifts={Array.isArray(exportShifts) ? exportShifts : []}
+        exportPayrollLocked={!canPayrollExport}
         exportRecalcByUser={recalcByUser}
         exportPrevMonthLabel={prevOfShownLabel}
         exportDisabled={
-          !canPayrollExport ||
-          isLoading ||
-          !Array.isArray(visibleBalances) ||
-          visibleBalances.length === 0
+          // Free: Der Export-Button bleibt aktiv (Stundenliste); die
+          // Premium-Formate werden im Popover gesperrt angezeigt.
+          canPayrollExport
+            ? isLoading ||
+              !Array.isArray(visibleBalances) ||
+              visibleBalances.length === 0
+            : false
         }
       />
 

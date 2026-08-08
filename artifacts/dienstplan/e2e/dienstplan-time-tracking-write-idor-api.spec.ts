@@ -93,7 +93,10 @@ test.beforeAll(async () => {
   test.setTimeout(120_000);
 
   // --- Arbeitgeber P mit Assistent + Schicht + Ist-Zeit ---------------------
+  // Premium VOR dem Aktivieren: der Schalter "Zeiterfassung aktivieren" ist im
+  // Free-Tarif serverseitig gegen Aenderungen gesperrt ("timeTrackingSettings").
   employerP = await registerFreeAccount("privat", "ttwriteidor-p");
+  await setAccountPlan(employerP.email, "premium");
   await enableTimeTracking(employerP.ctx);
   const pAssistantId = await createAssistant(employerP, "p");
   // Schicht anlegen (Done-Kriterium: P legt Assistent + Schicht + Ist-Zeit an);
@@ -112,6 +115,7 @@ test.beforeAll(async () => {
 
   // --- Getrennter Arbeitgeber Q mit eigenem Assistent + Ist-Zeit ------------
   employerQ = await registerFreeAccount("privat", "ttwriteidor-q");
+  await setAccountPlan(employerQ.email, "premium");
   await enableTimeTracking(employerQ.ctx);
   const qAssistantId = await createAssistant(employerQ, "q");
   qEntryId = await createTimeEntry(
@@ -121,9 +125,8 @@ test.beforeAll(async () => {
     "2026-07-02T16:00:00.000Z",
   );
 
-  // Q auf Premium heben, damit der confirm-Angriff NICHT am Plan-Gate (403
+  // Q ist von Anfang an Premium, damit der Angriff NICHT am Plan-Gate (403
   // plan_feature_required) endet, sondern die Tenant-Grenze (404) beweist.
-  await setAccountPlan(employerQ.email, "premium");
 });
 
 test.afterAll(async () => {

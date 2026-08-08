@@ -68,7 +68,8 @@ export type PlanFeature =
   | "strictTimeTracking" // Strikte Arbeitszeiterfassung
   | "calendarSync" // Export in eigene Kalender-App
   | "caregiverLogin" // Assistenzkraefte erhalten Zugang zur Team-Ansicht
-  | "absenceTracking"; // Tracking/Zaehlung von Urlaubs- & Krankheitstagen (Resturlaub, Statistik)
+  | "absenceTracking" // Tracking/Zaehlung von Urlaubs- & Krankheitstagen (Resturlaub, Statistik)
+  | "timeTrackingSettings"; // Schalter Zeiterfassung an/aus + Pausen-Vorbefuellung/-Abzug aendern
 
 /** Numerische Limits pro Plan (`null` = unbegrenzt). */
 export type PlanLimit =
@@ -100,6 +101,10 @@ export const PLAN_CONFIG: Record<Plan, PlanConfig> = {
       // Im einfachen PDF-Stundennachweis (basicExport) erscheinen Abwesenheiten
       // weiterhin als Eintraege — ohne Tracking-Salden.
       absenceTracking: false,
+      // Bestandsschutz: bereits aktivierte Zeiterfassung/Pausen-Regeln bleiben
+      // wirksam — gesperrt ist nur das AENDERN der drei Schalter (Server prueft
+      // auf Wert-Aenderung, nicht auf das Feld selbst).
+      timeTrackingSettings: false,
     },
     limits: {
       maxAssistants: 6,
@@ -126,6 +131,7 @@ export const PLAN_CONFIG: Record<Plan, PlanConfig> = {
       calendarSync: true,
       caregiverLogin: true,
       absenceTracking: true,
+      timeTrackingSettings: true,
     },
     limits: {
       maxAssistants: null, // unbegrenzt

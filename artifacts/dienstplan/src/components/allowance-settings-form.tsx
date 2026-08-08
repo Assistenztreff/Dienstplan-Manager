@@ -30,6 +30,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { readableApiError } from "@/lib/api-error";
 import { useTeam } from "@/context/team";
+import { useAuth } from "@/context/auth";
+import { hasAccess } from "@/lib/entitlements";
+import { PlanUpgradeLink } from "@/components/plan-limit-banner";
+import { Lock } from "lucide-react";
 
 type FormState = {
   nightPercent: string;
@@ -65,6 +69,22 @@ const NO_STATE = "none";
 
 // Sonderwert des Bereichs-Wählers: Konto-weite Einstellungen (kein Team-Override).
 const ACCOUNT_SCOPE = "account";
+
+// Premium-Hinweis unter gesperrten Schaltern (Free-Tarif): nach dem Muster der
+// bestehenden Free-Limits — sichtbar, aber gesperrt, mit direktem Upgrade-Weg.
+// Bereits aktive Einstellungen bleiben wirksam (Bestandsschutz), gesperrt ist
+// nur das Ändern; der Server lehnt Wert-Änderungen im Free-Tarif zusätzlich ab.
+function PremiumSwitchHint() {
+  return (
+    <p
+      className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1"
+      data-testid="premium-switch-hint"
+    >
+      <span>Nur mit Premium änderbar — die aktuelle Einstellung bleibt wirksam.</span>
+      <PlanUpgradeLink className="text-xs" />
+    </p>
+  );
+}
 
 const GERMAN_STATE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "BW", label: "Baden-Württemberg" },
@@ -126,6 +146,11 @@ function PercentField({
 export function AllowanceSettingsForm() {
   const queryClient = useQueryClient();
   const { teams, isDienstleister, isTeamScopeReady } = useTeam();
+  const { currentUser } = useAuth();
+  // Free-Tarif: Die drei Schalter Zeiterfassung/Pausen sind sichtbar, aber
+  // gesperrt (Premium-Feature "timeTrackingSettings"). Der Server lehnt
+  // Wert-Aenderungen zusaetzlich ab — das hier ist reine UX.
+  const switchesLocked = !hasAccess(currentUser, "timeTrackingSettings");
 
   // Bereich: Konto-Standard oder ein bestimmtes Team (nur Dienstleister mit Teams).
   const [scope, setScope] = useState<string>(ACCOUNT_SCOPE);
@@ -546,8 +571,18 @@ export function AllowanceSettingsForm() {
                   <div className="border-t border-border/60 pt-5">
                     <div className="flex items-start justify-between gap-4">
                       <div className="space-y-0.5">
-                        <Label htmlFor="timeTrackingEnabled" className="text-sm font-semibold">
+                        <Label
+                          htmlFor="timeTrackingEnabled"
+                          className="text-sm font-semibold flex items-center gap-1.5"
+                        >
                           Zeiterfassung aktivieren
+                          {switchesLocked && (
+                            <Lock
+                              className="h-3.5 w-3.5 text-muted-foreground"
+                              data-testid="lock-time-tracking"
+                              aria-label="Premium-Feature"
+                            />
+                          )}
                         </Label>
                         <p className="text-xs text-muted-foreground">
                           Erlaubt das Erfassen und Bearbeiten von Ist-Zeiten (Stundenzettel) für
@@ -555,12 +590,13 @@ export function AllowanceSettingsForm() {
                           Zeiteinträge angelegt oder bestätigt werden; bestehende Einträge bleiben
                           sichtbar. Die Änderung wird sofort gespeichert.
                         </p>
+                        {switchesLocked && <PremiumSwitchHint />}
                       </div>
                       <Switch
                         id="timeTrackingEnabled"
                         data-testid="allowance-time-tracking-switch"
                         checked={form.timeTrackingEnabled}
-                        disabled={saving}
+                        disabled={saving || switchesLocked}
                         onCheckedChange={onTimeTrackingToggle}
                       />
                     </div>
@@ -635,19 +671,31 @@ export function AllowanceSettingsForm() {
                   <div className="border-t border-border/60 pt-5 space-y-3">
                     <div className="flex items-start justify-between gap-4">
                       <div className="space-y-0.5">
-                        <Label htmlFor="pauseAutoEnabled" className="text-sm font-semibold">
+                        <Label
+                          htmlFor="pauseAutoEnabled"
+                          className="text-sm font-semibold flex items-center gap-1.5"
+                        >
                           Pausen automatisch vorbefüllen
+                          {switchesLocked && (
+                            <Lock
+                              className="h-3.5 w-3.5 text-muted-foreground"
+                              data-testid="lock-pause-auto"
+                              aria-label="Premium-Feature"
+                            />
+                          )}
                         </Label>
                         <p className="text-xs text-muted-foreground">
                           Befüllt beim Anlegen neuer Dienste die unbezahlte Pause automatisch
                           anhand der Dienstdauer (Staffel unten). Der Wert bleibt pro Dienst
                           überschreibbar; bestehende Dienste werden nicht verändert.
                         </p>
+                        {switchesLocked && <PremiumSwitchHint />}
                       </div>
                       <Switch
                         id="pauseAutoEnabled"
                         data-testid="allowance-pause-auto-switch"
                         checked={form.pauseAutoEnabled}
+                        disabled={switchesLocked}
                         onCheckedChange={(v) => set("pauseAutoEnabled", v)}
                       />
                     </div>
@@ -734,8 +782,18 @@ export function AllowanceSettingsForm() {
                   <div className="border-t border-border/60 pt-5">
                     <div className="flex items-start justify-between gap-4">
                       <div className="space-y-0.5">
-                        <Label htmlFor="deductPausesEnabled" className="text-sm font-semibold">
+                        <Label
+                          htmlFor="deductPausesEnabled"
+                          className="text-sm font-semibold flex items-center gap-1.5"
+                        >
                           Pausen von bezahlten Stunden abziehen
+                          {switchesLocked && (
+                            <Lock
+                              className="h-3.5 w-3.5 text-muted-foreground"
+                              data-testid="lock-deduct-pauses"
+                              aria-label="Premium-Feature"
+                            />
+                          )}
                         </Label>
                         <p className="text-xs text-muted-foreground">
                           Zieht die eingetragenen unbezahlten Pausenminuten von den gewerteten
@@ -744,11 +802,13 @@ export function AllowanceSettingsForm() {
                           bleiben unverändert. Solange ausgeschaltet, sind Pausen eine reine
                           Info-Kennzahl (bisheriges Verhalten). Gilt konto-weit für alle Teams.
                         </p>
+                        {switchesLocked && <PremiumSwitchHint />}
                       </div>
                       <Switch
                         id="deductPausesEnabled"
                         data-testid="allowance-deduct-pauses-switch"
                         checked={form.deductPausesEnabled}
+                        disabled={switchesLocked}
                         onCheckedChange={(v) => set("deductPausesEnabled", v)}
                       />
                     </div>

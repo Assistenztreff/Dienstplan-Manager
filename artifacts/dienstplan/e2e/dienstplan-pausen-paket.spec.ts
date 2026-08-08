@@ -2,6 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { format } from "date-fns";
 import {
   registerFreeAccount,
+  setAccountPlan,
   deleteFreeAccount,
   type FreeAccount,
 } from "./helpers/teams";
@@ -32,6 +33,9 @@ async function adoptSession(page: Page, account: FreeAccount): Promise<void> {
 
 test.beforeAll(async () => {
   acc = await registerFreeAccount("privat", "pausenpaket");
+  // Zeiterfassungs-/Pausen-Schalter sind Premium ("timeTrackingSettings") —
+  // das Aktivieren waere im Free-Tarif serverseitig gesperrt.
+  await setAccountPlan(acc.email, "premium");
   // Pausenregelung (gesetzliche Staffel) + Zeiterfassung aktivieren.
   const putRes = await acc.ctx.put("/api/allowance-settings", {
     data: {

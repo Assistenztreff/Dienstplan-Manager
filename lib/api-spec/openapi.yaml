@@ -32,6 +32,8 @@ tags:
     description: Betreiber-Konsole (nur superadmin)
   - name: month-closings
     description: Monatsabschluss der Lohnauswertung mit Nachberechnung
+  - name: hour-budgets
+    description: Zielvereinbarungen (genehmigte Assistenzstunden pro Monat, Bedarfsseite)
 paths:
   /healthz:
     get:
@@ -245,6 +247,98 @@ paths:
       responses:
         "204":
           description: Gelöscht
+
+  /hour-budgets:
+    get:
+      operationId: listHourBudgets
+      tags: [hour-budgets]
+      summary: Zielvereinbarungen (Monatsbudgets) auflisten — Premium advancedAnalytics
+      parameters:
+        - name: teamId
+          in: query
+          description: Optionaler Team-Kontext für die Datentrennung.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Liste der Zielvereinbarungen (nach Beginn sortiert)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HourBudget"
+        "403":
+          description: Premium-Tarif erforderlich (plan_feature_required)
+    post:
+      operationId: createHourBudget
+      tags: [hour-budgets]
+      summary: Zielvereinbarung anlegen — Premium advancedAnalytics
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HourBudgetInput"
+      responses:
+        "201":
+          description: Erstellt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HourBudget"
+        "403":
+          description: Premium-Tarif erforderlich (plan_feature_required)
+        "409":
+          description: >-
+            Konflikt: Der Zeitraum überlappt eine bestehende Zielvereinbarung
+            desselben Teams (code "budget_overlap").
+
+  /hour-budgets/{id}:
+    patch:
+      operationId: updateHourBudget
+      tags: [hour-budgets]
+      summary: Zielvereinbarung ändern — Premium advancedAnalytics
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HourBudgetUpdate"
+      responses:
+        "200":
+          description: Aktualisiert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HourBudget"
+        "404":
+          description: Nicht gefunden
+        "409":
+          description: >-
+            Konflikt: Der Zeitraum überlappt eine andere Zielvereinbarung
+            desselben Teams (code "budget_overlap").
+    delete:
+      operationId: deleteHourBudget
+      tags: [hour-budgets]
+      summary: Zielvereinbarung löschen — Premium advancedAnalytics
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Gelöscht
+        "404":
+          description: Nicht gefunden
 
   /shifts:
     get:
@@ -1298,6 +1392,42 @@ paths:
                   - $ref: "#/components/schemas/HoursBalance"
                   - type: "null"
 
+  /dashboard/hour-budget-balance:
+    get:
+      operationId: getHourBudgetBalance
+      tags: [dashboard]
+      summary: Stundenbilanz zum Monatsbudget — Premium advancedAnalytics
+      description: >
+        Bilanz der genehmigten Assistenzstunden (Zielvereinbarung) für einen
+        Monat: genehmigt / verbraucht / verbleibend plus laufender Jahressaldo
+        (kumuliert genehmigt minus verbraucht seit Jahresbeginn). Verbrauch
+        zählt nur echte Arbeitsdienste — Abwesenheitsstunden (Urlaub,
+        Krankheit etc.) sind im Budget bereits enthalten. Warnschwelle:
+        mehr als 1,5 angesparte Monatsbudgets.
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: integer
+        - name: year
+          in: query
+          schema:
+            type: integer
+        - name: teamId
+          in: query
+          description: Optionaler Team-Kontext für die Datentrennung.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Budget-Bilanz des Monats inkl. Jahressaldo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HourBudgetBalance"
+        "403":
+          description: Premium-Tarif erforderlich (plan_feature_required)
+
   /month-closings:
     get:
       operationId: getMonthClosings
@@ -2174,8 +2304,12 @@ components:
         weeklyHours:
           type: number
         workdaysPerWeek:
-          type: integer
-          description: Arbeitstage pro Woche (1–7); Basis für den Vertrags-Fallback der bwavg-Urlaubsbewertung.
+          type: number
+          description: Arbeitstage pro Woche (0,5–7, Dezimalwerte erlaubt); Basis für den Vertrags-Fallback der bwavg-Urlaubsbewertung.
+        workdaysConfirmedAt:
+          type: ["string", "null"]
+          format: date-time
+          description: Zeitpunkt der letzten bewussten Arbeitstage-Festlegung; null = Migrations-Default, Datenpflege-Hinweis anzeigen.
         vacationDays:
           type: integer
         vacationHoursUsed:
@@ -2207,10 +2341,10 @@ components:
           type: number
           minimum: 0
         workdaysPerWeek:
-          type: integer
-          minimum: 1
+          type: number
+          minimum: 0.5
           maximum: 7
-          description: Arbeitstage pro Woche (1–7), Default 5.
+          description: Arbeitstage pro Woche (0,5–7, Dezimalwerte erlaubt), Default 5.
         vacationDays:
           type: integer
           minimum: 0
@@ -2230,10 +2364,13 @@ components:
           type: number
           minimum: 0
         workdaysPerWeek:
-          type: integer
-          minimum: 1
+          type: number
+          minimum: 0.5
           maximum: 7
-          description: Arbeitstage pro Woche (1–7).
+          description: Arbeitstage pro Woche (0,5–7, Dezimalwerte erlaubt). Bei Angabe wird workdaysConfirmedAt gesetzt.
+        workdaysConfirm:
+          type: boolean
+          description: true = Arbeitstage/Woche als geprüft bestätigen (setzt nur workdaysConfirmedAt, ohne Werte zu ändern).
         vacationDays:
           type: integer
           minimum: 0
@@ -2244,6 +2381,110 @@ components:
           type: ["string", "null"]
         notes:
           type: ["string", "null"]
+
+    HourBudget:
+      type: object
+      required: [id, teamId, monthlyHours, startDate, createdAt]
+      properties:
+        id:
+          type: integer
+        teamId:
+          type: integer
+        monthlyHours:
+          type: number
+          description: Genehmigte Assistenzstunden pro Monat (Zielvereinbarung, Bedarfsseite).
+        startDate:
+          type: string
+          format: date
+          description: Beginn der Gültigkeit (inklusive).
+        endDate:
+          type: ["string", "null"]
+          description: Ende der Gültigkeit (inklusive); null = unbefristet.
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    HourBudgetInput:
+      type: object
+      required: [monthlyHours, startDate]
+      properties:
+        teamId:
+          type: integer
+          description: Optionaler Team-Kontext; muss ein erlaubtes Team sein.
+        monthlyHours:
+          type: number
+          exclusiveMinimum: 0
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        notes:
+          type: string
+
+    HourBudgetUpdate:
+      type: object
+      properties:
+        monthlyHours:
+          type: number
+          exclusiveMinimum: 0
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+
+    HourBudgetBalance:
+      type: object
+      required:
+        - month
+        - year
+        - approvedHours
+        - consumedHours
+        - remainingHours
+        - yearApprovedHours
+        - yearConsumedHours
+        - yearBalance
+        - warningThresholdHours
+        - warningActive
+        - hasBudgets
+      properties:
+        month:
+          type: integer
+        year:
+          type: integer
+        approvedHours:
+          type: number
+          description: Genehmigte Stunden des Monats (0 ohne gültige Zielvereinbarung).
+        consumedHours:
+          type: number
+          description: Verbrauchte Stunden des Monats (nur echte Arbeitsdienste, keine Abwesenheiten).
+        remainingHours:
+          type: number
+          description: Verbleibende Stunden des Monats (genehmigt minus verbraucht).
+        yearApprovedHours:
+          type: number
+          description: Kumuliert genehmigte Stunden seit Jahresbeginn (Januar bis Auswertungsmonat).
+        yearConsumedHours:
+          type: number
+          description: Kumuliert verbrauchte Stunden seit Jahresbeginn.
+        yearBalance:
+          type: number
+          description: Laufender Jahressaldo (genehmigt minus verbraucht; positiv = angespart).
+        warningThresholdHours:
+          type: number
+          description: Warnschwelle = 1,5 × Monatsbudget.
+        warningActive:
+          type: boolean
+          description: true, sobald der Jahressaldo die Warnschwelle übersteigt (nur bei vorhandenem Monatsbudget).
+        hasBudgets:
+          type: boolean
+          description: true, sobald im Scope mindestens eine Zielvereinbarung existiert (die Dashboard-Kachel blendet sich ohne Budget aus).
 
     Shift:
       type: object

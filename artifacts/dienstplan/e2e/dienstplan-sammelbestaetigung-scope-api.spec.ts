@@ -87,7 +87,10 @@ test.beforeAll(async () => {
   test.setTimeout(120_000);
 
   // --- Arbeitgeber P mit Assistent + zwei offenen Ist-Zeiten ----------------
+  // Premium VOR dem Aktivieren: der Schalter "Zeiterfassung aktivieren" ist im
+  // Free-Tarif serverseitig gegen Aenderungen gesperrt ("timeTrackingSettings").
   employerP = await registerFreeAccount("privat", "batchscope-p");
+  await setAccountPlan(employerP.email, "premium");
   await enableTimeTracking(employerP.ctx);
   const pAssistantId = await createAssistant(employerP, "p");
   pEntry1 = await createTimeEntry(
@@ -105,6 +108,7 @@ test.beforeAll(async () => {
 
   // --- Getrennter Arbeitgeber Q mit eigenem Assistent + Ist-Zeit ------------
   employerQ = await registerFreeAccount("privat", "batchscope-q");
+  await setAccountPlan(employerQ.email, "premium");
   await enableTimeTracking(employerQ.ctx);
   const qAssistantId = await createAssistant(employerQ, "q");
   qEntry1 = await createTimeEntry(
@@ -114,11 +118,10 @@ test.beforeAll(async () => {
     "2026-07-03T16:00:00.000Z",
   );
 
-  // Beide Konten auf Premium heben: confirm-batch ist strictTimeTracking-
-  // gegated. So endet der Q-Angriff NICHT am Plan-Gate (403), sondern beweist
-  // die Team-Scope-Grenze (stilles Ueberspringen fremder IDs).
-  await setAccountPlan(employerP.email, "premium");
-  await setAccountPlan(employerQ.email, "premium");
+  // Beide Konten sind von Anfang an Premium: confirm-batch ist
+  // strictTimeTracking-gegated. So endet der Q-Angriff NICHT am Plan-Gate
+  // (403), sondern beweist die Team-Scope-Grenze (stilles Ueberspringen
+  // fremder IDs).
 });
 
 test.afterAll(async () => {

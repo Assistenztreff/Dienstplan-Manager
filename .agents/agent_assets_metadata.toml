@@ -37,3 +37,38 @@ uri = "file://artifacts/dienstplan/public/handbuch.pdf"
 type = "pdf"
 title = "Handbuch – AssistenzPlaner (aktualisiert)"
 description = "Alle 11 Kapitel als PDF, jetzt inkl. neuem Abschnitt 'Assistenzkraft-Farben' im Kapitel Einstellungen."
+
+[[outputs]]
+id = "DSzR7_Iqt7xxWCKXWQpgq"
+uri = "file://.local/screenshots/t710/before-desktop-panel-heute.png"
+type = "image"
+title = "Tagesleiste vorher (Desktop)"
+description = "Bisheriger Stand: Datumskopf + farbige Badge-Blöcke pro Eintrag, Filter-Leiste darunter."
+
+[[outputs]]
+id = "K5bO0GAIhG0GtJ4d9LXcX"
+uri = "file://.local/screenshots/t710/after-desktop-panel-heute.png"
+type = "image"
+title = "Tagesleiste nachher (Desktop)"
+description = "Neu: Menüleiste mit Anzeigetyp-/Zeitraum-Dropdowns, Datum und „Dienst anlegen“ rechts; Einträge als schlichte Zeilen; Filter unten links unverändert."
+
+[[outputs]]
+id = "_JxXJ7xWHrVnecMu8SUxp"
+uri = "file://.local/screenshots/t710/after-desktop-panel-monat.png"
+type = "image"
+title = "Tagesleiste nachher — Zeitraum „Dieser Monat“ (Desktop)"
+description = "Längere Zeiträume gruppieren die Zeilen unter Tagesüberschriften."
+
+[[outputs]]
+id = "KT4v97gTL1aSC09Di2dy_"
+uri = "file://.local/screenshots/t710/before-mobil-panel.png"
+type = "image"
+title = "Tagesleiste vorher (Smartphone)"
+description = "Bisheriger Stand am Smartphone."
+
+[[outputs]]
+id = "yx8Rr_0lTamWLy61-k0_v"
+uri = "file://.local/screenshots/t710/after-mobil-panel.png"
+type = "image"
+title = "Tagesleiste nachher (Smartphone)"
+description = "Neue Menüleiste und Zeilen-Darstellung am Smartphone (400px)."
