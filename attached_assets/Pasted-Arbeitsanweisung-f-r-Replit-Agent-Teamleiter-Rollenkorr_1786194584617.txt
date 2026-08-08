@@ -1,0 +1,45 @@
+Arbeitsanweisung für Replit-Agent: Teamleiter-Rollenkorrektur Runde 3 — Nachfassen (4 offene Punkte)
+
+Projekt: AssistenzPlaner (Repo Assistenztreff/Dienstplan-Manager) Kontext: Die Arbeitsanweisung „Teamleiter-Rollenkorrektur Runde 3" vom 02.08. wurde offenbar nicht umgesetzt — bei Codeprüfung am 08.08. fehlen alle vier Punkte unten noch. Teil C aus der Original-Anweisung (404-Bug private Team-Verwaltung) ist bereits erledigt und hier nicht mehr enthalten.
+
+Es gilt weiterhin: Erst prüfen und schriftlich bestätigen (Datei/Route benennen, Ist-Zustand beschreiben), dann bauen. Keine E2E-Testsuiten während dieser Arbeit.
+
+1. can_view_payroll serverseitig auf Unternehmens-Teamleiter beschränken
+
+Ist-Zustand (Befund): In artifacts/api-server/src/routes/teams.ts, PATCH /teams/:id/members/:userId, steht aktuell: „Alle Konto-Admins (auch privat) dürfen beide Flags für Mitglieder ihres Teams setzen." — d. h. can_view_payroll kann derzeit für JEDE Person gesetzt werden, auch für Assistenzkräfte.
+
+Ziel: can_view_payroll darf ausschließlich für Personen mit der Rolle „Unternehmens-Teamleiter" (echtes Personal des Dienstleisters, kein Assistenzkraft-Account) gesetzt werden. Für Assistenzkräfte (Privatkonto UND Dienstleister) muss ein Versuch, can_view_payroll zu setzen, serverseitig mit 403 abgelehnt werden — nicht nur der Toggle im UI ausblenden.
+
+Migrations-Check: Prüfen, ob aktuell schon can_view_payroll = true bei Assistenzkraft-Mitgliedschaften gesetzt ist. Falls ja: per Migration zurücksetzen, Anzahl betroffener Zeilen kurz melden.
+
+2. Neue Rolle „Assistenznehmer beim Dienstleister" (Basis + Stufe 1 + Stufe 2)
+
+Ist-Zustand (Befund): In lib/db/src/schema/team_members.ts existieren nur is_teamleiter und can_view_payroll. Keine Felder für eine gestufte Freischaltung.
+
+Ziel: Neue Rolle für den Kunden des Dienstleisters (nicht Assistenzkraft, nicht Unternehmens-Teamleiter):
+
+Basis (Standard): team-weite Lese-Übersicht im Dashboard (nächste Tage im Dienstplan, Ausfälle/Urlaub im Team). Kein Bearbeitungsrecht.
+Stufe 1 (durch Dienstleister-Admin freischaltbar): Schichten/Assistenzkräfte im eigenen Team planen, Dienstplan als PDF exportieren, Abwesenheiten erfassen.
+Stufe 2 (baut auf Stufe 1 auf): Menüpunkte Team-Verwaltung und Zeiterfassung erscheinen; in der Team-Verwaltung nur Standardfelder der Personalkarten editierbar (Vorname, Nachname, E-Mail, Telefon, Anschrift); Lohndaten fest ausgeblendet, can_view_payroll bekommt diese Rolle nie.
+
+Vorschlag vor dem Bauen kurz bestätigen lassen: vermutlich zwei neue, eigene Boolean-Spalten oder Stufen-Enum an team_members (nicht is_teamleiter/can_view_payroll wiederverwenden — fachlich andere Rolle), Freischaltung über zwei neue Toggles im bestehenden Rollen-Dialog. Backend-Team-Scoping wie bei den anderen Rollen.
+
+3. Buttons „Mitglieder" und „Überführen" zusammenlegen
+
+Ist-Zustand (Befund): In artifacts/dienstplan/src/pages/team-verwaltung.tsx existieren weiterhin zwei getrennte Buttons pro Team (Zeile ~749 „Mitglieder", Zeile ~766 „Überführen").
+
+Ziel: Einen einzigen Einstiegspunkt „Mitglieder" pro Team. Vorher klären: Übernimmt „Hinzufügen" im Mitglieder-Dialog auch die komplette Historie (Verträge/Dienste/Zeiteinträge), so wie „Überführen" das tut, oder ist es eine reine Mitgliedschafts-Zuordnung? Je nach Antwort beide Aktionen klar benannt im selben Dialog anbieten (z. B. „Hinzufügen" vs. „Verschieben mit Verlauf"). Separaten „Überführen"-Button aus der Teamliste entfernen.
+
+4. Menüpunkt „Assistenten" auflösen zugunsten von „Team-Verwaltung"
+
+Ist-Zustand (Befund): Route /assistenten existiert in App.tsx weiterhin als eigenständiger Menüpunkt, unabhängig von der Team-Verwaltung. Zusätzlicher Befund: Der Menüpunkt „Team-Verwaltung" ist für Privatkonten bewusst sichtbar (dienstleisterOnly: false in layout.tsx), aber der „Neues Team"-Button auf dieser Seite wird nur nach Free/Premium-Limit ein-/ausgeblendet, nicht nach Kontotyp — ein privates Premium-Konto (unbegrenztes Team-Limit) sieht den Button aktiv, obwohl POST /teams serverseitig auf requireDienstleister beschränkt ist (Klick würde fehlschlagen).
+
+Ziel: Alle Assistenten-Funktionen in Team-Verwaltung überführen (Bestandsschutz — keine Funktion darf ohne Ersatz wegfallen, insbesondere Personalakten-Detailansicht/Vertragsverwaltung falls nur dort vorhanden).
+
+Design-Vorgabe für Privatkonten (löst den Button-Bug gleich mit): Für Konten mit accountType = privat entfällt die Team-Listenansicht (inkl. „Neues Team"-Button) komplett — Privatkonten haben ohnehin nur ein Team, das nie als eigene Verwaltungsebene sichtbar sein muss. Stattdessen landen sie direkt in der Mitgliederliste ihres einen Teams. Der Teamleiter-Status wird dort direkt in der Bearbeiten-Ansicht der jeweiligen Assistenzkraft gesetzt — ein einzelner Schalter „Als Teamleiter einsetzen" (kein zweiter Lohndaten-Schalter, da Punkt 1 dieser Anweisung can_view_payroll für Assistenzkräfte ohnehin serverseitig ausschließt).
+
+Für Privatkonten mit nur einem Team darf das Ganze nicht umständlicher werden als der bisherige direkte Zugriff über „Assistenten". Erst Konzept kurz vorschlagen, dann nach Freigabe „Assistenten" aus Navigation und Routing entfernen; alte Links falls einfach möglich auf Team-Verwaltung umleiten statt 404.
+
+Abschluss
+
+Pro Punkt (1–4) kurz zurückmelden: Ist-Zustand bestätigt, was geändert/gebaut wurde. Keine automatischen E2E-Tests — die laufen erst als eigener Block nach ausdrücklicher Freigabe.
