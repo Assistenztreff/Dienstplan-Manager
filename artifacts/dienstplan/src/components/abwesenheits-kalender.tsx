@@ -15,7 +15,7 @@
  * - Wird als eigene Seiten-Sektion (/abwesenheiten) UND als Popup (Dienstplan)
  *   verwendet — gleiches Layout an beiden Stellen.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useCreateShift,
   useDeleteShift,
@@ -27,6 +27,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  addDays,
   addMonths,
   eachDayOfInterval,
   endOfMonth,
@@ -167,6 +168,100 @@ export function AbwesenheitsKalender() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   // Smartphone-Akkordeon: aktueller Monat startet aufgeklappt.
   const [openMonth, setOpenMonth] = useState<number>(() => new Date().getMonth());
+
+  // ── Tastatur-Navigation: Roving-Tabindex (WAI-ARIA-Grid-Pattern) ─────────
+  // Ein Ref-Map für alle Tages-Buttons des sichtbaren Jahres.
+  const dayRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map());
+  // Der aktuell fokussierte Tag (yyyy-MM-dd); null = keiner / erster des Monats.
+  const [focusedDayKey, setFocusedDayKey] = useState<string | null>(null);
+  // Beim Monatswechsel (Akkordeon) muss der Fokus nach dem Rendern gesetzt werden.
+  const pendingFocusKey = useRef<string | null>(null);
+
+  // Roving-Tabindex zurücksetzen, wenn das Jahr wechselt.
+  useEffect(() => {
+    setFocusedDayKey(null);
+    pendingFocusKey.current = null;
+    dayRefs.current.clear();
+  }, [year]);
+
+  // Nach dem Öffnen eines Akkordeon-Monats: ausstehenden Fokus setzen.
+  useEffect(() => {
+    const k = pendingFocusKey.current;
+    if (!k) return;
+    const el = dayRefs.current.get(k);
+    if (el && el.offsetParent !== null) {
+      pendingFocusKey.current = null;
+      setFocusedDayKey(k);
+      el.focus();
+    }
+  }, [openMonth]);
+
+  /**
+   * Setzt Fokus auf einen Tag (per dayKey). Falls der Tag in einem geschlossenen
+   * Akkordeon-Monat liegt, öffnet es diesen zuerst und setzt den Fokus danach.
+   */
+  function moveFocusToDay(k: string) {
+    const el = dayRefs.current.get(k);
+    if (el && el.offsetParent !== null) {
+      setFocusedDayKey(k);
+      el.focus();
+    } else {
+      // Monat noch nicht gerendert (Akkordeon) → aufklappen, dann fokussieren.
+      pendingFocusKey.current = k;
+      const targetMonthIdx = Number(k.slice(5, 7)) - 1;
+      setOpenMonth(targetMonthIdx);
+    }
+  }
+
+  /**
+   * Tastatur-Handler für einen Tages-Button im Mini-Monatsraster.
+   * ArrowLeft/Right/Up/Down bewegen den Fokus, PageUp/Down wechseln den Monat,
+   * Home/End gehen zum Wochenanfang/-ende, Enter/Space aktivieren den Tag.
+   */
+  function handleDayKeyDown(e: React.KeyboardEvent, k: string) {
+    const d = new Date(`${k}T00:00:00`);
+    let target: Date | null = null;
+
+    switch (e.key) {
+      case "ArrowRight": target = addDays(d, 1); break;
+      case "ArrowLeft":  target = addDays(d, -1); break;
+      case "ArrowDown":  target = addDays(d, 7); break;
+      case "ArrowUp":    target = addDays(d, -7); break;
+      case "PageDown":   target = addMonths(d, 1); break;
+      case "PageUp":     target = addMonths(d, -1); break;
+      case "Home": {
+        const col = (getDay(d) + 6) % 7;
+        target = addDays(d, -col);
+        break;
+      }
+      case "End": {
+        const col = (getDay(d) + 6) % 7;
+        target = addDays(d, 6 - col);
+        break;
+      }
+      case "Enter":
+      case " ": {
+        e.preventDefault();
+        handleDayClick(k, visibleAbsences(k).length > 0);
+        return;
+      }
+      default: return;
+    }
+
+    if (!target) return;
+    e.preventDefault();
+
+    // Jahresgrenzen einhalten.
+    const yearStart = new Date(year, 0, 1);
+    const yearEnd = new Date(year, 11, 31);
+    if (target < yearStart) target = yearStart;
+    if (target > yearEnd) target = yearEnd;
+    // Monatstag-Clamp für PageUp/PageDown (z.B. 31. Jan → 28. Feb).
+    const targetYear = target.getFullYear();
+    if (targetYear !== year) return;
+
+    moveFocusToDay(dayKeyOf(target));
+  }
 
   // ── Abwesenheiten des Jahres, gruppiert pro Tag ──────────────────────────
   const absencesByDay = useMemo(() => {
@@ -377,6 +472,14 @@ export function AbwesenheitsKalender() {
     });
     const offset = (getDay(monthStart) + 6) % 7;
     const monthKey = format(monthStart, "yyyy-MM");
+
+    // Roving-Tabindex: welcher Tag dieses Monats bekommt tabIndex=0?
+    // Priorität: fokussierter Tag > gewählter Tag (Einzel) > erster Tag.
+    const focusedInMonth = focusedDayKey?.startsWith(monthKey) ? focusedDayKey : null;
+    const selectedInMonth =
+      !selectionMode && selected?.startsWith(monthKey) ? selected : null;
+    const tabbableKey = focusedInMonth ?? selectedInMonth ?? dayKeyOf(monthStart);
+
     return (
       <div
         key={monthKey}
@@ -386,51 +489,76 @@ export function AbwesenheitsKalender() {
         <p className="mb-1 text-center text-[11px] font-semibold">
           {format(monthStart, "MMMM", { locale: de })}
         </p>
-        <div className="grid grid-cols-7 gap-px">
-          {WEEKDAYS.map((w) => (
-            <span
-              key={w}
-              className="text-center text-[8px] font-medium uppercase text-muted-foreground/70"
-            >
-              {w}
-            </span>
-          ))}
-          {Array.from({ length: offset }).map((_, i) => (
-            <span key={`blank-${i}`} className="aspect-square" />
-          ))}
-          {days.map((day) => {
-            const k = dayKeyOf(day);
-            const cat = dominantCategory(k);
-            const isSelected = selectionMode
-              ? selectedDates.includes(k)
-              : selected === k;
-            const hasAbsences = visibleAbsences(k).length > 0;
-            return (
-              <button
-                key={k}
-                type="button"
-                data-testid={`abwkal-day-${k}`}
-                data-category={cat ?? undefined}
-                data-selected={isSelected ? "true" : undefined}
-                aria-pressed={selectionMode ? isSelected : undefined}
-                onClick={() => handleDayClick(k, hasAbsences)}
-                title={
-                  hasAbsences
-                    ? visibleAbsences(k)
-                        .map((s) => `${userName(s.userId)}: ${ABSENCE_TYPE_LABELS[s.type] ?? s.type}`)
-                        .join(", ")
-                    : undefined
-                }
-                className={[
-                  "aspect-square rounded-[3px] text-[10px] leading-none tabular-nums transition-colors",
-                  cat ? `${CATEGORY_STYLE[cat].cell} font-semibold` : "hover:bg-accent/40 text-foreground/70",
-                  isSelected ? "ring-2 ring-inset ring-primary" : "",
-                ].filter(Boolean).join(" ")}
+        <div
+          className="grid grid-cols-7 gap-px"
+          role="grid"
+          aria-label={format(monthStart, "MMMM yyyy", { locale: de })}
+        >
+          <div role="row" className="contents">
+            {WEEKDAYS.map((w) => (
+              <span
+                key={w}
+                role="columnheader"
+                aria-label={["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"][WEEKDAYS.indexOf(w)]}
+                className="text-center text-[8px] font-medium uppercase text-muted-foreground/70"
               >
-                {format(day, "d")}
-              </button>
-            );
-          })}
+                {w}
+              </span>
+            ))}
+          </div>
+          <div role="row" className="contents">
+            {Array.from({ length: offset }).map((_, i) => (
+              <span key={`blank-${i}`} role="gridcell" className="aspect-square" />
+            ))}
+            {days.map((day) => {
+              const k = dayKeyOf(day);
+              const cat = dominantCategory(k);
+              const isSelected = selectionMode
+                ? selectedDates.includes(k)
+                : selected === k;
+              const absences = visibleAbsences(k);
+              const hasAbsences = absences.length > 0;
+              const absenceDesc = hasAbsences
+                ? absences
+                    .map((s) => `${userName(s.userId)}: ${ABSENCE_TYPE_LABELS[s.type] ?? s.type}`)
+                    .join(", ")
+                : null;
+              const ariaLabel = [
+                format(day, "EEEE, d. MMMM yyyy", { locale: de }),
+                absenceDesc,
+              ]
+                .filter(Boolean)
+                .join(" — ");
+              return (
+                <button
+                  key={k}
+                  ref={(el) => {
+                    if (el) dayRefs.current.set(k, el);
+                    else dayRefs.current.delete(k);
+                  }}
+                  type="button"
+                  role="gridcell"
+                  data-testid={`abwkal-day-${k}`}
+                  data-category={cat ?? undefined}
+                  data-selected={isSelected ? "true" : undefined}
+                  aria-selected={isSelected}
+                  aria-label={ariaLabel}
+                  tabIndex={k === tabbableKey ? 0 : -1}
+                  onClick={() => handleDayClick(k, hasAbsences)}
+                  onKeyDown={(e) => handleDayKeyDown(e, k)}
+                  onFocus={() => setFocusedDayKey(k)}
+                  title={absenceDesc ?? undefined}
+                  className={[
+                    "aspect-square rounded-[3px] text-[10px] leading-none tabular-nums transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+                    cat ? `${CATEGORY_STYLE[cat].cell} font-semibold` : "hover:bg-accent/40 text-foreground/70",
+                    isSelected ? "ring-2 ring-inset ring-primary" : "",
+                  ].filter(Boolean).join(" ")}
+                >
+                  {format(day, "d")}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     );
