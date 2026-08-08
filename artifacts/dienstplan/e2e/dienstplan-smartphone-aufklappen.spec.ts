@@ -33,10 +33,14 @@ const pad2 = (n: number) => String(n).padStart(2, "0");
 // Feste Tage in der Monatsmitte: immer im aktuellen Monat, keine Monatsrolle.
 const DAY_A = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-12`;
 const DAY_B = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-13`;
+// Tag C (Task #726): Dienst + Krank-Abwesenheit derselben Assistenzkraft am
+// selben Tag → die Dienst-Pille muss das rote Ausfall-Warn-Icon zeigen.
+const DAY_C = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-14`;
 
 let acc: FreeAccount;
 let shiftIdFix: number;
 let shiftIdDraft: number;
+let shiftIdAusfall: number;
 
 async function login(page: Page): Promise<void> {
   await loginViaUi(page, acc.email, FREE_ACCOUNT_PASSWORD);
@@ -94,6 +98,33 @@ test.beforeAll(async () => {
     },
   });
   expect(vac.status(), `Urlaub anlegen (${vac.status()})`).toBe(201);
+
+  // Tag C (Task #726): Krank-Abwesenheit ZUERST, danach wird ein Dienst auf
+  // denselben Tag geplant. (Umgekehrt ginge es nicht: Eine neue Abwesenheit
+  // "überschreibt" serverseitig alle an dem Tag bereits geplanten Dienste —
+  // Primary-Lookup-Ersetzung in POST /shifts. Der Warnfall entsteht also genau
+  // dann, wenn ein Dienst auf einen Tag mit bestehender Krankmeldung fällt.)
+  const sick = await acc.ctx.post("/api/shifts", {
+    data: {
+      userId: assistantId,
+      type: "sick",
+      startTime: `${DAY_C}T00:00:00.000Z`,
+      endTime: `${DAY_C}T23:59:00.000Z`,
+      planningStatus: "FIX",
+    },
+  });
+  expect(sick.status(), `Krank-Abwesenheit an Tag C anlegen (${sick.status()})`).toBe(201);
+  const ausfallShift = await acc.ctx.post("/api/shifts", {
+    data: {
+      userId: assistantId,
+      type: "active",
+      startTime: `${DAY_C}T08:00:00.000Z`,
+      endTime: `${DAY_C}T14:00:00.000Z`,
+      planningStatus: "FIX",
+    },
+  });
+  expect(ausfallShift.status(), `Dienst an Tag C anlegen (${ausfallShift.status()})`).toBe(201);
+  shiftIdAusfall = ((await ausfallShift.json()) as { id: number }).id;
 });
 
 test.afterAll(async () => {
@@ -189,6 +220,23 @@ test("Aufklappen: einzeilige Kurz-Pillen mit Abweichungs-Icons, Pille öffnet de
     draftPill.locator('[data-status-badge="vertretung"]'),
     "Vertretung + Entwurf zeigen BEIDE Icons in der Kompakt-Pille",
   ).toBeVisible();
+
+  // Task #726: Dienst an Tag C, dessen Assistenzkraft am selben Tag krank ist,
+  // zeigt das rote Ausfall-Warn-Icon; Dienste ohne Ausfall (Tag A) nicht.
+  const ausfallPill = mobile.getByTestId(`day-chip-${shiftIdAusfall}`);
+  const warnBadge = ausfallPill.locator(
+    '[data-status-badge="warning"][aria-label="Ausfall: Assistenzkraft abwesend"]',
+  );
+  await expect(
+    warnBadge,
+    "Krank am Diensttag → Ausfall-Warn-Icon an der Dienst-Pille",
+  ).toBeVisible();
+  await expect(warnBadge).toHaveCSS("width", "12px");
+  await expect(warnBadge).toHaveCSS("height", "12px");
+  await expect(
+    pill.locator('[data-status-badge="warning"]'),
+    "Ohne Abwesenheit der eingeplanten Assistenzkraft gibt es kein Ausfall-Icon",
+  ).toHaveCount(0);
   // Geometrieprüfung: Auch im Kombinationsfall (zwei Icons) darf das Kürzel
   // nicht abgeschnitten sein — DOM-Text allein würde eine Ellipse verdecken.
   for (const id of [shiftIdFix, shiftIdDraft]) {

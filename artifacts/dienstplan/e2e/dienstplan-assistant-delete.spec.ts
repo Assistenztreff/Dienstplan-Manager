@@ -106,7 +106,7 @@ async function gotoAssistentenAsAdmin(page: Page): Promise<void> {
   expect(loginRes.ok(), `Admin-Login fehlgeschlagen (${loginRes.status()})`).toBe(true);
   await page.goto("/assistenten");
   await expect(
-    page.getByRole("heading", { name: "Assistenten", exact: true }),
+    page.getByRole("heading", { name: "Assistenzkräfte", exact: true }),
   ).toBeVisible({ timeout: 30000 });
 }
 
@@ -149,14 +149,14 @@ test("Abbrechen der Sicherheitsabfrage erhält die Assistenzkraft", async ({
   // Bearbeiten-Dialog öffnen.
   await card.getByRole("button", { name: "Bearbeiten" }).click();
   await expect(
-    page.getByRole("heading", { name: "Assistenten bearbeiten" }),
+    page.getByRole("heading", { name: "Assistenzkraft bearbeiten" }),
   ).toBeVisible();
 
   // Lösch-Knopf anklicken -> Sicherheitsabfrage erscheint.
   await page.getByRole("button", { name: "Loeschen" }).click();
   const confirm = page.getByRole("alertdialog");
   await expect(confirm).toBeVisible();
-  await expect(confirm.getByText("Assistenten loeschen?")).toBeVisible();
+  await expect(confirm.getByText("Assistenzkraft loeschen?")).toBeVisible();
 
   // Abbrechen -> nichts wird gelöscht.
   await confirm.getByRole("button", { name: "Abbrechen" }).click();
@@ -188,14 +188,14 @@ test("Assistenzkraft kann samt Daten über den Bearbeiten-Dialog gelöscht werde
   // Bearbeiten-Dialog öffnen.
   await card.getByRole("button", { name: "Bearbeiten" }).click();
   await expect(
-    page.getByRole("heading", { name: "Assistenten bearbeiten" }),
+    page.getByRole("heading", { name: "Assistenzkraft bearbeiten" }),
   ).toBeVisible();
 
   // Lösch-Knopf im Dialog anklicken -> Sicherheitsabfrage erscheint.
   await page.getByRole("button", { name: "Loeschen" }).click();
   const confirm = page.getByRole("alertdialog");
   await expect(confirm).toBeVisible();
-  await expect(confirm.getByText("Assistenten loeschen?")).toBeVisible();
+  await expect(confirm.getByText("Assistenzkraft loeschen?")).toBeVisible();
   // Der Name der konkreten Kraft taucht in der Warnung auf.
   await expect(confirm).toContainText(assistant.name);
 
@@ -230,7 +230,7 @@ test("beim Neuanlegen erscheint kein Lösch-Knopf", async ({ page }) => {
   // Anlege-Dialog öffnen.
   await page.getByRole("button", { name: "Neu anlegen" }).click();
   await expect(
-    page.getByRole("heading", { name: "Neuen Assistenten anlegen" }),
+    page.getByRole("heading", { name: "Neue Assistenzkraft anlegen" }),
   ).toBeVisible();
 
   // Im Anlege-Modus gibt es keinen "Loeschen"-Knopf.

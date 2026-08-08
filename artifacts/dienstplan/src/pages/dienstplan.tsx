@@ -1108,6 +1108,13 @@ function MonthGrid({
           const absenceCategories = (["ausfall", "geplant", "absage"] as const).filter(
             (cat) => absences.some((s) => ABSENCE_CATEGORY[s.type] === cat),
           );
+          // Task #726: Personen mit einer Ausfall-Abwesenheit (Krank/Kind krank)
+          // am selben Tag — deren Dienst-Pillen erhalten das rote Warn-Icon.
+          const ausfallUserIds = new Set(
+            absences
+              .filter((s) => ABSENCE_CATEGORY[s.type] === "ausfall")
+              .map((s) => s.userId),
+          );
           const countLabel = [
             nonAbsence.length > 0
               ? `${nonAbsence.length} ${nonAbsence.length === 1 ? "Dienst" : "Dienste"}`
@@ -1250,6 +1257,9 @@ function MonthGrid({
                     const isTeam = s.type === "team";
                     const slot = getPersonSlot(s.userId);
                     const status = s.planningStatus ?? "FIX";
+                    // Task #726: eingeplante Assistenzkraft ist am selben Tag
+                    // krank/Kind krank → roter Ausfall-Hinweis an der Pille.
+                    const hasAusfall = !isTeam && ausfallUserIds.has(s.userId);
                     const chipClickable = canEdit && !selectionMode;
                     const compact = variant === "compact";
                     const timeRange = `${format(new Date(s.startTime), "HH:mm")}–${format(new Date(s.endTime), "HH:mm")}`;
@@ -1294,11 +1304,14 @@ function MonthGrid({
                             <span data-testid={`day-chip-label-${s.id}`} className="truncate text-[11px] font-bold text-[#151515]">
                               {nameLabel}
                             </span>
-                            {/* Beide Abweichungen sind unabhängig — eine
+                            {/* Alle Abweichungen sind unabhängig — eine
                                 Vertretung kann zugleich Entwurf/Vorschlag sein
-                                und zeigt dann beide Icons. */}
-                            {(status !== "FIX" || s.isVertretung) && (
-                              /* Im Kombinationsfall überlappen die beiden
+                                und zeigt dann beide Icons. Priorität von links
+                                nach rechts aufsteigend: Entwurf < Vertretung <
+                                Ausfall — das wichtigste Icon liegt im Badge-
+                                Stack rechts oben und bleibt voll sichtbar. */}
+                            {(status !== "FIX" || s.isVertretung || hasAusfall) && (
+                              /* Im Kombinationsfall überlappen die
                                  12-px-Icons leicht (Badge-Stack), damit das
                                  Kürzel in der ~57-px-Zelle sichtbar bleibt. */
                               <span className="flex shrink-0 items-center -space-x-[7px]">
@@ -1312,22 +1325,39 @@ function MonthGrid({
                                 {s.isVertretung && (
                                   <StatusBadge kind="vertretung" label="Vertretung" calendarCompact />
                                 )}
+                                {hasAusfall && (
+                                  <StatusBadge
+                                    kind="warning"
+                                    label="Ausfall: Assistenzkraft abwesend"
+                                    calendarCompact
+                                  />
+                                )}
                               </span>
                             )}
                           </span>
                         ) : (
                           <>
-                            {/* Zeile 1: Name + Status-Badge Variante C */}
+                            {/* Zeile 1: Name + Status-Badge Variante C.
+                                Ausfall-Warnung (Task #726) rechts außen —
+                                gleiche Priorität wie im Compact-Zweig. */}
                             <span className="flex items-center justify-between gap-1 bg-white py-[2px] pl-[7px] pr-1 leading-none">
                               <span className="truncate text-[10px] font-bold text-[#151515]">{nameLabel}</span>
-                              {status === "FIX" ? (
-                                <StatusBadge kind="confirmed" label="Bestätigt" />
-                              ) : (
-                                <StatusBadge
-                                  kind="draft"
-                                  label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
-                                />
-                              )}
+                              <span className="flex shrink-0 items-center gap-[3px]">
+                                {status === "FIX" ? (
+                                  <StatusBadge kind="confirmed" label="Bestätigt" />
+                                ) : (
+                                  <StatusBadge
+                                    kind="draft"
+                                    label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
+                                  />
+                                )}
+                                {hasAusfall && (
+                                  <StatusBadge
+                                    kind="warning"
+                                    label="Ausfall: Assistenzkraft abwesend"
+                                  />
+                                )}
+                              </span>
                             </span>
                             {/* Zeile 2: Uhr-Badge + Uhrzeit (+ Vertretung rechts) auf Grauweiß */}
                             <span className="flex items-center gap-[3px] bg-[#f1f1ee] py-[2px] pl-[7px] pr-1 leading-none">

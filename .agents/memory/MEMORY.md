@@ -104,3 +104,5 @@
 - [E2E-Lanes Build-Race auf dist/](e2e-lanes-dist-build-race.md) — parallele api-shards bauen in dasselbe api-server/dist; MODULE_NOT_FOUND dist/index.mjs = transienter Race, Kette neu starten.
 - [aspect-ratio auf Grid-Items](aspect-ratio-grid-blowout.md) — aspect-ratio+stretch überträgt Inhaltshöhe als Mindestbreite auf die Spalte (Grid-Blowout); Fix min-w-0, nie overflow:hidden wenn Zeilen wachsen sollen.
 - [Ad-hoc-Screenshot-Skripte Dev-Stack](dev-screenshot-scripts.md) — view-toggle-grid explizit klicken; API via curl statt node-fetch (dev-login 401); Overlap-tolerantes Seeding mit Cleanup.
+- [UI-Text-Rename bricht E2E-Selektoren](ui-copy-rename-e2e-selectors.md) — nach Copy-Umbenennungen (z. B. neutral „Assistenzkraft") alte Strings per rg in e2e/ suchen und Selektoren mitziehen.
+- [Abwesenheit löscht Tagesdienste](absence-replaces-planned-shifts.md) — POST /shifts (Abwesenheit) löscht alle geplanten Dienste des Tages im Team; Koexistenz nur „Abwesenheit zuerst, Dienst danach".

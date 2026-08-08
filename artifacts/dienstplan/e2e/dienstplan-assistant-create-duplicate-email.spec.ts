@@ -50,7 +50,7 @@ async function gotoAssistentenAsAdmin(page: Page): Promise<void> {
   expect(loginRes.ok(), `Admin-Login fehlgeschlagen (${loginRes.status()})`).toBe(true);
   await page.goto("/assistenten");
   await expect(
-    page.getByRole("heading", { name: "Assistenten", exact: true }),
+    page.getByRole("heading", { name: "Assistenzkräfte", exact: true }),
   ).toBeVisible({ timeout: 30000 });
 }
 
@@ -91,7 +91,7 @@ test.describe("AssistentDialog: Doppelte E-Mail beim Anlegen", () => {
     // --- Anlege-Dialog öffnen ------------------------------------------------
     await page.getByRole("button", { name: "Neu anlegen" }).click();
     const dialog = page.getByRole("dialog");
-    await expect(dialog.getByText("Neuen Assistenten anlegen")).toBeVisible();
+    await expect(dialog.getByText("Neue Assistenzkraft anlegen")).toBeVisible();
 
     // --- Formular mit der bereits vergebenen E-Mail ausfüllen ----------------
     await dialog.getByPlaceholder("Max", { exact: true }).fill("Neu");

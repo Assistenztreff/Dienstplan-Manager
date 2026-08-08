@@ -203,6 +203,106 @@ test("Abwesenheitskalender: Zwei-Stufen-Klick, Mehrfachauswahl und Löschen im D
   }
 });
 
+// ── Smartphone (Task #714): Akkordeon-Pfad der Mehrfachauswahl ──────────────
+// Am Handy rendert der Kalender als Akkordeon (ein Monat pro Zeile, nur einer
+// offen). Die Auswahl lebt auf Komponentenebene und muss den Wechsel des
+// aufgeklappten Monats überleben; „Abwesenheit eintragen" legt den Zeitraum
+// auch über die Monatsgrenze hinweg an.
+test.describe("Smartphone-Akkordeon", () => {
+  test.use({ viewport: { width: 400, height: 800 } });
+
+  test("Mehrfachauswahl über die Monatsgrenze: Auswahl überlebt den Akkordeon-Wechsel, Zeitraum wird angelegt", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000); // Urlaubs-POSTs brauchen im Test-Stack ~5 s pro Tag.
+    await loginAsAdmin(page);
+    const assistant = await createAssistant(page);
+
+    // Monatspaar A→B: normal aktueller + nächster Monat; im Dezember stattdessen
+    // November→Dezember, damit beide Monate im angezeigten Jahr liegen.
+    const base = new Date().getMonth() === 11 ? -1 : 0;
+    const lastOfA = dateKey(0, base + 1); // Tag 0 des Folgemonats = letzter Tag von Monat A
+    const firstOfB = dateKey(1, base + 1);
+    const monthKeyA = lastOfA.slice(0, 7);
+    const monthKeyB = firstOfB.slice(0, 7);
+
+    try {
+      await page.goto("/abwesenheiten");
+      await page.getByTestId("toggle-abwesenheits-kalender").click();
+      const kalender = page.getByTestId("abwesenheits-kalender");
+      await expect(kalender).toBeVisible();
+
+      // Am Handy gibt es das Akkordeon statt des 6-spaltigen Jahresrasters.
+      const accordion = kalender.getByTestId("abwkal-accordion");
+      await expect(accordion).toBeVisible();
+      await expect(kalender.getByTestId("abwkal-grid")).toBeHidden();
+
+      await kalender.getByTestId("abwkal-person-filter").click();
+      await page.getByRole("option", { name: assistant.name }).click();
+
+      // Mehrfachauswahl aktivieren.
+      await kalender.getByTestId("abwkal-toggle-selection").click();
+      const selectionBar = kalender.getByTestId("abwkal-selection-bar");
+      await expect(selectionBar).toContainText("Mehrfachauswahl aktiv");
+
+      // Monat A aufklappen (der aktuelle Monat startet offen — nicht zuklappen).
+      const toggleA = accordion.getByTestId(`abwkal-acc-toggle-${monthKeyA}`);
+      if ((await toggleA.getAttribute("aria-expanded")) !== "true") {
+        await toggleA.click();
+      }
+      const dayA = accordion.getByTestId(`abwkal-day-${lastOfA}`);
+      // Togglen: wählen → abwählen → wieder wählen, ohne dass ein Dialog aufgeht.
+      await dayA.click();
+      await expect(selectionBar).toContainText("1 Tag ausgewählt");
+      await dayA.click();
+      // Leere Auswahl: Zähler verschwindet, Aktion ist deaktiviert.
+      await expect(dayA).not.toHaveAttribute("data-selected", "true");
+      await expect(
+        selectionBar.getByTestId("abwkal-create-from-selection"),
+      ).toBeDisabled();
+      await dayA.click();
+      await expect(dayA).toHaveAttribute("data-selected", "true");
+      await expect(page.getByTestId("abwkal-create-dialog")).toHaveCount(0);
+
+      // Monat B aufklappen (schließt Monat A) und ersten Tag dazuwählen.
+      await accordion.getByTestId(`abwkal-acc-toggle-${monthKeyB}`).click();
+      const dayB = accordion.getByTestId(`abwkal-day-${firstOfB}`);
+      await dayB.click();
+      await expect(selectionBar).toContainText("2 Tage ausgewählt");
+
+      // Zurück zu Monat A: die dortige Auswahl hat den Wechsel überlebt.
+      await toggleA.click();
+      await expect(accordion.getByTestId(`abwkal-day-${lastOfA}`)).toHaveAttribute(
+        "data-selected",
+        "true",
+      );
+      await expect(selectionBar).toContainText("2 Tage ausgewählt");
+
+      // Zeitraum über die Auswahl anlegen (2 Tage über die Monatsgrenze).
+      const createDialog = page.getByTestId("abwkal-create-dialog");
+      await selectionBar.getByTestId("abwkal-create-from-selection").click();
+      await expect(createDialog).toBeVisible();
+      await createDialog.getByTestId("abwkal-create-save").click();
+      await expect(createDialog).toHaveCount(0, { timeout: 30_000 });
+      await expect(selectionBar).toHaveCount(0);
+
+      // Beide Tage sind gefärbt — Monat A ist noch offen, für B umschalten.
+      await expect(accordion.getByTestId(`abwkal-day-${lastOfA}`)).toHaveAttribute(
+        "data-category",
+        "geplant",
+      );
+      await accordion.getByTestId(`abwkal-acc-toggle-${monthKeyB}`).click();
+      await expect(accordion.getByTestId(`abwkal-day-${firstOfB}`)).toHaveAttribute(
+        "data-category",
+        "geplant",
+      );
+    } finally {
+      await deleteShiftsOf(page, assistant.id);
+      await page.request.delete(`/api/users/${assistant.id}`);
+    }
+  });
+});
+
 test("Dienstplan-Popup: Abwesenheitskalender aus Kalender- und Tabellenansicht (Desktop + Tablet)", async ({
   page,
 }) => {

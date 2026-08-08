@@ -116,7 +116,7 @@ async function gotoAssistentenAsAdmin(page: Page): Promise<void> {
   expect(loginRes.ok(), `Admin-Login fehlgeschlagen (${loginRes.status()})`).toBe(true);
   await page.goto("/assistenten");
   await expect(
-    page.getByRole("heading", { name: "Assistenten", exact: true }),
+    page.getByRole("heading", { name: "Assistenzkräfte", exact: true }),
   ).toBeVisible({ timeout: 30000 });
 }
 
@@ -126,7 +126,7 @@ async function openEditDialog(page: Page, userId: number) {
   await card.scrollIntoViewIfNeeded();
   await card.getByRole("button", { name: "Bearbeiten" }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByText("Assistenten bearbeiten")).toBeVisible();
+  await expect(dialog.getByText("Assistenzkraft bearbeiten")).toBeVisible();
   return dialog;
 }
 
