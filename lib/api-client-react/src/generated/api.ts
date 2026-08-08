@@ -25,6 +25,8 @@ import type {
   AuthUser,
   BrandingSettings,
   BrandingSettingsInput,
+  BulkAbsenceInput,
+  BulkAbsenceResult,
   CalendarToken,
   ChangePassword200,
   ChangePasswordInput,
@@ -1391,6 +1393,78 @@ export const useCreateShift = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getCreateShiftMutationOptions(options));
+    }
+
+export const getBulkCreateAbsenceUrl = () => {
+
+
+
+
+  return `/api/shifts/bulk-absence`
+}
+
+/**
+ * Legt mehrere Abwesenheits-Tage derselben Art für eine Assistenzkraft transaktional in EINEM Request an (ganz oder gar nicht). Tage mit bereits vorhandener Abwesenheit desselben Typs werden übersprungen und gemeldet statt mit 409 abzubrechen. Der Urlaubszähler wird einmal am Ende fortgeschrieben, nicht pro Tag. Es gelten dieselben Regeln wie beim Einzel-Anlegen (Team-Scope, Selbstservice nur für eigene Abwesenheiten, Ersetzung geplanter Dienste am Abwesenheitstag, Vertragszeitraum-Guard für Urlaub, Vorausplanungs-Limit).
+ * @summary Abwesenheits-Zeitraum als Sammelauftrag anlegen
+ */
+export const bulkCreateAbsence = async (bulkAbsenceInput: BulkAbsenceInput, options?: RequestInit): Promise<BulkAbsenceResult> => {
+
+  return customFetch<BulkAbsenceResult>(getBulkCreateAbsenceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      bulkAbsenceInput,)
+  }
+);}
+
+
+
+
+export const getBulkCreateAbsenceMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkCreateAbsence>>, TError,{data: BodyType<BulkAbsenceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bulkCreateAbsence>>, TError,{data: BodyType<BulkAbsenceInput>}, TContext> => {
+
+const mutationKey = ['bulkCreateAbsence'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkCreateAbsence>>, {data: BodyType<BulkAbsenceInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  bulkCreateAbsence(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BulkCreateAbsenceMutationResult = NonNullable<Awaited<ReturnType<typeof bulkCreateAbsence>>>
+    export type BulkCreateAbsenceMutationBody = BodyType<BulkAbsenceInput>
+    export type BulkCreateAbsenceMutationError = ErrorType<void>
+
+    /**
+ * @summary Abwesenheits-Zeitraum als Sammelauftrag anlegen
+ */
+export const useBulkCreateAbsence = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkCreateAbsence>>, TError,{data: BodyType<BulkAbsenceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof bulkCreateAbsence>>,
+        TError,
+        {data: BodyType<BulkAbsenceInput>},
+        TContext
+      > => {
+      return useMutation(getBulkCreateAbsenceMutationOptions(options));
     }
 
 export const getGetShiftUrl = (id: number,) => {

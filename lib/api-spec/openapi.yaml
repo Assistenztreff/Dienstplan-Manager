@@ -408,6 +408,44 @@ paths:
             Tag (code "absence_duplicate"). Im zweiten Fall wird kein Eintrag
             angelegt und der Urlaubsanspruch nicht erneut belastet.
 
+  /shifts/bulk-absence:
+    post:
+      operationId: bulkCreateAbsence
+      tags: [shifts]
+      summary: Abwesenheits-Zeitraum als Sammelauftrag anlegen
+      description: >-
+        Legt mehrere Abwesenheits-Tage derselben Art für eine Assistenzkraft
+        transaktional in EINEM Request an (ganz oder gar nicht). Tage mit
+        bereits vorhandener Abwesenheit desselben Typs werden übersprungen und
+        gemeldet statt mit 409 abzubrechen. Der Urlaubszähler wird einmal am
+        Ende fortgeschrieben, nicht pro Tag. Es gelten dieselben Regeln wie
+        beim Einzel-Anlegen (Team-Scope, Selbstservice nur für eigene
+        Abwesenheiten, Ersetzung geplanter Dienste am Abwesenheitstag,
+        Vertragszeitraum-Guard für Urlaub, Vorausplanungs-Limit).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkAbsenceInput"
+      responses:
+        "201":
+          description: >-
+            Zeitraum angelegt (ggf. mit übersprungenen Duplikat-Tagen). Bei
+            createdCount 0 bestanden an allen Tagen bereits Abwesenheiten
+            dieses Typs.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkAbsenceResult"
+        "400":
+          description: >-
+            Ungültige Anfrage. U. a. wenn ein Urlaubstag außerhalb jedes
+            Vertragszeitraums der Assistenzkraft liegt (code
+            "vacation_outside_contract") — dann wird KEIN Tag angelegt.
+        "403":
+          description: Keine Berechtigung (fremde Person oder fremdes Team).
+
   /shifts/{id}:
     get:
       operationId: getShift
@@ -2602,6 +2640,64 @@ components:
           description: >-
             Unbezahlte Pausenminuten (Info-Kennzahl; reduziert NICHT die
             gewerteten Stunden).
+
+    BulkAbsenceInput:
+      type: object
+      required: [userId, type, days]
+      properties:
+        userId:
+          type: integer
+        teamId:
+          type: integer
+          description: Optionaler Team-Kontext; muss ein erlaubtes Team sein.
+        type:
+          type: string
+          description: Abwesenheitsart — nur Abwesenheiten sind als Sammelauftrag erlaubt.
+          enum: [vacation, sick, freizeitausgleich, kind_krank, freistellung, abgesagt_ag, abgesagt_an, urlaubsabgeltung]
+        days:
+          type: array
+          minItems: 1
+          maxItems: 92
+          description: >-
+            Ein Eintrag pro Kalendertag (Start/Ende desselben Tages, i. d. R.
+            00:00–23:59). Doppelte Kalendertage innerhalb der Liste werden
+            zusammengefasst.
+          items:
+            type: object
+            required: [startTime, endTime]
+            properties:
+              startTime:
+                type: string
+                format: date-time
+              endTime:
+                type: string
+                format: date-time
+        shiftModelId:
+          type: ["integer", "null"]
+          description: >-
+            Optionales Schichtmodell: liefert an Tagen ohne geplanten Dienst
+            die Standardzeiten (wie beim Einzel-Anlegen).
+        notes:
+          type: string
+          maxLength: 500
+
+    BulkAbsenceResult:
+      type: object
+      required: [createdCount, skippedCount, skippedDates, shiftIds]
+      properties:
+        createdCount:
+          type: integer
+        skippedCount:
+          type: integer
+        skippedDates:
+          type: array
+          description: Übersprungene Kalendertage (yyyy-MM-dd) mit bereits vorhandener Abwesenheit desselben Typs.
+          items:
+            type: string
+        shiftIds:
+          type: array
+          items:
+            type: integer
 
     ShiftUpdate:
       type: object

@@ -99,7 +99,8 @@
 - [MonthGrid Klick-Verhalten (3.4)](monthgrid-empty-cell-click.md) — Zellenklick/Enter wählt nur; Anlegen NUR über day-add-Plus/Tagesleiste; Zelle = div role=button, Plus echter Button (Bubbling-Stopp).
 - [Assistenz-Abwesenheits-Selbstservice](assistant-absence-selfservice.md) — POST/DELETE /shifts für reine Assistenzkräfte: Authz vor Inhalt, 404 statt Orakel, teamId aus Schichtmodell ableiten (First-Team-Fallback bucht sonst falsch).
 - [xlsx dynamic import default](xlsx-dynamic-import-default.md) — `(await import("xlsx")).default` ist im Vite-Dev undefined; `m.default ?? m` nutzen, sonst scheitern Excel-Exporte still.
-- [Urlaubs-POSTs in E2E langsam](e2e-vacation-post-slow.md) — ~5s pro vacation-POST (Urlaubskonto-Recalc); mehrtägige UI-Anlage braucht ≥30s-Timeout, Seeding besser per API.
+- [Urlaubs-POSTs in E2E langsam](e2e-vacation-post-slow.md) — ~5s pro vacation-POST (Urlaubskonto-Recalc); Zeiträume besser via POST /shifts/bulk-absence seeden (ein Request).
+- [Bulk-Absence-Endpunkt](bulk-absence-endpoint.md) — Sammel-Route spiegelt Einzel-Route; Dbx-Executor für Schreib-Helfer; Paritätstest Bulk vs. Einzel-Deltas; kein Client-Dedup-Prefilter mehr.
 - [PDF-Stundennachweis-Export zurückgestellt](pdf-statement-export-deferred.md) — export-pdf-button existiert nicht mehr; StatementExportDialog/fix-only-hint unerreichbar; keine Specs darauf aufbauen.
 - [E2E-Lanes Build-Race auf dist/](e2e-lanes-dist-build-race.md) — parallele api-shards bauen in dasselbe api-server/dist; MODULE_NOT_FOUND dist/index.mjs = transienter Race, Kette neu starten.
 - [aspect-ratio auf Grid-Items](aspect-ratio-grid-blowout.md) — aspect-ratio+stretch überträgt Inhaltshöhe als Mindestbreite auf die Spalte (Grid-Blowout); Fix min-w-0, nie overflow:hidden wenn Zeilen wachsen sollen.

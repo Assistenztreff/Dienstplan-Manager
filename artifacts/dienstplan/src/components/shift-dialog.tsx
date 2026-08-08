@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { format } from "date-fns";
+import { eachDayOfInterval, format } from "date-fns";
 import {
   useCreateShift,
+  useBulkCreateAbsence,
   useUpdateShift,
   useDeleteShift,
   useListShifts,
@@ -9,6 +10,7 @@ import {
   useGetAllowanceSettings,
   getListShiftsQueryKey,
   ApiError,
+  type BulkAbsenceInput,
   type ShiftInputType,
   type ShiftUpdateType,
 } from "@workspace/api-client-react";
@@ -41,7 +43,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { CalendarIcon, Check, ChevronsUpDown, Trash2 } from "lucide-react";
+import { CalendarIcon, Check, ChevronsUpDown, Trash2, X } from "lucide-react";
 import { de } from "date-fns/locale";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
@@ -232,6 +234,7 @@ export function ShiftDialog({
 }: ShiftDialogProps) {
   const queryClient = useQueryClient();
   const createShift = useCreateShift();
+  const bulkCreateAbsence = useBulkCreateAbsence();
   const updateShift = useUpdateShift();
   const deleteShift = useDeleteShift();
   // Dienste STRIKT team-bezogen laden: ohne Filter kämen Schichtmodelle
@@ -269,6 +272,11 @@ export function ShiftDialog({
   // damit iOS/Safari beim Öffnen des Dialogs keinen eigenen Kalender aufpoppt
   // und die Position vorhersehbar bleibt.
   const [dateOpen, setDateOpen] = useState(false);
+  // Optionales Bis-Datum für Abwesenheiten (Task #715): leer = ein einzelner
+  // Tag wie bisher; gesetzt = der ganze Zeitraum wird als Sammelauftrag in
+  // EINEM Request angelegt (transaktional, Urlaubskonto einmal am Ende).
+  const [absenceEndDate, setAbsenceEndDate] = useState("");
+  const [endDateOpen, setEndDateOpen] = useState(false);
 
   function modelFromSelection(sel: string) {
     if (!sel.startsWith("model:")) return undefined;
@@ -339,6 +347,8 @@ export function ShiftDialog({
       setBulkCreated(new Set());
       setBulkConflicts(null);
       setDateOpen(false);
+      setAbsenceEndDate("");
+      setEndDateOpen(false);
       setPauseTouched(false);
       setForm(buildInitialForm());
     }
@@ -582,10 +592,61 @@ export function ShiftDialog({
 
   async function handleSave(force = false) {
     if (!validate()) return;
+    // Bis-Datum nur für Abwesenheiten im Einzel-Anlege-Modus relevant.
+    const absenceRangeEnd =
+      !isEditing && !isBulk && isAbsence && absenceEndDate && absenceEndDate !== form.date
+        ? absenceEndDate
+        : null;
+    if (absenceRangeEnd && absenceRangeEnd < form.date) {
+      setErrors({ date: "Das Bis-Datum darf nicht vor dem Datum liegen." });
+      return;
+    }
     setSaving(true);
     try {
       const { startIso, endIso } = buildTimes(form.date);
       const { type, shiftModelId } = deriveTypeAndModel();
+
+      // Zeitraum-Anlage (Task #715): alle Tage von Datum bis Bis-Datum in
+      // EINEM Sammelauftrag; Tage mit bestehender Abwesenheit desselben Typs
+      // überspringt der Server.
+      if (absenceRangeEnd) {
+        const rangeDays = eachDayOfInterval({
+          start: new Date(`${form.date}T00:00:00`),
+          end: new Date(`${absenceRangeEnd}T00:00:00`),
+        });
+        const result = await bulkCreateAbsence.mutateAsync({
+          data: {
+            userId: Number(form.userId),
+            type: type as BulkAbsenceInput["type"],
+            days: rangeDays.map((d) => {
+              const key = format(d, "yyyy-MM-dd");
+              return {
+                startTime: new Date(`${key}T00:00:00`).toISOString(),
+                endTime: new Date(`${key}T23:59:59`).toISOString(),
+              };
+            }),
+            shiftModelId,
+            notes: form.notes || undefined,
+            ...(teamId != null ? { teamId } : {}),
+          },
+        });
+        if (result.createdCount === 0) {
+          setErrors({
+            notes: "Für den gewählten Zeitraum bestehen bereits Abwesenheiten dieses Typs.",
+          });
+          return;
+        }
+        await invalidate();
+        // Soft-Close-Hinweis nur für tatsächlich angelegte Tage.
+        const skippedKeys = new Set(result.skippedDates);
+        for (const d of rangeDays) {
+          if (!skippedKeys.has(format(d, "yyyy-MM-dd"))) {
+            void warnIfMonthClosed(d, teamId ?? null);
+          }
+        }
+        onClose();
+        return;
+      }
 
       if (isEditing && editShift) {
         const data = {
@@ -993,6 +1054,88 @@ export function ShiftDialog({
                 </DialogContent>
               </Dialog>
               {errors.date && <p className="text-xs text-destructive">{errors.date}</p>}
+            </div>
+          )}
+
+          {/* Optionales Bis-Datum (nur Abwesenheiten, Einzel-Anlege-Modus):
+              leer = ein Tag wie bisher; gesetzt = der ganze Zeitraum wird als
+              Sammelauftrag angelegt (Task #715). */}
+          {!isEditing && !isBulk && isAbsence && (
+            <div className="space-y-1.5">
+              <Label>Bis (optional)</Label>
+              <div className="flex gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  data-testid="shift-dialog-end-date"
+                  data-value={absenceEndDate}
+                  onClick={() => setEndDateOpen(true)}
+                  className={cn(
+                    "w-full justify-start font-normal",
+                    !absenceEndDate && "text-muted-foreground",
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                  {absenceEndDate
+                    ? format(new Date(`${absenceEndDate}T00:00:00`), "dd.MM.yyyy")
+                    : "Nur dieser Tag"}
+                </Button>
+                {absenceEndDate && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0"
+                    aria-label="Bis-Datum entfernen"
+                    data-testid="shift-dialog-end-date-clear"
+                    onClick={() => setAbsenceEndDate("")}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Mit Bis-Datum wird die Abwesenheit für den ganzen Zeitraum in einem
+                Schritt eingetragen.
+              </p>
+              <Dialog open={endDateOpen} onOpenChange={setEndDateOpen}>
+                <DialogContent
+                  className="w-auto max-w-[calc(100vw-2rem)] p-4"
+                  data-testid="shift-dialog-end-date-picker"
+                  onOpenAutoFocus={(e) => e.preventDefault()}
+                >
+                  <DialogHeader>
+                    <DialogTitle className="text-base">Bis-Datum wählen</DialogTitle>
+                  </DialogHeader>
+                  <Calendar
+                    mode="single"
+                    locale={de}
+                    showOutsideDays={false}
+                    captionLayout="dropdown"
+                    startMonth={new Date(new Date().getFullYear() - 3, 0)}
+                    endMonth={new Date(new Date().getFullYear() + 3, 11)}
+                    disabled={
+                      form.date ? { before: new Date(`${form.date}T00:00:00`) } : undefined
+                    }
+                    selected={
+                      absenceEndDate ? new Date(`${absenceEndDate}T00:00:00`) : undefined
+                    }
+                    defaultMonth={
+                      absenceEndDate
+                        ? new Date(`${absenceEndDate}T00:00:00`)
+                        : form.date
+                          ? new Date(`${form.date}T00:00:00`)
+                          : new Date(year, month - 1, 1)
+                    }
+                    onSelect={(d) => {
+                      if (!d) return;
+                      setAbsenceEndDate(format(d, "yyyy-MM-dd"));
+                      setEndDateOpen(false);
+                    }}
+                    className="mx-auto"
+                  />
+                </DialogContent>
+              </Dialog>
             </div>
           )}
 

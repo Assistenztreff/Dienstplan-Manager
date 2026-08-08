@@ -618,6 +618,57 @@ export interface ShiftInput {
   pauseMinutes?: number;
 }
 
+/**
+ * Abwesenheitsart — nur Abwesenheiten sind als Sammelauftrag erlaubt.
+ */
+export type BulkAbsenceInputType = typeof BulkAbsenceInputType[keyof typeof BulkAbsenceInputType];
+
+
+export const BulkAbsenceInputType = {
+  vacation: 'vacation',
+  sick: 'sick',
+  freizeitausgleich: 'freizeitausgleich',
+  kind_krank: 'kind_krank',
+  freistellung: 'freistellung',
+  abgesagt_ag: 'abgesagt_ag',
+  abgesagt_an: 'abgesagt_an',
+  urlaubsabgeltung: 'urlaubsabgeltung',
+} as const;
+
+export type BulkAbsenceInputDaysItem = {
+  startTime: string;
+  endTime: string;
+};
+
+export interface BulkAbsenceInput {
+  userId: number;
+  /** Optionaler Team-Kontext; muss ein erlaubtes Team sein. */
+  teamId?: number;
+  /** Abwesenheitsart — nur Abwesenheiten sind als Sammelauftrag erlaubt. */
+  type: BulkAbsenceInputType;
+  /**
+     * Ein Eintrag pro Kalendertag (Start/Ende desselben Tages, i. d. R. 00:00–23:59). Doppelte Kalendertage innerhalb der Liste werden zusammengefasst.
+     * @minItems 1
+     * @maxItems 92
+     */
+  days: BulkAbsenceInputDaysItem[];
+  /**
+     * Optionales Schichtmodell: liefert an Tagen ohne geplanten Dienst die Standardzeiten (wie beim Einzel-Anlegen).
+     * @nullable
+     */
+  shiftModelId?: number | null;
+  /** @maxLength 500 */
+  notes?: string;
+}
+
+export interface BulkAbsenceResult {
+  createdCount: number;
+  skippedCount: number;
+  /** Übersprungene Kalendertage (yyyy-MM-dd) mit bereits vorhandener Abwesenheit desselben Typs. */
+  skippedDates: string[];
+  shiftIds: number[];
+}
+
 export type ShiftUpdateType = typeof ShiftUpdateType[keyof typeof ShiftUpdateType];
 
 

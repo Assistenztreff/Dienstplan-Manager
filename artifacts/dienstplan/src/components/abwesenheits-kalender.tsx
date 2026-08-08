@@ -17,12 +17,12 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  useCreateShift,
+  useBulkCreateAbsence,
   useDeleteShift,
   useListShifts,
   useListUsers,
   ApiError,
-  type ShiftInputType,
+  type BulkAbsenceInput,
   type User,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -138,7 +138,7 @@ export function AbwesenheitsKalender() {
     query: { enabled: canManage },
   } as Parameters<typeof useListUsers>[1]) as { data?: User[] };
   const { data: allShifts } = useListShifts();
-  const createShift = useCreateShift();
+  const bulkCreateAbsence = useBulkCreateAbsence();
   const deleteShift = useDeleteShift();
 
   const assistants = useMemo(
@@ -379,68 +379,55 @@ export function AbwesenheitsKalender() {
     const start = new Date(`${createDraft.from}T00:00:00`);
     const end = new Date(`${createDraft.to}T00:00:00`);
     const days = eachDayOfInterval({ start, end });
-    // Tage mit bereits vorhandener Abwesenheit desselben Typs überspringen
-    // (gleiche Dedup-Regel wie das klassische Formular).
-    const existing = new Set(
-      ((allShifts ?? []) as AbsenceShiftLite[])
-        .filter((s) => s.userId === uid && s.type === createType)
-        .map((s) => dayKeyOf(new Date(s.startTime))),
-    );
-    const toCreate = days.filter((d) => !existing.has(dayKeyOf(d)));
-    if (toCreate.length === 0) {
-      setCreateError("Für den gewählten Zeitraum bestehen bereits Abwesenheiten dieses Typs.");
-      return;
-    }
     setSaving(true);
-    // Bereits erfolgreich angelegte Tage merken, damit ein erneuter Versuch
-    // nach einem Teilfehler nicht am serverseitigen Duplikatschutz klemmt.
-    const createdKeys = new Set<string>();
     try {
-      // Sequentiell anlegen (Read-Modify-Write des Urlaubskontos serverseitig).
-      for (const day of toCreate) {
-        const key = dayKeyOf(day);
-        await createShift.mutateAsync({
-          data: {
-            userId: uid,
-            startTime: new Date(`${key}T00:00:00`).toISOString(),
-            endTime: new Date(`${key}T23:59:59`).toISOString(),
-            type: createType as ShiftInputType,
-            shiftModelId: null,
-          },
-        });
-        createdKeys.add(key);
+      // Sammelauftrag (Task #715): der ganze Zeitraum in EINEM Request,
+      // transaktional (ganz oder gar nicht). Tage mit bestehender Abwesenheit
+      // desselben Typs überspringt der Server und meldet sie zurück.
+      const result = await bulkCreateAbsence.mutateAsync({
+        data: {
+          userId: uid,
+          type: createType as BulkAbsenceInput["type"],
+          days: days.map((day) => {
+            const key = dayKeyOf(day);
+            return {
+              startTime: new Date(`${key}T00:00:00`).toISOString(),
+              endTime: new Date(`${key}T23:59:59`).toISOString(),
+            };
+          }),
+          shiftModelId: null,
+        },
+      });
+      if (result.createdCount === 0) {
+        setCreateError("Für den gewählten Zeitraum bestehen bereits Abwesenheiten dieses Typs.");
+        return;
       }
       await invalidate();
-      for (const day of toCreate) void warnIfMonthClosed(day, null);
+      const skippedKeys = new Set(result.skippedDates);
+      for (const day of days) {
+        if (!skippedKeys.has(dayKeyOf(day))) void warnIfMonthClosed(day, null);
+      }
       toast({
         title: `${ABSENCE_TYPE_LABELS[createType] ?? "Abwesenheit"} eingetragen`,
-        description: `${toCreate.length} ${toCreate.length === 1 ? "Tag" : "Tage"} angelegt`,
+        description:
+          `${result.createdCount} ${result.createdCount === 1 ? "Tag" : "Tage"} angelegt` +
+          (result.skippedCount > 0 ? `, ${result.skippedCount} bereits vorhanden` : ""),
       });
       setCreateDraft(null);
       setSelectedDates([]);
       setSelectionMode(false);
     } catch (err) {
-      // Teilfehler: Serverdaten sofort nachladen — die bereits angelegten Tage
-      // landen dadurch in `existing` und werden beim erneuten Speichern
-      // automatisch übersprungen.
-      if (createdKeys.size > 0) await invalidate();
-      // Hinweis auf Teil-Anlage voranstellen, damit klar ist, dass bereits
-      // angelegte Tage beim erneuten Versuch übersprungen werden.
-      const partialPrefix =
-        createdKeys.size > 0
-          ? `${createdKeys.size} ${createdKeys.size === 1 ? "Tag wurde" : "Tage wurden"} bereits angelegt (werden beim erneuten Versuch übersprungen). `
-          : "";
       const planMsg = planUpgradeMessage(err);
       if (err instanceof ApiError && err.status === 401) {
         setCreateError("Sitzung abgelaufen. Bitte Seite neu laden und erneut anmelden.");
       } else if (planMsg) {
-        setCreateError(partialPrefix + planMsg);
+        setCreateError(planMsg);
       } else if (err instanceof ApiError && err.status === 403) {
-        setCreateError(partialPrefix + "Keine Berechtigung zum Eintragen von Abwesenheiten.");
+        setCreateError("Keine Berechtigung zum Eintragen von Abwesenheiten.");
       } else if (err instanceof ApiError && err.status === 400) {
-        setCreateError(partialPrefix + readableApiError(err, "Eintragen fehlgeschlagen. Bitte erneut versuchen."));
+        setCreateError(readableApiError(err, "Eintragen fehlgeschlagen. Bitte erneut versuchen."));
       } else {
-        setCreateError(partialPrefix + "Eintragen fehlgeschlagen. Bitte erneut versuchen.");
+        setCreateError("Eintragen fehlgeschlagen. Bitte erneut versuchen.");
       }
     } finally {
       setSaving(false);

@@ -16,6 +16,7 @@ import type { Response } from "express";
 import {
   ListShiftsQueryParams,
   CreateShiftBody,
+  BulkCreateAbsenceBody,
   GetShiftParams,
   UpdateShiftParams,
   UpdateShiftBody,
@@ -45,6 +46,11 @@ import { userHasFeature, getUserLimit } from "../lib/plan";
 import { resolveAllowanceOps } from "../lib/allowance-resolve";
 
 const router = Router();
+
+// Transaktions-Executor: Schreib-Helfer akzeptieren wahlweise die globale
+// db-Instanz oder eine offene Drizzle-Transaktion (Sammel-Anlage, s. u.).
+type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type Dbx = typeof db | DbTx;
 
 const SHIFT_SELECT = {
   id: shiftsTable.id,
@@ -121,7 +127,7 @@ async function dailyTargetHours(userId: number, date: Date): Promise<number> {
 // (Lohnausfallprinzip): ein 24h-Dienst schreibt 24h gut, ein normaler
 // Abwesenheitstag die vertraglichen Tages-Soll-Stunden. Keine Zuschläge hier,
 // da Abwesenheiten kein Arbeits-Schichtmodell sind.
-async function bookAbsenceTimeTracking(shift: AbsenceShift): Promise<void> {
+async function bookAbsenceTimeTracking(shift: AbsenceShift, dbx: Dbx = db): Promise<void> {
   const target = await dailyTargetHours(shift.userId, new Date(shift.startTime));
   const dailyHours = await absenceHoursFor(
     shift.userId,
@@ -130,7 +136,7 @@ async function bookAbsenceTimeTracking(shift: AbsenceShift): Promise<void> {
     shift.endTime,
     target
   );
-  await db.insert(timeTrackingTable).values({
+  await dbx.insert(timeTrackingTable).values({
     userId: shift.userId,
     teamId: shift.teamId,
     shiftId: shift.id,
@@ -168,15 +174,19 @@ async function removeAbsenceTimeTracking(shiftId: number): Promise<void> {
 // Urlaubszählers nach jedem Vertrags-Speichern).
 
 // Schreibt den genommenen Urlaub (in Stunden) auf einem konkreten Vertrag fort.
-// Geht nie unter null.
+// Geht nie unter null. Atomarer SQL-Inkrement statt Read-Modify-Write in JS:
+// gleichzeitige Buchungen (zwei Requests, Einzel- neben Sammel-Anlage) können
+// so keine Updates verlieren.
 async function applyVacationDelta(
   contract: { id: number; vacationHoursUsed: number },
-  deltaHours: number
+  deltaHours: number,
+  dbx: Dbx = db
 ): Promise<void> {
-  const next = contract.vacationHoursUsed + deltaHours;
-  await db
+  await dbx
     .update(contractsTable)
-    .set({ vacationHoursUsed: next < 0 ? 0 : Math.round(next * 100) / 100 })
+    .set({
+      vacationHoursUsed: sql`GREATEST(0, ROUND((${contractsTable.vacationHoursUsed} + ${deltaHours})::numeric, 2))::double precision`,
+    })
     .where(eq(contractsTable.id, contract.id));
 }
 
@@ -416,7 +426,7 @@ async function storeShiftMetrics(shift: {
   shiftModelId: number | null;
   startTime: Date;
   endTime: Date;
-}): Promise<void> {
+}, dbx: Dbx = db): Promise<void> {
   const absence = isAbsenceType(shift.type);
   // Bei Abwesenheit zählen die geplanten Schichtstunden (Lohnausfallprinzip):
   // 24h-Dienst → 24h, normaler Tag → vertragliche Tages-Soll-Stunden. Bei
@@ -445,7 +455,7 @@ async function storeShiftMetrics(shift: {
     window,
     state
   );
-  await db.update(shiftsTable).set(metrics).where(eq(shiftsTable.id, shift.id));
+  await dbx.update(shiftsTable).set(metrics).where(eq(shiftsTable.id, shift.id));
 }
 
 type ShiftConflict = {
@@ -668,9 +678,9 @@ async function findPlannedWorkShiftsForDay(
 // Entfernt eine geplante Arbeitsschicht samt zugehöriger Zeiterfassung. Wird eine
 // Abwesenheit angelegt, die sie "überschreibt", bliebe der Dienst sonst als
 // Doppelbuchung in Soll/Zuschlägen stehen.
-async function deleteReplacedWorkShift(shiftId: number): Promise<void> {
-  await db.delete(timeTrackingTable).where(eq(timeTrackingTable.shiftId, shiftId));
-  await db.delete(shiftsTable).where(eq(shiftsTable.id, shiftId));
+async function deleteReplacedWorkShift(shiftId: number, dbx: Dbx = db): Promise<void> {
+  await dbx.delete(timeTrackingTable).where(eq(timeTrackingTable.shiftId, shiftId));
+  await dbx.delete(shiftsTable).where(eq(shiftsTable.id, shiftId));
 }
 
 // Leitet Start/Ende eines Abwesenheits-Datums aus den Standardzeiten eines
@@ -956,6 +966,213 @@ router.post("/shifts", requireAuth, async (req, res): Promise<void> => {
     .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
     .where(eq(shiftsTable.id, shift.id));
   res.status(201).json(withUser);
+});
+
+// Sammel-Anlage eines Abwesenheits-Zeitraums (Task #715): legt N Kalendertage
+// derselben Abwesenheitsart transaktional in EINEM Request an. Motivation:
+// Die Einzel-Anlage kostet pro Tag einen vollen Request inkl. Urlaubskonto-
+// Fortschreibung (~Sekunden), ein mehrwöchiger Urlaub dauerte Minuten und
+// konnte bei Netzwerkfehlern halb angelegt liegen bleiben. Regeln identisch
+// zum Einzel-POST; Unterschiede bewusst:
+//  • Duplikate (vorhandene Abwesenheit desselben Typs am Tag) werden
+//    ÜBERSPRUNGEN und gemeldet statt mit 409 abzubrechen.
+//  • Der Urlaubszähler wird EINMAL am Ende fortgeschrieben (gebündelt je
+//    aktivem Vertrag), nicht pro Tag.
+//  • Scheitert irgendein Tag (z. B. Urlaub außerhalb des Vertrags), wird
+//    NICHTS angelegt (Transaktion, kein Teil-Zeitraum).
+router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void> => {
+  const body = BulkCreateAbsenceBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Invalid request body" });
+    return;
+  }
+  const { userId, type, shiftModelId } = body.data;
+
+  // Authz identisch zum Einzel-POST — VOR jeder inhaltlichen Prüfung (kein
+  // Daten-Orakel): reine Assistenzkräfte dürfen nur EIGENE Abwesenheiten
+  // eintragen (der Typ ist per Schema bereits auf Abwesenheiten beschränkt).
+  const isAdmin = isAdminLikeRole(req.session.role!);
+  const teamleiterTeams = isAdmin ? [] : await getTeamleiterTeamIds(req.session.userId!);
+  const isPrivileged = isAdmin || teamleiterTeams.length > 0;
+  if (!isPrivileged && userId !== req.session.userId) {
+    res.status(403).json({ error: "Keine Berechtigung" });
+    return;
+  }
+  const effectiveTeams = isAdmin ? undefined : teamleiterTeams;
+
+  // teamId-Ableitung aus dem Schichtmodell (Mehr-Team-Assistenzkräfte, §3) —
+  // gleiche Logik wie beim Einzel-POST.
+  let requestedTeamId = body.data.teamId ?? undefined;
+  if (!isPrivileged && requestedTeamId == null && shiftModelId != null) {
+    const [model] = await db
+      .select({ teamId: shiftModelsTable.teamId })
+      .from(shiftModelsTable)
+      .where(eq(shiftModelsTable.id, shiftModelId))
+      .limit(1);
+    if (model && (await getAllowedTeamIds(req.session.userId!)).includes(model.teamId)) {
+      requestedTeamId = model.teamId;
+    }
+  }
+
+  const write = await resolveWriteTeamId(
+    req.session.userId!,
+    requestedTeamId,
+    effectiveTeams?.length ? effectiveTeams : undefined,
+  );
+  if (!write.ok) {
+    if (write.reason === "forbidden") {
+      res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
+    } else {
+      res.status(400).json({ error: "Kein Team zugeordnet" });
+    }
+    return;
+  }
+  if (!(await isUserMemberOfTeam(userId, write.teamId))) {
+    res.status(403).json({ error: "Nutzer gehört nicht zu diesem Team" });
+    return;
+  }
+
+  // Kalendertage normalisieren und deduplizieren (ein Eintrag pro Tag,
+  // aufsteigend). Ohne Dedupe würden doppelte Tage im selben Request den
+  // Duplikatschutz umgehen (die Vorprüfung sieht nur Bestandsdaten).
+  const dayMap = new Map<string, { startTime: Date; endTime: Date }>();
+  for (const d of body.data.days) {
+    // Jeder Eintrag muss ein einzelner Kalendertag sein (Ende nach Beginn,
+    // max. 24 h): sonst ließe sich das 92-Tage-Limit über EINEN
+    // monatelangen Eintrag umgehen oder ein negatives Intervall speichern.
+    const durationMs = d.endTime.getTime() - d.startTime.getTime();
+    if (durationMs <= 0 || durationMs > 24 * 60 * 60 * 1000) {
+      res.status(400).json({
+        error:
+          "Ungültiger Tageseintrag: Ende muss nach dem Beginn liegen und innerhalb von 24 Stunden.",
+      });
+      return;
+    }
+    const key = new Date(d.startTime).toISOString().split("T")[0]!;
+    if (!dayMap.has(key)) dayMap.set(key, { startTime: d.startTime, endTime: d.endTime });
+  }
+  const days = [...dayMap.entries()].sort(([a], [b]) => a.localeCompare(b));
+
+  // Free-Limit (historyMonths) gegen den SPÄTESTEN Tag — ein Verstoß blockt
+  // den gesamten Zeitraum (kein Teil-Zeitraum).
+  const latest = days[days.length - 1]![1].startTime;
+  if (await forwardPlanningBlocked(write.teamId, req.session.userId!, latest, res)) {
+    return;
+  }
+
+  // URLAUB außerhalb des Vertragszeitraums: pro Tag prüfen (gleiche Semantik
+  // wie N Einzel-POSTs, deckt auch Zeiträume über einen Vertragswechsel ab) —
+  // VOR allen Seiteneffekten, ganz oder gar nicht.
+  if (type === "vacation") {
+    for (const [, t] of days) {
+      const msg = await vacationOutsideContractError(userId, write.teamId, t.startTime, t.endTime);
+      if (msg) {
+        res.status(400).json({ error: msg, code: "vacation_outside_contract" });
+        return;
+      }
+    }
+  }
+
+  // Schichtmodell muss zum Ziel-Team gehören; Standardzeiten einmal laden.
+  let modelDefaults: { start: string; end: string } | null = null;
+  if (shiftModelId != null) {
+    if (!(await isShiftModelInTeam(shiftModelId, write.teamId))) {
+      res.status(403).json({ error: "Schichtmodell gehört nicht zu diesem Team" });
+      return;
+    }
+    const [model] = await db
+      .select({
+        defaultStartTime: shiftModelsTable.defaultStartTime,
+        defaultEndTime: shiftModelsTable.defaultEndTime,
+      })
+      .from(shiftModelsTable)
+      .where(eq(shiftModelsTable.id, shiftModelId));
+    if (model?.defaultStartTime && model?.defaultEndTime) {
+      modelDefaults = { start: model.defaultStartTime, end: model.defaultEndTime };
+    }
+  }
+
+  // Duplikat-Vorprüfung: Tage mit bestehender Abwesenheit desselben Typs
+  // überspringen (Frontend-Verhalten der bisherigen Schleife, nur serverseitig
+  // verlässlich).
+  const skippedDates: string[] = [];
+  const toCreate: Array<{ key: string; startTime: Date; endTime: Date }> = [];
+  for (const [key, t] of days) {
+    const duplicate = await findDuplicateAbsence(userId, type, t.startTime, null);
+    if (duplicate) skippedDates.push(key);
+    else toCreate.push({ key, ...t });
+  }
+
+  const createdShifts = await db.transaction(async (tx) => {
+    const created: (typeof shiftsTable.$inferSelect)[] = [];
+    for (const day of toCreate) {
+      // Abwesenheits-Zeiten auflösen wie beim Einzel-POST (Lohnausfallprinzip):
+      // geplanter Dienst am Tag → Zeiten erben + Dienst entfernen; sonst
+      // optionale Modell-Standardzeiten; sonst ganztägig.
+      let startTime = day.startTime;
+      let endTime = day.endTime;
+      const planned = await findPlannedWorkShiftsForDay(userId, write.teamId, day.startTime);
+      if (planned.length > 0) {
+        startTime = planned[0]!.startTime;
+        endTime = planned[0]!.endTime;
+        for (const p of planned) {
+          await deleteReplacedWorkShift(p.id, tx);
+        }
+      } else if (modelDefaults) {
+        const t = shiftModelTimesForDay(day.startTime, modelDefaults.start, modelDefaults.end);
+        startTime = t.startTime;
+        endTime = t.endTime;
+      }
+      const [shift] = await tx
+        .insert(shiftsTable)
+        .values({
+          userId,
+          teamId: write.teamId,
+          startTime,
+          endTime,
+          type,
+          shiftModelId: shiftModelId ?? null,
+          notes: body.data.notes ?? null,
+          // Abwesenheiten sind produktseitig immer verbindlich (s. Einzel-POST).
+          planningStatus: "FIX" as const,
+          isVertretung: false,
+          pauseMinutes: 0,
+        })
+        .returning();
+      await storeShiftMetrics(shift!, tx);
+      await bookAbsenceTimeTracking(shift!, tx);
+      created.push(shift!);
+    }
+
+    // Urlaubszähler EINMAL fortschreiben: Stunden je Tag auflösen, aber je
+    // aktivem Vertrag bündeln (ein Zeitraum kann einen Vertragswechsel
+    // überspannen — jeder Tag bucht auf SEINEN Vertrag, wie N Einzel-POSTs).
+    if (type === "vacation" && created.length > 0) {
+      const byContract = new Map<
+        number,
+        { contract: { id: number; vacationHoursUsed: number }; delta: number }
+      >();
+      for (const shift of created) {
+        const hours = await resolveVacationHours(userId, write.teamId, shift.startTime, shift.endTime);
+        const contract = await activeContractFor(userId, new Date(shift.startTime));
+        if (!contract) continue;
+        const entry = byContract.get(contract.id) ?? { contract, delta: 0 };
+        entry.delta += hours;
+        byContract.set(contract.id, entry);
+      }
+      for (const { contract, delta } of byContract.values()) {
+        await applyVacationDelta(contract, delta, tx);
+      }
+    }
+    return created;
+  });
+
+  res.status(201).json({
+    createdCount: createdShifts.length,
+    skippedCount: skippedDates.length,
+    skippedDates,
+    shiftIds: createdShifts.map((s) => s.id),
+  });
 });
 
 router.get("/shifts/:id", requireAuth, async (req, res): Promise<void> => {

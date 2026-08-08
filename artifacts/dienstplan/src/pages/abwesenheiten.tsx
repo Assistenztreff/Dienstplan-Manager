@@ -4,12 +4,12 @@ import {
   useListContracts,
   useListShifts,
   useListShiftModels,
-  useCreateShift,
+  useBulkCreateAbsence,
   useDeleteShift,
   useUpdateContract,
   useGetVacationBalance,
   ApiError,
-  type ShiftInputType,
+  type BulkAbsenceInput,
   type VacationBalance,
   type Contract,
   type User,
@@ -198,7 +198,7 @@ export default function Abwesenheiten() {
   const { data: vacationShifts, isLoading: vacationLoading } = useListShifts({ type: "vacation" });
   const { data: sickShifts, isLoading: sickLoading } = useListShifts({ type: "sick" });
 
-  const createShift = useCreateShift();
+  const bulkCreateAbsence = useBulkCreateAbsence();
   const deleteShift = useDeleteShift();
 
   const [userId, setUserId] = useState<string>("");
@@ -328,49 +328,38 @@ export default function Abwesenheiten() {
     const uid = Number(effectiveUserId);
     const days = eachDayOfInterval({ start, end });
 
-    // Tage überspringen, an denen für diesen Assistenten bereits eine Abwesenheit
-    // desselben Typs existiert (verhindert doppelte Urlaubsabzüge).
-    const existingForUser = new Set(
-      allAbsences
-        .filter((a) => a.userId === uid && a.type === type)
-        .map((a) => dayKey(new Date(a.startTime)))
-    );
-
-    const toCreate = days.filter((d) => !existingForUser.has(dayKey(d)));
-    if (toCreate.length === 0) {
-      setError("Für den gewählten Zeitraum bestehen bereits Abwesenheiten dieses Typs.");
-      return;
-    }
-
     setSaving(true);
     try {
-      // Sequentiell anlegen: bei Urlaub aktualisiert der Server den genommenen
-      // Urlaub pro Vertrag (Read-Modify-Write); parallele Aufrufe könnten Zähler
-      // verlieren.
-      for (const day of toCreate) {
-        const startIso = new Date(`${dayKey(day)}T00:00:00`).toISOString();
-        const endIso = new Date(`${dayKey(day)}T23:59:59`).toISOString();
-        await createShift.mutateAsync({
-          data: {
-            userId: uid,
-            startTime: startIso,
-            endTime: endIso,
-            type: type as ShiftInputType,
-            shiftModelId: shiftModelId ? Number(shiftModelId) : null,
-          },
-        });
+      // Sammelauftrag (Task #715): der ganze Zeitraum in EINEM Request,
+      // transaktional (ganz oder gar nicht) — der Urlaubszähler wird server-
+      // seitig einmal am Ende fortgeschrieben. Tage mit bestehender Abwesenheit
+      // desselben Typs überspringt der Server und meldet sie zurück.
+      const result = await bulkCreateAbsence.mutateAsync({
+        data: {
+          userId: uid,
+          type: type as BulkAbsenceInput["type"],
+          days: days.map((day) => ({
+            startTime: new Date(`${dayKey(day)}T00:00:00`).toISOString(),
+            endTime: new Date(`${dayKey(day)}T23:59:59`).toISOString(),
+          })),
+          shiftModelId: shiftModelId ? Number(shiftModelId) : null,
+        },
+      });
+      if (result.createdCount === 0) {
+        setError("Für den gewählten Zeitraum bestehen bereits Abwesenheiten dieses Typs.");
+        return;
       }
       await invalidate();
-      // Soft-Close-Hinweis: Abwesenheit in bereits abgeschlossenem Monat.
-      for (const day of toCreate) {
-        void warnIfMonthClosed(day, null);
+      // Soft-Close-Hinweis: nur für tatsächlich angelegte Tage.
+      const skippedKeys = new Set(result.skippedDates);
+      for (const day of days) {
+        if (!skippedKeys.has(dayKey(day))) void warnIfMonthClosed(day, null);
       }
-      const skipped = days.length - toCreate.length;
       toast({
         title: `${TYPE_LABEL[type]} eingetragen`,
         description:
-          `${toCreate.length} ${toCreate.length === 1 ? "Tag" : "Tage"} angelegt` +
-          (skipped > 0 ? `, ${skipped} bereits vorhanden` : ""),
+          `${result.createdCount} ${result.createdCount === 1 ? "Tag" : "Tage"} angelegt` +
+          (result.skippedCount > 0 ? `, ${result.skippedCount} bereits vorhanden` : ""),
       });
       setFrom("");
       setTo("");

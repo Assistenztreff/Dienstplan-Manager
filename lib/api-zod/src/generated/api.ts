@@ -481,6 +481,29 @@ export const CreateShiftBody = zod.object({
 
 
 /**
+ * Legt mehrere Abwesenheits-Tage derselben Art für eine Assistenzkraft transaktional in EINEM Request an (ganz oder gar nicht). Tage mit bereits vorhandener Abwesenheit desselben Typs werden übersprungen und gemeldet statt mit 409 abzubrechen. Der Urlaubszähler wird einmal am Ende fortgeschrieben, nicht pro Tag. Es gelten dieselben Regeln wie beim Einzel-Anlegen (Team-Scope, Selbstservice nur für eigene Abwesenheiten, Ersetzung geplanter Dienste am Abwesenheitstag, Vertragszeitraum-Guard für Urlaub, Vorausplanungs-Limit).
+ * @summary Abwesenheits-Zeitraum als Sammelauftrag anlegen
+ */
+export const bulkCreateAbsenceBodyDaysMax = 92;
+
+export const bulkCreateAbsenceBodyNotesMax = 500;
+
+
+
+export const BulkCreateAbsenceBody = zod.object({
+  "userId": zod.number(),
+  "teamId": zod.number().optional().describe('Optionaler Team-Kontext; muss ein erlaubtes Team sein.'),
+  "type": zod.enum(['vacation', 'sick', 'freizeitausgleich', 'kind_krank', 'freistellung', 'abgesagt_ag', 'abgesagt_an', 'urlaubsabgeltung']).describe('Abwesenheitsart — nur Abwesenheiten sind als Sammelauftrag erlaubt.'),
+  "days": zod.array(zod.object({
+  "startTime": zod.coerce.date(),
+  "endTime": zod.coerce.date()
+})).min(1).max(bulkCreateAbsenceBodyDaysMax).describe('Ein Eintrag pro Kalendertag (Start\/Ende desselben Tages, i. d. R. 00:00–23:59). Doppelte Kalendertage innerhalb der Liste werden zusammengefasst.'),
+  "shiftModelId": zod.number().nullish().describe('Optionales Schichtmodell: liefert an Tagen ohne geplanten Dienst die Standardzeiten (wie beim Einzel-Anlegen).'),
+  "notes": zod.string().max(bulkCreateAbsenceBodyNotesMax).optional()
+})
+
+
+/**
  * @summary Schicht abrufen
  */
 export const GetShiftParams = zod.object({
