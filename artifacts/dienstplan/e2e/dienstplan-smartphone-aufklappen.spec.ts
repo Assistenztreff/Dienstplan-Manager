@@ -36,6 +36,7 @@ const DAY_B = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-13`;
 
 let acc: FreeAccount;
 let shiftIdFix: number;
+let shiftIdDraft: number;
 
 async function login(page: Page): Promise<void> {
   await loginViaUi(page, acc.email, FREE_ACCOUNT_PASSWORD);
@@ -54,10 +55,13 @@ test.beforeAll(async () => {
   expect(user.status(), `Assistenzkraft anlegen (${user.status()})`).toBe(201);
   const assistantId = ((await user.json()) as { id: number }).id;
 
-  // Zwei Dienste an Tag A: bestätigt + Entwurf (überlappungsfrei).
+  // Drei Dienste an Tag A: bestätigt + Entwurf (zugleich Vertretung — der
+  // Kombinationsfall muss BEIDE Icons zeigen) + bestätigt. Die Smartphone-
+  // Ansicht darf nur zwei Pillen und anschließend „+1 weitere“ zeigen.
   for (const [start, end, planningStatus] of [
     ["06:00", "12:00", "FIX"],
     ["13:00", "18:00", "VORLAEUFIG"],
+    ["19:00", "23:00", "FIX"],
   ] as const) {
     const res = await acc.ctx.post("/api/shifts", {
       data: {
@@ -66,11 +70,16 @@ test.beforeAll(async () => {
         startTime: `${DAY_A}T${start}:00.000Z`,
         endTime: `${DAY_A}T${end}:00.000Z`,
         planningStatus,
+        isVertretung: planningStatus === "VORLAEUFIG",
       },
     });
     expect(res.status(), `Dienst ${start} anlegen (${res.status()})`).toBe(201);
     if (planningStatus === "FIX") {
-      shiftIdFix = ((await res.json()) as { id: number }).id;
+      // Nur die ERSTE FIX-Schicht merken: die dritte (19–23 Uhr) fällt durch
+      // das Zwei-Pillen-Limit aus der Smartphone-Zelle heraus.
+      shiftIdFix ||= ((await res.json()) as { id: number }).id;
+    } else {
+      shiftIdDraft = ((await res.json()) as { id: number }).id;
     }
   }
 
@@ -102,9 +111,9 @@ test("Eingeklappt: Mini-Balken + Zähler statt Pillen, Tap wählt nur und zeigt 
   await expect(mobile.getByTestId(`day-bars-${DAY_A}`)).toBeVisible();
   await expect(
     mobile.getByTestId(`day-bars-${DAY_A}`).locator("> span"),
-    "Zwei Dienste = zwei Mini-Balken",
-  ).toHaveCount(2);
-  await expect(mobile.getByTestId(`day-count-${DAY_A}`)).toHaveText("2 Dienste");
+    "Drei Dienste = drei Mini-Balken",
+  ).toHaveCount(3);
+  await expect(mobile.getByTestId(`day-count-${DAY_A}`)).toHaveText("3 Dienste");
   await expect(mobile.getByTestId(`day-count-${DAY_B}`)).toHaveText("1 Abw.");
 
   // Abwesenheitsstreifen (3.3): Urlaub = Kategorie „geplant" (gelb #e5b73b).
@@ -143,7 +152,7 @@ test("Eingeklappt: Mini-Balken + Zähler statt Pillen, Tap wählt nur und zeigt 
   await expect(page.getByTestId("shift-dialog")).toHaveCount(0);
 });
 
-test("Aufklappen: kompakte Pillen mit Initialen, Pille öffnet den Schichtdialog", async ({
+test("Aufklappen: einzeilige Kurz-Pillen mit Abweichungs-Icons, Pille öffnet den Schichtdialog", async ({
   page,
 }) => {
   await login(page);
@@ -155,16 +164,51 @@ test("Aufklappen: kompakte Pillen mit Initialen, Pille öffnet den Schichtdialog
   await expect(toggle).toHaveAttribute("aria-label", "Monatsraster aufklappen");
   await toggle.click();
 
-  // Kompakte Pillen mit Initialen statt vollem Nachnamen.
+  // Kompakte Pillen mit Initialen statt vollem Nachnamen. Uhrzeit und
+  // Bestätigt-Icon entfallen; Entwurf bleibt als 12-px-Abweichungs-Icon sichtbar.
   const pill = mobile.getByTestId(`day-chip-${shiftIdFix}`);
   await expect(pill).toBeVisible();
   await expect(pill, "Aufgeklappt zeigt die Pille die Initialen der Assistenzkraft").toContainText(
     "EA",
   );
   await expect(
-    pill.locator('[data-status-badge="confirmed"][aria-label="Bestätigt"]'),
-    "Kompaktes Bestätigt-Badge (Variante C) in der Pille",
+    pill.locator('[data-status-badge="confirmed"]'),
+    "Bestätigte Dienste erhalten in der Smartphone-Zelle kein Status-Icon",
+  ).toHaveCount(0);
+  await expect(
+    pill.locator('[data-status-badge="clock"]'),
+    "Die Uhrzeitzeile entfällt in der Smartphone-Zelle",
+  ).toHaveCount(0);
+  await expect(mobile.getByTestId(`day-chip-label-${shiftIdFix}`)).toHaveCSS("font-size", "11px");
+  const draftPill = mobile.getByTestId(`day-chip-${shiftIdDraft}`);
+  const draftBadge = draftPill.locator('[data-status-badge="draft"][aria-label="Entwurf"]');
+  await expect(draftBadge, "Entwurf bleibt als Abweichung in der Smartphone-Zelle markiert").toBeVisible();
+  await expect(draftBadge).toHaveCSS("width", "12px");
+  await expect(draftBadge).toHaveCSS("height", "12px");
+  await expect(
+    draftPill.locator('[data-status-badge="vertretung"]'),
+    "Vertretung + Entwurf zeigen BEIDE Icons in der Kompakt-Pille",
   ).toBeVisible();
+  // Geometrieprüfung: Auch im Kombinationsfall (zwei Icons) darf das Kürzel
+  // nicht abgeschnitten sein — DOM-Text allein würde eine Ellipse verdecken.
+  for (const id of [shiftIdFix, shiftIdDraft]) {
+    const label = mobile.getByTestId(`day-chip-label-${id}`);
+    const geo = await label.evaluate((el) => ({
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    }));
+    expect(
+      geo.scrollWidth,
+      `Kürzel der Pille ${id} muss vollständig sichtbar sein (kein truncate)`,
+    ).toBeLessThanOrEqual(geo.clientWidth);
+  }
+  await expect(
+    mobile
+      .getByTestId(`day-cell-${DAY_A}`)
+      .locator('[data-testid^="day-chip-"]:not([data-testid^="day-chip-label-"])'),
+    "Aufgeklappt sind höchstens zwei Pillen sichtbar",
+  ).toHaveCount(2);
+  await expect(mobile.getByTestId(`day-more-${DAY_A}`)).toHaveText("+1");
   await expect(
     mobile.getByTestId(`day-bars-${DAY_A}`),
     "Aufgeklappt gibt es keine Mini-Balken mehr",
@@ -185,5 +229,5 @@ test("Aufklappen: kompakte Pillen mit Initialen, Pille öffnet den Schichtdialog
   // Zuklappen stellt die Farbcode-Anzeige wieder her.
   await page.getByTestId("toggle-mobile-expand").click();
   await expect(mobile.getByTestId(`day-bars-${DAY_A}`)).toBeVisible();
-  await expect(mobile.getByTestId(`day-count-${DAY_A}`)).toHaveText("2 Dienste");
+  await expect(mobile.getByTestId(`day-count-${DAY_A}`)).toHaveText("3 Dienste");
 });

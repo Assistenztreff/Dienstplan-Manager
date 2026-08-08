@@ -1092,11 +1092,16 @@ function MonthGrid({
           const dayShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), day));
           const selected = isSameDay(day, selectedDay);
           const today = isToday(day);
-          const nonAbsence = dayShifts.filter((s) => !isAbsenceShift(s));
+          // Chronologisch sortieren: das Pillen-Limit (2 bzw. 4) soll immer die
+          // FRÜHESTEN Dienste zeigen, unabhängig von der API-Reihenfolge.
+          const nonAbsence = dayShifts
+            .filter((s) => !isAbsenceShift(s))
+            .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
           const absences = dayShifts.filter((s) => isAbsenceShift(s));
-          // Arbeitspaket 07.08.2026, Punkt 3: bis zu 4 Pillen sichtbar
-          // (Desktop und Smartphone aufgeklappt gleich), danach „+n".
-          const visiblePills = nonAbsence.slice(0, 4);
+           // Desktop/Tablet zeigen bis zu vier Pillen; aufgeklappte Smartphone-
+           // Zellen bleiben mit höchstens zwei einzeiligen Pillen gleich hoch.
+           const pillLimit = variant === "compact" ? 2 : 4;
+           const visiblePills = nonAbsence.slice(0, pillLimit);
           const hiddenCount = nonAbsence.length - visiblePills.length;
           // Eingeklappte Smartphone-Zelle (3.3): ein Streifen je Abwesenheits-
           // Kategorie in Dominanzreihenfolge ausfall > geplant > absage.
@@ -1238,11 +1243,9 @@ function MonthGrid({
                   )}
                 </>
               ) : visiblePills.length > 0 && (
-                /* Schicht-Pillen (max. 4) — zweizeiliges Design gemäß Spec §2.1:
-                   Farbbalken links (Slot-Farbe), Zeile 1 = Name + Status-Badge
-                   auf Weiß, Zeile 2 = Uhr-Badge + Uhrzeit auf #f1f1ee.
-                   3.2: Aufgeklapptes Smartphone = kompakte Pille mit Initialen. */
-                <div className={`flex flex-col min-w-0 px-0.5 ${variant === "compact" ? "gap-[2px]" : "gap-[3px]"}`}>
+                /* Desktop/Tablet: zweizeilige Pille mit Uhrzeit. Aufgeklapptes
+                   Smartphone: einzeilige Pille mit Kürzel und Abweichungs-Icon. */
+                <div className={`flex flex-col min-w-0 ${variant === "compact" ? "gap-[2px] px-[1px]" : "gap-[3px] px-0.5"}`}>
                   {visiblePills.map((s) => {
                     const isTeam = s.type === "team";
                     const slot = getPersonSlot(s.userId);
@@ -1272,7 +1275,8 @@ function MonthGrid({
                           if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onShiftClick(s); }
                         } : undefined}
                         className={[
-                          "relative flex flex-col items-stretch overflow-hidden border border-[#e6e6e2]",
+                          "relative overflow-hidden border border-[#e6e6e2]",
+                          compact ? "flex h-5 items-center" : "flex flex-col items-stretch",
                           compact ? "rounded-[5px]" : "rounded-[6px]",
                           chipClickable ? "cursor-pointer" : "",
                         ].filter(Boolean).join(" ")}
@@ -1280,41 +1284,70 @@ function MonthGrid({
                         {/* Farbbalken links (volle Höhe) — einzige Stelle mit der Slot-Farbe */}
                         <span
                           aria-hidden="true"
-                          className={`absolute left-0 top-0 bottom-0 ${compact ? "w-[2.5px]" : "w-[3px]"}`}
+                          className={`absolute left-0 top-0 bottom-0 ${compact ? "w-[4px]" : "w-[3px]"}`}
                           style={{ backgroundColor: barColor }}
                         />
-                        {/* Zeile 1: Name (kompakt: Initialen) + Status-Badge Variante C (weiß) */}
-                        <span className={`flex items-center justify-between gap-1 bg-white py-[2px] leading-none ${compact ? "pl-[6px] pr-[5px]" : "pl-[7px] pr-1"}`}>
-                          <span className={`${compact ? "text-[8.5px]" : "text-[10px]"} font-bold text-[#151515] truncate`}>
-                            {nameLabel}
-                          </span>
-                          {status === "FIX" ? (
-                            <StatusBadge kind="confirmed" label="Bestätigt" compact={compact} />
-                          ) : (
-                            <StatusBadge
-                              kind="draft"
-                              label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
-                              compact={compact}
-                            />
-                          )}
-                        </span>
-                        {/* Zeile 2: Uhr-Badge + Uhrzeit (+ Vertretung rechts) auf Grauweiß */}
-                        <span className={`flex items-center gap-[3px] bg-[#f1f1ee] py-[2px] leading-none ${compact ? "pl-[6px] pr-[5px]" : "pl-[7px] pr-1"}`}>
-                          <StatusBadge kind="clock" compact={compact} />
-                          <span className={`${compact ? "text-[8.5px]" : "text-[9px]"} text-[#444444] truncate`}>
-                            <span className="min-[900px]:hidden">{isTeam ? "Teamdienst" : shortRange}</span>
-                            <span className="hidden min-[900px]:inline">{isTeam ? "Teamdienst" : timeRange}</span>
-                          </span>
-                          {s.isVertretung && (
-                            <span
-                              className="ml-auto inline-flex items-center gap-[2px] shrink-0 text-[#0f6e8c]"
-                              title="Vertretung"
-                            >
-                              <StatusBadge kind="vertretung" label="Vertretung" compact={compact} />
-                              <span className="hidden min-[900px]:inline text-[8px] font-semibold">Vertretung</span>
+                        {/* Enge Abstände im Compact-Zweig: bei ~57 px Zellbreite
+                            müssen Kürzel UND bis zu zwei 12-px-Icons passen. */}
+                        {compact ? (
+                          <span className="flex w-full items-center justify-between gap-[2px] bg-white py-0 pl-[5px] pr-[1px] leading-none">
+                            <span data-testid={`day-chip-label-${s.id}`} className="truncate text-[11px] font-bold text-[#151515]">
+                              {nameLabel}
                             </span>
-                          )}
-                        </span>
+                            {/* Beide Abweichungen sind unabhängig — eine
+                                Vertretung kann zugleich Entwurf/Vorschlag sein
+                                und zeigt dann beide Icons. */}
+                            {(status !== "FIX" || s.isVertretung) && (
+                              /* Im Kombinationsfall überlappen die beiden
+                                 12-px-Icons leicht (Badge-Stack), damit das
+                                 Kürzel in der ~57-px-Zelle sichtbar bleibt. */
+                              <span className="flex shrink-0 items-center -space-x-[7px]">
+                                {status !== "FIX" && (
+                                  <StatusBadge
+                                    kind="draft"
+                                    label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
+                                    calendarCompact
+                                  />
+                                )}
+                                {s.isVertretung && (
+                                  <StatusBadge kind="vertretung" label="Vertretung" calendarCompact />
+                                )}
+                              </span>
+                            )}
+                          </span>
+                        ) : (
+                          <>
+                            {/* Zeile 1: Name + Status-Badge Variante C */}
+                            <span className="flex items-center justify-between gap-1 bg-white py-[2px] pl-[7px] pr-1 leading-none">
+                              <span className="truncate text-[10px] font-bold text-[#151515]">{nameLabel}</span>
+                              {status === "FIX" ? (
+                                <StatusBadge kind="confirmed" label="Bestätigt" />
+                              ) : (
+                                <StatusBadge
+                                  kind="draft"
+                                  label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
+                                />
+                              )}
+                            </span>
+                            {/* Zeile 2: Uhr-Badge + Uhrzeit (+ Vertretung rechts) auf Grauweiß */}
+                            <span className="flex items-center gap-[3px] bg-[#f1f1ee] py-[2px] pl-[7px] pr-1 leading-none">
+                              <StatusBadge kind="clock" />
+                              <span className="truncate text-[9px] text-[#444444]">
+                                <span className="min-[900px]:hidden">{isTeam ? "Teamdienst" : shortRange}</span>
+                                <span className="hidden min-[900px]:inline">{isTeam ? "Teamdienst" : timeRange}</span>
+                              </span>
+                              {s.isVertretung && (
+                                <span
+                                  className="ml-auto inline-flex shrink-0 items-center gap-[2px] text-[#0f6e8c]"
+                                  title="Vertretung"
+                                >
+                                  <StatusBadge kind="vertretung" />
+                                  <span className="hidden min-[900px]:inline text-[8px] font-semibold">Vertretung</span>
+                                </span>
+                              )}
+                            </span>
+                          </>
+                        )}
                       </span>
                     );
                   })}

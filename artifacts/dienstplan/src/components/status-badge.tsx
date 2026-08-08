@@ -117,6 +117,7 @@ export function StatusBadge({
   label,
   className,
   compact = false,
+  calendarCompact = false,
 }: {
   kind: StatusBadgeKind;
   /** aria-label für Screenreader; ohne Angabe gilt das Badge als dekorativ. */
@@ -124,9 +125,11 @@ export function StatusBadge({
   className?: string;
   /** Kompakt-Größe für die Smartphone-Pille (Arbeitsanweisung 3.2/3.3). */
   compact?: boolean;
+  /** 12-px-Kreis für Statusabweichungen in der aufgeklappten Kalenderzelle. */
+  calendarCompact?: boolean;
 }) {
   const cfg = KIND_CONFIG[kind];
-  const circle = compact ? cfg.compactCircle : cfg.circle;
+  const circle = calendarCompact ? 12 : compact ? cfg.compactCircle : cfg.circle;
   return (
     <span
       role={label ? "img" : undefined}
