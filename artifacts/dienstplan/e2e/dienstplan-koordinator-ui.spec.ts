@@ -97,3 +97,65 @@ test("Inhaber legt einen Koordinator an und weist ihm ein Team zu", async ({ pag
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
 });
+
+/**
+ * Koordinator-Sicht im Browser: Nach Einladung und Login sieht der
+ * Koordinator nur sein zugewiesenes Team (Umschalter), hat dort den
+ * Zugriffsrechte-Zugang eines Teamleiters, aber KEINE Koordinatoren-
+ * Verwaltung und KEINE eigene Assistenzkraft-Karte.
+ * Baut auf dem vorherigen Test auf (Koordinator existiert, Team A zugewiesen).
+ */
+test("Koordinator-Sicht: nur zugewiesenes Team, keine Verwaltung, keine Selbstkarte", async ({ page }) => {
+  // Zweites, NICHT zugewiesenes Team anlegen (Gegenprobe im Umschalter).
+  const teamBName = `Koord-Fremdteam ${RUN}`;
+  const createRes = await owner.ctx.post("/api/teams", { data: { name: teamBName } });
+  expect(createRes.ok(), `Team anlegen fehlgeschlagen (${createRes.status()})`).toBe(true);
+
+  const teamsRes = await owner.ctx.get("/api/teams");
+  const teamAName = ((await teamsRes.json()) as { id: number; name: string }[]).find(
+    (t) => t.id === teamA,
+  )!.name;
+
+  // Koordinator-ID + Einladung -> Passwort setzen -> Browser-Login.
+  const listRes = await owner.ctx.get("/api/koordinatoren");
+  const koord = ((await listRes.json()) as { id: number; email: string }[]).find(
+    (k) => k.email === KOORD_EMAIL,
+  );
+  expect(koord, "Koordinator aus Test 1 fehlt").toBeTruthy();
+
+  const inviteRes = await owner.ctx.post(`/api/users/${koord!.id}/invite`, {});
+  expect(inviteRes.ok(), `Einladung fehlgeschlagen (${inviteRes.status()})`).toBe(true);
+  const { token, note } = (await inviteRes.json()) as { token: string; note: string };
+  // Einladungstext spricht vom Teamkoordinator, nicht von der Assistenzkraft.
+  expect(note).toContain("Teamkoordinators");
+
+  const passwort = `KoordSicht!${RUN}`;
+  const pwRes = await page.request.post("/api/auth/set-password", {
+    data: { token, password: passwort },
+  });
+  expect(pwRes.ok(), `Passwort setzen fehlgeschlagen (${pwRes.status()})`).toBe(true);
+  const loginRes = await page.request.post("/api/auth/login", {
+    data: { email: KOORD_EMAIL, password: passwort },
+  });
+  expect(loginRes.ok(), `Koordinator-Login fehlgeschlagen (${loginRes.status()})`).toBe(true);
+
+  await page.goto("/team-verwaltung");
+
+  // Teamleiter-Zugang: Zugriffsrechte-Knopf des zugewiesenen Teams erscheint.
+  // Grosszuegiger Timeout fuer den kalten Erst-Aufruf (Vite-Kompilierung).
+  await expect(page.getByTestId(`rights-team-${teamA}`)).toBeVisible({ timeout: 20_000 });
+
+  // Keine Koordinatoren-Verwaltung, keine eigene Assistenzkraft-Karte.
+  await expect(page.getByTestId("koordinatoren-bereich")).toHaveCount(0);
+  await expect(page.getByTestId(`assistant-card-${koord!.id}`)).toHaveCount(0);
+
+  // Team-Umschalter (lebt in der Dienstplan-Kopfzeile, nicht auf
+  // /team-verwaltung) bietet nur das zugewiesene Team an. Die Kopfzeile
+  // rendert Mobile- und Desktop-Variante — nur die sichtbare anklicken.
+  await page.goto("/dienstplan");
+  const switcher = page.locator('button[aria-label="Team auswählen"]:visible');
+  await expect(switcher).toBeVisible({ timeout: 20_000 });
+  await switcher.click();
+  await expect(page.getByRole("option", { name: teamAName })).toBeVisible();
+  await expect(page.getByRole("option", { name: teamBName })).toHaveCount(0);
+});

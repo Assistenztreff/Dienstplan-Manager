@@ -180,6 +180,73 @@ test.describe("Teamkoordinator-Zugang", () => {
     expect(users.some((u) => u.id === koordId)).toBe(false);
   });
 
+  test("Koordinator ist nie Personal: Vertraege, Dienste und Mitglieder-Operationen lehnen ab", async () => {
+    // Kein Vertrag (wuerde ihn in Stunden-/Lohnauswertungen ziehen).
+    const contractRes = await owner.ctx.post("/api/contracts", {
+      data: { userId: koordId, teamId: teamA, weeklyHours: 20, vacationDays: 30, startDate: "2026-01-01" },
+    });
+    expect(contractRes.status(), "Vertrag fuer Koordinator muss abgelehnt werden").toBe(403);
+
+    // Kein Dienst (wuerde ihn im Dienstplan als Pseudo-Assistenzkraft zeigen).
+    const shiftRes = await owner.ctx.post("/api/shifts", {
+      data: {
+        userId: koordId,
+        teamId: teamA,
+        type: "active",
+        startTime: "2026-08-10T08:00:00.000Z",
+        endTime: "2026-08-10T12:00:00.000Z",
+      },
+    });
+    expect(shiftRes.status(), "Dienst fuer Koordinator muss abgelehnt werden").toBe(403);
+
+    // Keine Ist-Zeit FUER ihn (er erfasst selbst fuer andere).
+    const ttRes = await owner.ctx.post("/api/time-tracking", {
+      data: {
+        userId: koordId,
+        teamId: teamA,
+        actualStart: "2026-08-10T08:00:00.000Z",
+        actualEnd: "2026-08-10T12:00:00.000Z",
+      },
+    });
+    expect(ttRes.status(), "Ist-Zeit fuer Koordinator muss abgelehnt werden").toBe(403);
+
+    // Generische Mitglieder-Operationen: Zuweisungen laufen NUR ueber
+    // PUT /koordinatoren/:id/teams — sonst entstuende eine Zeile ohne
+    // isTeamleiter bzw. ein stiller Rechteverlust.
+    const addRes = await owner.ctx.post(`/api/teams/${teamA}/members`, {
+      data: { userId: koordId },
+    });
+    expect(addRes.status(), "Generisches Hinzufuegen muss abgelehnt werden").toBe(403);
+
+    const patchRes = await owner.ctx.patch(`/api/teams/${teamA}/members/${koordId}`, {
+      data: { isTeamleiter: false },
+    });
+    expect(patchRes.status(), "Flag-Aenderung muss abgelehnt werden").toBe(403);
+
+    const moveRes = await owner.ctx.post(`/api/teams/${teamA}/members/${koordId}/move`, {
+      data: { targetTeamId: teamB },
+    });
+    expect(moveRes.status(), "Ueberfuehren muss abgelehnt werden").toBe(403);
+
+    const delRes = await owner.ctx.delete(`/api/teams/${teamA}/members/${koordId}`);
+    expect(delRes.status(), "Generisches Entfernen muss abgelehnt werden").toBe(403);
+
+    // Kein Rollen-Orakel: Ein FREMDER Koordinator (kein Mitglied des eigenen
+    // Teams) antwortet 404 wie jede andere fremde/unbekannte ID — nicht 403.
+    const fremdKoordRes = await fremd.ctx.post("/api/koordinatoren", {
+      data: { name: `Fremd Koordinator ${RUN}`, email: `e2e.koord.fremdk.${RUN}@dienstplan.test` },
+    });
+    expect(fremdKoordRes.status()).toBe(201);
+    const fremdKoordId = ((await fremdKoordRes.json()) as Entity).id;
+    const oracleRes = await owner.ctx.delete(`/api/teams/${teamA}/members/${fremdKoordId}`);
+    expect(oracleRes.status(), "Fremder Koordinator darf kein Rollen-Orakel sein").toBe(404);
+
+    // Zuweisung blieb unveraendert (isTeamleiter=true, beide Teams).
+    const membersRes = await owner.ctx.get(`/api/teams/${teamA}/members`);
+    const row = ((await membersRes.json()) as MemberDto[]).find((m) => m.userId === koordId);
+    expect(row).toMatchObject({ role: "koordinator", isTeamleiter: true });
+  });
+
   test("Fremde Koordinatoren und fremde Teams bleiben unauffindbar", async () => {
     // Fremdes Konto versucht, den Koordinator umzuhaengen bzw. einzuladen.
     const fremdPut = await fremd.ctx.put(`/api/koordinatoren/${koordId}/teams`, {

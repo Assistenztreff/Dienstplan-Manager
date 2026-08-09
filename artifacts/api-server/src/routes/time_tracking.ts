@@ -30,6 +30,7 @@ import {
   getTeamleiterTeamIds,
   parseTeamIdParam,
   isUserMemberOfTeam,
+  isKoordinatorUser,
 } from "../lib/teams";
 import { resolveAllowanceOps } from "../lib/allowance-resolve";
 import {
@@ -197,6 +198,14 @@ router.post("/time-tracking", requireAuth, async (req, res): Promise<void> => {
   // fremder userId ins Team verknüpfen (Cross-Team-PII-Leak).
   if (!(await isUserMemberOfTeam(userId, teamId))) {
     res.status(403).json({ error: "Nutzer gehört nicht zu diesem Team" });
+    return;
+  }
+  // Koordinatoren sind Verwaltungspersonen, nie Personal: Für sie werden
+  // keine Ist-Zeiten erfasst (sie erfassen selbst für Team-Mitglieder).
+  if (await isKoordinatorUser(userId)) {
+    res.status(403).json({
+      error: "Für Teamkoordinatoren werden keine Ist-Zeiten erfasst.",
+    });
     return;
   }
   // Konto-Schalter „Zeiterfassung aktivieren" (Standard AUS): neue Ist-Zeiten

@@ -31,6 +31,7 @@ import {
   canViewPayrollInTeam,
   parseTeamIdParam,
   isUserMemberOfTeam,
+  isKoordinatorUser,
 } from "../lib/teams";
 
 const router = Router();
@@ -152,6 +153,14 @@ router.post("/contracts", requireTeamPlanningOrAdmin, async (req, res): Promise<
   // ein fremder userId ins Team verknüpfen (Cross-Team-PII-Leak).
   if (!(await isUserMemberOfTeam(body.data.userId, write.teamId))) {
     res.status(403).json({ error: "Nutzer gehört nicht zu diesem Team" });
+    return;
+  }
+  // Koordinatoren sind Verwaltungspersonen, nie Personal: Ein Vertrag würde
+  // sie in Stunden-/Lohnauswertungen als Pseudo-Assistenzkraft auftauchen lassen.
+  if (await isKoordinatorUser(body.data.userId)) {
+    res.status(403).json({
+      error: "Für Teamkoordinatoren können keine Verträge angelegt werden.",
+    });
     return;
   }
   const [contract] = await db

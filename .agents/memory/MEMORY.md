@@ -110,3 +110,4 @@
 - [Playwright-Worker-Neustart nach Fehlschlag](e2e-worker-restart-state.md) — nach einem Fehlschlag resettet der Worker Modul-State; spätere Fehler derselben Datei sind meist Kaskade.
 - [Gestufte Team-Freischaltung](team-access-levels.md) — Rechte pro Mitgliedschaft; Route-Middleware und In-Route-Assert müssen dieselbe Stufe fordern, Premium-Gates über den Team-Eigentümer.
 - [Kontowechsel-Erkennung im Web-Client](kontowechsel-session-erkennung.md) — Auth-Zustand nur via applyUser (Epoch-Guard + Single-Flight), sonst stellt eine späte /auth/me-Antwort die alte Identität wieder her.
+- [Koordinator ist nie Personal](koordinator-nie-personal.md) — jeder Personal-Schreibpunkt lehnt Koordinator-Ziele ab; Mitgliedschaften nur via PUT-Vollabgleich; Scope-404 vor Rollen-403 (Orakel).

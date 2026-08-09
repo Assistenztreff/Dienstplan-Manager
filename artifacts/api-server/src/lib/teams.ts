@@ -145,6 +145,22 @@ export async function isUserMemberOfTeam(userId: number, teamId: number): Promis
 }
 
 /**
+ * Prüft, ob ein Nutzer ein Teamkoordinator ist. Koordinatoren sind reine
+ * Verwaltungspersonen und nie Personal: Personal-Datensätze (Verträge,
+ * Dienste, Ist-Zeiten) und generische Mitglieder-Operationen müssen sie
+ * ablehnen — ihre Mitgliedschaften verwaltet ausschließlich der
+ * Zuweisungsbereich (PUT /koordinatoren/:id/teams).
+ */
+export async function isKoordinatorUser(userId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ role: usersTable.role })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+  return row?.role === "koordinator";
+}
+
+/**
  * Prüft, ob ein Schichtmodell zu einem bestimmten Team gehört.
  * Basis für die Validierung von Schicht-Schreiboperationen: eine Schicht darf nur
  * mit einem Schichtmodell desselben Teams verknüpft werden — sonst flössen die

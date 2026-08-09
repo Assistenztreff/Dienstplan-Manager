@@ -34,6 +34,7 @@ import {
   mayGrantPayrollAccess,
   getTeamIdsWithCapability,
   isTeamleiterOfTeam,
+  isKoordinatorUser,
   type TeamCapability,
 } from "../lib/teams";
 import { UpdateTeamMemberFlagsBody } from "@workspace/api-zod";
@@ -310,13 +311,22 @@ router.post("/teams/:id/members", requireTeamManageOrAdmin, async (req, res): Pr
   // fremden Mandanten) per Enumeration in das eigene Team annektieren und
   // dessen Daten über die Team-Scoping-Helfer auslesen/ändern.
   const [user] = await db
-    .select({ id: usersTable.id })
+    .select({ id: usersTable.id, role: usersTable.role })
     .from(usersTable)
     .innerJoin(teamMembersTable, eq(teamMembersTable.userId, usersTable.id))
     .innerJoin(teamsTable, eq(teamsTable.id, teamMembersTable.teamId))
     .where(and(eq(usersTable.id, body.data.userId), eq(teamsTable.ownerId, ownerId)));
   if (!user) {
     res.status(404).json({ error: "Benutzer nicht gefunden" });
+    return;
+  }
+  // Koordinator-Mitgliedschaften laufen ausschließlich über den Zuweisungs-
+  // bereich (PUT /koordinatoren/:id/teams) — hier entstünde sonst eine Zeile
+  // ohne isTeamleiter, die der deklarative Vollabgleich nicht repariert.
+  if (user.role === "koordinator") {
+    res.status(403).json({
+      error: "Teamkoordinatoren werden über den Bereich Teamkoordinatoren zugewiesen.",
+    });
     return;
   }
 
@@ -437,6 +447,21 @@ router.patch(
       return;
     }
 
+    // Koordinator-Zeilen sind über den Zuweisungsbereich verwaltet: weder
+    // Stufen noch Flags dürfen hier geändert werden — isTeamleiter=false
+    // würde die Zuweisung unbemerkt entwerten (der Vollabgleich stellte sie
+    // nicht wieder her), Stufen sind für Koordinatoren bedeutungslos.
+    const [targetUser] = await db
+      .select({ role: usersTable.role })
+      .from(usersTable)
+      .where(eq(usersTable.id, targetUserId));
+    if (targetUser?.role === "koordinator") {
+      res.status(403).json({
+        error: "Die Rechte von Teamkoordinatoren werden über den Bereich Teamkoordinatoren verwaltet.",
+      });
+      return;
+    }
+
     // Lohndaten-Sperre: canViewPayroll nur für Unternehmens-Teamleiter eines
     // Dienstleister-Kontos. Der Teamleiter-Status kann im selben Request
     // gesetzt werden, deshalb wird der Zielzustand geprüft.
@@ -487,6 +512,30 @@ router.delete(
     const role = req.session.role!;
     const ownerId = await assertTeamAdminAccess(teamId, userId, role, res);
     if (ownerId === null) return;
+
+    // ERST die Mitgliedschaft im eigenen Team prüfen (404 wie bisher), DANN
+    // die Rolle: Ein Rollen-Check vor der Mitgliedschaft wäre ein Cross-
+    // Tenant-Orakel (403 für fremde Koordinatoren vs. 404 für alle anderen).
+    const [membership] = await db
+      .select({ id: teamMembersTable.id, role: usersTable.role })
+      .from(teamMembersTable)
+      .innerJoin(usersTable, eq(usersTable.id, teamMembersTable.userId))
+      .where(and(eq(teamMembersTable.teamId, teamId), eq(teamMembersTable.userId, targetUserId)))
+      .limit(1);
+    if (!membership) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    // Koordinator-Mitgliedschaften entfernt nur der Zuweisungsbereich
+    // (PUT /koordinatoren/:id/teams) — sonst liefe die Koordinator-Anzeige
+    // („zugewiesene Teams") auseinander bzw. Teamleiter könnten Koordinatoren
+    // aus dem Team werfen.
+    if (membership.role === "koordinator") {
+      res.status(403).json({
+        error: "Teamkoordinatoren werden über den Bereich Teamkoordinatoren verwaltet.",
+      });
+      return;
+    }
 
     const deleted = await db
       .delete(teamMembersTable)
@@ -539,6 +588,17 @@ router.post(
       .where(and(eq(teamMembersTable.teamId, teamId), eq(teamMembersTable.userId, userId)));
     if (!membership) {
       res.status(404).json({ error: "Mitgliedschaft nicht gefunden" });
+      return;
+    }
+
+    // Koordinatoren werden nicht überführt: Das Umhängen würde die Zuweisung
+    // ohne isTeamleiter neu anlegen (stiller Rechteverlust) und Personal-
+    // Daten-Migration ist für Verwaltungspersonen gegenstandslos. Zuweisungen
+    // ändert nur der Bereich Teamkoordinatoren.
+    if (await isKoordinatorUser(userId)) {
+      res.status(403).json({
+        error: "Teamkoordinatoren werden über den Bereich Teamkoordinatoren zugewiesen.",
+      });
       return;
     }
 

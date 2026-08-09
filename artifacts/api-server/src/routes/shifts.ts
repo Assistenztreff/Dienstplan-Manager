@@ -31,6 +31,7 @@ import {
   getTeamIdsWithCapability,
   parseTeamIdParam,
   isUserMemberOfTeam,
+  isKoordinatorUser,
   isShiftModelInTeam,
 } from "../lib/teams";
 import {
@@ -774,6 +775,16 @@ router.post("/shifts", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  // Koordinatoren sind Verwaltungspersonen, nie Personal: Für sie werden
+  // keine Dienste oder Abwesenheiten geplant (sonst tauchten sie im
+  // Dienstplan und in Stundenauswertungen als Pseudo-Assistenzkraft auf).
+  if (await isKoordinatorUser(body.data.userId)) {
+    res.status(403).json({
+      error: "Für Teamkoordinatoren können keine Dienste geplant werden.",
+    });
+    return;
+  }
+
   // Team-Dienst (Teamsitzung): nur erlaubt, wenn der Konto-Schalter des
   // Team-Eigentümers AN ist (Bestandsschutz: bestehende Einträge bleiben).
   if (body.data.type === "team") {
@@ -1037,6 +1048,14 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
     return;
   }
 
+  // Koordinatoren sind Verwaltungspersonen, nie Personal (wie Einzel-Route).
+  if (await isKoordinatorUser(userId)) {
+    res.status(403).json({
+      error: "Für Teamkoordinatoren können keine Dienste geplant werden.",
+    });
+    return;
+  }
+
   // Kalendertage normalisieren und deduplizieren (ein Eintrag pro Tag,
   // aufsteigend). Ohne Dedupe würden doppelte Tage im selben Request den
   // Duplikatschutz umgehen (die Vorprüfung sieht nur Bestandsdaten).
@@ -1264,6 +1283,13 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
     // Der neue Nutzer muss Mitglied des Teams der Schicht sein.
     if (!(await isUserMemberOfTeam(body.data.userId, oldShift.teamId))) {
       res.status(403).json({ error: "Nutzer gehört nicht zu diesem Team" });
+      return;
+    }
+    // Koordinatoren sind Verwaltungspersonen, nie Personal (wie beim Anlegen).
+    if (await isKoordinatorUser(body.data.userId)) {
+      res.status(403).json({
+        error: "Für Teamkoordinatoren können keine Dienste geplant werden.",
+      });
       return;
     }
   }

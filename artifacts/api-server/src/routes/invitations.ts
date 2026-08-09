@@ -69,7 +69,10 @@ router.post("/users/:id/invite", requireAdmin, requirePlanFeature("caregiverLogi
     inviteUrl,
     token,
     expiresIn: "48 Stunden",
-    note: "Dieser Link ist temporär und dient zur ersten Anmeldung der Assistenzkraft.",
+    note:
+      user.role === "koordinator"
+        ? "Dieser Link ist temporär und dient zur ersten Anmeldung des Teamkoordinators."
+        : "Dieser Link ist temporär und dient zur ersten Anmeldung der Assistenzkraft.",
   });
 });
 

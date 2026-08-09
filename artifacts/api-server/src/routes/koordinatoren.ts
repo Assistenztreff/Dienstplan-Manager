@@ -238,6 +238,23 @@ router.put(
         .insert(teamMembersTable)
         .values(toAdd.map((teamId) => ({ teamId, userId: id, isTeamleiter: true })));
     }
+    // Defensive Normalisierung: Auch BESTEHENDE, weiterhin gewünschte Zeilen
+    // müssen isTeamleiter=true tragen. Sollte je eine Koordinator-Zeile ohne
+    // das Flag entstehen (Altbestand, manuelle Eingriffe), repariert der
+    // Vollabgleich sie hier, statt sie stillschweigend zu behalten.
+    const toKeep = requested.filter((t) => currentIds.has(t));
+    if (toKeep.length > 0) {
+      await db
+        .update(teamMembersTable)
+        .set({ isTeamleiter: true })
+        .where(
+          and(
+            eq(teamMembersTable.userId, id),
+            inArray(teamMembersTable.teamId, toKeep),
+            eq(teamMembersTable.isTeamleiter, false),
+          ),
+        );
+    }
     if (toRemove.length > 0) {
       await db
         .delete(teamMembersTable)
