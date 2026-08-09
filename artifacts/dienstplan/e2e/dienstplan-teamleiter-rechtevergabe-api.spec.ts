@@ -176,6 +176,24 @@ test.describe("Teamleiter-Rechtevergabe", () => {
     expect(res.status()).toBe(404);
   });
 
+  test("Eigene Stufe aendern sperrt den Teamleiter nicht aus", async () => {
+    // Erlaubt, aber KEINE Eskalation und KEIN Selbst-Aussperren: Die eigene
+    // Zeile ist ein normales Mitglied (nicht der Inhaber), und die effektive
+    // Berechtigung haengt am Teamleiter-Flag, nicht an der Stufe.
+    const res = await leiterCtx.patch(`/api/teams/${teamA}/members/${leiterId}`, {
+      data: { accessLevel: "keine" },
+    });
+    expect(res.ok(), `Eigene Stufe setzen fehlgeschlagen (${res.status()})`).toBe(true);
+
+    // Trotz Stufe "keine" bleibt der Teamleiter voll handlungsfaehig.
+    const membersRes = await leiterCtx.get(`/api/teams/${teamA}/members`);
+    expect(membersRes.ok(), `Mitglieder lesen fehlgeschlagen (${membersRes.status()})`).toBe(true);
+    const wieder = await leiterCtx.patch(`/api/teams/${teamA}/members/${kollegeId}`, {
+      data: { accessLevel: "stufe2" },
+    });
+    expect(wieder.ok(), `Stufe setzen fehlgeschlagen (${wieder.status()})`).toBe(true);
+  });
+
   test("Entzug des Teamleiter-Status wirkt sofort", async () => {
     const revoke = await owner.ctx.patch(`/api/teams/${teamA}/members/${leiterId}`, {
       data: { isTeamleiter: false },

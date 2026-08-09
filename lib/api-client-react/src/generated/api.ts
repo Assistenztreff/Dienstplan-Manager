@@ -2435,8 +2435,8 @@ export const getUpdateTeamMemberFlagsUrl = (id: number,
 }
 
 /**
- * Setzt isTeamleiter und/oder canViewPayroll für ein Team-Mitglied. Nur Konto-Admins (Eigentümer) dürfen diese Flags ändern.
- * @summary Teamleiter-Flag und Lohndaten-Sichtbarkeit setzen
+ * Setzt isTeamleiter, accessLevel und/oder canViewPayroll für ein Team-Mitglied. Konto-Admins (Eigentümer) dürfen alle Felder ändern; Teamleiter des betroffenen Teams dürfen NUR accessLevel setzen — Teamleiter-/Lohndaten-Flags und die Rechte des Konto-Inhabers bleiben dem Inhaber vorbehalten (403). Fremde Teams antworten 404.
+ * @summary Zugriffsrechte eines Team-Mitglieds setzen
  */
 export const updateTeamMemberFlags = async (id: number,
     userId: number,
@@ -2487,7 +2487,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type UpdateTeamMemberFlagsMutationError = ErrorType<void>
 
     /**
- * @summary Teamleiter-Flag und Lohndaten-Sichtbarkeit setzen
+ * @summary Zugriffsrechte eines Team-Mitglieds setzen
  */
 export const useUpdateTeamMemberFlags = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTeamMemberFlags>>, TError,{id: number;userId: number;data: BodyType<TeamMemberFlagsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}

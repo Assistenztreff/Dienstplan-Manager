@@ -99,8 +99,11 @@ test("Teamleiter oeffnet den Zugriffsrechte-Dialog und vergibt eine Stufe", asyn
   await page.goto("/team-verwaltung");
 
   // Der Zugriffsrechte-Knopf erscheint fuer den Teamleiter in seinem Team.
+  // Grosszuegiger Timeout: Beim ersten Aufruf nach Stack-Start kompiliert Vite
+  // die Seite noch, und unter Parallellast kann die Members-Abfrage die
+  // Standard-5s ueberschreiten (beobachteter Flake bei parallelem Speclauf).
   const rechteButton = page.getByTestId(`rights-team-${teamA}`);
-  await expect(rechteButton).toBeVisible();
+  await expect(rechteButton).toBeVisible({ timeout: 20_000 });
   await rechteButton.click();
 
   const dialog = page.getByRole("dialog");

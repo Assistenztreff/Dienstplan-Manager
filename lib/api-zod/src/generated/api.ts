@@ -839,8 +839,8 @@ export const AddTeamMemberBody = zod.object({
 
 
 /**
- * Setzt isTeamleiter und/oder canViewPayroll für ein Team-Mitglied. Nur Konto-Admins (Eigentümer) dürfen diese Flags ändern.
- * @summary Teamleiter-Flag und Lohndaten-Sichtbarkeit setzen
+ * Setzt isTeamleiter, accessLevel und/oder canViewPayroll für ein Team-Mitglied. Konto-Admins (Eigentümer) dürfen alle Felder ändern; Teamleiter des betroffenen Teams dürfen NUR accessLevel setzen — Teamleiter-/Lohndaten-Flags und die Rechte des Konto-Inhabers bleiben dem Inhaber vorbehalten (403). Fremde Teams antworten 404.
+ * @summary Zugriffsrechte eines Team-Mitglieds setzen
  */
 export const UpdateTeamMemberFlagsParams = zod.object({
   "id": zod.coerce.number(),
