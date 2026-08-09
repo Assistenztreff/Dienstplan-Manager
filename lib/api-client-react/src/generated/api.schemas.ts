@@ -333,6 +333,19 @@ export const TeamMemberRole = {
   assistant: 'assistant',
 } as const;
 
+/**
+ * Gestufte Team-Freischaltung für Assistenznehmer beim Dienstleister. keine = keine Team-Rechte, basis = Lese-Übersicht, stufe1 = Planen und Assistenzkräfte pflegen, stufe2 = zusätzlich Team-Verwaltung und Zeiterfassung.
+ */
+export type TeamMemberAccessLevel = typeof TeamMemberAccessLevel[keyof typeof TeamMemberAccessLevel];
+
+
+export const TeamMemberAccessLevel = {
+  keine: 'keine',
+  basis: 'basis',
+  stufe1: 'stufe1',
+  stufe2: 'stufe2',
+} as const;
+
 export interface TeamMember {
   id: number;
   teamId: number;
@@ -344,14 +357,27 @@ export interface TeamMember {
   teamCount: number;
   /** Gibt dem Mitglied Admin-Level-Zugriff auf genau dieses Team */
   isTeamleiter: boolean;
-  /** Erlaubt dem Teamleiter Zugriff auf Lohn- und sensible Personalfelder */
+  /** Erlaubt Zugriff auf Lohn- und sensible Personalfelder. Nur für Unternehmens-Teamleiter eines Dienstleister-Kontos setzbar. */
   canViewPayroll: boolean;
+  /** Gestufte Team-Freischaltung für Assistenznehmer beim Dienstleister. keine = keine Team-Rechte, basis = Lese-Übersicht, stufe1 = Planen und Assistenzkräfte pflegen, stufe2 = zusätzlich Team-Verwaltung und Zeiterfassung. */
+  accessLevel: TeamMemberAccessLevel;
   createdAt: string;
 }
+
+export type TeamMemberFlagsInputAccessLevel = typeof TeamMemberFlagsInputAccessLevel[keyof typeof TeamMemberFlagsInputAccessLevel];
+
+
+export const TeamMemberFlagsInputAccessLevel = {
+  keine: 'keine',
+  basis: 'basis',
+  stufe1: 'stufe1',
+  stufe2: 'stufe2',
+} as const;
 
 export interface TeamMemberFlagsInput {
   isTeamleiter?: boolean;
   canViewPayroll?: boolean;
+  accessLevel?: TeamMemberFlagsInputAccessLevel;
 }
 
 export interface TeamMemberInput {
@@ -1597,6 +1623,19 @@ export const AuthUserPlan = {
   premium: 'premium',
 } as const;
 
+/**
+ * Höchste gestufte Team-Freischaltung über alle Mitgliedschaften hinweg. Steuert nur die Sichtbarkeit im Frontend; die Durchsetzung erfolgt serverseitig pro Team.
+ */
+export type AuthUserTeamAccessLevel = typeof AuthUserTeamAccessLevel[keyof typeof AuthUserTeamAccessLevel];
+
+
+export const AuthUserTeamAccessLevel = {
+  keine: 'keine',
+  basis: 'basis',
+  stufe1: 'stufe1',
+  stufe2: 'stufe2',
+} as const;
+
 export interface AuthUser {
   id: number;
   name: string;
@@ -1606,6 +1645,8 @@ export interface AuthUser {
   plan: AuthUserPlan;
   /** true, wenn der Nutzer in mindestens einem Team als Teamleiter eingetragen ist. Ermöglicht dem Frontend den Team-Switcher auch für Nicht-Dienstleister anzuzeigen. */
   isTeamleiter?: boolean;
+  /** Höchste gestufte Team-Freischaltung über alle Mitgliedschaften hinweg. Steuert nur die Sichtbarkeit im Frontend; die Durchsetzung erfolgt serverseitig pro Team. */
+  teamAccessLevel?: AuthUserTeamAccessLevel;
 }
 
 export interface LoginInput {

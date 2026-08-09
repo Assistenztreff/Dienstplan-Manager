@@ -819,7 +819,8 @@ export const ListTeamMembersResponseItem = zod.object({
   "role": zod.enum(['admin', 'assistant']),
   "teamCount": zod.number().describe('Anzahl der Teams dieses Dienstleisters, in denen der Nutzer Mitglied ist'),
   "isTeamleiter": zod.boolean().describe('Gibt dem Mitglied Admin-Level-Zugriff auf genau dieses Team'),
-  "canViewPayroll": zod.boolean().describe('Erlaubt dem Teamleiter Zugriff auf Lohn- und sensible Personalfelder'),
+  "canViewPayroll": zod.boolean().describe('Erlaubt Zugriff auf Lohn- und sensible Personalfelder. Nur für Unternehmens-Teamleiter eines Dienstleister-Kontos setzbar.'),
+  "accessLevel": zod.enum(['keine', 'basis', 'stufe1', 'stufe2']).describe('Gestufte Team-Freischaltung für Assistenznehmer beim Dienstleister. keine = keine Team-Rechte, basis = Lese-Übersicht, stufe1 = Planen und Assistenzkräfte pflegen, stufe2 = zusätzlich Team-Verwaltung und Zeiterfassung.'),
   "createdAt": zod.coerce.date()
 })
 export const ListTeamMembersResponse = zod.array(ListTeamMembersResponseItem)
@@ -848,7 +849,8 @@ export const UpdateTeamMemberFlagsParams = zod.object({
 
 export const UpdateTeamMemberFlagsBody = zod.object({
   "isTeamleiter": zod.boolean().optional(),
-  "canViewPayroll": zod.boolean().optional()
+  "canViewPayroll": zod.boolean().optional(),
+  "accessLevel": zod.enum(['keine', 'basis', 'stufe1', 'stufe2']).optional()
 })
 
 export const UpdateTeamMemberFlagsResponse = zod.object({
@@ -860,7 +862,8 @@ export const UpdateTeamMemberFlagsResponse = zod.object({
   "role": zod.enum(['admin', 'assistant']),
   "teamCount": zod.number().describe('Anzahl der Teams dieses Dienstleisters, in denen der Nutzer Mitglied ist'),
   "isTeamleiter": zod.boolean().describe('Gibt dem Mitglied Admin-Level-Zugriff auf genau dieses Team'),
-  "canViewPayroll": zod.boolean().describe('Erlaubt dem Teamleiter Zugriff auf Lohn- und sensible Personalfelder'),
+  "canViewPayroll": zod.boolean().describe('Erlaubt Zugriff auf Lohn- und sensible Personalfelder. Nur für Unternehmens-Teamleiter eines Dienstleister-Kontos setzbar.'),
+  "accessLevel": zod.enum(['keine', 'basis', 'stufe1', 'stufe2']).describe('Gestufte Team-Freischaltung für Assistenznehmer beim Dienstleister. keine = keine Team-Rechte, basis = Lese-Übersicht, stufe1 = Planen und Assistenzkräfte pflegen, stufe2 = zusätzlich Team-Verwaltung und Zeiterfassung.'),
   "createdAt": zod.coerce.date()
 })
 
@@ -896,7 +899,8 @@ export const MoveTeamMemberResponse = zod.object({
   "role": zod.enum(['admin', 'assistant']),
   "teamCount": zod.number().describe('Anzahl der Teams dieses Dienstleisters, in denen der Nutzer Mitglied ist'),
   "isTeamleiter": zod.boolean().describe('Gibt dem Mitglied Admin-Level-Zugriff auf genau dieses Team'),
-  "canViewPayroll": zod.boolean().describe('Erlaubt dem Teamleiter Zugriff auf Lohn- und sensible Personalfelder'),
+  "canViewPayroll": zod.boolean().describe('Erlaubt Zugriff auf Lohn- und sensible Personalfelder. Nur für Unternehmens-Teamleiter eines Dienstleister-Kontos setzbar.'),
+  "accessLevel": zod.enum(['keine', 'basis', 'stufe1', 'stufe2']).describe('Gestufte Team-Freischaltung für Assistenznehmer beim Dienstleister. keine = keine Team-Rechte, basis = Lese-Übersicht, stufe1 = Planen und Assistenzkräfte pflegen, stufe2 = zusätzlich Team-Verwaltung und Zeiterfassung.'),
   "createdAt": zod.coerce.date()
 })
 
@@ -1801,7 +1805,8 @@ export const LoginResponse = zod.object({
   "role": zod.enum(['admin', 'assistant', 'superadmin']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
-  "isTeamleiter": zod.boolean().optional().describe('true, wenn der Nutzer in mindestens einem Team als Teamleiter eingetragen ist. Ermöglicht dem Frontend den Team-Switcher auch für Nicht-Dienstleister anzuzeigen.')
+  "isTeamleiter": zod.boolean().optional().describe('true, wenn der Nutzer in mindestens einem Team als Teamleiter eingetragen ist. Ermöglicht dem Frontend den Team-Switcher auch für Nicht-Dienstleister anzuzeigen.'),
+  "teamAccessLevel": zod.enum(['keine', 'basis', 'stufe1', 'stufe2']).optional().describe('Höchste gestufte Team-Freischaltung über alle Mitgliedschaften hinweg. Steuert nur die Sichtbarkeit im Frontend; die Durchsetzung erfolgt serverseitig pro Team.')
 })
 
 
@@ -1815,7 +1820,8 @@ export const GetMeResponse = zod.object({
   "role": zod.enum(['admin', 'assistant', 'superadmin']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
-  "isTeamleiter": zod.boolean().optional().describe('true, wenn der Nutzer in mindestens einem Team als Teamleiter eingetragen ist. Ermöglicht dem Frontend den Team-Switcher auch für Nicht-Dienstleister anzuzeigen.')
+  "isTeamleiter": zod.boolean().optional().describe('true, wenn der Nutzer in mindestens einem Team als Teamleiter eingetragen ist. Ermöglicht dem Frontend den Team-Switcher auch für Nicht-Dienstleister anzuzeigen.'),
+  "teamAccessLevel": zod.enum(['keine', 'basis', 'stufe1', 'stufe2']).optional().describe('Höchste gestufte Team-Freischaltung über alle Mitgliedschaften hinweg. Steuert nur die Sichtbarkeit im Frontend; die Durchsetzung erfolgt serverseitig pro Team.')
 })
 
 
@@ -1838,7 +1844,8 @@ export const SetPasswordResponse = zod.object({
   "role": zod.enum(['admin', 'assistant', 'superadmin']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
-  "isTeamleiter": zod.boolean().optional().describe('true, wenn der Nutzer in mindestens einem Team als Teamleiter eingetragen ist. Ermöglicht dem Frontend den Team-Switcher auch für Nicht-Dienstleister anzuzeigen.')
+  "isTeamleiter": zod.boolean().optional().describe('true, wenn der Nutzer in mindestens einem Team als Teamleiter eingetragen ist. Ermöglicht dem Frontend den Team-Switcher auch für Nicht-Dienstleister anzuzeigen.'),
+  "teamAccessLevel": zod.enum(['keine', 'basis', 'stufe1', 'stufe2']).optional().describe('Höchste gestufte Team-Freischaltung über alle Mitgliedschaften hinweg. Steuert nur die Sichtbarkeit im Frontend; die Durchsetzung erfolgt serverseitig pro Team.')
 })
 
 
@@ -1877,7 +1884,8 @@ export const UpdateProfileResponse = zod.object({
   "role": zod.enum(['admin', 'assistant', 'superadmin']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
-  "isTeamleiter": zod.boolean().optional().describe('true, wenn der Nutzer in mindestens einem Team als Teamleiter eingetragen ist. Ermöglicht dem Frontend den Team-Switcher auch für Nicht-Dienstleister anzuzeigen.')
+  "isTeamleiter": zod.boolean().optional().describe('true, wenn der Nutzer in mindestens einem Team als Teamleiter eingetragen ist. Ermöglicht dem Frontend den Team-Switcher auch für Nicht-Dienstleister anzuzeigen.'),
+  "teamAccessLevel": zod.enum(['keine', 'basis', 'stufe1', 'stufe2']).optional().describe('Höchste gestufte Team-Freischaltung über alle Mitgliedschaften hinweg. Steuert nur die Sichtbarkeit im Frontend; die Durchsetzung erfolgt serverseitig pro Team.')
 })
 
 

@@ -5,6 +5,7 @@
  * Dienstplan-App API für Persönliche Assistenz
  * OpenAPI spec version: 0.1.0
  */
+import type { TeamMemberAccessLevel } from './teamMemberAccessLevel';
 import type { TeamMemberRole } from './teamMemberRole';
 
 export interface TeamMember {
@@ -18,7 +19,9 @@ export interface TeamMember {
   teamCount: number;
   /** Gibt dem Mitglied Admin-Level-Zugriff auf genau dieses Team */
   isTeamleiter: boolean;
-  /** Erlaubt dem Teamleiter Zugriff auf Lohn- und sensible Personalfelder */
+  /** Erlaubt Zugriff auf Lohn- und sensible Personalfelder. Nur für Unternehmens-Teamleiter eines Dienstleister-Kontos setzbar. */
   canViewPayroll: boolean;
+  /** Gestufte Team-Freischaltung für Assistenznehmer beim Dienstleister. keine = keine Team-Rechte, basis = Lese-Übersicht, stufe1 = Planen und Assistenzkräfte pflegen, stufe2 = zusätzlich Team-Verwaltung und Zeiterfassung. */
+  accessLevel: TeamMemberAccessLevel;
   createdAt: Date;
 }

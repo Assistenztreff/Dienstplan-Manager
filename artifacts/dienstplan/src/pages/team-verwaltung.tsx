@@ -27,10 +27,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, Building2, ArrowRightLeft, Lock, UserCog } from "lucide-react";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Building2,
+  ArrowRightLeft,
+  Lock,
+  UserCog,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
 import { PlanLimitBanner } from "@/components/plan-limit-banner";
+import { AssistenzkraftListe } from "@/components/assistenzkraft-liste";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/context/auth";
+import { useAuth, hasTeamAccessLevel, type TeamAccessLevel } from "@/context/auth";
 import { isAdminRole } from "@/lib/roles";
 import { isWithinLimit, getLimit } from "@/lib/entitlements";
 import { readableApiError, planUpgradeMessage } from "@/lib/api-error";
@@ -53,11 +64,28 @@ type Member = {
   createdAt: string;
   isTeamleiter: boolean;
   canViewPayroll: boolean;
+  accessLevel: TeamAccessLevel;
 };
 
 function roleLabel(role: "admin" | "assistant"): string {
   return role === "admin" ? "Assistenznehmer" : "Assistenzkraft";
 }
+
+/** Beschriftungen der gestuften Team-Freischaltung (siehe Handbuch "Rollen"). */
+const ACCESS_LEVEL_OPTIONS: { value: TeamAccessLevel; label: string; hint: string }[] = [
+  { value: "keine", label: "Kein Zugriff", hint: "Sieht nur die eigenen Daten." },
+  { value: "basis", label: "Basis – nur ansehen", hint: "Darf den Team-Überblick lesen." },
+  {
+    value: "stufe1",
+    label: "Stufe 1 – planen",
+    hint: "Darf Dienste und Abwesenheiten planen sowie Assistenzkräfte pflegen.",
+  },
+  {
+    value: "stufe2",
+    label: "Stufe 2 – verwalten",
+    hint: "Zusätzlich Team-Verwaltung und Zeiterfassung.",
+  },
+];
 
 type TeamDialogProps = {
   open: boolean;
@@ -147,6 +175,7 @@ type TransferDialogProps = {
  * "Assistenzkraft überführen": verschiebt eine Mitgliedschaft atomar vom
  * Quell-Team (Zeile, aus der der Dialog geöffnet wurde) in ein Ziel-Team über
  * den dedizierten Move-Endpunkt — kein Zwischenzustand aus Entfernen+Anlegen.
+ * Das ist der einzige Weg für einen Teamwechsel.
  */
 function TransferDialog({ team, teams, onClose }: TransferDialogProps) {
   const queryClient = useQueryClient();
@@ -174,7 +203,7 @@ function TransferDialog({ team, teams, onClose }: TransferDialogProps) {
       await queryClient.invalidateQueries({
         queryKey: getListTeamMembersQueryKey(Number(targetTeam)),
       });
-      // Team-gescopte Nutzerlisten (Assistenten-Seite) neu laden.
+      // Team-gescopte Nutzerlisten neu laden.
       await queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
       // Auch Dienstplan, Verträge, Zeiterfassung und Auswertung sind betroffen,
       // weil die persönlichen Daten mitwandern.
@@ -289,91 +318,65 @@ function TransferDialog({ team, teams, onClose }: TransferDialogProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Teamleiter-Rollen-Dialog: is_teamleiter und can_view_payroll je Mitglied
-// setzen. Nur für vollständige Admins (nicht Teamleiter selbst) sichtbar.
+// Zugriffsrechte-Dialog: gestufte Freischaltung je Mitgliedschaft. Der
+// klassische Teamleiter wird direkt auf der Assistenzkraft-Karte gesetzt; hier
+// steht die gestufte Freischaltung und — nur für Dienstleister-Teamleiter —
+// die zusätzliche Lohndaten-Freigabe.
 // ---------------------------------------------------------------------------
 
-type TeamleiterDialogProps = {
+type ZugriffsrechteDialogProps = {
   team: Team;
-  /** Ob der eingeloggte Admin ein Dienstleister-Konto hat (steuert Hinweistext). */
+  /** Ob der eingeloggte Admin ein Dienstleister-Konto hat (steuert Lohn-Freigabe). */
   isDienstleister: boolean;
   onClose: () => void;
 };
 
-function TeamleiterDialog({ team, isDienstleister, onClose }: TeamleiterDialogProps) {
+function ZugriffsrechteDialog({ team, isDienstleister, onClose }: ZugriffsrechteDialogProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: membersData, isLoading } = useListTeamMembers(team.id);
   const members = (membersData ?? []) as Member[];
 
-  // Optimistische lokale Kopie für sofortiges Toggle-Feedback.
-  const [localFlags, setLocalFlags] = useState<
-    Record<number, { isTeamleiter: boolean; canViewPayroll: boolean }>
-  >(() =>
-    Object.fromEntries(
-      (membersData as Member[] ?? []).map((m) => [
-        m.userId,
-        { isTeamleiter: m.isTeamleiter ?? false, canViewPayroll: m.canViewPayroll ?? false },
-      ]),
-    ),
-  );
+  const [busyUserId, setBusyUserId] = useState<number | null>(null);
 
-  // Synchronisiert localFlags wenn Mitgliederdaten geladen werden.
-  const [syncDone, setSyncDone] = useState(false);
-  if (!isLoading && !syncDone && members.length > 0) {
-    const flags: typeof localFlags = {};
-    for (const m of members) {
-      flags[m.userId] = {
-        isTeamleiter: m.isTeamleiter ?? false,
-        canViewPayroll: m.canViewPayroll ?? false,
-      };
-    }
-    setLocalFlags(flags);
-    setSyncDone(true);
-  }
+  const updateFlags = useUpdateTeamMemberFlags();
 
-  const updateFlags = useUpdateTeamMemberFlags({
-    mutation: {
-      onSuccess: async () => {
-        await queryClient.invalidateQueries({ queryKey: getListTeamMembersQueryKey(team.id) });
-      },
-      onError: (err: unknown) => {
-        toast({
-          title: "Fehler beim Speichern",
-          description: readableApiError(err, "Bitte erneut versuchen."),
-          variant: "destructive",
-        });
-      },
-    },
-  });
-
-  async function toggle(
-    userId: number,
-    field: "isTeamleiter" | "canViewPayroll",
-    value: boolean,
+  async function save(
+    member: Member,
+    patch: { accessLevel?: TeamAccessLevel; canViewPayroll?: boolean },
   ) {
-    const current = localFlags[userId] ?? { isTeamleiter: false, canViewPayroll: false };
-    const next = { ...current, [field]: value };
-    // canViewPayroll hat nur Wirkung wenn isTeamleiter=true.
-    if (field === "isTeamleiter" && !value) next.canViewPayroll = false;
-    setLocalFlags((prev) => ({ ...prev, [userId]: next }));
-    await updateFlags.mutateAsync({ id: team.id, userId, data: next });
+    setBusyUserId(member.userId);
+    try {
+      await updateFlags.mutateAsync({ id: team.id, userId: member.userId, data: patch });
+      await queryClient.invalidateQueries({ queryKey: getListTeamMembersQueryKey(team.id) });
+    } catch (err) {
+      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
+      toast({
+        title: "Fehler beim Speichern",
+        description: readableApiError(err, "Bitte erneut versuchen."),
+        variant: "destructive",
+      });
+    } finally {
+      setBusyUserId(null);
+    }
   }
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-serif text-xl flex items-center gap-2">
             <UserCog className="h-5 w-5 text-muted-foreground" />
-            Teamleiter-Rollen: {team.name}
+            Zugriffsrechte: {team.name}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-1 py-2">
           {isLoading ? (
             <div className="space-y-2 py-2">
-              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 w-full rounded-md" />)}
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-12 w-full rounded-md" />
+              ))}
             </div>
           ) : members.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">
@@ -382,53 +385,69 @@ function TeamleiterDialog({ team, isDienstleister, onClose }: TeamleiterDialogPr
           ) : (
             <ul className="divide-y divide-border/40">
               {members.map((m) => {
-                const flags = localFlags[m.userId] ?? {
-                  isTeamleiter: m.isTeamleiter ?? false,
-                  canViewPayroll: m.canViewPayroll ?? false,
-                };
+                const level: TeamAccessLevel = m.accessLevel ?? "keine";
+                const busy = busyUserId === m.userId;
+                const option = ACCESS_LEVEL_OPTIONS.find((o) => o.value === level);
                 return (
                   <li key={m.userId} className="py-3 space-y-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium text-sm">{m.name}</span>
                       <span className="text-xs text-muted-foreground">{m.email}</span>
-                      {flags.isTeamleiter && (
-                        <Badge variant="secondary" className="text-xs">Teamleiter</Badge>
+                      {m.isTeamleiter && (
+                        <Badge variant="secondary" className="text-xs">
+                          Teamleiter
+                        </Badge>
                       )}
                     </div>
-                    <div className="flex flex-col gap-2 pl-1">
-                      <div className="flex items-center gap-3">
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor={`al-${m.userId}`} className="text-xs text-muted-foreground">
+                        Freischaltung in diesem Team
+                      </Label>
+                      <Select
+                        value={level}
+                        disabled={busy}
+                        onValueChange={(v) =>
+                          void save(m, { accessLevel: v as TeamAccessLevel })
+                        }
+                      >
+                        <SelectTrigger
+                          id={`al-${m.userId}`}
+                          data-testid={`access-level-${m.userId}`}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ACCESS_LEVEL_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>
+                              {o.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {option && (
+                        <p className="text-xs text-muted-foreground">{option.hint}</p>
+                      )}
+                    </div>
+
+                    {/* Lohndaten sind eine bewusste Extra-Freigabe und nur für
+                        Teamleiter in Dienstleister-Konten zulässig. */}
+                    {isDienstleister && m.isTeamleiter && (
+                      <div className="flex items-center gap-3 pt-1">
                         <Switch
-                          id={`tl-${m.userId}`}
-                          checked={flags.isTeamleiter}
-                          disabled={updateFlags.isPending}
-                          onCheckedChange={(v) => void toggle(m.userId, "isTeamleiter", v)}
+                          id={`cp-${m.userId}`}
+                          checked={m.canViewPayroll ?? false}
+                          disabled={busy}
+                          onCheckedChange={(v) => void save(m, { canViewPayroll: v })}
                         />
-                        <Label htmlFor={`tl-${m.userId}`} className="text-sm cursor-pointer">
-                          Als Teamleiter festlegen
+                        <Label htmlFor={`cp-${m.userId}`} className="text-sm cursor-pointer">
+                          Darf Lohn- und Personaldaten sehen
                           <span className="block text-xs text-muted-foreground font-normal">
-                            Kann Schichten, Verträge und Zeiterfassung in diesem Team verwalten
+                            Gibt Zugang zu Stundenlohn, Sozialversicherungs- und Steuerdaten.
                           </span>
                         </Label>
                       </div>
-                      {flags.isTeamleiter && (
-                        <div className="flex items-center gap-3 pl-8">
-                          <Switch
-                            id={`cp-${m.userId}`}
-                            checked={flags.canViewPayroll}
-                            disabled={updateFlags.isPending}
-                            onCheckedChange={(v) => void toggle(m.userId, "canViewPayroll", v)}
-                          />
-                          <Label htmlFor={`cp-${m.userId}`} className="text-sm cursor-pointer">
-                            Darf Lohn-/Personaldaten sehen
-                            <span className="block text-xs text-muted-foreground font-normal">
-                              {isDienstleister
-                                ? "Gibt Zugang zu Stundenlohn, Sozialversicherungs- und Steuerdaten"
-                                : "Damit sieht diese Person auch Stundenlöhne, Verträge und persönliche Daten der anderen Teammitglieder."}
-                            </span>
-                          </Label>
-                        </div>
-                      )}
-                    </div>
+                    )}
                   </li>
                 );
               })}
@@ -444,6 +463,122 @@ function TeamleiterDialog({ team, isDienstleister, onClose }: TeamleiterDialogPr
   );
 }
 
+/**
+ * Ein Team als aufklappbarer Block: Kopfzeile mit Aktionen, darunter die
+ * Assistenzkräfte dieses Teams samt "Assistenzkraft anlegen".
+ */
+function TeamBlock({
+  team,
+  teams,
+  expanded,
+  onToggle,
+  isFullAdmin,
+  isDienstleisterKonto,
+  onTransfer,
+  onRechte,
+  onEdit,
+  onDelete,
+  confirmDelete,
+  onCancelDelete,
+  collapsible,
+}: {
+  team: Team;
+  teams: Team[];
+  expanded: boolean;
+  onToggle: () => void;
+  isFullAdmin: boolean;
+  isDienstleisterKonto: boolean;
+  onTransfer: () => void;
+  onRechte: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  confirmDelete: boolean;
+  onCancelDelete: () => void;
+  collapsible: boolean;
+}) {
+  return (
+    <Card className="border-border/50 shadow-sm" data-testid={`team-block-${team.id}`}>
+      <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-border/40 bg-muted/20">
+        {collapsible ? (
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={expanded}
+            data-testid={`toggle-team-${team.id}`}
+            className="flex min-h-11 min-w-11 flex-1 items-center gap-2 rounded-md px-1 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {expanded ? (
+              <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
+            )}
+            <Building2 className="h-4 w-4 text-muted-foreground/60 shrink-0" aria-hidden="true" />
+            <span className="font-medium truncate">{team.name}</span>
+          </button>
+        ) : (
+          <div className="flex flex-1 items-center gap-2 px-1">
+            <Building2 className="h-4 w-4 text-muted-foreground/60 shrink-0" aria-hidden="true" />
+            <span className="font-medium truncate">{team.name}</span>
+          </div>
+        )}
+
+        {isFullAdmin && (
+          <div className="flex flex-wrap items-center gap-2">
+            {teams.length > 1 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={onTransfer}
+                data-testid={`transfer-team-${team.id}`}
+                title="Assistenzkraft in ein anderes Team überführen"
+              >
+                <ArrowRightLeft className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Überführen</span>
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={onRechte}
+              data-testid={`rights-team-${team.id}`}
+              title="Zugriffsrechte der Mitglieder verwalten"
+            >
+              <UserCog className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Zugriffsrechte</span>
+            </Button>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={onEdit}>
+              <Pencil className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Bearbeiten</span>
+            </Button>
+            <Button
+              variant={confirmDelete ? "destructive" : "ghost"}
+              size="sm"
+              className="gap-1.5"
+              onClick={onDelete}
+              onBlur={onCancelDelete}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">{confirmDelete ? "Wirklich?" : "Löschen"}</span>
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {expanded && (
+        <CardContent className="p-4">
+          <AssistenzkraftListe
+            teamId={team.id}
+            canManageMembers={isFullAdmin}
+            isDienstleisterKonto={isDienstleisterKonto}
+          />
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
 export default function TeamVerwaltung() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -454,31 +589,41 @@ export default function TeamVerwaltung() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTeam, setEditTeam] = useState<Team | undefined>();
   const [transferTeam, setTransferTeam] = useState<Team | undefined>();
-  const [teamleiterTeam, setTeamleiterTeam] = useState<Team | undefined>();
+  const [rechteTeam, setRechteTeam] = useState<Team | undefined>();
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
 
-  // isTeamleiter = eingeloggte Person ist Teamleiter, kein Admin.
   const isFullAdmin = isAdminRole(currentUser?.role);
-  const isTeamleiterMode = !isFullAdmin && currentUser?.isTeamleiter === true;
-  const isDienstleister = currentUser?.accountType === "dienstleister";
+  // Freigeschaltete Nicht-Admins (klassische Teamleiter oder ab Stufe 1) pflegen
+  // hier die Assistenzkräfte, aber ohne Team-Struktur-Aktionen.
+  const isDelegiert =
+    !isFullAdmin &&
+    (currentUser?.isTeamleiter === true || hasTeamAccessLevel(currentUser, "stufe1"));
+  const isDienstleisterKonto = currentUser?.accountType === "dienstleister";
 
   const teams: Team[] = (data ?? []) as Team[];
+  // Privatkonten führen genau ein Team: Der Mitgliederbereich wird direkt
+  // aufgeklappt gezeigt, ohne Team-Auswahl davor.
+  const singleTeamView = teams.length <= 1;
 
   // Free-Plan begrenzt die Anzahl der Teams (Free = 1). Da die Registrierung
   // bereits ein Standard-Team anlegt, startet ein Free-Konto direkt am Limit.
-  // Ist es erreicht, wird das Anlegen gesperrt (Durchsetzung zusaetzlich
-  // serverseitig). `null` = unbegrenzt (Premium). Bestandsschutz: vorhandene
-  // Teams bleiben sichtbar/editierbar; nur das Anlegen ueber dem Limit ist gesperrt.
   const teamLimit = getLimit(currentUser, "maxTeams");
   const canAddTeam = isWithinLimit(currentUser, "maxTeams", teams.length);
 
-  function openCreate() {
-    setEditTeam(undefined);
-    setDialogOpen(true);
+  // Teams sind standardmäßig offen — Zuklappen ist die bewusste Aktion. So
+  // sieht man die Assistenzkräfte sofort, statt erst suchen zu müssen.
+  function isExpanded(teamId: number): boolean {
+    if (singleTeamView) return true;
+    return expanded[teamId] !== false;
   }
 
-  function openEdit(team: Team) {
-    setEditTeam(team);
+  function toggleTeam(teamId: number) {
+    setExpanded((prev) => ({ ...prev, [teamId]: !prev[teamId] }));
+  }
+
+  function openCreate() {
+    setEditTeam(undefined);
     setDialogOpen(true);
   }
 
@@ -509,135 +654,101 @@ export default function TeamVerwaltung() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Team-Verwaltung</h2>
-          <p className="text-muted-foreground mt-1 text-sm">
-            {isTeamleiterMode
-              ? "Mitglieder der dir zugewiesenen Teams verwalten"
-              : "Teams für die Organisation von Assistenzkräften und Dienstplänen verwalten"}
-          </p>
+          <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">
+            Team-Verwaltung
+          </h2>
+          <p className="text-muted-foreground mt-1 text-sm">Teams und Assistenzkräfte verwalten</p>
         </div>
-        {/* Neues Team nur für Admins — Teamleiter dürfen keine Teams anlegen */}
-        {!isTeamleiterMode && (canAddTeam ? (
-          <Button onClick={openCreate} className="gap-2">
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Neues Team</span>
-            <span className="sm:hidden">Neu</span>
-          </Button>
-        ) : (
-          <Button
-            disabled
-            className="gap-2"
-            title={`Im Free-Plan ist max. ${teamLimit} Team möglich. Upgrade auf Premium für mehrere Teams.`}
-          >
-            <Lock className="h-4 w-4" />
-            <span className="hidden sm:inline">Neues Team</span>
-            <span className="sm:hidden">Neu</span>
-          </Button>
-        ))}
+        {/* Neues Team nur für Konto-Admins mit Dienstleister-Konto — Privatkonten
+            und freigeschaltete Nicht-Admins legen keine Teams an. */}
+        {isFullAdmin &&
+          isDienstleisterKonto &&
+          (canAddTeam ? (
+            <Button onClick={openCreate} className="gap-2" data-testid="team-anlegen">
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Neues Team</span>
+              <span className="sm:hidden">Neu</span>
+            </Button>
+          ) : (
+            <Button
+              disabled
+              className="gap-2"
+              data-testid="team-anlegen"
+              title={`Im Free-Plan ist max. ${teamLimit} Team möglich. Upgrade auf Premium für mehrere Teams.`}
+            >
+              <Lock className="h-4 w-4" />
+              <span className="hidden sm:inline">Neues Team</span>
+              <span className="sm:hidden">Neu</span>
+            </Button>
+          ))}
       </div>
 
       {/* Limit-Hinweis (Free-Plan). Bei Premium ist teamLimit null. */}
-      {!isTeamleiterMode && !canAddTeam && teamLimit !== null && (
+      {isFullAdmin && isDienstleisterKonto && !canAddTeam && teamLimit !== null && (
         <PlanLimitBanner>
           Im Free-Plan ist maximal {teamLimit} Team möglich. Für mehrere Teams ist ein Upgrade auf
           Premium nötig.
         </PlanLimitBanner>
       )}
 
-      <Card className="border-border/50 shadow-sm">
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="p-4 space-y-3">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-14 w-full rounded-lg" />
-              ))}
-            </div>
-          ) : teams.length === 0 ? (
-            <div className="p-12 text-center">
-              <p className="text-muted-foreground mb-4">Noch keine Teams angelegt.</p>
+      {isLoading ? (
+        <div className="space-y-3">
+          {[1, 2].map((i) => (
+            <Skeleton key={i} className="h-32 w-full rounded-xl" />
+          ))}
+        </div>
+      ) : teams.length === 0 ? (
+        <Card className="border-border/50 shadow-sm">
+          <CardContent className="p-12 text-center">
+            <p className="text-muted-foreground mb-4">
+              {isDelegiert
+                ? "Dir ist derzeit kein Team zugewiesen."
+                : "Noch keine Teams angelegt."}
+            </p>
+            {isFullAdmin && (
               <Button onClick={openCreate} variant="outline" className="gap-2">
                 <Plus className="h-4 w-4" /> Erstes Team anlegen
               </Button>
-            </div>
-          ) : (
-            <ul className="divide-y divide-border/50">
-              {teams.map((team) => (
-                <li
-                  key={team.id}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors"
-                >
-                  <Building2 className="h-4 w-4 text-muted-foreground/60 shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <span className="font-medium truncate">{team.name}</span>
-                  </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {teams.map((team) => (
+            <TeamBlock
+              key={team.id}
+              team={team}
+              teams={teams}
+              expanded={isExpanded(team.id)}
+              onToggle={() => toggleTeam(team.id)}
+              isFullAdmin={isFullAdmin}
+              isDienstleisterKonto={isDienstleisterKonto}
+              onTransfer={() => setTransferTeam(team)}
+              onRechte={() => setRechteTeam(team)}
+              onEdit={() => {
+                setEditTeam(team);
+                setDialogOpen(true);
+              }}
+              onDelete={() => void handleDelete(team.id)}
+              confirmDelete={confirmDelete === team.id}
+              onCancelDelete={() => setConfirmDelete(null)}
+              collapsible={!singleTeamView}
+            />
+          ))}
+        </div>
+      )}
 
-                  {/* Admin-Only-Buttons: Überführen, Rollen, Bearbeiten, Löschen */}
-                  {!isTeamleiterMode && (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5"
-                        onClick={() => setTransferTeam(team)}
-                        data-testid={`transfer-team-${team.id}`}
-                      >
-                        <ArrowRightLeft className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">Überführen</span>
-                      </Button>
-                      {isFullAdmin && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1.5"
-                          onClick={() => setTeamleiterTeam(team)}
-                          title="Teamleiter-Rollen verwalten"
-                        >
-                          <UserCog className="h-3.5 w-3.5" />
-                          <span className="hidden sm:inline">Rollen</span>
-                        </Button>
-                      )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5"
-                        onClick={() => openEdit(team)}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">Bearbeiten</span>
-                      </Button>
-                      <Button
-                        variant={confirmDelete === team.id ? "destructive" : "ghost"}
-                        size="sm"
-                        className="gap-1.5"
-                        onClick={() => handleDelete(team.id)}
-                        onBlur={() => setConfirmDelete(null)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">
-                          {confirmDelete === team.id ? "Wirklich?" : "Löschen"}
-                        </span>
-                      </Button>
-                    </>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-
-      {!isTeamleiterMode && (
+      {isFullAdmin && isDienstleisterKonto && teams.length > 0 && (
         <p className="text-xs text-muted-foreground">
-          Teams strukturieren Assistenzkräfte und Dienstpläne. Ein Team kann nur gelöscht werden, wenn
-          ihm keine Mitglieder oder Daten mehr zugeordnet sind.
+          Teams strukturieren Assistenzkräfte und Dienstpläne. Ein Team kann nur gelöscht werden,
+          wenn ihm keine Mitglieder oder Daten mehr zugeordnet sind. Ein Teamwechsel läuft immer
+          über „Überführen“ — so wandern die Daten der Assistenzkraft in einem Schritt mit.
         </p>
       )}
 
-      {dialogOpen && (
-        <TeamDialog open={dialogOpen} onClose={closeDialog} editTeam={editTeam} />
-      )}
+      {dialogOpen && <TeamDialog open={dialogOpen} onClose={closeDialog} editTeam={editTeam} />}
 
       {transferTeam && (
         <TransferDialog
@@ -647,14 +758,13 @@ export default function TeamVerwaltung() {
         />
       )}
 
-      {teamleiterTeam && (
-        <TeamleiterDialog
-          team={teamleiterTeam}
-          isDienstleister={isDienstleister}
-          onClose={() => setTeamleiterTeam(undefined)}
+      {rechteTeam && (
+        <ZugriffsrechteDialog
+          team={rechteTeam}
+          isDienstleister={isDienstleisterKonto}
+          onClose={() => setRechteTeam(undefined)}
         />
       )}
-
     </div>
   );
 }

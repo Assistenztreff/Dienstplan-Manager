@@ -5,8 +5,10 @@
  * Dienstplan-App API für Persönliche Assistenz
  * OpenAPI spec version: 0.1.0
  */
+import type { TeamMemberFlagsInputAccessLevel } from './teamMemberFlagsInputAccessLevel';
 
 export interface TeamMemberFlagsInput {
   isTeamleiter?: boolean;
   canViewPayroll?: boolean;
+  accessLevel?: TeamMemberFlagsInputAccessLevel;
 }

@@ -88,18 +88,25 @@ test.describe("Privat-Admin darf keine Teams verwalten", () => {
   });
 });
 
-test.describe("Privat-Admin darf keine Mitgliedschaften verwalten", () => {
-  test("POST /api/teams/:id/members -> 403", async () => {
+// Mitgliedschaften: Seit der Vereinheitlichung der Team-Verwaltung pflegt AUCH
+// ein Privat-Konto die Assistenzkräfte seines EIGENEN Teams — die Mitglieder-
+// Endpunkte sind daher nicht mehr auf Dienstleister beschränkt. Die Grenze ist
+// jetzt der Team-Scope: ein fremdes (oder nicht existierendes) Team antwortet
+// mit 404, damit die Antwort nicht verrät, ob es das Team überhaupt gibt.
+const KEIN_ZUGRIFF = [401, 403, 404];
+
+test.describe("Privat-Admin kommt nicht an fremde Mitgliedschaften", () => {
+  test("POST /api/teams/:id/members -> kein Zugriff", async () => {
     const res = await privatAdminCtx.post(`/api/teams/${SOME_TEAM_ID}/members`, {
       data: { userId: SOME_USER_ID },
     });
-    expect(FORBIDDEN).toContain(res.status());
+    expect(KEIN_ZUGRIFF).toContain(res.status());
   });
 
-  test("DELETE /api/teams/:id/members/:userId -> 403", async () => {
+  test("DELETE /api/teams/:id/members/:userId -> kein Zugriff", async () => {
     const res = await privatAdminCtx.delete(
       `/api/teams/${SOME_TEAM_ID}/members/${SOME_USER_ID}`,
     );
-    expect(FORBIDDEN).toContain(res.status());
+    expect(KEIN_ZUGRIFF).toContain(res.status());
   });
 });

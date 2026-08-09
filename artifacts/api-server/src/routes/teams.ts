@@ -9,7 +9,7 @@ import {
   shiftModelsTable,
   timeTrackingTable,
 } from "@workspace/db";
-import { eq, and, asc, sql, count } from "drizzle-orm";
+import { eq, and, asc, sql, count, inArray } from "drizzle-orm";
 import type { Response } from "express";
 import {
   CreateTeamBody,
@@ -22,13 +22,19 @@ import {
 import {
   requireDienstleister,
   requireAdmin,
-  requireTeamleiterOrAdmin,
+  requireTeamReadOrAdmin,
+  requireTeamManageOrAdmin,
   requireAuth,
   isAdminLikeRole,
 } from "../middleware/auth";
 import { userWithinLimit, getUserLimit } from "../lib/plan";
 import { seedDefaultShiftModels } from "../lib/default-shift-models";
-import { isTeamleiterOfTeam } from "../lib/teams";
+import {
+  hasTeamCapability,
+  mayGrantPayrollAccess,
+  getTeamIdsWithCapability,
+  type TeamCapability,
+} from "../lib/teams";
 import { UpdateTeamMemberFlagsBody } from "@workspace/api-zod";
 
 const router = Router();
@@ -62,14 +68,20 @@ async function assertTeamOwnership(
 
 /**
  * Prüft für Team-Mitglieder-Operationen, ob der Aufrufer entweder der
- * Eigentümer des Teams ODER ein Teamleiter dieses Teams ist. Gibt bei Erfolg
- * die ownerId des Teams zurück (benötigt für selectMembers), sonst null.
+ * Eigentümer des Teams ODER im Team ausreichend freigeschaltet ist. Gibt bei
+ * Erfolg die ownerId des Teams zurück (benötigt für selectMembers), sonst null.
+ *
+ * `capability` muss zur jeweiligen Route passen: Lesen der Mitgliederliste
+ * genügt "read" (Basis-Freischaltung sieht das Team ohnehin), Hinzufügen und
+ * Entfernen verlangen "manage". Ohne diesen Parameter fiel die Liste für
+ * Basis-/Stufe-1-Mitglieder trotz erlaubter Route auf 404 zurück.
  */
 async function assertTeamAdminAccess(
   teamId: number,
   userId: number,
   role: string,
   res: Response,
+  capability: TeamCapability = "manage",
 ): Promise<number | null> {
   const [teamRow] = await db
     .select({ ownerId: teamsTable.ownerId })
@@ -86,8 +98,8 @@ async function assertTeamAdminAccess(
       return null;
     }
   } else {
-    // Nicht-Admin: muss is_teamleiter=true für dieses Team haben.
-    if (!(await isTeamleiterOfTeam(userId, teamId))) {
+    // Nicht-Admin: braucht die geforderte Freischaltung für genau dieses Team.
+    if (!(await hasTeamCapability(userId, teamId, capability))) {
       res.status(404).json({ error: "Not found" });
       return null;
     }
@@ -120,6 +132,7 @@ function selectMembers(
       teamCount,
       isTeamleiter: teamMembersTable.isTeamleiter,
       canViewPayroll: teamMembersTable.canViewPayroll,
+      accessLevel: teamMembersTable.accessLevel,
       createdAt: teamMembersTable.createdAt,
     })
     .from(teamMembersTable)
@@ -144,12 +157,17 @@ router.get("/teams", requireAuth, async (req, res): Promise<void> => {
       .orderBy(asc(teamsTable.id));
     res.json(rows);
   } else {
-    // Teamleiter: Teams, in denen is_teamleiter=true
+    // Nicht-Admins: Teams, für die sie freigeschaltet sind — als Teamleiter
+    // oder über eine gestufte Freischaltung ab Basis.
+    const allowed = await getTeamIdsWithCapability(userId, "read");
+    if (allowed.length === 0) {
+      res.json([]);
+      return;
+    }
     const rows = await db
       .select(TEAM_SELECT)
       .from(teamsTable)
-      .innerJoin(teamMembersTable, eq(teamMembersTable.teamId, teamsTable.id))
-      .where(and(eq(teamMembersTable.userId, userId), eq(teamMembersTable.isTeamleiter, true)))
+      .where(inArray(teamsTable.id, allowed))
       .orderBy(asc(teamsTable.id));
     res.json(rows);
   }
@@ -255,7 +273,7 @@ router.delete("/teams/:id", requireDienstleister, async (req, res): Promise<void
 /**
  * GET /teams/:id/members — Admins und Teamleiter können Mitglieder ihres Teams sehen.
  */
-router.get("/teams/:id/members", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
+router.get("/teams/:id/members", requireTeamReadOrAdmin, async (req, res): Promise<void> => {
   const teamId = Number(req.params["id"]);
   if (!Number.isInteger(teamId)) {
     res.status(400).json({ error: "Invalid id" });
@@ -263,7 +281,7 @@ router.get("/teams/:id/members", requireTeamleiterOrAdmin, async (req, res): Pro
   }
   const userId = req.session.userId!;
   const role = req.session.role!;
-  const ownerId = await assertTeamAdminAccess(teamId, userId, role, res);
+  const ownerId = await assertTeamAdminAccess(teamId, userId, role, res, "read");
   if (ownerId === null) return;
 
   const rows = await selectMembers(ownerId, eq(teamMembersTable.teamId, teamId));
@@ -273,7 +291,7 @@ router.get("/teams/:id/members", requireTeamleiterOrAdmin, async (req, res): Pro
 /**
  * POST /teams/:id/members — Admins und Teamleiter können Mitglieder hinzufügen.
  */
-router.post("/teams/:id/members", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
+router.post("/teams/:id/members", requireTeamManageOrAdmin, async (req, res): Promise<void> => {
   const teamId = Number(req.params["id"]);
   const body = AddTeamMemberBody.safeParse(req.body);
   if (!Number.isInteger(teamId) || !body.success) {
@@ -322,9 +340,17 @@ router.post("/teams/:id/members", requireTeamleiterOrAdmin, async (req, res): Pr
 });
 
 /**
- * PATCH /teams/:id/members/:userId — Setzt isTeamleiter und/oder canViewPayroll.
- * Konto-Admins (auch privat) dürfen isTeamleiter setzen; canViewPayroll ist
- * AUSSCHLIESSLICH Dienstleister-Konten vorbehalten (Lohnbuchhaltung).
+ * PATCH /teams/:id/members/:userId — Setzt isTeamleiter, accessLevel und/oder
+ * canViewPayroll für ein Mitglied.
+ *
+ * Grenzen (serverseitig durchgesetzt, nicht nur im UI):
+ * - isTeamleiter darf jeder Konto-Admin für sein Team setzen.
+ * - accessLevel (gestufte Freischaltung für Assistenznehmer beim Dienstleister)
+ *   darf jeder Konto-Admin für sein Team setzen.
+ * - canViewPayroll bleibt Unternehmens-Teamleitern eines Dienstleister-Kontos
+ *   vorbehalten. Jeder andere Versuch wird mit 403 abgelehnt — Assistenzkräfte
+ *   und gestufte Rollen bekommen nie Lohndaten.
+ * - Wird der Teamleiter-Status entzogen, fällt canViewPayroll automatisch mit.
  */
 router.patch(
   "/teams/:id/members/:userId",
@@ -346,10 +372,6 @@ router.patch(
     }
     const updates = { ...body.data };
 
-    // Alle Konto-Admins (auch privat) dürfen beide Flags für Mitglieder ihres Teams setzen.
-    // canViewPayroll gibt der Person Zugang zu Lohn-/SV-Daten — beim Privat-Konto ist
-    // das eine bewusste Entscheidung des Eigentümers (UI zeigt Hinweistext).
-
     if (Object.keys(updates).length === 0) {
       res.status(400).json({ error: "Keine Felder zum Aktualisieren angegeben" });
       return;
@@ -357,7 +379,10 @@ router.patch(
 
     // Mitgliedschaft muss existieren.
     const [existing] = await db
-      .select({ id: teamMembersTable.id })
+      .select({
+        id: teamMembersTable.id,
+        isTeamleiter: teamMembersTable.isTeamleiter,
+      })
       .from(teamMembersTable)
       .where(
         and(eq(teamMembersTable.teamId, teamId), eq(teamMembersTable.userId, targetUserId)),
@@ -365,6 +390,25 @@ router.patch(
     if (!existing) {
       res.status(404).json({ error: "Mitgliedschaft nicht gefunden" });
       return;
+    }
+
+    // Lohndaten-Sperre: canViewPayroll nur für Unternehmens-Teamleiter eines
+    // Dienstleister-Kontos. Der Teamleiter-Status kann im selben Request
+    // gesetzt werden, deshalb wird der Zielzustand geprüft.
+    const nextIsTeamleiter = updates.isTeamleiter ?? existing.isTeamleiter;
+    if (updates.canViewPayroll === true) {
+      if (!(await mayGrantPayrollAccess(teamId, targetUserId, nextIsTeamleiter))) {
+        res.status(403).json({
+          error:
+            "Lohndaten kannst du nur für Teamleiter in einem Dienstleister-Konto freigeben. Setze die Person zuerst als Teamleiter ein.",
+        });
+        return;
+      }
+    }
+    // Teamleiter-Status entzogen? Dann fällt der Lohndaten-Zugriff sofort mit,
+    // damit keine verwaiste Freigabe zurückbleibt.
+    if (updates.isTeamleiter === false) {
+      updates.canViewPayroll = false;
     }
 
     // Flags aktualisieren.
@@ -386,7 +430,7 @@ router.patch(
  */
 router.delete(
   "/teams/:id/members/:userId",
-  requireTeamleiterOrAdmin,
+  requireTeamManageOrAdmin,
   async (req, res): Promise<void> => {
     const teamId = Number(req.params["id"]);
     const targetUserId = Number(req.params["userId"]);

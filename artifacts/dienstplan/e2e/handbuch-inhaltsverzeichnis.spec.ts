@@ -5,8 +5,8 @@ import { test, expect } from "@playwright/test";
  * und benutzbar:
  *
  * 1. Startseite (/handbuch): vollständige Kapitel-Übersicht (Erste Schritte,
- *    Modul-Übersicht, Verwaltung) mit Badges/"folgt"-Markierungen; vorhandene
- *    Kapitel (Dienstplan, Team-Verwaltung) sind direkt anklickbar.
+ *    Modul-Übersicht, Verwaltung) mit Badges; die Kapitel (Dienstplan,
+ *    Team-Verwaltung, …) sind direkt anklickbar.
  * 2. Artikel-Seiten unterhalb der Desktop-Breite: die Kapitelliste ist über
  *    einen ausklappbaren Drawer (von links) erreichbar — die Desktop-Seitenleiste
  *    ist dort ausgeblendet — und ihre Links funktionieren.
@@ -39,19 +39,20 @@ test("Startseite zeigt das vollständige Inhaltsverzeichnis, Kapitel-Links funkt
     await expect(toc.getByRole("heading", { name: gruppe })).toBeVisible();
   }
 
-  // Badges und "folgt"-Markierungen wie in der Seitenleiste.
+  // Badges wie in der Seitenleiste.
   await expect(toc.getByText("Premium").first()).toBeVisible();
   // "Nur Dienstleister" ist in der Kapitelliste ein Icon mit
   // Screenreader-Text (sr-only) — daher toBeAttached statt toBeVisible.
   await expect(toc.getByText("Nur Dienstleister")).toBeAttached();
-  await expect(toc.getByText("folgt").first()).toBeVisible();
 
-  // Nicht vorhandene Kapitel (Einstellungen samt Unterkapiteln) sind NICHT verlinkt.
-  await expect(toc.getByRole("link", { name: "Schichtmodelle" })).toHaveCount(0);
-  await expect(toc.getByRole("link", { name: "Kalender-Abo" })).toHaveCount(0);
+  // Das Einstellungen-Kapitel existiert inzwischen samt Unterabschnitten —
+  // seine Unterpunkte springen als Anker-Links in die Kapitelseite.
+  await expect(toc.getByRole("link", { name: "Schichtmodelle" })).toHaveCount(1);
+  await expect(toc.getByRole("link", { name: "Kalender-Abo" })).toHaveCount(1);
 
-  // Die Modul-Kapitel sind verlinkt (Task #649).
-  for (const kapitel of ["Dashboard", "Assistenten", "Zeiterfassung", "Abwesenheiten"]) {
+  // Die Modul-Kapitel sind verlinkt. Das frühere Kapitel "Assistenten" heißt
+  // seit der Vereinheitlichung der Teamverwaltung "Assistenzkräfte".
+  for (const kapitel of ["Dashboard", "Assistenzkräfte", "Zeiterfassung", "Abwesenheiten"]) {
     await expect(toc.getByRole("link", { name: kapitel, exact: true })).toHaveCount(1);
   }
   await expect(

@@ -219,7 +219,6 @@ async function capture(page: Page, route: string, file: string) {
 const CHAPTERS: Array<[route: string, base: string]> = [
   ["/", "dashboard"],
   ["/dienstplan", "dienstplan-monatsansicht"],
-  ["/assistenten", "assistenten"],
   ["/zeiterfassung", "zeiterfassung"],
   ["/abwesenheiten", "abwesenheiten"],
   ["/auswertungen", "auswertungen"],

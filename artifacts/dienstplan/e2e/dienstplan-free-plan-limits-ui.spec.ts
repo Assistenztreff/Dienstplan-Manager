@@ -74,12 +74,12 @@ test.describe("Free-Limit Assistenten (UI)", () => {
     test.setTimeout(60000);
     await adoptSession(page, free);
 
-    await page.goto("/assistenten");
-    await expect(page.getByRole("heading", { name: "Assistenzkräfte" })).toBeVisible();
+    await page.goto("/team-verwaltung");
+    await expect(page.getByRole("heading", { name: "Team-Verwaltung", exact: true })).toBeVisible();
 
-    // Aktuelle UX am Limit: Der "Neu"-Button ist proaktiv DEAKTIVIERT und
+    // Aktuelle UX am Limit: Der Anlegen-Button ist proaktiv DEAKTIVIERT und
     // traegt den Upgrade-Hinweis als title (kein Dialog + 403 mehr noetig).
-    const newButton = page.getByRole("button", { name: "Neu", exact: true });
+    const newButton = page.getByTestId("assistenzkraft-anlegen");
     await expect(newButton).toBeVisible();
     await expect(newButton, "Am Limit muss der Anlegen-Button gesperrt sein").toBeDisabled();
     await expect(newButton).toHaveAttribute("title", /max\. 6 Assistenzkräfte/i);
@@ -113,9 +113,9 @@ test.describe("Free-Limit Teams (UI)", () => {
     await page.goto("/team-verwaltung");
     await expect(page.getByRole("heading", { name: "Team-Verwaltung" })).toBeVisible();
 
-    // Aktuelle UX am Limit: Der "Neu"-Button ist proaktiv DEAKTIVIERT und
+    // Aktuelle UX am Limit: Der Anlegen-Button ist proaktiv DEAKTIVIERT und
     // traegt den Upgrade-Hinweis als title (kein Dialog + 403 mehr noetig).
-    const newButton = page.getByRole("button", { name: "Neu", exact: true });
+    const newButton = page.getByTestId("team-anlegen");
     await expect(newButton).toBeVisible();
     await expect(newButton, "Am Limit muss der Anlegen-Button gesperrt sein").toBeDisabled();
     await expect(newButton).toHaveAttribute("title", /max\. 1 Team/i);

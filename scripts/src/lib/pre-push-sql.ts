@@ -100,6 +100,23 @@ export const PRE_PUSH_SQL: string[] = [
          FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE;
      END IF;
    END $$;`,
+  // Gestufte Team-Freischaltung (team_members.access_level): neuer Enum-Typ
+  // PLUS neue NOT-NULL-Spalte auf einer befüllten Tabelle — genau die
+  // Kombination, bei der push ohne TTY interaktiv nachfragen kann. Daher
+  // vorab idempotent: Typ anlegen, Spalte nullable ergänzen, Bestandszeilen
+  // auf den Standard "keine" setzen, dann NOT NULL erzwingen.
+  // Bewusst KEIN Backfill für is_teamleiter=true: das Teamleiter-Flag wird im
+  // Code getrennt als höchste Stufe gewertet, es darf keine zweite Quelle geben.
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'team_access_level') THEN
+       CREATE TYPE team_access_level AS ENUM ('keine', 'basis', 'stufe1', 'stufe2');
+     END IF;
+   END $$;`,
+  `ALTER TABLE team_members
+     ADD COLUMN IF NOT EXISTS access_level team_access_level DEFAULT 'keine';`,
+  `UPDATE team_members SET access_level = 'keine' WHERE access_level IS NULL;`,
+  `ALTER TABLE team_members ALTER COLUMN access_level SET DEFAULT 'keine';`,
+  `ALTER TABLE team_members ALTER COLUMN access_level SET NOT NULL;`,
 ];
 
 /** Alle Vorab-Schritte sequenziell gegen den übergebenen Client ausführen. */

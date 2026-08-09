@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useListTeams } from "@workspace/api-client-react";
-import { useAuth } from "@/context/auth";
+import { useAuth, hasTeamAccessLevel } from "@/context/auth";
 import { isAdminRole } from "@/lib/roles";
 
 type Team = { id: number; name: string };
@@ -57,9 +57,13 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
   // Teamleiter sind Nutzer mit is_teamleiter=true (kann assistant ODER admin sein,
   // aber nicht der Eigentümer eines eigenen Mandanten).
   const isTeamleiterUser = currentUser?.isTeamleiter === true && !isActualDienstleister;
+  // Freigeschaltete Mitglieder (Stufe „basis" und höher) arbeiten ebenfalls im
+  // Team-Scope: Ohne diese Zeile blieben ihre Anfragen unscoped und die Seiten
+  // zeigten nichts, obwohl der Server den Zugriff erlaubt.
+  const hasFreigabe = !isActualDienstleister && hasTeamAccessLevel(currentUser, "basis");
 
-  // Beide Gruppen bekommen den Team-Switcher und die Team-Scoping-Logik.
-  const showTeamSwitcher = isActualDienstleister || isTeamleiterUser;
+  // Alle drei Gruppen bekommen den Team-Switcher und die Team-Scoping-Logik.
+  const showTeamSwitcher = isActualDienstleister || isTeamleiterUser || hasFreigabe;
 
   const { data: teamsData, isLoading: teamsLoading } = useListTeams({
     query: { enabled: !!showTeamSwitcher },
@@ -106,7 +110,7 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
       value={{
         teams,
         isDienstleister: !!showTeamSwitcher,
-        isTeamleiterOnly: isTeamleiterUser,
+        isTeamleiterOnly: isTeamleiterUser || hasFreigabe,
         hasTeams: teams.length > 0,
         selectedTeamId: showTeamSwitcher ? selectedTeamId : null,
         setSelectedTeamId,

@@ -8,6 +8,7 @@ export default defineConfig({
   test: {
     include: [
       "src/migrate-prod.fresh-db.test.ts",
+      "src/pre-push-sql.bestands-db.db.test.ts",
       "src/setup-test-accounts.legacy-cleanup.db.test.ts",
     ],
     fileParallelism: false,

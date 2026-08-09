@@ -18,7 +18,27 @@ export type AuthUser = {
    * Globales Flag; feingranulare Team-Prüfung erfolgt serverseitig.
    */
   canViewPayroll?: boolean;
+  /**
+   * Höchste gestufte Team-Freischaltung über alle Mitgliedschaften hinweg
+   * ("keine" | "basis" | "stufe1" | "stufe2"). Steuert nur die Sichtbarkeit
+   * von Menüpunkten — die Durchsetzung passiert pro Team serverseitig.
+   */
+  teamAccessLevel?: TeamAccessLevel;
 };
+
+/** Stufen der Team-Freischaltung, aufsteigend. */
+export const TEAM_ACCESS_LEVELS = ["keine", "basis", "stufe1", "stufe2"] as const;
+export type TeamAccessLevel = (typeof TEAM_ACCESS_LEVELS)[number];
+
+/** Prüft, ob die Freischaltung des Nutzers mindestens die geforderte Stufe erreicht. */
+export function hasTeamAccessLevel(
+  user: { teamAccessLevel?: TeamAccessLevel } | null | undefined,
+  min: TeamAccessLevel,
+): boolean {
+  const rank = (l: TeamAccessLevel | undefined) =>
+    TEAM_ACCESS_LEVELS.indexOf(l ?? "keine");
+  return rank(user?.teamAccessLevel) >= rank(min);
+}
 
 type AuthContextType = {
   currentUser: AuthUser | null;

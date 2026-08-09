@@ -35,7 +35,7 @@ import { de } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { planUpgradeMessage, readableApiError, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
 import { warnIfMonthClosed } from "@/lib/month-closing-warning";
-import { useAuth } from "@/context/auth";
+import { useAuth, hasTeamAccessLevel } from "@/context/auth";
 import { isAdminRole } from "@/lib/roles";
 import { hasAccess } from "@/lib/entitlements";
 import { PlanUpgradeLink } from "@/components/plan-limit-banner";
@@ -181,7 +181,10 @@ export default function Abwesenheiten() {
   // Abwesenheiten ihres Scopes. Assistenzkräfte sehen die Seite ebenfalls,
   // aber ausschließlich für die EIGENE Person (§3 der Menü-Neustrukturierung);
   // der Server erzwingt dasselbe Scoping zusätzlich autoritativ.
-  const canManage = isAdminRole(currentUser?.role) || !!currentUser?.isTeamleiter;
+  const canManage =
+    isAdminRole(currentUser?.role) ||
+    !!currentUser?.isTeamleiter ||
+    hasTeamAccessLevel(currentUser, "stufe1");
 
   // Die Nutzerliste ist ein Admin-/Teamleiter-Endpunkt (403 für Assistenz-
   // kräfte) — für Assistenzkräfte gar nicht erst abfragen.

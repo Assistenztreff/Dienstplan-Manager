@@ -22,13 +22,13 @@ import {
   UpdateShiftBody,
   DeleteShiftParams,
 } from "@workspace/api-zod";
-import { requireAuth, requireAdmin, requireTeamleiterOrAdmin, isAdminLikeRole } from "../middleware/auth";
+import { requireAuth, requireAdmin, requireTeamPlanningOrAdmin, isAdminLikeRole } from "../middleware/auth";
 import {
   resolveReadTeamScope,
   resolveWriteTeamId,
   getAllowedTeamIds,
   getEffectiveAdminTeamIds,
-  getTeamleiterTeamIds,
+  getTeamIdsWithCapability,
   parseTeamIdParam,
   isUserMemberOfTeam,
   isShiftModelInTeam,
@@ -532,11 +532,12 @@ router.get("/shifts", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  // Teamleiter (assistant-Rolle, aber is_teamleiter=true) erhalten Admin-Sicht
-  // auf alle Schichten ihrer Teamleiter-Teams — nicht nur eigene Schichten.
+  // Team-Freigeschaltete (assistant-Rolle mit is_teamleiter=true ODER
+  // gestufter Freischaltung ab Basis) erhalten die team-weite Sicht auf alle
+  // Dienste dieser Teams — nicht nur die eigenen.
   const tlTeamIds = isAdminLikeRole(req.session.role!)
     ? null
-    : await getTeamleiterTeamIds(req.session.userId!);
+    : await getTeamIdsWithCapability(req.session.userId!, "read");
   const isTeamleiterUser = tlTeamIds != null && tlTeamIds.length > 0;
 
   const effectiveUserId =
@@ -713,7 +714,9 @@ router.post("/shifts", requireAuth, async (req, res): Promise<void> => {
   // (Urlaub/Krank) eintragen — alles andere bleibt 403. Dieser Authz-Check
   // steht bewusst VOR jeder inhaltlichen Prüfung (kein Daten-Orakel).
   const isAdmin = isAdminLikeRole(req.session.role!);
-  const teamleiterTeams = isAdmin ? [] : await getTeamleiterTeamIds(req.session.userId!);
+  const teamleiterTeams = isAdmin
+    ? []
+    : await getTeamIdsWithCapability(req.session.userId!, "plan");
   const isPrivileged = isAdmin || teamleiterTeams.length > 0;
   if (!isPrivileged) {
     if (!isAbsenceType(body.data.type) || body.data.userId !== req.session.userId) {
@@ -992,7 +995,9 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
   // Daten-Orakel): reine Assistenzkräfte dürfen nur EIGENE Abwesenheiten
   // eintragen (der Typ ist per Schema bereits auf Abwesenheiten beschränkt).
   const isAdmin = isAdminLikeRole(req.session.role!);
-  const teamleiterTeams = isAdmin ? [] : await getTeamleiterTeamIds(req.session.userId!);
+  const teamleiterTeams = isAdmin
+    ? []
+    : await getTeamIdsWithCapability(req.session.userId!, "plan");
   const isPrivileged = isAdmin || teamleiterTeams.length > 0;
   if (!isPrivileged && userId !== req.session.userId) {
     res.status(403).json({ error: "Keine Berechtigung" });
@@ -1206,7 +1211,7 @@ router.get("/shifts/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(shiftDto);
 });
 
-router.patch("/shifts/:id", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
+router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promise<void> => {
   const params = UpdateShiftParams.safeParse({ id: Number(req.params["id"]) });
   const body = UpdateShiftBody.safeParse(req.body);
   if (!params.success || !body.success) {

@@ -10,7 +10,7 @@ import {
   ArrowUp,
 } from "lucide-react";
 import platformLogoUrl from "@assets/assistenzplaner-logo-getrimmt.png";
-import { useAuth } from "@/context/auth";
+import { useAuth, hasTeamAccessLevel, type TeamAccessLevel } from "@/context/auth";
 import { useToast } from "@/hooks/use-toast";
 import { isAdminRole } from "@/lib/roles";
 import { useTimeTrackingEnabled } from "@/hooks/use-time-tracking-enabled";
@@ -32,12 +32,15 @@ import {
 // sobald mindestens ein Kind nach Filterung sichtbar bleibt. Jedes Kind
 // behält seine bisherigen Flag-Werte 1:1 (nur "Abwesenheiten" wurde per
 // §3-Entscheidung für alle Rollen geöffnet).
+// minTeamAccess: ab dieser gestuften Team-Freischaltung (Assistenznehmer beim
+// Dienstleister) wird der Punkt trotz adminOnly sichtbar.
 type NavLeaf = {
   href: string;
   label: string;
   adminOnly: boolean;
   dienstleisterOnly: boolean;
   teamleiterAllowed: boolean;
+  minTeamAccess?: TeamAccessLevel;
 };
 // Icons sind Phosphor Fill SVGs:
 // Haus=Start, Kalender=Planen, Uhr=Erfassen, Balkendiagramm=Auswerten,
@@ -58,13 +61,12 @@ const ALL_NAV_ITEMS: NavEntry[] = [
     ],
   },
   { href: "/zeiterfassung", label: "Erfassen", icon: ClockIcon, adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
-  { href: "/auswertungen", label: "Auswerten", icon: ChartBarIcon, adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true },
+  { href: "/auswertungen", label: "Auswerten", icon: ChartBarIcon, adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true, minTeamAccess: "stufe1" },
   {
     label: "Verwalten",
     icon: GearIcon,
     children: [
-      { href: "/assistenten", label: "Assistenzkräfte", adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true },
-      { href: "/team-verwaltung", label: "Team-Verwaltung", adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true },
+      { href: "/team-verwaltung", label: "Team-Verwaltung", adminOnly: true, dienstleisterOnly: false, teamleiterAllowed: true, minTeamAccess: "stufe1" },
       { href: "/einstellungen", label: "Einstellungen", adminOnly: false, dienstleisterOnly: false, teamleiterAllowed: false },
     ],
   },
@@ -88,8 +90,12 @@ function isLeafVisible(
   currentUser: ReturnType<typeof useAuth>["currentUser"],
   timeTrackingEnabled: boolean,
 ): boolean {
+  const hasStufe = item.minTeamAccess != null && hasTeamAccessLevel(currentUser, item.minTeamAccess);
   return (
-    (!item.adminOnly || isAdminRole(currentUser?.role) || (item.teamleiterAllowed && !!currentUser?.isTeamleiter)) &&
+    (!item.adminOnly ||
+      isAdminRole(currentUser?.role) ||
+      (item.teamleiterAllowed && !!currentUser?.isTeamleiter) ||
+      hasStufe) &&
     (!item.dienstleisterOnly || currentUser?.accountType === "dienstleister") &&
     (item.href !== "/zeiterfassung" || timeTrackingEnabled)
   );

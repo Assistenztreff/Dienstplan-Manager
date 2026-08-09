@@ -6,6 +6,7 @@ import { eq, and } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth-utils";
 import { seedDefaultShiftModels } from "../lib/default-shift-models";
 import { checkRegisterRateLimit } from "../lib/register-rate-limit";
+import { getHighestTeamAccessLevel, type TeamAccessLevel } from "../lib/teams";
 
 const router = Router();
 
@@ -50,6 +51,15 @@ async function computeCanViewPayroll(userId: number): Promise<boolean> {
     )
     .limit(1);
   return !!row;
+}
+
+/**
+ * Höchste gestufte Team-Freischaltung über alle Mitgliedschaften. Rein für die
+ * Sichtbarkeit im Frontend (Menüpunkte) — die Durchsetzung passiert pro Team
+ * serverseitig, siehe lib/teams.ts.
+ */
+async function computeTeamAccessLevel(userId: number): Promise<TeamAccessLevel> {
+  return getHighestTeamAccessLevel(userId);
 }
 
 router.post("/auth/login", async (req, res) => {
@@ -312,9 +322,10 @@ if (process.env.NODE_ENV !== "production") {
       }
       req.session.userId = target.id;
       req.session.role = target.role;
-      const [isTeamleiterTarget, canViewPayrollTarget] = await Promise.all([
+      const [isTeamleiterTarget, canViewPayrollTarget, teamAccessLevelTarget] = await Promise.all([
         computeIsTeamleiter(target.id),
         computeCanViewPayroll(target.id),
+        computeTeamAccessLevel(target.id),
       ]);
       res.json({
         id: target.id,
@@ -325,6 +336,7 @@ if (process.env.NODE_ENV !== "production") {
         plan: target.plan,
         isTeamleiter: isTeamleiterTarget,
         canViewPayroll: canViewPayrollTarget,
+        teamAccessLevel: teamAccessLevelTarget,
       });
       return;
     }
@@ -368,11 +380,12 @@ router.get("/auth/me", async (req, res) => {
     return res.status(401).json({ error: "Benutzer nicht gefunden" });
   }
   const { isActive: _isActive, ...publicUser } = user;
-  const [isTeamleiter, canViewPayroll] = await Promise.all([
+  const [isTeamleiter, canViewPayroll, teamAccessLevel] = await Promise.all([
     computeIsTeamleiter(user.id),
     computeCanViewPayroll(user.id),
+    computeTeamAccessLevel(user.id),
   ]);
-  return res.json({ ...publicUser, isTeamleiter, canViewPayroll });
+  return res.json({ ...publicUser, isTeamleiter, canViewPayroll, teamAccessLevel });
 });
 
 router.post("/auth/set-password", async (req, res) => {

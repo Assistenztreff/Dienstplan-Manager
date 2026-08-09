@@ -4,10 +4,10 @@ import { usersTable, shiftsTable, timeTrackingTable, contractsTable, allowanceSe
 import { computeShiftMetrics, type GermanState } from "@workspace/db";
 import { eq, and, sql, count, or, isNull, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { requireAuth, requireAdmin, requireTeamleiterOrAdmin, isAdminLikeRole } from "../middleware/auth";
-import { requirePlanFeature, userHasFeatureViaTeamOwner, getLenientTimeTrackingTeamIds } from "../lib/plan";
+import { requireAuth, requireAdmin, requireTeamPlanningOrAdmin, isAdminLikeRole } from "../middleware/auth";
+import { requirePlanFeatureViaTeamOwner, userHasFeatureViaTeamOwner, getLenientTimeTrackingTeamIds } from "../lib/plan";
 import { resolveAllowanceOps, type ResolvedAllowanceOps } from "../lib/allowance-resolve";
-import { resolveReadTeamScope, parseTeamIdParam, getAllowedTeamIds, getEffectiveAdminTeamIds, getTeamleiterTeamIds, canViewPayrollInTeam } from "../lib/teams";
+import { resolveReadTeamScope, parseTeamIdParam, getAllowedTeamIds, getEffectiveAdminTeamIds, getTeamIdsWithCapability, canViewPayrollInTeam } from "../lib/teams";
 import {
   LOW_VACATION_THRESHOLD,
   HORIZON_DAYS,
@@ -557,7 +557,7 @@ router.get("/dashboard/my-hours-balance", requireAuth, async (req, res): Promise
 // bleibt gewahrt: die ROHDATEN (Schichten, Zeiterfassung, Verträge) bleiben über
 // ihre regulären Listen-Endpunkte sichtbar — gesperrt wird nur diese abgeleitete
 // Premium-Auswertung.
-router.get("/dashboard/hours-balance", requireTeamleiterOrAdmin, requirePlanFeature("advancedAnalytics"), async (req, res): Promise<void> => {
+router.get("/dashboard/hours-balance", requireTeamPlanningOrAdmin, requirePlanFeatureViaTeamOwner("advancedAnalytics"), async (req, res): Promise<void> => {
   const monthYear = parseMonthYearParams(req);
   if (!monthYear) {
     res.status(400).json({ error: "Ungültiger month-/year-Parameter" });
@@ -571,7 +571,7 @@ router.get("/dashboard/hours-balance", requireTeamleiterOrAdmin, requirePlanFeat
   const role = req.session.role!;
   let requestedTeamId = parseTeamIdParam(req);
   if (!isAdminLikeRole(role)) {
-    const tlTeamIds = await getTeamleiterTeamIds(userId);
+    const tlTeamIds = await getTeamIdsWithCapability(userId, "plan");
     if (tlTeamIds.length === 0) {
       res.status(403).json({ error: "Keine Berechtigung" });
       return;

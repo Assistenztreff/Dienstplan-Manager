@@ -17,7 +17,7 @@ import {
   UpdateContractBody,
   DeleteContractParams,
 } from "@workspace/api-zod";
-import { requireAdmin, requireAuth, requireTeamleiterOrAdmin, isAdminLikeRole } from "../middleware/auth";
+import { requireAdmin, requireAuth, requireTeamPlanningOrAdmin, isAdminLikeRole } from "../middleware/auth";
 import { recalcVacationHoursUsed, resolveDailyRateInfo } from "../lib/vacation-hours";
 import { requirePlanFeatureViaTeamOwner } from "../lib/plan";
 import { resolveAllowanceOps } from "../lib/allowance-resolve";
@@ -115,7 +115,7 @@ router.get("/contracts", requireAuth, async (req, res): Promise<void> => {
   res.json(rows);
 });
 
-router.post("/contracts", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
+router.post("/contracts", requireTeamPlanningOrAdmin, async (req, res): Promise<void> => {
   const body = CreateContractBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "Invalid request body" });
@@ -179,7 +179,7 @@ router.post("/contracts", requireTeamleiterOrAdmin, async (req, res): Promise<vo
   res.status(201).json(withUser);
 });
 
-router.get("/contracts/:id", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
+router.get("/contracts/:id", requireTeamPlanningOrAdmin, async (req, res): Promise<void> => {
   const params = GetContractParams.safeParse({ id: Number(req.params["id"]) });
   if (!params.success) {
     res.status(400).json({ error: "Invalid id" });
@@ -213,7 +213,7 @@ router.get("/contracts/:id", requireTeamleiterOrAdmin, async (req, res): Promise
   res.json(row);
 });
 
-router.patch("/contracts/:id", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
+router.patch("/contracts/:id", requireTeamPlanningOrAdmin, async (req, res): Promise<void> => {
   const params = UpdateContractParams.safeParse({ id: Number(req.params["id"]) });
   const body = UpdateContractBody.safeParse(req.body);
   if (!params.success || !body.success) {
@@ -303,7 +303,7 @@ router.patch("/contracts/:id", requireTeamleiterOrAdmin, async (req, res): Promi
   res.json(withUser);
 });
 
-router.delete("/contracts/:id", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
+router.delete("/contracts/:id", requireTeamPlanningOrAdmin, async (req, res): Promise<void> => {
   const params = DeleteContractParams.safeParse({ id: Number(req.params["id"]) });
   if (!params.success) {
     res.status(400).json({ error: "Invalid id" });

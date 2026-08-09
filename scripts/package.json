@@ -23,6 +23,7 @@
     "pre-push-sql": "tsx ./src/pre-push-sql.ts",
     "migrate-allowance-settings": "tsx ./src/migrate-allowance-settings.ts",
     "migrate-absences-fix": "tsx ./src/migrate-absences-fix.ts",
+    "migrate-payroll-access": "tsx ./src/migrate-payroll-access.ts",
     "backfill-team-shift-models": "tsx ./src/backfill-team-shift-models.ts",
     "check-codegen-drift": "tsx ./src/check-codegen-drift.ts",
     "check-test-db-derivation": "tsx ./src/check-test-db-derivation.ts",

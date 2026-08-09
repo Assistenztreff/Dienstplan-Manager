@@ -96,9 +96,9 @@ async function gotoAssistentenAsAdmin(page: Page): Promise<void> {
     data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
   });
   expect(loginRes.ok(), `Admin-Login fehlgeschlagen (${loginRes.status()})`).toBe(true);
-  await page.goto("/assistenten");
+  await page.goto("/team-verwaltung");
   await expect(
-    page.getByRole("heading", { name: "Assistenzkräfte", exact: true }),
+    page.getByRole("heading", { name: "Team-Verwaltung", exact: true }),
   ).toBeVisible({ timeout: 30000 });
 }
 
@@ -201,7 +201,7 @@ test.describe("AssistentDialog: Bearbeiten zeigt immer die angeklickte Person", 
     await expect(page.getByRole("dialog")).toHaveCount(0);
 
     // ... und das Neu-Anlegen-Formular öffnen: leer / Default-Werte.
-    await page.getByRole("button", { name: "Neu anlegen" }).click();
+    await page.getByTestId("assistenzkraft-anlegen").click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText("Neue Assistenzkraft anlegen")).toBeVisible();
 

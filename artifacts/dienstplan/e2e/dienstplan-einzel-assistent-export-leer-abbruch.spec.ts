@@ -9,7 +9,7 @@ import {
 } from "./helpers/teams";
 
 /**
- * E2E-Test #551: Der Einzel-Assistent-Export ("Nachweis" auf /assistenten)
+ * E2E-Test #551: Der Einzel-Assistent-Export ("Nachweis" in der Team-Verwaltung)
  * muss sauber abbrechen und einen Fehler-Toast zeigen, wenn die gewählte
  * Assistenzkraft im Monat KEINE verbindlichen (FIX) Dienste oder Abwesenheiten
  * hat — statt ein leeres oder kaputtes PDF zu liefern.
@@ -108,7 +108,7 @@ test("Einzel-Assistent-Nachweis bricht sauber ab, wenn keine FIX-Dienste vorhand
   await loginViaUi(page, acc.email, FREE_ACCOUNT_PASSWORD);
 
   // Zur Assistenten-Seite navigieren.
-  await page.goto("/assistenten");
+  await page.goto("/team-verwaltung");
   // Auf die Assistenten-Karte warten (data-testid="assistant-card-{id}").
   const assistantCard = page.getByTestId(`assistant-card-${assistantId}`);
   await expect(assistantCard, "Assistenten-Karte muss nach Login erscheinen").toBeVisible({

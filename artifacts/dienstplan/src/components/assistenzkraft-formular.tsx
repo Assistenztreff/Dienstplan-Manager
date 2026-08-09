@@ -1,29 +1,19 @@
-import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "wouter";
+import { useState } from "react";
 import {
-  useListUsers,
-  useListContracts,
   useCreateUser,
   useUpdateUser,
   useDeleteUser,
   useCreateContract,
   useUpdateContract,
   useInviteUser,
-  useListTeamMembers,
-  useRemoveTeamMember,
   getListUsersQueryKey,
   getListContractsQueryKey,
-  getListTeamMembersQueryKey,
 } from "@workspace/api-client-react";
 import { useTeam } from "@/context/team";
-import { TeamSwitcher } from "@/components/team-switcher";
 import { useAuth } from "@/context/auth";
-import { isWithinLimit, getLimit, hasAccess } from "@/lib/entitlements";
-import { readableApiError, planUpgradeMessage, planFeatureMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
+import { hasAccess } from "@/lib/entitlements";
+import { readableApiError, planUpgradeMessage, planFeatureMessage } from "@/lib/api-error";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
@@ -46,17 +36,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Mail, Phone, MapPin, Calendar, Pencil, UserPlus, UserMinus, Send, Copy, Check, Download, Trash2, Lock, Calculator } from "lucide-react";
+import { Send, Copy, Check, Trash2, Lock, Calculator } from "lucide-react";
 import { ArbeitstageRechnerDialog } from "@/components/arbeitstage-rechner-dialog";
-import { formatHours } from "@/lib/utils";
-import { PlanLimitBanner, PlanUpgradeLink } from "@/components/plan-limit-banner";
+import { PlanUpgradeLink } from "@/components/plan-limit-banner";
 import { format } from "date-fns";
-import { de } from "date-fns/locale";
-import { toast } from "sonner";
-import { exportStatementSectionsPdf, type StatementRecalculation } from "@/lib/pdf-export";
-import { StatementExportDialog } from "@/components/statement-export-dialog";
 
-type User = {
+/**
+ * Formulare rund um eine einzelne Assistenzkraft: Stammdaten-Dialog (inkl.
+ * Lohn-/SV-Bereich und Arbeitszeit-Konditionen) und Einladungs-Dialog.
+ *
+ * Ausgelagert aus der früheren Seite /assistenten, damit die Team-Verwaltung
+ * dieselben Dialoge nutzen kann, ohne dass eine Funktion verloren geht.
+ */
+
+export type Assistenzkraft = {
   id: number;
   name: string;
   email: string;
@@ -73,7 +66,7 @@ type User = {
   isActive: boolean;
 };
 
-type Contract = {
+export type Vertrag = {
   id: number;
   userId: number;
   weeklyHours: number;
@@ -124,7 +117,7 @@ const EMPTY_FORM: FormState = {
   notes: "",
 };
 
-function splitName(name: string): { vorname: string; nachname: string } {
+export function splitName(name: string): { vorname: string; nachname: string } {
   const parts = name.trim().split(/\s+/);
   return {
     vorname: parts[0] ?? "",
@@ -139,7 +132,7 @@ type InviteDialogProps = {
   userName: string;
 };
 
-function InviteDialog({ open, onClose, userId, userName }: InviteDialogProps) {
+export function InviteDialog({ open, onClose, userId, userName }: InviteDialogProps) {
   const inviteUser = useInviteUser();
   const [result, setResult] = useState<{ inviteUrl: string; token: string; expiresIn: string; note: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -261,13 +254,19 @@ function FieldRow({ label, error, children }: { label: string; error?: string; c
 type AssistentDialogProps = {
   open: boolean;
   onClose: () => void;
-  editUser?: User;
-  editContract?: Contract;
+  editUser?: Assistenzkraft;
+  editContract?: Vertrag;
+  /**
+   * Team, dem eine neu angelegte Assistenzkraft zugeordnet wird. Ohne Angabe
+   * gilt das global gewaehlte Team aus dem Team-Umschalter.
+   */
+  teamId?: number | null;
 };
 
-function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDialogProps) {
+export function AssistentDialog({ open, onClose, editUser, editContract, teamId }: AssistentDialogProps) {
   const queryClient = useQueryClient();
-  const { selectedTeamId } = useTeam();
+  const { selectedTeamId: globalTeamId } = useTeam();
+  const selectedTeamId = teamId !== undefined ? teamId : globalTeamId;
   const { currentUser } = useAuth();
 
   // Lohn-/SV-Daten sind das Premium-Feature "advancedPersonnelFile" (Server
@@ -805,394 +804,5 @@ function AssistentDialog({ open, onClose, editUser, editContract }: AssistentDia
       </AlertDialogContent>
     </AlertDialog>
     </>
-  );
-}
-
-export default function Assistenten() {
-  const { currentUser } = useAuth();
-  const queryClient = useQueryClient();
-  const { isDienstleister, selectedTeamId } = useTeam();
-
-  // Dienstleister sehen die Liste team-gescoped (globaler Team-Kontext aus dem
-  // TeamSwitcher); fuer alle anderen bleibt die Abfrage unveraendert ungefiltert.
-  const teamScope = isDienstleister && selectedTeamId != null;
-  const { data: users, isLoading: usersLoading } = useListUsers(
-    teamScope ? { role: "assistant", teamId: selectedTeamId } : { role: "assistant" },
-  );
-  const { data: contracts, isLoading: contractsLoading } = useListContracts();
-
-  // Mitgliederliste des gewaehlten Teams: liefert teamCount je Nutzer, damit wir
-  // vor dem Entfernen der LETZTEN Mitgliedschaft warnen koennen.
-  const { data: teamMembers } = useListTeamMembers(selectedTeamId ?? 0, {
-    query: { enabled: teamScope },
-  } as Parameters<typeof useListTeamMembers>[1]) as {
-    data?: { userId: number; teamCount: number }[];
-  };
-  const removeMember = useRemoveTeamMember();
-
-  const [removeUser, setRemoveUser] = useState<User | undefined>();
-  const [memberBusy, setMemberBusy] = useState(false);
-
-  const teamCountByUserId = new Map(
-    (teamMembers ?? []).map((m) => [m.userId, m.teamCount]),
-  );
-
-  async function invalidateMemberQueries() {
-    await queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
-    await queryClient.invalidateQueries({ queryKey: getListContractsQueryKey() });
-    if (selectedTeamId != null) {
-      await queryClient.invalidateQueries({
-        queryKey: getListTeamMembersQueryKey(selectedTeamId),
-      });
-    }
-  }
-
-  async function handleRemoveFromTeam() {
-    if (!removeUser || selectedTeamId == null) return;
-    setMemberBusy(true);
-    try {
-      await removeMember.mutateAsync({ id: selectedTeamId, userId: removeUser.id });
-      setRemoveUser(undefined);
-      await invalidateMemberQueries();
-      toast.success("Assistenzkraft aus dem Team entfernt.");
-    } catch (err) {
-      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
-      toast.error(readableApiError(err, "Entfernen fehlgeschlagen. Bitte erneut versuchen."));
-    } finally {
-      setMemberBusy(false);
-    }
-  }
-
-  // Free-Plan begrenzt die Anzahl der Assistenten (Free = 6). Ist das Limit
-  // erreicht, wird das Anlegen gesperrt (Durchsetzung zusaetzlich serverseitig).
-  // `null` = unbegrenzt (Premium). Bestandsschutz: vorhandene Assistenten bleiben
-  // sichtbar/editierbar; nur das Anlegen ueber dem Limit ist gesperrt.
-  const assistantCount = (users ?? []).length;
-  const assistantLimit = getLimit(currentUser, "maxAssistants");
-  const canAddAssistant = isWithinLimit(currentUser, "maxAssistants", assistantCount);
-
-  // Premium-Features (UX-Gates; serverseitige Durchsetzung ist autoritativ):
-  // PDF-Stundennachweis (payrollExport) und Einladungslinks (caregiverLogin).
-  const canPayrollExport = hasAccess(currentUser, "payrollExport");
-  const canInvite = hasAccess(currentUser, "caregiverLogin");
-
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editUser, setEditUser] = useState<User | undefined>();
-  const [editContract, setEditContract] = useState<Contract | undefined>();
-  const [dialogOpenToken, setDialogOpenToken] = useState(0);
-  const [inviteUser, setInviteUser] = useState<User | undefined>();
-  const [exportUser, setExportUser] = useState<User | undefined>();
-
-  const isLoading = usersLoading || contractsLoading;
-
-  // Hervorheben eines Assistenten (z.B. vom Dashboard-Hinweis "wenig Resturlaub").
-  const [searchParams] = useSearchParams();
-  const highlightId = searchParams.get("highlight");
-  const highlightRef = useRef<HTMLDivElement | null>(null);
-  const [highlightActive, setHighlightActive] = useState(false);
-
-  useEffect(() => {
-    if (!highlightId || isLoading) return;
-    const node = highlightRef.current;
-    if (!node) return;
-    node.scrollIntoView({ behavior: "smooth", block: "center" });
-    setHighlightActive(true);
-    const timer = setTimeout(() => setHighlightActive(false), 2500);
-    return () => clearTimeout(timer);
-  }, [highlightId, isLoading, users]);
-
-  function openCreate() {
-    setEditUser(undefined);
-    setEditContract(undefined);
-    setDialogOpenToken((t) => t + 1);
-    setDialogOpen(true);
-  }
-
-  function openEdit(user: User, contract?: Contract) {
-    setEditUser(user);
-    setEditContract(contract);
-    setDialogOpenToken((t) => t + 1);
-    setDialogOpen(true);
-  }
-
-  function closeDialog() {
-    setDialogOpen(false);
-    setEditUser(undefined);
-    setEditContract(undefined);
-  }
-
-  return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Assistenzkräfte</h2>
-          <p className="text-muted-foreground mt-1 text-sm">Verwaltung der Assistenzkräfte und Verträge</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Team-Auswahl (rendert nur fuer Dienstleister mit Teams) — die Liste
-              unten ist auf das hier gewaehlte Team gefiltert. */}
-          <TeamSwitcher />
-        {canAddAssistant ? (
-          <Button onClick={openCreate} className="gap-2">
-            <UserPlus className="h-4 w-4" />
-            <span className="hidden sm:inline">Neu anlegen</span>
-            <span className="sm:hidden">Neu</span>
-          </Button>
-        ) : (
-          <Button
-            disabled
-            className="gap-2"
-            title={`Im Free-Plan sind max. ${assistantLimit} Assistenzkräfte möglich. Upgrade auf Premium für unbegrenzte Assistenzkräfte.`}
-          >
-            <Lock className="h-4 w-4" />
-            <span className="hidden sm:inline">Neu anlegen</span>
-            <span className="sm:hidden">Neu</span>
-          </Button>
-        )}
-        </div>
-      </div>
-
-      {/* Limit-Hinweis (Free-Plan). Bei Premium ist assistantLimit null. */}
-      {!canAddAssistant && assistantLimit !== null && (
-        <PlanLimitBanner>
-          Im Free-Plan sind maximal {assistantLimit} Assistenzkräfte möglich. Für unbegrenzte
-          Assistenzkräfte ist ein Upgrade auf Premium nötig.
-        </PlanLimitBanner>
-      )}
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-52 w-full rounded-xl" />
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {(users ?? []).map((user) => {
-            const userContracts = (contracts ?? []).filter((c) => c.userId === user.id);
-            const activeContract = userContracts.find(
-              (c) => !c.endDate || new Date(c.endDate) > new Date()
-            );
-
-            const { vorname, nachname } = splitName(user.name);
-            const isHighlighted = highlightId != null && String(user.id) === highlightId;
-
-            return (
-              <Card
-                key={user.id}
-                ref={isHighlighted ? highlightRef : undefined}
-                data-testid={`assistant-card-${user.id}`}
-                data-highlighted={isHighlighted && highlightActive ? "true" : "false"}
-                className={`border-border/50 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow ${
-                  isHighlighted && highlightActive ? "ring-2 ring-primary ring-offset-2" : ""
-                }`}
-              >
-                <div className="px-5 py-4 border-b border-border/40 bg-muted/30 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="font-semibold text-base leading-tight">
-                      {vorname} {nachname}
-                    </h3>
-                    <div className="flex items-center gap-1.5 mt-1.5 text-xs text-muted-foreground">
-                      <Mail className="h-3 w-3 shrink-0" />
-                      <span className="truncate">{user.email}</span>
-                    </div>
-                    {user.phone && (
-                      <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground">
-                        <Phone className="h-3 w-3 shrink-0" />
-                        <span>{user.phone}</span>
-                      </div>
-                    )}
-                    {user.address && (
-                      <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground">
-                        <MapPin className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{user.address}</span>
-                      </div>
-                    )}
-                  </div>
-                  <Badge
-                    variant={user.isActive ? "default" : "secondary"}
-                    className="shrink-0 text-xs"
-                  >
-                    {user.isActive ? "Aktiv" : "Inaktiv"}
-                  </Badge>
-                </div>
-
-                <CardContent className="p-5 flex-1 flex flex-col justify-between gap-4">
-                  {activeContract ? (
-                    <div className="space-y-2.5">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Wochenstunden</span>
-                        <span className="font-medium">{formatHours(activeContract.weeklyHours)} h</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Arbeitstage/Woche</span>
-                        <span className="font-medium">{formatHours(activeContract.workdaysPerWeek ?? 5)} Tage</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Urlaubsanspruch</span>
-                        <span className="font-medium">{activeContract.vacationDays} Tage</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground flex items-center gap-1">
-                          <Calendar className="h-3.5 w-3.5" /> Seit
-                        </span>
-                        <span className="font-medium">
-                          {format(new Date(activeContract.startDate), "dd.MM.yyyy")}
-                        </span>
-                      </div>
-                      {activeContract.notes && (
-                        <p className="text-xs text-muted-foreground pt-1 border-t border-border/40">
-                          {activeContract.notes}
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-sm text-muted-foreground py-4 text-center border border-dashed rounded-lg">
-                      Kein aktiver Vertrag hinterlegt
-                    </div>
-                  )}
-
-                  <div className="flex justify-end gap-2 flex-wrap">
-                    {/* Premium-Gates (reine UX — autoritativ setzt der Server durch):
-                        PDF-Stundennachweis = payrollExport, Einladungslink = caregiverLogin. */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1.5 text-muted-foreground hover:text-foreground"
-                      onClick={() => setExportUser(user as User)}
-                      disabled={!canPayrollExport}
-                      title={
-                        canPayrollExport
-                          ? "Stundennachweis als PDF exportieren"
-                          : PLAN_FEATURE_MESSAGES.payrollExport
-                      }
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Nachweis</span>
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1.5 text-muted-foreground hover:text-foreground"
-                      onClick={() => setInviteUser(user as User)}
-                      disabled={!canInvite}
-                      title={
-                        canInvite
-                          ? "Einladungslink generieren"
-                          : PLAN_FEATURE_MESSAGES.caregiverLogin
-                      }
-                    >
-                      <Send className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Einladen</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5"
-                      onClick={() => openEdit(user as User, activeContract as Contract | undefined)}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                      Bearbeiten
-                    </Button>
-                    {teamScope && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="gap-1.5 text-muted-foreground hover:text-destructive"
-                        onClick={() => setRemoveUser(user as User)}
-                        title="Aus dem gewählten Team entfernen"
-                        data-testid={`remove-member-${user.id}`}
-                      >
-                        <UserMinus className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">Aus Team entfernen</span>
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-
-          {(!users || users.length === 0) && (
-            <div className="col-span-full p-12 text-center border rounded-xl bg-card">
-              <p className="text-muted-foreground mb-4">Noch keine Assistenzkräfte angelegt.</p>
-              <Button onClick={openCreate} variant="outline" className="gap-2">
-                <Plus className="h-4 w-4" /> Erste Assistenzkraft anlegen
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
-      <AssistentDialog
-        key={dialogOpenToken}
-        open={dialogOpen}
-        onClose={closeDialog}
-        editUser={editUser}
-        editContract={editContract}
-      />
-      {inviteUser && (
-        <InviteDialog
-          open={!!inviteUser}
-          onClose={() => setInviteUser(undefined)}
-          userId={inviteUser.id}
-          userName={inviteUser.name}
-        />
-      )}
-      {exportUser && (
-        <StatementExportDialog
-          open={!!exportUser}
-          onClose={() => setExportUser(undefined)}
-          teamId={selectedTeamId}
-          assistantFilter={exportUser.id}
-          assistantName={exportUser.name}
-          rangeFromSections
-          description={
-            <>
-              Einzelnachweis fuer{" "}
-              <span className="font-medium text-foreground">{exportUser.name}</span> als PDF.
-              Waehle den gewuenschten Zeitraum – pro Monat entsteht eine Seite.
-            </>
-          }
-        />
-      )}
-      {/* Bestaetigung vor dem Entfernen aus dem Team; bei der LETZTEN
-          Team-Zuordnung zusaetzliche Warnung (Person verschwindet aus allen
-          team-gescopten Listen, Daten bleiben erhalten). */}
-      <AlertDialog open={!!removeUser} onOpenChange={(v) => !v && setRemoveUser(undefined)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Aus dem Team entfernen?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {removeUser && (
-                <>
-                  {removeUser.name} wird aus dem aktuell gewählten Team entfernt.{" "}
-                  {(teamCountByUserId.get(removeUser.id) ?? 0) <= 1 ? (
-                    <span className="font-medium text-destructive">
-                      Das ist die letzte Team-Zuordnung dieser Person — sie erscheint danach in
-                      keiner Team-Liste mehr, bis sie wieder einem Team zugeordnet wird. Daten
-                      (Verträge, Dienste, Zeiten) bleiben erhalten.
-                    </span>
-                  ) : (
-                    "Andere Team-Mitgliedschaften bleiben unberührt."
-                  )}
-                </>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={memberBusy}>Abbrechen</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                void handleRemoveFromTeam();
-              }}
-              disabled={memberBusy}
-              data-testid="confirm-remove-member"
-            >
-              {memberBusy ? "Entfernen..." : "Entfernen"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
   );
 }

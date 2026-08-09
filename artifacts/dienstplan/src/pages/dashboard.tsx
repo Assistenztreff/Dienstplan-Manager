@@ -119,7 +119,7 @@ function WarningsSection({
                   <li key={a.userId}>
                     <button
                       type="button"
-                      onClick={() => navigate(`/assistenten?highlight=${a.userId}`)}
+                      onClick={() => navigate(`/team-verwaltung?highlight=${a.userId}`)}
                       data-testid={`warning-low-vacation-${a.userId}`}
                       className="group flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 -mx-2 text-left text-sm text-muted-foreground transition-colors hover:bg-amber-100/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                     >
@@ -518,7 +518,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard
               title="Aktive Assistenzkräfte"
-              to="/assistenten"
+              to="/team-verwaltung"
               testId="kpi-active-assistants"
             >
               <div className="text-3xl font-bold">{summary.totalAssistants}</div>

@@ -8,7 +8,7 @@
  *
  * Geprüfte Seiten / Kontexte:
  *   1. /abwesenheiten (Von-/Bis-DatePicker)
- *   2. /assistenten   (Assistent-Anlegen-Dialog → Vertragsbeginn-DatePicker)
+ *   2. /team-verwaltung (Assistenzkraft-Anlegen-Dialog → Vertragsbeginn-DatePicker)
  *   3. /zeiterfassung (Manueller-Eintrag-Dialog → Datum-DatePicker)
  *
  * Der Test öffnet die jeweilige Seite und prüft, dass der Datums-Popover
@@ -55,8 +55,8 @@ test("Assistenten/Vertrag: Vertragsbeginn-DatePicker öffnet nicht automatisch (
 }) => {
   test.setTimeout(40_000);
   await loginAsAdmin(page);
-  await page.goto("/assistenten");
-  await expect(page.getByRole("heading", { name: "Assistenzkräfte" })).toBeVisible({
+  await page.goto("/team-verwaltung");
+  await expect(page.getByRole("heading", { name: "Team-Verwaltung", exact: true })).toBeVisible({
     timeout: 10_000,
   });
   // Neu-anlegen-Dialog öffnen.

@@ -1,5 +1,5 @@
 import { db } from "@workspace/db";
-import { teamsTable, teamMembersTable, shiftModelsTable } from "@workspace/db";
+import { teamsTable, teamMembersTable, shiftModelsTable, usersTable } from "@workspace/db";
 import { eq, asc, and, inArray } from "drizzle-orm";
 import type { Request } from "express";
 
@@ -208,24 +208,167 @@ export async function isTeamleiterOfTeam(userId: number, teamId: number): Promis
   return !!row;
 }
 
+// ---------------------------------------------------------------------------
+// Gestufte Team-Rechte (Assistenznehmer beim Dienstleister)
+//
+// Eine Mitgliedschaft kann NEBEN is_teamleiter eine ausdrücklich vergebene
+// Stufe tragen (team_members.access_level). Die Stufen sind aufsteigend:
+//   keine  → gar keine Team-Rechte (Standard, normale Assistenzkraft)
+//   basis  → team-weite Leseübersicht
+//   stufe1 → zusätzlich planen (Dienste, Abwesenheiten, Assistenzkräfte, PDF)
+//   stufe2 → zusätzlich Team-Verwaltung und Zeiterfassung
+//
+// Ein Unternehmens-Teamleiter (is_teamleiter=true) hat in SEINEM Team immer
+// mindestens stufe2. Lohndaten hängen NIE an einer Stufe.
+// ---------------------------------------------------------------------------
+
+export const TEAM_ACCESS_LEVELS = ["keine", "basis", "stufe1", "stufe2"] as const;
+export type TeamAccessLevel = (typeof TEAM_ACCESS_LEVELS)[number];
+
+/** Kleinste Stufe, die für eine Fähigkeit nötig ist. */
+export type TeamCapability = "read" | "plan" | "manage";
+
+const LEVEL_RANK: Record<TeamAccessLevel, number> = {
+  keine: 0,
+  basis: 1,
+  stufe1: 2,
+  stufe2: 3,
+};
+
+const CAPABILITY_MIN_RANK: Record<TeamCapability, number> = {
+  read: LEVEL_RANK.basis,
+  plan: LEVEL_RANK.stufe1,
+  manage: LEVEL_RANK.stufe2,
+};
+
+/** Effektive Stufe einer Mitgliedschaft: Teamleiter zählt immer als stufe2. */
+function effectiveRank(row: { isTeamleiter: boolean; accessLevel: string }): number {
+  if (row.isTeamleiter) return LEVEL_RANK.stufe2;
+  return LEVEL_RANK[(row.accessLevel as TeamAccessLevel) ?? "keine"] ?? 0;
+}
+
 /**
- * Gibt zurück, ob der Nutzer im angegebenen Team can_view_payroll=true hat.
- * Wird für die serverseitige Filterung sensibler Personalfelder verwendet.
+ * Alle Teams, in denen der Nutzer mindestens die geforderte Fähigkeit besitzt —
+ * über is_teamleiter ODER über eine ausdrücklich vergebene Stufe. Wird bei
+ * JEDEM Request frisch gelesen, damit ein Rechteentzug sofort greift.
  */
-export async function canViewPayrollInTeam(userId: number, teamId: number): Promise<boolean> {
+export async function getTeamIdsWithCapability(
+  userId: number,
+  capability: TeamCapability,
+): Promise<number[]> {
+  const rows = await db
+    .select({
+      teamId: teamMembersTable.teamId,
+      isTeamleiter: teamMembersTable.isTeamleiter,
+      accessLevel: teamMembersTable.accessLevel,
+    })
+    .from(teamMembersTable)
+    .where(eq(teamMembersTable.userId, userId));
+  const min = CAPABILITY_MIN_RANK[capability];
+  return rows
+    .filter((r) => effectiveRank(r) >= min)
+    .map((r) => r.teamId)
+    .sort((a, b) => a - b);
+}
+
+/** Prüft eine Fähigkeit für genau ein Team (IDOR-Schutz auf Einzelressourcen). */
+export async function hasTeamCapability(
+  userId: number,
+  teamId: number,
+  capability: TeamCapability,
+): Promise<boolean> {
   const [row] = await db
-    .select({ canViewPayroll: teamMembersTable.canViewPayroll })
+    .select({
+      isTeamleiter: teamMembersTable.isTeamleiter,
+      accessLevel: teamMembersTable.accessLevel,
+    })
     .from(teamMembersTable)
     .where(and(eq(teamMembersTable.userId, userId), eq(teamMembersTable.teamId, teamId)))
     .limit(1);
-  return row?.canViewPayroll ?? false;
+  if (!row) return false;
+  return effectiveRank(row) >= CAPABILITY_MIN_RANK[capability];
+}
+
+/** Höchste Stufe über alle Mitgliedschaften — nur für die Frontend-Sichtbarkeit. */
+export async function getHighestTeamAccessLevel(userId: number): Promise<TeamAccessLevel> {
+  const rows = await db
+    .select({
+      isTeamleiter: teamMembersTable.isTeamleiter,
+      accessLevel: teamMembersTable.accessLevel,
+    })
+    .from(teamMembersTable)
+    .where(eq(teamMembersTable.userId, userId));
+  let best = 0;
+  for (const r of rows) best = Math.max(best, effectiveRank(r));
+  return (TEAM_ACCESS_LEVELS.find((l) => LEVEL_RANK[l] === best) ?? "keine") as TeamAccessLevel;
+}
+
+/**
+ * Gibt zurück, ob der Nutzer im angegebenen Team Lohn-/SV-Daten sehen darf.
+ *
+ * Lohndaten sind AUSSCHLIESSLICH Unternehmens-Teamleitern eines
+ * Dienstleister-Kontos vorbehalten. Weder eine gestufte Freischaltung
+ * (Assistenznehmer) noch ein Teamleiter in einem Privat-Konto bekommt sie.
+ * Die drei Bedingungen werden hier zusammen geprüft, damit kein Aufrufer sie
+ * einzeln vergessen kann.
+ */
+export async function canViewPayrollInTeam(userId: number, teamId: number): Promise<boolean> {
+  const [row] = await db
+    .select({
+      canViewPayroll: teamMembersTable.canViewPayroll,
+      isTeamleiter: teamMembersTable.isTeamleiter,
+      ownerAccountType: usersTable.accountType,
+    })
+    .from(teamMembersTable)
+    .innerJoin(teamsTable, eq(teamsTable.id, teamMembersTable.teamId))
+    .innerJoin(usersTable, eq(usersTable.id, teamsTable.ownerId))
+    .where(and(eq(teamMembersTable.userId, userId), eq(teamMembersTable.teamId, teamId)))
+    .limit(1);
+  if (!row) return false;
+  return row.canViewPayroll && row.isTeamleiter && row.ownerAccountType === "dienstleister";
+}
+
+/**
+ * Prüft, ob eine Lohndaten-Freigabe für eine Mitgliedschaft überhaupt zulässig
+ * ist: nur in einem Dienstleister-Konto und nur für einen Teamleiter.
+ * Wird beim Setzen der Flags serverseitig durchgesetzt (403 statt stiller
+ * Speicherung).
+ */
+export async function mayGrantPayrollAccess(
+  teamId: number,
+  targetUserId: number,
+  nextIsTeamleiter: boolean,
+): Promise<boolean> {
+  if (!nextIsTeamleiter) return false;
+  const [row] = await db
+    .select({ ownerAccountType: usersTable.accountType })
+    .from(teamsTable)
+    .innerJoin(usersTable, eq(usersTable.id, teamsTable.ownerId))
+    .where(eq(teamsTable.id, teamId))
+    .limit(1);
+  if (row?.ownerAccountType !== "dienstleister") return false;
+  // Nur echtes Personal des Dienstleisters — der Ziel-Nutzer muss Mitglied sein.
+  const [membership] = await db
+    .select({ id: teamMembersTable.id })
+    .from(teamMembersTable)
+    .where(and(eq(teamMembersTable.teamId, teamId), eq(teamMembersTable.userId, targetUserId)))
+    .limit(1);
+  return !!membership;
+}
+
+/**
+ * Teams mit team-weitem LESEZUGRIFF für Nicht-Konto-Admins (Basis-Stufe und
+ * höher, inkl. Teamleiter). Basis für gescopte Listen (Dienstplan, Dashboard).
+ */
+export async function getTeamReadTeamIds(userId: number): Promise<number[]> {
+  return getTeamIdsWithCapability(userId, "read");
 }
 
 /**
  * Gibt die effektiven Admin-Level-Teams zurück:
  * - Für Admin-artige Rollen: alle erlaubten Teams (besessene + Mitgliedschaften).
- * - Für Teamleiter (nicht Admin-Rolle): nur Teams mit is_teamleiter=true.
- * Basis aller Datenzugriffe auf Admin-Ebene.
+ * - Sonst: Teams mit Planungsrecht (Teamleiter oder Stufe 1/2).
+ * Basis aller SCHREIB-Zugriffe auf Dienste, Verträge und Assistenzkräfte.
  */
 export async function getEffectiveAdminTeamIds(
   userId: number,
@@ -234,12 +377,27 @@ export async function getEffectiveAdminTeamIds(
   if (isAdminLikeRole(role)) {
     return getAllowedTeamIds(userId);
   }
-  return getTeamleiterTeamIds(userId);
+  return getTeamIdsWithCapability(userId, "plan");
 }
 
 /**
- * Prüft, ob ein Team dem Aufrufer gehört ODER der Aufrufer dort Teamleiter ist.
- * Basis für IDOR-Schutz auf Team-Mitgliederverwaltung durch Teamleiter.
+ * Wie getEffectiveAdminTeamIds, aber für Verwaltungs-Zugriffe (Zeiterfassung,
+ * Team-Verwaltung): Nicht-Admins brauchen dafür Stufe 2 bzw. Teamleiter.
+ */
+export async function getEffectiveManageTeamIds(
+  userId: number,
+  role: string,
+): Promise<number[]> {
+  if (isAdminLikeRole(role)) {
+    return getAllowedTeamIds(userId);
+  }
+  return getTeamIdsWithCapability(userId, "manage");
+}
+
+/**
+ * Prüft, ob ein Team dem Aufrufer gehört ODER der Aufrufer dort Verwaltungs-
+ * rechte hat (Teamleiter oder Stufe 2).
+ * Basis für IDOR-Schutz auf Team-Mitgliederverwaltung.
  */
 export async function hasTeamAdminAccess(
   teamId: number,
@@ -254,8 +412,7 @@ export async function hasTeamAdminAccess(
       .where(and(eq(teamsTable.id, teamId), eq(teamsTable.ownerId, userId)));
     return !!team;
   }
-  // Teamleiter: muss is_teamleiter=true haben
-  return isTeamleiterOfTeam(userId, teamId);
+  return hasTeamCapability(userId, teamId, "manage");
 }
 
 /** Liest den optionalen ?teamId Query-Parameter (mit NaN-Schutz). */

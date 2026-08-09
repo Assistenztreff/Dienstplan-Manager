@@ -142,8 +142,8 @@ test("Klick auf Gruppe 'Verwalten' führt zum ersten sichtbaren Kind", async ({ 
     const group = desktopNav(page).getByTestId("nav-group-verwalten");
     await expect(group).toBeVisible({ timeout: 30_000 });
     await group.click();
-    // Admin: erstes sichtbares Kind ist "Assistenzkräfte" (/assistenten).
-    await expect(page).toHaveURL(/\/assistenten$/);
+    // Admin: erstes sichtbares Kind ist "Team-Verwaltung" (/team-verwaltung).
+    await expect(page).toHaveURL(/\/team-verwaltung$/);
     const tabs = page.getByTestId("app-subnav-tabs");
     // Team-Verwaltung ist für Admins und Teamleitungen sichtbar — auch bei
     // Privat-Konten; reine Assistenzkräfte sehen den Punkt weiterhin nicht.

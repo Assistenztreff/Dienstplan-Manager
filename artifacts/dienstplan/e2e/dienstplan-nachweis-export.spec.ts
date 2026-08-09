@@ -115,8 +115,8 @@ test("Nachweis-Dialog navigiert den Monat und löst PDF-Download mit erwartetem 
   page,
 }) => {
   await loginViaUi(page, ADMIN_EMAIL, ADMIN_PASSWORD);
-  await page.goto("/assistenten");
-  await expect(page.getByRole("heading", { name: "Assistenzkräfte", exact: true })).toBeVisible();
+  await page.goto("/team-verwaltung");
+  await expect(page.getByRole("heading", { name: "Team-Verwaltung", exact: true })).toBeVisible();
 
   // Karte des angelegten Assistenten finden und "Nachweis" öffnen.
   const card = page.getByTestId(`assistant-card-${assistant.id}`);

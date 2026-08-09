@@ -8,6 +8,7 @@
 import type { AuthUserAccountType } from './authUserAccountType';
 import type { AuthUserPlan } from './authUserPlan';
 import type { AuthUserRole } from './authUserRole';
+import type { AuthUserTeamAccessLevel } from './authUserTeamAccessLevel';
 
 export interface AuthUser {
   id: number;
@@ -18,4 +19,6 @@ export interface AuthUser {
   plan: AuthUserPlan;
   /** true, wenn der Nutzer in mindestens einem Team als Teamleiter eingetragen ist. Ermöglicht dem Frontend den Team-Switcher auch für Nicht-Dienstleister anzuzeigen. */
   isTeamleiter?: boolean;
+  /** Höchste gestufte Team-Freischaltung über alle Mitgliedschaften hinweg. Steuert nur die Sichtbarkeit im Frontend; die Durchsetzung erfolgt serverseitig pro Team. */
+  teamAccessLevel?: AuthUserTeamAccessLevel;
 }

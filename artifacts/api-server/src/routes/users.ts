@@ -10,11 +10,11 @@ import {
   DeleteUserParams,
   GetUserParams,
 } from "@workspace/api-zod";
-import { requireAdmin, requireAuth, requireTeamleiterOrAdmin, isAdminLikeRole } from "../middleware/auth";
+import { requireAdmin, requireAuth, requireTeamReadOrAdmin, isAdminLikeRole } from "../middleware/auth";
 import {
   getAllowedTeamIds,
   getEffectiveAdminTeamIds,
-  getTeamleiterTeamIds,
+  getTeamIdsWithCapability,
   canViewPayrollInTeam,
   parseTeamIdParam,
   resolveWriteTeamId,
@@ -80,20 +80,21 @@ const BASIC_USER_SELECT = {
   createdAt: usersTable.createdAt,
 };
 
-router.get("/users", requireTeamleiterOrAdmin, async (req, res): Promise<void> => {
+router.get("/users", requireTeamReadOrAdmin, async (req, res): Promise<void> => {
   const query = ListUsersQueryParams.safeParse(req.query);
   if (!query.success) {
     res.status(400).json({ error: "Invalid query parameters" });
     return;
   }
 
-  // Teamleiter erhalten nur ihre Teamleiter-Teams als Scope — nicht alle
-  // Mitglied-Teams (das wäre zu weit). Admins bekommen den vollen Konto-Scope.
+  // Nicht-Konto-Admins erhalten nur die Teams, für die sie freigeschaltet
+  // sind (Teamleiter oder gestufte Freischaltung ab Basis) — nicht alle
+  // Mitglied-Teams. Admins bekommen den vollen Konto-Scope.
   const userId = req.session.userId!;
   const role = req.session.role!;
   const isTeamleiterOnly = !isAdminLikeRole(role);
   const allowedTeams = isTeamleiterOnly
-    ? await getTeamleiterTeamIds(userId)
+    ? await getTeamIdsWithCapability(userId, "read")
     : await getAllowedTeamIds(userId);
 
   const teamId = parseTeamIdParam(req);
@@ -273,8 +274,9 @@ router.get("/users/:id", requireAuth, async (req, res): Promise<void> => {
   const sessionRole = req.session.role!;
 
   if (!isAdminLikeRole(sessionRole) && sessionUserId !== requestedId) {
-    // Teamleiter-Ausnahme: Teamleiter dürfen Nutzer in ihren Teamleiter-Teams lesen.
-    const tlTeamIds = await getTeamleiterTeamIds(sessionUserId);
+    // Team-Ausnahme: Wer für ein Team freigeschaltet ist (Teamleiter oder
+    // Stufe ab Basis), darf dessen Mitglieder lesen.
+    const tlTeamIds = await getTeamIdsWithCapability(sessionUserId, "read");
     if (tlTeamIds.length === 0) {
       res.status(403).json({ error: "Keine Berechtigung" });
       return;

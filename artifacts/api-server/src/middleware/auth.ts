@@ -1,7 +1,8 @@
 import { NextFunction, Request, Response } from "express";
 import { db } from "@workspace/db";
-import { usersTable, teamMembersTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { usersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
+import { getTeamIdsWithCapability, type TeamCapability } from "../lib/teams";
 
 declare module "express-session" {
   interface SessionData {
@@ -97,49 +98,59 @@ export async function requireSuperadmin(
 }
 
 /**
- * Erlaubt Zugriff für Admin-artige Rollen ODER für Nutzer, die in mindestens
- * einem Team als Teamleiter eingetragen sind. Der Teamleiter-Status wird frisch
- * aus der DB gelesen, damit ein Rechteentzug sofort beim nächsten Request greift.
+ * Baut eine Middleware, die Admin-artige Rollen durchlässt ODER Nutzer, die in
+ * mindestens einem Team die geforderte Team-Fähigkeit besitzen (Teamleiter oder
+ * ausdrücklich vergebene Stufe). Die Rechte werden bei JEDEM Request frisch aus
+ * der DB gelesen, damit ein Rechteentzug sofort greift.
  */
-export async function requireTeamleiterOrAdmin(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  if (!req.session.userId) {
-    res.status(401).json({ error: "Nicht angemeldet" });
-    return;
-  }
-  const [user] = await db
-    .select({ isActive: usersTable.isActive })
-    .from(usersTable)
-    .where(eq(usersTable.id, req.session.userId));
-  if (!user || !user.isActive) {
-    req.session.destroy(() => {});
-    res.status(401).json({ error: "Konto deaktiviert oder nicht gefunden" });
-    return;
-  }
-  if (isAdminLikeRole(req.session.role)) {
-    next();
-    return;
-  }
-  // Für Nicht-Admins: prüfen, ob Teamleiter in mindestens einem Team.
-  const [tlRow] = await db
-    .select({ id: teamMembersTable.teamId })
-    .from(teamMembersTable)
-    .where(
-      and(
-        eq(teamMembersTable.userId, req.session.userId),
-        eq(teamMembersTable.isTeamleiter, true),
-      ),
-    )
-    .limit(1);
-  if (tlRow) {
-    next();
-    return;
-  }
-  res.status(403).json({ error: "Keine Berechtigung" });
+function requireTeamCapabilityOrAdmin(capability: TeamCapability) {
+  return async function middleware(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    if (!req.session.userId) {
+      res.status(401).json({ error: "Nicht angemeldet" });
+      return;
+    }
+    const [user] = await db
+      .select({ isActive: usersTable.isActive })
+      .from(usersTable)
+      .where(eq(usersTable.id, req.session.userId));
+    if (!user || !user.isActive) {
+      req.session.destroy(() => {});
+      res.status(401).json({ error: "Konto deaktiviert oder nicht gefunden" });
+      return;
+    }
+    if (isAdminLikeRole(req.session.role)) {
+      next();
+      return;
+    }
+    const teamIds = await getTeamIdsWithCapability(req.session.userId, capability);
+    if (teamIds.length > 0) {
+      next();
+      return;
+    }
+    res.status(403).json({ error: "Keine Berechtigung" });
+  };
 }
+
+/**
+ * Team-weiter Lesezugriff: Teamleiter oder Basis-Stufe und höher.
+ */
+export const requireTeamReadOrAdmin = requireTeamCapabilityOrAdmin("read");
+
+/**
+ * Planungsrechte: Teamleiter oder Stufe 1/2. Deckt Dienstplanung,
+ * Abwesenheiten, Assistenzkraft-Pflege und PDF-Export ab.
+ */
+export const requireTeamPlanningOrAdmin = requireTeamCapabilityOrAdmin("plan");
+
+/**
+ * Verwaltungsrechte: Teamleiter oder Stufe 2. Deckt Team-Verwaltung und
+ * Zeiterfassung ab.
+ */
+export const requireTeamManageOrAdmin = requireTeamCapabilityOrAdmin("manage");
 
 /**
  * Nur Admins mit Konto-Typ "dienstleister". Der Konto-Typ wird frisch aus der

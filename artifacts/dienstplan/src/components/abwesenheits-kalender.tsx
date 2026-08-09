@@ -54,7 +54,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CheckSquare, ChevronDown, ChevronLeft, ChevronRight, Trash2, X } from "lucide-react";
-import { useAuth } from "@/context/auth";
+import { useAuth, hasTeamAccessLevel } from "@/context/auth";
 import { isAdminRole } from "@/lib/roles";
 import { useToast } from "@/hooks/use-toast";
 import { planUpgradeMessage, readableApiError } from "@/lib/api-error";
@@ -132,7 +132,10 @@ export function AbwesenheitsKalender() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currentUser } = useAuth();
-  const canManage = isAdminRole(currentUser?.role) || !!currentUser?.isTeamleiter;
+  const canManage =
+    isAdminRole(currentUser?.role) ||
+    !!currentUser?.isTeamleiter ||
+    hasTeamAccessLevel(currentUser, "stufe1");
 
   const { data: users } = useListUsers(undefined, {
     query: { enabled: canManage },

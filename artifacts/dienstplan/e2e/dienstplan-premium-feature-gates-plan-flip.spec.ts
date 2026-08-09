@@ -85,7 +85,13 @@ test.describe("Premium-Feature-Gates: Plan-Flip (API)", () => {
     // Konto-Typ. Die Registrierung legt ein Standard-Team an, sodass POST
     // /users, /shifts und /time-tracking ohne explizite teamId funktionieren.
     acc = await registerFreeAccount("privat", "gates-flip");
+    // Der Schalter "Zeiterfassung aktivieren" ist selbst Premium-gesperrt.
+    // Kurz auf Premium heben, einschalten, zurueck auf Free: Der Bestandsschutz
+    // laesst den bereits aktiven Schalter aktiv — genau die Ausgangslage, die
+    // dieses Spec braucht (Erfassen frei, Bestaetigen Premium).
+    await setAccountPlan(acc.email, "premium");
     await enableTimeTracking(acc.ctx);
+    await setAccountPlan(acc.email, "free");
     const unique = Date.now();
 
     // Assistent OHNE Lohn-/SV-Daten (die wären im Free-Tarif geblockt).
@@ -331,7 +337,11 @@ test.describe("Premium-Feature-Gates: Sperr-Hinweise im Frontend (UI)", () => {
 
   test.beforeAll(async () => {
     free = await registerFreeAccount("privat", "gates-ui");
+    // Siehe oben: Der Zeiterfassungs-Schalter ist Premium-gesperrt, bleibt nach
+    // dem Downgrade aber dank Bestandsschutz aktiv.
+    await setAccountPlan(free.email, "premium");
     await enableTimeTracking(free.ctx);
+    await setAccountPlan(free.email, "free");
     const unique = Date.now();
 
     const userRes = await free.ctx.post("/api/users", {
@@ -394,8 +404,8 @@ test.describe("Premium-Feature-Gates: Sperr-Hinweise im Frontend (UI)", () => {
     test.setTimeout(60000);
     await adoptSession(page, free);
 
-    await page.goto("/assistenten");
-    await expect(page.getByRole("heading", { name: "Assistenzkräfte" })).toBeVisible();
+    await page.goto("/team-verwaltung");
+    await expect(page.getByRole("heading", { name: "Team-Verwaltung", exact: true })).toBeVisible();
 
     // Auf schmalen Viewports (Config: 400px) sind die Button-Beschriftungen
     // ausgeblendet (`hidden sm:inline`) — daher über das title-Attribut suchen,

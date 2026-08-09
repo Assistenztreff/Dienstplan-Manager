@@ -192,17 +192,14 @@ test.describe("Downgrade auf Free: Bestandsdaten bleiben im UI sichtbar", () => 
     await page.keyboard.press("Escape");
     await expect(dialog).not.toBeVisible();
 
-    // NUR das Neu-Anlegen reflektiert das Limit: Der "Neu"-Button bleibt bewusst
-    // aktiv (kein Anzeige-/Button-Gate), aber das Speichern eines weiteren
-    // Dienstes ueber dem Free-Limit zeigt den servergemappten Upgrade-Hinweis.
-    const addButton = page.getByRole("button", { name: "Neu", exact: true }).first();
-    await expect(addButton).toBeEnabled();
-    await addButton.click();
-    const createDialog = page.getByRole("dialog");
-    await expect(createDialog.getByText("Neues Schichtmodell")).toBeVisible();
-    await createDialog.getByPlaceholder("z.B. Aktivdienst").fill("Achter Dienst");
-    await createDialog.getByRole("button", { name: "Anlegen" }).click();
-    await expect(createDialog.getByText(/max\. 5 Dienste/i)).toBeVisible();
+    // NUR das Neu-Anlegen reflektiert das Limit: Der "Neu"-Button ist ueber dem
+    // Free-Limit proaktiv gesperrt und traegt den Upgrade-Hinweis als title.
+    // (Den servergemappten Hinweis beim Speichern deckt das Race-Szenario in
+    // dienstplan-free-plan-caps-ui.spec.ts ab.)
+    const addButton = page.getByTestId("model-create-locked");
+    await expect(addButton, "Ueber dem Limit muss Neu-Anlegen gesperrt sein").toBeDisabled();
+    await expect(addButton).toHaveAttribute("title", /max\. 5 Dienste/i);
+    await expect(addButton).toHaveAttribute("title", /Premium/i);
   });
 
   test("Team-Wechsler und Team-Verwaltung zeigen weiterhin beide Teams", async ({ page }) => {
@@ -236,8 +233,8 @@ test.describe("Downgrade auf Free: Bestandsdaten bleiben im UI sichtbar", () => 
     test.setTimeout(60000);
     await adoptSession(page, acc);
 
-    await page.goto("/assistenten");
-    await expect(page.getByRole("heading", { name: "Assistenzkräfte" })).toBeVisible();
+    await page.goto("/team-verwaltung");
+    await expect(page.getByRole("heading", { name: "Team-Verwaltung", exact: true })).toBeVisible();
 
     for (let i = 0; i < assistantIds.length; i++) {
       await expect(

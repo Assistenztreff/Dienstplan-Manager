@@ -1,4 +1,4 @@
-import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
+import { Switch, Route, Redirect, Router as WouterRouter, useLocation } from "wouter";
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApiError } from "@workspace/api-client-react";
 import { toast } from "sonner";
@@ -9,11 +9,10 @@ import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "@/components/layout";
 import { OfflineBanner } from "@/components/offline-banner";
-import { AuthProvider, useAuth } from "@/context/auth";
+import { AuthProvider, useAuth, hasTeamAccessLevel } from "@/context/auth";
 import { TeamProvider } from "@/context/team";
 import Dashboard from "@/pages/dashboard";
 import Dienstplan from "@/pages/dienstplan";
-import Assistenten from "@/pages/assistenten";
 import Zeiterfassung from "@/pages/zeiterfassung";
 import Abwesenheiten from "@/pages/abwesenheiten";
 import Auswertungen from "@/pages/auswertungen";
@@ -197,9 +196,12 @@ function Router() {
         {/* Abwesenheiten für alle Rollen: Assistenzkräfte sehen und verwalten
             dort nur die EIGENEN Einträge (Scoping in der Seite + Server). */}
         <Route path="/abwesenheiten" component={Abwesenheiten} />
-        {(isAdminRole(currentUser.role) || currentUser.isTeamleiter) && (
-          <Route path="/assistenten" component={Assistenten} />
-        )}
+        {/* Alte Assistenzkraft-Route: Die Seite ist in der Team-Verwaltung
+            aufgegangen. Bestehende Links und Lesezeichen landen dort statt
+            auf einer 404-Seite; der ?highlight-Parameter bleibt erhalten. */}
+        <Route path="/assistenten">
+          {() => <Redirect to={`/team-verwaltung${window.location.search}`} replace />}
+        </Route>
         {(isAdminRole(currentUser.role) || currentUser.isTeamleiter) && (
           <Route path="/auswertungen" component={Auswertungen} />
         )}
@@ -228,7 +230,12 @@ function Router() {
         {/* Team-Verwaltung: Admin ODER Teamleiter, bewusst UNABHÄNGIG vom
             accountType (Teamleiter sind Assistenzkräfte in Dienstleister-
             Teams; der Nav-Punkt war nie auf Dienstleister beschränkt). */}
-        {(isAdminRole(currentUser.role) || currentUser.isTeamleiter) && (
+        {/* Ab Stufe 1, weil dort die Assistenzkraft-Pflege liegt. Team-Struktur
+            (anlegen/bearbeiten/löschen, Zugriffsrechte) bleibt in der Seite
+            selbst den Konto-Admins vorbehalten. */}
+        {(isAdminRole(currentUser.role) ||
+          currentUser.isTeamleiter ||
+          hasTeamAccessLevel(currentUser, "stufe1")) && (
           <Route path="/team-verwaltung" component={TeamVerwaltung} />
         )}
         {/* Operator-Dashboard ausschliesslich fuer Superadmins (Betreiber). */}

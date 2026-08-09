@@ -8,7 +8,7 @@ import { BASE_URL, enableTimeTracking } from "./helpers/teams";
  * Deckt ab:
  * - Admin-Login über den echten Auth-Flow und Öffnen des Dashboards ("/")
  * - Jede der vier KPI-Kacheln springt beim Klick auf die richtige Zielseite:
- *   - kpi-active-assistants   -> /assistenten
+ *   - kpi-active-assistants   -> /team-verwaltung
  *   - kpi-shifts-today        -> /dienstplan?date=<heute> (yyyy-MM-dd)
  *   - kpi-pending-time-entries-> /zeiterfassung?status=pending
  *   - kpi-hours-balance       -> /auswertungen
@@ -56,10 +56,10 @@ test.describe("Dashboard-Kacheln (Admin)", () => {
     await loginAsAdmin(page);
   });
 
-  test("Kachel 'Aktive Assistenten' springt nach /assistenten", async ({ page }) => {
+  test("Kachel 'Aktive Assistenzkräfte' springt nach /team-verwaltung", async ({ page }) => {
     await openDashboard(page);
     await page.getByTestId("kpi-active-assistants").click();
-    await expect(page).toHaveURL(/\/assistenten$/);
+    await expect(page).toHaveURL(/\/team-verwaltung$/);
   });
 
   test("Kachel 'Schichten Heute' springt nach /dienstplan?date=<heute>", async ({ page }) => {
