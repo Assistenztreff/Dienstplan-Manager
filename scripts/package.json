@@ -26,6 +26,7 @@
     "migrate-payroll-access": "tsx ./src/migrate-payroll-access.ts",
     "backfill-team-shift-models": "tsx ./src/backfill-team-shift-models.ts",
     "check-codegen-drift": "tsx ./src/check-codegen-drift.ts",
+    "typecheck-libs-locked": "tsx ./src/typecheck-libs-locked.ts",
     "check-test-db-derivation": "tsx ./src/check-test-db-derivation.ts",
     "setup-test-db": "tsx ./src/setup-test-db.ts",
     "scoped-e2e": "tsx ./src/scoped-e2e.ts",

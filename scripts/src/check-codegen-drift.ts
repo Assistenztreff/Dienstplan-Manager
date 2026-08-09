@@ -4,6 +4,8 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { acquireCodegenLock } from "./lib/codegen-lock";
+
 /**
  * Codegen-Drift-Waechter (Merge-Absicherung).
  *
@@ -75,26 +77,36 @@ function fingerprint(repoRoot: string): string {
   return hash.digest("hex");
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const repoRoot = findRepoRoot(here);
 
-  const before = fingerprint(repoRoot);
-
-  console.log("[codegen-guard] Fuehre Codegen aus (Orval regeneriert den API-Client)...");
+  // Sperre halten, solange Orval die generierten Verzeichnisse leert und neu
+  // schreibt: parallel laufende Prüfketten (typecheck:libs liest dieselben
+  // Dateien) würden sonst in das Leerfenster hineinlesen (TS2307/TS6307).
+  const release = await acquireCodegenLock(repoRoot);
+  let before: string;
+  let after: string;
   try {
-    execSync("pnpm --filter @workspace/api-spec exec orval --config ./orval.config.ts", {
-      cwd: repoRoot,
-      stdio: "inherit",
-      timeout: 180_000,
-    });
-  } catch {
-    throw new Error(
-      "[codegen-guard] Der Codegen-Lauf (Orval) selbst ist fehlgeschlagen — siehe Ausgabe oben.",
-    );
-  }
+    before = fingerprint(repoRoot);
 
-  const after = fingerprint(repoRoot);
+    console.log("[codegen-guard] Fuehre Codegen aus (Orval regeneriert den API-Client)...");
+    try {
+      execSync("pnpm --filter @workspace/api-spec exec orval --config ./orval.config.ts", {
+        cwd: repoRoot,
+        stdio: "inherit",
+        timeout: 180_000,
+      });
+    } catch {
+      throw new Error(
+        "[codegen-guard] Der Codegen-Lauf (Orval) selbst ist fehlgeschlagen — siehe Ausgabe oben.",
+      );
+    }
+
+    after = fingerprint(repoRoot);
+  } finally {
+    release();
+  }
 
   if (before === after) {
     console.log("[codegen-guard] Kein Drift — generierter API-Client ist aktuell.");
@@ -111,4 +123,7 @@ function main(): void {
   process.exit(1);
 }
 
-main();
+main().catch((err) => {
+  console.error(err instanceof Error ? err.message : err);
+  process.exit(1);
+});
