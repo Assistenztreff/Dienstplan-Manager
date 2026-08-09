@@ -53,6 +53,9 @@ import type {
   HourBudgetUpdate,
   HoursBalance,
   InviteResult,
+  Koordinator,
+  KoordinatorInput,
+  KoordinatorTeamsInput,
   LexwareBookingList,
   ListContractsParams,
   ListHourBudgetsParams,
@@ -3867,6 +3870,226 @@ export function useGetTimeTrackingStatus<TData = Awaited<ReturnType<typeof getTi
 
 
 
+
+export const getListKoordinatorenUrl = () => {
+
+
+
+
+  return `/api/koordinatoren`
+}
+
+/**
+ * @summary Teamkoordinatoren des eigenen Dienstleister-Kontos auflisten
+ */
+export const listKoordinatoren = async ( options?: RequestInit): Promise<Koordinator[]> => {
+
+  return customFetch<Koordinator[]>(getListKoordinatorenUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListKoordinatorenQueryKey = () => {
+    return [
+    `/api/koordinatoren`
+    ] as const;
+    }
+
+
+export const getListKoordinatorenQueryOptions = <TData = Awaited<ReturnType<typeof listKoordinatoren>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listKoordinatoren>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListKoordinatorenQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listKoordinatoren>>> = ({ signal }) => listKoordinatoren({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listKoordinatoren>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListKoordinatorenQueryResult = NonNullable<Awaited<ReturnType<typeof listKoordinatoren>>>
+export type ListKoordinatorenQueryError = ErrorType<void>
+
+
+/**
+ * @summary Teamkoordinatoren des eigenen Dienstleister-Kontos auflisten
+ */
+
+export function useListKoordinatoren<TData = Awaited<ReturnType<typeof listKoordinatoren>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listKoordinatoren>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListKoordinatorenQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateKoordinatorUrl = () => {
+
+
+
+
+  return `/api/koordinatoren`
+}
+
+/**
+ * @summary Teamkoordinator anlegen (Dienstleister-Konto, Premium)
+ */
+export const createKoordinator = async (koordinatorInput: KoordinatorInput, options?: RequestInit): Promise<Koordinator> => {
+
+  return customFetch<Koordinator>(getCreateKoordinatorUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      koordinatorInput,)
+  }
+);}
+
+
+
+
+export const getCreateKoordinatorMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createKoordinator>>, TError,{data: BodyType<KoordinatorInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createKoordinator>>, TError,{data: BodyType<KoordinatorInput>}, TContext> => {
+
+const mutationKey = ['createKoordinator'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createKoordinator>>, {data: BodyType<KoordinatorInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createKoordinator(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateKoordinatorMutationResult = NonNullable<Awaited<ReturnType<typeof createKoordinator>>>
+    export type CreateKoordinatorMutationBody = BodyType<KoordinatorInput>
+    export type CreateKoordinatorMutationError = ErrorType<void>
+
+    /**
+ * @summary Teamkoordinator anlegen (Dienstleister-Konto, Premium)
+ */
+export const useCreateKoordinator = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createKoordinator>>, TError,{data: BodyType<KoordinatorInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createKoordinator>>,
+        TError,
+        {data: BodyType<KoordinatorInput>},
+        TContext
+      > => {
+      return useMutation(getCreateKoordinatorMutationOptions(options));
+    }
+
+export const getSetKoordinatorTeamsUrl = (id: number,) => {
+
+
+
+
+  return `/api/koordinatoren/${id}/teams`
+}
+
+/**
+ * @summary Team-Zuweisungen eines Koordinators ersetzen (Vollabgleich)
+ */
+export const setKoordinatorTeams = async (id: number,
+    koordinatorTeamsInput: KoordinatorTeamsInput, options?: RequestInit): Promise<Koordinator> => {
+
+  return customFetch<Koordinator>(getSetKoordinatorTeamsUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      koordinatorTeamsInput,)
+  }
+);}
+
+
+
+
+export const getSetKoordinatorTeamsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setKoordinatorTeams>>, TError,{id: number;data: BodyType<KoordinatorTeamsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setKoordinatorTeams>>, TError,{id: number;data: BodyType<KoordinatorTeamsInput>}, TContext> => {
+
+const mutationKey = ['setKoordinatorTeams'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setKoordinatorTeams>>, {id: number;data: BodyType<KoordinatorTeamsInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  setKoordinatorTeams(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetKoordinatorTeamsMutationResult = NonNullable<Awaited<ReturnType<typeof setKoordinatorTeams>>>
+    export type SetKoordinatorTeamsMutationBody = BodyType<KoordinatorTeamsInput>
+    export type SetKoordinatorTeamsMutationError = ErrorType<void>
+
+    /**
+ * @summary Team-Zuweisungen eines Koordinators ersetzen (Vollabgleich)
+ */
+export const useSetKoordinatorTeams = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setKoordinatorTeams>>, TError,{id: number;data: BodyType<KoordinatorTeamsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setKoordinatorTeams>>,
+        TError,
+        {id: number;data: BodyType<KoordinatorTeamsInput>},
+        TContext
+      > => {
+      return useMutation(getSetKoordinatorTeamsMutationOptions(options));
+    }
 
 export const getInviteUserUrl = (id: number,) => {
 

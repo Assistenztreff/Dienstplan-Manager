@@ -124,7 +124,15 @@ export async function deleteAccountTrees(
       [userIds],
     );
 
-    // 5) Konten selbst.
+    // 5) Verwaltete Koordinatoren: users.managed_by_user_id referenziert das
+    //    Konto OHNE Cascade — ein uebrig gebliebener Teamkoordinator wuerde
+    //    das Loeschen seines Dienstleister-Kontos blockieren. (Deren
+    //    user_id-gebundene Restdaten kaskadieren ueber die User-FKs.)
+    await client.query("DELETE FROM users WHERE managed_by_user_id = ANY($1)", [
+      userIds,
+    ]);
+
+    // 6) Konten selbst.
     const usersRes = await client.query("DELETE FROM users WHERE id = ANY($1)", [
       userIds,
     ]);

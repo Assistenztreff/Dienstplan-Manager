@@ -7,7 +7,7 @@ import { getTeamIdsWithCapability, type TeamCapability } from "../lib/teams";
 declare module "express-session" {
   interface SessionData {
     userId: number;
-    role: "admin" | "assistant" | "superadmin";
+    role: "admin" | "assistant" | "superadmin" | "koordinator";
   }
 }
 

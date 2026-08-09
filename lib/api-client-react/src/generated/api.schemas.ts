@@ -16,6 +16,7 @@ export const UserRole = {
   admin: 'admin',
   assistant: 'assistant',
   superadmin: 'superadmin',
+  koordinator: 'koordinator',
 } as const;
 
 export type UserAccountType = typeof UserAccountType[keyof typeof UserAccountType];
@@ -243,6 +244,28 @@ export interface OperatorErrorsResolveAllResult {
   resolvedCount: number;
 }
 
+export interface Koordinator {
+  id: number;
+  name: string;
+  email: string;
+  isActive: boolean;
+  /** true, sobald der Koordinator sein Passwort gesetzt hat (eingeladen und angenommen). */
+  hasLogin: boolean;
+  /** IDs der Teams, die dieser Koordinator koordiniert. */
+  teamIds: number[];
+  createdAt: string;
+}
+
+export interface KoordinatorInput {
+  /** @minLength 1 */
+  name: string;
+  email: string;
+}
+
+export interface KoordinatorTeamsInput {
+  teamIds: number[];
+}
+
 export type UserInputRole = typeof UserInputRole[keyof typeof UserInputRole];
 
 
@@ -331,6 +354,7 @@ export type TeamMemberRole = typeof TeamMemberRole[keyof typeof TeamMemberRole];
 export const TeamMemberRole = {
   admin: 'admin',
   assistant: 'assistant',
+  koordinator: 'koordinator',
 } as const;
 
 /**
@@ -1605,6 +1629,7 @@ export const AuthUserRole = {
   admin: 'admin',
   assistant: 'assistant',
   superadmin: 'superadmin',
+  koordinator: 'koordinator',
 } as const;
 
 export type AuthUserAccountType = typeof AuthUserAccountType[keyof typeof AuthUserAccountType];

@@ -33,6 +33,7 @@ import {
   hasTeamCapability,
   mayGrantPayrollAccess,
   getTeamIdsWithCapability,
+  isTeamleiterOfTeam,
   type TeamCapability,
 } from "../lib/teams";
 import { UpdateTeamMemberFlagsBody } from "@workspace/api-zod";
@@ -344,17 +345,21 @@ router.post("/teams/:id/members", requireTeamManageOrAdmin, async (req, res): Pr
  * canViewPayroll für ein Mitglied.
  *
  * Grenzen (serverseitig durchgesetzt, nicht nur im UI):
- * - isTeamleiter darf jeder Konto-Admin für sein Team setzen.
- * - accessLevel (gestufte Freischaltung für Assistenznehmer beim Dienstleister)
- *   darf jeder Konto-Admin für sein Team setzen.
+ * - Konto-Inhaber dürfen alle drei Felder für ihre Teams setzen.
+ * - Teamleiter des betroffenen Teams dürfen NUR accessLevel setzen — weder
+ *   Teamleiter- noch Lohndaten-Flags, und nie die Rechte des Konto-Inhabers.
+ *   Fremde Teams antworten 404 (kein Daten-Orakel).
  * - canViewPayroll bleibt Unternehmens-Teamleitern eines Dienstleister-Kontos
  *   vorbehalten. Jeder andere Versuch wird mit 403 abgelehnt — Assistenzkräfte
  *   und gestufte Rollen bekommen nie Lohndaten.
  * - Wird der Teamleiter-Status entzogen, fällt canViewPayroll automatisch mit.
+ *
+ * Bewusst NICHT requireTeamManageOrAdmin: Stufe 2 erlaubt Team-Verwaltung,
+ * aber KEINE Rechtevergabe — die bleibt Inhabern und Teamleitern vorbehalten.
  */
 router.patch(
   "/teams/:id/members/:userId",
-  requireAdmin,
+  requireAuth,
   async (req, res): Promise<void> => {
     const teamId = Number(req.params["id"]);
     const targetUserId = Number(req.params["userId"]);
@@ -362,8 +367,31 @@ router.patch(
       res.status(400).json({ error: "Invalid id" });
       return;
     }
-    const ownerId = req.session.userId!;
-    if (!(await assertTeamOwnership(teamId, ownerId, res))) return;
+    const callerId = req.session.userId!;
+
+    // Autorisierung VOR Inhaltsprüfung: Konto-Inhaber ODER Teamleiter genau
+    // dieses Teams. Alles andere (fremdes/unbekanntes Team, Stufe 2 ohne
+    // Teamleiter-Status) antwortet einheitlich 404.
+    const [teamRow] = await db
+      .select({ ownerId: teamsTable.ownerId })
+      .from(teamsTable)
+      .where(eq(teamsTable.id, teamId));
+    if (!teamRow) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    let isOwner = false;
+    if (isAdminLikeRole(req.session.role)) {
+      if (teamRow.ownerId !== callerId) {
+        res.status(404).json({ error: "Not found" });
+        return;
+      }
+      isOwner = true;
+    } else if (!(await isTeamleiterOfTeam(callerId, teamId))) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    const ownerId = teamRow.ownerId;
 
     const body = UpdateTeamMemberFlagsBody.safeParse(req.body);
     if (!body.success) {
@@ -375,6 +403,23 @@ router.patch(
     if (Object.keys(updates).length === 0) {
       res.status(400).json({ error: "Keine Felder zum Aktualisieren angegeben" });
       return;
+    }
+
+    // Teamleiter vergeben nur die Zugriffsstufe. Teamleiter-/Lohndaten-Flags
+    // und die Rechte des Konto-Inhabers bleiben dem Inhaber vorbehalten.
+    if (!isOwner) {
+      if (updates.isTeamleiter !== undefined || updates.canViewPayroll !== undefined) {
+        res.status(403).json({
+          error: "Teamleiter- und Lohndaten-Freigaben kann nur der Konto-Inhaber ändern.",
+        });
+        return;
+      }
+      if (targetUserId === ownerId) {
+        res.status(403).json({
+          error: "Die Rechte des Konto-Inhabers kannst du nicht ändern.",
+        });
+        return;
+      }
     }
 
     // Mitgliedschaft muss existieren.

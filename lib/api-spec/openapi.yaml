@@ -1216,6 +1216,71 @@ paths:
               schema:
                 $ref: "#/components/schemas/TimeTrackingStatus"
 
+  /koordinatoren:
+    get:
+      operationId: listKoordinatoren
+      tags: [teams]
+      summary: Teamkoordinatoren des eigenen Dienstleister-Kontos auflisten
+      responses:
+        "200":
+          description: Liste der Koordinatoren inkl. zugewiesener Teams
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Koordinator"
+        "403":
+          description: Kein Dienstleister-Konto oder keine Berechtigung
+    post:
+      operationId: createKoordinator
+      tags: [teams]
+      summary: Teamkoordinator anlegen (Dienstleister-Konto, Premium)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KoordinatorInput"
+      responses:
+        "201":
+          description: Erstellt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Koordinator"
+        "403":
+          description: Kein Dienstleister-Konto, keine Berechtigung oder Premium erforderlich
+        "409":
+          description: E-Mail-Adresse bereits vergeben
+
+  /koordinatoren/{id}/teams:
+    put:
+      operationId: setKoordinatorTeams
+      tags: [teams]
+      summary: Team-Zuweisungen eines Koordinators ersetzen (Vollabgleich)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KoordinatorTeamsInput"
+      responses:
+        "200":
+          description: Aktualisierte Koordinator-Daten
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Koordinator"
+        "404":
+          description: Koordinator oder Team nicht gefunden (auch bei fremdem Konto)
+
   /users/{id}/invite:
     post:
       operationId: inviteUser
@@ -1967,7 +2032,7 @@ components:
           type: string
         role:
           type: string
-          enum: [admin, assistant, superadmin]
+          enum: [admin, assistant, superadmin, koordinator]
         accountType:
           type: string
           enum: [privat, dienstleister]
@@ -2177,6 +2242,49 @@ components:
           type: integer
           description: Anzahl der Einträge, die von offen auf erledigt gesetzt wurden
 
+    Koordinator:
+      type: object
+      required: [id, name, email, isActive, hasLogin, teamIds, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        isActive:
+          type: boolean
+        hasLogin:
+          type: boolean
+          description: true, sobald der Koordinator sein Passwort gesetzt hat (eingeladen und angenommen).
+        teamIds:
+          type: array
+          items:
+            type: integer
+          description: IDs der Teams, die dieser Koordinator koordiniert.
+        createdAt:
+          type: string
+
+    KoordinatorInput:
+      type: object
+      required: [name, email]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+
+    KoordinatorTeamsInput:
+      type: object
+      required: [teamIds]
+      properties:
+        teamIds:
+          type: array
+          items:
+            type: integer
+
     UserInput:
       type: object
       required: [name, email, role]
@@ -2295,7 +2403,7 @@ components:
           type: string
         role:
           type: string
-          enum: [admin, assistant]
+          enum: [admin, assistant, koordinator]
         teamCount:
           type: integer
           description: Anzahl der Teams dieses Dienstleisters, in denen der Nutzer Mitglied ist
@@ -3779,7 +3887,7 @@ components:
           type: string
         role:
           type: string
-          enum: [admin, assistant, superadmin]
+          enum: [admin, assistant, superadmin, koordinator]
         accountType:
           type: string
           enum: [privat, dienstleister]

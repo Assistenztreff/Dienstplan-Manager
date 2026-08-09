@@ -7,9 +7,13 @@ import {
   useListTeamMembers,
   useMoveTeamMember,
   useUpdateTeamMemberFlags,
+  useListKoordinatoren,
+  useCreateKoordinator,
+  useSetKoordinatorTeams,
   getListTeamsQueryKey,
   getListTeamMembersQueryKey,
   getListUsersQueryKey,
+  getListKoordinatorenQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -37,14 +41,17 @@ import {
   UserCog,
   ChevronDown,
   ChevronRight,
+  Mail,
+  UserPlus,
 } from "lucide-react";
 import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { AssistenzkraftListe } from "@/components/assistenzkraft-liste";
+import { InviteDialog } from "@/components/assistenzkraft-formular";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth, hasTeamAccessLevel, type TeamAccessLevel } from "@/context/auth";
 import { isAdminRole } from "@/lib/roles";
-import { isWithinLimit, getLimit } from "@/lib/entitlements";
-import { readableApiError, planUpgradeMessage } from "@/lib/api-error";
+import { isWithinLimit, getLimit, hasAccess } from "@/lib/entitlements";
+import { readableApiError, planUpgradeMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
 
 type Team = {
   id: number;
@@ -59,7 +66,7 @@ type Member = {
   userId: number;
   name: string;
   email: string;
-  role: "admin" | "assistant";
+  role: "admin" | "assistant" | "koordinator";
   teamCount: number;
   createdAt: string;
   isTeamleiter: boolean;
@@ -67,9 +74,22 @@ type Member = {
   accessLevel: TeamAccessLevel;
 };
 
-function roleLabel(role: "admin" | "assistant"): string {
-  return role === "admin" ? "Assistenznehmer" : "Assistenzkraft";
+function roleLabel(role: "admin" | "assistant" | "koordinator"): string {
+  if (role === "admin") return "Assistenznehmer";
+  if (role === "koordinator") return "Teamkoordinator";
+  return "Assistenzkraft";
 }
+
+/** Teamkoordinator aus Sicht des Konto-Inhabers (GET /koordinatoren). */
+type Koordinator = {
+  id: number;
+  name: string;
+  email: string;
+  isActive: boolean;
+  hasLogin: boolean;
+  teamIds: number[];
+  createdAt: string;
+};
 
 /** Beschriftungen der gestuften Team-Freischaltung (siehe Handbuch "Rollen"). */
 const ACCESS_LEVEL_OPTIONS: { value: TeamAccessLevel; label: string; hint: string }[] = [
@@ -318,20 +338,25 @@ function TransferDialog({ team, teams, onClose }: TransferDialogProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Zugriffsrechte-Dialog: gestufte Freischaltung je Mitgliedschaft. Der
-// klassische Teamleiter wird direkt auf der Assistenzkraft-Karte gesetzt; hier
-// steht die gestufte Freischaltung und — nur für Dienstleister-Teamleiter —
-// die zusätzliche Lohndaten-Freigabe.
+// Zugriffsrechte-Dialog: bündelt alle Rechte-Entscheidungen je Mitgliedschaft —
+// die gestufte Freischaltung, den Teamleiter-Status und (nur für
+// Dienstleister-Teamleiter) die zusätzliche Lohndaten-Freigabe.
 // ---------------------------------------------------------------------------
 
 type ZugriffsrechteDialogProps = {
   team: Team;
   /** Ob der eingeloggte Admin ein Dienstleister-Konto hat (steuert Lohn-Freigabe). */
   isDienstleister: boolean;
+  /**
+   * true = Konto-Inhaber (alle Bedienelemente). false = Teamleiter-Sicht:
+   * nur Zugriffsstufen, keine Teamleiter-/Lohndaten-Schalter, Inhaber-Zeile
+   * schreibgeschützt. Die Durchsetzung bleibt serverseitig.
+   */
+  isOwnerView: boolean;
   onClose: () => void;
 };
 
-function ZugriffsrechteDialog({ team, isDienstleister, onClose }: ZugriffsrechteDialogProps) {
+function ZugriffsrechteDialog({ team, isDienstleister, isOwnerView, onClose }: ZugriffsrechteDialogProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: membersData, isLoading } = useListTeamMembers(team.id);
@@ -343,12 +368,16 @@ function ZugriffsrechteDialog({ team, isDienstleister, onClose }: Zugriffsrechte
 
   async function save(
     member: Member,
-    patch: { accessLevel?: TeamAccessLevel; canViewPayroll?: boolean },
+    patch: { accessLevel?: TeamAccessLevel; canViewPayroll?: boolean; isTeamleiter?: boolean },
+    successTitle?: string,
   ) {
     setBusyUserId(member.userId);
     try {
       await updateFlags.mutateAsync({ id: team.id, userId: member.userId, data: patch });
       await queryClient.invalidateQueries({ queryKey: getListTeamMembersQueryKey(team.id) });
+      if (successTitle) {
+        toast({ title: successTitle });
+      }
     } catch (err) {
       if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast({
@@ -370,6 +399,13 @@ function ZugriffsrechteDialog({ team, isDienstleister, onClose }: Zugriffsrechte
             Zugriffsrechte: {team.name}
           </DialogTitle>
         </DialogHeader>
+
+        {!isOwnerView && (
+          <p className="text-xs text-muted-foreground">
+            Als Teamleiter vergibst du hier die Zugriffsstufen. Teamleiter- und
+            Lohndaten-Freigaben kann nur der Konto-Inhaber ändern.
+          </p>
+        )}
 
         <div className="space-y-1 py-2">
           {isLoading ? (
@@ -393,13 +429,36 @@ function ZugriffsrechteDialog({ team, isDienstleister, onClose }: Zugriffsrechte
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium text-sm">{m.name}</span>
                       <span className="text-xs text-muted-foreground">{m.email}</span>
-                      {m.isTeamleiter && (
+                      {m.role === "koordinator" ? (
                         <Badge variant="secondary" className="text-xs">
-                          Teamleiter
+                          Teamkoordinator
                         </Badge>
+                      ) : (
+                        m.isTeamleiter && (
+                          <Badge variant="secondary" className="text-xs">
+                            Teamleiter
+                          </Badge>
+                        )
                       )}
                     </div>
 
+                    {/* Koordinatoren beziehen ihre Rechte aus der Team-Zuweisung
+                        (Teamleiter-Status), nicht aus der gestuften
+                        Freischaltung — das Stufen-Feld wäre hier irreführend. */}
+                    {m.role === "koordinator" ? (
+                      <p className="text-xs text-muted-foreground">
+                        {isOwnerView
+                          ? "Die Team-Zuweisung verwaltest du im Bereich „Teamkoordinatoren“ auf dieser Seite."
+                          : "Die Team-Zuweisung verwaltet der Konto-Inhaber."}
+                      </p>
+                    ) : /* Teamleiter-Sicht: Die Zeile des Konto-Inhabers bleibt
+                        schreibgeschützt — der Server lehnt solche Änderungen
+                        ohnehin ab (403). */
+                    !isOwnerView && m.userId === team.ownerId ? (
+                      <p className="text-xs text-muted-foreground">
+                        Konto-Inhaber — die Rechte kannst du hier nicht ändern.
+                      </p>
+                    ) : (
                     <div className="space-y-1.5">
                       <Label htmlFor={`al-${m.userId}`} className="text-xs text-muted-foreground">
                         Freischaltung in diesem Team
@@ -429,10 +488,45 @@ function ZugriffsrechteDialog({ team, isDienstleister, onClose }: Zugriffsrechte
                         <p className="text-xs text-muted-foreground">{option.hint}</p>
                       )}
                     </div>
+                    )}
+
+                    {/* Teamleiter-Status: zählt serverseitig wie Stufe 2 und ist
+                        Voraussetzung für die Lohndaten-Freigabe. Nur für
+                        Assistenzkraft-Mitgliedschaften — Assistenznehmer und
+                        Konto-Inhaber steuern ihre Rechte nicht über dieses Flag.
+                        In der Teamleiter-Sicht ausgeblendet (Inhaber-only). */}
+                    {isOwnerView && m.role === "assistant" && (
+                    <div className="flex items-center gap-3 pt-1">
+                      <Switch
+                        id={`tl-${m.userId}`}
+                        checked={m.isTeamleiter ?? false}
+                        disabled={busy}
+                        onCheckedChange={(v) =>
+                          void save(
+                            m,
+                            { isTeamleiter: v },
+                            v
+                              ? `${m.name} ist jetzt Teamleiter.`
+                              : `${m.name} ist kein Teamleiter mehr.`,
+                          )
+                        }
+                        data-testid={`toggle-teamleiter-${m.userId}`}
+                      />
+                      <Label htmlFor={`tl-${m.userId}`} className="text-sm cursor-pointer">
+                        Teamleiter
+                        <span className="block text-xs text-muted-foreground font-normal">
+                          Darf Dienste, Abwesenheiten und Zeiterfassung in diesem Team verwalten
+                          — zählt wie Stufe 2.
+                          {isDienstleister &&
+                            " Nur Teamleiter können die Lohndaten-Freigabe bekommen."}
+                        </span>
+                      </Label>
+                    </div>
+                    )}
 
                     {/* Lohndaten sind eine bewusste Extra-Freigabe und nur für
-                        Teamleiter in Dienstleister-Konten zulässig. */}
-                    {isDienstleister && m.isTeamleiter && (
+                        Teamleiter in Dienstleister-Konten zulässig (Inhaber-only). */}
+                    {isOwnerView && isDienstleister && m.isTeamleiter && (
                       <div className="flex items-center gap-3 pt-1">
                         <Switch
                           id={`cp-${m.userId}`}
@@ -464,6 +558,284 @@ function ZugriffsrechteDialog({ team, isDienstleister, onClose }: Zugriffsrechte
 }
 
 /**
+ * Zugriffsrechte-Knopf für Teamleiter ohne Admin-Rolle: erscheint nur, wenn
+ * die eigene Mitgliedschaft in GENAU DIESEM Team als Teamleiter markiert ist —
+ * eine Freischaltung (Stufe 2) genügt nicht. Die Durchsetzung bleibt
+ * serverseitig; hier geht es nur darum, den Dialog nicht in Teams anzubieten,
+ * in denen jeder Speicherversuch abgelehnt würde.
+ */
+function TeamleiterRechteButton({ teamId, onRechte }: { teamId: number; onRechte: () => void }) {
+  const { currentUser } = useAuth();
+  const { data } = useListTeamMembers(teamId);
+  const isTeamleiterHier = ((data ?? []) as Member[]).some(
+    (m) => m.userId === currentUser?.id && m.isTeamleiter,
+  );
+  if (!isTeamleiterHier) return null;
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="gap-1.5"
+      onClick={onRechte}
+      data-testid={`rights-team-${teamId}`}
+      title="Zugriffsrechte der Mitglieder verwalten"
+    >
+      <UserCog className="h-3.5 w-3.5" />
+      <span className="hidden sm:inline">Zugriffsrechte</span>
+    </Button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Teamkoordinatoren: Verwaltungspersonen des Dienstleister-Kontos mit eigenem
+// Login. Die Team-Zuweisung vergibt Teamleiter-Rechte je Team; sichtbar nur
+// für den Konto-Inhaber (Dienstleister).
+// ---------------------------------------------------------------------------
+
+function KoordinatorAnlegenDialog({ onClose }: { onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const createKoordinator = useCreateKoordinator();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    if (!name.trim() || !email.trim()) {
+      setError("Bitte Name und E-Mail-Adresse angeben.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await createKoordinator.mutateAsync({ data: { name: name.trim(), email: email.trim() } });
+      await queryClient.invalidateQueries({ queryKey: getListKoordinatorenQueryKey() });
+      onClose();
+    } catch (err) {
+      setError(
+        planUpgradeMessage(err) ??
+          readableApiError(err, "Speichern fehlgeschlagen. Bitte erneut versuchen."),
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-xl">Teamkoordinator anlegen</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <p className="text-sm text-muted-foreground">
+            Ein Teamkoordinator plant und verwaltet die Teams, die du ihm zuweist — ohne selbst
+            Assistenzkraft zu sein. Nach dem Anlegen kannst du ihn per Einladungslink zum eigenen
+            Zugang einladen.
+          </p>
+          <div className="space-y-1.5">
+            <Label htmlFor="koordinator-name">Name</Label>
+            <Input
+              id="koordinator-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Vor- und Nachname"
+              data-testid="koordinator-name"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="koordinator-email">E-Mail-Adresse</Label>
+            <Input
+              id="koordinator-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@beispiel.de"
+              data-testid="koordinator-email"
+            />
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+        </div>
+        <DialogFooter className="gap-2 pt-2">
+          <Button variant="outline" onClick={onClose} disabled={saving}>
+            Abbrechen
+          </Button>
+          <Button
+            onClick={() => void handleSave()}
+            disabled={saving}
+            data-testid="koordinator-speichern"
+          >
+            {saving ? "Speichert …" : "Anlegen"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function KoordinatorenBereich({ teams }: { teams: Team[] }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { currentUser } = useAuth();
+  const { data, isLoading } = useListKoordinatoren();
+  const koordinatoren = (data ?? []) as Koordinator[];
+  const setKoordinatorTeams = useSetKoordinatorTeams();
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [inviteFor, setInviteFor] = useState<Koordinator | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  // Gleiche Premium-Bedingung wie der Einladungslink für Assistenzkräfte:
+  // Koordinatoren sind nur mit eigenem Login sinnvoll (caregiverLogin).
+  const canManage = hasAccess(currentUser, "caregiverLogin");
+
+  async function toggleTeam(k: Koordinator, teamId: number, assigned: boolean) {
+    const next = assigned
+      ? Array.from(new Set([...k.teamIds, teamId]))
+      : k.teamIds.filter((t) => t !== teamId);
+    setBusyId(k.id);
+    try {
+      await setKoordinatorTeams.mutateAsync({ id: k.id, data: { teamIds: next } });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getListKoordinatorenQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getListTeamMembersQueryKey(teamId) }),
+        queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() }),
+      ]);
+    } catch (err) {
+      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
+      toast({
+        title: "Fehler beim Speichern",
+        description: readableApiError(err, "Bitte erneut versuchen."),
+        variant: "destructive",
+      });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <section className="space-y-3" data-testid="koordinatoren-bereich">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-serif font-bold text-foreground">Teamkoordinatoren</h3>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            Verwaltungspersonen mit eigenem Zugang — sie planen und verwalten die Teams, die du
+            ihnen zuweist, tauchen aber nicht als Assistenzkraft im Dienstplan auf.
+          </p>
+        </div>
+        <Button
+          onClick={() => setCreateOpen(true)}
+          variant="outline"
+          className="gap-2"
+          disabled={!canManage}
+          title={canManage ? undefined : PLAN_FEATURE_MESSAGES.caregiverLogin}
+          data-testid="koordinator-anlegen"
+        >
+          {canManage ? <UserPlus className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+          <span className="hidden sm:inline">Koordinator anlegen</span>
+          <span className="sm:hidden">Neu</span>
+        </Button>
+      </div>
+
+      {!canManage && (
+        <PlanLimitBanner>{PLAN_FEATURE_MESSAGES.caregiverLogin}</PlanLimitBanner>
+      )}
+
+      {isLoading ? (
+        <Skeleton className="h-24 w-full rounded-xl" />
+      ) : koordinatoren.length === 0 ? (
+        <Card className="border-border/50 shadow-sm">
+          <CardContent className="p-6 text-center text-sm text-muted-foreground">
+            Noch keine Teamkoordinatoren angelegt.
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {koordinatoren.map((k) => {
+            const busy = busyId === k.id;
+            return (
+              <Card
+                key={k.id}
+                className="border-border/50 shadow-sm"
+                data-testid={`koordinator-card-${k.id}`}
+              >
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{k.name}</span>
+                    <span className="text-xs text-muted-foreground">{k.email}</span>
+                    {k.hasLogin ? (
+                      <Badge variant="secondary" className="text-xs">
+                        Zugang aktiv
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-xs">
+                        Noch kein Zugang
+                      </Badge>
+                    )}
+                    <div className="ml-auto">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => setInviteFor(k)}
+                        data-testid={`koordinator-einladen-${k.id}`}
+                        title="Einladungslink für den eigenen Zugang generieren"
+                      >
+                        <Mail className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Einladen</span>
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-muted-foreground">
+                      Zugewiesene Teams — dort hat {k.name.split(" ")[0] ?? k.name}{" "}
+                      Teamleiter-Rechte:
+                    </p>
+                    <div className="flex flex-wrap gap-x-5 gap-y-2">
+                      {teams.map((team) => {
+                        const assigned = k.teamIds.includes(team.id);
+                        return (
+                          <div key={team.id} className="flex items-center gap-2">
+                            <Switch
+                              id={`kt-${k.id}-${team.id}`}
+                              checked={assigned}
+                              disabled={busy}
+                              onCheckedChange={(v) => void toggleTeam(k, team.id, v)}
+                              data-testid={`koordinator-team-${k.id}-${team.id}`}
+                            />
+                            <Label
+                              htmlFor={`kt-${k.id}-${team.id}`}
+                              className="text-sm cursor-pointer"
+                            >
+                              {team.name}
+                            </Label>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {createOpen && <KoordinatorAnlegenDialog onClose={() => setCreateOpen(false)} />}
+      {inviteFor && (
+        <InviteDialog
+          open
+          onClose={() => setInviteFor(null)}
+          userId={inviteFor.id}
+          userName={inviteFor.name}
+        />
+      )}
+    </section>
+  );
+}
+
+/**
  * Ein Team als aufklappbarer Block: Kopfzeile mit Aktionen, darunter die
  * Assistenzkräfte dieses Teams samt "Assistenzkraft anlegen".
  */
@@ -473,7 +845,6 @@ function TeamBlock({
   expanded,
   onToggle,
   isFullAdmin,
-  isDienstleisterKonto,
   onTransfer,
   onRechte,
   onEdit,
@@ -487,7 +858,6 @@ function TeamBlock({
   expanded: boolean;
   onToggle: () => void;
   isFullAdmin: boolean;
-  isDienstleisterKonto: boolean;
   onTransfer: () => void;
   onRechte: () => void;
   onEdit: () => void;
@@ -564,15 +934,12 @@ function TeamBlock({
             </Button>
           </div>
         )}
+        {!isFullAdmin && <TeamleiterRechteButton teamId={team.id} onRechte={onRechte} />}
       </div>
 
       {expanded && (
         <CardContent className="p-4">
-          <AssistenzkraftListe
-            teamId={team.id}
-            canManageMembers={isFullAdmin}
-            isDienstleisterKonto={isDienstleisterKonto}
-          />
+          <AssistenzkraftListe teamId={team.id} canManageMembers={isFullAdmin} />
         </CardContent>
       )}
     </Card>
@@ -724,7 +1091,6 @@ export default function TeamVerwaltung() {
               expanded={isExpanded(team.id)}
               onToggle={() => toggleTeam(team.id)}
               isFullAdmin={isFullAdmin}
-              isDienstleisterKonto={isDienstleisterKonto}
               onTransfer={() => setTransferTeam(team)}
               onRechte={() => setRechteTeam(team)}
               onEdit={() => {
@@ -738,6 +1104,12 @@ export default function TeamVerwaltung() {
             />
           ))}
         </div>
+      )}
+
+      {/* Teamkoordinatoren: nur der Konto-Inhaber eines Dienstleister-Kontos
+          verwaltet sie — Teamleiter und freigeschaltete Mitglieder nicht. */}
+      {isFullAdmin && isDienstleisterKonto && !isLoading && (
+        <KoordinatorenBereich teams={teams} />
       )}
 
       {isFullAdmin && isDienstleisterKonto && teams.length > 0 && (
@@ -762,6 +1134,7 @@ export default function TeamVerwaltung() {
         <ZugriffsrechteDialog
           team={rechteTeam}
           isDienstleister={isDienstleisterKonto}
+          isOwnerView={isFullAdmin}
           onClose={() => setRechteTeam(undefined)}
         />
       )}

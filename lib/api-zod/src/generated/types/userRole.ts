@@ -13,4 +13,5 @@ export const UserRole = {
   admin: 'admin',
   assistant: 'assistant',
   superadmin: 'superadmin',
+  koordinator: 'koordinator',
 } as const;

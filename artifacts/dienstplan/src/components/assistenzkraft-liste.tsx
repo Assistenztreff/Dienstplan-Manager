@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "wouter";
+import { format, parseISO } from "date-fns";
 import {
   useListUsers,
   useListContracts,
   useListTeamMembers,
   useRemoveTeamMember,
-  useUpdateTeamMemberFlags,
   getListUsersQueryKey,
   getListContractsQueryKey,
   getListTeamMembersQueryKey,
@@ -29,6 +29,7 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import {
+  Calendar,
   Mail,
   Phone,
   MapPin,
@@ -39,8 +40,8 @@ import {
   Download,
   Lock,
   ShieldCheck,
-  ShieldOff,
 } from "lucide-react";
+import { formatHours } from "@/lib/utils";
 import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { toast } from "sonner";
 import { StatementExportDialog } from "@/components/statement-export-dialog";
@@ -62,24 +63,22 @@ type Props = {
   /** Team, dessen Assistenzkräfte gezeigt werden. null = kein Team-Kontext. */
   teamId: number | null;
   /**
-   * Darf Mitgliedschaften steuern (Teamleiter einsetzen, aus dem Team
-   * entfernen). Nur für Konto-Admins — die Durchsetzung bleibt serverseitig.
+   * Darf Mitgliedschaften steuern (aus dem Team entfernen). Nur für
+   * Konto-Admins — die Durchsetzung bleibt serverseitig.
    */
   canManageMembers: boolean;
-  /** Steuert nur den Hinweistext beim Einsetzen als Teamleiter. */
-  isDienstleisterKonto: boolean;
 };
 
 /**
  * Assistenzkräfte eines Teams als Karten-Liste — inklusive Anlegen,
- * Bearbeiten, Einladen, PDF-Stundennachweis, Teamleiter-Status und Entfernen
- * aus dem Team.
+ * Bearbeiten, Einladen, PDF-Stundennachweis und Entfernen aus dem Team.
  *
- * Die Karte zeigt bewusst die Kontaktdaten in den Vordergrund; Arbeitszeit-
- * Angaben stehen klein darunter. Verträge bleiben vollständig im Bearbeiten-
- * Dialog pflegbar, werden hier aber nicht als eigene Funktion beworben.
+ * Aufbau der Karte: oben Name mit Kontaktdaten und Status-Badges, in der
+ * Mitte die Vertragsdaten als Beschriftung-Wert-Zeilen, unten die Aktionen.
+ * Der Teamleiter-Status wird im Zugriffsrechte-Dialog der Team-Verwaltung
+ * gepflegt; die Karte zeigt ihn nur als Badge an.
  */
-export function AssistenzkraftListe({ teamId, canManageMembers, isDienstleisterKonto }: Props) {
+export function AssistenzkraftListe({ teamId, canManageMembers }: Props) {
   const { currentUser } = useAuth();
   const queryClient = useQueryClient();
 
@@ -96,11 +95,9 @@ export function AssistenzkraftListe({ teamId, canManageMembers, isDienstleisterK
   } as Parameters<typeof useListTeamMembers>[1]) as { data?: Mitgliedschaft[] };
 
   const removeMember = useRemoveTeamMember();
-  const updateFlags = useUpdateTeamMemberFlags();
 
   const [removeUser, setRemoveUser] = useState<Assistenzkraft | undefined>();
   const [memberBusy, setMemberBusy] = useState(false);
-  const [flagsBusyUserId, setFlagsBusyUserId] = useState<number | null>(null);
 
   const memberByUserId = new Map((teamMembers ?? []).map((m) => [m.userId, m]));
 
@@ -125,34 +122,6 @@ export function AssistenzkraftListe({ teamId, canManageMembers, isDienstleisterK
       toast.error(readableApiError(err, "Entfernen fehlgeschlagen. Bitte erneut versuchen."));
     } finally {
       setMemberBusy(false);
-    }
-  }
-
-  /**
-   * Teamleiter-Status direkt auf der Karte umschalten. Lohndaten werden dabei
-   * nie mitgegeben — die bleiben eine bewusste Extra-Freigabe und sind
-   * serverseitig auf Dienstleister-Teamleiter beschränkt.
-   */
-  async function toggleTeamleiter(user: Assistenzkraft, next: boolean) {
-    if (teamId == null) return;
-    setFlagsBusyUserId(user.id);
-    try {
-      await updateFlags.mutateAsync({
-        id: teamId,
-        userId: user.id,
-        data: { isTeamleiter: next },
-      });
-      await queryClient.invalidateQueries({ queryKey: getListTeamMembersQueryKey(teamId) });
-      toast.success(
-        next
-          ? `${user.name} ist jetzt Teamleiter.`
-          : `${user.name} ist kein Teamleiter mehr.`,
-      );
-    } catch (err) {
-      if (!navigator.onLine) return;
-      toast.error(readableApiError(err, "Ändern fehlgeschlagen. Bitte erneut versuchen."));
-    } finally {
-      setFlagsBusyUserId(null);
     }
   }
 
@@ -261,7 +230,6 @@ export function AssistenzkraftListe({ teamId, canManageMembers, isDienstleisterK
             const isHighlighted = highlightId != null && String(user.id) === highlightId;
             const membership = memberByUserId.get(user.id);
             const isTeamleiter = membership?.isTeamleiter === true;
-            const flagsBusy = flagsBusyUserId === user.id;
 
             return (
               <Card
@@ -314,15 +282,45 @@ export function AssistenzkraftListe({ teamId, canManageMembers, isDienstleisterK
 
                 <CardContent className="p-5 flex-1 flex flex-col justify-between gap-4">
                   {activeContract ? (
-                    <p className="text-xs text-muted-foreground">
-                      {activeContract.weeklyHours} Stunden pro Woche ·{" "}
-                      {activeContract.vacationDays} Urlaubstage
-                    </p>
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Wochenstunden</span>
+                        <span className="font-medium">
+                          {formatHours(activeContract.weeklyHours)} h
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Arbeitstage/Woche</span>
+                        <span className="font-medium">
+                          {formatHours(activeContract.workdaysPerWeek ?? 5)} Tage
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Urlaubsanspruch</span>
+                        <span className="font-medium">{activeContract.vacationDays} Tage</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground flex items-center gap-1">
+                          <Calendar className="h-3.5 w-3.5" aria-hidden="true" /> Seit
+                        </span>
+                        <span className="font-medium">
+                          {/* parseISO statt new Date(): Datums-Strings ohne Zeitanteil
+                              würden sonst als UTC-Mitternacht gedeutet und westlich
+                              von UTC einen Tag zu früh angezeigt. */}
+                          {format(parseISO(activeContract.startDate), "dd.MM.yyyy")}
+                        </span>
+                      </div>
+                      {activeContract.notes && (
+                        <p className="text-xs text-muted-foreground pt-1 border-t border-border/40">
+                          {activeContract.notes}
+                        </p>
+                      )}
+                    </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground">
+                    <div className="text-sm text-muted-foreground py-4 px-3 text-center border border-dashed rounded-lg">
                       Arbeitszeiten sind noch nicht hinterlegt. Du kannst sie beim Bearbeiten
                       ergänzen.
-                    </p>
+                    </div>
                   )}
 
                   <div className="flex justify-end gap-2 flex-wrap">
@@ -365,32 +363,6 @@ export function AssistenzkraftListe({ teamId, canManageMembers, isDienstleisterK
                       <Pencil className="h-3.5 w-3.5" />
                       Bearbeiten
                     </Button>
-                    {/* Teamleiter direkt auf der Karte einsetzen oder entfernen —
-                        kein Umweg über einen eigenen Rollen-Dialog. */}
-                    {canManageMembers && teamScope && membership && (
-                      <Button
-                        variant={isTeamleiter ? "ghost" : "outline"}
-                        size="sm"
-                        className="gap-1.5"
-                        disabled={flagsBusy}
-                        onClick={() => void toggleTeamleiter(user as Assistenzkraft, !isTeamleiter)}
-                        data-testid={`toggle-teamleiter-${user.id}`}
-                        title={
-                          isTeamleiter
-                            ? "Teamleiter-Rechte in diesem Team entziehen"
-                            : isDienstleisterKonto
-                              ? "Darf Dienste, Abwesenheiten und Zeiterfassung in diesem Team verwalten"
-                              : "Darf Dienste, Abwesenheiten und Zeiterfassung in deinem Team verwalten"
-                        }
-                      >
-                        {isTeamleiter ? (
-                          <ShieldOff className="h-3.5 w-3.5" />
-                        ) : (
-                          <ShieldCheck className="h-3.5 w-3.5" />
-                        )}
-                        {isTeamleiter ? "Teamleiter entfernen" : "Als Teamleiter einsetzen"}
-                      </Button>
-                    )}
                     {canManageMembers && teamScope && (
                       <Button
                         variant="ghost"

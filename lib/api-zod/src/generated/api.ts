@@ -29,7 +29,7 @@ export const ListUsersResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant', 'superadmin']),
+  "role": zod.enum(['admin', 'assistant', 'superadmin', 'koordinator']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
   "phone": zod.string().nullish(),
@@ -82,7 +82,7 @@ export const GetUserResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant', 'superadmin']),
+  "role": zod.enum(['admin', 'assistant', 'superadmin', 'koordinator']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
   "phone": zod.string().nullish(),
@@ -129,7 +129,7 @@ export const UpdateUserResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant', 'superadmin']),
+  "role": zod.enum(['admin', 'assistant', 'superadmin', 'koordinator']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
   "phone": zod.string().nullish(),
@@ -178,7 +178,7 @@ export const ListContractsResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant', 'superadmin']),
+  "role": zod.enum(['admin', 'assistant', 'superadmin', 'koordinator']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
   "phone": zod.string().nullish(),
@@ -244,7 +244,7 @@ export const GetContractResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant', 'superadmin']),
+  "role": zod.enum(['admin', 'assistant', 'superadmin', 'koordinator']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
   "phone": zod.string().nullish(),
@@ -304,7 +304,7 @@ export const UpdateContractResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant', 'superadmin']),
+  "role": zod.enum(['admin', 'assistant', 'superadmin', 'koordinator']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
   "phone": zod.string().nullish(),
@@ -436,7 +436,7 @@ export const ListShiftsResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant', 'superadmin']),
+  "role": zod.enum(['admin', 'assistant', 'superadmin', 'koordinator']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
   "phone": zod.string().nullish(),
@@ -533,7 +533,7 @@ export const GetShiftResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant', 'superadmin']),
+  "role": zod.enum(['admin', 'assistant', 'superadmin', 'koordinator']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
   "phone": zod.string().nullish(),
@@ -601,7 +601,7 @@ export const UpdateShiftResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant', 'superadmin']),
+  "role": zod.enum(['admin', 'assistant', 'superadmin', 'koordinator']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
   "phone": zod.string().nullish(),
@@ -816,7 +816,7 @@ export const ListTeamMembersResponseItem = zod.object({
   "userId": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant']),
+  "role": zod.enum(['admin', 'assistant', 'koordinator']),
   "teamCount": zod.number().describe('Anzahl der Teams dieses Dienstleisters, in denen der Nutzer Mitglied ist'),
   "isTeamleiter": zod.boolean().describe('Gibt dem Mitglied Admin-Level-Zugriff auf genau dieses Team'),
   "canViewPayroll": zod.boolean().describe('Erlaubt Zugriff auf Lohn- und sensible Personalfelder. Nur für Unternehmens-Teamleiter eines Dienstleister-Kontos setzbar.'),
@@ -859,7 +859,7 @@ export const UpdateTeamMemberFlagsResponse = zod.object({
   "userId": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant']),
+  "role": zod.enum(['admin', 'assistant', 'koordinator']),
   "teamCount": zod.number().describe('Anzahl der Teams dieses Dienstleisters, in denen der Nutzer Mitglied ist'),
   "isTeamleiter": zod.boolean().describe('Gibt dem Mitglied Admin-Level-Zugriff auf genau dieses Team'),
   "canViewPayroll": zod.boolean().describe('Erlaubt Zugriff auf Lohn- und sensible Personalfelder. Nur für Unternehmens-Teamleiter eines Dienstleister-Kontos setzbar.'),
@@ -896,7 +896,7 @@ export const MoveTeamMemberResponse = zod.object({
   "userId": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant']),
+  "role": zod.enum(['admin', 'assistant', 'koordinator']),
   "teamCount": zod.number().describe('Anzahl der Teams dieses Dienstleisters, in denen der Nutzer Mitglied ist'),
   "isTeamleiter": zod.boolean().describe('Gibt dem Mitglied Admin-Level-Zugriff auf genau dieses Team'),
   "canViewPayroll": zod.boolean().describe('Erlaubt Zugriff auf Lohn- und sensible Personalfelder. Nur für Unternehmens-Teamleiter eines Dienstleister-Kontos setzbar.'),
@@ -1148,7 +1148,7 @@ export const ListTimeEntriesResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant', 'superadmin']),
+  "role": zod.enum(['admin', 'assistant', 'superadmin', 'koordinator']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
   "phone": zod.string().nullish(),
@@ -1210,7 +1210,7 @@ export const GetTimeEntryResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant', 'superadmin']),
+  "role": zod.enum(['admin', 'assistant', 'superadmin', 'koordinator']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
   "phone": zod.string().nullish(),
@@ -1264,7 +1264,7 @@ export const UpdateTimeEntryResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant', 'superadmin']),
+  "role": zod.enum(['admin', 'assistant', 'superadmin', 'koordinator']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
   "phone": zod.string().nullish(),
@@ -1319,7 +1319,7 @@ export const ConfirmTimeEntryResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant', 'superadmin']),
+  "role": zod.enum(['admin', 'assistant', 'superadmin', 'koordinator']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
   "phone": zod.string().nullish(),
@@ -1366,6 +1366,55 @@ export const GetTimeTrackingStatusResponse = zod.object({
   "pauseThreshold2Hours": zod.number(),
   "pauseMinutes2": zod.number()
 }).optional().describe('Effektive Pausenregelung für den angemeldeten Nutzer (Admin = eigene Konto-Einstellung, Assistenzkraft = Regel des ersten Team-Eigentümers mit aktivierter Vorbefüllung). Dient der Vorbefüllung des Pausenfelds im Zeiterfassungs-Dialog.')
+})
+
+
+/**
+ * @summary Teamkoordinatoren des eigenen Dienstleister-Kontos auflisten
+ */
+export const ListKoordinatorenResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "isActive": zod.boolean(),
+  "hasLogin": zod.boolean().describe('true, sobald der Koordinator sein Passwort gesetzt hat (eingeladen und angenommen).'),
+  "teamIds": zod.array(zod.number()).describe('IDs der Teams, die dieser Koordinator koordiniert.'),
+  "createdAt": zod.string()
+})
+export const ListKoordinatorenResponse = zod.array(ListKoordinatorenResponseItem)
+
+
+/**
+ * @summary Teamkoordinator anlegen (Dienstleister-Konto, Premium)
+ */
+
+
+
+export const CreateKoordinatorBody = zod.object({
+  "name": zod.string().min(1),
+  "email": zod.string().email()
+})
+
+
+/**
+ * @summary Team-Zuweisungen eines Koordinators ersetzen (Vollabgleich)
+ */
+export const SetKoordinatorTeamsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SetKoordinatorTeamsBody = zod.object({
+  "teamIds": zod.array(zod.number())
+})
+
+export const SetKoordinatorTeamsResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "isActive": zod.boolean(),
+  "hasLogin": zod.boolean().describe('true, sobald der Koordinator sein Passwort gesetzt hat (eingeladen und angenommen).'),
+  "teamIds": zod.array(zod.number()).describe('IDs der Teams, die dieser Koordinator koordiniert.'),
+  "createdAt": zod.string()
 })
 
 
@@ -1492,7 +1541,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant', 'superadmin']),
+  "role": zod.enum(['admin', 'assistant', 'superadmin', 'koordinator']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
   "phone": zod.string().nullish(),
@@ -1525,7 +1574,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant', 'superadmin']),
+  "role": zod.enum(['admin', 'assistant', 'superadmin', 'koordinator']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
   "phone": zod.string().nullish(),
@@ -1802,7 +1851,7 @@ export const LoginResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant', 'superadmin']),
+  "role": zod.enum(['admin', 'assistant', 'superadmin', 'koordinator']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
   "isTeamleiter": zod.boolean().optional().describe('true, wenn der Nutzer in mindestens einem Team als Teamleiter eingetragen ist. Ermöglicht dem Frontend den Team-Switcher auch für Nicht-Dienstleister anzuzeigen.'),
@@ -1817,7 +1866,7 @@ export const GetMeResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant', 'superadmin']),
+  "role": zod.enum(['admin', 'assistant', 'superadmin', 'koordinator']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
   "isTeamleiter": zod.boolean().optional().describe('true, wenn der Nutzer in mindestens einem Team als Teamleiter eingetragen ist. Ermöglicht dem Frontend den Team-Switcher auch für Nicht-Dienstleister anzuzeigen.'),
@@ -1841,7 +1890,7 @@ export const SetPasswordResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant', 'superadmin']),
+  "role": zod.enum(['admin', 'assistant', 'superadmin', 'koordinator']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
   "isTeamleiter": zod.boolean().optional().describe('true, wenn der Nutzer in mindestens einem Team als Teamleiter eingetragen ist. Ermöglicht dem Frontend den Team-Switcher auch für Nicht-Dienstleister anzuzeigen.'),
@@ -1881,7 +1930,7 @@ export const UpdateProfileResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'assistant', 'superadmin']),
+  "role": zod.enum(['admin', 'assistant', 'superadmin', 'koordinator']),
   "accountType": zod.enum(['privat', 'dienstleister']),
   "plan": zod.enum(['free', 'premium']),
   "isTeamleiter": zod.boolean().optional().describe('true, wenn der Nutzer in mindestens einem Team als Teamleiter eingetragen ist. Ermöglicht dem Frontend den Team-Switcher auch für Nicht-Dienstleister anzuzeigen.'),

@@ -20,28 +20,27 @@ router.post("/users/:id/invite", requireAdmin, requirePlanFeature("caregiverLogi
     return;
   }
 
-  // Team-Zugehörigkeit MUSS vor jeder weiteren Auskunft geprüft werden — sonst
-  // ließe sich über die 404/400/200-Antwortcodes erraten, ob eine fremde ID
-  // existiert und ob sie ein Assistent ist (Cross-Tenant-Enumeration). Ein
-  // Nicht-Mitglied wird daher immer als "nicht gefunden" behandelt.
+  // Zugriff MUSS vor jeder weiteren Auskunft geprüft werden — sonst ließe
+  // sich über die 404/400/200-Antwortcodes erraten, ob eine fremde ID
+  // existiert und welche Rolle sie hat (Cross-Tenant-Enumeration). Erlaubt:
+  // Mitglieder der eigenen Teams (Assistenzkräfte) sowie eigene Koordinatoren
+  // (über managedByUserId verknüpft, auch ohne Team-Zuweisung). Alles andere
+  // antwortet einheitlich "nicht gefunden".
   const requesterId = req.session.userId as number;
-  const isMember = await isUserInAllowedTeams(requesterId, id);
-  if (!isMember) {
-    res.status(404).json({ error: "Benutzer nicht gefunden" });
-    return;
-  }
-
   const [user] = await db
     .select()
     .from(usersTable)
     .where(eq(usersTable.id, id));
+  const isOwnKoordinator =
+    user?.role === "koordinator" && user.managedByUserId === requesterId;
+  const isMember = isOwnKoordinator ? true : await isUserInAllowedTeams(requesterId, id);
 
-  if (!user) {
+  if (!user || (!isMember && !isOwnKoordinator)) {
     res.status(404).json({ error: "Benutzer nicht gefunden" });
     return;
   }
-  if (user.role !== "assistant") {
-    res.status(400).json({ error: "Einladungen nur für Assistenzkräfte möglich" });
+  if (user.role !== "assistant" && user.role !== "koordinator") {
+    res.status(400).json({ error: "Einladungen nur für Assistenzkräfte und Koordinatoren möglich" });
     return;
   }
   if (!user.isActive) {

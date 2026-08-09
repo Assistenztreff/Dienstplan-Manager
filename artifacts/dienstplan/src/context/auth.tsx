@@ -4,7 +4,7 @@ export type AuthUser = {
   id: number;
   name: string;
   email: string;
-  role: "admin" | "assistant" | "superadmin";
+  role: "admin" | "assistant" | "superadmin" | "koordinator";
   accountType: "privat" | "dienstleister";
   /** SaaS-Abo-Stufe. "free" = abgespeckte Gratis-Version, "premium" = voller Funktionsumfang. */
   plan: "free" | "premium";
@@ -104,7 +104,10 @@ function readStoredSession(): AuthUser | null {
       typeof parsed.id === "number" &&
       typeof parsed.name === "string" &&
       typeof parsed.email === "string" &&
-      (parsed.role === "admin" || parsed.role === "assistant" || parsed.role === "superadmin") &&
+      (parsed.role === "admin" ||
+        parsed.role === "assistant" ||
+        parsed.role === "superadmin" ||
+        parsed.role === "koordinator") &&
       (parsed.accountType === "privat" || parsed.accountType === "dienstleister") &&
       (parsed.plan === "free" || parsed.plan === "premium")
     ) {

@@ -42,6 +42,18 @@ Ohne overrideAllowedIds könnten Teamleiter auf alle Mitglied-Teams schreiben (S
 - `context/team.tsx`: `isTeamleiterOnly` Bool; `showTeamSwitcher = isDienstleister || isTeamleiterUser`; beide Gruppen bekommen Team-Switcher und Team-Scope-Logik.
 - `team-verwaltung.tsx`: `TeamleiterDialog` mit `useUpdateTeamMemberFlags` Hook (generiert aus openapi.yaml) + Toggle-Switches; "Rollen"-Button nur für Full-Admins.
 
+## Rechtevergabe (PATCH /teams/:id/members/:userId)
+- Zwei Autorisierungsstufen in-route (kein requireAdmin mehr): Konto-Inhaber (admin-like UND team.ownerId=caller) = alle Felder; sonst `isTeamleiterOfTeam` = NUR `accessLevel` (isTeamleiter/canViewPayroll im Body → 403, Ziel=Inhaber → 403), alles andere 404.
+- Bewusst NICHT capability-basiert (`requireTeamManageOrAdmin`): Stufe 2 erlaubt Team-Verwaltung, aber KEINE Rechtevergabe — die bleibt Inhabern und Teamleitern vorbehalten. Konsistent halten, wenn Koordinatoren dazukommen.
+- Frontend: `ZugriffsrechteDialog` hat `isOwnerView`-Prop (Teamleiter-Sicht: nur Stufen-Selects, Inhaber-Zeile read-only); Button für Nicht-Admins via eigener `TeamleiterRechteButton` (prüft eigene Mitgliedschaft im exakten Team).
+
+## Teamkoordinatoren (eigener Zugang mit Team-Zuweisung)
+- Neue users-Rolle `koordinator` + `users.managed_by_user_id` (Self-FK **ON DELETE CASCADE** — ohne Cascade blockiert jeder Koordinator die Löschung seines Dienstleister-Kontos; Test-Cleanup in `deleteAccountTrees` löscht sie zusätzlich explizit).
+- Team-Zuweisung = `team_members`-Zeile mit `isTeamleiter=true` → gesamte Teamleiter-Maschinerie greift ohne Sonderpfade (Scoping, Rechtevergabe, Nav). Zuweisung deklarativ per PUT-Vollabgleich; Konto-Verknüpfung (nicht Membership) macht teamlose Koordinatoren für den Inhaber sichtbar, weil GET /users membership-gescoped ist.
+- Rollen-Fanout beachten: `userHasFeatureViaTeamOwner` muss `koordinator` wie `assistant` behandeln (nie eigener Plan, Arbeitgeber zahlt); Routen mit `role === "assistant"`-Selbst-Scoping behandeln Koordinatoren wie Admins — das ist gewollt (Verwaltungsrolle), bleibt aber team- und mitgliedschafts-validiert (Ziel-Team ∈ allowedTeams + Ziel-User Mitglied des Ziel-Teams).
+- Anlegen ist Premium-gegated (`caregiverLogin`); Einladung läuft über den bestehenden Invite-Flow (Guard erlaubt Team-Mitglied ODER eigenen Koordinator via managedByUserId, einheitlich 404).
+- Offener Lifecycle-Rest: Koordinatoren können via API/UI weder gelöscht noch deaktiviert/bearbeitet werden (nur Teams entziehen).
+
 ## Wichtige Fallstricke
 - `zod` ist NICHT direkt in api-server installiert: Inline-Zod-Schemas müssen als Import aus `@workspace/api-zod` (generierte Zod-Schemas) ersetzt werden, z.B. `UpdateTeamMemberFlagsBody` statt `z.object({...})`.
 - GET /dashboard/hours-balance: Teamleiter müssen eine teamId mitgeben (Default: erstes Teamleiter-Team), kein globaler Dump.

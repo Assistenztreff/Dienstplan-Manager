@@ -113,7 +113,9 @@ export async function userHasFeatureViaTeamOwner(
     .select({ role: usersTable.role })
     .from(usersTable)
     .where(eq(usersTable.id, userId));
-  if (user?.role !== "assistant") return false;
+  // Assistenzkräfte UND Teamkoordinatoren haben nie einen eigenen bezahlten
+  // Plan — Premium-Features leiten sich vom Arbeitgeber (Team-Eigentümer) ab.
+  if (user?.role !== "assistant" && user?.role !== "koordinator") return false;
 
   const owners = await db
     .select({ ownerPlan: usersTable.plan })

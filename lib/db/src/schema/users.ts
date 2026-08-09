@@ -1,8 +1,24 @@
-import { pgTable, serial, text, boolean, timestamp, date, pgEnum, real } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  serial,
+  text,
+  boolean,
+  timestamp,
+  date,
+  pgEnum,
+  real,
+  integer,
+  type AnyPgColumn,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-export const roleEnum = pgEnum("role", ["admin", "assistant", "superadmin"]);
+// "koordinator" = Verwaltungsperson eines Dienstleister-Kontos (Unternehmens-
+// Teamleiter laut Konzeptpapier): bekommt Teamleiter-Rechte über zugewiesene
+// team_members-Zeilen (is_teamleiter=true), ist aber KEINE Assistenzkraft —
+// alle role="assistant"-Filter (Karten, Picker, Auswertungen) schließen sie
+// dadurch automatisch aus.
+export const roleEnum = pgEnum("role", ["admin", "assistant", "superadmin", "koordinator"]);
 export const accountTypeEnum = pgEnum("account_type", ["privat", "dienstleister"]);
 // SaaS-Abo-Stufe pro Konto. "free" = abgespeckte Gratis-Version, "premium" =
 // voller Funktionsumfang. Aktivierung erfolgt vorerst manuell ueber das
@@ -35,6 +51,17 @@ export const usersTable = pgTable("users", {
   // Google/Apple/Outlook). Kalender-Clients koennen keine Session-Cookies
   // senden, daher authentifiziert der Token die Feed-URL. NULL = kein Abo.
   calendarToken: text("calendar_token").unique(),
+  // Konto-Verknüpfung für Koordinatoren: das Dienstleister-Konto, das diesen
+  // Koordinator angelegt hat und verwaltet. Nur für role="koordinator" gesetzt.
+  // Nötig, weil GET /users mitgliedschafts-gescoped ist — ein Koordinator ohne
+  // zugewiesene Teams wäre sonst für den Inhaber unsichtbar (und Einladung/
+  // Team-Zuweisung ließen sich nicht sauber autorisieren).
+  // ON DELETE CASCADE: Ohne das verwaltende Konto ist ein Koordinator
+  // funktionslos — und ein NO-ACTION-FK würde jede Löschung des
+  // Dienstleister-Kontos blockieren, solange Koordinatoren existieren.
+  managedByUserId: integer("managed_by_user_id").references((): AnyPgColumn => usersTable.id, {
+    onDelete: "cascade",
+  }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
