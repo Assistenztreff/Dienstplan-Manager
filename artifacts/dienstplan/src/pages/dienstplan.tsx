@@ -836,7 +836,7 @@ function DayDetailRow({
             }
           : undefined
       }
-      className={`relative flex items-center gap-2.5 border-b border-[#f1f1ee] py-[9px] pl-4 pr-3 text-[12.5px] last:border-b-0 ${
+      className={`relative flex items-center gap-2.5 border-b border-[#f1f1ee] py-[9px] pl-4 pr-3 text-[12.5px] last:border-b-0 ${planningStatusBadgeOutline(shift)} ${
         clickable
           ? "cursor-pointer transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
           : ""

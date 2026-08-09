@@ -185,11 +185,23 @@ test("Massen-Eintragen und Massen-Löschen über mehrere Tage funktioniert", asy
       .toBe(3);
     for (const s of created) createdShiftIds.push(s.id);
 
-    // Die Badges erscheinen im Kalender.
+    // Abwesenheiten (hier: Urlaub) erscheinen NICHT als Eintrag in der
+    // Personenzeile der Tabelle — die Tabelle zeigt nur reguläre Dienste.
+    // Sichtbarer Nachweis ist die Übersicht "Team-Abwesenheiten": die drei
+    // aufeinanderfolgenden Urlaubstage werden dort zu einem Zeitraum gebündelt.
     const desktop = page.getByTestId("dienstplan-desktop");
-    for (const s of created) {
-      await expect(desktop.getByTestId(`shift-badge-${s.id}`)).toBeVisible();
-    }
+    const absenceOverview = page.getByTestId("team-absence-overview");
+    await expect(absenceOverview.getByTestId("team-absence-count")).toContainText(
+      /Zeitraum|Zeiträume/,
+    );
+    await absenceOverview.getByTestId("team-absence-toggle").click();
+    const absenceRow = absenceOverview
+      .getByTestId("team-absence-row")
+      .filter({ hasText: assistant.name });
+    await expect(absenceRow, "Urlaubs-Zeitraum muss in der Abwesenheits-Übersicht stehen").toHaveCount(1);
+    await expect(absenceRow).toContainText("Urlaub");
+    await expect(absenceRow).toContainText("3 Tage");
+    await absenceOverview.getByTestId("team-absence-toggle").click();
 
     // --- Wieder alle Tage auswählen und per BulkDeleteDialog löschen ------
     await page.getByTestId("toggle-selection-mode").click();
@@ -213,7 +225,11 @@ test("Massen-Eintragen und Massen-Löschen über mehrere Tage funktioniert", asy
     await expect(delDialog).toHaveCount(0, { timeout: 30_000 });
     await expect(page.getByTestId("bulk-action-bar")).toHaveCount(0);
 
-    // Badges verschwinden; API liefert keine Schichten mehr.
+    // Abwesenheits-Übersicht ist wieder leer; API liefert keine Schichten mehr.
+    await expect(absenceOverview.getByTestId("team-absence-count")).toContainText(
+      "keine aktuell",
+      { timeout: 15_000 },
+    );
     for (const s of created) {
       await expect(desktop.getByTestId(`shift-badge-${s.id}`)).toHaveCount(0);
     }

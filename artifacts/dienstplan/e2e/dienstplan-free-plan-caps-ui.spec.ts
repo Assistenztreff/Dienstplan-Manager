@@ -225,7 +225,8 @@ test.describe("Free-Limit Vorausplanung (UI)", () => {
 
     // Typ auf Abwesenheit "Urlaub" umstellen (Zeiten-Felder verschwinden).
     await dialog.getByTestId("shift-dialog-type").click();
-    await page.getByRole("option", { name: "Urlaub" }).click();
+    // exact: true — sonst trifft der Name auch "Urlaubsabgeltung (ausgezahlt)".
+    await page.getByRole("option", { name: "Urlaub", exact: true }).click();
 
     await pickShiftDialogDate(page, dialog, farDateKey);
     await dialog.getByTestId("shift-dialog-save").click();
