@@ -128,7 +128,12 @@ test("Dienstplan: Entwurf/Vorschlag sichtbar gekennzeichnet (Label, Status-Attri
   // Mobile-Containers (sticky Header) — über die Header-Testids ansteuern.
   await page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list").click();
 
-  // Entwurf (VORLAEUFIG): Status-Attribut + sichtbares Label + gestrichelter Rand.
+  // Seit #746 nutzt die Listenansicht die einzeiligen Tagesleisten-Zeilen
+  // (DayDetailRow): Unverbindliche Dienste sind dort per Status-Icon (Stift-
+  // Kreis) + sichtbarem Label ("Entwurf"/"Vorschlag") + Bestätigen-Button
+  // gekennzeichnet — der gestrichelte Rand existiert nur noch im Monatsgitter.
+
+  // Entwurf (VORLAEUFIG): Status-Attribut + sichtbares Label + Status-Icon.
   const draftBadge = mobile.getByTestId(`shift-badge-${draftShiftId}`);
   await expect(draftBadge, "Entwurf-Schicht muss im Kalender sichtbar sein").toBeVisible();
   await expect(draftBadge).toHaveAttribute("data-planning-status", "VORLAEUFIG");
@@ -136,9 +141,13 @@ test("Dienstplan: Entwurf/Vorschlag sichtbar gekennzeichnet (Label, Status-Attri
     /Entwurf/i
   );
   await expect(
-    draftBadge,
-    "Entwurf-Badge muss den gestrichelten Rand tragen (border-dashed)"
-  ).toHaveClass(/border-dashed/);
+    draftBadge.locator("svg").first(),
+    "Entwurf-Zeile muss das Status-Icon tragen (nicht nur Text/Farbe)"
+  ).toBeVisible();
+  await expect(
+    mobile.getByTestId(`shift-confirm-${draftShiftId}`),
+    "Entwurf-Zeile muss den Bestätigen-Button anbieten"
+  ).toBeVisible();
 
   // Vorschlag (ANGEBOTEN): ebenfalls unverbindlich gekennzeichnet.
   const offeredBadge = mobile.getByTestId(`shift-badge-${offeredShiftId}`);
@@ -147,15 +156,15 @@ test("Dienstplan: Entwurf/Vorschlag sichtbar gekennzeichnet (Label, Status-Attri
   await expect(offeredBadge, "Vorschlag-Label muss für Nutzer sichtbar sein").toContainText(
     /Vorschlag/i
   );
-  await expect(offeredBadge).toHaveClass(/border-dashed/);
+  await expect(offeredBadge.locator("svg").first()).toBeVisible();
 
-  // Gegenprobe FIX: verbindliche Dienste tragen KEIN Planungs-Label und keinen
-  // gestrichelten Rand — sonst wäre die Kennzeichnung bedeutungslos.
+  // Gegenprobe FIX: verbindliche Dienste tragen KEIN Planungs-Label, sondern
+  // "bestätigt" — sonst wäre die Kennzeichnung bedeutungslos.
   const fixBadge = mobile.getByTestId(`shift-badge-${fixShiftId}`);
   await expect(fixBadge).toBeVisible();
   await expect(fixBadge).toHaveAttribute("data-planning-status", "FIX");
   await expect(fixBadge).not.toContainText(/Entwurf|Vorschlag/i);
-  await expect(fixBadge).not.toHaveClass(/border-dashed/);
+  await expect(fixBadge).toContainText(/bestätigt/i);
 });
 
 test("Auswertungen + Export-Dialog zeigen den Hinweis 'nur bestätigte Dienste zählen'", async ({

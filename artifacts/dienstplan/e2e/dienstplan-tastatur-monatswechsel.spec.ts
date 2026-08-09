@@ -58,7 +58,7 @@ test.describe("Tastatur-Monatswechsel im Agenda-Modus (mobil)", () => {
     await page.keyboard.press("ArrowRight");
 
     // Monatsheader muss auf nächsten Monat zeigen.
-    const header = page.locator("h2").filter({ hasText: "Dienstplan" });
+    const header = page.getByTestId("month-label");
     await expect(header).toContainText(expectedNext, { timeout: 5_000 });
   });
 
@@ -75,7 +75,7 @@ test.describe("Tastatur-Monatswechsel im Agenda-Modus (mobil)", () => {
     await agendaView.focus();
     await page.keyboard.press("ArrowLeft");
 
-    const header = page.locator("h2").filter({ hasText: "Dienstplan" });
+    const header = page.getByTestId("month-label");
     await expect(header).toContainText(expectedPrev, { timeout: 5_000 });
   });
 });
@@ -99,7 +99,7 @@ test.describe("Tastatur-Monatswechsel im Tabellen-Modus (Desktop)", () => {
     const expectedNext = monthLabel(addMonths(TODAY, 1));
     await page.keyboard.press("ArrowRight");
 
-    const header = page.locator("h2").filter({ hasText: "Dienstplan" });
+    const header = page.getByTestId("month-label");
     await expect(header).toContainText(expectedNext, { timeout: 5_000 });
   });
 
@@ -114,7 +114,7 @@ test.describe("Tastatur-Monatswechsel im Tabellen-Modus (Desktop)", () => {
     const expectedPrev = monthLabel(subMonths(TODAY, 1));
     await page.keyboard.press("ArrowLeft");
 
-    const header = page.locator("h2").filter({ hasText: "Dienstplan" });
+    const header = page.getByTestId("month-label");
     await expect(header).toContainText(expectedPrev, { timeout: 5_000 });
   });
 });

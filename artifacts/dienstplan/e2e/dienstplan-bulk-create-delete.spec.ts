@@ -168,8 +168,10 @@ test("Massen-Eintragen und Massen-Löschen über mehrere Tage funktioniert", asy
 
     await dialog.getByTestId("shift-dialog-save").click();
 
-    // Dialog schließt; Auswahl wird geleert, Modus beendet.
-    await expect(dialog).toHaveCount(0);
+    // Dialog schließt; Auswahl wird geleert, Modus beendet. Urlaubs-Anlagen
+    // sind serverseitig langsam (Urlaubskonto-Recalc, ~5s+/Tag) — großzügig
+    // warten statt der 5s-Default-Frist.
+    await expect(dialog).toHaveCount(0, { timeout: 30_000 });
     await expect(page.getByTestId("bulk-action-bar")).toHaveCount(0);
     await expect(page.getByTestId("toggle-selection-mode")).toContainText("Mehrfachauswahl");
 
@@ -206,8 +208,9 @@ test("Massen-Eintragen und Massen-Löschen über mehrere Tage funktioniert", asy
 
     await delDialog.getByTestId("bulk-delete-confirm").click();
 
-    // Dialog schließt; Auswahl geleert, Modus beendet.
-    await expect(delDialog).toHaveCount(0);
+    // Dialog schließt; Auswahl geleert, Modus beendet (Massen-Löschen inkl.
+    // Urlaubskonto-Recalc kann >5s dauern).
+    await expect(delDialog).toHaveCount(0, { timeout: 30_000 });
     await expect(page.getByTestId("bulk-action-bar")).toHaveCount(0);
 
     // Badges verschwinden; API liefert keine Schichten mehr.

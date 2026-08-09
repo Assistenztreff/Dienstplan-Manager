@@ -1,5 +1,5 @@
 import { isAdminRole } from "@/lib/roles";
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams, useLocation } from "wouter";
 import {
@@ -10,7 +10,7 @@ import {
   getListShiftsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, getDay, isValid, startOfDay, endOfDay, startOfWeek, endOfWeek, addDays, addMonths, differenceInCalendarDays, isWithinInterval } from "date-fns";
+import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, getDay, getISOWeek, isValid, startOfDay, endOfDay, startOfWeek, endOfWeek, addDays, addMonths, differenceInCalendarDays, isWithinInterval } from "date-fns";
 import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -164,6 +164,32 @@ const PersonColorsContext = createContext<PersonColorAssignment | undefined>(und
 
 function usePersonColors(): PersonColorAssignment | undefined {
   return useContext(PersonColorsContext);
+}
+
+/** Kategoriale Personen-Slot-Farben (userId → Slot) — gemeinsame Quelle für
+ *  die Tagesleiste unter dem Kalender UND die mobile Listenansicht, damit der
+ *  3-px-Farbbalken überall dieselbe Farbe pro Assistenzkraft trägt.
+ *  Zuweisung: Assistenzkraft sortiert nach ID (= Anlagereihenfolge) → Slot 1, 2, ...
+ *  Bei >12 Assistenzkräften: wrap-around ab Slot 1 (zweite Runde). */
+function usePersonSlotLookup(): (userId: number) => PersonSlot {
+  const personColors = usePersonColors();
+  const [assistantPalette] = useAssistantPalette();
+  const activeSlots = useMemo(() => getPersonSlots(assistantPalette), [assistantPalette]);
+  const personSlots = useMemo<Map<number, PersonSlot>>(() => {
+    if (!personColors) return new Map();
+    const sortedIds = [...personColors.keys()].sort((a, b) => a - b);
+    return new Map(sortedIds.map((id, idx) => [id, activeSlots[idx % activeSlots.length]!]));
+  }, [personColors, activeSlots]);
+  return useCallback(
+    (userId: number) => {
+      const slot = personSlots.get(userId);
+      if (slot) return slot;
+      if (!Number.isFinite(userId)) return activeSlots[0]!;
+      const hash = Math.abs(Math.trunc(userId) * 2654435761);
+      return activeSlots[hash % activeSlots.length]!;
+    },
+    [personSlots, activeSlots],
+  );
 }
 
 function shiftBadgeClasses(shift: Shift, personColors?: PersonColorAssignment): string {
@@ -596,9 +622,21 @@ function AgendaView({
   onNextMonth?: () => void;
 }) {
   const selectedDateSet = new Set(selectedDates ?? []);
+  const getPersonSlot = usePersonSlotLookup();
+
+  // ── Wochen-Kapitel (Task #746, Variante A): Tage nach ISO-Woche (Mo–So)
+  //    gruppieren; jede Woche wird ein eigener Kartenblock mit Überschrift. ──
+  const weeks: { key: string; days: Date[] }[] = [];
+  for (const day of days) {
+    const key = format(startOfWeek(day, { weekStartsOn: 1 }), "yyyy-MM-dd");
+    const last = weeks[weeks.length - 1];
+    if (last && last.key === key) last.days.push(day);
+    else weeks.push({ key, days: [day] });
+  }
+
   return (
     <div
-      className="space-y-1"
+      className="space-y-3"
       tabIndex={onPrevMonth || onNextMonth ? 0 : undefined}
       aria-label="Monatsansicht — ArrowLeft/ArrowRight für Monatswechsel"
       onKeyDown={
@@ -616,77 +654,112 @@ function AgendaView({
       }
       data-testid="agenda-view"
     >
-      {days.map((day) => {
-        const dayShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), day));
-        const isCurrentDay = isToday(day);
-        const bulkSelected = selectionMode && selectedDateSet.has(format(day, "yyyy-MM-dd"));
-
+      {weeks.map((week) => {
+        const first = week.days[0]!;
+        const weekLast = week.days[week.days.length - 1]!;
+        const rangeLabel = isSameDay(first, weekLast)
+          ? format(first, "d. MMMM", { locale: de })
+          : `${format(first, "d.")}–${format(weekLast, "d. MMMM", { locale: de })}`;
         return (
-          <div
-            key={day.toISOString()}
-            data-testid={`agenda-day-${format(day, "yyyy-MM-dd")}`}
-            data-selected={bulkSelected ? "true" : "false"}
-            className={`rounded-lg border overflow-hidden ${
-              bulkSelected ? "border-primary ring-2 ring-primary bg-primary/5" : "border-border/40"
-            }`}
+          <section
+            key={week.key}
+            data-testid={`agenda-week-${week.key}`}
+            className="overflow-hidden rounded-lg border border-border/40 bg-card"
           >
-            <button
-              type="button"
-              className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                isCurrentDay
-                  ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                  : "bg-muted/40 text-foreground hover:bg-muted/70"
-              } ${!canEdit ? "cursor-default pointer-events-none" : ""}`}
-              onClick={() =>
-                canEdit && (selectionMode ? onToggleDate?.(day) : onDayClick(day))
-              }
-            >
-              <span className="text-sm font-semibold min-w-[24px]">{format(day, "d")}</span>
-              <span className="text-sm">{format(day, "EEEE", { locale: de })}</span>
-              {canEdit && (
-                <span
-                  className={`ml-auto flex items-center gap-1 text-xs ${
-                    isCurrentDay ? "opacity-80" : "text-muted-foreground"
+            <h3 className="border-b border-border/40 bg-muted/40 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+              KW {getISOWeek(first)} · {rangeLabel}
+            </h3>
+            {week.days.map((day) => {
+              const dayShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), day));
+              const isCurrentDay = isToday(day);
+              // Wochenende: Tönung UND fetter Wochentag — Information nie nur
+              // über Farbe (Barrierefreiheit, DESIGN-GUIDELINES).
+              const weekend = getDay(day) === 0 || getDay(day) === 6;
+              const bulkSelected = selectionMode && selectedDateSet.has(format(day, "yyyy-MM-dd"));
+
+              return (
+                <div
+                  key={day.toISOString()}
+                  data-testid={`agenda-day-${format(day, "yyyy-MM-dd")}`}
+                  data-selected={bulkSelected ? "true" : "false"}
+                  className={`border-b border-border/30 last:border-b-0 ${
+                    bulkSelected ? "bg-primary/5 ring-2 ring-inset ring-primary" : ""
                   }`}
                 >
-                  {dayShifts.length > 0 && (
-                    <span className="font-medium">{dayShifts.length}</span>
-                  )}
-                  <Plus className="h-3.5 w-3.5" />
-                </span>
-              )}
-            </button>
-
-            <div className="bg-card px-3 py-2 space-y-1.5">
-              {dayShifts.length > 0 ? (
-                dayShifts.map((shift) => (
-                  <div key={shift.id}>
-                    <ShiftBadge
-                      shift={shift}
-                      showName={canEdit}
-                      modelMap={modelMap}
-                      onClick={canEdit && !selectionMode ? (e) => { e.stopPropagation(); onShiftClick(shift); } : undefined}
-                      onConfirm={canEdit && !selectionMode ? onConfirmShift : undefined}
-                    />
-                    {shift.notes && (
-                      <p
-                        data-testid={`agenda-shift-note-${shift.id}`}
-                        className="mt-0.5 px-1 text-[11px] text-muted-foreground leading-snug"
-                      >
-                        {shift.notes.length > 80
-                          ? shift.notes.slice(0, 80) + "…"
-                          : shift.notes}
-                      </p>
+                  <button
+                    type="button"
+                    className={`flex min-h-[44px] w-full items-center gap-3 px-4 py-2 text-left transition-colors ${
+                      isCurrentDay
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                        : weekend
+                          ? "bg-muted/60 text-foreground hover:bg-muted"
+                          : "bg-card text-foreground hover:bg-muted/40"
+                    } ${!canEdit ? "cursor-default pointer-events-none" : ""}`}
+                    onClick={() =>
+                      canEdit && (selectionMode ? onToggleDate?.(day) : onDayClick(day))
+                    }
+                  >
+                    <span className="min-w-[24px] text-sm font-semibold tabular-nums">{format(day, "d")}</span>
+                    <span className={`text-sm ${weekend ? "font-bold" : ""}`}>
+                      {format(day, "EEEEEE", { locale: de })}
+                    </span>
+                    {isCurrentDay && (
+                      <span className="rounded bg-primary-foreground px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
+                        Heute
+                      </span>
                     )}
-                  </div>
-                ))
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  {canEdit ? "Keine Schichten — tippen zum Hinzufügen" : "Keine Schichten"}
-                </p>
-              )}
-            </div>
-          </div>
+                    {canEdit && (
+                      <span
+                        className={`ml-auto flex items-center gap-1.5 text-xs ${
+                          isCurrentDay ? "opacity-80" : "text-muted-foreground"
+                        }`}
+                      >
+                        {/* Leere Tage: dezenter Hinweis links neben dem Plus;
+                            die Zahlenspalte bleibt reserviert, damit das Plus
+                            über alle Zeilen bündig steht. */}
+                        {dayShifts.length === 0 && <span>Schicht hinzufügen</span>}
+                        <span className="min-w-[1rem] text-right font-medium tabular-nums">
+                          {dayShifts.length > 0 ? dayShifts.length : ""}
+                        </span>
+                        <Plus className="h-3.5 w-3.5 shrink-0" />
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Nur Tage MIT Einträgen bekommen Detailzeilen — leere Tage
+                      bleiben einzeilig (Task #746). Zeilen im selben Format
+                      wie die Tagesleiste unter dem Kalender (DayDetailRow). */}
+                  {dayShifts.length > 0 && (
+                    <div className="border-t border-border/20 bg-card">
+                      {dayShifts.map((shift) => (
+                        <div key={shift.id}>
+                          <DayDetailRow
+                            shift={shift}
+                            testId={`shift-badge-${shift.id}`}
+                            showName={canEdit}
+                            barColor={shift.type === "team" ? "#0284c7" : getPersonSlot(shift.userId).bg}
+                            modelMap={modelMap}
+                            onClick={canEdit && !selectionMode ? () => onShiftClick(shift) : undefined}
+                            onConfirm={canEdit && !selectionMode ? onConfirmShift : undefined}
+                          />
+                          {shift.notes && (
+                            <p
+                              data-testid={`agenda-shift-note-${shift.id}`}
+                              className="border-b border-[#f1f1ee] px-4 pb-2 text-[11px] leading-snug text-muted-foreground last:border-b-0"
+                            >
+                              {shift.notes.length > 80
+                                ? shift.notes.slice(0, 80) + "…"
+                                : shift.notes}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </section>
         );
       })}
     </div>
@@ -705,12 +778,19 @@ function DayDetailRow({
   modelMap,
   onClick,
   onConfirm,
+  testId,
+  showName = true,
 }: {
   shift: Shift;
   barColor: string;
   modelMap: Map<number, ShiftModelInfo>;
   onClick?: () => void;
   onConfirm?: (shift: Shift) => void;
+  /** Überschreibt die data-testid (mobile Listenansicht nutzt `shift-badge-<id>`,
+   *  damit bestehende E2E-Selektoren weiter greifen). */
+  testId?: string;
+  /** Namensspalte ausblenden (Lesemodus der mobilen Listenansicht). */
+  showName?: boolean;
 }) {
   const { selectedTeamId } = useTeam();
   const mirror = isMirrorShift(shift, selectedTeamId);
@@ -733,7 +813,7 @@ function DayDetailRow({
   const clickable = !!onClick && !mirror;
   return (
     <div
-      data-testid={`day-detail-shift-${shift.id}`}
+      data-testid={testId ?? `day-detail-shift-${shift.id}`}
       data-planning-status={status}
       title={
         mirror && einsatzLabel
@@ -766,7 +846,7 @@ function DayDetailRow({
       <span aria-hidden="true" className="absolute bottom-0 left-0 top-0 w-[3px]" style={{ backgroundColor: barColor }} />
       {/* Name gehört zum Zeilen-Layout (Punkt 5) — für alle sichtbar, die die
           Zeile sehen dürfen; Autorisierung gilt nur für Aktionen. */}
-      {shift.user && (
+      {showName && shift.user && (
         <span className="min-w-[110px] shrink truncate font-semibold text-[#151515]">{shift.user.name}</span>
       )}
       <span className="flex min-w-0 items-center gap-1 text-[#555555]">
@@ -915,26 +995,9 @@ function MonthGrid({
   }, [detailShifts]);
   const numWeeks = Math.ceil((blanks.length + days.length) / 7);
 
-  // ── Aktive Assistenzkraft-Palette (Einstellung aus localStorage) ─────────
-  const [assistantPalette] = useAssistantPalette();
-  const activeSlots = getPersonSlots(assistantPalette);
-
-  // ── Kategoriale Personen-Slot-Farben ──────────────────────────────────────
-  // Zuweisung: Assistenzkraft sortiert nach ID (= Anlagereihenfolge) → Slot 1, 2, ...
-  // Bei >12 Assistenzkräften: wrap-around ab Slot 1 (zweite Runde).
-  const personSlots = useMemo<Map<number, PersonSlot>>(() => {
-    if (!personColors) return new Map();
-    const sortedIds = [...personColors.keys()].sort((a, b) => a - b);
-    return new Map(sortedIds.map((id, idx) => [id, activeSlots[idx % activeSlots.length]!]));
-  }, [personColors, activeSlots]);
-
-  function getPersonSlot(userId: number): PersonSlot {
-    const slot = personSlots.get(userId);
-    if (slot) return slot;
-    if (!Number.isFinite(userId)) return activeSlots[0]!;
-    const hash = Math.abs(Math.trunc(userId) * 2654435761);
-    return activeSlots[hash % activeSlots.length]!;
-  }
+  // ── Kategoriale Personen-Slot-Farben (gemeinsamer Hook mit der mobilen
+  //    Listenansicht, damit die Farbzuordnung überall identisch ist) ────────
+  const getPersonSlot = usePersonSlotLookup();
 
   // ── Dynamische Zeilenhöhe abhängig von max. Einträgen pro Tag ─────────────
   // Spec §3: 1–2 Einträge → scrollfrei; erst ab 3 Einträgen darf die Ansicht
