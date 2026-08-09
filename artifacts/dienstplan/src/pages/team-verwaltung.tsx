@@ -51,7 +51,12 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth, hasTeamAccessLevel, type TeamAccessLevel } from "@/context/auth";
 import { isAdminRole } from "@/lib/roles";
 import { isWithinLimit, getLimit, hasAccess } from "@/lib/entitlements";
-import { readableApiError, planUpgradeMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
+import {
+  readableApiError,
+  planUpgradeMessage,
+  ownerSessionMessage,
+  PLAN_FEATURE_MESSAGES,
+} from "@/lib/api-error";
 
 type Team = {
   id: number;
@@ -614,6 +619,7 @@ function KoordinatorAnlegenDialog({ onClose }: { onClose: () => void }) {
     } catch (err) {
       setError(
         planUpgradeMessage(err) ??
+          ownerSessionMessage(err) ??
           readableApiError(err, "Speichern fehlgeschlagen. Bitte erneut versuchen."),
       );
     } finally {
@@ -705,7 +711,10 @@ function KoordinatorenBereich({ teams }: { teams: Team[] }) {
       if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast({
         title: "Fehler beim Speichern",
-        description: readableApiError(err, "Bitte erneut versuchen."),
+        description:
+          planUpgradeMessage(err) ??
+          ownerSessionMessage(err) ??
+          readableApiError(err, "Bitte erneut versuchen."),
         variant: "destructive",
       });
     } finally {

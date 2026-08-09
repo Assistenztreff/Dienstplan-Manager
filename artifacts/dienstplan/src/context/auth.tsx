@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 export type AuthUser = {
   id: number;
@@ -143,27 +143,88 @@ export function resyncAuthAfter401(): Promise<boolean> | null {
   return resyncAuthHandler ? resyncAuthHandler() : null;
 }
 
+// Kontowechsel-Erkennung: Wird im selben Browser ein anderes Konto angemeldet
+// (z. B. weil der Inhaber den Einladungslink einer Assistenzkraft/Koordinatorin
+// selbst geöffnet hat oder im Dev-Modus der Nutzer-Umschalter benutzt wurde),
+// liefert /auth/me plötzlich eine andere Nutzer-ID. Der hier registrierte
+// Handler (App.tsx) verwirft dann alle zwischengespeicherten Daten, damit
+// keine veraltete Ansicht des vorherigen Kontos stehen bleibt.
+let userSwitchHandler: ((next: AuthUser) => void) | null = null;
+
+/** Registriert den globalen Kontowechsel-Handler. Liefert eine Abmeldefunktion. */
+export function registerUserSwitchHandler(handler: (next: AuthUser) => void): () => void {
+  userSwitchHandler = handler;
+  return () => {
+    if (userSwitchHandler === handler) userSwitchHandler = null;
+  };
+}
+
+/** Mindestabstand zwischen zwei Session-Frischeprüfungen beim Tab-Fokus. */
+const SESSION_RECHECK_MIN_INTERVAL_MS = 10_000;
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => readStoredSession());
   const [isLoading, setIsLoading] = useState(true);
 
+  // ID des zuletzt angewendeten Nutzers — Grundlage der Kontowechsel-Erkennung.
+  const lastUserIdRef = useRef<number | null>(currentUser?.id ?? null);
+  // Erst nach dem ersten Bootstrap scharf: Die initiale Hydration aus dem
+  // Dev-localStorage-Cache darf keinen "Kontowechsel" melden (die Abfragen
+  // liefen ohnehin schon unter der Cookie-Session des echten Nutzers).
+  const readyRef = useRef(false);
+  // Auth-Epoche: wird bei JEDER Zustandsanwendung erhöht. Frischeprüfungen
+  // (/auth/me aus Bootstrap, Fokus-Check, 401/403-Resync) merken sich die
+  // Epoche vor ihrem Request und wenden ihre Antwort nur an, wenn sich die
+  // Epoche nicht geändert hat. So kann eine verspätet eintreffende Antwort
+  // (noch unter dem alten Cookie gestartet) nie eine neuere Identität
+  // überschreiben und die veraltete Inhaber-Ansicht wiederherstellen.
+  const authEpochRef = useRef(0);
+
+  /**
+   * Zentraler Setter für den Auth-Zustand: aktualisiert State + Dev-Cache und
+   * meldet einen Kontowechsel (andere Nutzer-ID als zuvor) an den global
+   * registrierten Handler, damit die App veraltete Daten verwerfen kann.
+   * Erhöht die Auth-Epoche und invalidiert damit alle noch laufenden
+   * Frischeprüfungen.
+   */
+  const applyUser = useCallback((user: AuthUser | null) => {
+    authEpochRef.current += 1;
+    const prevId = lastUserIdRef.current;
+    lastUserIdRef.current = user?.id ?? null;
+    setCurrentUser((prev) => {
+      // Unverändertes Profil nicht neu setzen — vermeidet Re-Render bei jeder
+      // Fokus-Frischeprüfung.
+      if (prev && user && JSON.stringify(prev) === JSON.stringify(user)) return prev;
+      return user;
+    });
+    storeSession(user);
+    if (readyRef.current && prevId != null && user != null && user.id !== prevId) {
+      userSwitchHandler?.(user);
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
+    // Single-flight für ALLE Frischeprüfungen (Bootstrap-Resync UND
+    // Fokus-Check): Es läuft immer höchstens ein /auth/me-Abgleich. Damit
+    // können sich zwei Abgleiche nie gegenseitig überholen und in falscher
+    // Reihenfolge anwenden.
     let inflight: Promise<boolean> | null = null;
 
     // Versucht, eine gültige Session herzustellen: erst /auth/me, im Dev-Modus
     // notfalls per Dev-Login. Liefert true, wenn danach ein Nutzer angemeldet
     // ist. Bei endgültigem Scheitern wird der lokale Zustand geleert, sodass
     // die App auf die Login-Seite wechselt statt endlos 401s zu produzieren.
+    // Epoch-Guard: Antworten werden nur angewendet, wenn zwischenzeitlich
+    // keine andere Zustandsanwendung passiert ist (z. B. expliziter Login).
     async function bootstrap(): Promise<boolean> {
+      const epoch = authEpochRef.current;
+      const stillCurrent = () => !cancelled && authEpochRef.current === epoch;
       try {
         const meRes = await apiFetch("/api/auth/me");
         if (meRes.ok) {
           const user = (await meRes.json()) as AuthUser;
-          if (!cancelled) {
-            setCurrentUser(user);
-            storeSession(user);
-          }
+          if (stillCurrent()) applyUser(user);
           return true;
         }
 
@@ -171,18 +232,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const devRes = await apiFetch("/api/auth/dev-login", { method: "POST" });
           if (devRes.ok) {
             const user = (await devRes.json()) as AuthUser;
-            if (!cancelled) {
-              setCurrentUser(user);
-              storeSession(user);
-            }
+            if (stillCurrent()) applyUser(user);
             return true;
           }
         }
 
-        if (!cancelled) {
-          setCurrentUser(null);
-          storeSession(null);
-        }
+        if (stillCurrent()) applyUser(null);
         return false;
       } catch (error) {
         // Netzwerkfehler (TypeError bei fetch) bedeuten, dass der Nutzer offline
@@ -191,10 +246,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // bekannte Nutzer gesetzt und das OfflineBanner zeigt den Hinweis.
         // Nur bei einem 4xx/5xx (kein TypeError) wird der Zustand geleert.
         const isNetworkError = error instanceof TypeError;
-        if (!isNetworkError && !cancelled) {
-          setCurrentUser(null);
-          storeSession(null);
-        }
+        if (!isNetworkError && !cancelled && authEpochRef.current === epoch) applyUser(null);
         return false;
       }
     }
@@ -208,14 +260,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return inflight;
     };
 
+    // Kontowechsel-Frischeprüfung: Wird der Tab wieder sichtbar/fokussiert
+    // (z. B. nachdem in einem anderen Tab ein Einladungslink geöffnet und
+    // damit ein anderes Konto angemeldet wurde), prüfen wir /auth/me erneut.
+    // Eine geänderte Nutzer-ID meldet applyUser an den Kontowechsel-Handler.
+    // Sanfter als bootstrap(): Nur eine 200-Antwort wird angewendet — 401
+    // überlässt der bestehenden Selbstheilung, transiente 5xx loggen nicht aus.
+    let lastCheckAt = 0;
+    const check = () => {
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (inflight || now - lastCheckAt < SESSION_RECHECK_MIN_INTERVAL_MS) return;
+      lastCheckAt = now;
+      inflight = (async () => {
+        const epoch = authEpochRef.current;
+        try {
+          const r = await apiFetch("/api/auth/me");
+          if (r.ok) {
+            const user = (await r.json()) as AuthUser;
+            if (!cancelled && authEpochRef.current === epoch) applyUser(user);
+            return true;
+          }
+          return false;
+        } catch {
+          // Offline/Netzwerkfehler: Zustand unangetastet lassen.
+          return false;
+        }
+      })().finally(() => {
+        inflight = null;
+      });
+    };
+    window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", check);
+
     bootstrap().finally(() => {
-      if (!cancelled) setIsLoading(false);
+      if (!cancelled) {
+        setIsLoading(false);
+        readyRef.current = true;
+      }
     });
     return () => {
       cancelled = true;
       resyncAuthHandler = null;
+      window.removeEventListener("focus", check);
+      document.removeEventListener("visibilitychange", check);
     };
-  }, []);
+  }, [applyUser]);
 
   const login = async (email: string, password: string) => {
     const r = await apiFetch("/api/auth/login", {
@@ -228,8 +318,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(safeErrorText(data.error, "Anmeldung fehlgeschlagen"));
     }
     const user = (await r.json()) as AuthUser;
-    setCurrentUser(user);
-    storeSession(user);
+    applyUser(user);
   };
 
   const register = async (input: {
@@ -259,28 +348,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw err;
     }
     const user = (await r.json()) as AuthUser;
-    setCurrentUser(user);
-    storeSession(user);
+    applyUser(user);
   };
 
   const logout = async () => {
     await apiFetch("/api/auth/logout", { method: "POST" });
-    setCurrentUser(null);
-    storeSession(null);
+    applyUser(null);
   };
 
   const refreshUser = async () => {
+    // Frischeprüfung wie der Fokus-Check: Epoch-Guard, damit eine verspätete
+    // Antwort keinen zwischenzeitlich angewendeten Zustand überschreibt.
+    const epoch = authEpochRef.current;
     try {
       const r = await apiFetch("/api/auth/me");
+      if (authEpochRef.current !== epoch) return;
       if (r.ok) {
         const user = (await r.json()) as AuthUser;
-        setCurrentUser(user);
-        storeSession(user);
+        if (authEpochRef.current === epoch) applyUser(user);
         return;
       }
       // Session serverseitig ungültig (401/403) -> lokalen Zustand & Cache leeren.
-      setCurrentUser(null);
-      storeSession(null);
+      applyUser(null);
     } catch {
       // Transienter Netzwerkfehler: bestehenden Zustand bewusst NICHT verwerfen.
     }
@@ -309,8 +398,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(safeErrorText(data.error, "Nutzerwechsel fehlgeschlagen"));
     }
     const user = (await r.json()) as AuthUser;
-    setCurrentUser(user);
-    storeSession(user);
+    applyUser(user);
   };
 
   const setPassword = async (token: string, password: string): Promise<AuthUser> => {
@@ -324,8 +412,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(safeErrorText(data.error, "Fehler beim Setzen des Passworts"));
     }
     const user = (await r.json()) as AuthUser;
-    setCurrentUser(user);
-    storeSession(user);
+    applyUser(user);
     return user;
   };
 

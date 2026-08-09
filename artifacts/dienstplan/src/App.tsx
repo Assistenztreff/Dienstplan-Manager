@@ -2,7 +2,7 @@ import { Switch, Route, Redirect, Router as WouterRouter, useLocation } from "wo
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApiError } from "@workspace/api-client-react";
 import { toast } from "sonner";
-import { resyncAuthAfter401 } from "@/context/auth";
+import { registerUserSwitchHandler, resyncAuthAfter401 } from "@/context/auth";
 import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
@@ -56,6 +56,25 @@ import { Loader2 } from "lucide-react";
 let lastResyncAt = 0;
 const RESYNC_COOLDOWN_MS = 15_000;
 
+// Kontowechsel-Verdacht bei 403: Wenn eine Abfrage/Aktion mit 403 scheitert,
+// kann im selben Browser inzwischen ein anderes Konto angemeldet sein (z. B.
+// weil der Inhaber einen Einladungslink selbst geöffnet hat). Dann prüfen wir
+// die Session einmal frisch (gedrosselt) — bei geänderter Nutzer-ID greift der
+// unten registrierte Kontowechsel-Handler. Ein legitimes 403 desselben
+// Nutzers bleibt folgenlos.
+let lastSessionCheckAt = 0;
+const SESSION_CHECK_COOLDOWN_MS = 10_000;
+
+function maybeRecheckSessionAfter403(error: unknown): void {
+  if (!(error instanceof ApiError) || error.status !== 403) return;
+  const now = Date.now();
+  if (now - lastSessionCheckAt < SESSION_CHECK_COOLDOWN_MS) return;
+  lastSessionCheckAt = now;
+  // bootstrap() holt /auth/me frisch; applyUser meldet eine geänderte
+  // Nutzer-ID an den Kontowechsel-Handler.
+  void resyncAuthAfter401();
+}
+
 // Netzwerkfehler (fetch TypeError) von echten API-Fehlern unterscheiden.
 function isNetworkError(error: unknown): boolean {
   return error instanceof TypeError;
@@ -80,6 +99,7 @@ const queryClient: QueryClient = new QueryClient({
         });
         return;
       }
+      maybeRecheckSessionAfter403(error);
       // Netzwerkfehler: nur anzeigen, wenn das Banner noch nicht sichtbar ist
       // (navigator.onLine true, aber API nicht erreichbar).
       if (isNetworkError(error) && navigator.onLine) {
@@ -94,6 +114,7 @@ const queryClient: QueryClient = new QueryClient({
   }),
   mutationCache: new MutationCache({
     onError: (error) => {
+      maybeRecheckSessionAfter403(error);
       // Netzwerkfehler bei Mutations: Das Offline-Banner zeigt bereits einen
       // Hinweis wenn navigator.onLine===false. Kein zusätzlicher Toast nötig.
       if (isNetworkError(error) && !navigator.onLine) return;
@@ -121,6 +142,18 @@ const queryClient: QueryClient = new QueryClient({
       networkMode: "offlineFirst",
     },
   },
+});
+
+// Kontowechsel-Handler: Meldet /auth/me eine andere Nutzer-ID als zuvor
+// (Einladungslink im selben Browser geöffnet, Dev-Nutzerwechsel, …), gehören
+// alle zwischengespeicherten Daten dem vorherigen Konto — vollständig
+// verwerfen (inkl. pausierter Offline-Mutationen) und kurz erklären, warum
+// sich die Ansicht gerade ändert.
+registerUserSwitchHandler((next) => {
+  queryClient.clear();
+  toast.info("Anmeldung gewechselt", {
+    description: `Du bist jetzt als ${next.name} angemeldet. Die Ansicht wurde entsprechend aktualisiert.`,
+  });
 });
 
 const PUBLIC_PATHS = [

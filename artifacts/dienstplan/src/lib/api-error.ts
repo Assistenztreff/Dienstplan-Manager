@@ -175,3 +175,29 @@ export function planFeatureMessage(err: unknown): string | null {
 export function planUpgradeMessage(err: unknown): string | null {
   return planFeatureMessage(err) ?? planLimitMessage(err);
 }
+
+/**
+ * Klare Meldung für 403 auf Inhaber-Aktionen (Teamkoordinatoren anlegen,
+ * Teams zuweisen): Der häufigste Grund ist ein unbemerkter Kontowechsel im
+ * selben Browser — z. B. weil der Inhaber einen Einladungslink selbst
+ * geöffnet hat und damit seine eigene Anmeldung ersetzt wurde. Die veraltete
+ * Seite zeigt dann noch die Inhaber-Ansicht, die aktive Anmeldung hat aber
+ * keine Inhaber-Rechte mehr.
+ */
+export const OWNER_SESSION_REQUIRED_MESSAGE =
+  "Dafür musst du als Inhaber des Dienstleister-Kontos angemeldet sein. " +
+  "Vermutlich wurde in diesem Browser inzwischen ein anderes Konto angemeldet " +
+  "(z. B. über einen Einladungslink) — melde dich wieder mit dem Inhaber-Konto an " +
+  "und versuche es erneut.";
+
+/**
+ * Erkennt ein 403 auf einer Inhaber-Aktion und liefert die Kontowechsel-
+ * Meldung. Strukturierte Plan-403s (Premium-Feature/Limit) sind hier bewusst
+ * ausgenommen — die behandelt `planUpgradeMessage` mit dem passenden
+ * Upgrade-Hinweis. Gibt `null` für alle anderen Fehler zurück.
+ */
+export function ownerSessionMessage(err: unknown): string | null {
+  if (!(err instanceof ApiError) || err.status !== 403) return null;
+  if (planUpgradeMessage(err)) return null;
+  return OWNER_SESSION_REQUIRED_MESSAGE;
+}

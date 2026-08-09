@@ -225,6 +225,15 @@ export function InviteDialog({ open, onClose, userId, userName }: InviteDialogPr
                 {result.note}
               </p>
 
+              <p
+                className="text-xs text-muted-foreground border-l-2 border-amber-400/70 pl-3"
+                data-testid="invite-browser-hinweis"
+              >
+                Wichtig: Öffne den Link nicht selbst in diesem Browser — sonst ersetzt die
+                Anmeldung der eingeladenen Person deine eigene. Gib den Link weiter oder nutze
+                zum Ausprobieren ein privates Fenster.
+              </p>
+
               <Button variant="outline" className="w-full gap-2" onClick={generate} disabled={loading}>
                 <Send className="h-4 w-4" />
                 Neuen Link generieren

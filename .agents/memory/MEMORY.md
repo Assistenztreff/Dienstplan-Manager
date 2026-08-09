@@ -109,3 +109,4 @@
 - [Abwesenheit löscht Tagesdienste](absence-replaces-planned-shifts.md) — POST /shifts (Abwesenheit) löscht alle geplanten Dienste des Tages im Team; Koexistenz nur „Abwesenheit zuerst, Dienst danach".
 - [Playwright-Worker-Neustart nach Fehlschlag](e2e-worker-restart-state.md) — nach einem Fehlschlag resettet der Worker Modul-State; spätere Fehler derselben Datei sind meist Kaskade.
 - [Gestufte Team-Freischaltung](team-access-levels.md) — Rechte pro Mitgliedschaft; Route-Middleware und In-Route-Assert müssen dieselbe Stufe fordern, Premium-Gates über den Team-Eigentümer.
+- [Kontowechsel-Erkennung im Web-Client](kontowechsel-session-erkennung.md) — Auth-Zustand nur via applyUser (Epoch-Guard + Single-Flight), sonst stellt eine späte /auth/me-Antwort die alte Identität wieder her.

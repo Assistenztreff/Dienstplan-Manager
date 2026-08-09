@@ -82,7 +82,9 @@ test("Team-Löschen mit Mitglied zeigt die konkrete 409-Servermeldung im Toast",
 }) => {
   await loginBrowserAndOpenTeams(page);
 
-  const row = page.locator("li").filter({ hasText: teamDelName });
+  // Teams werden seit dem Umbau der Team-Verwaltung als Karten
+  // (`team-block-<id>`) gerendert, nicht mehr als Listenelemente.
+  const row = page.getByTestId(`team-block-${teamDelId}`);
   await expect(row).toBeVisible();
 
   // Erster Klick aktiviert die Bestätigung ("Wirklich?"), zweiter löst das

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "@workspace/api-client-react";
 import {
+  ownerSessionMessage,
+  OWNER_SESSION_REQUIRED_MESSAGE,
   planFeatureMessage,
   planLimitMessage,
   planUpgradeMessage,
@@ -240,5 +242,38 @@ describe("planUpgradeMessage", () => {
     expect(planUpgradeMessage(makeApiError(403, { error: "Keine Berechtigung" }))).toBeNull();
     expect(planUpgradeMessage(makeApiError(401, {}))).toBeNull();
     expect(planUpgradeMessage(new Error("network"))).toBeNull();
+  });
+});
+
+/**
+ * `ownerSessionMessage` übersetzt 403-Antworten auf Inhaber-Aktionen
+ * (Teamkoordinatoren anlegen, Teams zuweisen) in die Kontowechsel-Meldung:
+ * Der häufigste Grund für so ein 403 ist, dass im selben Browser inzwischen
+ * ein anderes Konto angemeldet wurde (z. B. Einladungslink selbst geöffnet)
+ * und die angezeigte Inhaber-Ansicht veraltet ist (Task #742).
+ */
+describe("ownerSessionMessage", () => {
+  it("liefert die Kontowechsel-Meldung für ein einfaches 403", () => {
+    const msg = ownerSessionMessage(makeApiError(403, { error: "Keine Berechtigung" }));
+    expect(msg).toBe(OWNER_SESSION_REQUIRED_MESSAGE);
+    expect(msg).toContain("Inhaber des Dienstleister-Kontos");
+  });
+
+  it("überlässt strukturierte Plan-403s dem Upgrade-Hinweis (null)", () => {
+    expect(
+      ownerSessionMessage(
+        makeApiError(403, { code: "plan_feature_required", feature: "caregiverLogin" }),
+      ),
+    ).toBeNull();
+    expect(
+      ownerSessionMessage(makeApiError(403, { code: "plan_limit_reached", limit: "maxTeams" })),
+    ).toBeNull();
+  });
+
+  it("gibt null für andere Status und Nicht-ApiError-Fehler zurück", () => {
+    expect(ownerSessionMessage(makeApiError(401, {}))).toBeNull();
+    expect(ownerSessionMessage(makeApiError(404, { error: "Nicht gefunden" }))).toBeNull();
+    expect(ownerSessionMessage(new Error("network"))).toBeNull();
+    expect(ownerSessionMessage(undefined)).toBeNull();
   });
 });
