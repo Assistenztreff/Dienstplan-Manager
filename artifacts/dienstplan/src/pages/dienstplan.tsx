@@ -274,6 +274,15 @@ function lastName(name: string): string {
   return parts.length > 0 ? parts[parts.length - 1]! : name.trim();
 }
 
+/** Zweizeilige Namensdarstellung für die Tabellenansicht. */
+function nameLines(name: string): { firstName: string; lastName: string } {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] ?? "",
+    lastName: parts.slice(1).join(" "),
+  };
+}
+
 /** Kategoriefarben der Abwesenheits-Streifen in eingeklappten Smartphone-Zellen
  *  (Arbeitsanweisung 3.3, Vorlage: geplant gelb / ausfall rot / absage grau). */
 const ABSENCE_CATEGORY_HEX: Record<AbsenceCategory, string> = {
@@ -2398,7 +2407,10 @@ export default function Dienstplan() {
                         {isAdmin ? (
                           <span className="inline-flex items-center gap-2">
                             <span className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${userDotClass(assistant.id, personColors)}`} />
-                            {assistant.name}
+                            <span className="min-w-0 text-center leading-snug">
+                              <span className="block">{nameLines(assistant.name).firstName}</span>
+                              <span className="block">{nameLines(assistant.name).lastName || "\u00a0"}</span>
+                            </span>
                           </span>
                         ) : (
                           "Meine Schichten"
