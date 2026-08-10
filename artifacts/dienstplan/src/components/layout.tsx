@@ -6,7 +6,6 @@ import {
   X,
   ChevronDown,
   ShieldCheck,
-  LogOut,
   ArrowUp,
 } from "lucide-react";
 import platformLogoUrl from "@assets/assistenzplaner-logo-getrimmt.png";
@@ -201,7 +200,7 @@ export function PlatformHeaderPlaceholder() {
             <img
               src={platformLogoUrl}
               alt="AssistenzPlaner"
-              className="h-10 w-auto ml-[0px] mr-[0px] mt-[0px] mb-[0px]"
+              className="h-8 w-auto"
               data-testid="platform-header-logo"
             />
           </span>
@@ -253,7 +252,7 @@ export function PlatformHeaderPlaceholder() {
                 type="button"
                 onClick={() => void handleLogout()}
                 disabled={loggingOut}
-                className="ml-1 sm:ml-2 md:flex flex h-9 items-center rounded-full border border-brand-dark bg-brand-dark px-5 font-semibold text-brand-white shadow-sm transition-colors hover:bg-brand-yellow hover:text-brand-dark active:bg-brand-yellow active:text-brand-dark active:outline-[3px] active:outline-offset-5 active:outline-brand-dark focus-visible:bg-brand-yellow focus-visible:text-brand-dark focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark text-lg pl-[20px] pr-[20px] pt-[0px] pb-[0px]"
+                className="ml-1 sm:ml-2 hidden md:flex h-9 items-center rounded-full border border-brand-dark bg-brand-dark px-5 font-semibold text-brand-white shadow-sm transition-colors hover:bg-brand-yellow hover:text-brand-dark active:bg-brand-yellow active:text-brand-dark active:outline-[3px] active:outline-offset-5 active:outline-brand-dark focus-visible:bg-brand-yellow focus-visible:text-brand-dark focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-dark text-lg pl-[20px] pr-[20px] pt-[0px] pb-[0px]"
                 data-testid="platform-header-logout"
               >
                 {loggingOut ? "Wird abgemeldet..." : "Logout"}
@@ -624,9 +623,7 @@ function PlatformFooterPlaceholder() {
 
 function AppSubNavigation() {
   const [location] = useLocation();
-  const { currentUser, logout } = useAuth();
-  const { toast } = useToast();
-  const [loggingOut, setLoggingOut] = useState(false);
+  const { currentUser } = useAuth();
 
   // Zeiterfassung nur anzeigen, wenn der Konto-Schalter (bzw. der des
   // Arbeitgebers bei Assistenzkräften) eingeschaltet ist. Standard AUS —
@@ -641,22 +638,6 @@ function AppSubNavigation() {
   const activeGroup = navItems.find(
     (e): e is Extract<NavEntry, { children: NavLeaf[] }> => isNavGroup(e) && isGroupActive(e, location),
   );
-
-  async function handleLogout() {
-    setLoggingOut(true);
-    try {
-      await logout();
-    } catch {
-      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
-      toast({
-        variant: "destructive",
-        title: "Fehler beim Abmelden",
-        description: "Bitte versuchen Sie es erneut.",
-      });
-    } finally {
-      setLoggingOut(false);
-    }
-  }
 
   return (
     <>
@@ -698,17 +679,6 @@ function AppSubNavigation() {
                 </Link>
               );
             })}
-            <button
-              type="button"
-              onClick={() => void handleLogout()}
-              disabled={loggingOut}
-              className="flex h-12 shrink-0 items-center gap-1.5 px-3 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 disabled:opacity-60"
-              title={currentUser ? `Angemeldet als ${currentUser.name}` : "Abmelden"}
-            >
-              <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span>{loggingOut ? "Wird abgemeldet..." : "Abmelden"}</span>
-            </button>
-
             {/* Dev-only: Test-Nutzer-Wechsler (rendert in Produktion nichts,
                 Guard via import.meta.env.DEV in der Komponente selbst). */}
             <DevUserSwitcher />
