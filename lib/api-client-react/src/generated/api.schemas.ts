@@ -724,6 +724,18 @@ export interface BulkAbsenceResult {
   shiftIds: number[];
 }
 
+export interface BulkDeleteShiftsInput {
+  /**
+     * @minItems 1
+     * @maxItems 200
+     */
+  ids: number[];
+}
+
+export interface BulkDeleteShiftsResult {
+  deletedIds: number[];
+}
+
 export type ShiftUpdateType = typeof ShiftUpdateType[keyof typeof ShiftUpdateType];
 
 

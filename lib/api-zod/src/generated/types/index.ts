@@ -25,6 +25,8 @@ export * from './bulkAbsenceInput';
 export * from './bulkAbsenceInputDaysItem';
 export * from './bulkAbsenceInputType';
 export * from './bulkAbsenceResult';
+export * from './bulkDeleteShiftsInput';
+export * from './bulkDeleteShiftsResult';
 export * from './calendarToken';
 export * from './changePassword200';
 export * from './changePasswordInput';

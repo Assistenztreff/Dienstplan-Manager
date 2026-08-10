@@ -27,6 +27,8 @@ import type {
   BrandingSettingsInput,
   BulkAbsenceInput,
   BulkAbsenceResult,
+  BulkDeleteShiftsInput,
+  BulkDeleteShiftsResult,
   CalendarToken,
   ChangePassword200,
   ChangePasswordInput,
@@ -1469,6 +1471,78 @@ export const useBulkCreateAbsence = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getBulkCreateAbsenceMutationOptions(options));
+    }
+
+export const getBulkDeleteShiftsUrl = () => {
+
+
+
+
+  return `/api/shifts/bulk-delete`
+}
+
+/**
+ * Löscht ausgewählte Einträge transaktional in einem Request. Falls ein Eintrag nicht existiert oder nicht im erlaubten Team liegt, wird nichts gelöscht. Bei Urlaub werden Zeiterfassung und Urlaubskonto wie beim Einzel-Löschen korrekt zurückgebucht.
+ * @summary Mehrere Dienste oder Abwesenheiten gesammelt löschen
+ */
+export const bulkDeleteShifts = async (bulkDeleteShiftsInput: BulkDeleteShiftsInput, options?: RequestInit): Promise<BulkDeleteShiftsResult> => {
+
+  return customFetch<BulkDeleteShiftsResult>(getBulkDeleteShiftsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      bulkDeleteShiftsInput,)
+  }
+);}
+
+
+
+
+export const getBulkDeleteShiftsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkDeleteShifts>>, TError,{data: BodyType<BulkDeleteShiftsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bulkDeleteShifts>>, TError,{data: BodyType<BulkDeleteShiftsInput>}, TContext> => {
+
+const mutationKey = ['bulkDeleteShifts'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkDeleteShifts>>, {data: BodyType<BulkDeleteShiftsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  bulkDeleteShifts(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BulkDeleteShiftsMutationResult = NonNullable<Awaited<ReturnType<typeof bulkDeleteShifts>>>
+    export type BulkDeleteShiftsMutationBody = BodyType<BulkDeleteShiftsInput>
+    export type BulkDeleteShiftsMutationError = ErrorType<void>
+
+    /**
+ * @summary Mehrere Dienste oder Abwesenheiten gesammelt löschen
+ */
+export const useBulkDeleteShifts = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkDeleteShifts>>, TError,{data: BodyType<BulkDeleteShiftsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof bulkDeleteShifts>>,
+        TError,
+        {data: BodyType<BulkDeleteShiftsInput>},
+        TContext
+      > => {
+      return useMutation(getBulkDeleteShiftsMutationOptions(options));
     }
 
 export const getGetShiftUrl = (id: number,) => {

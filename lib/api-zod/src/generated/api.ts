@@ -504,6 +504,23 @@ export const BulkCreateAbsenceBody = zod.object({
 
 
 /**
+ * Löscht ausgewählte Einträge transaktional in einem Request. Falls ein Eintrag nicht existiert oder nicht im erlaubten Team liegt, wird nichts gelöscht. Bei Urlaub werden Zeiterfassung und Urlaubskonto wie beim Einzel-Löschen korrekt zurückgebucht.
+ * @summary Mehrere Dienste oder Abwesenheiten gesammelt löschen
+ */
+export const bulkDeleteShiftsBodyIdsMax = 200;
+
+
+
+export const BulkDeleteShiftsBody = zod.object({
+  "ids": zod.array(zod.number()).min(1).max(bulkDeleteShiftsBodyIdsMax)
+})
+
+export const BulkDeleteShiftsResponse = zod.object({
+  "deletedIds": zod.array(zod.number())
+})
+
+
+/**
  * @summary Schicht abrufen
  */
 export const GetShiftParams = zod.object({
