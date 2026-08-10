@@ -3,6 +3,7 @@ import { eachDayOfInterval, format } from "date-fns";
 import {
   useCreateShift,
   useBulkCreateAbsence,
+  useBulkCreateShifts,
   useUpdateShift,
   useDeleteShift,
   useListShifts,
@@ -10,6 +11,7 @@ import {
   useGetAllowanceSettings,
   ApiError,
   type BulkAbsenceInput,
+  type BulkShiftsInput,
   type ShiftInputType,
   type ShiftUpdateType,
 } from "@workspace/api-client-react";
@@ -47,7 +49,11 @@ import { de } from "date-fns/locale";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { readableApiError, planUpgradeMessage } from "@/lib/api-error";
-import { invalidateShiftDerivedQueries, removeShiftsFromCache } from "@/lib/shift-cache";
+import {
+  invalidateShiftDerivedQueries,
+  removeShiftsFromCache,
+  upsertShiftsInCache,
+} from "@/lib/shift-cache";
 import { warnIfMonthClosed } from "@/lib/month-closing-warning";
 import { computeAutoPauseMinutes } from "@/lib/pause";
 import { useTeam } from "@/context/team";
@@ -235,6 +241,7 @@ export function ShiftDialog({
   const queryClient = useQueryClient();
   const createShift = useCreateShift();
   const bulkCreateAbsence = useBulkCreateAbsence();
+  const bulkCreateShifts = useBulkCreateShifts();
   const updateShift = useUpdateShift();
   const deleteShift = useDeleteShift();
   // Dienste STRIKT team-bezogen laden: ohne Filter kämen Schichtmodelle
@@ -328,10 +335,9 @@ export function ShiftDialog({
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [overlapConflicts, setOverlapConflicts] = useState<ConflictInfo[] | null>(null);
-  // Mehrfach-Anlegen: bereits erfolgreich angelegte Tage (damit ein "Trotzdem
-  // anlegen"-Wiederholungslauf sie nicht doppelt erzeugt) und die Tage mit
-  // Überschneidung (für die Warnung + force-Wiederholung).
-  const [bulkCreated, setBulkCreated] = useState<Set<string>>(new Set());
+  // Mehrfach-Anlegen: Tage mit Überschneidung aus der Server-Antwort (409).
+  // Der Sammel-Endpunkt ist atomar — bei Konflikt wird NICHTS angelegt, ein
+  // "Trotzdem anlegen"-Wiederholungslauf schickt daher alle Tage mit force.
   const [bulkConflicts, setBulkConflicts] = useState<string[] | null>(null);
   // Pausen-Vorbefüllung: sobald der Nutzer das Pausenfeld selbst angefasst hat,
   // wird es von der automatischen Regel nicht mehr überschrieben.
@@ -344,7 +350,6 @@ export function ShiftDialog({
       setErrors({});
       setConfirmDelete(false);
       setOverlapConflicts(null);
-      setBulkCreated(new Set());
       setBulkConflicts(null);
       setDateOpen(false);
       setAbsenceEndDate("");
@@ -606,13 +611,14 @@ export function ShiftDialog({
       const { startIso, endIso } = buildTimes(form.date);
       const { type, shiftModelId } = deriveTypeAndModel();
 
-      // Zeitraum-Anlage (Task #715): alle Tage von Datum bis Bis-Datum in
-      // EINEM Sammelauftrag; Tage mit bestehender Abwesenheit desselben Typs
-      // überspringt der Server.
-      if (absenceRangeEnd) {
+      // Abwesenheiten (Neu-Anlage): immer als Sammelauftrag (Task #715), auch
+      // bei nur einem Tag — die Antwort liefert die angelegten Einträge samt
+      // ersetzter Arbeitsdienste, sodass die Oberfläche sofort reagieren kann.
+      // Tage mit bestehender Abwesenheit desselben Typs überspringt der Server.
+      if (!isEditing && !isBulk && isAbsence) {
         const rangeDays = eachDayOfInterval({
           start: new Date(`${form.date}T00:00:00`),
-          end: new Date(`${absenceRangeEnd}T00:00:00`),
+          end: new Date(`${absenceRangeEnd ?? form.date}T00:00:00`),
         });
         const result = await bulkCreateAbsence.mutateAsync({
           data: {
@@ -632,11 +638,19 @@ export function ShiftDialog({
         });
         if (result.createdCount === 0) {
           setErrors({
-            notes: "Für den gewählten Zeitraum bestehen bereits Abwesenheiten dieses Typs.",
+            notes:
+              rangeDays.length === 1
+                ? "An diesem Tag besteht bereits eine Abwesenheit dieses Typs."
+                : "Für den gewählten Zeitraum bestehen bereits Abwesenheiten dieses Typs.",
           });
           return;
         }
-        await invalidate();
+        // Sofort reagieren: angelegte Einträge direkt in die geladenen Listen
+        // einfügen, ersetzte Arbeitsdienste entfernen; der Abgleich abgeleiteter
+        // Daten (Salden, Urlaubszähler) läuft im Hintergrund.
+        upsertShiftsInCache(queryClient, result.shifts, result.teamId);
+        removeShiftsFromCache(queryClient, result.replacedShiftIds);
+        void invalidate();
         // Soft-Close-Hinweis nur für tatsächlich angelegte Tage.
         const skippedKeys = new Set(result.skippedDates);
         for (const d of rangeDays) {
@@ -664,10 +678,11 @@ export function ShiftDialog({
           pauseMinutes:
             !isAbsence && !isTeam ? Math.max(0, Number(form.pauseMinutes) || 0) : 0,
         };
-        await updateShift.mutateAsync({
+        const updated = await updateShift.mutateAsync({
           id: editShift.id,
           data: { ...data, ...(force ? { force: true } : {}) } as typeof data,
         });
+        upsertShiftsInCache(queryClient, [updated], teamId ?? null);
       } else {
         const data = {
           userId: Number(form.userId),
@@ -687,15 +702,18 @@ export function ShiftDialog({
               }
             : {}),
         };
-        await createShift.mutateAsync({
+        const created = await createShift.mutateAsync({
           data: {
             ...data,
             ...(force ? { force: true } : {}),
             ...(teamId != null ? { teamId } : {}),
           } as typeof data,
         });
+        upsertShiftsInCache(queryClient, [created], teamId ?? null);
       }
-      await invalidate();
+      // Sofort reagieren: der gespeicherte Eintrag steht schon im Cache; der
+      // Abgleich abgeleiteter Daten läuft im Hintergrund.
+      void invalidate();
       // Soft-Close-Hinweis: Änderung in bereits abgeschlossenem Monat.
       void warnIfMonthClosed(new Date(form.date), teamId ?? null);
       onClose();
@@ -726,118 +744,116 @@ export function ShiftDialog({
     }
   }
 
-  // Mehrfach-Anlegen: legt für jeden ausgewählten Tag dieselbe Schicht an.
-  // Bereits erfolgreich erstellte Tage werden bei einem "Trotzdem anlegen"-
-  // Wiederholungslauf übersprungen (kein Doppel-Anlegen). Überschneidungen
-  // werden gesammelt und können per force erneut versucht werden.
+  // Mehrfach-Anlegen: ALLE ausgewählten Tage in EINEM Sammelauftrag statt
+  // sequenzieller Einzel-Requests pro Tag. Arbeitsdienste/Team-Einträge laufen
+  // über /shifts/bulk (transaktional, ganz oder gar nicht — bei
+  // Überschneidungen meldet der Server die betroffenen Tage und "Trotzdem
+  // anlegen" wiederholt den kompletten Auftrag mit force); Abwesenheiten über
+  // /shifts/bulk-absence (bestehende Tage überspringt der Server).
   async function handleBulkSave(force = false) {
     if (!bulkDates || bulkDates.length === 0) return;
     if (!validate()) return;
     setSaving(true);
     try {
       const { type, shiftModelId } = deriveTypeAndModel();
-      const created = new Set(bulkCreated);
-      const conflicts: string[] = [];
-      let sessionExpired = false;
-      let otherError = false;
-      let forbiddenMessage: string | null = null;
-      let planLimitError: string | null = null;
 
-      for (const dateStr of bulkDates) {
-        // Schon angelegte Tage nicht erneut erstellen.
-        if (created.has(dateStr)) continue;
-        const { startIso, endIso } = buildTimes(dateStr);
-        const data = {
-          userId: Number(form.userId),
-          startTime: startIso,
-          endTime: endIso,
-          type,
-          planningStatus: isAbsence ? "FIX" : form.planningStatus,
-          shiftModelId,
-          notes: form.notes || undefined,
-          ...(!isAbsence && !isTeam && form.einsatzTeamId
-            ? { einsatzTeamId: Number(form.einsatzTeamId) }
-            : {}),
-          ...(!isAbsence && !isTeam
-            ? {
-                isVertretung: form.isVertretung,
-                pauseMinutes: Math.max(0, Number(form.pauseMinutes) || 0),
-              }
-            : {}),
-        };
-        try {
-          await createShift.mutateAsync({
-            data: {
-              ...data,
-              ...(force ? { force: true } : {}),
-              ...(teamId != null ? { teamId } : {}),
-            } as typeof data,
+      if (isAbsence) {
+        const result = await bulkCreateAbsence.mutateAsync({
+          data: {
+            userId: Number(form.userId),
+            type: type as BulkAbsenceInput["type"],
+            days: bulkDates.map((dateStr) => ({
+              startTime: new Date(`${dateStr}T00:00:00`).toISOString(),
+              endTime: new Date(`${dateStr}T23:59:59`).toISOString(),
+            })),
+            shiftModelId,
+            notes: form.notes || undefined,
+            ...(teamId != null ? { teamId } : {}),
+          },
+        });
+        if (result.createdCount === 0) {
+          setErrors({
+            notes: "Für die gewählten Tage bestehen bereits Abwesenheiten dieses Typs.",
           });
-          created.add(dateStr);
-        } catch (err) {
-          const planMsg = planUpgradeMessage(err);
-          if (err instanceof ApiError && err.status === 401) {
-            sessionExpired = true;
-            break;
-          } else if (planMsg) {
-            planLimitError = planMsg;
-            break;
-          } else if (err instanceof ApiError && err.status === 403) {
-            // Konkrete Server-Meldung (z. B. team-fremdes Schichtmodell)
-            // durchreichen — betrifft alle Tage gleichermaßen, daher Abbruch.
-            forbiddenMessage = readableApiError(err, "Keine Berechtigung zum Speichern.");
-            break;
-          } else if (err instanceof ApiError && err.status === 400) {
-            // Konkrete Server-Meldung (z. B. Urlaub außerhalb des Vertrags-
-            // zeitraums) durchreichen — betrifft alle Tage, daher Abbruch.
-            forbiddenMessage = readableApiError(err, "Speichern fehlgeschlagen. Bitte erneut versuchen.");
-            break;
-          } else if (
-            err instanceof ApiError &&
-            err.status === 409 &&
-            (err.data as { code?: string } | null)?.code === "shift_overlap"
-          ) {
-            conflicts.push(dateStr);
-          } else {
-            otherError = true;
+          return;
+        }
+        // Sofort reagieren: angelegte Einträge direkt in die geladenen Listen
+        // einfügen, ersetzte Arbeitsdienste entfernen; der Abgleich läuft im
+        // Hintergrund.
+        upsertShiftsInCache(queryClient, result.shifts, result.teamId);
+        removeShiftsFromCache(queryClient, result.replacedShiftIds);
+        void invalidate();
+        const skippedKeys = new Set(result.skippedDates);
+        for (const dateStr of bulkDates) {
+          if (!skippedKeys.has(dateStr)) {
+            void warnIfMonthClosed(new Date(dateStr), teamId ?? null);
           }
         }
-      }
-
-      setBulkCreated(created);
-      await invalidate();
-
-      if (sessionExpired) {
-        setErrors({ notes: "Sitzung abgelaufen. Bitte Seite neu laden und erneut anmelden." });
-        return;
-      }
-      if (planLimitError) {
-        setErrors({ notes: planLimitError });
-        return;
-      }
-      if (forbiddenMessage) {
-        setErrors({ notes: forbiddenMessage });
-        return;
-      }
-      if (otherError) {
-        setErrors({
-          notes: "Einige Schichten konnten nicht angelegt werden. Bitte erneut versuchen.",
-        });
-        return;
-      }
-      if (conflicts.length > 0) {
-        // Nur Überschneidungen offen: Warnung anzeigen, force-Wiederholung anbieten.
-        setBulkConflicts(conflicts);
+        onSaved?.();
+        onClose();
         return;
       }
 
-      // Alles angelegt. Soft-Close-Hinweis für den ersten betroffenen Tag
-      // (der Toast erscheint pro Monat ohnehin nur einmal).
+      const result = await bulkCreateShifts.mutateAsync({
+        data: {
+          userId: Number(form.userId),
+          type: type as BulkShiftsInput["type"],
+          days: bulkDates.map((dateStr) => {
+            const { startIso, endIso } = buildTimes(dateStr);
+            return { startTime: startIso, endTime: endIso };
+          }),
+          shiftModelId,
+          notes: form.notes || undefined,
+          ...(!isTeam
+            ? {
+                planningStatus: form.planningStatus,
+                isVertretung: form.isVertretung,
+                pauseMinutes: Math.max(0, Number(form.pauseMinutes) || 0),
+                ...(form.einsatzTeamId ? { einsatzTeamId: Number(form.einsatzTeamId) } : {}),
+              }
+            : {}),
+          ...(force ? { force: true } : {}),
+          ...(teamId != null ? { teamId } : {}),
+        },
+      });
+      // Sofort reagieren: angelegte Einträge direkt in die geladenen Listen
+      // einfügen; der Abgleich abgeleiteter Daten läuft im Hintergrund.
+      upsertShiftsInCache(queryClient, result.shifts, result.teamId);
+      void invalidate();
       for (const dateStr of bulkDates) {
         void warnIfMonthClosed(new Date(dateStr), teamId ?? null);
       }
       onSaved?.();
       onClose();
+    } catch (err) {
+      const planMsg = planUpgradeMessage(err);
+      if (err instanceof ApiError && err.status === 401) {
+        setErrors({ notes: "Sitzung abgelaufen. Bitte Seite neu laden und erneut anmelden." });
+      } else if (planMsg) {
+        setErrors({ notes: planMsg });
+      } else if (err instanceof ApiError && err.status === 403) {
+        // Konkrete Server-Meldung (z. B. team-fremdes Schichtmodell)
+        // durchreichen — betrifft alle Tage gleichermaßen.
+        setErrors({ notes: readableApiError(err, "Keine Berechtigung zum Speichern.") });
+      } else if (
+        err instanceof ApiError &&
+        err.status === 409 &&
+        (err.data as { code?: string } | null)?.code === "shift_overlap"
+      ) {
+        // Es wurde NICHTS angelegt; der Server meldet die betroffenen Tage.
+        const dates = (err.data as { conflictDates?: string[] }).conflictDates ?? [];
+        setBulkConflicts(dates.length > 0 ? dates : [...bulkDates]);
+      } else if (err instanceof ApiError && (err.status === 400 || err.status === 409)) {
+        // Konkrete Server-Meldung durchreichen (z. B. Urlaub außerhalb des
+        // Vertragszeitraums oder Team-Eintrag-Duplikate).
+        setErrors({
+          notes: readableApiError(err, "Speichern fehlgeschlagen. Bitte erneut versuchen."),
+        });
+      } else {
+        setErrors({
+          notes: "Einige Schichten konnten nicht angelegt werden. Bitte erneut versuchen.",
+        });
+      }
     } finally {
       setSaving(false);
     }
@@ -856,11 +872,14 @@ export function ShiftDialog({
     if (!editShift) return;
     setSaving(true);
     try {
-      await updateShift.mutateAsync({
+      const updated = await updateShift.mutateAsync({
         id: editShift.id,
         data: { planningStatus: "FIX", force: true } as { planningStatus: "FIX" },
       });
-      await invalidate();
+      // Sofort reagieren: bestätigten Eintrag direkt im Cache ersetzen; der
+      // Abgleich abgeleiteter Daten läuft im Hintergrund.
+      upsertShiftsInCache(queryClient, [updated], teamId ?? null);
+      void invalidate();
       void warnIfMonthClosed(new Date(editShift.startTime), teamId ?? null);
       onClose();
     } catch (err) {
@@ -1464,7 +1483,8 @@ export function ShiftDialog({
           )}
 
           {/* Kollisionswarnung im Mehrfach-Modus: betrifft ganze Tage, nicht eine
-              einzelne Zeitspanne. Bereits angelegte Tage bleiben erhalten. */}
+              einzelne Zeitspanne. Der Sammelauftrag legt bei Konflikten NICHTS
+              an — "Trotzdem anlegen" wiederholt ihn komplett mit force. */}
           {bulkConflicts && bulkConflicts.length > 0 && (
             <div
               className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2.5 text-sm"
@@ -1481,8 +1501,8 @@ export function ShiftDialog({
                   .join(", ")}
               </p>
               <p className="mt-1.5 text-xs text-muted-foreground">
-                Die übrigen Tage wurden bereits angelegt. Du kannst die Tage mit
-                Überschneidung trotzdem anlegen, falls das gewollt ist.
+                Es wurde noch nichts angelegt. Du kannst alle ausgewählten Tage
+                trotzdem anlegen, falls die Überschneidung gewollt ist.
               </p>
             </div>
           )}

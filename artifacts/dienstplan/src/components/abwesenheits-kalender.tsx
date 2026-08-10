@@ -58,7 +58,11 @@ import { useAuth, hasTeamAccessLevel } from "@/context/auth";
 import { isAdminRole } from "@/lib/roles";
 import { useToast } from "@/hooks/use-toast";
 import { planUpgradeMessage, readableApiError } from "@/lib/api-error";
-import { invalidateShiftDerivedQueries, removeShiftsFromCache } from "@/lib/shift-cache";
+import {
+  invalidateShiftDerivedQueries,
+  removeShiftsFromCache,
+  upsertShiftsInCache,
+} from "@/lib/shift-cache";
 import { warnIfMonthClosed } from "@/lib/month-closing-warning";
 
 // ── Kategorien (HANDOFF): 3 Kategoriefarben statt 8 Einzelfarben ────────────
@@ -404,7 +408,12 @@ export function AbwesenheitsKalender() {
         setCreateError("Für den gewählten Zeitraum bestehen bereits Abwesenheiten dieses Typs.");
         return;
       }
-      await invalidate();
+      // Sofort reagieren: angelegte Einträge direkt in die geladenen Listen
+      // einfügen, ersetzte Arbeitsdienste entfernen; der Abgleich läuft im
+      // Hintergrund.
+      upsertShiftsInCache(queryClient, result.shifts, result.teamId);
+      removeShiftsFromCache(queryClient, result.replacedShiftIds);
+      void invalidate();
       const skippedKeys = new Set(result.skippedDates);
       for (const day of days) {
         if (!skippedKeys.has(dayKeyOf(day))) void warnIfMonthClosed(day, null);

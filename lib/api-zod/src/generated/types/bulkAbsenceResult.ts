@@ -5,11 +5,18 @@
  * Dienstplan-App API für Persönliche Assistenz
  * OpenAPI spec version: 0.1.0
  */
+import type { Shift } from './shift';
 
 export interface BulkAbsenceResult {
+  /** Team, in dem die Einträge angelegt wurden (aufgelöster Team-Kontext) — für zielgenaue Cache-Aktualisierung im Client. */
+  teamId: number;
   createdCount: number;
   skippedCount: number;
   /** Übersprungene Kalendertage (yyyy-MM-dd) mit bereits vorhandener Abwesenheit desselben Typs. */
   skippedDates: string[];
   shiftIds: number[];
+  /** Die angelegten Einträge in Listen-Form (wie GET /shifts) — damit die Oberfläche sie ohne erneuten Monats-Abruf direkt einfügen kann. */
+  shifts: Shift[];
+  /** IDs der geplanten Arbeitsdienste, die durch die Abwesenheit ersetzt (gelöscht) wurden — damit die Oberfläche sie sofort entfernen kann. */
+  replacedShiftIds: number[];
 }

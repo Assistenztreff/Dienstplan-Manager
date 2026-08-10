@@ -504,6 +504,37 @@ export const BulkCreateAbsenceBody = zod.object({
 
 
 /**
+ * Legt dieselbe Schicht für mehrere Kalendertage transaktional in EINEM Request an (ganz oder gar nicht). Nur für Arbeitsdienste und Team-Einträge — Abwesenheiten laufen über /shifts/bulk-absence. Es gelten dieselben Regeln wie beim Einzel-Anlegen (Team-Scope, Vorausplanungs-Limit, Schichtmodell-Team-Bindung, Aushilfe-Einsatz). Überschneidungen mit bestehenden Diensten werden VOR dem Anlegen für alle Tage geprüft: Gibt es welche und ist force nicht gesetzt, wird NICHTS angelegt und die betroffenen Tage werden gemeldet (409, code "shift_overlap", Feld conflictDates). Team-Einträge: pro Tag und Team nur einer; Duplikat-Tage melden 409 mit code "team_meeting_duplicate" (force umgeht das nicht).
+ * @summary Mehrere Dienste als Sammelauftrag anlegen
+ */
+export const bulkCreateShiftsBodyDaysMax = 92;
+
+export const bulkCreateShiftsBodyNotesMax = 500;
+
+export const bulkCreateShiftsBodyPauseMinutesMin = 0;
+export const bulkCreateShiftsBodyPauseMinutesMax = 1440;
+
+
+
+export const BulkCreateShiftsBody = zod.object({
+  "userId": zod.number(),
+  "teamId": zod.number().optional().describe('Optionaler Team-Kontext; muss ein erlaubtes Team sein.'),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'work', 'team']).describe('Dienstart — nur Arbeitsdienste und Team-Einträge sind hier erlaubt; Abwesenheiten laufen über \/shifts\/bulk-absence.'),
+  "days": zod.array(zod.object({
+  "startTime": zod.coerce.date(),
+  "endTime": zod.coerce.date()
+})).min(1).max(bulkCreateShiftsBodyDaysMax).describe('Ein Eintrag pro Kalendertag mit den konkreten Start-\/End-Zeiten dieses Tages (Tagesübergang erlaubt, max. 24 h). Doppelte Kalendertage innerhalb der Liste werden zusammengefasst.'),
+  "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX']).optional().describe('Optionaler Planungsstatus (Default FIX): VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt. Team-Einträge sind serverseitig immer FIX.'),
+  "shiftModelId": zod.number().nullish(),
+  "notes": zod.string().max(bulkCreateShiftsBodyNotesMax).optional(),
+  "einsatzTeamId": zod.number().nullish().describe('Aushilfe-Einsatz: ID eines anderen eigenen Teams (wie beim Einzel-Anlegen; bei Team-Einträgen nicht erlaubt).'),
+  "isVertretung": zod.boolean().optional(),
+  "pauseMinutes": zod.number().min(bulkCreateShiftsBodyPauseMinutesMin).max(bulkCreateShiftsBodyPauseMinutesMax).optional(),
+  "force": zod.boolean().optional().describe('Überschneidungen mit bestehenden Diensten bewusst zulassen (gleiche Semantik wie force beim Einzel-Anlegen).')
+})
+
+
+/**
  * Löscht ausgewählte Einträge transaktional in einem Request. Falls ein Eintrag nicht existiert oder nicht im erlaubten Team liegt, wird nichts gelöscht. Bei Urlaub werden Zeiterfassung und Urlaubskonto wie beim Einzel-Löschen korrekt zurückgebucht.
  * @summary Mehrere Dienste oder Abwesenheiten gesammelt löschen
  */

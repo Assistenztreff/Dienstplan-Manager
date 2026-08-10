@@ -35,6 +35,78 @@ export function removeShiftsFromCache(queryClient: QueryClient, ids: Iterable<nu
   );
 }
 
+/** Minimale Strukturform eines Listen-Eintrags aus GET /shifts. */
+export interface CachedShiftRow {
+  id: number;
+  userId: number;
+  type: string;
+  startTime: string;
+  endTime: string;
+}
+
+/**
+ * Prüft, ob ein Eintrag in eine gecachte /api/shifts-Liste mit diesen
+ * Query-Parametern gehört. Spiegelt die Server-Filter: Monat/Jahr wirken nur
+ * GEMEINSAM und beziehen sich auf den Startzeitpunkt in UTC (EXTRACT auf der
+ * timestamptz-Spalte); userId/type exakt. Team-gescopte Listen werden nur
+ * befüllt, wenn das Ziel-Team des Schreibvorgangs bekannt ist und passt —
+ * sonst überlässt der Aufrufer die Angleichung der Hintergrund-Invalidierung.
+ */
+function matchesListParams(
+  shift: CachedShiftRow,
+  params: Record<string, unknown>,
+  teamId: number | null
+): boolean {
+  if (params.month != null && params.year != null) {
+    const d = new Date(shift.startTime);
+    if (
+      d.getUTCMonth() + 1 !== Number(params.month) ||
+      d.getUTCFullYear() !== Number(params.year)
+    ) {
+      return false;
+    }
+  }
+  if (params.userId != null && shift.userId !== Number(params.userId)) return false;
+  if (params.type != null && shift.type !== params.type) return false;
+  if (params.teamId != null && (teamId == null || Number(params.teamId) !== teamId)) return false;
+  return true;
+}
+
+/**
+ * Fügt neu angelegte bzw. geänderte Einträge sofort in alle passenden
+ * geladenen Shift-Listen ein (bzw. ersetzt sie dort per ID). Gegenstück zu
+ * removeShiftsFromCache: Die Oberfläche zeigt das Ergebnis direkt nach der
+ * Server-Bestätigung, die anschließende Hintergrund-Invalidierung gleicht
+ * abgeleitete Daten (Salden, Urlaubszähler) ab.
+ *
+ * `teamId` ist das aufgelöste Ziel-Team des Schreibvorgangs (aus der
+ * Server-Antwort oder dem Dialog-Kontext); ohne Angabe bleiben team-gescopte
+ * Listen unangetastet (kein falsches Team-Fenster).
+ */
+export function upsertShiftsInCache(
+  queryClient: QueryClient,
+  shifts: readonly CachedShiftRow[],
+  teamId: number | null = null
+): void {
+  if (shifts.length === 0) return;
+  const byId = new Map(shifts.map((s) => [s.id, s] as const));
+  const queries = queryClient
+    .getQueryCache()
+    .findAll({ predicate: (q) => q.queryKey[0] === "/api/shifts" });
+  for (const query of queries) {
+    const rawParams = query.queryKey[1];
+    const params =
+      rawParams && typeof rawParams === "object" ? (rawParams as Record<string, unknown>) : {};
+    queryClient.setQueryData<CachedShiftRow[] | undefined>(query.queryKey, (old) => {
+      if (!Array.isArray(old)) return old;
+      const kept = old.filter((s) => !byId.has(s.id));
+      const additions = shifts.filter((s) => matchesListParams(s, params, teamId));
+      if (additions.length === 0 && kept.length === old.length) return old;
+      return [...kept, ...additions];
+    });
+  }
+}
+
 /**
  * Key-Präfixe aller Queries, deren Daten von Schichten/Abwesenheiten
  * abgeleitet sind: Listen selbst, Verträge (Urlaubszähler inkl.

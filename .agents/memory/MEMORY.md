@@ -113,3 +113,4 @@
 - [Abwesenheiten: Anzeigeort & Test-Fallen](dienstplan-absence-display-contract.md) — nie als Dienst-Pille sichtbar, nur in der Team-Abwesenheiten-Übersicht (liegt außerhalb der Ansicht-Container); "Urlaub" exakt matchen.
 - [Koordinator ist nie Personal](koordinator-nie-personal.md) — jeder Personal-Schreibpunkt lehnt Koordinator-Ziele ab; Mitgliedschaften nur via PUT-Vollabgleich; Scope-404 vor Rollen-403 (Orakel).
 - [Shift-abgeleitete Cache-Invalidierung](shift-derived-query-invalidation.md) — nach Schicht-Writes zentralen Helfer nutzen (Contracts/Time-Tracking/Dashboard hängen dran), nie nur /api/shifts.
+- [Bulk-Write-DTOs für Cache-Patches](bulk-write-dto-cache-patch.md) — Sammel-Routen liefern volle Zeilen + aufgelöstes teamId (Shift-DTO strippt es); Client patcht Listen sofort, 409 = atomar, nichts invalidieren.

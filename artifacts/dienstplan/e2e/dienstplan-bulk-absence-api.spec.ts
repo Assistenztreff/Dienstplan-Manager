@@ -225,6 +225,26 @@ test("legt bei Urlaub ausserhalb des Vertragszeitraums KEINEN einzigen Tag an", 
   expect(await vacationHoursUsed(), "Urlaubskonto unveraendert").toBe(baseline);
 });
 
+test("zwei GLEICHZEITIGE identische Zeitraeume buchen jeden Tag nur einmal", async () => {
+  // Doppelklick-Schutz: Ohne Advisory-Lock saehen beide Requests "Tag ist
+  // frei" und buchten die Abwesenheit doppelt (inkl. doppeltem Urlaubsabzug).
+  test.setTimeout(120_000);
+  const days = [dayString("11-16"), dayString("11-17")];
+  const [a, b] = await Promise.all([
+    bulkAbsence("sick", days),
+    bulkAbsence("sick", days),
+  ]);
+  expect(a.status).toBe(201);
+  expect(b.status).toBe(201);
+  expect(a.body.createdCount + b.body.createdCount, "jeder Tag nur EINMAL angelegt").toBe(2);
+  expect(a.body.skippedCount + b.body.skippedCount, "der langsamere ueberspringt beide Tage").toBe(2);
+
+  const november = (await listAbsences("sick")).filter((s) =>
+    days.some((d) => s.startTime.startsWith(d)),
+  );
+  expect(november.length).toBe(2);
+});
+
 test("ersetzt geplante Dienste am Abwesenheitstag und erbt deren Zeiten", async () => {
   const dayWithShift = dayString("10-14");
   const dayWithout = dayString("10-15");

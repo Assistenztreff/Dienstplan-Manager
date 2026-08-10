@@ -38,6 +38,7 @@ import {
   chunkIds,
   invalidateShiftDerivedQueries,
   removeShiftsFromCache,
+  upsertShiftsInCache,
 } from "@/lib/shift-cache";
 import { warnIfMonthClosed } from "@/lib/month-closing-warning";
 import { useAuth, hasTeamAccessLevel } from "@/context/auth";
@@ -352,7 +353,12 @@ export default function Abwesenheiten() {
         setError("Für den gewählten Zeitraum bestehen bereits Abwesenheiten dieses Typs.");
         return;
       }
-      await invalidate();
+      // Sofort reagieren: angelegte Einträge direkt in die geladenen Listen
+      // einfügen, ersetzte Arbeitsdienste entfernen; der Abgleich abgeleiteter
+      // Daten (Urlaubszähler, Salden) läuft im Hintergrund.
+      upsertShiftsInCache(queryClient, result.shifts, result.teamId);
+      removeShiftsFromCache(queryClient, result.replacedShiftIds);
+      void invalidate();
       // Soft-Close-Hinweis: nur für tatsächlich angelegte Tage.
       const skippedKeys = new Set(result.skippedDates);
       for (const day of days) {

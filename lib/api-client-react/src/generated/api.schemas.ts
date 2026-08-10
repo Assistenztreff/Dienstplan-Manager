@@ -717,11 +717,90 @@ export interface BulkAbsenceInput {
 }
 
 export interface BulkAbsenceResult {
+  /** Team, in dem die Einträge angelegt wurden (aufgelöster Team-Kontext) — für zielgenaue Cache-Aktualisierung im Client. */
+  teamId: number;
   createdCount: number;
   skippedCount: number;
   /** Übersprungene Kalendertage (yyyy-MM-dd) mit bereits vorhandener Abwesenheit desselben Typs. */
   skippedDates: string[];
   shiftIds: number[];
+  /** Die angelegten Einträge in Listen-Form (wie GET /shifts) — damit die Oberfläche sie ohne erneuten Monats-Abruf direkt einfügen kann. */
+  shifts: Shift[];
+  /** IDs der geplanten Arbeitsdienste, die durch die Abwesenheit ersetzt (gelöscht) wurden — damit die Oberfläche sie sofort entfernen kann. */
+  replacedShiftIds: number[];
+}
+
+/**
+ * Dienstart — nur Arbeitsdienste und Team-Einträge sind hier erlaubt; Abwesenheiten laufen über /shifts/bulk-absence.
+ */
+export type BulkShiftsInputType = typeof BulkShiftsInputType[keyof typeof BulkShiftsInputType];
+
+
+export const BulkShiftsInputType = {
+  active: 'active',
+  standby: 'standby',
+  night: 'night',
+  full_day: 'full_day',
+  work: 'work',
+  team: 'team',
+} as const;
+
+export type BulkShiftsInputDaysItem = {
+  startTime: string;
+  endTime: string;
+};
+
+/**
+ * Optionaler Planungsstatus (Default FIX): VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt. Team-Einträge sind serverseitig immer FIX.
+ */
+export type BulkShiftsInputPlanningStatus = typeof BulkShiftsInputPlanningStatus[keyof typeof BulkShiftsInputPlanningStatus];
+
+
+export const BulkShiftsInputPlanningStatus = {
+  VORLAEUFIG: 'VORLAEUFIG',
+  ANGEBOTEN: 'ANGEBOTEN',
+  FIX: 'FIX',
+} as const;
+
+export interface BulkShiftsInput {
+  userId: number;
+  /** Optionaler Team-Kontext; muss ein erlaubtes Team sein. */
+  teamId?: number;
+  /** Dienstart — nur Arbeitsdienste und Team-Einträge sind hier erlaubt; Abwesenheiten laufen über /shifts/bulk-absence. */
+  type: BulkShiftsInputType;
+  /**
+     * Ein Eintrag pro Kalendertag mit den konkreten Start-/End-Zeiten dieses Tages (Tagesübergang erlaubt, max. 24 h). Doppelte Kalendertage innerhalb der Liste werden zusammengefasst.
+     * @minItems 1
+     * @maxItems 92
+     */
+  days: BulkShiftsInputDaysItem[];
+  /** Optionaler Planungsstatus (Default FIX): VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt. Team-Einträge sind serverseitig immer FIX. */
+  planningStatus?: BulkShiftsInputPlanningStatus;
+  /** @nullable */
+  shiftModelId?: number | null;
+  /** @maxLength 500 */
+  notes?: string;
+  /**
+     * Aushilfe-Einsatz: ID eines anderen eigenen Teams (wie beim Einzel-Anlegen; bei Team-Einträgen nicht erlaubt).
+     * @nullable
+     */
+  einsatzTeamId?: number | null;
+  isVertretung?: boolean;
+  /**
+     * @minimum 0
+     * @maximum 1440
+     */
+  pauseMinutes?: number;
+  /** Überschneidungen mit bestehenden Diensten bewusst zulassen (gleiche Semantik wie force beim Einzel-Anlegen). */
+  force?: boolean;
+}
+
+export interface BulkShiftsResult {
+  /** Team, in dem die Einträge angelegt wurden (aufgelöster Team-Kontext) — für zielgenaue Cache-Aktualisierung im Client. */
+  teamId: number;
+  createdCount: number;
+  /** Die angelegten Einträge in Listen-Form (wie GET /shifts). */
+  shifts: Shift[];
 }
 
 export interface BulkDeleteShiftsInput {

@@ -17,6 +17,7 @@ import {
   ListShiftsQueryParams,
   CreateShiftBody,
   BulkCreateAbsenceBody,
+  BulkCreateShiftsBody,
   BulkDeleteShiftsBody,
   GetShiftParams,
   UpdateShiftParams,
@@ -1122,19 +1123,31 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
     }
   }
 
-  // Duplikat-Vorprüfung: Tage mit bestehender Abwesenheit desselben Typs
-  // überspringen (Frontend-Verhalten der bisherigen Schleife, nur serverseitig
-  // verlässlich).
-  const skippedDates: string[] = [];
-  const toCreate: Array<{ key: string; startTime: Date; endTime: Date }> = [];
-  for (const [key, t] of days) {
-    const duplicate = await findDuplicateAbsence(userId, type, t.startTime, null);
-    if (duplicate) skippedDates.push(key);
-    else toCreate.push({ key, ...t });
-  }
+  // Duplikat-Prüfung UND Anlage laufen unter einem Advisory-Lock pro
+  // Zielperson race-sicher in EINER Transaktion: Zwei gleichzeitige identische
+  // Aufträge (z. B. Doppelklick in zwei Fenstern) würden sonst beide "Tag ist
+  // frei" sehen und die Abwesenheit doppelt buchen — inkl. doppeltem
+  // Urlaubsabzug. Der zweite Auftrag wartet am Lock und überspringt die Tage
+  // dann als Duplikate (Frontend-Verhalten der bisherigen Schleife).
+  const {
+    created: createdShifts,
+    replaced: replacedShiftIds,
+    skippedDates,
+  } = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${"shifts-bulk:user:" + userId}))`,
+    );
 
-  const createdShifts = await db.transaction(async (tx) => {
+    const skipped: string[] = [];
+    const toCreate: Array<{ key: string; startTime: Date; endTime: Date }> = [];
+    for (const [key, t] of days) {
+      const duplicate = await findDuplicateAbsence(userId, type, t.startTime, null);
+      if (duplicate) skipped.push(key);
+      else toCreate.push({ key, ...t });
+    }
+
     const created: (typeof shiftsTable.$inferSelect)[] = [];
+    const replaced: number[] = [];
     for (const day of toCreate) {
       // Abwesenheits-Zeiten auflösen wie beim Einzel-POST (Lohnausfallprinzip):
       // geplanter Dienst am Tag → Zeiten erben + Dienst entfernen; sonst
@@ -1147,6 +1160,7 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
         endTime = planned[0]!.endTime;
         for (const p of planned) {
           await deleteReplacedWorkShift(p.id, tx);
+          replaced.push(p.id);
         }
       } else if (modelDefaults) {
         const t = shiftModelTimesForDay(day.startTime, modelDefaults.start, modelDefaults.end);
@@ -1194,14 +1208,277 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
         await applyVacationDelta(contract, delta, tx);
       }
     }
-    return created;
+    return { created, replaced, skippedDates: skipped };
   });
 
+  // Angelegte Einträge in Listen-Form (wie GET /shifts) mitliefern: der Client
+  // fügt sie direkt in den Cache ein, statt auf einen Monats-Reload zu warten.
+  const createdRows =
+    createdShifts.length > 0
+      ? await db
+          .select(SHIFT_SELECT)
+          .from(shiftsTable)
+          .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
+          .where(inArray(shiftsTable.id, createdShifts.map((s) => s.id)))
+      : [];
+
   res.status(201).json({
+    teamId: write.teamId,
     createdCount: createdShifts.length,
     skippedCount: skippedDates.length,
     skippedDates,
     shiftIds: createdShifts.map((s) => s.id),
+    shifts: createdRows,
+    replacedShiftIds,
+  });
+});
+
+// Sammel-Anlage von Diensten: legt dieselbe Schicht für N Kalendertage
+// transaktional in EINEM Request an (ganz oder gar nicht). Motivation: Die
+// Mehrfachauswahl im Dienstplan schickte bisher pro Tag einen sequenziellen
+// Einzel-POST — viele Tage bedeuteten viele Wartezeiten und konnten bei
+// Netzwerkfehlern halb angelegt liegen bleiben. Regeln identisch zum
+// Einzel-POST; Unterschiede bewusst:
+//  • Nur Arbeitsdienste und Team-Einträge — Abwesenheiten laufen über
+//    /shifts/bulk-absence (eigene Ersetzungs-/Urlaubskonto-Logik).
+//  • Überschneidungen werden VOR dem Anlegen für ALLE Tage geprüft: ohne
+//    force wird bei Konflikten NICHTS angelegt und die betroffenen Tage
+//    werden gemeldet (409, conflictDates) — der Client bietet dann wie beim
+//    Einzel-Anlegen "Trotzdem anlegen" an.
+router.post("/shifts/bulk", requireAuth, async (req, res): Promise<void> => {
+  const body = BulkCreateShiftsBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Invalid request body" });
+    return;
+  }
+  const { userId, type, shiftModelId } = body.data;
+
+  // Authz VOR jeder inhaltlichen Prüfung (kein Daten-Orakel): Arbeitsdienste
+  // sind nie Selbstservice — nur Admins und Teamleiter mit Planungsrecht.
+  const isAdmin = isAdminLikeRole(req.session.role!);
+  const teamleiterTeams = isAdmin
+    ? []
+    : await getTeamIdsWithCapability(req.session.userId!, "plan");
+  const isPrivileged = isAdmin || teamleiterTeams.length > 0;
+  if (!isPrivileged) {
+    res.status(403).json({ error: "Keine Berechtigung" });
+    return;
+  }
+  const effectiveTeams = isAdmin ? undefined : teamleiterTeams;
+
+  const write = await resolveWriteTeamId(
+    req.session.userId!,
+    body.data.teamId ?? undefined,
+    effectiveTeams?.length ? effectiveTeams : undefined,
+  );
+  if (!write.ok) {
+    if (write.reason === "forbidden") {
+      res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
+    } else {
+      res.status(400).json({ error: "Kein Team zugeordnet" });
+    }
+    return;
+  }
+  if (!(await isUserMemberOfTeam(userId, write.teamId))) {
+    res.status(403).json({ error: "Nutzer gehört nicht zu diesem Team" });
+    return;
+  }
+
+  // Koordinatoren sind Verwaltungspersonen, nie Personal (wie Einzel-Route).
+  if (await isKoordinatorUser(userId)) {
+    res.status(403).json({
+      error: "Für Teamkoordinatoren können keine Dienste geplant werden.",
+    });
+    return;
+  }
+
+  // Kalendertage normalisieren und deduplizieren (ein Eintrag pro Tag). Jeder
+  // Eintrag muss ein positives Intervall von höchstens 24 h sein (24h-Dienste
+  // erlaubt) — sonst ließe sich das 92-Tage-Limit über EINEN monatelangen
+  // Eintrag umgehen oder ein negatives Intervall speichern.
+  const dayMap = new Map<string, { startTime: Date; endTime: Date }>();
+  for (const d of body.data.days) {
+    const durationMs = d.endTime.getTime() - d.startTime.getTime();
+    if (durationMs <= 0 || durationMs > 24 * 60 * 60 * 1000) {
+      res.status(400).json({
+        error:
+          "Ungültiger Tageseintrag: Ende muss nach dem Beginn liegen und innerhalb von 24 Stunden.",
+      });
+      return;
+    }
+    const key = new Date(d.startTime).toISOString().split("T")[0]!;
+    if (!dayMap.has(key)) dayMap.set(key, { startTime: d.startTime, endTime: d.endTime });
+  }
+  const days = [...dayMap.entries()].sort(([a], [b]) => a.localeCompare(b));
+
+  // Team-Einträge: Konto-Schalter des Team-Eigentümers muss AN sein. Der
+  // Duplikat-Check gegen den Bestand (pro Tag und Team nur EIN Eintrag,
+  // Duplikate würden die Stunden-Gutschrift verdoppeln; force umgeht das
+  // bewusst NICHT) läuft race-sicher INNERHALB der Transaktion unten.
+  if (type === "team" && !(await teamMeetingEnabledForTeam(write.teamId))) {
+    res.status(400).json({
+      error: "Der Team-Dienst (Teamsitzung) ist in den Einstellungen deaktiviert.",
+      code: "team_meeting_disabled",
+    });
+    return;
+  }
+
+  // Free-Limit (historyMonths) gegen den SPÄTESTEN Tag — ein Verstoß blockt
+  // den gesamten Auftrag (kein Teil-Zeitraum).
+  const latest = days[days.length - 1]![1].startTime;
+  if (await forwardPlanningBlocked(write.teamId, req.session.userId!, latest, res)) {
+    return;
+  }
+
+  // Aushilfe-Einsatz: gleiche Regeln wie beim Einzel-POST.
+  if (body.data.einsatzTeamId != null) {
+    if (type === "team") {
+      res.status(400).json({ error: "Team-Einträge können kein Aushilfe-Einsatz sein" });
+      return;
+    }
+    if (body.data.einsatzTeamId === write.teamId) {
+      res.status(400).json({ error: "Einsatz-Team muss ein anderes Team sein" });
+      return;
+    }
+    const allowedForEinsatz = await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!);
+    if (!allowedForEinsatz.includes(body.data.einsatzTeamId)) {
+      res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
+      return;
+    }
+  }
+
+  // Das verknüpfte Schichtmodell muss zum Ziel-Team gehören.
+  if (shiftModelId != null) {
+    if (!(await isShiftModelInTeam(shiftModelId, write.teamId))) {
+      res.status(403).json({ error: "Schichtmodell gehört nicht zu diesem Team" });
+      return;
+    }
+  }
+
+  // Überschneidungen INNERHALB des Auftrags (Tagesübergänge können sich in
+  // Nachbartage schieben) sofort melden — reine Rechenprüfung ohne DB. Die
+  // Prüfung gegen den BESTAND läuft race-sicher in der Transaktion unten.
+  const force = body.data.force === true;
+  if (type !== "team" && !force) {
+    const pairConflicts = new Set<string>();
+    for (let i = 0; i < days.length; i++) {
+      for (let j = i + 1; j < days.length; j++) {
+        const a = days[i]![1];
+        const b = days[j]![1];
+        if (a.startTime < b.endTime && b.startTime < a.endTime) {
+          pairConflicts.add(days[i]![0]);
+          pairConflicts.add(days[j]![0]);
+        }
+      }
+    }
+    if (pairConflicts.size > 0) {
+      const sorted = [...pairConflicts].sort();
+      res.status(409).json({
+        error: `Überschneidung mit bestehenden Diensten an ${sorted.length === 1 ? "einem Tag" : `${sorted.length} Tagen`}.`,
+        code: "shift_overlap" as const,
+        conflictDates: sorted,
+      });
+      return;
+    }
+  }
+
+  // Transaktional prüfen UND anlegen — unter einem Advisory-Lock pro
+  // Zielperson bzw. (bei Team-Einträgen) pro Team: Zwei GLEICHZEITIGE
+  // Aufträge (z. B. Doppelklick in zwei Fenstern) würden sonst beide einen
+  // konfliktfreien Bestand sehen und doppelt buchen. Der zweite Auftrag
+  // wartet am Lock auf den Commit des ersten und sieht dessen Einträge dann
+  // bei seiner eigenen Prüfung (→ 409 statt Doppelbuchung). Team-Einträge
+  // werden wie beim Einzel-POST ganztägig normalisiert und sind immer FIX;
+  // Vertretungs-Markierung und Pausenminuten sind reine Arbeitsdienst-Infos.
+  const txResult = await db.transaction(async (tx) => {
+    const lockKey =
+      type === "team" ? `shifts-bulk:team:${write.teamId}` : `shifts-bulk:user:${userId}`;
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
+
+    if (type === "team") {
+      const duplicateDates: string[] = [];
+      for (const [key, t] of days) {
+        const duplicate = await findDuplicateTeamEntry(write.teamId, t.startTime, null);
+        if (duplicate) duplicateDates.push(key);
+      }
+      if (duplicateDates.length > 0) {
+        return { kind: "team_duplicate" as const, conflictDates: duplicateDates };
+      }
+    } else if (!force) {
+      const conflictDates = new Set<string>();
+      for (const [key, t] of days) {
+        const conflicts = await findOverlappingShifts(userId, t.startTime, t.endTime, null);
+        if (conflicts.length > 0) conflictDates.add(key);
+      }
+      if (conflictDates.size > 0) {
+        return { kind: "overlap" as const, conflictDates: [...conflictDates].sort() };
+      }
+    }
+
+    const ids: number[] = [];
+    for (const [, t] of days) {
+      let { startTime, endTime } = t;
+      if (type === "team") {
+        const normalized = normalizeTeamEntryTimes(startTime);
+        startTime = normalized.startTime;
+        endTime = normalized.endTime;
+      }
+      const [shift] = await tx
+        .insert(shiftsTable)
+        .values({
+          userId,
+          teamId: write.teamId,
+          startTime,
+          endTime,
+          type,
+          shiftModelId: shiftModelId ?? null,
+          notes: body.data.notes ?? null,
+          ...(type === "team"
+            ? { planningStatus: "FIX" as const, isVertretung: false, pauseMinutes: 0 }
+            : {
+                ...(body.data.planningStatus ? { planningStatus: body.data.planningStatus } : {}),
+                isVertretung: body.data.isVertretung ?? false,
+                pauseMinutes: Math.max(0, body.data.pauseMinutes ?? 0),
+                einsatzTeamId: body.data.einsatzTeamId ?? null,
+              }),
+        })
+        .returning();
+      await storeShiftMetrics(shift!, tx);
+      ids.push(shift!.id);
+    }
+    return { kind: "created" as const, ids };
+  });
+
+  if (txResult.kind === "team_duplicate") {
+    res.status(409).json({
+      error: `Für dieses Team besteht an ${txResult.conflictDates.length === 1 ? "einem der Tage" : `${txResult.conflictDates.length} der Tage`} bereits ein Team-Eintrag.`,
+      code: "team_meeting_duplicate" as const,
+      conflictDates: txResult.conflictDates,
+    });
+    return;
+  }
+  if (txResult.kind === "overlap") {
+    res.status(409).json({
+      error: `Überschneidung mit bestehenden Diensten an ${txResult.conflictDates.length === 1 ? "einem Tag" : `${txResult.conflictDates.length} Tagen`}.`,
+      code: "shift_overlap" as const,
+      conflictDates: txResult.conflictDates,
+    });
+    return;
+  }
+  const createdIds = txResult.ids;
+
+  // Angelegte Einträge in Listen-Form (wie GET /shifts) zurückgeben: der
+  // Client fügt sie direkt in den Cache ein (kein Warten auf Monats-Reload).
+  const rows = await db
+    .select(SHIFT_SELECT)
+    .from(shiftsTable)
+    .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
+    .where(inArray(shiftsTable.id, createdIds));
+
+  res.status(201).json({
+    teamId: write.teamId,
+    createdCount: rows.length,
+    shifts: rows,
   });
 });
 

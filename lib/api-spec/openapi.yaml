@@ -446,6 +446,46 @@ paths:
         "403":
           description: Keine Berechtigung (fremde Person oder fremdes Team).
 
+  /shifts/bulk:
+    post:
+      operationId: bulkCreateShifts
+      tags: [shifts]
+      summary: Mehrere Dienste als Sammelauftrag anlegen
+      description: >-
+        Legt dieselbe Schicht für mehrere Kalendertage transaktional in EINEM
+        Request an (ganz oder gar nicht). Nur für Arbeitsdienste und
+        Team-Einträge — Abwesenheiten laufen über /shifts/bulk-absence. Es
+        gelten dieselben Regeln wie beim Einzel-Anlegen (Team-Scope,
+        Vorausplanungs-Limit, Schichtmodell-Team-Bindung, Aushilfe-Einsatz).
+        Überschneidungen mit bestehenden Diensten werden VOR dem Anlegen für
+        alle Tage geprüft: Gibt es welche und ist force nicht gesetzt, wird
+        NICHTS angelegt und die betroffenen Tage werden gemeldet (409, code
+        "shift_overlap", Feld conflictDates). Team-Einträge: pro Tag und Team
+        nur einer; Duplikat-Tage melden 409 mit code "team_meeting_duplicate"
+        (force umgeht das nicht).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkShiftsInput"
+      responses:
+        "201":
+          description: Alle Tage angelegt.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkShiftsResult"
+        "400":
+          description: Ungültige Anfrage (z. B. Tageseintrag über 24 Stunden).
+        "403":
+          description: Keine Berechtigung (kein Verwaltungszugriff, fremdes Team oder team-fremdes Schichtmodell).
+        "409":
+          description: >-
+            Überschneidungen oder Team-Eintrag-Duplikate — es wurde NICHTS
+            angelegt. Body enthält error, code ("shift_overlap" oder
+            "team_meeting_duplicate") und conflictDates (yyyy-MM-dd).
+
   /shifts/bulk-delete:
     post:
       operationId: bulkDeleteShifts
@@ -2895,8 +2935,13 @@ components:
 
     BulkAbsenceResult:
       type: object
-      required: [createdCount, skippedCount, skippedDates, shiftIds]
+      required: [createdCount, skippedCount, skippedDates, shiftIds, shifts, replacedShiftIds, teamId]
       properties:
+        teamId:
+          type: integer
+          description: >-
+            Team, in dem die Einträge angelegt wurden (aufgelöster
+            Team-Kontext) — für zielgenaue Cache-Aktualisierung im Client.
         createdCount:
           type: integer
         skippedCount:
@@ -2910,6 +2955,99 @@ components:
           type: array
           items:
             type: integer
+        shifts:
+          type: array
+          description: >-
+            Die angelegten Einträge in Listen-Form (wie GET /shifts) — damit
+            die Oberfläche sie ohne erneuten Monats-Abruf direkt einfügen kann.
+          items:
+            $ref: "#/components/schemas/Shift"
+        replacedShiftIds:
+          type: array
+          description: >-
+            IDs der geplanten Arbeitsdienste, die durch die Abwesenheit ersetzt
+            (gelöscht) wurden — damit die Oberfläche sie sofort entfernen kann.
+          items:
+            type: integer
+
+    BulkShiftsInput:
+      type: object
+      required: [userId, type, days]
+      properties:
+        userId:
+          type: integer
+        teamId:
+          type: integer
+          description: Optionaler Team-Kontext; muss ein erlaubtes Team sein.
+        type:
+          type: string
+          description: >-
+            Dienstart — nur Arbeitsdienste und Team-Einträge sind hier erlaubt;
+            Abwesenheiten laufen über /shifts/bulk-absence.
+          enum: [active, standby, night, full_day, work, team]
+        days:
+          type: array
+          minItems: 1
+          maxItems: 92
+          description: >-
+            Ein Eintrag pro Kalendertag mit den konkreten Start-/End-Zeiten
+            dieses Tages (Tagesübergang erlaubt, max. 24 h). Doppelte
+            Kalendertage innerhalb der Liste werden zusammengefasst.
+          items:
+            type: object
+            required: [startTime, endTime]
+            properties:
+              startTime:
+                type: string
+                format: date-time
+              endTime:
+                type: string
+                format: date-time
+        planningStatus:
+          type: string
+          description: >-
+            Optionaler Planungsstatus (Default FIX): VORLAEUFIG = Entwurf,
+            ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt. Team-Einträge
+            sind serverseitig immer FIX.
+          enum: [VORLAEUFIG, ANGEBOTEN, FIX]
+        shiftModelId:
+          type: ["integer", "null"]
+        notes:
+          type: string
+          maxLength: 500
+        einsatzTeamId:
+          type: ["integer", "null"]
+          description: >-
+            Aushilfe-Einsatz: ID eines anderen eigenen Teams (wie beim
+            Einzel-Anlegen; bei Team-Einträgen nicht erlaubt).
+        isVertretung:
+          type: boolean
+        pauseMinutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+        force:
+          type: boolean
+          description: >-
+            Überschneidungen mit bestehenden Diensten bewusst zulassen
+            (gleiche Semantik wie force beim Einzel-Anlegen).
+
+    BulkShiftsResult:
+      type: object
+      required: [createdCount, shifts, teamId]
+      properties:
+        teamId:
+          type: integer
+          description: >-
+            Team, in dem die Einträge angelegt wurden (aufgelöster
+            Team-Kontext) — für zielgenaue Cache-Aktualisierung im Client.
+        createdCount:
+          type: integer
+        shifts:
+          type: array
+          description: Die angelegten Einträge in Listen-Form (wie GET /shifts).
+          items:
+            $ref: "#/components/schemas/Shift"
 
     BulkDeleteShiftsInput:
       type: object

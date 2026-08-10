@@ -29,6 +29,8 @@ import type {
   BulkAbsenceResult,
   BulkDeleteShiftsInput,
   BulkDeleteShiftsResult,
+  BulkShiftsInput,
+  BulkShiftsResult,
   CalendarToken,
   ChangePassword200,
   ChangePasswordInput,
@@ -1471,6 +1473,78 @@ export const useBulkCreateAbsence = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getBulkCreateAbsenceMutationOptions(options));
+    }
+
+export const getBulkCreateShiftsUrl = () => {
+
+
+
+
+  return `/api/shifts/bulk`
+}
+
+/**
+ * Legt dieselbe Schicht für mehrere Kalendertage transaktional in EINEM Request an (ganz oder gar nicht). Nur für Arbeitsdienste und Team-Einträge — Abwesenheiten laufen über /shifts/bulk-absence. Es gelten dieselben Regeln wie beim Einzel-Anlegen (Team-Scope, Vorausplanungs-Limit, Schichtmodell-Team-Bindung, Aushilfe-Einsatz). Überschneidungen mit bestehenden Diensten werden VOR dem Anlegen für alle Tage geprüft: Gibt es welche und ist force nicht gesetzt, wird NICHTS angelegt und die betroffenen Tage werden gemeldet (409, code "shift_overlap", Feld conflictDates). Team-Einträge: pro Tag und Team nur einer; Duplikat-Tage melden 409 mit code "team_meeting_duplicate" (force umgeht das nicht).
+ * @summary Mehrere Dienste als Sammelauftrag anlegen
+ */
+export const bulkCreateShifts = async (bulkShiftsInput: BulkShiftsInput, options?: RequestInit): Promise<BulkShiftsResult> => {
+
+  return customFetch<BulkShiftsResult>(getBulkCreateShiftsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      bulkShiftsInput,)
+  }
+);}
+
+
+
+
+export const getBulkCreateShiftsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkCreateShifts>>, TError,{data: BodyType<BulkShiftsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bulkCreateShifts>>, TError,{data: BodyType<BulkShiftsInput>}, TContext> => {
+
+const mutationKey = ['bulkCreateShifts'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkCreateShifts>>, {data: BodyType<BulkShiftsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  bulkCreateShifts(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BulkCreateShiftsMutationResult = NonNullable<Awaited<ReturnType<typeof bulkCreateShifts>>>
+    export type BulkCreateShiftsMutationBody = BodyType<BulkShiftsInput>
+    export type BulkCreateShiftsMutationError = ErrorType<void>
+
+    /**
+ * @summary Mehrere Dienste als Sammelauftrag anlegen
+ */
+export const useBulkCreateShifts = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkCreateShifts>>, TError,{data: BodyType<BulkShiftsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof bulkCreateShifts>>,
+        TError,
+        {data: BodyType<BulkShiftsInput>},
+        TContext
+      > => {
+      return useMutation(getBulkCreateShiftsMutationOptions(options));
     }
 
 export const getBulkDeleteShiftsUrl = () => {
