@@ -17,6 +17,7 @@ import {
   ListShiftsQueryParams,
   CreateShiftBody,
   BulkCreateAbsenceBody,
+  BulkDeleteShiftsBody,
   GetShiftParams,
   UpdateShiftParams,
   UpdateShiftBody,
@@ -165,8 +166,13 @@ async function syncAbsenceTimeTracking(shift: AbsenceShift): Promise<void> {
     .where(eq(timeTrackingTable.shiftId, shift.id));
 }
 
-async function removeAbsenceTimeTracking(shiftId: number): Promise<void> {
-  await db.delete(timeTrackingTable).where(eq(timeTrackingTable.shiftId, shiftId));
+async function removeAbsenceTimeTracking(
+  shiftId: number | number[],
+  dbx: Dbx = db
+): Promise<void> {
+  const ids = Array.isArray(shiftId) ? shiftId : [shiftId];
+  if (ids.length === 0) return;
+  await dbx.delete(timeTrackingTable).where(inArray(timeTrackingTable.shiftId, ids));
 }
 
 // Stundenbewertung von Urlaubs-/Abwesenheitstagen (vacationHoursForShift,
@@ -1572,6 +1578,102 @@ router.delete("/shifts/:id", requireAuth, async (req, res): Promise<void> => {
 
   await db.delete(shiftsTable).where(eq(shiftsTable.id, params.data.id));
   res.status(204).send();
+});
+
+// Sammel-Löschung (Task #751): löscht mehrere Einträge transaktional in EINEM
+// Request statt N Einzel-DELETEs (spürbar schneller bei Mehrfachauswahl und
+// mehrtägigen Abwesenheiten). Spiegelt die Einzel-Route exakt:
+// - Authz je Eintrag VOR jeder Aktion: Admin/Teamleiter im Team-Scope dürfen
+//   alles, reine Assistenzkräfte nur EIGENE Abwesenheiten — konsistent 404
+//   statt 403 (fremde Schicht-IDs bleiben nicht ausspähbar).
+// - Ganz oder gar nicht: fehlt ein Eintrag oder ist einer unzulässig, wird
+//   NICHTS gelöscht (404).
+// - Abwesenheiten: verknüpfte Zeiterfassung mit löschen; Urlaub: Stunden wie
+//   beim Einzel-Löschen auflösen, aber je Vertrag gebündelt zurückbuchen (ein
+//   Zeitraum kann einen Vertragswechsel überspannen — jeder Tag bucht auf
+//   SEINEN Vertrag, wie N Einzel-DELETEs).
+router.post("/shifts/bulk-delete", requireAuth, async (req, res): Promise<void> => {
+  const body = BulkDeleteShiftsBody.safeParse(req.body ?? {});
+  if (!body.success) {
+    res.status(400).json({ error: "Invalid request body" });
+    return;
+  }
+  // Batch-interne Duplikate tolerieren (doppelte ID = derselbe Eintrag).
+  const ids = [...new Set(body.data.ids)];
+
+  const shifts = await db.select().from(shiftsTable).where(inArray(shiftsTable.id, ids));
+  if (shifts.length !== ids.length) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const allowedTeams = await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!);
+  let memberTeams: number[] | null = null;
+  for (const shift of shifts) {
+    const isPrivilegedForTeam = shift.teamId != null && allowedTeams.includes(shift.teamId);
+    if (isPrivilegedForTeam) continue;
+    const ownAbsence =
+      isAbsenceType(shift.type) && shift.userId === req.session.userId && shift.teamId != null;
+    if (!ownAbsence) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    memberTeams ??= await getAllowedTeamIds(req.session.userId!);
+    if (!memberTeams.includes(shift.teamId!)) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+  }
+
+  // Urlaubs-Rückbuchung vorbereiten (Reads bewusst auf globalem db, gleiche
+  // Race-Toleranz wie der Einzel-Pfad; Writes unten in der Transaktion).
+  const byContract = new Map<
+    number,
+    { contract: { id: number; vacationHoursUsed: number }; delta: number }
+  >();
+  for (const shift of shifts) {
+    if (shift.type !== "vacation") continue;
+    const hours = await resolveVacationHours(
+      shift.userId,
+      shift.teamId,
+      shift.startTime,
+      shift.endTime
+    );
+    const contract = await activeContractFor(shift.userId, new Date(shift.startTime));
+    if (!contract) continue;
+    const entry = byContract.get(contract.id) ?? { contract, delta: 0 };
+    entry.delta -= hours;
+    byContract.set(contract.id, entry);
+  }
+
+  const absenceIds = shifts.filter((s) => isAbsenceType(s.type)).map((s) => s.id);
+  // Ganz-oder-gar-nicht auch unter Nebenläufigkeit: Verschwindet eine Schicht
+  // zwischen Vorab-Read und Transaktion (paralleler Lösch-Request), liefert
+  // das DELETE weniger Zeilen als angefordert — dann wird ALLES zurückgerollt,
+  // sonst würde z. B. Urlaub doppelt zurückgebucht.
+  const raceLost = new Error("bulk-delete-race");
+  try {
+    await db.transaction(async (tx) => {
+      await removeAbsenceTimeTracking(absenceIds, tx);
+      const deleted = await tx
+        .delete(shiftsTable)
+        .where(inArray(shiftsTable.id, ids))
+        .returning({ id: shiftsTable.id });
+      if (deleted.length !== ids.length) throw raceLost;
+      for (const { contract, delta } of byContract.values()) {
+        await applyVacationDelta(contract, delta, tx);
+      }
+    });
+  } catch (err) {
+    if (err === raceLost) {
+      // Gleiche Antwort wie „ID unbekannt" — kein Orakel, kein Teil-Erfolg.
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    throw err;
+  }
+
+  res.json({ deletedIds: ids });
 });
 
 export default router;

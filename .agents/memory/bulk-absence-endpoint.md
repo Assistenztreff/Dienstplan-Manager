@@ -31,3 +31,10 @@ verschiedene Ergebnisse. Solche Punkte als Folgeaufgabe für BEIDE Pfade.
 - Frontend-Eingänge (Kalender-Mehrfachauswahl, Von/Bis-Formular,
   Dialog-Bis-Datum) haben KEINEN Client-Duplikat-Prefilter mehr; Toast/Fehler
   speisen sich aus createdCount/skippedCount der Server-Antwort.
+- Sammel-LÖSCHEN (bulk-delete) zusätzlich: Vorab-Reads (Ziel-Schichten, Authz,
+  Urlaubsstunden) + in-Transaktion `DELETE … RETURNING` mit
+  Anzahl-Verifikation; bei Abweichung Rollback + 404 (gleiche Antwort wie
+  „ID unbekannt", kein Teil-Erfolg). Ohne diese Verifikation bucht ein
+  paralleler Lösch-Request denselben Urlaub DOPPELT zurück. Die Einzel-Route
+  hat diese Verifikation historisch NICHT (kein tx, kein rowCount-Check) —
+  als Folgeaufgabe für beide Pfade vermerkt, nicht still nur im Bulk fixen.

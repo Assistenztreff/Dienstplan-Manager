@@ -8,7 +8,6 @@ import {
   useListShifts,
   useListShiftModels,
   useGetAllowanceSettings,
-  getListShiftsQueryKey,
   ApiError,
   type BulkAbsenceInput,
   type ShiftInputType,
@@ -48,6 +47,7 @@ import { de } from "date-fns/locale";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { readableApiError, planUpgradeMessage } from "@/lib/api-error";
+import { invalidateShiftDerivedQueries, removeShiftsFromCache } from "@/lib/shift-cache";
 import { warnIfMonthClosed } from "@/lib/month-closing-warning";
 import { computeAutoPauseMinutes } from "@/lib/pause";
 import { useTeam } from "@/context/team";
@@ -542,7 +542,7 @@ export function ShiftDialog({
   }
 
   async function invalidate() {
-    await queryClient.invalidateQueries({ queryKey: getListShiftsQueryKey({ month, year }) });
+    await invalidateShiftDerivedQueries(queryClient);
   }
 
   function deriveTypeAndModel(): { type: ShiftInputType & ShiftUpdateType; shiftModelId: number | null } {
@@ -881,7 +881,11 @@ export function ShiftDialog({
     setSaving(true);
     try {
       await deleteShift.mutateAsync({ id: editShift.id });
-      await invalidate();
+      // Sofort reagieren (Task #751): Eintrag aus dem Cache nehmen und den
+      // Dialog schließen; der Monats-Abgleich läuft im Hintergrund statt die
+      // Oberfläche 2–3 s zu blockieren.
+      removeShiftsFromCache(queryClient, [editShift.id]);
+      void invalidate();
       void warnIfMonthClosed(new Date(editShift.startTime), teamId ?? null);
       onClose();
     } finally {

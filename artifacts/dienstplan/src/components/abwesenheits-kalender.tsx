@@ -58,6 +58,7 @@ import { useAuth, hasTeamAccessLevel } from "@/context/auth";
 import { isAdminRole } from "@/lib/roles";
 import { useToast } from "@/hooks/use-toast";
 import { planUpgradeMessage, readableApiError } from "@/lib/api-error";
+import { invalidateShiftDerivedQueries, removeShiftsFromCache } from "@/lib/shift-cache";
 import { warnIfMonthClosed } from "@/lib/month-closing-warning";
 
 // ── Kategorien (HANDOFF): 3 Kategoriefarben statt 8 Einzelfarben ────────────
@@ -311,9 +312,7 @@ export function AbwesenheitsKalender() {
     "Unbekannt";
 
   async function invalidate() {
-    await queryClient.invalidateQueries({
-      predicate: (q) => q.queryKey[0] === "/api/shifts",
-    });
+    await invalidateShiftDerivedQueries(queryClient);
   }
 
   // ── Direktanlage: Klick-Logik ────────────────────────────────────────────
@@ -441,7 +440,10 @@ export function AbwesenheitsKalender() {
     setDeletingId(id);
     try {
       await deleteShift.mutateAsync({ id });
-      await invalidate();
+      // Sofort reagieren (Task #751): Eintrag aus dem Cache nehmen statt auf
+      // den vollständigen Reload zu warten; Abgleich läuft im Hintergrund.
+      removeShiftsFromCache(queryClient, [id]);
+      void invalidate();
       toast({ title: "Abwesenheit entfernt" });
       // Wenn für den Tag nichts mehr übrig ist, Detailansicht schließen.
       if (dayDetail && visibleAbsences(dayDetail).length <= 1) setDayDetail(null);

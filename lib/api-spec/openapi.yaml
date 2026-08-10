@@ -469,6 +469,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BulkDeleteShiftsResult"
+        "400":
+          description: Ungültiger Request-Body (z. B. leere ID-Liste oder mehr als 200 IDs).
         "404":
           description: Mindestens ein Eintrag ist nicht vorhanden oder nicht zugänglich.
 

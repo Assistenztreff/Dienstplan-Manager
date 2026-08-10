@@ -5,7 +5,7 @@ import {
   useListShifts,
   useListShiftModels,
   useBulkCreateAbsence,
-  useDeleteShift,
+  useBulkDeleteShifts,
   useUpdateContract,
   useGetVacationBalance,
   ApiError,
@@ -34,6 +34,11 @@ import { eachDayOfInterval, format, startOfMonth, endOfMonth, addMonths, subMont
 import { de } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { planUpgradeMessage, readableApiError, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
+import {
+  chunkIds,
+  invalidateShiftDerivedQueries,
+  removeShiftsFromCache,
+} from "@/lib/shift-cache";
 import { warnIfMonthClosed } from "@/lib/month-closing-warning";
 import { useAuth, hasTeamAccessLevel } from "@/context/auth";
 import { isAdminRole } from "@/lib/roles";
@@ -202,7 +207,7 @@ export default function Abwesenheiten() {
   const { data: sickShifts, isLoading: sickLoading } = useListShifts({ type: "sick" });
 
   const bulkCreateAbsence = useBulkCreateAbsence();
-  const deleteShift = useDeleteShift();
+  const bulkDeleteShifts = useBulkDeleteShifts();
 
   const [userId, setUserId] = useState<string>("");
   const [type, setType] = useState<AbsenceType>("vacation");
@@ -301,12 +306,7 @@ export default function Abwesenheiten() {
       .find((c) => !c.endDate || new Date(c.endDate) > new Date());
 
   async function invalidate() {
-    await queryClient.invalidateQueries({
-      predicate: (q) => {
-        const k = q.queryKey[0];
-        return k === "/api/shifts" || k === "/api/contracts";
-      },
-    });
+    await invalidateShiftDerivedQueries(queryClient);
   }
 
   async function handleSave() {
@@ -391,15 +391,28 @@ export default function Abwesenheiten() {
 
   async function handleDelete(range: AbsenceRange) {
     setDeletingKey(range.key);
+    // Sammelauftrag (Task #751): der ganze Zeitraum in EINEM Request, server-
+    // seitig transaktional inkl. Zeiterfassungs- und Urlaubs-Rückbuchung —
+    // statt N langsamer Einzel-DELETEs. Sehr lange Zeiträume laufen in
+    // Blöcken à 200 (API-Limit), jeder Block atomar.
+    const deleted: number[] = [];
     try {
-      for (const id of range.shiftIds) {
-        await deleteShift.mutateAsync({ id });
+      for (const chunk of chunkIds(range.shiftIds)) {
+        const result = await bulkDeleteShifts.mutateAsync({ data: { ids: chunk } });
+        deleted.push(...result.deletedIds);
       }
-      await invalidate();
+      // Sofort reagieren: Einträge aus dem Cache nehmen; der Abgleich (inkl.
+      // Urlaubszähler auf den Verträgen) läuft im Hintergrund.
+      removeShiftsFromCache(queryClient, deleted);
+      void invalidate();
       void warnIfMonthClosed(range.startDate, null);
       void warnIfMonthClosed(range.endDate, null);
       toast({ title: "Abwesenheit entfernt" });
     } catch {
+      // Bereits gelöschte Blöcke sofort aus der Ansicht nehmen; die Liste
+      // gleicht sich im Hintergrund ab.
+      removeShiftsFromCache(queryClient, deleted);
+      void invalidate();
       if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast({ title: "Entfernen fehlgeschlagen", variant: "destructive" });
     } finally {

@@ -2623,8 +2623,6 @@ export default function Dienstplan() {
           dates={dialog.mode === "bulk-delete" ? dialog.dates : []}
           shifts={allShifts.filter((s) => !isMirrorShift(s, selectedTeamId))}
           assistants={assistants}
-          month={month}
-          year={year}
           onDeleted={() => {
             clearSelection();
             closeDialog();

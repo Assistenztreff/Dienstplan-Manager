@@ -112,3 +112,4 @@
 - [Kontowechsel-Erkennung im Web-Client](kontowechsel-session-erkennung.md) — Auth-Zustand nur via applyUser (Epoch-Guard + Single-Flight), sonst stellt eine späte /auth/me-Antwort die alte Identität wieder her.
 - [Abwesenheiten: Anzeigeort & Test-Fallen](dienstplan-absence-display-contract.md) — nie als Dienst-Pille sichtbar, nur in der Team-Abwesenheiten-Übersicht (liegt außerhalb der Ansicht-Container); "Urlaub" exakt matchen.
 - [Koordinator ist nie Personal](koordinator-nie-personal.md) — jeder Personal-Schreibpunkt lehnt Koordinator-Ziele ab; Mitgliedschaften nur via PUT-Vollabgleich; Scope-404 vor Rollen-403 (Orakel).
+- [Shift-abgeleitete Cache-Invalidierung](shift-derived-query-invalidation.md) — nach Schicht-Writes zentralen Helfer nutzen (Contracts/Time-Tracking/Dashboard hängen dran), nie nur /api/shifts.

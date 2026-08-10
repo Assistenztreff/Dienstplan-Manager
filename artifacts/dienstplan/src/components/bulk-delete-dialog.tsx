@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
-import {
-  useDeleteShift,
-  getListShiftsQueryKey,
-} from "@workspace/api-client-react";
+import { useBulkDeleteShifts } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  chunkIds,
+  invalidateShiftDerivedQueries,
+  removeShiftsFromCache,
+} from "@/lib/shift-cache";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -35,8 +37,6 @@ type BulkDeleteDialogProps = {
   /** Alle aktuell geladenen Schichten des Monats (zur Ziel-Ermittlung). */
   shifts: Shift[];
   assistants: Assistant[];
-  month: number;
-  year: number;
   /** Wird nach erfolgreichem Löschen aufgerufen (Auswahl leeren + Modus beenden). */
   onDeleted: () => void;
 };
@@ -58,12 +58,10 @@ export function BulkDeleteDialog({
   dates,
   shifts,
   assistants,
-  month,
-  year,
   onDeleted,
 }: BulkDeleteDialogProps) {
   const queryClient = useQueryClient();
-  const deleteShift = useDeleteShift();
+  const bulkDelete = useBulkDeleteShifts();
 
   // "all" = alle Assistenten, sonst eine konkrete userId.
   const [userId, setUserId] = useState<"all" | number>("all");
@@ -95,24 +93,29 @@ export function BulkDeleteDialog({
     }
     setSaving(true);
     setError(null);
+    // Sammelauftrag (Task #751): EIN Request statt N Einzel-DELETEs, server-
+    // seitig transaktional (ganz oder gar nicht). Sehr große Auswahlen laufen
+    // in Blöcken à 200 (API-Limit) — jeder Block atomar.
+    const deleted: number[] = [];
     try {
-      // Sequenziell löschen, damit ein einzelner Fehler eindeutig zuzuordnen ist.
-      let failed = 0;
-      for (const s of targets) {
-        try {
-          await deleteShift.mutateAsync({ id: s.id });
-        } catch {
-          failed += 1;
-        }
+      for (const chunk of chunkIds(targets.map((s) => s.id))) {
+        const result = await bulkDelete.mutateAsync({ data: { ids: chunk } });
+        deleted.push(...result.deletedIds);
       }
-      await queryClient.invalidateQueries({ queryKey: getListShiftsQueryKey({ month, year }) });
-      if (failed > 0) {
-        setError(`${failed} von ${targets.length} Einträgen konnten nicht gelöscht werden.`);
-        return;
-      }
+      // Sofort reagieren: gelöschte Einträge aus dem Cache entfernen; der
+      // Abgleich aller abgeleiteten Daten (Monat, Salden, Urlaubszähler)
+      // läuft danach im Hintergrund (kein Warten mehr).
+      removeShiftsFromCache(queryClient, deleted);
+      void invalidateShiftDerivedQueries(queryClient);
       onDeleted();
       onClose();
     } catch (err) {
+      // Ganz oder gar nicht: bei 404 wurde in diesem Block NICHTS gelöscht
+      // (z. B. weil ein Eintrag inzwischen anderweitig entfernt wurde).
+      // Bereits gelöschte Blöcke sofort aus der Ansicht nehmen und die Liste
+      // im Hintergrund abgleichen, damit die Ziel-Zählung wieder stimmt.
+      removeShiftsFromCache(queryClient, deleted);
+      void invalidateShiftDerivedQueries(queryClient);
       setError(readableApiError(err, "Löschen fehlgeschlagen. Bitte erneut versuchen."));
     } finally {
       setSaving(false);
