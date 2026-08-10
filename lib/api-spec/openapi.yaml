@@ -446,6 +446,32 @@ paths:
         "403":
           description: Keine Berechtigung (fremde Person oder fremdes Team).
 
+  /shifts/bulk-delete:
+    post:
+      operationId: bulkDeleteShifts
+      tags: [shifts]
+      summary: Mehrere Dienste oder Abwesenheiten gesammelt löschen
+      description: >-
+        Löscht ausgewählte Einträge transaktional in einem Request. Falls ein
+        Eintrag nicht existiert oder nicht im erlaubten Team liegt, wird nichts
+        gelöscht. Bei Urlaub werden Zeiterfassung und Urlaubskonto wie beim
+        Einzel-Löschen korrekt zurückgebucht.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkDeleteShiftsInput"
+      responses:
+        "200":
+          description: Einträge gelöscht
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkDeleteShiftsResult"
+        "404":
+          description: Mindestens ein Eintrag ist nicht vorhanden oder nicht zugänglich.
+
   /shifts/{id}:
     get:
       operationId: getShift
@@ -2879,6 +2905,26 @@ components:
           items:
             type: string
         shiftIds:
+          type: array
+          items:
+            type: integer
+
+    BulkDeleteShiftsInput:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            type: integer
+
+    BulkDeleteShiftsResult:
+      type: object
+      required: [deletedIds]
+      properties:
+        deletedIds:
           type: array
           items:
             type: integer
