@@ -683,7 +683,9 @@ function AgendaView({
                   data-testid={`agenda-day-${format(day, "yyyy-MM-dd")}`}
                   data-selected={bulkSelected ? "true" : "false"}
                   className={`border-b border-border/30 last:border-b-0 ${
-                    bulkSelected ? "bg-primary/5 ring-2 ring-inset ring-primary" : ""
+                    bulkSelected
+                      ? "bg-assistenz-mint ring-2 ring-inset ring-assistenz-brand"
+                      : ""
                   }`}
                 >
                   <button
@@ -1229,9 +1231,9 @@ function MonthGrid({
                 // Punkt 1: Zelle innen weiß, leicht abgerundete Ecken.
                 "bg-white",
                 bulkSelected
-                  ? "ring-2 ring-inset ring-primary"
+                  ? "ring-2 ring-inset ring-assistenz-brand bg-assistenz-mint"
                   : selected && !selectionMode
-                    ? "ring-2 ring-inset ring-primary/70 bg-primary/5"
+                    ? "ring-2 ring-inset ring-assistenz-brand bg-assistenz-mint/60"
                     : "hover:bg-accent/20",
                 today ? "ring-1 ring-inset ring-amber-400/60" : "",
               ].filter(Boolean).join(" ")}
@@ -2356,7 +2358,7 @@ export default function Dienstplan() {
                       onClick={isSelectionMode && isAdmin ? () => toggleDate(day) : undefined}
                       className={`p-2 font-medium text-center w-[88px] min-w-[88px] ${
                         colSelected
-                          ? "bg-primary/10 ring-1 ring-inset ring-primary"
+                          ? "bg-assistenz-mint ring-1 ring-inset ring-assistenz-brand"
                           : isToday(day)
                             ? "bg-primary/10"
                             : ""
@@ -2417,7 +2419,7 @@ export default function Dienstplan() {
                               cellClickable ? "cursor-pointer group" : ""
                             } ${
                               colSelected
-                                ? "bg-primary/5"
+                                ? "bg-assistenz-mint/60"
                                 : isToday(day)
                                   ? "bg-primary/5"
                                   : isAdmin && !isSelectionMode
