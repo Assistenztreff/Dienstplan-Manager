@@ -377,4 +377,92 @@ test.describe("Teamkoordinator-Zugang", () => {
     const listRes = await owner.ctx.get("/api/koordinatoren");
     expect(((await listRes.json()) as KoordinatorDto[]).some((k) => k.id === koordId)).toBe(true);
   });
+
+  test("Sperren und Entfernen: fremde Konten bleiben aussen vor (404)", async () => {
+    const fremdPatch = await fremd.ctx.patch(`/api/koordinatoren/${koordId}`, {
+      data: { isActive: false },
+    });
+    expect(fremdPatch.status()).toBe(404);
+    const fremdDelete = await fremd.ctx.delete(`/api/koordinatoren/${koordId}`);
+    expect(fremdDelete.status()).toBe(404);
+
+    // Zugang blieb unberuehrt.
+    const meRes = await koordCtx.get("/api/auth/me");
+    expect(meRes.ok()).toBe(true);
+  });
+
+  test("Sperren beendet Sitzungen sofort, Entsperren stellt den Zugang wieder her", async () => {
+    // Team wieder zuweisen, damit die Sperre auch Team-Zugriffe abdeckt.
+    const putRes = await owner.ctx.put(`/api/koordinatoren/${koordId}/teams`, {
+      data: { teamIds: [teamB] },
+    });
+    expect(putRes.ok()).toBe(true);
+
+    const sperrRes = await owner.ctx.patch(`/api/koordinatoren/${koordId}`, {
+      data: { isActive: false },
+    });
+    expect(sperrRes.ok(), `Sperren fehlgeschlagen (${sperrRes.status()})`).toBe(true);
+    const dto = (await sperrRes.json()) as KoordinatorDto & { isActive: boolean };
+    expect(dto.isActive).toBe(false);
+    // Eintrag und Team-Zuweisung bleiben bestehen.
+    expect(dto.teamIds).toEqual([teamB]);
+
+    // Bestehende Sitzung endet SOFORT (frischer isActive-Read pro Request).
+    const meRes = await koordCtx.get("/api/auth/me");
+    expect(meRes.status()).toBe(401);
+    const teamsRes = await koordCtx.get("/api/teams");
+    expect(teamsRes.status()).toBe(401);
+
+    // Auch ein neuer Login ist gesperrt.
+    const loginGesperrt = await koordCtx.post("/api/auth/login", {
+      data: { email: KOORD_EMAIL, password: KOORD_PASSWORD },
+    });
+    expect(loginGesperrt.ok()).toBe(false);
+
+    // Entsperren: Login funktioniert wieder, Rechte unveraendert.
+    const entsperrRes = await owner.ctx.patch(`/api/koordinatoren/${koordId}`, {
+      data: { isActive: true },
+    });
+    expect(entsperrRes.ok()).toBe(true);
+    expect(((await entsperrRes.json()) as { isActive: boolean }).isActive).toBe(true);
+
+    const loginRes = await koordCtx.post("/api/auth/login", {
+      data: { email: KOORD_EMAIL, password: KOORD_PASSWORD },
+    });
+    expect(loginRes.ok(), `Login nach Entsperren fehlgeschlagen (${loginRes.status()})`).toBe(
+      true,
+    );
+    const teamIds = ((await (await koordCtx.get("/api/teams")).json()) as Team[]).map(
+      (t) => t.id,
+    );
+    expect(teamIds).toContain(teamB);
+  });
+
+  test("Entfernen loescht Eintrag, Team-Zuweisungen und Login sofort", async () => {
+    const delRes = await owner.ctx.delete(`/api/koordinatoren/${koordId}`);
+    expect(delRes.status(), `Entfernen fehlgeschlagen (${delRes.status()})`).toBe(204);
+
+    // Eintrag weg …
+    const listRes = await owner.ctx.get("/api/koordinatoren");
+    expect(((await listRes.json()) as KoordinatorDto[]).some((k) => k.id === koordId)).toBe(
+      false,
+    );
+    // … Team-Zuweisung aufgeraeumt …
+    const membersRes = await owner.ctx.get(`/api/teams/${teamB}/members`);
+    expect(membersRes.ok()).toBe(true);
+    expect(((await membersRes.json()) as MemberDto[]).some((m) => m.userId === koordId)).toBe(
+      false,
+    );
+    // … bestehende Sitzung endet sofort, Login unmoeglich.
+    const meRes = await koordCtx.get("/api/auth/me");
+    expect(meRes.status()).toBe(401);
+    const loginRes = await koordCtx.post("/api/auth/login", {
+      data: { email: KOORD_EMAIL, password: KOORD_PASSWORD },
+    });
+    expect(loginRes.ok()).toBe(false);
+
+    // Wiederholtes Entfernen: 404 (kein Orakel, idempotent aus Sicht des Inhabers).
+    const wiederRes = await owner.ctx.delete(`/api/koordinatoren/${koordId}`);
+    expect(wiederRes.status()).toBe(404);
+  });
 });

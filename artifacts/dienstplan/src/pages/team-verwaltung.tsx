@@ -10,6 +10,8 @@ import {
   useListKoordinatoren,
   useCreateKoordinator,
   useSetKoordinatorTeams,
+  useUpdateKoordinator,
+  useDeleteKoordinator,
   getListTeamsQueryKey,
   getListTeamMembersQueryKey,
   getListUsersQueryKey,
@@ -21,6 +23,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -43,6 +55,8 @@ import {
   ChevronRight,
   Mail,
   UserPlus,
+  Ban,
+  Unlock,
 } from "lucide-react";
 import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { AssistenzkraftListe } from "@/components/assistenzkraft-liste";
@@ -686,9 +700,13 @@ function KoordinatorenBereich({ teams }: { teams: Team[] }) {
   const { data, isLoading } = useListKoordinatoren();
   const koordinatoren = (data ?? []) as Koordinator[];
   const setKoordinatorTeams = useSetKoordinatorTeams();
+  const updateKoordinator = useUpdateKoordinator();
+  const deleteKoordinator = useDeleteKoordinator();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [inviteFor, setInviteFor] = useState<Koordinator | null>(null);
+  const [sperrenFor, setSperrenFor] = useState<Koordinator | null>(null);
+  const [entfernenFor, setEntfernenFor] = useState<Koordinator | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
 
   // Gleiche Premium-Bedingung wie der Einladungslink für Assistenzkräfte:
@@ -719,6 +737,63 @@ function KoordinatorenBereich({ teams }: { teams: Team[] }) {
       });
     } finally {
       setBusyId(null);
+    }
+  }
+
+  /** Nach Sperren/Entsperren/Entfernen betroffene Listen neu laden. */
+  async function refreshKoordinatorData(k: Koordinator) {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: getListKoordinatorenQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() }),
+      ...k.teamIds.map((teamId) =>
+        queryClient.invalidateQueries({ queryKey: getListTeamMembersQueryKey(teamId) }),
+      ),
+    ]);
+  }
+
+  function showError(err: unknown, title: string) {
+    if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
+    toast({
+      title,
+      description:
+        ownerSessionMessage(err) ?? readableApiError(err, "Bitte erneut versuchen."),
+      variant: "destructive",
+    });
+  }
+
+  async function handleSperren(k: Koordinator, isActive: boolean) {
+    setBusyId(k.id);
+    try {
+      await updateKoordinator.mutateAsync({ id: k.id, data: { isActive } });
+      await refreshKoordinatorData(k);
+      toast({
+        title: isActive ? "Zugang entsperrt" : "Zugang gesperrt",
+        description: isActive
+          ? `${k.name} kann sich wieder anmelden.`
+          : `${k.name} kann sich nicht mehr anmelden. Bestehende Sitzungen enden sofort.`,
+      });
+    } catch (err) {
+      showError(err, isActive ? "Entsperren fehlgeschlagen" : "Sperren fehlgeschlagen");
+    } finally {
+      setBusyId(null);
+      setSperrenFor(null);
+    }
+  }
+
+  async function handleEntfernen(k: Koordinator) {
+    setBusyId(k.id);
+    try {
+      await deleteKoordinator.mutateAsync({ id: k.id });
+      await refreshKoordinatorData(k);
+      toast({
+        title: "Koordinator entfernt",
+        description: `${k.name} wurde samt Team-Zuweisungen und Zugang entfernt.`,
+      });
+    } catch (err) {
+      showError(err, "Entfernen fehlgeschlagen");
+    } finally {
+      setBusyId(null);
+      setEntfernenFor(null);
     }
   }
 
@@ -772,7 +847,11 @@ function KoordinatorenBereich({ teams }: { teams: Team[] }) {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{k.name}</span>
                     <span className="text-xs text-muted-foreground">{k.email}</span>
-                    {k.hasLogin ? (
+                    {!k.isActive ? (
+                      <Badge variant="destructive" className="text-xs">
+                        Gesperrt
+                      </Badge>
+                    ) : k.hasLogin ? (
                       <Badge variant="secondary" className="text-xs">
                         Zugang aktiv
                       </Badge>
@@ -781,17 +860,58 @@ function KoordinatorenBereich({ teams }: { teams: Team[] }) {
                         Noch kein Zugang
                       </Badge>
                     )}
-                    <div className="ml-auto">
+                    <div className="ml-auto flex flex-wrap items-center gap-1.5">
                       <Button
                         variant="outline"
                         size="sm"
                         className="gap-1.5"
                         onClick={() => setInviteFor(k)}
+                        disabled={busy || !k.isActive}
                         data-testid={`koordinator-einladen-${k.id}`}
-                        title="Einladungslink für den eigenen Zugang generieren"
+                        title={
+                          k.isActive
+                            ? "Einladungslink für den eigenen Zugang generieren"
+                            : "Zugang ist gesperrt — erst entsperren"
+                        }
                       >
                         <Mail className="h-3.5 w-3.5" />
                         <span className="hidden sm:inline">Einladen</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        disabled={busy}
+                        onClick={() =>
+                          k.isActive ? setSperrenFor(k) : void handleSperren(k, true)
+                        }
+                        data-testid={`koordinator-sperren-${k.id}`}
+                        title={
+                          k.isActive
+                            ? "Zugang sperren — die Person kann sich nicht mehr anmelden"
+                            : "Zugang wieder entsperren"
+                        }
+                      >
+                        {k.isActive ? (
+                          <Ban className="h-3.5 w-3.5" />
+                        ) : (
+                          <Unlock className="h-3.5 w-3.5" />
+                        )}
+                        <span className="hidden sm:inline">
+                          {k.isActive ? "Sperren" : "Entsperren"}
+                        </span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1.5 text-destructive hover:text-destructive"
+                        disabled={busy}
+                        onClick={() => setEntfernenFor(k)}
+                        data-testid={`koordinator-entfernen-${k.id}`}
+                        title="Koordinator entfernen — Eintrag, Team-Zuweisungen und Zugang werden gelöscht"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Entfernen</span>
                       </Button>
                     </div>
                   </div>
@@ -840,6 +960,55 @@ function KoordinatorenBereich({ teams }: { teams: Team[] }) {
           userName={inviteFor.name}
         />
       )}
+
+      {/* Bestätigung: Zugang sperren (Entsperren geht ohne Rückfrage). */}
+      <AlertDialog open={sperrenFor != null} onOpenChange={(v) => !v && setSperrenFor(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Zugang sperren?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {sperrenFor?.name} kann sich danach nicht mehr anmelden — auch bestehende
+              Sitzungen enden sofort. Der Eintrag und die Team-Zuweisungen bleiben bestehen,
+              du kannst den Zugang jederzeit wieder entsperren.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busyId != null}>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busyId != null}
+              onClick={() => sperrenFor && void handleSperren(sperrenFor, false)}
+              data-testid="koordinator-sperren-bestaetigen"
+            >
+              Zugang sperren
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bestätigung: Koordinator entfernen (endgültig). */}
+      <AlertDialog open={entfernenFor != null} onOpenChange={(v) => !v && setEntfernenFor(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Koordinator entfernen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {entfernenFor?.name} wird endgültig entfernt: Eintrag, alle Team-Zuweisungen und
+              der Login-Zugang. Bestehende Sitzungen enden sofort. Das lässt sich nicht
+              rückgängig machen — wenn du dir unsicher bist, sperre den Zugang stattdessen.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busyId != null}>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busyId != null}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => entfernenFor && void handleEntfernen(entfernenFor)}
+              data-testid="koordinator-entfernen-bestaetigen"
+            >
+              Endgültig entfernen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

@@ -56,6 +56,7 @@ export * from './inviteResult';
 export * from './koordinator';
 export * from './koordinatorInput';
 export * from './koordinatorTeamsInput';
+export * from './koordinatorUpdateInput';
 export * from './lexwareBooking';
 export * from './lexwareBookingList';
 export * from './lexwareBookingListSource';

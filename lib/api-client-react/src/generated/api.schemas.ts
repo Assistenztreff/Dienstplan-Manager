@@ -262,6 +262,11 @@ export interface KoordinatorInput {
   email: string;
 }
 
+export interface KoordinatorUpdateInput {
+  /** false = Zugang sperren, true = wieder entsperren. */
+  isActive: boolean;
+}
+
 export interface KoordinatorTeamsInput {
   teamIds: number[];
 }

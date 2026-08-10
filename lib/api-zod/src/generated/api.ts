@@ -1397,6 +1397,38 @@ export const CreateKoordinatorBody = zod.object({
 
 
 /**
+ * Sperrt (isActive=false) bzw. entsperrt (isActive=true) den Zugang eines Koordinators. Eine Sperre wirkt sofort, weil die Auth-Middleware den Aktiv-Status pro Request frisch aus der Datenbank liest.
+ * @summary Teamkoordinator sperren oder entsperren (Login-Zugang)
+ */
+export const UpdateKoordinatorParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateKoordinatorBody = zod.object({
+  "isActive": zod.boolean().describe('false = Zugang sperren, true = wieder entsperren.')
+})
+
+export const UpdateKoordinatorResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "isActive": zod.boolean(),
+  "hasLogin": zod.boolean().describe('true, sobald der Koordinator sein Passwort gesetzt hat (eingeladen und angenommen).'),
+  "teamIds": zod.array(zod.number()).describe('IDs der Teams, die dieser Koordinator koordiniert.'),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * Entfernt den Koordinator vollständig — inklusive aller Team-Zuweisungen. Bestehende Sitzungen enden sofort, weil die Auth-Middleware den Nutzer pro Request frisch aus der Datenbank liest.
+ * @summary Teamkoordinator entfernen (Eintrag, Team-Zuweisungen und Login)
+ */
+export const DeleteKoordinatorParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
  * @summary Team-Zuweisungen eines Koordinators ersetzen (Vollabgleich)
  */
 export const SetKoordinatorTeamsParams = zod.object({

@@ -2,7 +2,11 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { teamsTable, teamMembersTable, usersTable } from "@workspace/db";
 import { eq, and, asc, inArray, sql } from "drizzle-orm";
-import { CreateKoordinatorBody, SetKoordinatorTeamsBody } from "@workspace/api-zod";
+import {
+  CreateKoordinatorBody,
+  SetKoordinatorTeamsBody,
+  UpdateKoordinatorBody,
+} from "@workspace/api-zod";
 import { requireDienstleister } from "../middleware/auth";
 import { requirePlanFeature } from "../lib/plan";
 
@@ -96,6 +100,32 @@ async function loadKoordinatoren(ownerId: number, onlyId?: number): Promise<Koor
   }));
 }
 
+/**
+ * Autorisierung VOR Inhaltsprüfung: Der Koordinator muss existieren UND
+ * diesem Konto gehören — sonst einheitlich 404 (keine Enumeration).
+ * Gibt die geprüfte ID zurück oder null, wenn bereits geantwortet wurde.
+ */
+async function resolveOwnedKoordinatorId(
+  rawId: string | string[] | undefined,
+  ownerId: number,
+  res: import("express").Response,
+): Promise<number | null> {
+  const id = Number(rawId);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Ungültige ID" });
+    return null;
+  }
+  const [target] = await db
+    .select({ role: usersTable.role, managedByUserId: usersTable.managedByUserId })
+    .from(usersTable)
+    .where(eq(usersTable.id, id));
+  if (!target || target.role !== "koordinator" || target.managedByUserId !== ownerId) {
+    res.status(404).json({ error: "Koordinator nicht gefunden" });
+    return null;
+  }
+  return id;
+}
+
 router.get("/koordinatoren", requireDienstleister, async (req, res): Promise<void> => {
   res.json(await loadKoordinatoren(req.session.userId!));
 });
@@ -185,23 +215,9 @@ router.put(
   "/koordinatoren/:id/teams",
   requireDienstleister,
   async (req, res): Promise<void> => {
-    const id = Number(req.params["id"]);
-    if (!Number.isInteger(id) || id <= 0) {
-      res.status(400).json({ error: "Ungültige ID" });
-      return;
-    }
     const ownerId = req.session.userId!;
-
-    // Autorisierung VOR Inhaltsprüfung: Der Koordinator muss existieren UND
-    // diesem Konto gehören — sonst einheitlich 404 (keine Enumeration).
-    const [target] = await db
-      .select({ role: usersTable.role, managedByUserId: usersTable.managedByUserId })
-      .from(usersTable)
-      .where(eq(usersTable.id, id));
-    if (!target || target.role !== "koordinator" || target.managedByUserId !== ownerId) {
-      res.status(404).json({ error: "Koordinator nicht gefunden" });
-      return;
-    }
+    const id = await resolveOwnedKoordinatorId(req.params["id"], ownerId, res);
+    if (id == null) return;
 
     const body = SetKoordinatorTeamsBody.safeParse(req.body);
     if (!body.success) {
@@ -265,5 +281,62 @@ router.put(
     res.json(dto);
   },
 );
+
+/**
+ * PATCH /koordinatoren/:id — Zugang sperren/entsperren (isActive).
+ * Eine Sperre wirkt SOFORT: Die Auth-Middleware liest isActive pro Request
+ * frisch aus der DB (gleiche Mechanik wie die Deaktivierung von
+ * Assistenzkräften) und zerstört die Session beim nächsten Zugriff.
+ */
+router.patch("/koordinatoren/:id", requireDienstleister, async (req, res): Promise<void> => {
+  const ownerId = req.session.userId!;
+  const id = await resolveOwnedKoordinatorId(req.params["id"], ownerId, res);
+  if (id == null) return;
+
+  const body = UpdateKoordinatorBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Invalid request body" });
+    return;
+  }
+
+  await db.update(usersTable).set({ isActive: body.data.isActive }).where(eq(usersTable.id, id));
+
+  const [dto] = await loadKoordinatoren(ownerId, id);
+  res.json(dto);
+});
+
+/**
+ * DELETE /koordinatoren/:id — entfernt den Koordinator vollständig:
+ * Nutzerzeile (inkl. Login/Einladungstoken) und via ON DELETE CASCADE alle
+ * team_members-Zuweisungen. Bestehende Sitzungen enden sofort (frischer
+ * DB-Read pro Request findet den Nutzer nicht mehr → 401).
+ *
+ * Sollte der Koordinator wider Erwarten in Append-only-Historien referenziert
+ * sein (FK ohne CASCADE), antwortet die Route mit einem lesbaren 409 und
+ * verweist auf das Sperren — statt mit einem 500 zu scheitern.
+ */
+router.delete("/koordinatoren/:id", requireDienstleister, async (req, res): Promise<void> => {
+  const ownerId = req.session.userId!;
+  const id = await resolveOwnedKoordinatorId(req.params["id"], ownerId, res);
+  if (id == null) return;
+
+  try {
+    await db.delete(usersTable).where(eq(usersTable.id, id));
+  } catch (err) {
+    const pgCode =
+      (err as { cause?: { code?: string }; code?: string })?.cause?.code ??
+      (err as { code?: string })?.code;
+    if (pgCode === "23503") {
+      res.status(409).json({
+        error:
+          "Entfernen nicht möglich, weil noch Daten auf diese Person verweisen. Sperre den Zugang stattdessen.",
+      });
+      return;
+    }
+    throw err;
+  }
+
+  res.status(204).end();
+});
 
 export default router;

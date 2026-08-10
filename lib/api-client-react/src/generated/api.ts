@@ -56,6 +56,7 @@ import type {
   Koordinator,
   KoordinatorInput,
   KoordinatorTeamsInput,
+  KoordinatorUpdateInput,
   LexwareBookingList,
   ListContractsParams,
   ListHourBudgetsParams,
@@ -4017,6 +4018,150 @@ export const useCreateKoordinator = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getCreateKoordinatorMutationOptions(options));
+    }
+
+export const getUpdateKoordinatorUrl = (id: number,) => {
+
+
+
+
+  return `/api/koordinatoren/${id}`
+}
+
+/**
+ * Sperrt (isActive=false) bzw. entsperrt (isActive=true) den Zugang eines Koordinators. Eine Sperre wirkt sofort, weil die Auth-Middleware den Aktiv-Status pro Request frisch aus der Datenbank liest.
+ * @summary Teamkoordinator sperren oder entsperren (Login-Zugang)
+ */
+export const updateKoordinator = async (id: number,
+    koordinatorUpdateInput: KoordinatorUpdateInput, options?: RequestInit): Promise<Koordinator> => {
+
+  return customFetch<Koordinator>(getUpdateKoordinatorUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      koordinatorUpdateInput,)
+  }
+);}
+
+
+
+
+export const getUpdateKoordinatorMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateKoordinator>>, TError,{id: number;data: BodyType<KoordinatorUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateKoordinator>>, TError,{id: number;data: BodyType<KoordinatorUpdateInput>}, TContext> => {
+
+const mutationKey = ['updateKoordinator'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateKoordinator>>, {id: number;data: BodyType<KoordinatorUpdateInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateKoordinator(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateKoordinatorMutationResult = NonNullable<Awaited<ReturnType<typeof updateKoordinator>>>
+    export type UpdateKoordinatorMutationBody = BodyType<KoordinatorUpdateInput>
+    export type UpdateKoordinatorMutationError = ErrorType<void>
+
+    /**
+ * @summary Teamkoordinator sperren oder entsperren (Login-Zugang)
+ */
+export const useUpdateKoordinator = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateKoordinator>>, TError,{id: number;data: BodyType<KoordinatorUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateKoordinator>>,
+        TError,
+        {id: number;data: BodyType<KoordinatorUpdateInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateKoordinatorMutationOptions(options));
+    }
+
+export const getDeleteKoordinatorUrl = (id: number,) => {
+
+
+
+
+  return `/api/koordinatoren/${id}`
+}
+
+/**
+ * Entfernt den Koordinator vollständig — inklusive aller Team-Zuweisungen. Bestehende Sitzungen enden sofort, weil die Auth-Middleware den Nutzer pro Request frisch aus der Datenbank liest.
+ * @summary Teamkoordinator entfernen (Eintrag, Team-Zuweisungen und Login)
+ */
+export const deleteKoordinator = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteKoordinatorUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteKoordinatorMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteKoordinator>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteKoordinator>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteKoordinator'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteKoordinator>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteKoordinator(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteKoordinatorMutationResult = NonNullable<Awaited<ReturnType<typeof deleteKoordinator>>>
+
+    export type DeleteKoordinatorMutationError = ErrorType<void>
+
+    /**
+ * @summary Teamkoordinator entfernen (Eintrag, Team-Zuweisungen und Login)
+ */
+export const useDeleteKoordinator = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteKoordinator>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteKoordinator>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteKoordinatorMutationOptions(options));
     }
 
 export const getSetKoordinatorTeamsUrl = (id: number,) => {

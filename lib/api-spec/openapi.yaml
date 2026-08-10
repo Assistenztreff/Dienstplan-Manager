@@ -1257,6 +1257,58 @@ paths:
         "409":
           description: E-Mail-Adresse bereits vergeben
 
+  /koordinatoren/{id}:
+    patch:
+      operationId: updateKoordinator
+      tags: [teams]
+      summary: Teamkoordinator sperren oder entsperren (Login-Zugang)
+      description: >-
+        Sperrt (isActive=false) bzw. entsperrt (isActive=true) den Zugang eines
+        Koordinators. Eine Sperre wirkt sofort, weil die Auth-Middleware den
+        Aktiv-Status pro Request frisch aus der Datenbank liest.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KoordinatorUpdateInput"
+      responses:
+        "200":
+          description: Aktualisierte Koordinator-Daten
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Koordinator"
+        "404":
+          description: Koordinator nicht gefunden (auch bei fremdem Konto)
+    delete:
+      operationId: deleteKoordinator
+      tags: [teams]
+      summary: Teamkoordinator entfernen (Eintrag, Team-Zuweisungen und Login)
+      description: >-
+        Entfernt den Koordinator vollständig — inklusive aller
+        Team-Zuweisungen. Bestehende Sitzungen enden sofort, weil die
+        Auth-Middleware den Nutzer pro Request frisch aus der Datenbank liest.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Entfernt
+        "404":
+          description: Koordinator nicht gefunden (auch bei fremdem Konto)
+        "409":
+          description: Entfernen nicht möglich, weil abhängige Daten bestehen — stattdessen sperren
+
   /koordinatoren/{id}/teams:
     put:
       operationId: setKoordinatorTeams
@@ -2278,6 +2330,14 @@ components:
         email:
           type: string
           format: email
+
+    KoordinatorUpdateInput:
+      type: object
+      required: [isActive]
+      properties:
+        isActive:
+          type: boolean
+          description: false = Zugang sperren, true = wieder entsperren.
 
     KoordinatorTeamsInput:
       type: object
