@@ -1068,14 +1068,15 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
   // Duplikatschutz umgehen (die Vorprüfung sieht nur Bestandsdaten).
   const dayMap = new Map<string, { startTime: Date; endTime: Date }>();
   for (const d of body.data.days) {
-    // Jeder Eintrag muss ein einzelner Kalendertag sein (Ende nach Beginn,
-    // max. 24 h): sonst ließe sich das 92-Tage-Limit über EINEN
-    // monatelangen Eintrag umgehen oder ein negatives Intervall speichern.
+    // Jeder Eintrag muss ein einzelner Kalendertag sein. Ein lokaler
+    // Kalendertag kann an der Sommer-/Winterzeitumstellung 23 bzw. 25 Stunden
+    // lang sein; deshalb sind bei Abwesenheiten bis zu 25 Stunden gültig.
+    // Das 92-Tage-Limit bleibt damit nicht umgehbar.
     const durationMs = d.endTime.getTime() - d.startTime.getTime();
-    if (durationMs <= 0 || durationMs > 24 * 60 * 60 * 1000) {
+    if (durationMs <= 0 || durationMs > 25 * 60 * 60 * 1000) {
       res.status(400).json({
         error:
-          "Ungültiger Tageseintrag: Ende muss nach dem Beginn liegen und innerhalb von 24 Stunden.",
+          "Ungültiger Tageseintrag: Ende muss nach dem Beginn liegen und innerhalb eines Kalendertags enden.",
       });
       return;
     }
@@ -1292,17 +1293,18 @@ router.post("/shifts/bulk", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  // Kalendertage normalisieren und deduplizieren (ein Eintrag pro Tag). Jeder
-  // Eintrag muss ein positives Intervall von höchstens 24 h sein (24h-Dienste
-  // erlaubt) — sonst ließe sich das 92-Tage-Limit über EINEN monatelangen
-  // Eintrag umgehen oder ein negatives Intervall speichern.
+  // Kalendertage normalisieren und deduplizieren (ein Eintrag pro Tag). Ein
+  // ganztägiger Team-Eintrag darf an der Zeitumstellung 23 bzw. 25 Stunden
+  // lang sein; reguläre (auch 24h-)Dienste bleiben strikt auf 24 Stunden
+  // begrenzt, damit kein Mehrtages-Dienst als einzelner Tag durchrutscht.
   const dayMap = new Map<string, { startTime: Date; endTime: Date }>();
   for (const d of body.data.days) {
     const durationMs = d.endTime.getTime() - d.startTime.getTime();
-    if (durationMs <= 0 || durationMs > 24 * 60 * 60 * 1000) {
+    const maxDurationMs = (type === "team" ? 25 : 24) * 60 * 60 * 1000;
+    if (durationMs <= 0 || durationMs > maxDurationMs) {
       res.status(400).json({
         error:
-          "Ungültiger Tageseintrag: Ende muss nach dem Beginn liegen und innerhalb von 24 Stunden.",
+          "Ungültiger Tageseintrag: Ende muss nach dem Beginn liegen und innerhalb eines Kalendertags enden.",
       });
       return;
     }

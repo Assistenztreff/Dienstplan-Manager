@@ -173,6 +173,17 @@ function buildIso(date: string, time: string): string {
   return new Date(`${date}T${time}:00`).toISOString();
 }
 
+// Ganztägige Einträge werden als UTC-Kalendertag übertragen. Das macht sie
+// unabhängig von der lokalen Browser-Zeitzone: Am Tag der Zeitumstellung wäre
+// 00:00–23:59 in Europe/Berlin sonst 23 bzw. 25 Stunden lang. Der Server
+// verwendet für ganztägige Einträge dieselbe UTC-Tageskonvention.
+function fullDayTimes(date: string): { startTime: string; endTime: string } {
+  return {
+    startTime: `${date}T00:00:00.000Z`,
+    endTime: `${date}T23:59:59.000Z`,
+  };
+}
+
 // Liefert das Vortagsdatum ("yyyy-MM-dd") zu einem Datum. Wird für den Hinweis
 // auf einen hineinragenden Vortags-Nachtdienst beim Anlegen von Abwesenheiten
 // gebraucht.
@@ -572,10 +583,8 @@ export function ShiftDialog({
   // verwenden.
   function buildTimes(dateStr: string): { startIso: string; endIso: string } {
     if (isAbsence || isTeam) {
-      return {
-        startIso: new Date(`${dateStr}T00:00:00`).toISOString(),
-        endIso: new Date(`${dateStr}T23:59:59`).toISOString(),
-      };
+      const fullDay = fullDayTimes(dateStr);
+      return { startIso: fullDay.startTime, endIso: fullDay.endTime };
     }
     if (is24h) {
       const startDate = new Date(`${dateStr}T${form.startTime}:00`);
@@ -624,13 +633,7 @@ export function ShiftDialog({
           data: {
             userId: Number(form.userId),
             type: type as BulkAbsenceInput["type"],
-            days: rangeDays.map((d) => {
-              const key = format(d, "yyyy-MM-dd");
-              return {
-                startTime: new Date(`${key}T00:00:00`).toISOString(),
-                endTime: new Date(`${key}T23:59:59`).toISOString(),
-              };
-            }),
+            days: rangeDays.map((d) => fullDayTimes(format(d, "yyyy-MM-dd"))),
             shiftModelId,
             notes: form.notes || undefined,
             ...(teamId != null ? { teamId } : {}),
@@ -762,10 +765,7 @@ export function ShiftDialog({
           data: {
             userId: Number(form.userId),
             type: type as BulkAbsenceInput["type"],
-            days: bulkDates.map((dateStr) => ({
-              startTime: new Date(`${dateStr}T00:00:00`).toISOString(),
-              endTime: new Date(`${dateStr}T23:59:59`).toISOString(),
-            })),
+            days: bulkDates.map(fullDayTimes),
             shiftModelId,
             notes: form.notes || undefined,
             ...(teamId != null ? { teamId } : {}),

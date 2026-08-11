@@ -397,8 +397,8 @@ export function AbwesenheitsKalender() {
           days: days.map((day) => {
             const key = dayKeyOf(day);
             return {
-              startTime: new Date(`${key}T00:00:00`).toISOString(),
-              endTime: new Date(`${key}T23:59:59`).toISOString(),
+              startTime: `${key}T00:00:00.000Z`,
+              endTime: `${key}T23:59:59.000Z`,
             };
           }),
           shiftModelId: null,

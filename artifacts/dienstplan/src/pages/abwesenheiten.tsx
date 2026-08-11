@@ -343,8 +343,8 @@ export default function Abwesenheiten() {
           userId: uid,
           type: type as BulkAbsenceInput["type"],
           days: days.map((day) => ({
-            startTime: new Date(`${dayKey(day)}T00:00:00`).toISOString(),
-            endTime: new Date(`${dayKey(day)}T23:59:59`).toISOString(),
+            startTime: `${dayKey(day)}T00:00:00.000Z`,
+            endTime: `${dayKey(day)}T23:59:59.000Z`,
           })),
           shiftModelId: shiftModelId ? Number(shiftModelId) : null,
         },
