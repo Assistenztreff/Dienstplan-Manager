@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from "
 import { useListTeams } from "@workspace/api-client-react";
 import { useAuth, hasTeamAccessLevel } from "@/context/auth";
 import { isAdminRole } from "@/lib/roles";
+import { REFERENCE_DATA_STALE_TIME_MS } from "@/lib/shift-cache";
 
 type Team = { id: number; name: string };
 
@@ -66,8 +67,8 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
   const showTeamSwitcher = isActualDienstleister || isTeamleiterUser || hasFreigabe;
 
   const { data: teamsData, isLoading: teamsLoading } = useListTeams({
-    query: { enabled: !!showTeamSwitcher },
-  } as Parameters<typeof useListTeams>[0]);
+    query: { enabled: !!showTeamSwitcher, staleTime: REFERENCE_DATA_STALE_TIME_MS },
+  } as unknown as Parameters<typeof useListTeams>[0]);
 
   const teams = useMemo(() => ((teamsData ?? []) as Team[]), [teamsData]);
 

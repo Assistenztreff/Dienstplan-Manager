@@ -13,6 +13,8 @@ import {
   type VacationBalance,
   type Contract,
   type User,
+  type Shift,
+  type ShiftModel,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -39,6 +41,9 @@ import {
   invalidateShiftDerivedQueries,
   removeShiftsFromCache,
   upsertShiftsInCache,
+  REFERENCE_DATA_STALE_TIME_MS,
+  SHIFT_LIST_STALE_TIME_MS,
+  SHIFT_LIST_GC_TIME_MS,
 } from "@/lib/shift-cache";
 import { warnIfMonthClosed } from "@/lib/month-closing-warning";
 import { useAuth, hasTeamAccessLevel } from "@/context/auth";
@@ -197,15 +202,32 @@ export default function Abwesenheiten() {
   // Doppelter Cast (Optionen + Ergebnis): Die generierten Hooks verlieren die
   // Datentyp-Inferenz, sobald Optionen ohne queryKey übergeben werden.
   const { data: users, isLoading: usersLoading } = useListUsers(undefined, {
-    query: { enabled: canManage },
-  } as Parameters<typeof useListUsers>[1]) as {
+    query: { enabled: canManage, staleTime: REFERENCE_DATA_STALE_TIME_MS },
+  } as unknown as Parameters<typeof useListUsers>[1]) as {
     data?: User[];
     isLoading: boolean;
   };
-  const { data: contracts, isLoading: contractsLoading } = useListContracts();
-  const { data: shiftModels } = useListShiftModels();
-  const { data: vacationShifts, isLoading: vacationLoading } = useListShifts({ type: "vacation" });
-  const { data: sickShifts, isLoading: sickLoading } = useListShifts({ type: "sick" });
+  const { data: contracts, isLoading: contractsLoading } = useListContracts(undefined, {
+    query: { staleTime: REFERENCE_DATA_STALE_TIME_MS },
+  } as unknown as Parameters<typeof useListContracts>[1]) as {
+    data?: Contract[];
+    isLoading: boolean;
+  };
+  const { data: shiftModels } = useListShiftModels(undefined, {
+    query: { staleTime: REFERENCE_DATA_STALE_TIME_MS },
+  } as unknown as Parameters<typeof useListShiftModels>[1]) as { data?: ShiftModel[] };
+  const { data: vacationShifts, isLoading: vacationLoading } = useListShifts(
+    { type: "vacation" },
+    {
+      query: { staleTime: SHIFT_LIST_STALE_TIME_MS, gcTime: SHIFT_LIST_GC_TIME_MS },
+    } as unknown as Parameters<typeof useListShifts>[1],
+  ) as { data?: Shift[]; isLoading: boolean };
+  const { data: sickShifts, isLoading: sickLoading } = useListShifts(
+    { type: "sick" },
+    {
+      query: { staleTime: SHIFT_LIST_STALE_TIME_MS, gcTime: SHIFT_LIST_GC_TIME_MS },
+    } as unknown as Parameters<typeof useListShifts>[1],
+  ) as { data?: Shift[]; isLoading: boolean };
 
   const bulkCreateAbsence = useBulkCreateAbsence();
   const bulkDeleteShifts = useBulkDeleteShifts();

@@ -13,4 +13,6 @@ The Orval-generated query hooks type their second arg as `{ query?: UseQueryOpti
 
 **Why:** casting the (generic) second parameter resolves the function's generics with defaults/unknown, degrading the return inference.
 
-**How to apply:** when adding `enabled`/other query options to a generated hook, do both casts together — options cast for the call, result cast for the data. The web app (dienstplan) mostly calls these hooks with no options, so it doesn't hit this.
+**How to apply:** when adding `enabled`/other query options to a generated hook, do both casts together — options cast for the call, result cast for the data.
+
+**Update:** dienstplan (web) now adds options to many generated hooks (staleTime/gcTime/placeholderData throughout dienstplan.tsx, shift-dialog.tsx, abwesenheiten.tsx, context/team.tsx). A single `as Parameters<typeof useXyz>[N]` cast sometimes fails with TS2352 ("neither type sufficiently overlaps") once the options object is "richer" (e.g. adds `placeholderData: keepPreviousData`, a generic function) — the erased generic reduces structural overlap. Fix: double-hop through `unknown`, i.e. `as unknown as Parameters<typeof useXyz>[N]`. Plain single casts with a simple options shape (e.g. just `{ enabled }`) still compile fine and don't need changing.

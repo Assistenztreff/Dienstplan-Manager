@@ -8,8 +8,10 @@ import {
   useListShiftModels,
   useUpdateShift,
   getListShiftsQueryKey,
+  type User,
+  type ShiftModel,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, getDay, getISOWeek, isValid, startOfDay, endOfDay, startOfWeek, endOfWeek, addDays, addMonths, differenceInCalendarDays, isWithinInterval } from "date-fns";
 import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
@@ -73,6 +75,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  SHIFT_LIST_STALE_TIME_MS,
+  SHIFT_LIST_GC_TIME_MS,
+  REFERENCE_DATA_STALE_TIME_MS,
+  prefetchAdjacentMonthShifts,
+} from "@/lib/shift-cache";
 
 type Shift = {
   id: number;
@@ -2176,14 +2184,40 @@ export default function Dienstplan() {
   const { selectedTeamId } = useTeam();
   const teamParam = selectedTeamId != null ? { teamId: selectedTeamId } : {};
 
-  const { data: shifts, isLoading: shiftsLoading } = useListShifts({ month, year, ...teamParam });
+  // placeholderData: keepPreviousData (Task #758) hält beim Monatswechsel
+  // die Daten des vorherigen Monats sichtbar, bis der neue Monat eintrifft —
+  // isLoading bleibt dabei false, sodass die Seite NICHT auf den Skeleton-
+  // Zweig unten zurückfällt und Grid/Liste montiert bleiben (siehe
+  // isTransitioning weiter unten für den dezenten Ladehinweis).
+  const { data: shifts, isLoading: shiftsLoading, isFetching: shiftsFetching } = useListShifts(
+    { month, year, ...teamParam },
+    {
+      query: {
+        placeholderData: keepPreviousData,
+        staleTime: SHIFT_LIST_STALE_TIME_MS,
+        gcTime: SHIFT_LIST_GC_TIME_MS,
+      },
+    } as unknown as Parameters<typeof useListShifts>[1],
+  ) as { data?: Shift[]; isLoading: boolean; isFetching: boolean };
   const queryClient = useQueryClient();
+
+  // Vor-/Folgemonat im Hintergrund vorladen (Task #758): ein Klick auf
+  // "Vorheriger/Nächster Monat" findet die Daten dann meist schon im Cache.
+  // Abhängigkeiten bewusst nur Primitives (nicht das teamParam-Objekt, das
+  // bei jedem Render neu erzeugt wird und den Effekt sonst dauerhaft
+  // auslösen würde).
+  useEffect(() => {
+    prefetchAdjacentMonthShifts(queryClient, month, year, teamParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryClient, month, year, selectedTeamId]);
+
   const updateShift = useUpdateShift();
   const [confirmingShiftId, setConfirmingShiftId] = useState<number | null>(null);
   const [isBulkConfirming, setIsBulkConfirming] = useState(false);
   const { data: users, isLoading: usersLoading } = useListUsers(
-    selectedTeamId != null ? { teamId: selectedTeamId } : undefined
-  );
+    selectedTeamId != null ? { teamId: selectedTeamId } : undefined,
+    { query: { staleTime: REFERENCE_DATA_STALE_TIME_MS } } as unknown as Parameters<typeof useListUsers>[1],
+  ) as { data?: User[]; isLoading: boolean };
 
   const goToMonth = (newDate: Date) => {
     setCurrentDate(newDate);
@@ -2233,7 +2267,10 @@ export default function Dienstplan() {
     [assistantIdsKey],
   );
 
-  const { data: shiftModels } = useListShiftModels(teamParam);
+  const { data: shiftModels } = useListShiftModels(
+    teamParam,
+    { query: { staleTime: REFERENCE_DATA_STALE_TIME_MS } } as unknown as Parameters<typeof useListShiftModels>[1],
+  ) as { data?: ShiftModel[] };
   const modelMap = new Map<number, ShiftModelInfo>(
     (shiftModels ?? []).map((m) => [m.id, { name: m.name }])
   );
@@ -2248,6 +2285,11 @@ export default function Dienstplan() {
       ? assistants
       : assistants.filter((a) => a.id === selectedAssistant);
   const isLoading = shiftsLoading || (isAdmin && usersLoading);
+  // Dezenter Hinweis auf einen Hintergrund-Reload (Platzhalterdaten aus
+  // keepPreviousData sind sichtbar, z. B. kurz nach einem Monatswechsel) —
+  // KEIN Ersatz für isLoading: Grid/Liste bleiben voll bedienbar, nur
+  // optisch leicht abgedunkelt (siehe Content-Wrapper weiter unten).
+  const isTransitioning = shiftsFetching && !isLoading;
 
   function openCreate(date: Date, userId?: number) {
     if (!isAdmin) return;
@@ -2465,7 +2507,7 @@ export default function Dienstplan() {
       )}
 
       <div className="flex flex-col md:hidden" data-testid="dienstplan-mobile">
-        <div className="w-full">
+        <div className={`w-full transition-opacity duration-150 ${isTransitioning ? "opacity-60" : ""}`}>
         {mobileView === "list" ? (
           <AgendaView
             days={days}
@@ -2506,7 +2548,7 @@ export default function Dienstplan() {
       </div>
 
       <div className="hidden flex-col md:flex" data-testid="dienstplan-desktop">
-        <div className="w-full">
+        <div className={`w-full transition-opacity duration-150 ${isTransitioning ? "opacity-60" : ""}`}>
         {desktopView === "grid" ? (
           <MonthGrid
             days={days}

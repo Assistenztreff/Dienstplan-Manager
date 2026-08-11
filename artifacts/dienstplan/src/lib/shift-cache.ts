@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { getListShiftsQueryOptions, type ListShiftsParams } from "@workspace/api-client-react";
 
 /**
  * API-Limit je Sammel-Löschauftrag (openapi.yaml, BulkDeleteShiftsInput
@@ -6,6 +7,56 @@ import type { QueryClient } from "@tanstack/react-query";
  * transaktional (ganz oder gar nicht).
  */
 export const BULK_DELETE_CHUNK_SIZE = 200;
+
+/**
+ * Gültigkeitsdauer für Schicht-Listen (Task #758: Seitenstart & Monats-
+ * wechsel beschleunigen). 30s "frisch" halten verhindert, dass schnelles
+ * Vor-/Zurückblättern oder ein kurz danach geöffneter Dialog (gleicher
+ * Query-Key) dieselben Daten sofort erneut lädt; 15 Minuten im Cache halten
+ * zuletzt gesehene Monate beim Zurückblättern instant verfügbar. Mutationen
+ * umgehen das ohnehin über invalidateShiftDerivedQueries — Invalidierung
+ * erzwingt einen Reload unabhängig von der Gültigkeitsdauer.
+ */
+export const SHIFT_LIST_STALE_TIME_MS = 30_000;
+export const SHIFT_LIST_GC_TIME_MS = 15 * 60_000;
+
+/**
+ * Referenzdaten (Nutzer, Teams, Schichtmodelle, Zuschlags-Einstellungen)
+ * ändern sich seltener als Schichten selbst — eine großzügigere
+ * Gültigkeitsdauer vermeidet unnötige Neuladungen beim Wechseln zwischen
+ * Dienstplan-Unterseiten oder beim Öffnen eines Dialogs kurz nach dem
+ * Seitenaufruf.
+ */
+export const REFERENCE_DATA_STALE_TIME_MS = 60_000;
+
+/**
+ * Läd die Schichten des Vor- und Folgemonats (gleicher Team-Scope) im
+ * Hintergrund vor (Task #758). Nutzt dieselben Query-Optionen wie
+ * useListShifts, damit React Query den Cache-Eintrag exakt teilt — ein Klick
+ * auf "Vorheriger/Nächster Monat" findet die Daten dann meist schon vor (ein
+ * bereits frischer Eintrag löst dank SHIFT_LIST_STALE_TIME_MS keinen
+ * weiteren Request aus, auch nicht bei wiederholtem Aufruf dieser Funktion).
+ */
+export function prefetchAdjacentMonthShifts(
+  queryClient: QueryClient,
+  month: number,
+  year: number,
+  teamParam: { teamId?: number },
+): void {
+  for (const delta of [-1, 1]) {
+    const target = new Date(year, month - 1 + delta, 1);
+    const params: ListShiftsParams = {
+      month: target.getMonth() + 1,
+      year: target.getFullYear(),
+      ...teamParam,
+    };
+    void queryClient.prefetchQuery({
+      ...getListShiftsQueryOptions(params),
+      staleTime: SHIFT_LIST_STALE_TIME_MS,
+      gcTime: SHIFT_LIST_GC_TIME_MS,
+    });
+  }
+}
 
 /** Zerlegt eine ID-Liste in API-konforme Blöcke (max. 200 je Request). */
 export function chunkIds(ids: number[], size = BULK_DELETE_CHUNK_SIZE): number[][] {

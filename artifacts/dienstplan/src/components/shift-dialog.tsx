@@ -14,6 +14,9 @@ import {
   type BulkShiftsInput,
   type ShiftInputType,
   type ShiftUpdateType,
+  type Shift,
+  type ShiftModel,
+  type AllowanceSettings,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -53,6 +56,9 @@ import {
   invalidateShiftDerivedQueries,
   removeShiftsFromCache,
   upsertShiftsInCache,
+  REFERENCE_DATA_STALE_TIME_MS,
+  SHIFT_LIST_STALE_TIME_MS,
+  SHIFT_LIST_GC_TIME_MS,
 } from "@/lib/shift-cache";
 import { warnIfMonthClosed } from "@/lib/month-closing-warning";
 import { computeAutoPauseMinutes } from "@/lib/pause";
@@ -258,21 +264,28 @@ export function ShiftDialog({
   // Dienste STRIKT team-bezogen laden: ohne Filter kämen Schichtmodelle
   // fremder eigener Teams in die Auswahl, deren Speichern der Server korrekt
   // mit 403 ablehnt ("Schichtmodell gehört nicht zu diesem Team").
-  const { data: models } = useListShiftModels(teamId != null ? { teamId } : {});
+  const { data: models } = useListShiftModels(
+    teamId != null ? { teamId } : {},
+    { query: { staleTime: REFERENCE_DATA_STALE_TIME_MS } } as unknown as Parameters<typeof useListShiftModels>[1],
+  ) as { data?: ShiftModel[] };
   // Konto-globaler Schalter „Team-Dienst (Teamsitzung)": blendet die
   // Team-Option im Typ-Wähler ein (Server-Gate bleibt maßgeblich).
   const { data: allowanceSettings } = useGetAllowanceSettings(
     teamId != null ? { teamId } : undefined,
-  );
+    { query: { staleTime: REFERENCE_DATA_STALE_TIME_MS } } as unknown as Parameters<typeof useGetAllowanceSettings>[1],
+  ) as { data?: AllowanceSettings };
   const teamMeetingEnabled = allowanceSettings?.teamMeetingEnabled === true;
   // Schichten des Monats (gleicher Query wie die Kalender-Seite, kommt daher
-  // aus dem Cache): Basis für den Hinweis auf einen Vortags-Nachtdienst, der
-  // in den gewählten Abwesenheitstag hineinragt.
-  const { data: monthShifts } = useListShifts({
-    month,
-    year,
-    ...(teamId != null ? { teamId } : {}),
-  });
+  // aus dem Cache — dieselbe Gültigkeitsdauer verhindert einen doppelten
+  // Reload beim Öffnen des Dialogs kurz nach dem Seitenaufruf): Basis für
+  // den Hinweis auf einen Vortags-Nachtdienst, der in den gewählten
+  // Abwesenheitstag hineinragt.
+  const { data: monthShifts } = useListShifts(
+    { month, year, ...(teamId != null ? { teamId } : {}) },
+    {
+      query: { staleTime: SHIFT_LIST_STALE_TIME_MS, gcTime: SHIFT_LIST_GC_TIME_MS },
+    } as unknown as Parameters<typeof useListShifts>[1],
+  ) as { data?: Shift[] };
   // Aushilfe-Einsatz: nur für Dienstleister mit mehreren Teams relevant —
   // wählbar sind alle EIGENEN Teams außer dem aktuell angezeigten (teamId).
   const { teams } = useTeam();
