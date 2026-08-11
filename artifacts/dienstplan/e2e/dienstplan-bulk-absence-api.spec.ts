@@ -298,6 +298,9 @@ test("akzeptiert ganztaegige Abwesenheit am Winterzeit-Umstellungstag (25. Oktob
   const { status, body } = await bulkAbsence("freizeitausgleich", [dst]);
   expect(status, "25. Oktober sollte 201 liefern").toBe(201);
   expect(body.createdCount).toBe(1);
+  // Aufraeumen: Der Zeitraum-Test unten deckt denselben Tag ab und wuerde ihn
+  // sonst als bereits vorhanden ueberspringen (Reihenfolge-Abhaengigkeit).
+  for (const id of body.shiftIds) await deleteShift(id);
 });
 
 test("akzeptiert ganztaegige Abwesenheit am Sommerzeit-Umstellungstag (29. Maerz)", async () => {
@@ -308,6 +311,7 @@ test("akzeptiert ganztaegige Abwesenheit am Sommerzeit-Umstellungstag (29. Maerz
   const { status, body } = await bulkAbsence("freizeitausgleich", [dst]);
   expect(status, "29. Maerz sollte 201 liefern").toBe(201);
   expect(body.createdCount).toBe(1);
+  for (const id of body.shiftIds) await deleteShift(id);
 });
 
 test("akzeptiert Zeitraum ueber die Winterzeit-Umstellung hinweg", async () => {

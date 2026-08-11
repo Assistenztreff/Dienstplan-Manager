@@ -101,6 +101,7 @@
 - [xlsx dynamic import default](xlsx-dynamic-import-default.md) — `(await import("xlsx")).default` ist im Vite-Dev undefined; `m.default ?? m` nutzen, sonst scheitern Excel-Exporte still.
 - [Urlaubs-POSTs in E2E langsam](e2e-vacation-post-slow.md) — ~5s pro vacation-POST (Urlaubskonto-Recalc); Zeiträume besser via POST /shifts/bulk-absence seeden (ein Request).
 - [Bulk-Absence-Endpunkt](bulk-absence-endpoint.md) — Sammel-Route spiegelt Einzel-Route; Dbx-Executor für Schreib-Helfer; Paritätstest Bulk vs. Einzel-Deltas; kein Client-Dedup-Prefilter mehr.
+- [Zeitraum-Reads Paritätsfallen](bulk-range-read-parity.md) — beim Bündeln einer Tag-Schleife: Stichtagswerte je Tag, Löschmenge nur aus Zieltagen, DATE()-Konvention, Reads im Lock.
 - [PDF-Stundennachweis-Export zurückgestellt](pdf-statement-export-deferred.md) — export-pdf-button existiert nicht mehr; StatementExportDialog/fix-only-hint unerreichbar; keine Specs darauf aufbauen.
 - [E2E-Lanes Build-Race auf dist/](e2e-lanes-dist-build-race.md) — parallele api-shards bauen in dasselbe api-server/dist; MODULE_NOT_FOUND dist/index.mjs = transienter Race, Kette neu starten.
 - [aspect-ratio auf Grid-Items](aspect-ratio-grid-blowout.md) — aspect-ratio+stretch überträgt Inhaltshöhe als Mindestbreite auf die Spalte (Grid-Blowout); Fix min-w-0, nie overflow:hidden wenn Zeilen wachsen sollen.

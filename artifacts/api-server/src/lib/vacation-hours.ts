@@ -9,6 +9,9 @@ import { eq, and, sql } from "drizzle-orm";
 import { isPlainFullDay, averageDailyHours } from "./shift-metrics-resolve";
 import { resolveAllowanceOps } from "./allowance-resolve";
 
+// Globale db-Instanz ODER eine offene Drizzle-Transaktion.
+type VacationDbx = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 // Ein ganztägiger Urlaubstag (00:00–23:59, kein zugrundeliegender Dienst)
 // verbraucht hoursPerDay (Standard 8h). Ersetzt der Urlaub einen konkret
 // geplanten Dienst (echte Schichtzeiten — vom Primary-Lookup geerbt oder aus
@@ -51,6 +54,61 @@ export async function bwavgDailyHours(userId: number, refDate: Date): Promise<nu
       )
     );
   return averageDailyHours(Number(row?.total ?? 0), Number(row?.days ?? 0));
+}
+
+// Batch-Variante für Sammelaufträge: liefert den §11-BUrlG-Durchschnitt für
+// MEHRERE Stichtage aus EINER Abfrage. Fachlich identisch zu bwavgDailyHours
+// (rollierendes 13-Wochen-Fenster je Stichtag, gleiche Grenzen und Rundung) —
+// nur ohne eine eigene Abfrage pro Kalendertag. Schlüssel der Rückgabe ist der
+// ISO-Zeitstempel des jeweiligen Stichtags.
+//
+// `dbx` erlaubt das Lesen INNERHALB einer offenen Transaktion. Wichtig: Der
+// Durchschnitt speist sich aus bestätigten Arbeitszeiten — ersetzt ein
+// Sammelauftrag Dienste, MUSS dieser Read vor dem Löschen laufen, sonst fehlen
+// die ersetzten Dienste im Fenster (der Einzelpfad rechnet ebenfalls vorher).
+export async function bwavgDailyHoursForDates(
+  userId: number,
+  refDates: Date[],
+  dbx: VacationDbx = db
+): Promise<Map<string, number | null>> {
+  const result = new Map<string, number | null>();
+  if (refDates.length === 0) return result;
+
+  const WINDOW_MS = 91 * 24 * 3_600_000; // 13 Wochen
+  const refTimes = refDates.map((date) => date.getTime());
+  const windowStart = new Date(Math.min(...refTimes) - WINDOW_MS);
+  const windowEnd = new Date(Math.max(...refTimes));
+  const rows = await dbx
+    .select({
+      actualStart: timeTrackingTable.actualStart,
+      actualHours: timeTrackingTable.actualHours,
+    })
+    .from(timeTrackingTable)
+    .innerJoin(shiftsTable, eq(timeTrackingTable.shiftId, shiftsTable.id))
+    .where(
+      and(
+        eq(timeTrackingTable.userId, userId),
+        eq(timeTrackingTable.status, "confirmed"),
+        eq(shiftsTable.type, "work"),
+        sql`${timeTrackingTable.actualStart} >= ${windowStart.toISOString()}`,
+        sql`${timeTrackingTable.actualStart} < ${windowEnd.toISOString()}`
+      )
+    );
+
+  for (const refDate of refDates) {
+    const end = refDate.getTime();
+    const start = end - WINDOW_MS;
+    let total = 0;
+    const days = new Set<string>();
+    for (const row of rows) {
+      const startedAt = new Date(row.actualStart).getTime();
+      if (startedAt < start || startedAt >= end) continue;
+      total += row.actualHours ?? 0;
+      days.add(new Date(row.actualStart).toISOString().split("T")[0]!);
+    }
+    result.set(refDate.toISOString(), averageDailyHours(total, days.size));
+  }
+  return result;
 }
 
 // Aktiver Vertrag des Nutzers IM TEAM der Schicht zum Stichtag (jüngster

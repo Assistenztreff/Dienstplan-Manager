@@ -43,6 +43,7 @@ import {
 } from "../lib/shift-metrics-resolve";
 import {
   absenceHoursFor,
+  bwavgDailyHoursForDates,
   resolveVacationHours,
 } from "../lib/vacation-hours";
 import { userHasFeature, getUserLimit } from "../lib/plan";
@@ -115,6 +116,64 @@ type AbsenceShift = {
   startTime: Date;
   endTime: Date;
 };
+
+type BulkContract = {
+  id: number;
+  teamId: number;
+  startDate: string;
+  endDate: string | null;
+  weeklyHours: number;
+  workdaysPerWeek: number;
+  vacationHoursUsed: number;
+};
+
+function dayKey(value: Date | string): string {
+  return new Date(value).toISOString().split("T")[0]!;
+}
+
+// Aktiver Vertrag zum Stichtag aus der einmalig geladenen Vertragsliste.
+//
+// ACHTUNG, bewusst gemischt gescoped — exakt wie der Einzelpfad:
+//  • OHNE teamId (Aufruf für Tages-Soll-Stunden und Urlaubskonto-Buchung):
+//    jüngster Beginn gewinnt, teamübergreifend — identisch zu
+//    activeContractFor(userId, date), das ebenfalls nicht nach Team filtert.
+//  • MIT teamId (Aufruf für die Abwesenheits-Stunden): team-gescoped, wie
+//    activeTeamContractFor in vacation-hours.ts.
+// Bei einer Person mit gleichzeitig aktiven Verträgen in zwei Teams entscheidet
+// das, welches Urlaubskonto belastet wird. Nicht "vereinheitlichen" — das wäre
+// eine stille Verhaltensänderung an Lohn-/Urlaubsdaten. Abgesichert durch
+// dienstplan-bulk-absence-multiteam-vertrag-api.spec.ts.
+function contractForDay(
+  contracts: BulkContract[],
+  day: Date,
+  teamId?: number,
+): BulkContract | null {
+  const date = dayKey(day);
+  return (
+    contracts
+      .filter(
+        (contract) =>
+          (teamId == null || contract.teamId === teamId) &&
+          contract.startDate <= date &&
+          (contract.endDate == null || contract.endDate >= date),
+      )
+      .sort((a, b) => b.startDate.localeCompare(a.startDate))[0] ?? null
+  );
+}
+
+function dailyTargetHoursFromContracts(contracts: BulkContract[], day: Date): number {
+  const contract = contractForDay(contracts, day);
+  if (!contract) return 8;
+  const workdays = contract.workdaysPerWeek > 0 ? contract.workdaysPerWeek : 5;
+  return Math.round((contract.weeklyHours / workdays) * 100) / 100;
+}
+
+function isContractOlderThan13Weeks(contract: BulkContract, refDate: Date): boolean {
+  return (
+    refDate.getTime() - new Date(`${contract.startDate}T00:00:00Z`).getTime() >=
+    91 * 24 * 3_600_000
+  );
+}
 
 // Vertragliche Soll-Stunden des Tages (Wochenstunden / Arbeitstage pro Woche,
 // Fallback 5 Arbeitstage). Fallback 8h ohne Vertrag.
@@ -270,6 +329,55 @@ async function vacationOutsideContractError(
   return "Urlaub liegt außerhalb des Vertragszeitraums.";
 }
 
+// Trägt den Vertrags-Guard des Sammelauftrags aus der Transaktion heraus: Die
+// Prüfung braucht die Vertragsdaten, die erst im Advisory-Lock gelesen werden,
+// muss aber weiterhin mit 400 (statt 500) antworten und dabei alles
+// zurückrollen.
+class VacationOutsideContractError extends Error {}
+
+// Varianten des Vertrags-Guards für Sammelanlagen: Die identische Fachlogik
+// arbeitet mit dem bereits einmal geladenen Vertragsbestand statt N Reads.
+function vacationOutsideContractErrorFromContracts(
+  allContracts: BulkContract[],
+  teamId: number,
+  startTime: Date | string,
+  endTime: Date | string,
+): string | null {
+  if (allContracts.length === 0) return null;
+  const contracts = allContracts.filter((contract) => contract.teamId === teamId);
+  const startDay = dayKey(startTime);
+  const endDay = dayKey(new Date(new Date(endTime).getTime() - 1));
+  if (
+    contracts.some(
+      (contract) =>
+        contract.startDate <= startDay &&
+        (contract.endDate == null || contract.endDate >= endDay),
+    )
+  ) {
+    return null;
+  }
+
+  const formatDe = (iso: string) => {
+    const [y, m, d] = iso.split("-");
+    return `${d}.${m}.${y}`;
+  };
+  const futureStarts = contracts
+    .map((contract) => contract.startDate)
+    .filter((date) => date > startDay)
+    .sort();
+  if (futureStarts.length > 0) {
+    return `Urlaub liegt außerhalb des Vertragszeitraums (Vertrag ab ${formatDe(futureStarts[0]!)}).`;
+  }
+  const pastEnds = contracts
+    .map((contract) => contract.endDate)
+    .filter((date): date is string => date != null && date < endDay)
+    .sort();
+  if (pastEnds.length > 0) {
+    return `Urlaub liegt außerhalb des Vertragszeitraums (Vertrag bis ${formatDe(pastEnds[pastEnds.length - 1]!)}).`;
+  }
+  return "Urlaub liegt außerhalb des Vertragszeitraums.";
+}
+
 // Prüft, ob für denselben Nutzer, Abwesenheitstyp und Kalendertag bereits eine
 // Schicht existiert. Verhindert doppelte Urlaubs-/Krank-Einträge (und damit
 // doppelte vacationDaysUsed-Abzüge), auch wenn der Frontend-Schutz umgangen wird.
@@ -391,12 +499,16 @@ async function valuationPercentFor(type: string, shiftModelId: number | null): P
 // des Teams der Schicht: zuerst der TEAM-OVERRIDE (team_id gesetzt), sonst die
 // Konto-Zeile des TEAM-EIGENTÜMERS (team_id NULL). Fallback 23:00–06:00; ohne
 // Bundesland nur bundesweite Feiertage.
+//
+// `dbx` erlaubt das Lesen INNERHALB einer offenen Transaktion: Sammelaufträge
+// bewerten damit Stunden, die sie in derselben Transaktion schreiben.
 async function allowanceContext(
-  teamId: number | null
+  teamId: number | null,
+  dbx: Dbx = db
 ): Promise<{ window: NightWindow; state: GermanState | null }> {
   let settings: { nightStart: string; nightEnd: string; state: string | null } | undefined;
   if (teamId != null) {
-    const [override] = await db
+    const [override] = await dbx
       .select({
         nightStart: allowanceSettingsTable.nightStart,
         nightEnd: allowanceSettingsTable.nightEnd,
@@ -406,7 +518,7 @@ async function allowanceContext(
       .where(eq(allowanceSettingsTable.teamId, teamId));
     settings = override;
     if (!settings) {
-      const [row] = await db
+      const [row] = await dbx
         .select({
           nightStart: allowanceSettingsTable.nightStart,
           nightEnd: allowanceSettingsTable.nightEnd,
@@ -1097,25 +1209,16 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
     if (!dayMap.has(key)) dayMap.set(key, { startTime: d.startTime, endTime: d.endTime });
   }
   const days = [...dayMap.entries()].sort(([a], [b]) => a.localeCompare(b));
+  // Zeitraumgrenzen als Kalendertage — identische DATE()-Konvention wie die
+  // Tages-Abfragen des Einzelpfads, nur einmal für den ganzen Zeitraum.
+  const firstDay = days[0]![0];
+  const lastDay = days[days.length - 1]![0];
 
   // Free-Limit (historyMonths) gegen den SPÄTESTEN Tag — ein Verstoß blockt
   // den gesamten Zeitraum (kein Teil-Zeitraum).
   const latest = days[days.length - 1]![1].startTime;
   if (await forwardPlanningBlocked(write.teamId, req.session.userId!, latest, res)) {
     return;
-  }
-
-  // URLAUB außerhalb des Vertragszeitraums: pro Tag prüfen (gleiche Semantik
-  // wie N Einzel-POSTs, deckt auch Zeiträume über einen Vertragswechsel ab) —
-  // VOR allen Seiteneffekten, ganz oder gar nicht.
-  if (type === "vacation") {
-    for (const [, t] of days) {
-      const msg = await vacationOutsideContractError(userId, write.teamId, t.startTime, t.endTime);
-      if (msg) {
-        res.status(400).json({ error: msg, code: "vacation_outside_contract" });
-        return;
-      }
-    }
   }
 
   // Schichtmodell muss zum Ziel-Team gehören; Standardzeiten einmal laden.
@@ -1143,87 +1246,258 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
   // frei" sehen und die Abwesenheit doppelt buchen — inkl. doppeltem
   // Urlaubsabzug. Der zweite Auftrag wartet am Lock und überspringt die Tage
   // dann als Duplikate (Frontend-Verhalten der bisherigen Schleife).
+  let txResult: {
+    created: { id: number; startTime: Date }[];
+    replaced: number[];
+    skippedDates: string[];
+  };
+  try {
+    txResult = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${"shifts-bulk:user:" + userId}))`,
+      );
+
+      // Zeitraumdaten NACH dem Lock laden: parallele identische Aufträge sehen
+      // damit zuverlässig die Einträge des zuerst abgeschlossenen Auftrags.
+      // Ein Request mit vielen Tagen bleibt bei wenigen Reads statt einer
+      // sequenziellen Abfragekette pro Kalendertag.
+      //
+      // Die Verträge gehören ausdrücklich dazu: sie speisen den Vertrags-Guard,
+      // die Tages-Soll-Stunden UND die Urlaubskonto-Buchung. Vor dem Lock
+      // gelesen, könnte eine parallele Vertragsänderung dazwischenliegen und der
+      // Auftrag mit veralteten Vertragsgrenzen anlegen bzw. auf einen nicht mehr
+      // passenden Vertrag buchen (Lohn-/Urlaubsdaten).
+      const [existingAbsences, plannedWork, ops, allowance, contracts] = await Promise.all([
+        tx
+          .select({ startTime: shiftsTable.startTime })
+          .from(shiftsTable)
+          .where(
+            and(
+              eq(shiftsTable.userId, userId),
+              eq(shiftsTable.type, type as "vacation" | "sick"),
+              sql`DATE(${shiftsTable.startTime}) >= ${firstDay}`,
+              sql`DATE(${shiftsTable.startTime}) <= ${lastDay}`,
+            ),
+          ),
+        tx
+          .select({
+            id: shiftsTable.id,
+            startTime: shiftsTable.startTime,
+            endTime: shiftsTable.endTime,
+          })
+          .from(shiftsTable)
+          .where(
+            and(
+              eq(shiftsTable.userId, userId),
+              eq(shiftsTable.teamId, write.teamId),
+              notInArray(shiftsTable.type, [
+                "vacation",
+                "sick",
+                "freizeitausgleich",
+                "team",
+                "kind_krank",
+                "freistellung",
+                "abgesagt_ag",
+                "abgesagt_an",
+                "urlaubsabgeltung",
+              ]),
+              sql`DATE(${shiftsTable.startTime}) >= ${firstDay}`,
+              sql`DATE(${shiftsTable.startTime}) <= ${lastDay}`,
+            ),
+          ),
+        resolveAllowanceOps(write.teamId, tx),
+        allowanceContext(write.teamId, tx),
+        tx
+          .select({
+            id: contractsTable.id,
+            teamId: contractsTable.teamId,
+            startDate: contractsTable.startDate,
+            endDate: contractsTable.endDate,
+            weeklyHours: contractsTable.weeklyHours,
+            workdaysPerWeek: contractsTable.workdaysPerWeek,
+            vacationHoursUsed: contractsTable.vacationHoursUsed,
+          })
+          .from(contractsTable)
+          .where(eq(contractsTable.userId, userId)),
+      ]);
+
+      // URLAUB außerhalb des Vertragszeitraums: pro Tag prüfen (gleiche Semantik
+      // wie N Einzel-POSTs, deckt auch Zeiträume über einen Vertragswechsel ab).
+      // Läuft im Lock gegen genau die Vertragsdaten, die anschließend gebucht
+      // werden; ein Verstoß rollt die Transaktion zurück (ganz oder gar nicht).
+      if (type === "vacation") {
+        for (const [, t] of days) {
+          const msg = vacationOutsideContractErrorFromContracts(
+            contracts,
+            write.teamId,
+            t.startTime,
+            t.endTime,
+          );
+          if (msg) throw new VacationOutsideContractError(msg);
+        }
+      }
+
+      const existingDates = new Set(existingAbsences.map((shift) => dayKey(shift.startTime)));
+      const plannedByDay = new Map<string, typeof plannedWork>();
+      for (const shift of plannedWork) {
+        const key = dayKey(shift.startTime);
+        const planned = plannedByDay.get(key) ?? [];
+        planned.push(shift);
+        plannedByDay.set(key, planned);
+      }
+      for (const planned of plannedByDay.values()) {
+        planned.sort(
+          (a, b) =>
+            b.endTime.getTime() -
+            b.startTime.getTime() -
+            (a.endTime.getTime() - a.startTime.getTime()),
+        );
+      }
+
+      const skipped = days.filter(([key]) => existingDates.has(key)).map(([key]) => key);
+      const toCreate = days.filter(([key]) => !existingDates.has(key));
+
+      // Zeiten je Tag auflösen wie beim Einzel-POST (Lohnausfallprinzip):
+      // geplanter Dienst am Tag → Zeiten erben; sonst optionale Modell-
+      // Standardzeiten; sonst ganztägig. Ersetzt werden NUR Dienste an Tagen,
+      // die auch wirklich angelegt werden (übersprungene Tage bleiben unberührt).
+      const resolved = toCreate.map(([key, day]) => {
+        const planned = plannedByDay.get(key) ?? [];
+        const inherited = planned[0];
+        const times = inherited
+          ? { startTime: inherited.startTime, endTime: inherited.endTime }
+          : modelDefaults
+            ? shiftModelTimesForDay(day.startTime, modelDefaults.start, modelDefaults.end)
+            : day;
+        return { times, planned };
+      });
+
+      const replaced = resolved.flatMap(({ planned }) => planned.map((shift) => shift.id));
+
+      // REIHENFOLGE: Löschen der ersetzten Dienste läuft VOR der Berechnung —
+      // exakt wie der Einzelpfad, der deleteReplacedWorkShift ebenfalls vor
+      // storeShiftMetrics aufruft. Relevant wird das im Sammelauftrag, weil der
+      // ersetzte Dienst eines FRÜHEREN Tages im 13-Wochen-Fenster eines
+      // SPÄTEREN Tages liegt: Bei N Einzel-Requests ist er dann bereits
+      // gelöscht. Würde hier zuerst gerechnet, zählte er noch mit und der
+      // Sammelweg käme auf einen anderen Durchschnitt. (Der ersetzte Dienst des
+      // eigenen Tages liegt ohnehin außerhalb — das Fenster endet am Stichtag.)
+      // Abgesichert durch dienstplan-bulk-absence-bwavg-ersetzung-api.spec.ts.
+      if (replaced.length > 0) {
+        await tx.delete(timeTrackingTable).where(inArray(timeTrackingTable.shiftId, replaced));
+        await tx.delete(shiftsTable).where(inArray(shiftsTable.id, replaced));
+      }
+
+      // 13-Wochen-Durchschnitt je Stichtag (rollierendes Fenster wie im
+      // Einzelpfad), aber gesammelt in EINER Abfrage statt einer pro Tag.
+      const averages =
+        ops.vacationMethod === "bwavg"
+          ? await bwavgDailyHoursForDates(
+              userId,
+              resolved.map(({ times }) => times.startTime),
+              tx,
+            )
+          : new Map<string, number | null>();
+
+      const prepared = resolved.map(({ times }) => {
+        const targetHours = dailyTargetHoursFromContracts(contracts, times.startTime);
+        const teamContract = contractForDay(contracts, times.startTime, write.teamId);
+        const average =
+          ops.vacationMethod === "bwavg" &&
+          (!teamContract || isContractOlderThan13Weeks(teamContract, times.startTime))
+            ? averages.get(times.startTime.toISOString()) ?? null
+            : null;
+        const contractHours =
+          teamContract && teamContract.weeklyHours > 0 && teamContract.workdaysPerWeek > 0
+            ? Math.round((teamContract.weeklyHours / teamContract.workdaysPerWeek) * 100) / 100
+            : null;
+        const isFullDay = isPlainFullDay(times.startTime, times.endTime);
+        const durationHours =
+          Math.round(((times.endTime.getTime() - times.startTime.getTime()) / 3_600_000) * 100) /
+          100;
+        const absenceHours = (fallback: number) =>
+          !isFullDay
+            ? durationHours
+            : average ?? (ops.vacationMethod === "bwavg" ? contractHours ?? fallback : fallback);
+        const plannedHours = absenceHours(targetHours);
+        const metrics = resolveShiftMetrics(
+          { type, startTime: times.startTime, endTime: times.endTime, plannedHours, valuationPercent: 100 },
+          allowance.window,
+          allowance.state,
+        );
+        return { ...times, plannedHours, vacationHours: absenceHours(ops.vacationHoursPerDay), metrics };
+      });
+
+      const created =
+        prepared.length > 0
+          ? await tx
+              .insert(shiftsTable)
+              .values(
+                prepared.map((shift) => ({
+                  userId,
+                  teamId: write.teamId,
+                  startTime: shift.startTime,
+                  endTime: shift.endTime,
+                  type,
+                  shiftModelId: shiftModelId ?? null,
+                  notes: body.data.notes ?? null,
+                  planningStatus: "FIX" as const,
+                  isVertretung: false,
+                  pauseMinutes: 0,
+                  ...shift.metrics,
+                })),
+              )
+              .returning()
+          : [];
+      if (created.length > 0) {
+        await tx.insert(timeTrackingTable).values(
+          created.map((shift, index) => ({
+            userId: shift.userId,
+            teamId: shift.teamId!,
+            shiftId: shift.id,
+            actualStart: shift.startTime,
+            actualEnd: shift.endTime,
+            actualHours: prepared[index]!.plannedHours,
+            status: "confirmed" as const,
+          })),
+        );
+      }
+
+      // Urlaubszähler EINMAL fortschreiben: Stunden je Tag auflösen, aber je
+      // aktivem Vertrag bündeln (ein Zeitraum kann einen Vertragswechsel
+      // überspannen — jeder Tag bucht auf SEINEN Vertrag, wie N Einzel-POSTs).
+      if (type === "vacation" && created.length > 0) {
+        const byContract = new Map<
+          number,
+          { contract: { id: number; vacationHoursUsed: number }; delta: number }
+        >();
+        for (const [index, shift] of created.entries()) {
+          const hours = prepared[index]!.vacationHours;
+          const contract = contractForDay(contracts, new Date(shift.startTime));
+          if (!contract) continue;
+          const entry = byContract.get(contract.id) ?? { contract, delta: 0 };
+          entry.delta += hours;
+          byContract.set(contract.id, entry);
+        }
+        for (const { contract, delta } of byContract.values()) {
+          await applyVacationDelta(contract, delta, tx);
+        }
+      }
+      return { created, replaced, skippedDates: skipped };
+    });
+  } catch (err) {
+    // Vertrags-Guard aus der gesperrten Transaktion: nichts wurde geschrieben.
+    if (err instanceof VacationOutsideContractError) {
+      res.status(400).json({ error: err.message, code: "vacation_outside_contract" });
+      return;
+    }
+    throw err;
+  }
   const {
     created: createdShifts,
     replaced: replacedShiftIds,
     skippedDates,
-  } = await db.transaction(async (tx) => {
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext(${"shifts-bulk:user:" + userId}))`,
-    );
-
-    const skipped: string[] = [];
-    const toCreate: Array<{ key: string; startTime: Date; endTime: Date }> = [];
-    for (const [key, t] of days) {
-      const duplicate = await findDuplicateAbsence(userId, type, t.startTime, null);
-      if (duplicate) skipped.push(key);
-      else toCreate.push({ key, ...t });
-    }
-
-    const created: (typeof shiftsTable.$inferSelect)[] = [];
-    const replaced: number[] = [];
-    for (const day of toCreate) {
-      // Abwesenheits-Zeiten auflösen wie beim Einzel-POST (Lohnausfallprinzip):
-      // geplanter Dienst am Tag → Zeiten erben + Dienst entfernen; sonst
-      // optionale Modell-Standardzeiten; sonst ganztägig.
-      let startTime = day.startTime;
-      let endTime = day.endTime;
-      const planned = await findPlannedWorkShiftsForDay(userId, write.teamId, day.startTime);
-      if (planned.length > 0) {
-        startTime = planned[0]!.startTime;
-        endTime = planned[0]!.endTime;
-        for (const p of planned) {
-          await deleteReplacedWorkShift(p.id, tx);
-          replaced.push(p.id);
-        }
-      } else if (modelDefaults) {
-        const t = shiftModelTimesForDay(day.startTime, modelDefaults.start, modelDefaults.end);
-        startTime = t.startTime;
-        endTime = t.endTime;
-      }
-      const [shift] = await tx
-        .insert(shiftsTable)
-        .values({
-          userId,
-          teamId: write.teamId,
-          startTime,
-          endTime,
-          type,
-          shiftModelId: shiftModelId ?? null,
-          notes: body.data.notes ?? null,
-          // Abwesenheiten sind produktseitig immer verbindlich (s. Einzel-POST).
-          planningStatus: "FIX" as const,
-          isVertretung: false,
-          pauseMinutes: 0,
-        })
-        .returning();
-      await storeShiftMetrics(shift!, tx);
-      await bookAbsenceTimeTracking(shift!, tx);
-      created.push(shift!);
-    }
-
-    // Urlaubszähler EINMAL fortschreiben: Stunden je Tag auflösen, aber je
-    // aktivem Vertrag bündeln (ein Zeitraum kann einen Vertragswechsel
-    // überspannen — jeder Tag bucht auf SEINEN Vertrag, wie N Einzel-POSTs).
-    if (type === "vacation" && created.length > 0) {
-      const byContract = new Map<
-        number,
-        { contract: { id: number; vacationHoursUsed: number }; delta: number }
-      >();
-      for (const shift of created) {
-        const hours = await resolveVacationHours(userId, write.teamId, shift.startTime, shift.endTime);
-        const contract = await activeContractFor(userId, new Date(shift.startTime));
-        if (!contract) continue;
-        const entry = byContract.get(contract.id) ?? { contract, delta: 0 };
-        entry.delta += hours;
-        byContract.set(contract.id, entry);
-      }
-      for (const { contract, delta } of byContract.values()) {
-        await applyVacationDelta(contract, delta, tx);
-      }
-    }
-    return { created, replaced, skippedDates: skipped };
-  });
+  } = txResult;
 
   // Angelegte Einträge in Listen-Form (wie GET /shifts) mitliefern: der Client
   // fügt sie direkt in den Cache ein, statt auf einen Monats-Reload zu warten.

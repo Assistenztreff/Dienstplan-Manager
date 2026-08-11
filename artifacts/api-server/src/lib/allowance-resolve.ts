@@ -2,6 +2,9 @@ import { db } from "@workspace/db";
 import { allowanceSettingsTable, teamsTable } from "@workspace/db";
 import { and, eq, isNull } from "drizzle-orm";
 
+// Globale db-Instanz ODER eine offene Drizzle-Transaktion.
+type AllowanceDbx = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 // Aufgelöste Konto-/Team-Einstellungen für Auto-Genehmigung und Urlaubsberechnung.
 // Fallback-Kette überall: Team-Override (team_id gesetzt) → Konto-Zeile des
 // Team-Eigentümers (team_id NULL) → Defaults. Nie die Einstellungen eines
@@ -39,19 +42,24 @@ const opsColumns = {
 
 // Löst die betrieblichen Einstellungen (Auto-Genehmigung, Urlaub) für ein Team
 // auf. Ohne Team gelten die Defaults.
+//
+// `dbx` erlaubt das Lesen INNERHALB einer offenen Transaktion: Sammelaufträge
+// berechnen aus diesen Einstellungen Stunden, die sie in derselben Transaktion
+// schreiben — eine Einstellungsänderung darf nicht dazwischenfallen.
 export async function resolveAllowanceOps(
-  teamId: number | null
+  teamId: number | null,
+  dbx: AllowanceDbx = db
 ): Promise<ResolvedAllowanceOps> {
   if (teamId == null) return { ...DEFAULT_ALLOWANCE_OPS };
 
-  const [override] = await db
+  const [override] = await dbx
     .select(opsColumns)
     .from(allowanceSettingsTable)
     .where(eq(allowanceSettingsTable.teamId, teamId))
     .limit(1);
   if (override) return override;
 
-  const [ownerRow] = await db
+  const [ownerRow] = await dbx
     .select(opsColumns)
     .from(teamsTable)
     .innerJoin(
