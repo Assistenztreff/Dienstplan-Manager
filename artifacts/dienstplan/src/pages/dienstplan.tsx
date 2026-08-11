@@ -1656,8 +1656,8 @@ function DienstplanHeader({
   assistants: Assistant[];
   selectedAssistant: number | "all";
   onSelectAssistant: (v: number | "all") => void;
-  mobileView: "list" | "grid";
-  onMobileView: (v: "list" | "grid") => void;
+  mobileView: "list" | "grid" | "table";
+  onMobileView: (v: "list" | "grid" | "table") => void;
   desktopView: "table" | "grid";
   onDesktopView: (v: "table" | "grid") => void;
   confirmableCount: number;
@@ -1750,10 +1750,11 @@ function DienstplanHeader({
       <div className="md:hidden" data-testid="view-toggles-mobile">
         <ViewToggle
           value={mobileView}
-          onChange={(v) => onMobileView(v as "list" | "grid")}
+          onChange={(v) => onMobileView(v as "list" | "grid" | "table")}
           showLabels={showLabels}
           options={[
             { value: "list", label: "Liste", icon: List },
+            { value: "table", label: "Tabelle", icon: Table2 },
             { value: "grid", label: "Monat", icon: CalendarDays },
           ]}
         />
@@ -1936,6 +1937,193 @@ function monthsAhead(target: Date, now: Date): number {
   );
 }
 
+/** Tabellenansicht (Zeile pro Assistenzkraft, Spalte pro Tag). Wird sowohl am
+ * Desktop als auch — mit der vorhandenen Assistenzkraft-Filterung, die die
+ * Zeilenzahl reduziert — am Smartphone verwendet (per Horizontal-Scroll). */
+function DienstplanTableView({
+  days,
+  year,
+  month,
+  tableAssistants,
+  allShifts,
+  isAdmin,
+  isSelectionMode,
+  selectedDates,
+  toggleDate,
+  openCreate,
+  openEdit,
+  onConfirmShift,
+  modelMap,
+  personColors,
+  onPrevMonth,
+  onNextMonth,
+}: {
+  days: Date[];
+  year: number;
+  month: number;
+  tableAssistants: Assistant[];
+  allShifts: Shift[];
+  isAdmin: boolean;
+  isSelectionMode: boolean;
+  selectedDates: string[];
+  toggleDate: (day: Date) => void;
+  openCreate: (date: Date, userId?: number) => void;
+  openEdit: (shift: Shift) => void;
+  onConfirmShift?: (shift: Shift) => void;
+  modelMap: Map<number, ShiftModelInfo>;
+  personColors: PersonColorAssignment | undefined;
+  onPrevMonth: () => void;
+  onNextMonth: () => void;
+}) {
+  return (
+    <Card
+      className="w-full overflow-x-auto border-border/50 shadow-sm"
+      tabIndex={0}
+      aria-label="Tabellenansicht — ArrowLeft/ArrowRight für Monatswechsel"
+      onKeyDown={(e) => {
+        if (e.key === "ArrowLeft" || e.key === "PageUp") {
+          e.preventDefault();
+          onPrevMonth();
+        } else if (e.key === "ArrowRight" || e.key === "PageDown") {
+          e.preventDefault();
+          onNextMonth();
+        }
+      }}
+    >
+      <table className="min-w-full table-fixed text-sm">
+        <caption className="sr-only">
+          Dienstplan für {format(new Date(year, month - 1, 1), "MMMM yyyy", { locale: de })}
+        </caption>
+        <thead>
+          <tr className="h-px border-b bg-muted/50">
+            <th scope="col" className="p-3 text-left font-medium sticky left-0 bg-muted/50 backdrop-blur-sm z-10 w-48">
+              {isAdmin ? "Assistenzkraft" : "Schicht"}
+            </th>
+            {days.map((day) => {
+              const colSelected =
+                isSelectionMode && selectedDates.includes(format(day, "yyyy-MM-dd"));
+              return (
+              <th
+                key={day.toISOString()}
+                scope="col"
+                data-testid={isSelectionMode ? `col-header-${format(day, "yyyy-MM-dd")}` : undefined}
+                data-selected={colSelected ? "true" : "false"}
+                onClick={isSelectionMode && isAdmin ? () => toggleDate(day) : undefined}
+                className={`p-2 font-medium text-center w-[88px] min-w-[88px] ${
+                  colSelected
+                    ? "bg-assistenz-mint ring-1 ring-inset ring-assistenz-brand"
+                    : isToday(day)
+                      ? "bg-primary/10"
+                      : ""
+                } ${isSelectionMode && isAdmin ? "cursor-pointer hover:bg-primary/5" : ""}`}
+              >
+                <div className="text-xs text-muted-foreground">{format(day, "E", { locale: de })}</div>
+                <div
+                  className={`text-sm ${
+                    isToday(day)
+                      ? "bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center mx-auto"
+                      : ""
+                  }`}
+                >
+                  {format(day, "d")}
+                </div>
+              </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {tableAssistants.length === 0 ? (
+            <tr>
+              <td colSpan={days.length + 1} className="p-8 text-center text-muted-foreground">
+                Keine Einträge gefunden.
+              </td>
+            </tr>
+          ) : (
+            tableAssistants.map((assistant) => {
+              const assistantShifts = allShifts.filter((s) => s.userId === assistant.id);
+              return (
+              <tr
+                key={assistant.id}
+                className="border-b last:border-0 hover:bg-muted/20 transition-colors"
+              >
+                <th scope="row" className="px-3 py-1.5 font-medium sticky left-0 bg-card hover:bg-muted/20 transition-colors z-10 shadow-[1px_0_0_0_hsl(var(--border))]">
+                  {isAdmin ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${userDotClass(assistant.id, personColors)}`} />
+                      <span className="min-w-0 text-center leading-snug">
+                        <span className="block">{nameLines(assistant.name).firstName}</span>
+                        <span className="block">{nameLines(assistant.name).lastName || "\u00a0"}</span>
+                      </span>
+                    </span>
+                  ) : (
+                    "Meine Schichten"
+                  )}
+                </th>
+                {days.map((day, dayIdx) => {
+                  const dayShifts = assistantShifts.filter(
+                    (s) => isSameDay(new Date(s.startTime), day)
+                  );
+                  const regular = dayShifts.filter((s) => !isAbsenceShift(s));
+                  const colSelected =
+                    isSelectionMode && selectedDates.includes(format(day, "yyyy-MM-dd"));
+                  const cellClickable = isAdmin;
+                  return (
+                    <td
+                      key={day.toISOString()}
+                      className={`p-1 border-l border-border/30 align-top ${
+                        cellClickable ? "cursor-pointer group" : ""
+                      } ${
+                        colSelected
+                          ? "bg-assistenz-mint/60"
+                          : isToday(day)
+                            ? "bg-primary/5"
+                            : isAdmin && !isSelectionMode
+                              ? "hover:bg-muted/30"
+                              : ""
+                      }`}
+                      onClick={
+                        isAdmin
+                          ? isSelectionMode
+                            ? () => toggleDate(day)
+                            : () => openCreate(day, assistant.id)
+                          : undefined
+                      }
+                      title={
+                        isAdmin && !isSelectionMode
+                          ? "Klicken zum Anlegen einer Schicht"
+                          : undefined
+                      }
+                    >
+                      <div className="space-y-1 min-h-[26px]">
+                        {regular.map((s) => (
+                          <ShiftBadge
+                            key={s.id}
+                            shift={s}
+                            modelMap={modelMap}
+                            onClick={isAdmin && !isSelectionMode ? (e) => { e.stopPropagation(); openEdit(s); } : undefined}
+                            onConfirm={isAdmin && !isSelectionMode ? onConfirmShift : undefined}
+                          />
+                        ))}
+                        {regular.length === 0 && isAdmin && (
+                          <div className="hidden group-hover:flex items-center justify-center h-8 text-muted-foreground/40">
+                            <Plus className="h-3.5 w-3.5" />
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+    </Card>
+  );
+}
+
 export default function Dienstplan() {
   const { currentUser } = useAuth();
   const isAdmin = isAdminRole(currentUser?.role);
@@ -1955,10 +2143,10 @@ export default function Dienstplan() {
 
   const [currentDate, setCurrentDate] = useState(initialDate);
   const [dialog, setDialog] = useState<DialogState>({ mode: "closed" });
-  const [mobileView, setMobileView] = usePersistentState<"list" | "grid">(
+  const [mobileView, setMobileView] = usePersistentState<"list" | "grid" | "table">(
     "dienstplan.mobileView",
     "grid",
-    ["list", "grid"],
+    ["list", "grid", "table"],
   );
   // 3.3: Smartphone-Monatsraster startet bei jedem Aufruf eingeklappt
   // (Mini-Balken + Zähler); der Header-Button klappt für die laufende Ansicht
@@ -2286,6 +2474,25 @@ export default function Dienstplan() {
             onPrevMonth={prevMonth}
             onNextMonth={nextMonth}
           />
+        ) : mobileView === "table" ? (
+          <DienstplanTableView
+            days={days}
+            year={year}
+            month={month}
+            tableAssistants={tableAssistants}
+            allShifts={allShifts}
+            isAdmin={isAdmin}
+            isSelectionMode={isSelectionMode}
+            selectedDates={selectedDates}
+            toggleDate={toggleDate}
+            openCreate={openCreate}
+            openEdit={openEdit}
+            onConfirmShift={confirmShift}
+            modelMap={modelMap}
+            personColors={personColors}
+            onPrevMonth={prevMonth}
+            onNextMonth={nextMonth}
+          />
         ) : (
           <MonthGrid
             days={days}
@@ -2332,151 +2539,24 @@ export default function Dienstplan() {
             onFocusDateHandled={() => setMonthGridFocusDate(null)}
           />
         ) : (
-          <Card
-            className="w-full overflow-x-auto border-border/50 shadow-sm"
-            tabIndex={0}
-            aria-label="Tabellenansicht — ArrowLeft/ArrowRight für Monatswechsel"
-            onKeyDown={(e) => {
-              if (e.key === "ArrowLeft" || e.key === "PageUp") {
-                e.preventDefault();
-                prevMonth();
-              } else if (e.key === "ArrowRight" || e.key === "PageDown") {
-                e.preventDefault();
-                nextMonth();
-              }
-            }}
-          >
-            <table className="min-w-full table-fixed text-sm">
-              <caption className="sr-only">
-                Dienstplan für {format(new Date(year, month - 1, 1), "MMMM yyyy", { locale: de })}
-              </caption>
-              <thead>
-                <tr className="h-px border-b bg-muted/50">
-                  <th scope="col" className="p-3 text-left font-medium sticky left-0 bg-muted/50 backdrop-blur-sm z-10 w-48">
-                    {isAdmin ? "Assistenzkraft" : "Schicht"}
-                  </th>
-                  {days.map((day) => {
-                    const colSelected =
-                      isSelectionMode && selectedDates.includes(format(day, "yyyy-MM-dd"));
-                    return (
-                    <th
-                      key={day.toISOString()}
-                      scope="col"
-                      data-testid={isSelectionMode ? `col-header-${format(day, "yyyy-MM-dd")}` : undefined}
-                      data-selected={colSelected ? "true" : "false"}
-                      onClick={isSelectionMode && isAdmin ? () => toggleDate(day) : undefined}
-                      className={`p-2 font-medium text-center w-[88px] min-w-[88px] ${
-                        colSelected
-                          ? "bg-assistenz-mint ring-1 ring-inset ring-assistenz-brand"
-                          : isToday(day)
-                            ? "bg-primary/10"
-                            : ""
-                      } ${isSelectionMode && isAdmin ? "cursor-pointer hover:bg-primary/5" : ""}`}
-                    >
-                      <div className="text-xs text-muted-foreground">{format(day, "E", { locale: de })}</div>
-                      <div
-                        className={`text-sm ${
-                          isToday(day)
-                            ? "bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center mx-auto"
-                            : ""
-                        }`}
-                      >
-                        {format(day, "d")}
-                      </div>
-                    </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {tableAssistants.length === 0 ? (
-                  <tr>
-                    <td colSpan={days.length + 1} className="p-8 text-center text-muted-foreground">
-                      Keine Einträge gefunden.
-                    </td>
-                  </tr>
-                ) : (
-                  tableAssistants.map((assistant) => {
-                    const assistantShifts = allShifts.filter((s) => s.userId === assistant.id);
-                    return (
-                    <tr
-                      key={assistant.id}
-                      className="border-b last:border-0 hover:bg-muted/20 transition-colors"
-                    >
-                      <th scope="row" className="px-3 py-1.5 font-medium sticky left-0 bg-card hover:bg-muted/20 transition-colors z-10 shadow-[1px_0_0_0_hsl(var(--border))]">
-                        {isAdmin ? (
-                          <span className="inline-flex items-center gap-2">
-                            <span className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${userDotClass(assistant.id, personColors)}`} />
-                            <span className="min-w-0 text-center leading-snug">
-                              <span className="block">{nameLines(assistant.name).firstName}</span>
-                              <span className="block">{nameLines(assistant.name).lastName || "\u00a0"}</span>
-                            </span>
-                          </span>
-                        ) : (
-                          "Meine Schichten"
-                        )}
-                      </th>
-                      {days.map((day, dayIdx) => {
-                        const dayShifts = assistantShifts.filter(
-                          (s) => isSameDay(new Date(s.startTime), day)
-                        );
-                        const regular = dayShifts.filter((s) => !isAbsenceShift(s));
-                        const colSelected =
-                          isSelectionMode && selectedDates.includes(format(day, "yyyy-MM-dd"));
-                        const cellClickable = isAdmin;
-                        return (
-                          <td
-                            key={day.toISOString()}
-                            className={`p-1 border-l border-border/30 align-top ${
-                              cellClickable ? "cursor-pointer group" : ""
-                            } ${
-                              colSelected
-                                ? "bg-assistenz-mint/60"
-                                : isToday(day)
-                                  ? "bg-primary/5"
-                                  : isAdmin && !isSelectionMode
-                                    ? "hover:bg-muted/30"
-                                    : ""
-                            }`}
-                            onClick={
-                              isAdmin
-                                ? isSelectionMode
-                                  ? () => toggleDate(day)
-                                  : () => openCreate(day, assistant.id)
-                                : undefined
-                            }
-                            title={
-                              isAdmin && !isSelectionMode
-                                ? "Klicken zum Anlegen einer Schicht"
-                                : undefined
-                            }
-                          >
-                            <div className="space-y-1 min-h-[26px]">
-                              {regular.map((s) => (
-                                <ShiftBadge
-                                  key={s.id}
-                                  shift={s}
-                                  modelMap={modelMap}
-                                  onClick={isAdmin && !isSelectionMode ? (e) => { e.stopPropagation(); openEdit(s); } : undefined}
-                                  onConfirm={isAdmin && !isSelectionMode ? confirmShift : undefined}
-                                />
-                              ))}
-                              {regular.length === 0 && isAdmin && (
-                                <div className="hidden group-hover:flex items-center justify-center h-8 text-muted-foreground/40">
-                                  <Plus className="h-3.5 w-3.5" />
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                        );
-                      })}
-                    </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </Card>
+          <DienstplanTableView
+            days={days}
+            year={year}
+            month={month}
+            tableAssistants={tableAssistants}
+            allShifts={allShifts}
+            isAdmin={isAdmin}
+            isSelectionMode={isSelectionMode}
+            selectedDates={selectedDates}
+            toggleDate={toggleDate}
+            openCreate={openCreate}
+            openEdit={openEdit}
+            onConfirmShift={confirmShift}
+            modelMap={modelMap}
+            personColors={personColors}
+            onPrevMonth={prevMonth}
+            onNextMonth={nextMonth}
+          />
         )}
         </div>
       </div>
