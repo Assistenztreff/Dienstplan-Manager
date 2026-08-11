@@ -614,6 +614,7 @@ function AgendaView({
   onToggleDate,
   onPrevMonth,
   onNextMonth,
+  variant = "compact",
 }: {
   days: Date[];
   shifts: Shift[];
@@ -629,7 +630,10 @@ function AgendaView({
   onPrevMonth?: () => void;
   /** Monatswechsel per Tastatur: → / PageDown → nächster Monat */
   onNextMonth?: () => void;
+  /** "compact" (Standard, Smartphone) oder "comfortable" (Desktop, mehr Luft). */
+  variant?: "compact" | "comfortable";
 }) {
+  const comfortable = variant === "comfortable";
   const selectedDateSet = new Set(selectedDates ?? []);
   const getPersonSlot = usePersonSlotLookup();
 
@@ -645,7 +649,7 @@ function AgendaView({
 
   return (
     <div
-      className="space-y-3"
+      className={comfortable ? "space-y-4" : "space-y-3"}
       tabIndex={onPrevMonth || onNextMonth ? 0 : undefined}
       aria-label="Monatsansicht — ArrowLeft/ArrowRight für Monatswechsel"
       onKeyDown={
@@ -675,7 +679,7 @@ function AgendaView({
             data-testid={`agenda-week-${week.key}`}
             className="overflow-hidden rounded-lg border border-border/40 bg-card"
           >
-            <h3 className="border-b border-border/40 bg-muted/40 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+            <h3 className={`border-b border-border/40 bg-muted/40 font-bold uppercase tracking-wide text-muted-foreground ${comfortable ? "px-5 py-2 text-xs" : "px-4 py-1.5 text-[11px]"}`}>
               KW {getISOWeek(first)} · {rangeLabel}
             </h3>
             {week.days.map((day) => {
@@ -699,7 +703,7 @@ function AgendaView({
                 >
                   <button
                     type="button"
-                    className={`flex min-h-[44px] w-full items-center gap-3 px-4 py-2 text-left transition-colors ${
+                    className={`flex w-full items-center text-left transition-colors ${comfortable ? "min-h-[52px] gap-4 px-5 py-3" : "min-h-[44px] gap-3 px-4 py-2"} ${
                       isCurrentDay
                         ? "bg-primary text-primary-foreground hover:bg-primary/90"
                         : weekend
@@ -710,8 +714,8 @@ function AgendaView({
                       canEdit && (selectionMode ? onToggleDate?.(day) : onDayClick(day))
                     }
                   >
-                    <span className="min-w-[24px] text-sm font-semibold tabular-nums">{format(day, "d")}</span>
-                    <span className={`text-sm ${weekend ? "font-bold" : ""}`}>
+                    <span className={`min-w-[24px] font-semibold tabular-nums ${comfortable ? "text-base" : "text-sm"}`}>{format(day, "d")}</span>
+                    <span className={`${comfortable ? "text-base" : "text-sm"} ${weekend ? "font-bold" : ""}`}>
                       {format(day, "EEEEEE", { locale: de })}
                     </span>
                     {isCurrentDay && (
@@ -721,7 +725,7 @@ function AgendaView({
                     )}
                     {canEdit && (
                       <span
-                        className={`ml-auto flex items-center gap-1.5 text-xs ${
+                        className={`ml-auto flex items-center gap-1.5 ${comfortable ? "text-sm" : "text-xs"} ${
                           isCurrentDay ? "opacity-80" : "text-muted-foreground"
                         }`}
                       >
@@ -732,13 +736,13 @@ function AgendaView({
                         <span className="min-w-[1rem] text-right font-medium tabular-nums">
                           {dayShifts.length > 0 ? dayShifts.length : ""}
                         </span>
-                        <Plus className="h-3.5 w-3.5 shrink-0" />
+                        <Plus className={`shrink-0 ${comfortable ? "h-4 w-4" : "h-3.5 w-3.5"}`} />
                       </span>
                     )}
                   </button>
 
                   {/* Nur Tage MIT Einträgen bekommen Detailzeilen — leere Tage
-                      bleiben einzeilig (Task #746). Zeilen im selben Format
+                      bleiben einzeilig. Zeilen im selben Format
                       wie die Tagesleiste unter dem Kalender (DayDetailRow). */}
                   {dayShifts.length > 0 && (
                     <div className="border-t border-border/20 bg-card">
@@ -750,6 +754,7 @@ function AgendaView({
                             showName={canEdit}
                             barColor={shift.type === "team" ? "#0284c7" : getPersonSlot(shift.userId).bg}
                             modelMap={modelMap}
+                            comfortable={comfortable}
                             onClick={canEdit && !selectionMode ? () => onShiftClick(shift) : undefined}
                             onConfirm={canEdit && !selectionMode ? onConfirmShift : undefined}
                           />
@@ -791,6 +796,7 @@ function DayDetailRow({
   onConfirm,
   testId,
   showName = true,
+  comfortable = false,
 }: {
   shift: Shift;
   barColor: string;
@@ -802,6 +808,8 @@ function DayDetailRow({
   testId?: string;
   /** Namensspalte ausblenden (Lesemodus der mobilen Listenansicht). */
   showName?: boolean;
+  /** Großzügigeres Padding/Schrift für die Desktop-Persistenzliste. */
+  comfortable?: boolean;
 }) {
   const { selectedTeamId } = useTeam();
   const mirror = isMirrorShift(shift, selectedTeamId);
@@ -847,7 +855,7 @@ function DayDetailRow({
             }
           : undefined
       }
-      className={`relative flex items-center gap-2.5 border-b border-[#f1f1ee] py-[9px] pl-4 pr-3 text-[12.5px] last:border-b-0 ${planningStatusBadgeOutline(shift)} ${
+      className={`relative flex items-center border-b border-[#f1f1ee] last:border-b-0 ${comfortable ? "gap-3 py-3 pl-5 pr-4 text-sm" : "gap-2.5 py-[9px] pl-4 pr-3 text-[12.5px]"} ${planningStatusBadgeOutline(shift)} ${
         clickable
           ? "cursor-pointer transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
           : ""
@@ -858,7 +866,7 @@ function DayDetailRow({
       {/* Name gehört zum Zeilen-Layout (Punkt 5) — für alle sichtbar, die die
           Zeile sehen dürfen; Autorisierung gilt nur für Aktionen. */}
       {showName && shift.user && (
-        <span className="min-w-[110px] shrink truncate font-semibold text-[#151515]">{shift.user.name}</span>
+        <span className={`shrink truncate font-semibold text-[#151515] ${comfortable ? "min-w-[130px]" : "min-w-[110px]"}`}>{shift.user.name}</span>
       )}
       <span className="flex min-w-0 items-center gap-1 text-[#555555]">
         {isAbsence ? (
@@ -882,7 +890,7 @@ function DayDetailRow({
             e.stopPropagation();
             onConfirm(shift);
           }}
-          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#d8d8d4] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#092948] transition-colors hover:border-[#092948]"
+          className={`inline-flex shrink-0 items-center gap-1 rounded-md border border-[#d8d8d4] bg-white px-2 py-0.5 font-semibold text-[#092948] transition-colors hover:border-[#092948] ${comfortable ? "text-xs" : "text-[11px]"}`}
         >
           <Check className="h-3 w-3" />
           Bestätigen
@@ -1656,8 +1664,8 @@ function DienstplanHeader({
   assistants: Assistant[];
   selectedAssistant: number | "all";
   onSelectAssistant: (v: number | "all") => void;
-  mobileView: "list" | "grid" | "table";
-  onMobileView: (v: "list" | "grid" | "table") => void;
+  mobileView: "list" | "grid";
+  onMobileView: (v: "list" | "grid") => void;
   desktopView: "table" | "grid";
   onDesktopView: (v: "table" | "grid") => void;
   confirmableCount: number;
@@ -1750,11 +1758,10 @@ function DienstplanHeader({
       <div className="md:hidden" data-testid="view-toggles-mobile">
         <ViewToggle
           value={mobileView}
-          onChange={(v) => onMobileView(v as "list" | "grid" | "table")}
+          onChange={(v) => onMobileView(v as "list" | "grid")}
           showLabels={showLabels}
           options={[
             { value: "list", label: "Liste", icon: List },
-            { value: "table", label: "Tabelle", icon: Table2 },
             { value: "grid", label: "Monat", icon: CalendarDays },
           ]}
         />
@@ -2143,10 +2150,10 @@ export default function Dienstplan() {
 
   const [currentDate, setCurrentDate] = useState(initialDate);
   const [dialog, setDialog] = useState<DialogState>({ mode: "closed" });
-  const [mobileView, setMobileView] = usePersistentState<"list" | "grid" | "table">(
+  const [mobileView, setMobileView] = usePersistentState<"list" | "grid">(
     "dienstplan.mobileView",
     "grid",
-    ["list", "grid", "table"],
+    ["list", "grid"],
   );
   // 3.3: Smartphone-Monatsraster startet bei jedem Aufruf eingeklappt
   // (Mini-Balken + Zähler); der Header-Button klappt für die laufende Ansicht
@@ -2474,25 +2481,6 @@ export default function Dienstplan() {
             onPrevMonth={prevMonth}
             onNextMonth={nextMonth}
           />
-        ) : mobileView === "table" ? (
-          <DienstplanTableView
-            days={days}
-            year={year}
-            month={month}
-            tableAssistants={tableAssistants}
-            allShifts={allShifts}
-            isAdmin={isAdmin}
-            isSelectionMode={isSelectionMode}
-            selectedDates={selectedDates}
-            toggleDate={toggleDate}
-            openCreate={openCreate}
-            openEdit={openEdit}
-            onConfirmShift={confirmShift}
-            modelMap={modelMap}
-            personColors={personColors}
-            onPrevMonth={prevMonth}
-            onNextMonth={nextMonth}
-          />
         ) : (
           <MonthGrid
             days={days}
@@ -2559,6 +2547,41 @@ export default function Dienstplan() {
           />
         )}
         </div>
+      </div>
+
+      {/* ── Persistente Wochen-Kapitel-Liste ───────────────────────────────
+           Erscheint dauerhaft unterhalb der Hauptansicht, unabhängig vom
+           gewählten Ansicht-Umschalter. Smartphone: kompaktes Design.
+           Desktop: großzügiger skaliert (comfortable-Variante). ── */}
+      <div className="md:hidden" data-testid="persistent-week-list-mobile">
+        <AgendaView
+          days={days}
+          shifts={visibleShifts}
+          modelMap={modelMap}
+          onDayClick={(day) => openCreate(day)}
+          onShiftClick={openEdit}
+          onConfirmShift={confirmShift}
+          canEdit={isAdmin}
+          selectionMode={isSelectionMode}
+          selectedDates={selectedDates}
+          onToggleDate={toggleDate}
+          variant="compact"
+        />
+      </div>
+      <div className="hidden md:block" data-testid="persistent-week-list-desktop">
+        <AgendaView
+          days={days}
+          shifts={visibleShifts}
+          modelMap={modelMap}
+          onDayClick={(day) => openCreate(day)}
+          onShiftClick={openEdit}
+          onConfirmShift={confirmShift}
+          canEdit={isAdmin}
+          selectionMode={isSelectionMode}
+          selectedDates={selectedDates}
+          onToggleDate={toggleDate}
+          variant="comfortable"
+        />
       </div>
 
       {isAdmin && assistants.length > 0 && (
