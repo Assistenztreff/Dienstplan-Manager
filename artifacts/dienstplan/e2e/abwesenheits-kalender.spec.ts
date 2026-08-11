@@ -349,3 +349,153 @@ test("Dienstplan-Popup: Abwesenheitskalender aus Kalender- und Tabellenansicht (
   await page.keyboard.press("Escape");
   await expect(popup).toHaveCount(0);
 });
+
+// ── Zeitumstellungs-Regressionstests (Task #770) ─────────────────────────────
+// Der Kalender gruppiert Abwesenheiten über startTime.substring(0,10) — der
+// reine UTC-Datums-Schlüssel. Kehrt jemand zu lokaler Zeitinterpretation zurück
+// (z.B. new Date(startTime).toLocaleDateString()), würden Einträge mit
+// T00:00:00.000Z in deutschen Zeitzonen auf den Vortag fallen. Diese Specs
+// fangen genau diese Rendering-Regression auf Browser-Ebene ab.
+//
+// Beide DST-Daten liegen in 2026 (Winterzeit: 25. Oktober, Sommerzeit: 29. März).
+// Der Kalender zeigt standardmäßig das laufende Jahr; die Tests navigieren
+// falls nötig zum richtigen Jahr.
+
+const DST_YEAR = 2026;
+
+async function navigateToYear(page: import("@playwright/test").Page, kalender: import("@playwright/test").Locator, targetYear: number): Promise<void> {
+  const yearLabel = kalender.getByTestId("abwkal-year-label");
+  let current = Number((await yearLabel.textContent())?.trim() ?? "0");
+  while (current < targetYear) {
+    await kalender.getByTestId("abwkal-next-year").click();
+    current = Number((await yearLabel.textContent())?.trim() ?? "0");
+  }
+  while (current > targetYear) {
+    await kalender.getByTestId("abwkal-prev-year").click();
+    current = Number((await yearLabel.textContent())?.trim() ?? "0");
+  }
+}
+
+async function seedSickAbsence(
+  page: import("@playwright/test").Page,
+  userId: number,
+  isoDay: string,
+): Promise<number> {
+  const res = await page.request.post("/api/shifts", {
+    data: {
+      userId,
+      type: "sick",
+      startTime: `${isoDay}T00:00:00.000Z`,
+      endTime:   `${isoDay}T23:59:59.000Z`,
+    },
+  });
+  expect(res.ok(), `Seed-Abwesenheit ${isoDay} fehlgeschlagen (${res.status()})`).toBe(true);
+  return ((await res.json()) as { id: number }).id;
+}
+
+test("Winterzeit-Umstellungstag (25. Oktober): Abwesenheit erscheint auf dem 25., nicht dem 24.", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await loginAsAdmin(page);
+
+  const unique = Date.now();
+  const userRes = await page.request.post("/api/users", {
+    data: {
+      name: `E2E DST Winter ${unique}`,
+      email: `e2e.dst.winter.${unique}@dienstplan.test`,
+      role: "assistant",
+    },
+  });
+  expect(userRes.ok(), `Anlegen fehlgeschlagen (${userRes.status()})`).toBe(true);
+  const assistant = (await userRes.json()) as { id: number; name: string };
+
+  try {
+    // UTC-Konvention: T00:00:00.000Z–T23:59:59.000Z. Am Winterzeit-Umstellungstag
+    // dauert der Berliner Tag 25 Stunden; UTC beträgt trotzdem ~23:59:59, kein
+    // Überlauf auf den nächsten Tag.
+    await seedSickAbsence(page, assistant.id, `${DST_YEAR}-10-25`);
+
+    await page.goto("/abwesenheiten");
+    await page.getByTestId("toggle-abwesenheits-kalender").click();
+    const kalender = page.getByTestId("abwesenheits-kalender");
+    await expect(kalender).toBeVisible();
+
+    await navigateToYear(page, kalender, DST_YEAR);
+
+    await kalender.getByTestId("abwkal-person-filter").click();
+    await page.getByRole("option", { name: assistant.name }).click();
+
+    const grid = kalender.getByTestId("abwkal-grid");
+
+    // 25. Oktober muss die Abwesenheit tragen.
+    await expect(grid.getByTestId(`abwkal-day-${DST_YEAR}-10-25`)).toHaveAttribute(
+      "data-category",
+      "ausfall",
+    );
+    // Vortag (24.) und Folgetag (26.) dürfen keine Abwesenheit dieses
+    // Assistenten zeigen — eine lokale-Zeit-Regression würde den 25. auf den 24. schieben.
+    await expect(grid.getByTestId(`abwkal-day-${DST_YEAR}-10-24`)).not.toHaveAttribute(
+      "data-category",
+    );
+    await expect(grid.getByTestId(`abwkal-day-${DST_YEAR}-10-26`)).not.toHaveAttribute(
+      "data-category",
+    );
+  } finally {
+    await deleteShiftsOf(page, assistant.id);
+    await page.request.delete(`/api/users/${assistant.id}`);
+  }
+});
+
+test("Sommerzeit-Umstellungstag (29. März): Abwesenheit erscheint auf dem 29., nicht dem 28.", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await loginAsAdmin(page);
+
+  const unique = Date.now();
+  const userRes = await page.request.post("/api/users", {
+    data: {
+      name: `E2E DST Sommer ${unique}`,
+      email: `e2e.dst.sommer.${unique}@dienstplan.test`,
+      role: "assistant",
+    },
+  });
+  expect(userRes.ok(), `Anlegen fehlgeschlagen (${userRes.status()})`).toBe(true);
+  const assistant = (await userRes.json()) as { id: number; name: string };
+
+  try {
+    // UTC-Konvention: T00:00:00.000Z–T23:59:59.000Z. Am Sommerzeit-Umstellungstag
+    // dauert der Berliner Tag 23 Stunden; die UTC-Zeitspanne bleibt ~23:59:59,
+    // kein Kurztagfehler.
+    await seedSickAbsence(page, assistant.id, `${DST_YEAR}-03-29`);
+
+    await page.goto("/abwesenheiten");
+    await page.getByTestId("toggle-abwesenheits-kalender").click();
+    const kalender = page.getByTestId("abwesenheits-kalender");
+    await expect(kalender).toBeVisible();
+
+    await navigateToYear(page, kalender, DST_YEAR);
+
+    await kalender.getByTestId("abwkal-person-filter").click();
+    await page.getByRole("option", { name: assistant.name }).click();
+
+    const grid = kalender.getByTestId("abwkal-grid");
+
+    // 29. März muss die Abwesenheit tragen.
+    await expect(grid.getByTestId(`abwkal-day-${DST_YEAR}-03-29`)).toHaveAttribute(
+      "data-category",
+      "ausfall",
+    );
+    // Benachbarte Tage ohne Abwesenheit.
+    await expect(grid.getByTestId(`abwkal-day-${DST_YEAR}-03-28`)).not.toHaveAttribute(
+      "data-category",
+    );
+    await expect(grid.getByTestId(`abwkal-day-${DST_YEAR}-03-30`)).not.toHaveAttribute(
+      "data-category",
+    );
+  } finally {
+    await deleteShiftsOf(page, assistant.id);
+    await page.request.delete(`/api/users/${assistant.id}`);
+  }
+});
