@@ -180,9 +180,9 @@ function buildIso(date: string, time: string): string {
 }
 
 // Ganztägige Einträge werden als UTC-Kalendertag übertragen. Das macht sie
-// unabhängig von der lokalen Browser-Zeitzone: Am Tag der Zeitumstellung wäre
-// 00:00–23:59 in Europe/Berlin sonst 23 bzw. 25 Stunden lang. Der Server
-// verwendet für ganztägige Einträge dieselbe UTC-Tageskonvention.
+// stabil für Zeitzonen mit positivem UTC-Offset (z. B. Europe/Berlin UTC+1/+2):
+// UTC-Mitternacht liegt dort immer am selben Kalendertag wie in der lokalen Anzeige.
+// Der Server verlangt Start und Ende auf demselben UTC-Datum (same-date-Validierung).
 function fullDayTimes(date: string): { startTime: string; endTime: string } {
   return {
     startTime: `${date}T00:00:00.000Z`,

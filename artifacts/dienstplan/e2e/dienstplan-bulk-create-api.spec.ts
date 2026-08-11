@@ -267,6 +267,38 @@ test("weist ungueltige Tageseintraege und Abwesenheits-Typen mit 400 ab", async 
   ).toBe(1);
 });
 
+test("lehnt Team-Eintrag ab der zwei UTC-Tage ueberspannt und akzeptiert UTC-Konvention", async () => {
+  // Team-Eintraege nutzen UTC-Konvention (T00:00:00Z–T23:59:59Z): Start und Ende
+  // auf demselben UTC-Kalendertag. Ein 25h-Interval (Berliner Lokalzeit-Mitternacht
+  // am Winterzeit-Umstellungstag) ueberspannt zwei UTC-Tage und wird abgelehnt —
+  // unabhaengig davon ob die Teamsitzung im Konto aktiv ist.
+  const crossDay = await bulkCreate(adminCtx, {
+    userId: assistantId,
+    type: "team",
+    days: [
+      {
+        startTime: `${YEAR}-10-24T22:00:00.000Z`, // 00:00 CEST (UTC+2)
+        endTime: `${YEAR}-10-25T23:00:00.000Z`, // 00:00 CET (UTC+1, naechster UTC-Tag)
+      },
+    ],
+  });
+  expect(crossDay.status, "25h UTC-tagesuebergreifender Team-Eintrag muss 400 liefern").toBe(400);
+
+  // UTC-Konvention am DST-Tag: selber UTC-Tag, darf nicht von der Datumsvalidierung
+  // abgelehnt werden (zulaessig: 201, 400 team_meeting_disabled, 409 Duplikat).
+  const utcConvention = await bulkCreate(adminCtx, {
+    userId: assistantId,
+    type: "team",
+    days: [{ startTime: `${YEAR}-10-25T00:00:00.000Z`, endTime: `${YEAR}-10-25T23:59:59.000Z` }],
+  });
+  if (utcConvention.status === 400) {
+    expect(
+      utcConvention.body.code,
+      "Datumsvalidierung darf UTC-Konvention nicht ablehnen",
+    ).toBe("team_meeting_disabled");
+  }
+});
+
 test("Team-Eintraege: Schalter beachtet, Tages-Duplikat bleibt auch mit force 409", async () => {
   const day = `${YEAR}-07-20`;
   const first = await bulkCreate(adminCtx, {

@@ -69,6 +69,8 @@ describe("resolveDatabaseUrl", () => {
     APP_DATABASE_URL: process.env.APP_DATABASE_URL,
     DATABASE_URL: process.env.DATABASE_URL,
     SCALEWAY_DB_PASSWORD: process.env.SCALEWAY_DB_PASSWORD,
+    PROD_DATABASE_URL: process.env.PROD_DATABASE_URL,
+    NODE_ENV: process.env.NODE_ENV,
   } as const;
 
   afterEach(() => {
@@ -126,5 +128,31 @@ describe("resolveDatabaseUrl", () => {
     const result = resolveDatabaseUrl()!;
     expect(() => new URL(result)).not.toThrow();
     expect(new URL(result).hostname).toBe("app-host");
+  });
+
+  it("PROD_DATABASE_URL hat in Produktion Vorrang vor APP_DATABASE_URL", () => {
+    process.env.NODE_ENV = "production";
+    process.env.PROD_DATABASE_URL = "postgresql://u:p@prod-host:5432/prod-db";
+    process.env.APP_DATABASE_URL = "postgresql://u:p@staging-host:5432/staging-db";
+    delete process.env.SCALEWAY_DB_PASSWORD;
+    expect(resolveDatabaseUrl()).toBe("postgresql://u:p@prod-host:5432/prod-db");
+  });
+
+  it("PROD_DATABASE_URL wird ausserhalb der Produktion ignoriert", () => {
+    process.env.NODE_ENV = "development";
+    process.env.PROD_DATABASE_URL = "postgresql://u:p@prod-host:5432/prod-db";
+    process.env.APP_DATABASE_URL = "postgresql://u:p@staging-host:5432/staging-db";
+    delete process.env.SCALEWAY_DB_PASSWORD;
+    expect(resolveDatabaseUrl()).toBe("postgresql://u:p@staging-host:5432/staging-db");
+  });
+
+  it("SCALEWAY_DB_PASSWORD ueberschreibt auch das Passwort in PROD_DATABASE_URL", () => {
+    process.env.NODE_ENV = "production";
+    process.env.PROD_DATABASE_URL = "postgresql://u:altespw@prod-host:5432/prod-db";
+    delete process.env.APP_DATABASE_URL;
+    process.env.SCALEWAY_DB_PASSWORD = "neues{pw}#prod";
+    const parsed = new URL(resolveDatabaseUrl()!);
+    expect(decodeURIComponent(parsed.password)).toBe("neues{pw}#prod");
+    expect(parsed.hostname).toBe("prod-host");
   });
 });

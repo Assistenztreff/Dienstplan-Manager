@@ -1068,15 +1068,17 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
   // Duplikatschutz umgehen (die Vorprüfung sieht nur Bestandsdaten).
   const dayMap = new Map<string, { startTime: Date; endTime: Date }>();
   for (const d of body.data.days) {
-    // Jeder Eintrag muss ein einzelner Kalendertag sein. Ein lokaler
-    // Kalendertag kann an der Sommer-/Winterzeitumstellung 23 bzw. 25 Stunden
-    // lang sein; deshalb sind bei Abwesenheiten bis zu 25 Stunden gültig.
-    // Das 92-Tage-Limit bleibt damit nicht umgehbar.
+    // Jeder Eintrag muss exakt einen UTC-Kalendertag umfassen.
+    // Der Client verwendet die UTC-Konvention (T00:00:00.000Z–T23:59:59.000Z),
+    // sodass Start- und Enddatum immer identisch sind. Das schützt vor
+    // willkürlichen 25h-Intervallen, die zwei UTC-Tage überspannen.
     const durationMs = d.endTime.getTime() - d.startTime.getTime();
-    if (durationMs <= 0 || durationMs > 25 * 60 * 60 * 1000) {
+    const startUtcDate = d.startTime.toISOString().split("T")[0]!;
+    const endUtcDate = d.endTime.toISOString().split("T")[0]!;
+    if (durationMs <= 0 || startUtcDate !== endUtcDate) {
       res.status(400).json({
         error:
-          "Ungültiger Tageseintrag: Ende muss nach dem Beginn liegen und innerhalb eines Kalendertags enden.",
+          "Ungültiger Tageseintrag: Start und Ende müssen auf demselben UTC-Kalendertag liegen (T00:00:00Z–T23:59:59Z).",
       });
       return;
     }
@@ -1293,15 +1295,25 @@ router.post("/shifts/bulk", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  // Kalendertage normalisieren und deduplizieren (ein Eintrag pro Tag). Ein
-  // ganztägiger Team-Eintrag darf an der Zeitumstellung 23 bzw. 25 Stunden
-  // lang sein; reguläre (auch 24h-)Dienste bleiben strikt auf 24 Stunden
-  // begrenzt, damit kein Mehrtages-Dienst als einzelner Tag durchrutscht.
+  // Kalendertage normalisieren und deduplizieren (ein Eintrag pro Tag).
+  // Ganztägige Team-Einträge (Teamsitzung) nutzen UTC-Konvention wie
+  // bulk-absence (T00:00:00Z–T23:59:59Z): Start und Ende auf demselben
+  // UTC-Datum. Reguläre Dienste (Aktivdienst, Nacht …) haben spezifische
+  // Zeiten und werden auf ≤24 h begrenzt.
   const dayMap = new Map<string, { startTime: Date; endTime: Date }>();
   for (const d of body.data.days) {
     const durationMs = d.endTime.getTime() - d.startTime.getTime();
-    const maxDurationMs = (type === "team" ? 25 : 24) * 60 * 60 * 1000;
-    if (durationMs <= 0 || durationMs > maxDurationMs) {
+    if (type === "team") {
+      const startUtcDate = d.startTime.toISOString().split("T")[0]!;
+      const endUtcDate = d.endTime.toISOString().split("T")[0]!;
+      if (durationMs <= 0 || startUtcDate !== endUtcDate) {
+        res.status(400).json({
+          error:
+            "Ungültiger Tageseintrag: Start und Ende müssen auf demselben UTC-Kalendertag liegen (T00:00:00Z–T23:59:59Z).",
+        });
+        return;
+      }
+    } else if (durationMs <= 0 || durationMs > 24 * 60 * 60 * 1000) {
       res.status(400).json({
         error:
           "Ungültiger Tageseintrag: Ende muss nach dem Beginn liegen und innerhalb eines Kalendertags enden.",

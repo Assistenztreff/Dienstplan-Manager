@@ -34,11 +34,13 @@ const YEAR = new Date().getFullYear();
 // (Urlaubstage vor Vertragsbeginn) innerhalb desselben Jahres testbar ist.
 const CONTRACT_START = `${YEAR}-03-01`;
 
-// Ganztaegige Zeiten, exakt wie das Frontend sie sendet (00:00–23:59).
+// Ganztaegige Zeiten, exakt wie das Frontend sie sendet (00:00–23:59 UTC).
+// Explizites "Z" damit die Dauer immer ~23:59:59 betraegt — unabhaengig
+// von der lokalen Zeitzone des Testrechners und von DST-Umstellungen.
 function fullDay(day: string): { startTime: string; endTime: string } {
   return {
-    startTime: new Date(`${day}T00:00:00`).toISOString(),
-    endTime: new Date(`${day}T23:59:59`).toISOString(),
+    startTime: `${day}T00:00:00.000Z`,
+    endTime: `${day}T23:59:59.000Z`,
   };
 }
 
@@ -277,7 +279,61 @@ test("ersetzt geplante Dienste am Abwesenheitstag und erbt deren Zeiten", async 
   expect(inherited!.endTime).toBe(shiftEnd);
   expect(inherited!.planningStatus).toBe("FIX");
   const untouched = sickShifts.find(
-    (s) => s.startTime === new Date(`${dayWithout}T00:00:00`).toISOString(),
+    (s) => s.startTime === `${dayWithout}T00:00:00.000Z`,
   );
   expect(untouched, "Tag ohne Dienst bleibt ganztaegig").toBeTruthy();
+});
+
+// ── Zeitumstellungs-Regressionstests (Task #756) ─────────────────────────────
+// In Deutschland ist der Tag der Sommerzeit-Umstellung (letzter Sonntag im
+// Maerz) 23 UTC-Stunden lang; der Tag der Winterzeit-Umstellung (letzter
+// Sonntag im Oktober) 25 UTC-Stunden. Mit UTC-Konvention (T00:00:00.000Z bis
+// T23:59:59.000Z) betraegt die Dauer immer ~23:59:59 — DST-neutral.
+
+test("akzeptiert ganztaegige Abwesenheit am Winterzeit-Umstellungstag (25. Oktober)", async () => {
+  // 25.10.2026: Deutschland stellt auf Winterzeit um (CEST → CET).
+  // Berliner Mitternacht-zu-Mitternacht = 25 UTC-Stunden, aber UTC-Konvention
+  // liefert immer ~23:59:59 — keine falsche 24h-Ueberschreitung.
+  const dst = dayString("10-25");
+  const { status, body } = await bulkAbsence("freizeitausgleich", [dst]);
+  expect(status, "25. Oktober sollte 201 liefern").toBe(201);
+  expect(body.createdCount).toBe(1);
+});
+
+test("akzeptiert ganztaegige Abwesenheit am Sommerzeit-Umstellungstag (29. Maerz)", async () => {
+  // 29.03.2026: Deutschland stellt auf Sommerzeit um (CET → CEST).
+  // Berliner Mitternacht-zu-Mitternacht = 23 UTC-Stunden, UTC-Konvention
+  // liefert weiterhin ~23:59:59 — kein falscher Kurztagfehler.
+  const dst = dayString("03-29");
+  const { status, body } = await bulkAbsence("freizeitausgleich", [dst]);
+  expect(status, "29. Maerz sollte 201 liefern").toBe(201);
+  expect(body.createdCount).toBe(1);
+});
+
+test("akzeptiert Zeitraum ueber die Winterzeit-Umstellung hinweg", async () => {
+  // Drei Tage rund um den 25.10.2026; alle drei muessen angelegt werden.
+  const days = [dayString("10-23"), dayString("10-25"), dayString("10-27")];
+  const { status, body } = await bulkAbsence("freizeitausgleich", days);
+  expect(status, "Zeitraum ueber Winterzeitumstellung sollte 201 liefern").toBe(201);
+  expect(body.createdCount).toBe(3);
+});
+
+test("lehnt Abwesenheit mit Start und Ende auf verschiedenen UTC-Tagen ab (25h Berliner Lokalzeit)", async () => {
+  // Die UTC-Konvention verlangt, dass Start und Ende auf demselben UTC-Kalendertag
+  // liegen (T00:00:00Z–T23:59:59Z). Ein Interval, das zwei UTC-Tage ueberspannt
+  // (Berliner Lokalzeit-Mitternacht am Winterzeit-Umstellungstag = 22:00–23:00 UTC
+  // zwei aufeinanderfolgende Tage, 25h), wird daher mit 400 abgelehnt.
+  const res = await adminCtx.post("/api/shifts/bulk-absence", {
+    data: {
+      userId: assistantId,
+      type: "freistellung",
+      days: [
+        {
+          startTime: "2026-10-24T22:00:00.000Z", // 00:00 CEST (UTC+2)
+          endTime: "2026-10-25T23:00:00.000Z",   // 00:00 CET (UTC+1, naechster Tag)
+        },
+      ],
+    },
+  });
+  expect(res.status(), "Interval ueber zwei UTC-Tage muss 400 liefern").toBe(400);
 });

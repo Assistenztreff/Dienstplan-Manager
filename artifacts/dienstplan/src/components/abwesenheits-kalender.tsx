@@ -276,9 +276,11 @@ export function AbwesenheitsKalender() {
     const map = new Map<string, AbsenceShiftLite[]>();
     for (const s of (allShifts ?? []) as AbsenceShiftLite[]) {
       if (!ABSENCE_TYPES.includes(s.type)) continue;
-      const d = new Date(s.startTime);
-      if (d.getFullYear() !== year) continue;
-      const k = dayKeyOf(d);
+      // UTC-Datum aus dem ISO-String extrahieren (kein `new Date()`, damit
+      // Abwesenheiten mit T00:00:00.000Z auch in Zeitzonen westlich UTC dem
+      // richtigen Kalender-Tag zugeordnet werden).
+      const k = s.startTime.substring(0, 10);
+      if (Number(s.startTime.substring(0, 4)) !== year) continue;
       if (!map.has(k)) map.set(k, []);
       map.get(k)!.push(s);
     }

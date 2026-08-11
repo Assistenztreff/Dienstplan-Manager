@@ -52,23 +52,29 @@ export function normalizeDatabaseUrl(raw: string): string {
 }
 
 /**
- * Liefert die effektive Datenbank-URL: `APP_DATABASE_URL` hat Vorrang vor
- * `DATABASE_URL` (letztere wird auf Replit von der eingebauten Datenbank
- * verwaltet und kann nicht ueberschrieben werden). So kann die
- * Entwicklungsumgebung auf Staging und die veroeffentlichte App auf die
- * Produktions-DB zeigen. Ergebnis ist bereits normalisiert.
+ * Liefert die effektive Datenbank-URL:
+ * - In Produktion (NODE_ENV=production) hat `PROD_DATABASE_URL` hoechste
+ *   Prioritaet, damit das Deploy auf eine eigene Produktions-DB zeigt.
+ * - Danach folgt `APP_DATABASE_URL` (ueberschreibt die von Replit verwaltete
+ *   `DATABASE_URL`, die vom eingebauten Replit-DB-Service gesetzt wird).
+ * - Zuletzt `DATABASE_URL` als Fallback.
+ * Ergebnis ist bereits normalisiert.
  */
 export function resolveDatabaseUrl(): string | undefined {
+  const isProduction = process.env.NODE_ENV === "production";
+  // In Produktion: PROD_DATABASE_URL bevorzugen (eigene Prod-DB).
+  // In Entwicklung: APP_DATABASE_URL bevorzugen (Staging-DB).
+  const fromProd = isProduction ? process.env.PROD_DATABASE_URL : undefined;
   const fromApp = process.env.APP_DATABASE_URL;
-  const raw = fromApp ?? process.env.DATABASE_URL;
+  const overrideUrl = fromProd ?? fromApp;
+  const raw = overrideUrl ?? process.env.DATABASE_URL;
   if (!raw) return undefined;
   let url = normalizeDatabaseUrl(raw);
   // Rotiertes DB-Passwort: SCALEWAY_DB_PASSWORD (Secret) hat Vorrang vor dem
-  // in APP_DATABASE_URL eingebetteten Passwort. So bricht eine Passwort-
-  // Rotation nicht alle hinterlegten URLs (Secrets sind fuer den Agenten
-  // nicht loeschbar und koennen umgebungsspezifische Werte ueberschatten).
+  // in der URL eingebetteten Passwort. Gilt fuer APP_DATABASE_URL und
+  // PROD_DATABASE_URL (beide zeigen auf denselben Scaleway-Server).
   const rotated = process.env.SCALEWAY_DB_PASSWORD;
-  if (fromApp && rotated && isParseableUrl(url)) {
+  if (overrideUrl && rotated && isParseableUrl(url)) {
     const parsed = new URL(url);
     parsed.password = encodeURIComponent(rotated);
     url = parsed.toString();
