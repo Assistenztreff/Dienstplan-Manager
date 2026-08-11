@@ -67,6 +67,35 @@ async function activeContractFor(userId: number, date: Date) {
   return contracts[0] ?? null;
 }
 
+/**
+ * Batch-Variante: lädt den jeweils aktiven Vertrag für mehrere Nutzer in
+ * einer einzigen DB-Abfrage (statt N Abfragen in einer Schleife).
+ * Gibt für jeden userId höchstens einen Eintrag zurück (neuester Vertrag,
+ * der das Datum abdeckt).
+ */
+async function activeContractsForUsers(userIds: number[], date: Date) {
+  if (!userIds.length) return [];
+  const dateStr = date.toISOString().split("T")[0];
+  const all = await db
+    .select()
+    .from(contractsTable)
+    .where(
+      and(
+        inArray(contractsTable.userId, userIds),
+        sql`${contractsTable.startDate} <= ${dateStr}`,
+        or(isNull(contractsTable.endDate), sql`${contractsTable.endDate} >= ${dateStr}`)
+      )
+    )
+    .orderBy(sql`${contractsTable.startDate} DESC`);
+  // Ersten Treffer pro userId behalten (bereits absteigend nach startDate sortiert).
+  const seen = new Set<number>();
+  return all.filter((c) => {
+    if (seen.has(c.userId)) return false;
+    seen.add(c.userId);
+    return true;
+  });
+}
+
 const SAFE_SHIFT_USER = {
   id: usersTable.id,
   name: usersTable.name,
@@ -100,78 +129,97 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
       return;
     }
-    // Liste der Assistenten-IDs innerhalb des Team-Scopes (für Zähler & Warnungen).
-    const teamMemberIds = teamScope.length
-      ? (
-          await db
+
+    const horizonEnd = new Date(todayStart);
+    horizonEnd.setDate(horizonEnd.getDate() + HORIZON_DAYS);
+
+    // ── Gruppe 1: alle Abfragen, die nur teamScope brauchen, parallel ────────
+    const [
+      teamMemberRows,
+      activeShiftsTodayRow,
+      enabledTeamIds,
+      monthShifts,
+      upcomingShifts,
+      horizonShifts,
+      lenientTeamIds,
+    ] = await Promise.all([
+      // Mitglieds-IDs für Zähler & Warnungen
+      teamScope.length
+        ? db
             .selectDistinct({ userId: teamMembersTable.userId })
             .from(teamMembersTable)
             .where(inArray(teamMembersTable.teamId, teamScope))
-        ).map((r) => r.userId)
-      : [];
+        : Promise.resolve([] as { userId: number }[]),
 
-    const [{ totalAssistants }] = await db
-      .select({ totalAssistants: count() })
-      .from(usersTable)
-      .where(
-        and(
-          eq(usersTable.role, "assistant"),
-          teamMemberIds.length ? inArray(usersTable.id, teamMemberIds) : sql`false`,
-        )
-      );
+      // KPI: heutige FIX-Schichten
+      db
+        .select({ activeShiftsToday: count() })
+        .from(shiftsTable)
+        .where(
+          and(
+            inArray(shiftsTable.teamId, teamScope),
+            eq(shiftsTable.planningStatus, "FIX"),
+            sql`${shiftsTable.startTime} >= ${todayStart}`,
+            sql`${shiftsTable.startTime} < ${todayEnd}`,
+          )
+        ),
 
-    const [{ activeShiftsToday }] = await db
-      .select({ activeShiftsToday: count() })
-      .from(shiftsTable)
-      .where(
-        and(
-          inArray(shiftsTable.teamId, teamScope),
-          // Nur verbindlich bestätigte (FIX) Schichten zählen; Entwürfe
-          // (VORLAEUFIG) und Angebote (ANGEBOTEN) verfälschen den KPI nicht.
-          eq(shiftsTable.planningStatus, "FIX"),
-          sql`${shiftsTable.startTime} >= ${todayStart}`,
-          sql`${shiftsTable.startTime} < ${todayEnd}`,
-        )
-      );
+      // Konto-Schalter „Zeiterfassung aktivieren"
+      teamScope.length
+        ? getTimeTrackingEnabledTeamIds(teamScope)
+        : isTimeTrackingEnabledForOwner(userId).then((v) => (v ? [1] : [])),
 
-    // Konto-Schalter „Zeiterfassung aktivieren" (Standard AUS): Bei AUS zeigt
-    // das Dashboard KEINE Zeiterfassungs-Kennzahlen (offene Stundenzettel,
-    // Ist-Stunden, ungezählte offene Einträge) — die Zahlen wären ohne
-    // Erfassung dauerhaft leer bzw. irreführende Bestandsdaten.
-    const timeTrackingEnabled = teamScope.length
-      ? (await getTimeTrackingEnabledTeamIds(teamScope)).length > 0
-      : await isTimeTrackingEnabledForOwner(userId);
+      // Monatliche FIX-Schichten (Soll-Stunden)
+      db
+        .select({ startTime: shiftsTable.startTime, endTime: shiftsTable.endTime })
+        .from(shiftsTable)
+        .where(
+          and(
+            inArray(shiftsTable.teamId, teamScope),
+            eq(shiftsTable.planningStatus, "FIX"),
+            sql`EXTRACT(MONTH FROM ${shiftsTable.startTime}) = ${month}`,
+            sql`EXTRACT(YEAR FROM ${shiftsTable.startTime}) = ${year}`,
+          )
+        ),
 
-    const [{ pendingTimeEntries }] = timeTrackingEnabled
-      ? await db
-          .select({ pendingTimeEntries: count() })
-          .from(timeTrackingTable)
-          .where(and(inArray(timeTrackingTable.teamId, teamScope), eq(timeTrackingTable.status, "pending")))
-      : [{ pendingTimeEntries: 0 }];
+      // Nächste 5 Schichten (für die Kachel)
+      db
+        .select({
+          id: shiftsTable.id,
+          userId: shiftsTable.userId,
+          startTime: shiftsTable.startTime,
+          endTime: shiftsTable.endTime,
+          type: shiftsTable.type,
+          notes: shiftsTable.notes,
+          createdAt: shiftsTable.createdAt,
+          user: SAFE_SHIFT_USER,
+        })
+        .from(shiftsTable)
+        .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
+        .where(and(inArray(shiftsTable.teamId, teamScope), sql`${shiftsTable.startTime} >= ${today}`))
+        .limit(5),
 
-    const monthShifts = await db
-      .select({ startTime: shiftsTable.startTime, endTime: shiftsTable.endTime })
-      .from(shiftsTable)
-      .where(
-        and(
-          inArray(shiftsTable.teamId, teamScope),
-          // Geplante Soll-Stunden zählen nur verbindlich bestätigte (FIX)
-          // Schichten; Entwürfe/Vorschläge verfälschen die Zahl nicht.
-          eq(shiftsTable.planningStatus, "FIX"),
-          sql`EXTRACT(MONTH FROM ${shiftsTable.startTime}) = ${month}`,
-          sql`EXTRACT(YEAR FROM ${shiftsTable.startTime}) = ${year}`,
-        )
-      );
-    const monthlyPlannedHours = monthShifts.reduce(
-      (acc, s) => acc + (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3_600_000,
-      0
-    );
+      // Horizon-Schichten für Abdeckungs-Warnung
+      db
+        .select({ startTime: shiftsTable.startTime, endTime: shiftsTable.endTime })
+        .from(shiftsTable)
+        .where(
+          and(
+            inArray(shiftsTable.teamId, teamScope),
+            sql`${shiftsTable.startTime} < ${horizonEnd}`,
+            sql`${shiftsTable.endTime} > ${todayStart}`,
+          )
+        ),
 
-    // Ist-Stunden: bestätigte Einträge zählen immer. In Teams von
-    // Free-Eigentümern (kein strictTimeTracking → kein Freigabe-Workflow)
-    // zählen auch "offene" Einträge — sonst blieben erfasste Stunden für
-    // Free-Konten dauerhaft unsichtbar. Abgelehnte zählen nie.
-    const lenientTeamIds = await getLenientTimeTrackingTeamIds(teamScope);
+      // Lenient-Teams (Free-Eigentümer ohne Freigabe-Workflow)
+      getLenientTimeTrackingTeamIds(teamScope),
+    ]);
+
+    const teamMemberIds = teamMemberRows.map((r) => r.userId);
+    const timeTrackingEnabled = enabledTeamIds.length > 0;
+    const strictTeamIds = teamScope.filter((id) => !lenientTeamIds.includes(id));
+
+    // ── Gruppe 2: abhängig von teamMemberIds und timeTrackingEnabled ─────────
     const statusCondition = lenientTeamIds.length
       ? or(
           eq(timeTrackingTable.status, "confirmed"),
@@ -181,112 +229,131 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
           ),
         )
       : eq(timeTrackingTable.status, "confirmed");
-    const monthTimeEntries = timeTrackingEnabled
-      ? await db
-          .select({ actualHours: timeTrackingTable.actualHours })
-          .from(timeTrackingTable)
-          .where(
-            and(
-              inArray(timeTrackingTable.teamId, teamScope),
-              sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${month}`,
-              sql`EXTRACT(YEAR FROM ${timeTrackingTable.actualStart}) = ${year}`,
-              statusCondition,
-            )
+
+    const [
+      totalAssistantsRow,
+      assistants,
+      pendingTimeEntriesRow,
+      monthTimeEntries,
+      uncountedEntries,
+      recentTimeEntries,
+    ] = await Promise.all([
+      // KPI: Anzahl aktiver Assistenzkräfte
+      db
+        .select({ totalAssistants: count() })
+        .from(usersTable)
+        .where(
+          and(
+            eq(usersTable.role, "assistant"),
+            teamMemberIds.length ? inArray(usersTable.id, teamMemberIds) : sql`false`,
           )
-      : [];
-    // Bei deaktivierter Zeiterfassung gibt es keine Ist-Stunden — die
-    // Ist-Kennzahl zeigt dann die geplanten FIX-Stunden (planbasiert), damit
-    // die Kachel konsistent bleibt und keine Zeiterfassungs-Werte auftauchen.
+        ),
+
+      // Assistenten-Liste für Urlaubs-Warnhinweise
+      teamMemberIds.length
+        ? db
+            .select({ id: usersTable.id, name: usersTable.name })
+            .from(usersTable)
+            .where(
+              and(
+                eq(usersTable.role, "assistant"),
+                eq(usersTable.isActive, true),
+                inArray(usersTable.id, teamMemberIds),
+              )
+            )
+        : Promise.resolve([] as { id: number; name: string }[]),
+
+      // KPI: offene Zeiteinträge
+      timeTrackingEnabled
+        ? db
+            .select({ pendingTimeEntries: count() })
+            .from(timeTrackingTable)
+            .where(and(inArray(timeTrackingTable.teamId, teamScope), eq(timeTrackingTable.status, "pending")))
+        : Promise.resolve([{ pendingTimeEntries: 0 }] as { pendingTimeEntries: number | bigint }[]),
+
+      // Ist-Stunden des Monats (bestätigt + ggf. offen in lenient-Teams)
+      timeTrackingEnabled
+        ? db
+            .select({ actualHours: timeTrackingTable.actualHours })
+            .from(timeTrackingTable)
+            .where(
+              and(
+                inArray(timeTrackingTable.teamId, teamScope),
+                sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${month}`,
+                sql`EXTRACT(YEAR FROM ${timeTrackingTable.actualStart}) = ${year}`,
+                statusCondition,
+              )
+            )
+        : Promise.resolve([] as { actualHours: number | null }[]),
+
+      // Offene Stunden in strikten Teams (Premium-Upgrade-Hinweis)
+      timeTrackingEnabled && strictTeamIds.length
+        ? db
+            .select({ actualHours: timeTrackingTable.actualHours })
+            .from(timeTrackingTable)
+            .where(
+              and(
+                inArray(timeTrackingTable.teamId, strictTeamIds),
+                eq(timeTrackingTable.status, "pending"),
+                sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${month}`,
+                sql`EXTRACT(YEAR FROM ${timeTrackingTable.actualStart}) = ${year}`,
+              )
+            )
+        : Promise.resolve([] as { actualHours: number | null }[]),
+
+      // Letzte 5 Zeiteinträge
+      timeTrackingEnabled
+        ? db
+            .select({
+              id: timeTrackingTable.id,
+              userId: timeTrackingTable.userId,
+              shiftId: timeTrackingTable.shiftId,
+              actualStart: timeTrackingTable.actualStart,
+              actualEnd: timeTrackingTable.actualEnd,
+              actualHours: timeTrackingTable.actualHours,
+              status: timeTrackingTable.status,
+              notes: timeTrackingTable.notes,
+              confirmedBy: timeTrackingTable.confirmedBy,
+              confirmedAt: timeTrackingTable.confirmedAt,
+              createdAt: timeTrackingTable.createdAt,
+              user: SAFE_SHIFT_USER,
+            })
+            .from(timeTrackingTable)
+            .leftJoin(usersTable, eq(timeTrackingTable.userId, usersTable.id))
+            .where(inArray(timeTrackingTable.teamId, teamScope))
+            .limit(5)
+        : Promise.resolve([] as never[]),
+    ]);
+
+    // ── Gruppe 3: Verträge aller Assistenten in einer Abfrage (kein N+1) ─────
+    // Ersetzt: for (assistant of assistants) { await activeContractFor(...) }
+    const activeContracts = await activeContractsForUsers(
+      assistants.map((a) => a.id),
+      todayStart,
+    );
+    const contractByUserId = new Map(activeContracts.map((c) => [c.userId, c]));
+
+    // ── Berechnungen ──────────────────────────────────────────────────────────
+    const monthlyPlannedHours = monthShifts.reduce(
+      (acc, s) => acc + (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3_600_000,
+      0
+    );
     const monthlyActualHours = timeTrackingEnabled
       ? monthTimeEntries.reduce((acc, e) => acc + (e.actualHours ?? 0), 0)
       : monthlyPlannedHours;
-
-    // Offene Einträge in STRIKTEN Teams (Premium-Eigentümer) fließen nicht in
-    // monthlyActualHours ein. Nach einem Upgrade Free→Premium würden zuvor
-    // gezählte "offene" Stunden sonst kommentarlos verschwinden — deshalb wird
-    // die nicht gezählte Summe explizit ausgewiesen, damit das Frontend einen
-    // Hinweis mit geführtem Weg zum Nachbestätigen zeigen kann.
-    const strictTeamIds = teamScope.filter((id) => !lenientTeamIds.includes(id));
-    let uncountedPendingHours = 0;
-    let uncountedPendingEntries = 0;
-    if (timeTrackingEnabled && strictTeamIds.length) {
-      const uncounted = await db
-        .select({ actualHours: timeTrackingTable.actualHours })
-        .from(timeTrackingTable)
-        .where(
-          and(
-            inArray(timeTrackingTable.teamId, strictTeamIds),
-            eq(timeTrackingTable.status, "pending"),
-            sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${month}`,
-            sql`EXTRACT(YEAR FROM ${timeTrackingTable.actualStart}) = ${year}`,
-          )
-        );
-      uncountedPendingEntries = uncounted.length;
-      uncountedPendingHours = uncounted.reduce((acc, e) => acc + (e.actualHours ?? 0), 0);
-    }
-
-    const upcomingShifts = await db
-      .select({
-        id: shiftsTable.id,
-        userId: shiftsTable.userId,
-        startTime: shiftsTable.startTime,
-        endTime: shiftsTable.endTime,
-        type: shiftsTable.type,
-        notes: shiftsTable.notes,
-        createdAt: shiftsTable.createdAt,
-        user: SAFE_SHIFT_USER,
-      })
-      .from(shiftsTable)
-      .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
-      .where(and(inArray(shiftsTable.teamId, teamScope), sql`${shiftsTable.startTime} >= ${today}`))
-      .limit(5);
-
-    const recentTimeEntries = timeTrackingEnabled
-      ? await db
-          .select({
-            id: timeTrackingTable.id,
-            userId: timeTrackingTable.userId,
-            shiftId: timeTrackingTable.shiftId,
-            actualStart: timeTrackingTable.actualStart,
-            actualEnd: timeTrackingTable.actualEnd,
-            actualHours: timeTrackingTable.actualHours,
-            status: timeTrackingTable.status,
-            notes: timeTrackingTable.notes,
-            confirmedBy: timeTrackingTable.confirmedBy,
-            confirmedAt: timeTrackingTable.confirmedAt,
-            createdAt: timeTrackingTable.createdAt,
-            user: SAFE_SHIFT_USER,
-          })
-          .from(timeTrackingTable)
-          .leftJoin(usersTable, eq(timeTrackingTable.userId, usersTable.id))
-          .where(inArray(timeTrackingTable.teamId, teamScope))
-          .limit(5)
-      : [];
-
-    // --- Warnhinweise (nur Admin) ---
-    const assistants = teamMemberIds.length
-      ? await db
-          .select({ id: usersTable.id, name: usersTable.name })
-          .from(usersTable)
-          .where(
-            and(
-              eq(usersTable.role, "assistant"),
-              eq(usersTable.isActive, true),
-              inArray(usersTable.id, teamMemberIds),
-            )
-          )
-      : [];
+    const uncountedPendingHours = uncountedEntries.reduce((acc, e) => acc + (e.actualHours ?? 0), 0);
+    const uncountedPendingEntries = uncountedEntries.length;
+    const { pendingTimeEntries } = pendingTimeEntriesRow[0];
+    const { totalAssistants } = totalAssistantsRow[0];
 
     const vacationCandidates: VacationCandidate[] = [];
-    // Umrechnungsfaktor (vacationHoursPerDay) je Vertrags-Team einmalig
-    // auflösen — die Resttage werden aus der stundengenauen Buchhaltung
-    // abgeleitet (vacation_days_used existiert nicht mehr).
     const opsByTeam = new Map<number, ResolvedAllowanceOps>();
     for (const assistant of assistants) {
-      const contract = await activeContractFor(assistant.id, todayStart);
+      const contract = contractByUserId.get(assistant.id);
       if (!contract) continue;
       let ops = opsByTeam.get(contract.teamId);
       if (!ops) {
+        // resolveAllowanceOps pro Team nur einmal (bereits gecacht via Map)
         ops = await resolveAllowanceOps(contract.teamId);
         opsByTeam.set(contract.teamId, ops);
       }
@@ -299,26 +366,11 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       });
     }
     const lowVacationAssistants = computeLowVacationAssistants(vacationCandidates);
-
-    const horizonEnd = new Date(todayStart);
-    horizonEnd.setDate(horizonEnd.getDate() + HORIZON_DAYS);
-    // Eine Schicht deckt jeden Tag ab, den sie überlappt (auch über Mitternacht
-    // laufende Nachtdienste), nicht nur ihren Starttag.
-    const horizonShifts = await db
-      .select({ startTime: shiftsTable.startTime, endTime: shiftsTable.endTime })
-      .from(shiftsTable)
-      .where(
-        and(
-          inArray(shiftsTable.teamId, teamScope),
-          sql`${shiftsTable.startTime} < ${horizonEnd}`,
-          sql`${shiftsTable.endTime} > ${todayStart}`,
-        )
-      );
     const uncoveredDays = computeUncoveredDays(horizonShifts, todayStart, HORIZON_DAYS);
 
     res.json({
       totalAssistants: Number(totalAssistants),
-      activeShiftsToday: Number(activeShiftsToday),
+      activeShiftsToday: Number(activeShiftsTodayRow[0].activeShiftsToday),
       pendingTimeEntries: Number(pendingTimeEntries),
       monthlyPlannedHours: Math.round(monthlyPlannedHours * 100) / 100,
       monthlyActualHours: Math.round(monthlyActualHours * 100) / 100,
@@ -330,10 +382,6 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       recentTimeEntries,
       warnings: {
         pendingTimeEntries: Number(pendingTimeEntries),
-        // "Offen" ist nur dann ein To-do, wenn im Scope mindestens ein Team
-        // mit Freigabe-Workflow (strictTimeTracking, Premium-Eigentümer)
-        // existiert. Sind ALLE Teams lenient (Free), ist "offen" der
-        // Normalzustand — das Frontend blendet die Warnung dann aus.
         timeTrackingConfirmable:
           timeTrackingEnabled &&
           (teamScope.length === 0 || lenientTeamIds.length < teamScope.length),

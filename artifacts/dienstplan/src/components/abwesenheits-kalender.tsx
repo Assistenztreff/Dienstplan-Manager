@@ -18,6 +18,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useBulkCreateAbsence,
+  useBulkDeleteShifts,
   useDeleteShift,
   useListShifts,
   useListUsers,
@@ -148,6 +149,7 @@ export function AbwesenheitsKalender() {
   const { data: allShifts } = useListShifts();
   const bulkCreateAbsence = useBulkCreateAbsence();
   const deleteShift = useDeleteShift();
+  const bulkDeleteShifts = useBulkDeleteShifts();
 
   const assistants = useMemo(
     () => (users ?? []).filter((u) => u.role === "assistant"),
@@ -174,6 +176,8 @@ export function AbwesenheitsKalender() {
   const [saving, setSaving] = useState(false);
   const [dayDetail, setDayDetail] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  // Für "Zeitraum löschen": userId+type des laufenden Bulk-Deletes.
+  const [deletingRange, setDeletingRange] = useState<string | null>(null);
   // Smartphone-Akkordeon: aktueller Monat startet aufgeklappt.
   const [openMonth, setOpenMonth] = useState<number>(() => new Date().getMonth());
 
@@ -451,18 +455,74 @@ export function AbwesenheitsKalender() {
     setDeletingId(id);
     try {
       await deleteShift.mutateAsync({ id });
-      // Sofort reagieren (Task #751): Eintrag aus dem Cache nehmen statt auf
-      // den vollständigen Reload zu warten; Abgleich läuft im Hintergrund.
+      // Sofort reagieren: Eintrag aus dem Cache nehmen statt auf Reload zu warten.
       removeShiftsFromCache(queryClient, [id]);
       void invalidate();
       toast({ title: "Abwesenheit entfernt" });
       // Wenn für den Tag nichts mehr übrig ist, Detailansicht schließen.
       if (dayDetail && visibleAbsences(dayDetail).length <= 1) setDayDetail(null);
     } catch {
-      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
+      if (!navigator.onLine) return;
       toast({ title: "Entfernen fehlgeschlagen", variant: "destructive" });
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  /**
+   * Findet alle Shift-IDs, die zum gleichen zusammenhängenden Abwesenheits-
+   * Zeitraum gehören wie der angeklickte Eintrag (selber Nutzer, selbe Art,
+   * lückenlos aufeinanderfolgende Tage).
+   */
+  function findAbsenceRangeIds(userId: number, type: string, dayKey: string): number[] {
+    const same = ((allShifts ?? []) as AbsenceShiftLite[])
+      .filter((s) => s.userId === userId && s.type === type)
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+    // Aufeinanderfolgende Tage zu Segmenten gruppieren (Lücke > 1 Tag = neues Segment).
+    const segments: { id: number; key: string }[][] = [];
+    let seg: { id: number; key: string }[] = [];
+    for (const s of same) {
+      const key = s.startTime.substring(0, 10);
+      if (seg.length === 0) {
+        seg.push({ id: s.id, key });
+      } else {
+        const lastKey = seg[seg.length - 1].key;
+        const diffDays = Math.round(
+          (new Date(`${key}T00:00:00`).getTime() - new Date(`${lastKey}T00:00:00`).getTime()) /
+            86_400_000,
+        );
+        if (diffDays <= 1) {
+          seg.push({ id: s.id, key });
+        } else {
+          segments.push(seg);
+          seg = [{ id: s.id, key }];
+        }
+      }
+    }
+    if (seg.length > 0) segments.push(seg);
+
+    const found = segments.find((sg) => sg.some((e) => e.key === dayKey));
+    return found ? found.map((e) => e.id) : [];
+  }
+
+  /** Löscht alle Tage eines zusammenhängenden Abwesenheits-Zeitraums auf einmal. */
+  async function handleDeleteRange(userId: number, type: string, dayKey: string) {
+    const rangeKey = `${userId}:${type}`;
+    const ids = findAbsenceRangeIds(userId, type, dayKey);
+    if (!ids.length) return;
+    setDeletingRange(rangeKey);
+    try {
+      await bulkDeleteShifts.mutateAsync({ data: { ids } });
+      removeShiftsFromCache(queryClient, ids);
+      void invalidate();
+      toast({ title: `${ids.length} Abwesenheitstag${ids.length === 1 ? "" : "e"} entfernt` });
+      setDayDetail(null);
+    } catch {
+      if (!navigator.onLine) return;
+      toast({ title: "Entfernen fehlgeschlagen", variant: "destructive" });
+    } finally {
+      setDeletingRange(null);
     }
   }
 
@@ -787,29 +847,54 @@ export function AbwesenheitsKalender() {
           <div className="space-y-2">
             {(dayDetail ? visibleAbsences(dayDetail) : []).map((s) => {
               const canDelete = canManage || s.userId === currentUser?.id;
+              const rangeKey = `${s.userId}:${s.type}`;
+              const rangeIds = canDelete ? findAbsenceRangeIds(s.userId, s.type, s.startTime.substring(0, 10)) : [];
+              const rangeSize = rangeIds.length;
+              const isRangeDeleting = deletingRange === rangeKey;
+              const isSingleDeleting = deletingId === s.id;
+              const anyDeleting = isRangeDeleting || isSingleDeleting;
               return (
                 <div
                   key={s.id}
-                  className="flex items-center justify-between gap-2 rounded-md border border-border/40 px-3 py-2"
+                  className="rounded-md border border-border/40 px-3 py-2 space-y-2"
                   data-testid={`abwkal-day-entry-${s.id}`}
                 >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{userName(s.userId)}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {ABSENCE_TYPE_LABELS[s.type] ?? s.type}
-                    </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{userName(s.userId)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {ABSENCE_TYPE_LABELS[s.type] ?? s.type}
+                      </p>
+                    </div>
+                    {canDelete && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-destructive shrink-0"
+                        onClick={() => handleDelete(s.id)}
+                        disabled={anyDeleting}
+                        aria-label="Nur diesen Tag löschen"
+                        title="Nur diesen Tag löschen"
+                        data-testid={`abwkal-delete-${s.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
-                  {canDelete && (
+                  {/* Zeitraum-Lösch-Button: erscheint nur bei Zeiträumen > 1 Tag */}
+                  {canDelete && rangeSize > 1 && (
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      className="h-8 w-8 p-0 text-destructive"
-                      onClick={() => handleDelete(s.id)}
-                      disabled={deletingId === s.id}
-                      aria-label="Abwesenheit löschen"
-                      data-testid={`abwkal-delete-${s.id}`}
+                      className="h-7 w-full gap-1.5 text-xs text-destructive border-destructive/30 hover:bg-destructive/5"
+                      onClick={() => handleDeleteRange(s.userId, s.type, s.startTime.substring(0, 10))}
+                      disabled={anyDeleting}
+                      data-testid={`abwkal-delete-range-${s.id}`}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3 w-3" />
+                      {isRangeDeleting
+                        ? "Wird gelöscht…"
+                        : `Zeitraum löschen (${rangeSize} Tage)`}
                     </Button>
                   )}
                 </div>

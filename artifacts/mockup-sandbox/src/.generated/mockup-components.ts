@@ -3,8 +3,6 @@ type ModuleMap = Record<string, () => Promise<Record<string, unknown>>>;
 export const modules: ModuleMap = {
   "./components/mockups/agenda-mobil/KompakteListe.tsx": () => import("../components/mockups/agenda-mobil/KompakteListe.tsx"),
   "./components/mockups/agenda-mobil/WochenKapitel.tsx": () => import("../components/mockups/agenda-mobil/WochenKapitel.tsx"),
-  "./components/mockups/dashboard-polish/DashboardAkzent.tsx": () => import("../components/mockups/dashboard-polish/DashboardAkzent.tsx"),
-  "./components/mockups/dashboard-polish/DashboardRuhig.tsx": () => import("../components/mockups/dashboard-polish/DashboardRuhig.tsx"),
   "./components/mockups/dienstplan-layouts/Cockpit.tsx": () => import("../components/mockups/dienstplan-layouts/Cockpit.tsx"),
   "./components/mockups/dienstplan-layouts/MonatsBuehne.tsx": () => import("../components/mockups/dienstplan-layouts/MonatsBuehne.tsx"),
   "./components/mockups/dienstplan-layouts/Wochenband.tsx": () => import("../components/mockups/dienstplan-layouts/Wochenband.tsx"),
@@ -27,5 +25,7 @@ export const modules: ModuleMap = {
   "./components/mockups/startseite/MobileDashboard.tsx": () => import("../components/mockups/startseite/MobileDashboard.tsx"),
   "./components/mockups/startseite/MobileMenu.tsx": () => import("../components/mockups/startseite/MobileMenu.tsx"),
   "./components/mockups/startseite/MobileStartseite.tsx": () => import("../components/mockups/startseite/MobileStartseite.tsx"),
-  "./components/mockups/startseite/Startseite.tsx": () => import("../components/mockups/startseite/Startseite.tsx")
+  "./components/mockups/startseite/Startseite.tsx": () => import("../components/mockups/startseite/Startseite.tsx"),
+  "./components/mockups/dashboard-polish/DashboardAkzent.tsx": () => import("../components/mockups/dashboard-polish/DashboardAkzent.tsx"),
+  "./components/mockups/dashboard-polish/DashboardRuhig.tsx": () => import("../components/mockups/dashboard-polish/DashboardRuhig.tsx")
 };
