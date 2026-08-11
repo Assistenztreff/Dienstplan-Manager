@@ -1563,11 +1563,17 @@ router.post("/shifts/bulk", requireAuth, async (req, res): Promise<void> => {
   }
   const effectiveTeams = isAdmin ? undefined : teamleiterTeams;
 
-  const write = await resolveWriteTeamId(
-    req.session.userId!,
-    body.data.teamId ?? undefined,
-    effectiveTeams?.length ? effectiveTeams : undefined,
-  );
+  // ── Gruppe 1 (parallel): Team-Auflösung + Koordinator-Check ────────────────
+  // isKoordinatorUser hängt nur von userId ab — kann gleichzeitig mit
+  // resolveWriteTeamId laufen, das teamId nicht kennt.
+  const [write, isKoordinator] = await Promise.all([
+    resolveWriteTeamId(
+      req.session.userId!,
+      body.data.teamId ?? undefined,
+      effectiveTeams?.length ? effectiveTeams : undefined,
+    ),
+    isKoordinatorUser(userId),
+  ]);
   if (!write.ok) {
     if (write.reason === "forbidden") {
       res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
@@ -1576,20 +1582,16 @@ router.post("/shifts/bulk", requireAuth, async (req, res): Promise<void> => {
     }
     return;
   }
-  if (!(await isUserMemberOfTeam(userId, write.teamId))) {
-    res.status(403).json({ error: "Nutzer gehört nicht zu diesem Team" });
-    return;
-  }
-
   // Koordinatoren sind Verwaltungspersonen, nie Personal (wie Einzel-Route).
-  if (await isKoordinatorUser(userId)) {
+  if (isKoordinator) {
     res.status(403).json({
       error: "Für Teamkoordinatoren können keine Dienste geplant werden.",
     });
     return;
   }
 
-  // Kalendertage normalisieren und deduplizieren (ein Eintrag pro Tag).
+  // Kalendertage normalisieren und deduplizieren (ein Eintrag pro Tag) — rein
+  // rechnerisch, kein DB-Zugriff, daher hier vor Gruppe 2.
   // Team-Einträge: UTC-Tagesgrenz-Prüfung wie bulk-absence (DST-neutral;
   //   T00:00:00Z–T23:59:59Z besteht immer, 25-h-Berliner-Mitternacht wird
   //   abgelehnt, weil sie zwei UTC-Tage überspannt).
@@ -1627,12 +1629,29 @@ router.post("/shifts/bulk", requireAuth, async (req, res): Promise<void> => {
     if (!dayMap.has(key)) dayMap.set(key, { startTime: d.startTime, endTime: d.endTime });
   }
   const days = [...dayMap.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const latest = days[days.length - 1]![1].startTime;
 
-  // Team-Einträge: Konto-Schalter des Team-Eigentümers muss AN sein. Der
-  // Duplikat-Check gegen den Bestand (pro Tag und Team nur EIN Eintrag,
-  // Duplikate würden die Stunden-Gutschrift verdoppeln; force umgeht das
-  // bewusst NICHT) läuft race-sicher INNERHALB der Transaktion unten.
-  if (type === "team" && !(await teamMeetingEnabledForTeam(write.teamId))) {
+  // ── Gruppe 2 (parallel): Mitgliedschaft, Modell-Scope, Teamsitzungs-Schalter ─
+  // Alle drei brauchen write.teamId (→ nach Gruppe 1) und keinen DB-Wert des
+  // jeweils anderen — laufen also gleichzeitig.
+  const [isMember, modelBelongsToTeam, teamMeetingOk] = await Promise.all([
+    isUserMemberOfTeam(userId, write.teamId),
+    shiftModelId != null
+      ? isShiftModelInTeam(shiftModelId, write.teamId)
+      : Promise.resolve(true),
+    type === "team"
+      ? teamMeetingEnabledForTeam(write.teamId)
+      : Promise.resolve(true),
+  ]);
+  if (!isMember) {
+    res.status(403).json({ error: "Nutzer gehört nicht zu diesem Team" });
+    return;
+  }
+  if (!modelBelongsToTeam) {
+    res.status(403).json({ error: "Schichtmodell gehört nicht zu diesem Team" });
+    return;
+  }
+  if (!teamMeetingOk) {
     res.status(400).json({
       error: "Der Team-Dienst (Teamsitzung) ist in den Einstellungen deaktiviert.",
       code: "team_meeting_disabled",
@@ -1641,8 +1660,8 @@ router.post("/shifts/bulk", requireAuth, async (req, res): Promise<void> => {
   }
 
   // Free-Limit (historyMonths) gegen den SPÄTESTEN Tag — ein Verstoß blockt
-  // den gesamten Auftrag (kein Teil-Zeitraum).
-  const latest = days[days.length - 1]![1].startTime;
+  // den gesamten Auftrag (kein Teil-Zeitraum). Sendet die Antwort selbst →
+  // bleibt sequenziell nach Gruppe 2.
   if (await forwardPlanningBlocked(write.teamId, req.session.userId!, latest, res)) {
     return;
   }
@@ -1660,14 +1679,6 @@ router.post("/shifts/bulk", requireAuth, async (req, res): Promise<void> => {
     const allowedForEinsatz = await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!);
     if (!allowedForEinsatz.includes(body.data.einsatzTeamId)) {
       res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
-      return;
-    }
-  }
-
-  // Das verknüpfte Schichtmodell muss zum Ziel-Team gehören.
-  if (shiftModelId != null) {
-    if (!(await isShiftModelInTeam(shiftModelId, write.teamId))) {
-      res.status(403).json({ error: "Schichtmodell gehört nicht zu diesem Team" });
       return;
     }
   }
@@ -1712,58 +1723,144 @@ router.post("/shifts/bulk", requireAuth, async (req, res): Promise<void> => {
       type === "team" ? `shifts-bulk:team:${write.teamId}` : `shifts-bulk:user:${userId}`;
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
 
+    // ── Batch-Duplikat-/Überschneidungsprüfung (1 Query statt N) ────────────
     if (type === "team") {
-      const duplicateDates: string[] = [];
-      for (const [key, t] of days) {
-        const duplicate = await findDuplicateTeamEntry(write.teamId, t.startTime, null);
-        if (duplicate) duplicateDates.push(key);
-      }
+      // Eine Query für alle Team-Einträge im Datumsbereich, Auswertung in-memory.
+      const firstDayStart = new Date(`${days[0]![0]}T00:00:00.000Z`);
+      const lastDayEnd = new Date(
+        `${days[days.length - 1]![0]}T00:00:00.000Z`
+      );
+      lastDayEnd.setUTCDate(lastDayEnd.getUTCDate() + 1);
+      const existingTeamRows = await tx
+        .select({ startTime: shiftsTable.startTime })
+        .from(shiftsTable)
+        .where(
+          and(
+            eq(shiftsTable.teamId, write.teamId),
+            eq(shiftsTable.type, "team" as const),
+            gte(shiftsTable.startTime, firstDayStart),
+            lt(shiftsTable.startTime, lastDayEnd),
+          ),
+        );
+      const existingTeamDays = new Set(
+        existingTeamRows.map((r) => r.startTime.toISOString().split("T")[0]!),
+      );
+      const duplicateDates = days
+        .filter(([key]) => existingTeamDays.has(key))
+        .map(([key]) => key);
       if (duplicateDates.length > 0) {
         return { kind: "team_duplicate" as const, conflictDates: duplicateDates };
       }
     } else if (!force) {
+      // Eine Query über das gesamte Zeitfenster aller Tage, Zuordnung in-memory.
+      const minStart = days[0]![1].startTime;
+      const maxEnd = days.reduce(
+        (acc, [, t]) => (t.endTime > acc ? t.endTime : acc),
+        days[0]![1].endTime,
+      );
+      const existing = await tx
+        .select({
+          startTime: shiftsTable.startTime,
+          endTime: shiftsTable.endTime,
+        })
+        .from(shiftsTable)
+        .where(
+          and(
+            eq(shiftsTable.userId, userId),
+            notInArray(shiftsTable.type, [
+              "vacation",
+              "sick",
+              "team",
+              "kind_krank",
+              "freistellung",
+              "abgesagt_ag",
+              "abgesagt_an",
+              "urlaubsabgeltung",
+              "freizeitausgleich",
+            ]),
+            lt(shiftsTable.startTime, maxEnd),
+            gt(shiftsTable.endTime, minStart),
+          ),
+        );
       const conflictDates = new Set<string>();
       for (const [key, t] of days) {
-        const conflicts = await findOverlappingShifts(userId, t.startTime, t.endTime, null);
-        if (conflicts.length > 0) conflictDates.add(key);
+        if (existing.some((c) => c.startTime < t.endTime && c.endTime > t.startTime)) {
+          conflictDates.add(key);
+        }
       }
       if (conflictDates.size > 0) {
         return { kind: "overlap" as const, conflictDates: [...conflictDates].sort() };
       }
     }
 
-    const ids: number[] = [];
-    for (const [, t] of days) {
+    // ── Batch-INSERT (1 Query statt N) ───────────────────────────────────────
+    const insertValues = days.map(([, t]) => {
       let { startTime, endTime } = t;
       if (type === "team") {
         const normalized = normalizeTeamEntryTimes(startTime);
         startTime = normalized.startTime;
         endTime = normalized.endTime;
       }
-      const [shift] = await tx
-        .insert(shiftsTable)
-        .values({
-          userId,
-          teamId: write.teamId,
-          startTime,
-          endTime,
-          type,
-          shiftModelId: shiftModelId ?? null,
-          notes: body.data.notes ?? null,
-          ...(type === "team"
-            ? { planningStatus: "FIX" as const, isVertretung: false, pauseMinutes: 0 }
-            : {
-                ...(body.data.planningStatus ? { planningStatus: body.data.planningStatus } : {}),
-                isVertretung: body.data.isVertretung ?? false,
-                pauseMinutes: Math.max(0, body.data.pauseMinutes ?? 0),
-                einsatzTeamId: body.data.einsatzTeamId ?? null,
-              }),
-        })
-        .returning();
-      await storeShiftMetrics(shift!, tx);
-      ids.push(shift!.id);
+      return {
+        userId,
+        teamId: write.teamId,
+        startTime,
+        endTime,
+        type,
+        shiftModelId: shiftModelId ?? null,
+        notes: body.data.notes ?? null,
+        ...(type === "team"
+          ? { planningStatus: "FIX" as const, isVertretung: false, pauseMinutes: 0 }
+          : {
+              ...(body.data.planningStatus ? { planningStatus: body.data.planningStatus } : {}),
+              isVertretung: body.data.isVertretung ?? false,
+              pauseMinutes: Math.max(0, body.data.pauseMinutes ?? 0),
+              einsatzTeamId: body.data.einsatzTeamId ?? null,
+            }),
+      };
+    });
+    const inserted = await tx.insert(shiftsTable).values(insertValues).returning();
+
+    // ── Batch-Metriken (3 Queries statt N×4) ─────────────────────────────────
+    // Geteilte Werte einmal lesen; resolveShiftMetrics ist rein rechnerisch.
+    const [valuationPct, ctx] = await Promise.all([
+      valuationPercentFor(type, shiftModelId ?? null),
+      allowanceContext(write.teamId, tx),
+    ]);
+    const metricsRows = inserted.map((shift) => ({
+      id: shift.id,
+      m: resolveShiftMetrics(
+        {
+          type: shift.type,
+          startTime: shift.startTime,
+          endTime: shift.endTime,
+          plannedHours: 0, // bulk-route ist nie Abwesenheit → kein Lohnausfall-Lookup nötig
+          valuationPercent: valuationPct,
+        },
+        ctx.window,
+        ctx.state,
+      ),
+    }));
+    // Ein UPDATE … FROM (VALUES …) für alle Zeilen
+    if (metricsRows.length > 0) {
+      await tx.execute(sql`
+        UPDATE ${shiftsTable} AS s
+        SET valued_hours  = v.vh,
+            night_hours   = v.nh,
+            sunday_hours  = v.sh,
+            holiday_hours = v.hh
+        FROM (VALUES ${sql.join(
+          metricsRows.map(
+            (r) =>
+              sql`(${r.id}::int, ${r.m.valuedHours}::numeric, ${r.m.nightHours}::numeric, ${r.m.sundayHours}::numeric, ${r.m.holidayHours}::numeric)`,
+          ),
+          sql`, `,
+        )}) AS v(id, vh, nh, sh, hh)
+        WHERE s.id = v.id
+      `);
     }
-    return { kind: "created" as const, ids };
+
+    return { kind: "created" as const, ids: inserted.map((s) => s.id) };
   });
 
   if (txResult.kind === "team_duplicate") {
