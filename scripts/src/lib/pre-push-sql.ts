@@ -117,6 +117,28 @@ export const PRE_PUSH_SQL: string[] = [
   `UPDATE team_members SET access_level = 'keine' WHERE access_level IS NULL;`,
   `ALTER TABLE team_members ALTER COLUMN access_level SET DEFAULT 'keine';`,
   `ALTER TABLE team_members ALTER COLUMN access_level SET NOT NULL;`,
+  // Performance-Indizes für die Schichten-Tabelle: Monatsliste (GET /shifts),
+  // Duplikatprüfung (DATE-Abfragen) und Überschneidungsprüfung nutzen jetzt
+  // sargable Bereichsfilter, die diese Indizes verwenden können.
+  // Ohne diese Indizes prüft PostgreSQL bei wachsendem Bestand jede Zeile.
+  `CREATE INDEX IF NOT EXISTS shifts_team_id_start_time_idx
+     ON shifts (team_id, start_time);`,
+  `CREATE INDEX IF NOT EXISTS shifts_user_id_start_time_idx
+     ON shifts (user_id, start_time);`,
+  // Partieller Index für Aushilfe-Spiegel (einsatz_team_id): Bitmap-OR-Scan
+  // auf (team_id OR einsatz_team_id) IN teamScope. Nur für Zeilen mit
+  // gesetztem einsatz_team_id, damit der Index klein und effektiv bleibt.
+  // Guard: läuft VOR dem Schema-Push; auf einer frischen DB existiert die
+  // shifts-Tabelle noch nicht — daher IF-EXISTS-Wrapper. Frische DBs erhalten
+  // den Index über das deklarative Drizzle-Schema (s. shifts.ts).
+  `DO $$ BEGIN
+     IF EXISTS (SELECT 1 FROM information_schema.tables
+                WHERE table_name = 'shifts' AND table_schema = 'public') THEN
+       CREATE INDEX IF NOT EXISTS shifts_einsatz_team_id_start_time_idx
+         ON shifts (einsatz_team_id, start_time)
+         WHERE einsatz_team_id IS NOT NULL;
+     END IF;
+   END $$;`,
 ];
 
 /** Alle Vorab-Schritte sequenziell gegen den übergebenen Client ausführen. */

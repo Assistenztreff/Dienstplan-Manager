@@ -1,10 +1,10 @@
-import { pgTable, serial, integer, real, text, timestamp, pgEnum, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, real, text, timestamp, pgEnum, boolean, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
 import { teamsTable } from "./teams";
 import { shiftModelsTable } from "./shift_models";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 export const shiftTypeEnum = pgEnum("shift_type", [
   "active",
@@ -63,7 +63,20 @@ export const shiftsTable = pgTable("shifts", {
   sundayHours: real("sunday_hours").notNull().default(0),
   holidayHours: real("holiday_hours").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [
+  // Team + Zeitraum: Monatsliste (häufigste Abfrage in GET /shifts)
+  index("shifts_team_id_start_time_idx").on(t.teamId, t.startTime),
+  // User + Zeitraum: benutzerspezifische Listen, Duplikat- und Überschneidungsprüfung
+  index("shifts_user_id_start_time_idx").on(t.userId, t.startTime),
+  // Partieller Index für Aushilfe-Spiegel: Bitmap-OR-Scan auf
+  // (team_id OR einsatz_team_id) IN teamScope; nur für gesetztes einsatz_team_id,
+  // damit der Index klein bleibt. Deklarativ hier → drizzle-kit push legt ihn
+  // auch auf frischen DBs an. pre-push-sql.ts hält ihn zusätzlich für
+  // Bestands-DBs vor, auf denen runPrePushSql VOR dem Schema-Push läuft.
+  index("shifts_einsatz_team_id_start_time_idx")
+    .on(t.einsatzTeamId, t.startTime)
+    .where(sql`${t.einsatzTeamId} IS NOT NULL`),
+]);
 
 export const shiftsRelations = relations(shiftsTable, ({ one }) => ({
   user: one(usersTable, { fields: [shiftsTable.userId], references: [usersTable.id] }),

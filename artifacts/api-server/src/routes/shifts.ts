@@ -11,7 +11,7 @@ import {
   type NightWindow,
   type GermanState,
 } from "@workspace/db";
-import { eq, and, sql, or, isNull, ne, notInArray, lt, gt, inArray } from "drizzle-orm";
+import { eq, and, sql, or, isNull, ne, notInArray, lt, gt, gte, inArray } from "drizzle-orm";
 import type { Response } from "express";
 import {
   ListShiftsQueryParams,
@@ -281,11 +281,15 @@ async function findDuplicateAbsence(
   date: Date,
   excludeShiftId: number | null
 ): Promise<{ id: number } | null> {
+  // Sargable Tagesgrenze statt DATE(): ermöglicht Indexnutzung auf start_time.
   const dateStr = new Date(date).toISOString().split("T")[0];
+  const dayStart = new Date(`${dateStr}T00:00:00.000Z`);
+  const nextDay = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
   const conditions = [
     eq(shiftsTable.userId, userId),
     eq(shiftsTable.type, type as "vacation" | "sick"),
-    sql`DATE(${shiftsTable.startTime}) = ${dateStr}`,
+    gte(shiftsTable.startTime, dayStart),
+    lt(shiftsTable.startTime, nextDay),
   ];
   if (excludeShiftId !== null) conditions.push(ne(shiftsTable.id, excludeShiftId));
   const [row] = await db
@@ -334,11 +338,15 @@ async function findDuplicateTeamEntry(
   date: Date,
   excludeShiftId: number | null
 ): Promise<{ id: number } | null> {
+  // Sargable Tagesgrenze statt DATE(): ermöglicht Indexnutzung auf start_time.
   const dateStr = new Date(date).toISOString().split("T")[0];
+  const dayStart = new Date(`${dateStr}T00:00:00.000Z`);
+  const nextDay = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
   const conditions = [
     eq(shiftsTable.teamId, teamId),
     eq(shiftsTable.type, "team" as const),
-    sql`DATE(${shiftsTable.startTime}) = ${dateStr}`,
+    gte(shiftsTable.startTime, dayStart),
+    lt(shiftsTable.startTime, nextDay),
   ];
   if (excludeShiftId !== null) conditions.push(ne(shiftsTable.id, excludeShiftId));
   const [row] = await db
@@ -577,8 +585,11 @@ router.get("/shifts", requireAuth, async (req, res): Promise<void> => {
   if (effectiveUserId) conditions.push(eq(shiftsTable.userId, effectiveUserId));
   if (query.data.type) conditions.push(eq(shiftsTable.type, query.data.type as "active" | "standby" | "night" | "full_day" | "vacation" | "sick" | "work" | "freizeitausgleich" | "team" | "kind_krank" | "freistellung" | "abgesagt_ag" | "abgesagt_an" | "urlaubsabgeltung"));
   if (query.data.month && query.data.year) {
-    conditions.push(sql`EXTRACT(MONTH FROM ${shiftsTable.startTime}) = ${query.data.month}`);
-    conditions.push(sql`EXTRACT(YEAR FROM ${shiftsTable.startTime}) = ${query.data.year}`);
+    // Sargable Monatsgrenze statt EXTRACT(): ermöglicht Indexnutzung auf start_time.
+    const monthStart = new Date(Date.UTC(query.data.year, query.data.month - 1, 1));
+    const monthEnd = new Date(Date.UTC(query.data.year, query.data.month, 1));
+    conditions.push(gte(shiftsTable.startTime, monthStart));
+    conditions.push(lt(shiftsTable.startTime, monthEnd));
   }
 
   const rows = await db
@@ -650,6 +661,7 @@ async function findPlannedWorkShiftsForDay(
   teamId: number,
   day: Date
 ): Promise<{ id: number; startTime: Date; endTime: Date }[]> {
+  // Sargable Tagesgrenze statt DATE(): ermöglicht Indexnutzung auf start_time.
   const dateStr = day.toISOString().split("T")[0];
   const rows = await db
     .select({
@@ -673,7 +685,8 @@ async function findPlannedWorkShiftsForDay(
           "abgesagt_an",
           "urlaubsabgeltung",
         ]),
-        sql`DATE(${shiftsTable.startTime}) = ${dateStr}`
+        gte(shiftsTable.startTime, new Date(`${dateStr}T00:00:00.000Z`)),
+        lt(shiftsTable.startTime, new Date(new Date(`${dateStr}T00:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000)),
       )
     );
   return rows.sort(
@@ -1068,17 +1081,15 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
   // Duplikatschutz umgehen (die Vorprüfung sieht nur Bestandsdaten).
   const dayMap = new Map<string, { startTime: Date; endTime: Date }>();
   for (const d of body.data.days) {
-    // Jeder Eintrag muss exakt einen UTC-Kalendertag umfassen.
-    // Der Client verwendet die UTC-Konvention (T00:00:00.000Z–T23:59:59.000Z),
-    // sodass Start- und Enddatum immer identisch sind. Das schützt vor
-    // willkürlichen 25h-Intervallen, die zwei UTC-Tage überspannen.
+    // Jeder Eintrag muss ein einzelner Kalendertag sein. Ein lokaler
+    // Kalendertag kann an der Sommer-/Winterzeitumstellung 23 bzw. 25 Stunden
+    // lang sein; deshalb sind bei Abwesenheiten bis zu 25 Stunden gültig.
+    // Das 92-Tage-Limit bleibt damit nicht umgehbar.
     const durationMs = d.endTime.getTime() - d.startTime.getTime();
-    const startUtcDate = d.startTime.toISOString().split("T")[0]!;
-    const endUtcDate = d.endTime.toISOString().split("T")[0]!;
-    if (durationMs <= 0 || startUtcDate !== endUtcDate) {
+    if (durationMs <= 0 || durationMs > 25 * 60 * 60 * 1000) {
       res.status(400).json({
         error:
-          "Ungültiger Tageseintrag: Start und Ende müssen auf demselben UTC-Kalendertag liegen (T00:00:00Z–T23:59:59Z).",
+          "Ungültiger Tageseintrag: Ende muss nach dem Beginn liegen und innerhalb eines Kalendertags enden.",
       });
       return;
     }
@@ -1295,25 +1306,15 @@ router.post("/shifts/bulk", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  // Kalendertage normalisieren und deduplizieren (ein Eintrag pro Tag).
-  // Ganztägige Team-Einträge (Teamsitzung) nutzen UTC-Konvention wie
-  // bulk-absence (T00:00:00Z–T23:59:59Z): Start und Ende auf demselben
-  // UTC-Datum. Reguläre Dienste (Aktivdienst, Nacht …) haben spezifische
-  // Zeiten und werden auf ≤24 h begrenzt.
+  // Kalendertage normalisieren und deduplizieren (ein Eintrag pro Tag). Ein
+  // ganztägiger Team-Eintrag darf an der Zeitumstellung 23 bzw. 25 Stunden
+  // lang sein; reguläre (auch 24h-)Dienste bleiben strikt auf 24 Stunden
+  // begrenzt, damit kein Mehrtages-Dienst als einzelner Tag durchrutscht.
   const dayMap = new Map<string, { startTime: Date; endTime: Date }>();
   for (const d of body.data.days) {
     const durationMs = d.endTime.getTime() - d.startTime.getTime();
-    if (type === "team") {
-      const startUtcDate = d.startTime.toISOString().split("T")[0]!;
-      const endUtcDate = d.endTime.toISOString().split("T")[0]!;
-      if (durationMs <= 0 || startUtcDate !== endUtcDate) {
-        res.status(400).json({
-          error:
-            "Ungültiger Tageseintrag: Start und Ende müssen auf demselben UTC-Kalendertag liegen (T00:00:00Z–T23:59:59Z).",
-        });
-        return;
-      }
-    } else if (durationMs <= 0 || durationMs > 24 * 60 * 60 * 1000) {
+    const maxDurationMs = (type === "team" ? 25 : 24) * 60 * 60 * 1000;
+    if (durationMs <= 0 || durationMs > maxDurationMs) {
       res.status(400).json({
         error:
           "Ungültiger Tageseintrag: Ende muss nach dem Beginn liegen und innerhalb eines Kalendertags enden.",
