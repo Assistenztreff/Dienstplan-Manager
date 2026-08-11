@@ -1193,19 +1193,28 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
   // Duplikatschutz umgehen (die Vorprüfung sieht nur Bestandsdaten).
   const dayMap = new Map<string, { startTime: Date; endTime: Date }>();
   for (const d of body.data.days) {
-    // Jeder Eintrag muss ein einzelner Kalendertag sein. Ein lokaler
-    // Kalendertag kann an der Sommer-/Winterzeitumstellung 23 bzw. 25 Stunden
-    // lang sein; deshalb sind bei Abwesenheiten bis zu 25 Stunden gültig.
-    // Das 92-Tage-Limit bleibt damit nicht umgehbar.
+    // Jeder Eintrag muss genau einen UTC-Kalendertag umfassen.  Damit ist die
+    // Prüfung DST-neutral: ein Berliner „25-Stunden-Tag" (Winterzeit-Umstellung)
+    // wird mit T00:00:00Z–T23:59:59Z übermittelt und besteht den Test; ein
+    // Interval, das zwei UTC-Tage überspannt (z. B. Berliner Mitternacht →
+    // T22:00Z–T23:00Z nächster UTC-Tag, ebenfalls 25 h), wird abgelehnt.
     const durationMs = d.endTime.getTime() - d.startTime.getTime();
-    if (durationMs <= 0 || durationMs > 25 * 60 * 60 * 1000) {
+    if (durationMs <= 0) {
       res.status(400).json({
-        error:
-          "Ungültiger Tageseintrag: Ende muss nach dem Beginn liegen und innerhalb eines Kalendertags enden.",
+        error: "Ungültiger Tageseintrag: Ende muss nach dem Beginn liegen.",
       });
       return;
     }
-    const key = new Date(d.startTime).toISOString().split("T")[0]!;
+    const startDay = d.startTime.toISOString().split("T")[0]!;
+    const endDay = d.endTime.toISOString().split("T")[0]!;
+    if (startDay !== endDay) {
+      res.status(400).json({
+        error:
+          "Ungültiger Tageseintrag: Start und Ende müssen auf demselben UTC-Kalendertag liegen.",
+      });
+      return;
+    }
+    const key = startDay;
     if (!dayMap.has(key)) dayMap.set(key, { startTime: d.startTime, endTime: d.endTime });
   }
   const days = [...dayMap.entries()].sort(([a], [b]) => a.localeCompare(b));
@@ -1580,22 +1589,41 @@ router.post("/shifts/bulk", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  // Kalendertage normalisieren und deduplizieren (ein Eintrag pro Tag). Ein
-  // ganztägiger Team-Eintrag darf an der Zeitumstellung 23 bzw. 25 Stunden
-  // lang sein; reguläre (auch 24h-)Dienste bleiben strikt auf 24 Stunden
-  // begrenzt, damit kein Mehrtages-Dienst als einzelner Tag durchrutscht.
+  // Kalendertage normalisieren und deduplizieren (ein Eintrag pro Tag).
+  // Team-Einträge: UTC-Tagesgrenz-Prüfung wie bulk-absence (DST-neutral;
+  //   T00:00:00Z–T23:59:59Z besteht immer, 25-h-Berliner-Mitternacht wird
+  //   abgelehnt, weil sie zwei UTC-Tage überspannt).
+  // Reguläre Dienste: strikt ≤ 24 h, damit kein Mehrtages-Dienst als
+  //   einzelner Tag durchrutscht.
   const dayMap = new Map<string, { startTime: Date; endTime: Date }>();
   for (const d of body.data.days) {
     const durationMs = d.endTime.getTime() - d.startTime.getTime();
-    const maxDurationMs = (type === "team" ? 25 : 24) * 60 * 60 * 1000;
-    if (durationMs <= 0 || durationMs > maxDurationMs) {
+    if (durationMs <= 0) {
       res.status(400).json({
-        error:
-          "Ungültiger Tageseintrag: Ende muss nach dem Beginn liegen und innerhalb eines Kalendertags enden.",
+        error: "Ungültiger Tageseintrag: Ende muss nach dem Beginn liegen.",
       });
       return;
     }
-    const key = new Date(d.startTime).toISOString().split("T")[0]!;
+    const startDay = d.startTime.toISOString().split("T")[0]!;
+    const endDay = d.endTime.toISOString().split("T")[0]!;
+    if (type === "team") {
+      if (startDay !== endDay) {
+        res.status(400).json({
+          error:
+            "Ungültiger Tageseintrag: Start und Ende müssen auf demselben UTC-Kalendertag liegen.",
+        });
+        return;
+      }
+    } else {
+      if (durationMs > 24 * 60 * 60 * 1000) {
+        res.status(400).json({
+          error:
+            "Ungültiger Tageseintrag: Ende muss nach dem Beginn liegen und innerhalb eines Kalendertags enden.",
+        });
+        return;
+      }
+    }
+    const key = startDay;
     if (!dayMap.has(key)) dayMap.set(key, { startTime: d.startTime, endTime: d.endTime });
   }
   const days = [...dayMap.entries()].sort(([a], [b]) => a.localeCompare(b));
