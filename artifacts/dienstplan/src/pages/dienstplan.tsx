@@ -1972,6 +1972,7 @@ function DienstplanTableView({
   personColors,
   onPrevMonth,
   onNextMonth,
+  absenceByUser,
 }: {
   days: Date[];
   year: number;
@@ -1989,6 +1990,7 @@ function DienstplanTableView({
   personColors: PersonColorAssignment | undefined;
   onPrevMonth: () => void;
   onNextMonth: () => void;
+  absenceByUser: Map<number, Set<string>>;
 }) {
   return (
     <Card
@@ -2080,8 +2082,12 @@ function DienstplanTableView({
                     (s) => isSameDay(new Date(s.startTime), day)
                   );
                   const regular = dayShifts.filter((s) => !isAbsenceShift(s));
-                  const colSelected =
-                    isSelectionMode && selectedDates.includes(format(day, "yyyy-MM-dd"));
+                  const dk = format(day, "yyyy-MM-dd");
+                  const colSelected = isSelectionMode && selectedDates.includes(dk);
+                  // Zelle ausgegraut, wenn die Assistenzkraft an diesem Tag abwesend ist
+                  // (nur in der normalen Tabellenansicht, nicht im Auswahl-Modus).
+                  const isAbsent =
+                    isAdmin && !isSelectionMode && (absenceByUser.get(assistant.id)?.has(dk) ?? false);
                   const cellClickable = isAdmin;
                   return (
                     <td
@@ -2091,11 +2097,13 @@ function DienstplanTableView({
                       } ${
                         colSelected
                           ? "bg-assistenz-mint/60"
-                          : isToday(day)
-                            ? "bg-primary/5"
-                            : isAdmin && !isSelectionMode
-                              ? "hover:bg-muted/30"
-                              : ""
+                          : isAbsent
+                            ? "bg-muted/40"
+                            : isToday(day)
+                              ? "bg-primary/5"
+                              : isAdmin && !isSelectionMode
+                                ? "hover:bg-muted/30"
+                                : ""
                       }`}
                       onClick={
                         isAdmin
@@ -2104,9 +2112,12 @@ function DienstplanTableView({
                             : () => openCreate(day, assistant.id)
                           : undefined
                       }
+                      aria-disabled={isAbsent || undefined}
                       title={
                         isAdmin && !isSelectionMode
-                          ? "Klicken zum Anlegen einer Schicht"
+                          ? isAbsent
+                            ? "An diesem Tag abwesend"
+                            : "Klicken zum Anlegen einer Schicht"
                           : undefined
                       }
                     >
@@ -2120,7 +2131,7 @@ function DienstplanTableView({
                             onConfirm={isAdmin && !isSelectionMode ? onConfirmShift : undefined}
                           />
                         ))}
-                        {regular.length === 0 && isAdmin && (
+                        {regular.length === 0 && isAdmin && !isAbsent && (
                           <div className="hidden group-hover:flex items-center justify-center h-8 text-muted-foreground/40">
                             <Plus className="h-3.5 w-3.5" />
                           </div>
@@ -2276,6 +2287,23 @@ export default function Dienstplan() {
   );
 
   const allShifts: Shift[] = shifts ?? [];
+
+  // Map userId → Set<dayKey "yyyy-MM-dd"> aller Abwesenheitstage im geladenen Monat.
+  // Wird ausschließlich in der Tabellenansicht (Zell-Styling + Klick-Sperre) genutzt.
+  // Der ShiftDialog führt seinen eigenen monatsgenauen Query aus, damit auch
+  // Datumsänderungen auf andere Monate korrekt abgesichert sind.
+  const absenceByUser = useMemo(() => {
+    const map = new Map<number, Set<string>>();
+    for (const s of allShifts) {
+      if (!isAbsenceShift(s)) continue;
+      const dk = format(new Date(s.startTime), "yyyy-MM-dd");
+      let set = map.get(s.userId);
+      if (!set) { set = new Set<string>(); map.set(s.userId, set); }
+      set.add(dk);
+    }
+    return map;
+  }, [allShifts]);
+
   const visibleShifts: Shift[] =
     selectedAssistant === "all"
       ? allShifts
@@ -2301,6 +2329,20 @@ export default function Dienstplan() {
         },
       );
       return;
+    }
+    // Kein neuer Dienst für eine abwesende Assistenzkraft.
+    if (userId != null) {
+      const dk = format(date, "yyyy-MM-dd");
+      if (absenceByUser.get(userId)?.has(dk)) {
+        const found = assistants.find((a) => a.id === userId);
+        const first = found?.name.trim().split(/\s+/)[0];
+        toast.info(
+          first
+            ? `${first} ist an diesem Tag abwesend.`
+            : "Diese Assistenzkraft ist an diesem Tag abwesend.",
+        );
+        return;
+      }
     }
     setDialog({ mode: "create", date, userId });
   }
@@ -2586,6 +2628,7 @@ export default function Dienstplan() {
             personColors={personColors}
             onPrevMonth={prevMonth}
             onNextMonth={nextMonth}
+            absenceByUser={absenceByUser}
           />
         )}
         </div>

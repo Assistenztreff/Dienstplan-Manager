@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { eachDayOfInterval, format } from "date-fns";
 import {
   useCreateShift,
@@ -126,6 +126,19 @@ type ShiftDialogProps = {
   /** Wird nach erfolgreichem Speichern aufgerufen (z. B. Auswahl zurücksetzen). */
   onSaved?: () => void;
 };
+
+// Abwesenheitstypen — spiegelt ABSENCE_TYPES in dienstplan.tsx; muss bei
+// Erweiterungen synchron gehalten werden.
+const DIALOG_ABSENCE_TYPES = new Set([
+  "vacation",
+  "sick",
+  "freizeitausgleich",
+  "kind_krank",
+  "freistellung",
+  "abgesagt_ag",
+  "abgesagt_an",
+  "urlaubsabgeltung",
+]);
 
 const LEGACY_TYPE_LABELS: Record<string, string> = {
   active: "Aktivdienst",
@@ -356,6 +369,29 @@ export function ShiftDialog({
 
   const [form, setForm] = useState<FormState>(buildInitialForm);
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
+
+  // Abwesenheits-Query für den Monat des aktuell gewählten Datums.
+  // Ist das Datum noch nicht gesetzt oder liegt es im selben Monat wie der
+  // übergebene Kalendermonat, trifft der Request auf einen bereits warmen
+  // Cache-Eintrag und kostet kein Netzwerk. Ändert der Nutzer das Datum auf
+  // einen anderen Monat, wird für diesen Monat nachgeladen — so ist die
+  // Abwesenheitsprüfung auch bei monatswechselnden Datumsänderungen korrekt.
+  const formMonth = form.date ? Number(form.date.slice(5, 7)) : month;
+  const formYear  = form.date ? Number(form.date.slice(0, 4)) : year;
+  const { data: dialogMonthShifts } = useListShifts(
+    { month: formMonth, year: formYear, ...(teamId != null ? { teamId } : {}) },
+    {
+      query: {
+        staleTime: SHIFT_LIST_STALE_TIME_MS,
+        gcTime:    SHIFT_LIST_GC_TIME_MS,
+        enabled:   !isEditing,
+      },
+    } as unknown as Parameters<typeof useListShifts>[1],
+  ) as { data?: Shift[]; isFetching: boolean };
+  // Solange der Monats-Query noch unterwegs ist, sind Abwesenheitsdaten
+  // unbekannt. Speichern blockiert in dieser Phase (sicherer Fallback statt
+  // stiller Zulassung, besonders bei einem Monatswechsel im Datumspicker).
+  const absenceDataPending = !isEditing && dialogMonthShifts === undefined;
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [overlapConflicts, setOverlapConflicts] = useState<ConflictInfo[] | null>(null);
@@ -475,24 +511,48 @@ export function ShiftDialog({
   // Auswahl-Anzeige des Assistenten-Pickers (nur Mitglieder des aktuellen Teams).
   const selectedAssistant = assistants.find((a) => String(a.id) === form.userId);
 
-  const renderAssistantItem = (a: Assistant) => (
-    <CommandItem
-      key={a.id}
-      value={a.name}
-      onSelect={() => {
-        set("userId", String(a.id));
-        setAssistantOpen(false);
-      }}
-    >
-      <Check
-        className={cn(
-          "mr-2 h-4 w-4",
-          String(a.id) === form.userId ? "opacity-100" : "opacity-0",
+  // Welche Assistenzkräfte sind am aktuell gewählten Datum abwesend?
+  // Leitet sich aus dialogMonthShifts ab — der Query für den Monat von
+  // form.date lädt nach, wenn der Nutzer das Datum auf einen anderen Monat
+  // ändert (gleicher Monat = Cache-Hit, kein Netzwerk-Overhead).
+  const absentUserIds = useMemo(() => {
+    if (isEditing || !form.date || !dialogMonthShifts) return undefined;
+    const ids = new Set<number>();
+    for (const s of dialogMonthShifts) {
+      if (!DIALOG_ABSENCE_TYPES.has(s.type)) continue;
+      if (format(new Date(s.startTime), "yyyy-MM-dd") === form.date) ids.add(s.userId);
+    }
+    return ids.size > 0 ? ids : undefined;
+  }, [isEditing, dialogMonthShifts, form.date]);
+
+  const renderAssistantItem = (a: Assistant) => {
+    const isAbsent = absentUserIds?.has(a.id) ?? false;
+    return (
+      <CommandItem
+        key={a.id}
+        value={a.name}
+        disabled={isAbsent}
+        aria-disabled={isAbsent}
+        onSelect={() => {
+          if (isAbsent) return;
+          set("userId", String(a.id));
+          setAssistantOpen(false);
+        }}
+        className={isAbsent ? "opacity-50 cursor-default" : undefined}
+      >
+        <Check
+          className={cn(
+            "mr-2 h-4 w-4",
+            String(a.id) === form.userId ? "opacity-100" : "opacity-0",
+          )}
+        />
+        <span className={isAbsent ? "text-muted-foreground" : undefined}>{a.name}</span>
+        {isAbsent && (
+          <span className="ml-auto text-[11px] text-muted-foreground">Abwesend</span>
         )}
-      />
-      {a.name}
-    </CommandItem>
-  );
+      </CommandItem>
+    );
+  };
 
   // Abgleich der Standard-Wochentage des gewählten Modells mit dem gewählten
   // Datum bzw. den ausgewählten Tagen (Mehrfach-Modus). Reine Hinweis-Logik —
@@ -619,6 +679,30 @@ export function ShiftDialog({
 
   async function handleSave(force = false) {
     if (!validate()) return;
+    // Abwesenheitsdaten noch unterwegs (Monatswechsel im Datumspicker, Cache-Miss):
+    // sicherer Fallback statt stiller Zulassung — Nutzer kann es nach dem Laden
+    // erneut versuchen.
+    if (!isEditing && !isAbsence && !isTeam && absenceDataPending) {
+      setErrors({ notes: "Abwesenheitsdaten werden geladen. Bitte erneut versuchen." });
+      return;
+    }
+    // Kein Arbeitsdienst für eine abwesende Assistenzkraft —
+    // fängt den Fall ab, dass das Datum nach dem Öffnen des Dialogs geändert wurde
+    // (auch monatswechselnde Datumsänderungen, da absentUserIds aus dem
+    // dialog-eigenen Monats-Query stammt).
+    if (!isEditing && !isAbsence && !isTeam && form.userId) {
+      const uid = Number(form.userId);
+      if (absentUserIds?.has(uid)) {
+        const found = assistants.find((a) => a.id === uid);
+        const first = found?.name.trim().split(/\s+/)[0];
+        setErrors({
+          userId: first
+            ? `${first} ist an diesem Tag abwesend.`
+            : "Diese Assistenzkraft ist an diesem Tag abwesend.",
+        });
+        return;
+      }
+    }
     // Bis-Datum nur für Abwesenheiten im Einzel-Anlege-Modus relevant.
     const absenceRangeEnd =
       !isEditing && !isBulk && isAbsence && absenceEndDate && absenceEndDate !== form.date
