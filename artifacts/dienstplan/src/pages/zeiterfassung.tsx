@@ -11,7 +11,9 @@ import {
   useCreateTimeEntry,
   ApiError,
   type Shift,
+  type TimeEntry,
 } from "@workspace/api-client-react";
+import { keepPreviousData } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -39,11 +41,13 @@ import {
 } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
-import { Check, CheckCheck, X, CalendarClock, ArrowRight, Plus } from "lucide-react";
+import { Check, CheckCheck, X, CalendarClock, ArrowRight, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuth } from "@/context/auth";
 import { useTeam } from "@/context/team";
 import { TeamSwitcher } from "@/components/team-switcher";
+import { MonthYearPicker } from "@/components/month-year-picker";
 import { useQueryClient } from "@tanstack/react-query";
+import { SHIFT_LIST_STALE_TIME_MS, SHIFT_LIST_GC_TIME_MS } from "@/lib/shift-cache";
 import { useToast } from "@/hooks/use-toast";
 import { readableApiError, planFeatureMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
 import { warnIfMonthClosed } from "@/lib/month-closing-warning";
@@ -129,6 +133,14 @@ function ZeiterfassungDeaktiviert({ isAdmin }: { isAdmin: boolean }) {
 export default function Zeiterfassung() {
   const { currentUser } = useAuth();
   const isAdmin = isAdminRole(currentUser?.role);
+
+  // Monatswahl: Standard = aktueller Monat.
+  const [currentDate, setCurrentDate] = useState(() => new Date());
+  const month = currentDate.getMonth() + 1;
+  const year = currentDate.getFullYear();
+  const prevMonth = () => setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
+  const nextMonth = () => setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+
   // Konto-Schalter „Zeiterfassung": bei AUS zeigt die Seite nur den Hinweis.
   const { enabled: timeTrackingEnabled, isLoading: statusLoading } =
     useTimeTrackingEnabled();
@@ -148,16 +160,37 @@ export default function Zeiterfassung() {
   const [searchParams, setSearchParams] = useSearchParams();
   const statusFilter = searchParams.get("status");
 
-  const { data: entries, isLoading: entriesLoading } = useListTimeEntries(
-    selectedTeamId != null ? { teamId: selectedTeamId } : undefined,
-  );
+  // placeholderData: keepPreviousData hält beim Monatswechsel die Einträge des
+  // vorherigen Monats sichtbar, während der neue geladen wird — kein Aufblitzen
+  // auf leere Skelette (analog zum Dienstplan-Kalender und den Auswertungen).
+  const { data: entries, isLoading: entriesLoading, isPlaceholderData: entriesPlaceholder } = useListTimeEntries(
+    { month, year, ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}) },
+    {
+      query: {
+        placeholderData: keepPreviousData,
+        staleTime: SHIFT_LIST_STALE_TIME_MS,
+        gcTime: SHIFT_LIST_GC_TIME_MS,
+      },
+    } as any,
+  ) as { data: TimeEntry[] | undefined; isLoading: boolean; isPlaceholderData: boolean };
   const { data: users, isLoading: usersLoading } = useListUsers(
     selectedTeamId != null ? { teamId: selectedTeamId } : undefined,
   );
-  // Eigene geplante Schichten des Assistenten (Server erzwingt die eigene userId).
-  const { data: shifts, isLoading: shiftsLoading } = useListShifts(undefined, {
-    query: { enabled: isAssistant },
-  } as Parameters<typeof useListShifts>[1]);
+  // Eigene geplante Schichten des Assistenten im ausgewählten Monat (Server
+  // erzwingt die eigene userId). Gleicher month/year-Scope wie die Ist-Zeiten,
+  // damit bookedShiftIds nur Einträge desselben Monats enthält und bereits
+  // gebuchte Schichten außerhalb des Monats nicht fälschlich als offen erscheinen.
+  const { data: shifts, isLoading: shiftsLoading, isPlaceholderData: shiftsPlaceholder } = useListShifts(
+    { month, year },
+    {
+      query: {
+        enabled: isAssistant,
+        placeholderData: keepPreviousData,
+        staleTime: SHIFT_LIST_STALE_TIME_MS,
+        gcTime: SHIFT_LIST_GC_TIME_MS,
+      },
+    } as any,
+  ) as { data: Shift[] | undefined; isLoading: boolean; isPlaceholderData: boolean };
 
   const { mutate: confirmEntry, isPending: isConfirming } = useConfirmTimeEntry();
   const confirmBatch = useConfirmTimeEntriesBatch();
@@ -165,6 +198,14 @@ export default function Zeiterfassung() {
 
   const isLoading =
     entriesLoading || (isAdmin && usersLoading) || (isAssistant && shiftsLoading);
+
+  // Assistenten-Panel: beide Queries müssen dieselbe Monats-Generation zeigen,
+  // bevor Schichten als „buchbar" gelten. keepPreviousData lässt isLoading auf
+  // false fallen, obwohl noch Daten vom Vormonat gezeigt werden — isPlaceholderData
+  // erkennt diesen Zwischenzustand. Solange eine der beiden Queries noch
+  // Placeholder-Daten liefert, zeigt das Panel einen Ladeindikator statt
+  // potenziell veralteter Schichten (verhindert versehentliche Doppelbuchungen).
+  const openShiftsSettling = isAssistant && (entriesPlaceholder || shiftsPlaceholder);
 
   // Schichten, für die bereits eine Ist-Zeit erfasst wurde (verhindert Doppelbuchung).
   const bookedShiftIds = useMemo(() => {
@@ -563,7 +604,36 @@ export default function Zeiterfassung() {
             {isAdmin ? "Geleistete Stunden prüfen und genehmigen" : "Meine geleisteten Stunden"}
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+          {/* Monatswahl: Vor-/Nächste-Monat-Pfeil + Popover-Raster */}
+          <div className="flex items-center gap-0.5">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9"
+              onClick={prevMonth}
+              aria-label="Vorheriger Monat"
+              data-testid="month-prev"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <MonthYearPicker
+              month={month}
+              year={year}
+              onChange={(m, y) => setCurrentDate(new Date(y, m - 1, 1))}
+              testId="month-label"
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9"
+              onClick={nextMonth}
+              aria-label="Nächster Monat"
+              data-testid="month-next"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
           {(isAssistant || isAdmin) && (
             <Button className="gap-1.5 shrink-0" onClick={openManual} data-testid="manual-entry">
               <Plus className="h-4 w-4" />
@@ -574,7 +644,7 @@ export default function Zeiterfassung() {
             <Button
               variant="outline"
               className="gap-1.5 shrink-0"
-              disabled={!canConfirm}
+              disabled={!canConfirm || entriesPlaceholder}
               title={canConfirm ? undefined : PLAN_FEATURE_MESSAGES.strictTimeTracking}
               onClick={() => setBatchOpen(true)}
               data-testid="batch-confirm-open"
@@ -645,7 +715,7 @@ export default function Zeiterfassung() {
               <CalendarClock className="h-5 w-5 text-muted-foreground" />
               <h3 className="font-semibold">Geplante Schichten übernehmen</h3>
             </div>
-            {isLoading ? (
+            {isLoading || openShiftsSettling ? (
               <div className="space-y-3">
                 <Skeleton className="h-12 w-full" />
                 <Skeleton className="h-12 w-full" />
@@ -738,7 +808,7 @@ export default function Zeiterfassung() {
                               variant="outline"
                               size="sm"
                               className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200"
-                              disabled={isConfirming || !canConfirm}
+                              disabled={isConfirming || !canConfirm || entriesPlaceholder}
                               title={canConfirm ? "Bestätigen" : PLAN_FEATURE_MESSAGES.strictTimeTracking}
                               aria-label={`Zeiteintrag vom ${format(new Date(entry.actualStart), "dd.MM.yyyy", { locale: de })} bestätigen`}
                               onClick={() => handleConfirm(entry.id, "confirmed")}
@@ -749,7 +819,7 @@ export default function Zeiterfassung() {
                               variant="outline"
                               size="sm"
                               className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-                              disabled={isConfirming || !canConfirm}
+                              disabled={isConfirming || !canConfirm || entriesPlaceholder}
                               title={canConfirm ? "Ablehnen" : PLAN_FEATURE_MESSAGES.strictTimeTracking}
                               aria-label={`Zeiteintrag vom ${format(new Date(entry.actualStart), "dd.MM.yyyy", { locale: de })} ablehnen`}
                               onClick={() => handleConfirm(entry.id, "rejected")}
@@ -887,7 +957,7 @@ export default function Zeiterfassung() {
             </Button>
             <Button
               onClick={handleBatchConfirm}
-              disabled={batchSaving || pendingFiltered.length === 0}
+              disabled={batchSaving || pendingFiltered.length === 0 || entriesPlaceholder}
               data-testid="batch-confirm-save"
             >
               {batchSaving
