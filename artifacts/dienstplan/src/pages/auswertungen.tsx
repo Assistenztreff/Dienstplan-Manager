@@ -1,5 +1,6 @@
 import { isAdminRole } from "@/lib/roles";
 import { useMemo, useRef, useState } from "react";
+import { keepPreviousData } from "@tanstack/react-query";
 import {
   useGetHoursBalance,
   useListUsers,
@@ -33,6 +34,7 @@ import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
 import { hasAccess } from "@/lib/entitlements";
+import { SHIFT_LIST_STALE_TIME_MS, SHIFT_LIST_GC_TIME_MS } from "@/lib/shift-cache";
 import { PlanUpgradeLink } from "@/components/plan-limit-banner";
 import { useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 import { PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
@@ -286,13 +288,23 @@ export default function Auswertungen() {
 
   const { selectedTeamId } = useTeam();
   const teamParam = selectedTeamId != null ? { teamId: selectedTeamId } : {};
+  // placeholderData: keepPreviousData hält beim Monatswechsel die Zahlen des
+  // vorherigen Monats sichtbar, während der neue geladen wird — kein Aufblitzen
+  // auf leere Skelette (analog zu Task #758 im Dienstplan-Kalender).
   const { data: balances, isLoading } = useGetHoursBalance(
     {
       month,
       year,
       ...teamParam,
     },
-    { query: { enabled: !analyticsLocked } } as any,
+    {
+      query: {
+        enabled: !analyticsLocked,
+        placeholderData: keepPreviousData,
+        staleTime: SHIFT_LIST_STALE_TIME_MS,
+        gcTime: SHIFT_LIST_GC_TIME_MS,
+      },
+    } as any,
   ) as any;
 
   // Stundenliste (Free-Export): FIX-Dienste + Abwesenheiten aus der
