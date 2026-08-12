@@ -47,3 +47,4 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+\n# Hochgeladene Assets (nur lokal, nicht versioniert)\nattached_assets/
