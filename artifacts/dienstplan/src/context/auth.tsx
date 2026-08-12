@@ -49,10 +49,13 @@ type AuthContextType = {
     email: string;
     password: string;
     accountType: "privat" | "dienstleister";
-  }) => Promise<void>;
+  }) => Promise<{ emailVerificationSent: boolean }>;
   logout: () => Promise<void>;
   setPassword: (token: string, password: string) => Promise<AuthUser>;
   refreshUser: () => Promise<void>;
+  forgotPassword: (email: string) => Promise<void>;
+  resetPassword: (token: string, password: string) => Promise<void>;
+  resendVerification: (email: string) => Promise<void>;
   /** Dev-only: vorhandene Test-Nutzer zum Umschalten auflisten. Leer in Produktion. */
   devListUsers: () => Promise<AuthUser[]>;
   /** Dev-only: als anderer vorhandener Test-Nutzer agieren. No-op in Produktion. */
@@ -63,10 +66,13 @@ const AuthContext = createContext<AuthContextType>({
   currentUser: null,
   isLoading: true,
   login: async () => {},
-  register: async () => {},
+  register: async () => ({ emailVerificationSent: false }),
   logout: async () => {},
   setPassword: async () => { throw new Error("not initialized"); },
   refreshUser: async () => {},
+  forgotPassword: async () => {},
+  resetPassword: async () => {},
+  resendVerification: async () => {},
   devListUsers: async () => [],
   devSwitchUser: async () => {},
 });
@@ -314,8 +320,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ email, password }),
     });
     if (!r.ok) {
-      const data = await r.json().catch(() => ({})) as { error?: string };
-      throw new Error(safeErrorText(data.error, "Anmeldung fehlgeschlagen"));
+      const data = await r.json().catch(() => ({})) as { error?: string; code?: string };
+      throw Object.assign(
+        new Error(safeErrorText(data.error, "Anmeldung fehlgeschlagen")),
+        { status: r.status, code: data.code },
+      );
     }
     const user = (await r.json()) as AuthUser;
     applyUser(user);
@@ -326,7 +335,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     email: string;
     password: string;
     accountType: "privat" | "dienstleister";
-  }) => {
+  }): Promise<{ emailVerificationSent: boolean }> => {
     const r = await apiFetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -347,8 +356,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       throw err;
     }
-    const user = (await r.json()) as AuthUser;
-    applyUser(user);
+    const data = (await r.json()) as AuthUser & { emailVerificationSent?: boolean };
+    if (!data.emailVerificationSent) {
+      applyUser(data);
+    }
+    return { emailVerificationSent: !!data.emailVerificationSent };
+  };
+
+  const forgotPassword = async (email: string): Promise<void> => {
+    const r = await apiFetch("/api/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    if (!r.ok) {
+      const data = await r.json().catch(() => ({})) as { error?: string };
+      throw new Error(safeErrorText(data.error, "Fehler beim Anfordern des Reset-Links"));
+    }
+  };
+
+  const resetPassword = async (token: string, password: string): Promise<void> => {
+    const r = await apiFetch("/api/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, password }),
+    });
+    if (!r.ok) {
+      const data = await r.json().catch(() => ({})) as { error?: string };
+      throw new Error(safeErrorText(data.error, "Fehler beim Zurücksetzen des Passworts"));
+    }
+  };
+
+  const resendVerification = async (email: string): Promise<void> => {
+    const r = await apiFetch("/api/auth/resend-verification", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    if (!r.ok) {
+      const data = await r.json().catch(() => ({})) as { error?: string };
+      throw new Error(safeErrorText(data.error, "Fehler beim Senden der Bestätigungsmail"));
+    }
   };
 
   const logout = async () => {
@@ -417,7 +465,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, isLoading, login, register, logout, setPassword, refreshUser, devListUsers, devSwitchUser }}>
+    <AuthContext.Provider value={{ currentUser, isLoading, login, register, logout, setPassword, refreshUser, forgotPassword, resetPassword, resendVerification, devListUsers, devSwitchUser }}>
       {children}
     </AuthContext.Provider>
   );

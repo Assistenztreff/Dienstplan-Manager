@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/auth";
-import { Lock, Mail } from "lucide-react";
+import { Lock, Mail, MailCheck } from "lucide-react";
 import {
   AuthErrorBox,
   AuthInput,
@@ -13,7 +13,7 @@ import {
 } from "@/components/auth/auth-layout";
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, resendVerification } = useAuth();
   const [, navigate] = useLocation();
   // Vorbefüllung z. B. aus der Registrierung („E-Mail bereits verwendet" → Zur Anmeldung).
   const [email, setEmail] = useState(
@@ -22,18 +22,41 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [verificationRequired, setVerificationRequired] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendDone, setResendDone] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setVerificationRequired(false);
     setLoading(true);
     try {
       await login(email.trim(), password);
       navigate("/");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Anmeldung fehlgeschlagen");
+      const code = (err as { code?: string }).code;
+      if (code === "email_not_verified") {
+        setVerificationRequired(true);
+        setError("Bitte bestätige zuerst deine E-Mail-Adresse.");
+      } else {
+        setError(err instanceof Error ? err.message : "Anmeldung fehlgeschlagen");
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setResendLoading(true);
+    try {
+      await resendVerification(email.trim());
+      setResendDone(true);
+    } catch {
+      // Immer als "gesendet" anzeigen — kein Existenz-Orakel.
+      setResendDone(true);
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -41,6 +64,31 @@ export default function Login() {
     <AuthLayout title="Login">
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-5">
         {error && <AuthErrorBox>{error}</AuthErrorBox>}
+
+        {verificationRequired && (
+          <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+            <MailCheck className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" aria-hidden />
+            <div className="space-y-1 text-sm">
+              {resendDone ? (
+                <p className="text-blue-800 font-medium">
+                  Bestätigungsmail wurde erneut gesendet — bitte prüfen Sie Ihr Postfach (inkl. Spam).
+                </p>
+              ) : (
+                <>
+                  <p className="text-blue-800">Keine Bestätigungsmail erhalten?</p>
+                  <button
+                    type="button"
+                    onClick={() => void handleResend()}
+                    disabled={resendLoading}
+                    className="font-semibold text-blue-700 underline underline-offset-2 hover:text-blue-900 disabled:opacity-50"
+                  >
+                    {resendLoading ? "Wird gesendet…" : "Erneut senden"}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="space-y-2">
           <AuthLabel htmlFor="email">E-Mail</AuthLabel>

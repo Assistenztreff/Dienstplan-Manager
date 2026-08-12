@@ -3,12 +3,23 @@ import { db } from "@workspace/db";
 import { usersTable, teamsTable, teamMembersTable } from "@workspace/db";
 import type { User } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
-import { hashPassword, verifyPassword } from "../lib/auth-utils";
+import { hashPassword, verifyPassword, generateSecureToken } from "../lib/auth-utils";
+import { isEmailEnabled, sendPasswordResetEmail, sendVerificationEmail } from "../lib/mailer";
+import { logger } from "../lib/logger";
 import { seedDefaultShiftModels } from "../lib/default-shift-models";
 import { checkRegisterRateLimit } from "../lib/register-rate-limit";
 import { getHighestTeamAccessLevel, type TeamAccessLevel } from "../lib/teams";
 
 const router = Router();
+
+function getBaseUrl(): string {
+  return (
+    process.env.APP_URL?.trim() ||
+    (process.env.REPLIT_DOMAINS
+      ? `https://${(process.env.REPLIT_DOMAINS as string).split(",")[0]}`
+      : "http://localhost")
+  );
+}
 
 const USER_SELECT = {
   id: usersTable.id,
@@ -80,6 +91,12 @@ router.post("/auth/login", async (req, res) => {
   }
   if (!verifyPassword(password, user.passwordHash)) {
     return res.status(401).json({ error: "E-Mail oder Passwort falsch" });
+  }
+  if (user.emailVerified === false) {
+    return res.status(403).json({
+      error: "Bitte bestätige zuerst deine E-Mail-Adresse. Prüfe dein Postfach (inkl. Spam-Ordner).",
+      code: "email_not_verified",
+    });
   }
 
   req.session.userId = user.id;
@@ -172,6 +189,23 @@ router.post("/auth/register", async (req, res) => {
   // Standard-Dienste für das frisch angelegte Team vorinstallieren.
   await seedDefaultShiftModels(team.id);
 
+  // E-Mail-Verifizierung: Wenn RESEND_API_KEY gesetzt ist, erst nach Bestätigung anmelden.
+  if (isEmailEnabled()) {
+    const verifyToken = generateSecureToken();
+    await db
+      .update(usersTable)
+      .set({ emailVerificationToken: verifyToken, emailVerified: false })
+      .where(eq(usersTable.id, user.id));
+    const verifyUrl = `${getBaseUrl()}/email-bestaetigen?token=${verifyToken}`;
+    await sendVerificationEmail(user.email, verifyUrl);
+    // Noch keine Session — Nutzer muss erst E-Mail bestätigen.
+    return res.status(201).json({
+      id: user.id, name: user.name, email: user.email,
+      role: user.role, accountType: user.accountType, plan: user.plan,
+      isTeamleiter: false, emailVerificationSent: true,
+    });
+  }
+
   req.session.userId = user.id;
   req.session.role = user.role;
 
@@ -184,6 +218,7 @@ router.post("/auth/register", async (req, res) => {
     accountType: user.accountType,
     plan: user.plan,
     isTeamleiter: false,
+    emailVerificationSent: false,
   });
 });
 
@@ -497,6 +532,125 @@ router.post("/auth/update-profile", async (req, res) => {
   }
 
   return res.json(updated);
+});
+
+// ---------------------------------------------------------------------------
+// Passwort-Reset per E-Mail
+// ---------------------------------------------------------------------------
+
+router.post("/auth/forgot-password", async (req, res) => {
+  const { email } = req.body as { email?: unknown };
+  if (typeof email !== "string" || !email.trim()) {
+    return res.status(400).json({ error: "E-Mail-Adresse erforderlich" });
+  }
+  const normalizedEmail = email.toLowerCase().trim();
+  // Immer 200 zurückgeben — kein Existenz-Orakel.
+  try {
+    const [user] = await db
+      .select({ id: usersTable.id, isActive: usersTable.isActive })
+      .from(usersTable)
+      .where(eq(usersTable.email, normalizedEmail));
+    if (user?.isActive) {
+      const token = generateSecureToken();
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await db
+        .update(usersTable)
+        .set({ passwordResetToken: token, passwordResetTokenExpiry: expiresAt })
+        .where(eq(usersTable.id, user.id));
+      const resetUrl = `${getBaseUrl()}/passwort-zuruecksetzen?token=${token}`;
+      await sendPasswordResetEmail(normalizedEmail, resetUrl);
+    }
+  } catch (err) {
+    logger.error({ err }, "Fehler beim Passwort-Reset-Versand");
+  }
+  return res.json({ ok: true });
+});
+
+router.post("/auth/reset-password", async (req, res) => {
+  const { token, password } = req.body as { token?: unknown; password?: unknown };
+  if (typeof token !== "string" || typeof password !== "string" || !token || !password) {
+    return res.status(400).json({ error: "Token und Passwort erforderlich" });
+  }
+  if (password.length < 8) {
+    return res.status(400).json({ error: "Passwort muss mindestens 8 Zeichen lang sein" });
+  }
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.passwordResetToken, token));
+  if (!user) {
+    return res.status(400).json({ error: "Ungültiger oder abgelaufener Reset-Link" });
+  }
+  if (user.passwordResetTokenExpiry && user.passwordResetTokenExpiry < new Date()) {
+    return res.status(400).json({ error: "Reset-Link abgelaufen — bitte neuen Link anfordern" });
+  }
+  if (!user.isActive) {
+    return res.status(400).json({ error: "Konto ist deaktiviert" });
+  }
+  await db
+    .update(usersTable)
+    .set({ passwordHash: hashPassword(password), passwordResetToken: null, passwordResetTokenExpiry: null })
+    .where(eq(usersTable.id, user.id));
+  return res.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// E-Mail-Verifizierung
+// ---------------------------------------------------------------------------
+
+router.post("/auth/verify-email", async (req, res) => {
+  const { token } = req.body as { token?: unknown };
+  if (typeof token !== "string" || !token) {
+    return res.status(400).json({ error: "Token erforderlich" });
+  }
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.emailVerificationToken, token));
+  if (!user) {
+    return res.status(400).json({ error: "Ungültiger oder bereits verwendeter Bestätigungslink" });
+  }
+  if (!user.isActive) {
+    return res.status(400).json({ error: "Konto ist deaktiviert" });
+  }
+  await db
+    .update(usersTable)
+    .set({ emailVerified: true, emailVerificationToken: null })
+    .where(eq(usersTable.id, user.id));
+  // Nutzer nach erfolgreicher Verifizierung direkt anmelden.
+  req.session.userId = user.id;
+  req.session.role = user.role;
+  return res.json({
+    id: user.id, name: user.name, email: user.email,
+    role: user.role, accountType: user.accountType, plan: user.plan,
+  });
+});
+
+router.post("/auth/resend-verification", async (req, res) => {
+  const { email } = req.body as { email?: unknown };
+  if (typeof email !== "string" || !email.trim()) {
+    return res.status(400).json({ error: "E-Mail-Adresse erforderlich" });
+  }
+  const normalizedEmail = email.toLowerCase().trim();
+  // Immer 200 zurückgeben — kein Existenz-Orakel.
+  try {
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, normalizedEmail));
+    if (user?.isActive && user.emailVerified === false) {
+      const token = generateSecureToken();
+      await db
+        .update(usersTable)
+        .set({ emailVerificationToken: token })
+        .where(eq(usersTable.id, user.id));
+      const verifyUrl = `${getBaseUrl()}/email-bestaetigen?token=${token}`;
+      await sendVerificationEmail(normalizedEmail, verifyUrl);
+    }
+  } catch (err) {
+    logger.error({ err }, "Fehler beim Erneut-Senden der Verifizierungsmail");
+  }
+  return res.json({ ok: true });
 });
 
 export default router;

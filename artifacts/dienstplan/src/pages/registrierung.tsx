@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/auth";
-import { Check, Lock, Mail, User } from "lucide-react";
+import { Check, CheckCircle2, Lock, Mail, User } from "lucide-react";
 import {
   AuthErrorBox,
   AuthInput,
@@ -34,6 +34,7 @@ export default function Registrierung() {
   const [error, setError] = useState("");
   const [emailError, setEmailError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [emailVerificationSent, setEmailVerificationSent] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,8 +50,12 @@ export default function Registrierung() {
     }
     setLoading(true);
     try {
-      await register({ name: name.trim(), email: email.trim(), password, accountType });
-      navigate("/");
+      const result = await register({ name: name.trim(), email: email.trim(), password, accountType });
+      if (result.emailVerificationSent) {
+        setEmailVerificationSent(true);
+      } else {
+        navigate("/");
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Registrierung fehlgeschlagen";
       const status = err instanceof Error ? (err as { status?: number }).status : undefined;
@@ -84,6 +89,23 @@ export default function Registrierung() {
   };
 
   const aktiverTyp = KONTO_TYPEN.find((t) => t.value === accountType);
+
+  if (emailVerificationSent) {
+    return (
+      <AuthLayout title="Fast geschafft!">
+        <div className="flex flex-col items-center gap-4 py-2 text-center">
+          <CheckCircle2 className="h-10 w-10 text-green-600" aria-hidden />
+          <h2 className="text-base font-bold text-brand-dark">Bestätigungsmail verschickt!</h2>
+          <p className="text-sm text-slate-600">
+            Wir haben eine Bestätigungsmail an{" "}
+            <span className="font-semibold text-brand-dark">{email.trim()}</span>{" "}
+            gesendet. Bitte klicken Sie auf den Link in der E-Mail, um sich anzumelden.
+          </p>
+          <p className="text-xs text-slate-500">Kein E-Mail? Prüfen Sie auch den Spam-Ordner.</p>
+        </div>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout title="Registrieren">

@@ -24,6 +24,8 @@ import Login from "@/pages/login";
 import Registrierung from "@/pages/registrierung";
 import Einladung from "@/pages/einladung";
 import PasswortVergessen from "@/pages/passwort-vergessen";
+import PasswortZuruecksetzen from "@/pages/passwort-zuruecksetzen";
+import EmailBestaetigen from "@/pages/email-bestaetigen";
 import { Impressum, Datenschutz, Kontakt, Barrierefreiheit } from "@/pages/rechtliches";
 import {
   HandbuchStart,
@@ -161,6 +163,8 @@ const PUBLIC_PATHS = [
   "/registrierung",
   "/einladung",
   "/passwort-vergessen",
+  "/passwort-zuruecksetzen",
+  "/email-bestaetigen",
   "/impressum",
   "/datenschutz",
   "/kontakt",
@@ -200,6 +204,8 @@ function Router() {
         <Route path="/registrierung" component={Registrierung} />
         <Route path="/einladung" component={Einladung} />
         <Route path="/passwort-vergessen" component={PasswortVergessen} />
+        <Route path="/passwort-zuruecksetzen" component={PasswortZuruecksetzen} />
+        <Route path="/email-bestaetigen" component={EmailBestaetigen} />
         <Route path="/impressum" component={Impressum} />
         <Route path="/datenschutz" component={Datenschutz} />
         <Route path="/kontakt" component={Kontakt} />

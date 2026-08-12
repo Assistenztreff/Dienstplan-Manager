@@ -23,3 +23,8 @@ export function generateInviteToken(userId: number): string {
   const random = randomBytes(24).toString("hex");
   return `${userId}-${random}`;
 }
+
+/** Kryptographisch sicherer URL-sicherer Token (64 Hex-Zeichen). */
+export function generateSecureToken(): string {
+  return randomBytes(32).toString("hex");
+}
