@@ -287,6 +287,10 @@ router.patch("/time-tracking/:id", requireTeamManageOrAdmin, async (req, res): P
       new Date(body.data.actualEnd as unknown as string)
     );
   }
+  if (Object.keys(updateData).length === 0) {
+    res.status(400).json({ error: "Keine änderbaren Felder angegeben." });
+    return;
+  }
   const allowedTeams = await getEffectiveManageTeamIds(req.session.userId!, req.session.role!);
   // Zeile zuerst team-gescoped laden (404 bei fremd/fehlend), dann den
   // Konto-Schalter des Team-Eigentümers prüfen (403 bei deaktivierter

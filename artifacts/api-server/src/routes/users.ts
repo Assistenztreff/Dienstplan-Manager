@@ -422,6 +422,11 @@ router.patch("/users/:id", requireAdmin, async (req, res): Promise<void> => {
     }
   }
 
+  if (Object.keys(body.data).length === 0) {
+    res.status(400).json({ error: "Keine änderbaren Felder angegeben." });
+    return;
+  }
+
   let user;
   try {
     [user] = await db

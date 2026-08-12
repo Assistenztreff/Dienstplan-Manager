@@ -246,6 +246,11 @@ router.patch("/contracts/:id", requireTeamPlanningOrAdmin, async (req, res): Pro
     updateValues["endDate"] = toDateString(body.data.endDate);
   }
 
+  if (Object.keys(updateValues).length === 0) {
+    res.status(400).json({ error: "Keine änderbaren Felder angegeben." });
+    return;
+  }
+
   const allowedTeams = await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!);
 
   // Teamleiter ohne canViewPayroll dürfen nur den eigenen Vertrag bearbeiten.

@@ -205,6 +205,10 @@ router.patch(
     if (body.data.startDate !== undefined) updateValues["startDate"] = effectiveStart;
     if (body.data.endDate !== undefined) updateValues["endDate"] = effectiveEnd;
     if (body.data.notes !== undefined) updateValues["notes"] = body.data.notes;
+    if (Object.keys(updateValues).length === 0) {
+      res.status(400).json({ error: "Keine änderbaren Felder angegeben." });
+      return;
+    }
     const [updated] = await db
       .update(hourBudgetsTable)
       .set(updateValues)

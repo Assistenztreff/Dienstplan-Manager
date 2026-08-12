@@ -1954,6 +1954,14 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
     res.status(400).json({ error: "Invalid request" });
     return;
   }
+  // Leere Anfragen sofort ablehnen — bevor abgeleitete Felder (z.B.
+  // planningStatus FIX bei Abwesenheiten) hinzugefügt werden. Die
+  // Server-seitig ergänzten Felder sind kein Ersatz für Client-Eingaben:
+  // hat der Client nichts gesendet, gibt es keine Änderung zu speichern.
+  if (Object.keys(body.data).length === 0) {
+    res.status(400).json({ error: "Keine änderbaren Felder angegeben." });
+    return;
+  }
 
   const [oldShift] = await db
     .select()

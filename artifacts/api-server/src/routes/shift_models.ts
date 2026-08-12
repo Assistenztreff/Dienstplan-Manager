@@ -98,6 +98,10 @@ router.patch("/shift-models/:id", requireAdmin, async (req, res): Promise<void> 
     res.status(400).json({ error: "Invalid request" });
     return;
   }
+  if (Object.keys(body.data).length === 0) {
+    res.status(400).json({ error: "Keine änderbaren Felder angegeben." });
+    return;
+  }
   const allowedTeams = await getAllowedTeamIds(req.session.userId!);
   const [updated] = await db
     .update(shiftModelsTable)
