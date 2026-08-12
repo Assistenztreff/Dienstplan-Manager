@@ -19,7 +19,7 @@ import {
   shiftModelsTable,
 } from "@workspace/db";
 import { computeShiftMetrics, type GermanState } from "@workspace/db";
-import { eq, and, sql, or, isNull, inArray } from "drizzle-orm";
+import { eq, and, sql, or, isNull, inArray, gte, lt } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { resolveAllowanceOps, type ResolvedAllowanceOps } from "./allowance-resolve";
 import { resolveReadTeamScope } from "./teams";
@@ -32,46 +32,6 @@ import {
   type HoursBalanceRow,
 } from "./dashboard-hours-balance";
 import { getTimeTrackingEnabledTeamIds } from "./time-tracking-enabled";
-
-// Maßgeblicher Vertrag für die Auswertung eines Monats: Ein Vertrag zählt,
-// sobald er den ausgewerteten Monat IRGENDWO überlappt (startDate <= Monats-
-// ende UND endDate >= Monatsanfang bzw. offen). Ein Lookup nur zum
-// Monatsersten würde mittmonatlich startende Verträge (z. B. ab dem 15.)
-// still übersehen — die Urlaubsspalten fielen dann auf 0/vollen Anspruch
-// zurück. Bei mehreren Kandidaten werden Verträge aus dem aktuellen
-// Team-Scope bevorzugt (Multi-Team-Assistenten sollen keinen teamfremden
-// Vertrag erwischen — konsistent zur Abrechnungsart-Fallback-Kette),
-// innerhalb der Gruppe gewinnt der neueste Vertragsbeginn.
-async function contractForMonth(
-  userId: number,
-  month: number,
-  year: number,
-  teamScope: number[],
-) {
-  const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
-  // Letzter Kalendertag des Monats (UTC, Tag 0 des Folgemonats).
-  const monthEnd = new Date(Date.UTC(year, month, 0)).toISOString().split("T")[0];
-  const contracts = await db
-    .select()
-    .from(contractsTable)
-    .where(
-      and(
-        eq(contractsTable.userId, userId),
-        sql`${contractsTable.startDate} <= ${monthEnd}`,
-        or(
-          isNull(contractsTable.endDate),
-          sql`${contractsTable.endDate} >= ${monthStart}`
-        )
-      )
-    );
-  if (!contracts.length) return null;
-  const byNewestStart = (a: (typeof contracts)[number], b: (typeof contracts)[number]) =>
-    new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
-  const scopeSet = new Set(teamScope);
-  const inScope = contracts.filter((c) => scopeSet.has(c.teamId));
-  const candidates = inScope.length ? inScope : contracts;
-  return candidates.sort(byNewestStart)[0] ?? null;
-}
 
 /**
  * Berechnet die Stundenbilanz-Zeilen (inkl. Geldwerten) fuer den Team-Scope
@@ -106,6 +66,12 @@ export async function computeHoursBalances(
     list.push(m.teamId);
     teamsByUser.set(m.userId, list);
   }
+  // Sargable Monatsgrenzen: Date-Objekte für Timestamp-Spalten (start_time,
+  // actual_start), Strings für Date-Spalten (start_date, end_date in contracts).
+  const monthStartDate = new Date(Date.UTC(year, month - 1, 1));
+  const monthEndDate = new Date(Date.UTC(year, month, 1));
+  const monthStart = monthStartDate.toISOString().split("T")[0]!;
+  const monthEnd = new Date(Date.UTC(year, month, 0)).toISOString().split("T")[0]!;
 
   const assistants = teamMemberIds.length
     ? await db
@@ -211,8 +177,9 @@ export async function computeHoursBalances(
             inArray(shiftsTable.teamId, teamScope),
             eq(shiftsTable.type, "team"),
             eq(shiftsTable.planningStatus, "FIX"),
-            sql`EXTRACT(MONTH FROM ${shiftsTable.startTime}) = ${month}`,
-            sql`EXTRACT(YEAR FROM ${shiftsTable.startTime}) = ${year}`,
+            // Sargable Bereichsprädikat aktiviert den (team_id, start_time)-Index.
+            gte(shiftsTable.startTime, monthStartDate),
+            lt(shiftsTable.startTime, monthEndDate),
           )
         )
         .groupBy(shiftsTable.teamId)
@@ -278,13 +245,18 @@ export async function computeHoursBalances(
     return ops;
   };
 
-  const result = await Promise.all(
-    assistants.map(async (assistant) => {
-      // Schichten inkl. Vergütungsfeldern des Schichtmodells — im SOLL-Modus
-      // rechnet die Premium-Geldrechnung den Grundlohn je geplanter Schicht
-      // nach deren Vergütungstyp (regular/percentage/flat).
-      const shifts = await db
+  // ── Batch-Reads: ein Query je Datenquelle für alle Assistenzkräfte ─────────
+  // Ersetzt N×3 Einzel-Queries (shifts + timeEntries + contractForMonth je
+  // Assistenzkraft) durch 3 gebündelte IN(userIds)-Abfragen. Skaliert linear
+  // statt quadratisch mit der Teamgröße.
+  const assistantIds = assistants.map((a) => a.id);
+
+  // Batch-Schichten: alle FIX-Schichten aller Assistenzkräfte in einem Query.
+  // Sargable Bereichsprädikat aktiviert den (user_id, start_time)-Index.
+  const allShifts = assistantIds.length && teamScope.length
+    ? await db
         .select({
+          userId: shiftsTable.userId,
           type: shiftsTable.type,
           startTime: shiftsTable.startTime,
           endTime: shiftsTable.endTime,
@@ -298,26 +270,34 @@ export async function computeHoursBalances(
           compensationType: shiftModelsTable.compensationType,
           compensationPercent: shiftModelsTable.compensationPercent,
           compensationFlatCents: shiftModelsTable.compensationFlatCents,
-          // Modellname zur Erkennung von Bereitschafts-Diensten
-          // (vorbereitete Abrechnungskategorien der Auswertung).
+          // Modellname zur Erkennung von Bereitschafts-Diensten.
           modelName: shiftModelsTable.name,
         })
         .from(shiftsTable)
         .leftJoin(shiftModelsTable, eq(shiftsTable.shiftModelId, shiftModelsTable.id))
         .where(
           and(
-            eq(shiftsTable.userId, assistant.id),
+            inArray(shiftsTable.userId, assistantIds),
             inArray(shiftsTable.teamId, teamScope),
-            // Nur verbindlich bestätigte Schichten fließen in den offiziellen
-            // Soll/Ist-Nachweis ein; Entwürfe/Vorschläge bleiben unverbindlich.
             eq(shiftsTable.planningStatus, "FIX"),
-            sql`EXTRACT(MONTH FROM ${shiftsTable.startTime}) = ${month}`,
-            sql`EXTRACT(YEAR FROM ${shiftsTable.startTime}) = ${year}`,
+            gte(shiftsTable.startTime, monthStartDate),
+            lt(shiftsTable.startTime, monthEndDate),
           )
-        );
+        )
+    : [];
+  const shiftsByUser = new Map<number, typeof allShifts>();
+  for (const s of allShifts) {
+    const list = shiftsByUser.get(s.userId) ?? [];
+    list.push(s);
+    shiftsByUser.set(s.userId, list);
+  }
 
-      const timeEntriesWithShift = await db
+  // Batch-Zeiteinträge: alle bestätigten Einträge aller Assistenzkräfte in einem Query.
+  // Sargable Bereichsprädikat aktiviert den (team_id, actual_start)-Index.
+  const allTimeEntries = assistantIds.length && teamScope.length
+    ? await db
         .select({
+          userId: timeTrackingTable.userId,
           actualHours: timeTrackingTable.actualHours,
           actualStart: timeTrackingTable.actualStart,
           actualEnd: timeTrackingTable.actualEnd,
@@ -333,15 +313,60 @@ export async function computeHoursBalances(
         .leftJoin(shiftModelsTable, eq(shiftsTable.shiftModelId, shiftModelsTable.id))
         .where(
           and(
-            eq(timeTrackingTable.userId, assistant.id),
+            inArray(timeTrackingTable.userId, assistantIds),
             inArray(timeTrackingTable.teamId, teamScope),
-            sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${month}`,
-            sql`EXTRACT(YEAR FROM ${timeTrackingTable.actualStart}) = ${year}`,
+            gte(timeTrackingTable.actualStart, monthStartDate),
+            lt(timeTrackingTable.actualStart, monthEndDate),
             eq(timeTrackingTable.status, "confirmed"),
           )
-        );
+        )
+    : [];
+  const timeEntriesByUser = new Map<number, typeof allTimeEntries>();
+  for (const e of allTimeEntries) {
+    const list = timeEntriesByUser.get(e.userId) ?? [];
+    list.push(e);
+    timeEntriesByUser.set(e.userId, list);
+  }
 
-      const contract = await contractForMonth(assistant.id, month, year, teamScope);
+  // Batch-Verträge: ein Query für alle Assistenzkräfte statt N contractForMonth()-Aufrufe.
+  // Gleiche Prioritäts-Logik: Scope-Verträge bevorzugen, dann neuester Beginn.
+  const allContractsRaw = assistantIds.length
+    ? await db
+        .select()
+        .from(contractsTable)
+        .where(
+          and(
+            inArray(contractsTable.userId, assistantIds),
+            sql`${contractsTable.startDate} <= ${monthEnd}`,
+            or(
+              isNull(contractsTable.endDate),
+              sql`${contractsTable.endDate} >= ${monthStart}`
+            )
+          )
+        )
+    : [];
+  const contractByUser = new Map<number, (typeof allContractsRaw)[number]>();
+  {
+    const scopeSet = new Set(teamScope);
+    for (const userId of assistantIds) {
+      const userContracts = allContractsRaw.filter((c) => c.userId === userId);
+      if (!userContracts.length) continue;
+      const byNewestStart = (
+        a: (typeof userContracts)[number],
+        b: (typeof userContracts)[number],
+      ) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
+      const inScope = userContracts.filter((c) => scopeSet.has(c.teamId));
+      const candidates = inScope.length ? inScope : userContracts;
+      contractByUser.set(userId, candidates.sort(byNewestStart)[0]!);
+    }
+  }
+
+  const result = await Promise.all(
+    assistants.map(async (assistant) => {
+      // Batch-Lookup statt Einzel-Queries je Assistenzkraft (N+1-Vermeidung).
+      const shifts = shiftsByUser.get(assistant.id) ?? [];
+      const timeEntriesWithShift = timeEntriesByUser.get(assistant.id) ?? [];
+      const contract = contractByUser.get(assistant.id) ?? null;
 
       // Abrechnungsart-Kette: Team-Override/Konto des Team-Eigentümers → SOLL
       // (Bestandsschutz-Default). Der frühere Vertrags-Override wurde bewusst

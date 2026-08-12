@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, real, date, text, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, real, date, text, timestamp, pgEnum, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -41,7 +41,12 @@ export const contractsTable = pgTable("contracts", {
   // kommt ausschließlich aus allowance_settings (Team-Override → Konto → SOLL).
   billingMethod: billingMethodEnum("billing_method"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [
+  // Monatsüberschneidungs-Abfragen (contractForMonth, activeContractsForUsers):
+  // WHERE user_id = ? AND start_date <= ? AND (end_date IS NULL OR end_date >= ?)
+  index("contracts_user_id_start_date_idx").on(t.userId, t.startDate),
+  index("contracts_user_id_end_date_idx").on(t.userId, t.endDate),
+]);
 
 export const contractsRelations = relations(contractsTable, ({ one }) => ({
   user: one(usersTable, { fields: [contractsTable.userId], references: [usersTable.id] }),

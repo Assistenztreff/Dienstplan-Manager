@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, real, text, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, real, text, timestamp, pgEnum, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -25,7 +25,14 @@ export const timeTrackingTable = pgTable("time_tracking", {
   confirmedBy: integer("confirmed_by").references(() => usersTable.id, { onDelete: "set null" }),
   confirmedAt: timestamp("confirmed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [
+  // Monatslisten-Abfragen (Dashboard, hours-balance):
+  // WHERE team_id IN (...) AND actual_start >= ? AND actual_start < ?
+  index("time_tracking_team_id_actual_start_idx").on(t.teamId, t.actualStart),
+  // Benutzer-spezifische Abfragen (Dashboard-Assistenten-Branch):
+  // WHERE user_id = ? AND actual_start >= ? AND actual_start < ?
+  index("time_tracking_user_id_actual_start_idx").on(t.userId, t.actualStart),
+]);
 
 export const timeTrackingRelations = relations(timeTrackingTable, ({ one }) => ({
   user: one(usersTable, { fields: [timeTrackingTable.userId], references: [usersTable.id] }),

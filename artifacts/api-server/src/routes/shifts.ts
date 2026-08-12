@@ -12,6 +12,7 @@ import {
   type GermanState,
 } from "@workspace/db";
 import { eq, and, sql, or, isNull, ne, notInArray, lt, gt, gte, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { Response } from "express";
 import {
   ListShiftsQueryParams,
@@ -51,6 +52,12 @@ import { resolveAllowanceOps } from "../lib/allowance-resolve";
 
 const router = Router();
 
+// Aliase für die zwei Teamtabellen-JOINs im SHIFT_SELECT-Projektor.
+// Ersetzen korrelierte Subqueries (einen Subselect pro Zeile) durch effiziente
+// LEFT JOINs, die der Planer einmal ausführt und über alle Zeilen wiederverwendet.
+const einsatzTeamsTable = alias(teamsTable, "einsatz_teams");
+const homeTeamsTable = alias(teamsTable, "home_teams");
+
 // Transaktions-Executor: Schreib-Helfer akzeptieren wahlweise die globale
 // db-Instanz oder eine offene Drizzle-Transaktion (Sammel-Anlage, s. u.).
 type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -72,11 +79,12 @@ const SHIFT_SELECT = {
   sundayHours: shiftsTable.sundayHours,
   holidayHours: shiftsTable.holidayHours,
   createdAt: shiftsTable.createdAt,
-  // Aushilfe-Einsatz: Team-Namen als korrelierte Subselects (explizit
-  // qualifizierte Spalten, s. Drizzle-Eigenheit bei sql`` in Projektionen).
+  // Aushilfe-Einsatz: Team-Namen über JOIN statt korrelierter Subselects
+  // (ein JOIN pro Query statt eines Subselects pro Zeile).
+  // Alle Query-Sites müssen leftJoin(einsatzTeamsTable) + leftJoin(homeTeamsTable) ergänzen.
   einsatzTeamId: shiftsTable.einsatzTeamId,
-  einsatzTeamName: sql<string | null>`(SELECT t.name FROM teams t WHERE t.id = shifts.einsatz_team_id)`,
-  homeTeamName: sql<string | null>`(CASE WHEN shifts.einsatz_team_id IS NOT NULL THEN (SELECT t.name FROM teams t WHERE t.id = shifts.team_id) END)`,
+  einsatzTeamName: einsatzTeamsTable.name,
+  homeTeamName: sql<string | null>`CASE WHEN ${shiftsTable.einsatzTeamId} IS NOT NULL THEN ${homeTeamsTable.name} END`,
   user: {
     id: usersTable.id,
     name: usersTable.name,
@@ -712,6 +720,8 @@ router.get("/shifts", requireAuth, async (req, res): Promise<void> => {
     .select(SHIFT_SELECT)
     .from(shiftsTable)
     .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
+    .leftJoin(einsatzTeamsTable, eq(einsatzTeamsTable.id, shiftsTable.einsatzTeamId))
+    .leftJoin(homeTeamsTable, eq(homeTeamsTable.id, shiftsTable.teamId))
     .where(conditions.length > 0 ? and(...conditions) : undefined);
   res.json(rows);
 });
@@ -1128,6 +1138,8 @@ router.post("/shifts", requireAuth, async (req, res): Promise<void> => {
       .select(SHIFT_SELECT)
       .from(shiftsTable)
       .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
+      .leftJoin(einsatzTeamsTable, eq(einsatzTeamsTable.id, shiftsTable.einsatzTeamId))
+      .leftJoin(homeTeamsTable, eq(homeTeamsTable.id, shiftsTable.teamId))
       .where(eq(shiftsTable.id, shift.id));
     return row;
   });
@@ -1238,10 +1250,13 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
     if (!dayMap.has(key)) dayMap.set(key, { startTime: d.startTime, endTime: d.endTime });
   }
   const days = [...dayMap.entries()].sort(([a], [b]) => a.localeCompare(b));
-  // Zeitraumgrenzen als Kalendertage — identische DATE()-Konvention wie die
-  // Tages-Abfragen des Einzelpfads, nur einmal für den ganzen Zeitraum.
   const firstDay = days[0]![0];
   const lastDay = days[days.length - 1]![0];
+  // Sargable Tagesgrenzen: halboffene Bereichsabfragen aktivieren den
+  // (user_id, start_time)-Index — DATE()-Aufrufe im Prädikat verhindern Indexnutzung.
+  const firstDayStart = new Date(`${firstDay}T00:00:00.000Z`);
+  const dayAfterLast = new Date(`${lastDay}T00:00:00.000Z`);
+  dayAfterLast.setUTCDate(dayAfterLast.getUTCDate() + 1);
 
   // Free-Limit (historyMonths) gegen den SPÄTESTEN Tag — ein Verstoß blockt
   // den gesamten Zeitraum (kein Teil-Zeitraum).
@@ -1304,8 +1319,9 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
             and(
               eq(shiftsTable.userId, userId),
               eq(shiftsTable.type, type as "vacation" | "sick"),
-              sql`DATE(${shiftsTable.startTime}) >= ${firstDay}`,
-              sql`DATE(${shiftsTable.startTime}) <= ${lastDay}`,
+              // Sargable Bereichsprädikat aktiviert den (user_id, start_time)-Index.
+              gte(shiftsTable.startTime, firstDayStart),
+              lt(shiftsTable.startTime, dayAfterLast),
             ),
           ),
         tx
@@ -1330,8 +1346,9 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
                 "abgesagt_an",
                 "urlaubsabgeltung",
               ]),
-              sql`DATE(${shiftsTable.startTime}) >= ${firstDay}`,
-              sql`DATE(${shiftsTable.startTime}) <= ${lastDay}`,
+              // Sargable Bereichsprädikat aktiviert den (user_id, start_time)-Index.
+              gte(shiftsTable.startTime, firstDayStart),
+              lt(shiftsTable.startTime, dayAfterLast),
             ),
           ),
         resolveAllowanceOps(write.teamId, tx),
@@ -1536,6 +1553,8 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
           .select(SHIFT_SELECT)
           .from(shiftsTable)
           .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
+          .leftJoin(einsatzTeamsTable, eq(einsatzTeamsTable.id, shiftsTable.einsatzTeamId))
+          .leftJoin(homeTeamsTable, eq(homeTeamsTable.id, shiftsTable.teamId))
           .where(inArray(shiftsTable.id, createdShifts.map((s) => s.id)))
       : [];
 
@@ -1907,6 +1926,8 @@ router.post("/shifts/bulk", requireAuth, async (req, res): Promise<void> => {
     .select(SHIFT_SELECT)
     .from(shiftsTable)
     .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
+    .leftJoin(einsatzTeamsTable, eq(einsatzTeamsTable.id, shiftsTable.einsatzTeamId))
+    .leftJoin(homeTeamsTable, eq(homeTeamsTable.id, shiftsTable.teamId))
     .where(inArray(shiftsTable.id, createdIds));
 
   res.status(201).json({
@@ -1926,6 +1947,8 @@ router.get("/shifts/:id", requireAuth, async (req, res): Promise<void> => {
     .select({ ...SHIFT_SELECT, teamId: shiftsTable.teamId })
     .from(shiftsTable)
     .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
+    .leftJoin(einsatzTeamsTable, eq(einsatzTeamsTable.id, shiftsTable.einsatzTeamId))
+    .leftJoin(homeTeamsTable, eq(homeTeamsTable.id, shiftsTable.teamId))
     .where(eq(shiftsTable.id, params.data.id));
   if (!row) {
     res.status(404).json({ error: "Not found" });
@@ -2251,6 +2274,8 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
         .select(SHIFT_SELECT)
         .from(shiftsTable)
         .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
+        .leftJoin(einsatzTeamsTable, eq(einsatzTeamsTable.id, shiftsTable.einsatzTeamId))
+        .leftJoin(homeTeamsTable, eq(homeTeamsTable.id, shiftsTable.teamId))
         .where(eq(shiftsTable.id, params.data.id));
       return row;
     });

@@ -139,6 +139,23 @@ export const PRE_PUSH_SQL: string[] = [
          WHERE einsatz_team_id IS NOT NULL;
      END IF;
    END $$;`,
+  // Performance-Indexes für contracts: Monatsüberschneidungs-Abfragen
+  // (contractForMonth, activeContractsForUsers) filtern auf
+  // user_id + start_date <= X und end_date >= Y. Ohne diese Indizes
+  // führt PostgreSQL bei wachsendem Bestand einen Seq-Scan durch.
+  // CONCURRENTLY: kein Tabellen-Lock im laufenden Betrieb.
+  `CREATE INDEX CONCURRENTLY IF NOT EXISTS contracts_user_id_start_date_idx
+     ON contracts (user_id, start_date);`,
+  `CREATE INDEX CONCURRENTLY IF NOT EXISTS contracts_user_id_end_date_idx
+     ON contracts (user_id, end_date);`,
+  // Performance-Indexes für time_tracking: Monatslisten (Dashboard/hours-balance)
+  // filtern auf team_id IN (...) AND actual_start BETWEEN. Der Index auf
+  // (team_id, actual_start) aktiviert den bestehenden Index-Nutzen.
+  // (user_id, actual_start) beschleunigt den Assistenten-Branch des Dashboards.
+  `CREATE INDEX CONCURRENTLY IF NOT EXISTS time_tracking_team_id_actual_start_idx
+     ON time_tracking (team_id, actual_start);`,
+  `CREATE INDEX CONCURRENTLY IF NOT EXISTS time_tracking_user_id_actual_start_idx
+     ON time_tracking (user_id, actual_start);`,
 ];
 
 /** Alle Vorab-Schritte sequenziell gegen den übergebenen Client ausführen. */

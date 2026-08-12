@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { usersTable, shiftsTable, timeTrackingTable, contractsTable, allowanceSettingsTable, teamMembersTable, teamsTable, shiftModelsTable } from "@workspace/db";
 import { computeShiftMetrics, type GermanState } from "@workspace/db";
-import { eq, and, sql, count, or, isNull, inArray } from "drizzle-orm";
+import { eq, and, sql, count, or, isNull, inArray, gte, lt } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { requireAuth, requireAdmin, requireTeamPlanningOrAdmin, isAdminLikeRole } from "../middleware/auth";
 import { requirePlanFeatureViaTeamOwner, userHasFeatureViaTeamOwner, getLenientTimeTrackingTeamIds } from "../lib/plan";
@@ -114,6 +114,10 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     return;
   }
   const { month, year } = monthYear;
+  // Sargable Monatsgrenzen (halboffenes Intervall): ermöglichen Indexnutzung auf
+  // start_time/actual_start — EXTRACT(MONTH/YEAR FROM col) zerstört Indexnutzung.
+  const monthStart = new Date(Date.UTC(year, month - 1, 1));
+  const monthEnd = new Date(Date.UTC(year, month, 1));
   // Superadmin (Betreiber) nutzt das Dashboard wie ein Admin — nur mit den
   // eigenen Teams (Team-Scoping-Helfer arbeiten rein über die userId).
   const isAdmin = isAdminLikeRole(req.session.role);
@@ -169,16 +173,19 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
         ? getTimeTrackingEnabledTeamIds(teamScope)
         : isTimeTrackingEnabledForOwner(userId).then((v) => (v ? [1] : [])),
 
-      // Monatliche FIX-Schichten (Soll-Stunden)
+      // Monatliche FIX-Schichten (Soll-Stunden) — SQL-Aggregat statt JS-reduce.
+      // Sargable Bereichsprädikat aktiviert den (team_id, start_time)-Index.
       db
-        .select({ startTime: shiftsTable.startTime, endTime: shiftsTable.endTime })
+        .select({
+          plannedHours: sql<number>`COALESCE(SUM(EXTRACT(EPOCH FROM (${shiftsTable.endTime} - ${shiftsTable.startTime})) / 3600), 0)`.mapWith(Number),
+        })
         .from(shiftsTable)
         .where(
           and(
             inArray(shiftsTable.teamId, teamScope),
             eq(shiftsTable.planningStatus, "FIX"),
-            sql`EXTRACT(MONTH FROM ${shiftsTable.startTime}) = ${month}`,
-            sql`EXTRACT(YEAR FROM ${shiftsTable.startTime}) = ${year}`,
+            gte(shiftsTable.startTime, monthStart),
+            lt(shiftsTable.startTime, monthEnd),
           )
         ),
 
@@ -271,7 +278,8 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
             .where(and(inArray(timeTrackingTable.teamId, teamScope), eq(timeTrackingTable.status, "pending")))
         : Promise.resolve([{ pendingTimeEntries: 0 }] as { pendingTimeEntries: number | bigint }[]),
 
-      // Ist-Stunden des Monats (bestätigt + ggf. offen in lenient-Teams)
+      // Ist-Stunden des Monats (bestätigt + ggf. offen in lenient-Teams).
+      // Sargable Bereichsprädikat aktiviert den (team_id, actual_start)-Index.
       timeTrackingEnabled
         ? db
             .select({ actualHours: timeTrackingTable.actualHours })
@@ -279,14 +287,15 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
             .where(
               and(
                 inArray(timeTrackingTable.teamId, teamScope),
-                sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${month}`,
-                sql`EXTRACT(YEAR FROM ${timeTrackingTable.actualStart}) = ${year}`,
+                gte(timeTrackingTable.actualStart, monthStart),
+                lt(timeTrackingTable.actualStart, monthEnd),
                 statusCondition,
               )
             )
         : Promise.resolve([] as { actualHours: number | null }[]),
 
-      // Offene Stunden in strikten Teams (Premium-Upgrade-Hinweis)
+      // Offene Stunden in strikten Teams (Premium-Upgrade-Hinweis).
+      // Sargable Bereichsprädikat aktiviert den (team_id, actual_start)-Index.
       timeTrackingEnabled && strictTeamIds.length
         ? db
             .select({ actualHours: timeTrackingTable.actualHours })
@@ -295,8 +304,8 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
               and(
                 inArray(timeTrackingTable.teamId, strictTeamIds),
                 eq(timeTrackingTable.status, "pending"),
-                sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${month}`,
-                sql`EXTRACT(YEAR FROM ${timeTrackingTable.actualStart}) = ${year}`,
+                gte(timeTrackingTable.actualStart, monthStart),
+                lt(timeTrackingTable.actualStart, monthEnd),
               )
             )
         : Promise.resolve([] as { actualHours: number | null }[]),
@@ -334,10 +343,8 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     const contractByUserId = new Map(activeContracts.map((c) => [c.userId, c]));
 
     // ── Berechnungen ──────────────────────────────────────────────────────────
-    const monthlyPlannedHours = monthShifts.reduce(
-      (acc, s) => acc + (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3_600_000,
-      0
-    );
+    // SQL-Aggregat direkt verwenden (monthShifts liefert eine Zeile mit plannedHours).
+    const monthlyPlannedHours = monthShifts[0]!.plannedHours;
     const monthlyActualHours = timeTrackingEnabled
       ? monthTimeEntries.reduce((acc, e) => acc + (e.actualHours ?? 0), 0)
       : monthlyPlannedHours;
@@ -433,8 +440,9 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
         // Geplante Soll-Stunden zählen nur verbindlich bestätigte (FIX)
         // Schichten; Entwürfe/Vorschläge verfälschen die Zahl nicht.
         eq(shiftsTable.planningStatus, "FIX"),
-        sql`EXTRACT(MONTH FROM ${shiftsTable.startTime}) = ${month}`,
-        sql`EXTRACT(YEAR FROM ${shiftsTable.startTime}) = ${year}`,
+        // Sargable Bereichsprädikat aktiviert den (user_id, start_time)-Index.
+        gte(shiftsTable.startTime, monthStart),
+        lt(shiftsTable.startTime, monthEnd),
       )
     );
   const monthlyPlannedHours = monthShifts.reduce(
@@ -464,8 +472,9 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
         .where(
           and(
             eq(timeTrackingTable.userId, userId),
-            sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${month}`,
-            sql`EXTRACT(YEAR FROM ${timeTrackingTable.actualStart}) = ${year}`,
+            // Sargable Bereichsprädikat aktiviert den (user_id, actual_start)-Index.
+            gte(timeTrackingTable.actualStart, monthStart),
+            lt(timeTrackingTable.actualStart, monthEnd),
             statusCondition,
           )
         )
@@ -491,8 +500,9 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
           eq(timeTrackingTable.userId, userId),
           inArray(timeTrackingTable.teamId, strictTeamIds),
           eq(timeTrackingTable.status, "pending"),
-          sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${month}`,
-          sql`EXTRACT(YEAR FROM ${timeTrackingTable.actualStart}) = ${year}`,
+          // Sargable Bereichsprädikat aktiviert den (user_id, actual_start)-Index.
+          gte(timeTrackingTable.actualStart, monthStart),
+          lt(timeTrackingTable.actualStart, monthEnd),
         )
       );
     uncountedPendingEntries = uncounted.length;
