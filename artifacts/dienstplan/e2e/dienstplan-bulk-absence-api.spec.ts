@@ -284,6 +284,82 @@ test("ersetzt geplante Dienste am Abwesenheitstag und erbt deren Zeiten", async 
   expect(untouched, "Tag ohne Dienst bleibt ganztaegig").toBeTruthy();
 });
 
+// ── Regression: uebersprungene Tage behalten ihre Dienste ────────────────────
+// Beim Bulk-Auftrag wird jeder Tag, an dem bereits eine Abwesenheit desselben
+// Typs existiert, UEBERSPRUNGEN (skipped). Dabei duerfen geplante Arbeitsdienste
+// an eben diesen Tagen NICHT geloescht werden — nur Dienste an den NEUEN Tagen
+// werden ersetzt. Ohne den Fix wurden auch Dienste an uebersprungenen Tagen
+// aus der ranges-weiten plannedWork-Abfrage gezogen und geloescht.
+
+test("geplante Dienste an uebersprungenen Tagen bleiben erhalten", async () => {
+  // Tag A: bereits eine Abwesenheit, zusaetzlich ein geplanter Dienst
+  // Tag B: keine Abwesenheit, hat einen geplanten Dienst (soll ersetzt werden)
+  // Tag C: keine Abwesenheit, kein Dienst (soll ganztaegig angelegt werden)
+  const dayA = dayString("07-10");
+  const dayB = dayString("07-11");
+  const dayC = dayString("07-12");
+
+  // Bestehende Abwesenheit an Tag A anlegen
+  const existingAbsRes = await adminCtx.post("/api/shifts", {
+    data: { userId: assistantId, type: "sick", ...fullDay(dayA) },
+  });
+  expect(existingAbsRes.status(), "Bestehende Abwesenheit anlegen sollte 201 liefern").toBe(201);
+  const existingAbsId = ((await existingAbsRes.json()) as { id: number }).id;
+
+  // Geplanter Dienst an Tag A — wird uebersprungen, darf NICHT geloescht werden
+  const shiftOnSkippedRes = await adminCtx.post("/api/shifts", {
+    data: {
+      userId: assistantId,
+      type: "active",
+      planningStatus: "FIX",
+      startTime: new Date(`${dayA}T08:00:00`).toISOString(),
+      endTime: new Date(`${dayA}T14:00:00`).toISOString(),
+    },
+  });
+  expect(shiftOnSkippedRes.status(), "Dienst an uebersprungsTag anlegen sollte 201 liefern").toBe(201);
+  const shiftOnSkippedId = ((await shiftOnSkippedRes.json()) as { id: number }).id;
+
+  // Geplanter Dienst an Tag B — wird NEU angelegt, muss geloescht werden
+  const shiftOnNewRes = await adminCtx.post("/api/shifts", {
+    data: {
+      userId: assistantId,
+      type: "active",
+      planningStatus: "FIX",
+      startTime: new Date(`${dayB}T09:00:00`).toISOString(),
+      endTime: new Date(`${dayB}T15:00:00`).toISOString(),
+    },
+  });
+  expect(shiftOnNewRes.status(), "Dienst an neuem Tag anlegen sollte 201 liefern").toBe(201);
+  const shiftOnNewId = ((await shiftOnNewRes.json()) as { id: number }).id;
+
+  // Sammel-Anlage: Tag A wird uebersprungen (Abwesenheit existiert bereits),
+  // Tag B und C werden neu angelegt.
+  const { status, body } = await bulkAbsence("sick", [dayA, dayB, dayC]);
+  expect(status, "Sammel-Anlage sollte 201 liefern").toBe(201);
+  expect(body.skippedCount, "Tag A muss uebersprungen werden").toBe(1);
+  expect(body.skippedDates, "Tag A muss in skippedDates stehen").toContain(dayA);
+  expect(body.createdCount, "Tag B und C muessen neu angelegt werden").toBe(2);
+
+  // Kern der Regression: Dienst an uebersprungsTag A bleibt erhalten
+  const skippedShiftStillThere = await adminCtx.get(`/api/shifts/${shiftOnSkippedId}`);
+  expect(
+    skippedShiftStillThere.status(),
+    "Dienst an uebersprungsTag darf NICHT geloescht worden sein",
+  ).toBe(200);
+
+  // Dienst an Tag B muss geloescht sein (Lohnausfallprinzip am neuen Tag)
+  const replacedShiftGone = await adminCtx.get(`/api/shifts/${shiftOnNewId}`);
+  expect(
+    replacedShiftGone.status(),
+    "Dienst am neu angelegten Tag muss geloescht sein",
+  ).toBe(404);
+
+  // Aufraeumen: bestehende Abwesenheit + verbliebener Dienst an Tag A
+  await deleteShift(existingAbsId);
+  await deleteShift(shiftOnSkippedId);
+  for (const id of body.shiftIds) await deleteShift(id);
+});
+
 // ── Zeitumstellungs-Regressionstests (Task #756) ─────────────────────────────
 // In Deutschland ist der Tag der Sommerzeit-Umstellung (letzter Sonntag im
 // Maerz) 23 UTC-Stunden lang; der Tag der Winterzeit-Umstellung (letzter
