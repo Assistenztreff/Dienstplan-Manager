@@ -47,7 +47,7 @@ import { useTeam } from "@/context/team";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { MonthYearPicker } from "@/components/month-year-picker";
 import { useQueryClient } from "@tanstack/react-query";
-import { SHIFT_LIST_STALE_TIME_MS, SHIFT_LIST_GC_TIME_MS } from "@/lib/shift-cache";
+import { SHIFT_LIST_STALE_TIME_MS, SHIFT_LIST_GC_TIME_MS, REFERENCE_DATA_STALE_TIME_MS } from "@/lib/shift-cache";
 import { useToast } from "@/hooks/use-toast";
 import { readableApiError, planFeatureMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
 import { warnIfMonthClosed } from "@/lib/month-closing-warning";
@@ -175,6 +175,7 @@ export default function Zeiterfassung() {
   ) as { data: TimeEntry[] | undefined; isLoading: boolean; isPlaceholderData: boolean };
   const { data: users, isLoading: usersLoading } = useListUsers(
     selectedTeamId != null ? { teamId: selectedTeamId } : undefined,
+    { query: { staleTime: REFERENCE_DATA_STALE_TIME_MS } } as any,
   );
   // Eigene geplante Schichten des Assistenten im ausgewählten Monat (Server
   // erzwingt die eigene userId). Gleicher month/year-Scope wie die Ist-Zeiten,

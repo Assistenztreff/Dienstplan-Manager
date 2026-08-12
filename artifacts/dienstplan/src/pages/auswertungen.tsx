@@ -34,7 +34,7 @@ import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
 import { hasAccess } from "@/lib/entitlements";
-import { SHIFT_LIST_STALE_TIME_MS, SHIFT_LIST_GC_TIME_MS } from "@/lib/shift-cache";
+import { SHIFT_LIST_STALE_TIME_MS, SHIFT_LIST_GC_TIME_MS, REFERENCE_DATA_STALE_TIME_MS } from "@/lib/shift-cache";
 import { PlanUpgradeLink } from "@/components/plan-limit-banner";
 import { useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
 import { PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
@@ -316,11 +316,18 @@ export default function Auswertungen() {
       year,
       ...teamParam,
     },
-    { query: { enabled: isAdmin } } as any,
+    {
+      query: {
+        enabled: isAdmin,
+        staleTime: SHIFT_LIST_STALE_TIME_MS,
+        gcTime: SHIFT_LIST_GC_TIME_MS,
+      },
+    } as any,
   ) as any;
 
   const { data: users, isLoading: usersLoading } = useListUsers(
-    selectedTeamId != null ? { teamId: selectedTeamId } : undefined
+    selectedTeamId != null ? { teamId: selectedTeamId } : undefined,
+    { query: { staleTime: REFERENCE_DATA_STALE_TIME_MS } } as any,
   );
 
   const assistants: Assistant[] = isAdmin
