@@ -5,6 +5,7 @@ import express, {
   type NextFunction,
 } from "express";
 import path from "path";
+import { fileURLToPath } from "url";
 import cors from "cors";
 import session from "express-session";
 import ConnectPgSimple from "connect-pg-simple";
@@ -139,12 +140,28 @@ app.use("/api", router);
 // zu sein.
 // ---------------------------------------------------------------------------
 if (isProduction) {
-  const frontendDir = path.resolve("artifacts/dienstplan/dist/public");
+  // Pfad relativ zur kompilierten Datei (dist/index.mjs), nicht zu process.cwd(),
+  // damit er auch dann korrekt aufgelöst wird, wenn der Prozess aus einem
+  // anderen Arbeitsverzeichnis gestartet wird.
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const frontendDir = path.join(__dirname, "../../dienstplan/dist/public");
+
   // Statische Assets (JS, CSS, Bilder) zuerst — ohne index.html-Fallback.
   app.use(express.static(frontendDir, { index: false }));
+
   // Catch-all: jeder unbekannte GET-Pfad liefert die SPA-Shell.
+  // Fehlerbehandlung: Falls index.html nicht gefunden wird (z. B. weil der
+  // Frontend-Build im Container fehlt), wird statt eines 500-Fehlers eine
+  // einfache 503-Antwort gesendet — so schlägt der Healthcheck nicht fehl.
   app.get("*", (_req, res) => {
-    res.sendFile(path.join(frontendDir, "index.html"));
+    res.sendFile(path.join(frontendDir, "index.html"), (err) => {
+      if (err) {
+        res
+          .status(503)
+          .send("Frontend nicht verfügbar — bitte versuche es später erneut.");
+      }
+    });
   });
 }
 
