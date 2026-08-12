@@ -863,7 +863,7 @@ function DayDetailRow({
             }
           : undefined
       }
-      className={`relative flex items-center border-b border-[#f1f1ee] last:border-b-0 ${comfortable ? "gap-3 py-3 pl-5 pr-4 text-sm" : "gap-2.5 py-[9px] pl-4 pr-3 text-[12.5px]"} ${planningStatusBadgeOutline(shift)} ${
+      className={`relative flex items-center border-b border-[#f1f1ee] last:border-b-0 ${comfortable ? "gap-3 py-3 pl-5 pr-4 text-sm" : "min-h-[44px] gap-2.5 py-1.5 pl-4 pr-3 text-[12.5px]"} ${planningStatusBadgeOutline(shift)} ${
         clickable
           ? "cursor-pointer transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
           : ""
@@ -898,7 +898,7 @@ function DayDetailRow({
             e.stopPropagation();
             onConfirm(shift);
           }}
-          className={`inline-flex shrink-0 items-center gap-1 rounded-md border border-[#d8d8d4] bg-white px-2 py-0.5 font-semibold text-[#092948] transition-colors hover:border-[#092948] ${comfortable ? "text-xs" : "text-[11px]"}`}
+          className={`relative inline-flex shrink-0 items-center gap-1 rounded-md border border-[#d8d8d4] bg-white px-2 py-0.5 font-semibold text-[#092948] transition-colors hover:border-[#092948] ${comfortable ? "text-xs" : "text-[11px] after:absolute after:content-[''] after:inset-x-0 after:top-1/2 after:-translate-y-1/2 after:h-[44px]"}`}
         >
           <Check className="h-3 w-3" />
           Bestätigen
