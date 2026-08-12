@@ -89,9 +89,9 @@ const SHIFT_SELECT = {
   },
 };
 
-async function activeContractFor(userId: number, date: Date) {
+async function activeContractFor(userId: number, date: Date, dbx: Dbx = db) {
   const dateStr = date.toISOString().split("T")[0];
-  const contracts = await db
+  const contracts = await dbx
     .select()
     .from(contractsTable)
     .where(
@@ -177,8 +177,8 @@ function isContractOlderThan13Weeks(contract: BulkContract, refDate: Date): bool
 
 // Vertragliche Soll-Stunden des Tages (Wochenstunden / Arbeitstage pro Woche,
 // Fallback 5 Arbeitstage). Fallback 8h ohne Vertrag.
-async function dailyTargetHours(userId: number, date: Date): Promise<number> {
-  const contract = await activeContractFor(userId, date);
+async function dailyTargetHours(userId: number, date: Date, dbx: Dbx = db): Promise<number> {
+  const contract = await activeContractFor(userId, date, dbx);
   if (!contract) return 8;
   const workdays =
     contract.workdaysPerWeek > 0 ? contract.workdaysPerWeek : 5;
@@ -190,13 +190,14 @@ async function dailyTargetHours(userId: number, date: Date): Promise<number> {
 // Abwesenheitstag die vertraglichen Tages-Soll-Stunden. Keine Zuschläge hier,
 // da Abwesenheiten kein Arbeits-Schichtmodell sind.
 async function bookAbsenceTimeTracking(shift: AbsenceShift, dbx: Dbx = db): Promise<void> {
-  const target = await dailyTargetHours(shift.userId, new Date(shift.startTime));
+  const target = await dailyTargetHours(shift.userId, new Date(shift.startTime), dbx);
   const dailyHours = await absenceHoursFor(
     shift.userId,
     shift.teamId,
     shift.startTime,
     shift.endTime,
-    target
+    target,
+    dbx
   );
   await dbx.insert(timeTrackingTable).values({
     userId: shift.userId,
@@ -211,16 +212,17 @@ async function bookAbsenceTimeTracking(shift: AbsenceShift, dbx: Dbx = db): Prom
 
 // Hält die gebuchte Zeiterfassung einer Abwesenheit synchron, wenn sich Datum,
 // Zeiten oder der zugrundeliegende Vertrag geändert haben.
-async function syncAbsenceTimeTracking(shift: AbsenceShift): Promise<void> {
-  const target = await dailyTargetHours(shift.userId, new Date(shift.startTime));
+async function syncAbsenceTimeTracking(shift: AbsenceShift, dbx: Dbx = db): Promise<void> {
+  const target = await dailyTargetHours(shift.userId, new Date(shift.startTime), dbx);
   const dailyHours = await absenceHoursFor(
     shift.userId,
     shift.teamId,
     shift.startTime,
     shift.endTime,
-    target
+    target,
+    dbx
   );
-  await db
+  await dbx
     .update(timeTrackingTable)
     .set({ actualHours: dailyHours, actualStart: shift.startTime, actualEnd: shift.endTime })
     .where(eq(timeTrackingTable.shiftId, shift.id));
@@ -262,11 +264,12 @@ async function applyVacationDelta(
 async function adjustVacationHours(
   userId: number,
   date: Date,
-  deltaHours: number
+  deltaHours: number,
+  dbx: Dbx = db
 ): Promise<void> {
-  const contract = await activeContractFor(userId, date);
+  const contract = await activeContractFor(userId, date, dbx);
   if (!contract) return;
-  await applyVacationDelta(contract, deltaHours);
+  await applyVacationDelta(contract, deltaHours, dbx);
 }
 
 // Vertragszeitraum-Guard für URLAUB: Hat die Assistenzkraft mindestens einen
@@ -565,13 +568,14 @@ async function storeShiftMetrics(shift: {
         shift.teamId,
         shift.startTime,
         shift.endTime,
-        await dailyTargetHours(shift.userId, new Date(shift.startTime))
+        await dailyTargetHours(shift.userId, new Date(shift.startTime), dbx),
+        dbx
       )
     : 0;
   const valuationPercent = absence
     ? 100
     : await valuationPercentFor(shift.type, shift.shiftModelId);
-  const { window, state } = await allowanceContext(shift.teamId);
+  const { window, state } = await allowanceContext(shift.teamId, dbx);
   const metrics = resolveShiftMetrics(
     {
       type: shift.type,
@@ -1057,6 +1061,10 @@ router.post("/shifts", requireAuth, async (req, res): Promise<void> => {
   //  • Fallback (leerer Tag): ist optional ein Schichtmodell verknüpft, gelten
   //    dessen Standardzeiten. Sonst bleibt es ein ganztägiger Eintrag (00:00–23:59
   //    aus dem Frontend → vertragliche Tages-Soll-Stunden, keine Zuschläge).
+  // Abwesenheits-Zeiten auflösen: vorher geplante Arbeitsdienste lesen (Read
+  // außerhalb der Transaktion, rein lesend) — IDs werden innerhalb der
+  // Transaktion per Batch-Delete ersetzt.
+  let plannedForDelete: number[] = [];
   if (isAbsenceType(body.data.type)) {
     const planned = await findPlannedWorkShiftsForDay(
       body.data.userId,
@@ -1066,9 +1074,7 @@ router.post("/shifts", requireAuth, async (req, res): Promise<void> => {
     if (planned.length > 0) {
       insertValues.startTime = planned[0]!.startTime;
       insertValues.endTime = planned[0]!.endTime;
-      for (const p of planned) {
-        await deleteReplacedWorkShift(p.id);
-      }
+      plannedForDelete = planned.map((p) => p.id);
     } else if (body.data.shiftModelId != null) {
       const [model] = await db
         .select({
@@ -1089,28 +1095,42 @@ router.post("/shifts", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
-  const [shift] = await db.insert(shiftsTable).values(insertValues).returning();
-
-  await storeShiftMetrics(shift);
-
-  if (isAbsenceType(shift.type)) {
-    await bookAbsenceTimeTracking(shift);
-    if (shift.type === "vacation") {
-      const hours = await resolveVacationHours(
-        shift.userId,
-        shift.teamId,
-        shift.startTime,
-        shift.endTime
-      );
-      await adjustVacationHours(shift.userId, new Date(shift.startTime), hours);
+  // Alle Schreiboperationen transaktional: Batch-Delete ersetzte Arbeitsdienste
+  // (inkl. Zeiterfassungs-Einträge), INSERT, Kennzahlen, TT-Buchung und
+  // Urlaubskonto-Fortschreibung in einem atomaren Block.
+  const withUser = await db.transaction(async (tx) => {
+    // Batch-delete ersetzte Arbeitsdienste in zwei inArray-Statements statt
+    // N+1 sequenzieller Einzellöschungen (identisches Muster wie bulk-absence).
+    if (plannedForDelete.length > 0) {
+      await tx.delete(timeTrackingTable).where(inArray(timeTrackingTable.shiftId, plannedForDelete));
+      await tx.delete(shiftsTable).where(inArray(shiftsTable.id, plannedForDelete));
     }
-  }
 
-  const [withUser] = await db
-    .select(SHIFT_SELECT)
-    .from(shiftsTable)
-    .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
-    .where(eq(shiftsTable.id, shift.id));
+    const [shift] = await tx.insert(shiftsTable).values(insertValues).returning();
+
+    await storeShiftMetrics(shift, tx);
+
+    if (isAbsenceType(shift.type)) {
+      await bookAbsenceTimeTracking(shift, tx);
+      if (shift.type === "vacation") {
+        const hours = await resolveVacationHours(
+          shift.userId,
+          shift.teamId,
+          shift.startTime,
+          shift.endTime,
+          tx
+        );
+        await adjustVacationHours(shift.userId, new Date(shift.startTime), hours, tx);
+      }
+    }
+
+    const [row] = await tx
+      .select(SHIFT_SELECT)
+      .from(shiftsTable)
+      .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
+      .where(eq(shiftsTable.id, shift.id));
+    return row;
+  });
   res.status(201).json(withUser);
 });
 
@@ -2144,77 +2164,96 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
     updateValues.startTime = normalized.startTime;
     updateValues.endTime = normalized.endTime;
   }
-  const [updated] = await db
-    .update(shiftsTable)
-    .set(updateValues)
-    .where(eq(shiftsTable.id, params.data.id))
-    .returning();
-  if (!updated) {
-    res.status(404).json({ error: "Not found" });
-    return;
+  // Alle Schreiboperationen transaktional: UPDATE, Zeiterfassung-Sync,
+  // Urlaubs-Rebalancierung und Kennzahlen in einem atomaren Block.
+  // Sentinel für parallele Löschung zwischen Vorab-Read und UPDATE (Race).
+  const notFoundError = new Error("patch-shift-not-found");
+  let patchResult;
+  try {
+    patchResult = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(shiftsTable)
+        .set(updateValues)
+        .where(eq(shiftsTable.id, params.data.id))
+        .returning();
+      if (!updated) throw notFoundError;
+
+      const newType = updated.type;
+      const oldType = oldShift.type;
+      const wasAbsence = isAbsenceType(oldType);
+      const isAbsence = isAbsenceType(newType);
+
+      // Zeiterfassung an den Typ-Übergang anpassen.
+      if (wasAbsence && !isAbsence) {
+        await removeAbsenceTimeTracking(updated.id, tx);
+      } else if (!wasAbsence && isAbsence) {
+        await bookAbsenceTimeTracking(updated, tx);
+      } else if (wasAbsence && isAbsence) {
+        // Bleibt Abwesenheit: Buchung mit Datum/Zeiten/Vertrag synchron halten.
+        await syncAbsenceTimeTracking(updated, tx);
+      }
+
+      // Urlaubsanspruch rebalancieren (stundengenau): Ein Urlaubstag bucht seine
+      // Urlaubs-Stunden auf den Vertrag, der für (userId, Datum) gilt — vor und nach
+      // dem Update. Ändert sich der gültige Vertrag (z.B. Datumswechsel über
+      // Vertragsgrenzen), der Typ ODER die Stundenzahl (z.B. Zeit-Edit von/zu 24h),
+      // wird umgebucht.
+      // Erste Promise.all-Gruppe: beide Contract-Reads parallel (über tx).
+      const [oldVacationContract, newVacationContract] = await Promise.all([
+        oldType === "vacation"
+          ? activeContractFor(oldShift.userId, new Date(oldShift.startTime), tx)
+          : Promise.resolve(null),
+        newType === "vacation"
+          ? activeContractFor(updated.userId, new Date(updated.startTime), tx)
+          : Promise.resolve(null),
+      ]);
+      // Zweite Promise.all-Gruppe: Stunden-Reads nur wenn ein Contract vorliegt (über tx).
+      const [oldVacationHours, newVacationHours] = await Promise.all([
+        oldVacationContract
+          ? resolveVacationHours(
+              oldShift.userId,
+              oldShift.teamId,
+              oldShift.startTime,
+              oldShift.endTime,
+              tx
+            )
+          : Promise.resolve(0),
+        newVacationContract
+          ? resolveVacationHours(
+              updated.userId,
+              updated.teamId,
+              updated.startTime,
+              updated.endTime,
+              tx
+            )
+          : Promise.resolve(0),
+      ]);
+      if (oldVacationContract?.id !== newVacationContract?.id) {
+        if (oldVacationContract) await applyVacationDelta(oldVacationContract, -oldVacationHours, tx);
+        if (newVacationContract) await applyVacationDelta(newVacationContract, newVacationHours, tx);
+      } else if (newVacationContract && oldVacationHours !== newVacationHours) {
+        // Gleicher Vertrag, aber geänderte Stundenzahl: Differenz umbuchen.
+        await applyVacationDelta(newVacationContract, newVacationHours - oldVacationHours, tx);
+      }
+
+      // Kennzahlen nach der Änderung (Zeiten/Typ/Modell) neu berechnen und speichern.
+      await storeShiftMetrics(updated, tx);
+
+      const [row] = await tx
+        .select(SHIFT_SELECT)
+        .from(shiftsTable)
+        .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
+        .where(eq(shiftsTable.id, params.data.id));
+      return row;
+    });
+  } catch (err) {
+    if (err === notFoundError) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    throw err;
   }
-
-  const newType = updated.type;
-  const oldType = oldShift.type;
-  const wasAbsence = isAbsenceType(oldType);
-  const isAbsence = isAbsenceType(newType);
-
-  // Zeiterfassung an den Typ-Übergang anpassen.
-  if (wasAbsence && !isAbsence) {
-    await removeAbsenceTimeTracking(updated.id);
-  } else if (!wasAbsence && isAbsence) {
-    await bookAbsenceTimeTracking(updated);
-  } else if (wasAbsence && isAbsence) {
-    // Bleibt Abwesenheit: Buchung mit Datum/Zeiten/Vertrag synchron halten.
-    await syncAbsenceTimeTracking(updated);
-  }
-
-  // Urlaubsanspruch rebalancieren (stundengenau): Ein Urlaubstag bucht seine
-  // Urlaubs-Stunden auf den Vertrag, der für (userId, Datum) gilt — vor und nach
-  // dem Update. Ändert sich der gültige Vertrag (z.B. Datumswechsel über
-  // Vertragsgrenzen), der Typ ODER die Stundenzahl (z.B. Zeit-Edit von/zu 24h),
-  // wird umgebucht.
-  const oldVacationContract =
-    oldType === "vacation"
-      ? await activeContractFor(oldShift.userId, new Date(oldShift.startTime))
-      : null;
-  const newVacationContract =
-    newType === "vacation"
-      ? await activeContractFor(updated.userId, new Date(updated.startTime))
-      : null;
-  const oldVacationHours = oldVacationContract
-    ? await resolveVacationHours(
-        oldShift.userId,
-        oldShift.teamId,
-        oldShift.startTime,
-        oldShift.endTime
-      )
-    : 0;
-  const newVacationHours = newVacationContract
-    ? await resolveVacationHours(
-        updated.userId,
-        updated.teamId,
-        updated.startTime,
-        updated.endTime
-      )
-    : 0;
-  if (oldVacationContract?.id !== newVacationContract?.id) {
-    if (oldVacationContract) await applyVacationDelta(oldVacationContract, -oldVacationHours);
-    if (newVacationContract) await applyVacationDelta(newVacationContract, newVacationHours);
-  } else if (newVacationContract && oldVacationHours !== newVacationHours) {
-    // Gleicher Vertrag, aber geänderte Stundenzahl: Differenz umbuchen.
-    await applyVacationDelta(newVacationContract, newVacationHours - oldVacationHours);
-  }
-
-  // Kennzahlen nach der Änderung (Zeiten/Typ/Modell) neu berechnen und speichern.
-  await storeShiftMetrics(updated);
-
-  const [withUser] = await db
-    .select(SHIFT_SELECT)
-    .from(shiftsTable)
-    .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
-    .where(eq(shiftsTable.id, params.data.id));
-  res.json(withUser);
+  res.json(patchResult);
 });
 
 router.delete("/shifts/:id", requireAuth, async (req, res): Promise<void> => {
@@ -2254,20 +2293,39 @@ router.delete("/shifts/:id", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
-  if (isAbsenceType(shift.type)) {
-    await removeAbsenceTimeTracking(shift.id);
-    if (shift.type === "vacation") {
-      const hours = await resolveVacationHours(
-        shift.userId,
-        shift.teamId,
-        shift.startTime,
-        shift.endTime
-      );
-      await adjustVacationHours(shift.userId, new Date(shift.startTime), -hours);
+  // Alle Schreiboperationen transaktional: Zeiterfassung-Entfernung,
+  // Urlaubs-Rückbuchung und Schicht-Löschung atomar. Das DELETE mit
+  // .returning() erkennt einen Race (parallele Löschung zwischen
+  // Vorab-Read und Transaktion).
+  const raceError = new Error("delete-shift-race");
+  try {
+    await db.transaction(async (tx) => {
+      if (isAbsenceType(shift.type)) {
+        await removeAbsenceTimeTracking(shift.id, tx);
+        if (shift.type === "vacation") {
+          const hours = await resolveVacationHours(
+            shift.userId,
+            shift.teamId,
+            shift.startTime,
+            shift.endTime,
+            tx
+          );
+          await adjustVacationHours(shift.userId, new Date(shift.startTime), -hours, tx);
+        }
+      }
+      const deleted = await tx
+        .delete(shiftsTable)
+        .where(eq(shiftsTable.id, params.data.id))
+        .returning({ id: shiftsTable.id });
+      if (deleted.length === 0) throw raceError;
+    });
+  } catch (err) {
+    if (err === raceError) {
+      res.status(404).json({ error: "Not found" });
+      return;
     }
+    throw err;
   }
-
-  await db.delete(shiftsTable).where(eq(shiftsTable.id, params.data.id));
   res.status(204).send();
 });
 
@@ -2316,25 +2374,33 @@ router.post("/shifts/bulk-delete", requireAuth, async (req, res): Promise<void> 
     }
   }
 
-  // Urlaubs-Rückbuchung vorbereiten (Reads bewusst auf globalem db, gleiche
-  // Race-Toleranz wie der Einzel-Pfad; Writes unten in der Transaktion).
+  // Urlaubs-Rückbuchung vorbereiten: Contracts und Stunden für alle
+  // Urlaubsschichten parallel lesen (Batch statt N×2 sequenzielle Reads),
+  // Writes folgen in der Transaktion.
+  const vacationShifts = shifts.filter((s) => s.type === "vacation");
   const byContract = new Map<
     number,
     { contract: { id: number; vacationHoursUsed: number }; delta: number }
   >();
-  for (const shift of shifts) {
-    if (shift.type !== "vacation") continue;
-    const hours = await resolveVacationHours(
-      shift.userId,
-      shift.teamId,
-      shift.startTime,
-      shift.endTime
-    );
-    const contract = await activeContractFor(shift.userId, new Date(shift.startTime));
-    if (!contract) continue;
-    const entry = byContract.get(contract.id) ?? { contract, delta: 0 };
-    entry.delta -= hours;
-    byContract.set(contract.id, entry);
+  if (vacationShifts.length > 0) {
+    const [contracts, hoursArr] = await Promise.all([
+      Promise.all(
+        vacationShifts.map((s) => activeContractFor(s.userId, new Date(s.startTime)))
+      ),
+      Promise.all(
+        vacationShifts.map((s) =>
+          resolveVacationHours(s.userId, s.teamId, s.startTime, s.endTime)
+        )
+      ),
+    ]);
+    for (let i = 0; i < vacationShifts.length; i++) {
+      const contract = contracts[i];
+      if (!contract) continue;
+      const hours = hoursArr[i]!;
+      const entry = byContract.get(contract.id) ?? { contract, delta: 0 };
+      entry.delta -= hours;
+      byContract.set(contract.id, entry);
+    }
   }
 
   const absenceIds = shifts.filter((s) => isAbsenceType(s.type)).map((s) => s.id);

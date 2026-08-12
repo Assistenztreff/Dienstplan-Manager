@@ -32,12 +32,18 @@ export function vacationHoursForShift(
 // §11-BUrlG-Durchschnitt: mittlere Tages-Stunden der letzten 13 Wochen aus
 // BESTÄTIGTEN Arbeits-IST-Zeiten (nur type "work", Abwesenheits-Buchungen
 // ausgenommen, sonst zirkulär). Ohne Historie → null (Aufrufer nutzt Fallback).
-export async function bwavgDailyHours(userId: number, refDate: Date): Promise<number | null> {
+// `dbx` erlaubt das Lesen innerhalb einer offenen Transaktion (gleiche Semantik
+// wie bwavgDailyHoursForDates).
+export async function bwavgDailyHours(
+  userId: number,
+  refDate: Date,
+  dbx: VacationDbx = db
+): Promise<number | null> {
   const end = new Date(refDate);
   const start = new Date(end.getTime() - 91 * 24 * 3_600_000); // 13 Wochen
   const startStr = start.toISOString();
   const endStr = end.toISOString();
-  const [row] = await db
+  const [row] = await dbx
     .select({
       total: sql<number>`COALESCE(SUM(${timeTrackingTable.actualHours}), 0)`,
       days: sql<number>`COUNT(DISTINCT DATE(${timeTrackingTable.actualStart}))`,
@@ -117,10 +123,11 @@ export async function bwavgDailyHoursForDates(
 async function activeTeamContractFor(
   userId: number,
   teamId: number,
-  date: Date
+  date: Date,
+  dbx: VacationDbx = db
 ): Promise<{ weeklyHours: number; workdaysPerWeek: number; startDate: string } | null> {
   const dateStr = date.toISOString().split("T")[0]!;
-  const [contract] = await db
+  const [contract] = await dbx
     .select({
       weeklyHours: contractsTable.weeklyHours,
       workdaysPerWeek: contractsTable.workdaysPerWeek,
@@ -165,14 +172,15 @@ export async function absenceHoursFor(
   teamId: number | null,
   startTime: Date | string,
   endTime: Date | string,
-  fallbackPerDay: number
+  fallbackPerDay: number,
+  dbx: VacationDbx = db
 ): Promise<number> {
   const start = new Date(startTime);
   const end = new Date(endTime);
   if (!isPlainFullDay(start, end)) {
     return vacationHoursForShift(start, end, fallbackPerDay);
   }
-  const info = await resolveDailyRateInfo(userId, teamId, start, fallbackPerDay);
+  const info = await resolveDailyRateInfo(userId, teamId, start, fallbackPerDay, dbx);
   return vacationHoursForShift(start, end, info.dailyHours);
 }
 
@@ -196,11 +204,12 @@ export async function resolveDailyRateInfo(
   userId: number,
   teamId: number | null,
   refDate: Date,
-  fallbackPerDay: number
+  fallbackPerDay: number,
+  dbx: VacationDbx = db
 ): Promise<DailyRateInfo> {
-  const ops = await resolveAllowanceOps(teamId);
+  const ops = await resolveAllowanceOps(teamId, dbx);
   const contract =
-    teamId != null ? await activeTeamContractFor(userId, teamId, refDate) : null;
+    teamId != null ? await activeTeamContractFor(userId, teamId, refDate, dbx) : null;
   const info: DailyRateInfo = {
     dailyHours: fallbackPerDay,
     source: "default",
@@ -210,7 +219,7 @@ export async function resolveDailyRateInfo(
   if (ops.vacationMethod !== "bwavg") return info;
   if (contract) {
     const avg = contractOlderThan13Weeks(contract.startDate, refDate)
-      ? await bwavgDailyHours(userId, refDate)
+      ? await bwavgDailyHours(userId, refDate, dbx)
       : null;
     if (avg != null) {
       info.dailyHours = avg;
@@ -223,7 +232,7 @@ export async function resolveDailyRateInfo(
   } else {
     // Ohne Vertrag: bisheriges Verhalten (Schnitt, falls Historie; sonst
     // Standardwert) — kein Verhaltensbruch für vertragslose Nutzer.
-    const avg = await bwavgDailyHours(userId, refDate);
+    const avg = await bwavgDailyHours(userId, refDate, dbx);
     if (avg != null) {
       info.dailyHours = avg;
       info.source = "bwavg";
@@ -238,10 +247,11 @@ export async function resolveVacationHours(
   userId: number,
   teamId: number | null,
   startTime: Date | string,
-  endTime: Date | string
+  endTime: Date | string,
+  dbx: VacationDbx = db
 ): Promise<number> {
-  const ops = await resolveAllowanceOps(teamId);
-  return absenceHoursFor(userId, teamId, startTime, endTime, ops.vacationHoursPerDay);
+  const ops = await resolveAllowanceOps(teamId, dbx);
+  return absenceHoursFor(userId, teamId, startTime, endTime, ops.vacationHoursPerDay, dbx);
 }
 
 // Berechnet den Urlaubszähler (vacationHoursUsed) eines Vertrags komplett neu
