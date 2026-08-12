@@ -499,3 +499,122 @@ test("Sommerzeit-Umstellungstag (29. März): Abwesenheit erscheint auf dem 29., 
     await page.request.delete(`/api/users/${assistant.id}`);
   }
 });
+
+// ── Mobile-Akkordeon DST-Regressionstests (Task #795) ────────────────────────
+// Dieselben UTC-Datums-Schlüssel-Checks wie oben, aber bei 400 px Viewport:
+// Das 6-Spalten-Grid ist dort ausgeblendet; stattdessen rendert der Kalender
+// ein Akkordeon (abwkal-accordion). Ein Rückfall auf lokale Zeitinterpretation
+// wäre auf europäischen Smartphones nicht sichtbar gewesen, bis dieser Spec
+// existierte.
+
+test("Mobil-Akkordeon – Winterzeit-Umstellungstag (25. Oktober): Abwesenheit erscheint auf dem 25., nicht dem 24.", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 400, height: 900 });
+  await loginAsAdmin(page);
+
+  const unique = Date.now();
+  const userRes = await page.request.post("/api/users", {
+    data: {
+      name: `E2E DST Mob Winter ${unique}`,
+      email: `e2e.dst.mob.winter.${unique}@dienstplan.test`,
+      role: "assistant",
+    },
+  });
+  expect(userRes.ok(), `Anlegen fehlgeschlagen (${userRes.status()})`).toBe(true);
+  const assistant = (await userRes.json()) as { id: number; name: string };
+
+  try {
+    await seedSickAbsence(page, assistant.id, `${DST_YEAR}-10-25`);
+
+    await page.goto("/abwesenheiten");
+    await page.getByTestId("toggle-abwesenheits-kalender").click();
+    const kalender = page.getByTestId("abwesenheits-kalender");
+    await expect(kalender).toBeVisible();
+
+    await navigateToYear(page, kalender, DST_YEAR);
+
+    await kalender.getByTestId("abwkal-person-filter").click();
+    await page.getByRole("option", { name: assistant.name }).click();
+
+    // Akkordeon ist bei 400 px sichtbar; das Grid bleibt versteckt.
+    const accordion = kalender.getByTestId("abwkal-accordion");
+    await expect(accordion).toBeVisible();
+
+    // Oktober-Zeile aufklappen.
+    await accordion.getByTestId(`abwkal-acc-toggle-${DST_YEAR}-10`).click();
+
+    // 25. Oktober muss die Abwesenheit tragen.
+    await expect(accordion.getByTestId(`abwkal-day-${DST_YEAR}-10-25`)).toHaveAttribute(
+      "data-category",
+      "ausfall",
+    );
+    // Vortag und Folgetag dürfen leer bleiben.
+    await expect(accordion.getByTestId(`abwkal-day-${DST_YEAR}-10-24`)).not.toHaveAttribute(
+      "data-category",
+    );
+    await expect(accordion.getByTestId(`abwkal-day-${DST_YEAR}-10-26`)).not.toHaveAttribute(
+      "data-category",
+    );
+  } finally {
+    await deleteShiftsOf(page, assistant.id);
+    await page.request.delete(`/api/users/${assistant.id}`);
+  }
+});
+
+test("Mobil-Akkordeon – Sommerzeit-Umstellungstag (29. März): Abwesenheit erscheint auf dem 29., nicht dem 28.", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 400, height: 900 });
+  await loginAsAdmin(page);
+
+  const unique = Date.now();
+  const userRes = await page.request.post("/api/users", {
+    data: {
+      name: `E2E DST Mob Sommer ${unique}`,
+      email: `e2e.dst.mob.sommer.${unique}@dienstplan.test`,
+      role: "assistant",
+    },
+  });
+  expect(userRes.ok(), `Anlegen fehlgeschlagen (${userRes.status()})`).toBe(true);
+  const assistant = (await userRes.json()) as { id: number; name: string };
+
+  try {
+    await seedSickAbsence(page, assistant.id, `${DST_YEAR}-03-29`);
+
+    await page.goto("/abwesenheiten");
+    await page.getByTestId("toggle-abwesenheits-kalender").click();
+    const kalender = page.getByTestId("abwesenheits-kalender");
+    await expect(kalender).toBeVisible();
+
+    await navigateToYear(page, kalender, DST_YEAR);
+
+    await kalender.getByTestId("abwkal-person-filter").click();
+    await page.getByRole("option", { name: assistant.name }).click();
+
+    // Akkordeon ist bei 400 px sichtbar; das Grid bleibt versteckt.
+    const accordion = kalender.getByTestId("abwkal-accordion");
+    await expect(accordion).toBeVisible();
+
+    // März-Zeile aufklappen.
+    await accordion.getByTestId(`abwkal-acc-toggle-${DST_YEAR}-03`).click();
+
+    // 29. März muss die Abwesenheit tragen.
+    await expect(accordion.getByTestId(`abwkal-day-${DST_YEAR}-03-29`)).toHaveAttribute(
+      "data-category",
+      "ausfall",
+    );
+    // Benachbarte Tage ohne Abwesenheit.
+    await expect(accordion.getByTestId(`abwkal-day-${DST_YEAR}-03-28`)).not.toHaveAttribute(
+      "data-category",
+    );
+    await expect(accordion.getByTestId(`abwkal-day-${DST_YEAR}-03-30`)).not.toHaveAttribute(
+      "data-category",
+    );
+  } finally {
+    await deleteShiftsOf(page, assistant.id);
+    await page.request.delete(`/api/users/${assistant.id}`);
+  }
+});
