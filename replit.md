@@ -18,6 +18,7 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
   - Keine automatischen Deployments ohne Rückfrage; keine Komplettüberarbeitung, wenn ein gezielter Fix reicht.
   - **Proaktive Spar-Hinweise (verbindlich)**: Sobald eine Kosteneffizienz-Optimierung erkennbar wird (z. B. eine aufgeblähte Memory-Datei, doppelte Validierungsläufe oder teure wiederkehrende Muster), aktiv und sofort darauf hinweisen — nicht still für später vormerken.
   - **Modus-Empfehlung bei jedem neuen Auftrag (verbindlich)**: Zu Beginn eines Arbeitsauftrags kurz nennen, welcher Modus am besten passt (Agent-Modus Lite/Economy/Power sowie Build-Session vs. Plan-Modus vs. isolierte Tasks) — mit Begründung in einem Satz.
+  - **Vorab-Durchdenken bei asynchronen Features (verbindlich)**: Vor dem ersten Edit bei Features mit async Daten + Benutzer-Input drei Fragen beantworten: (1) *Laden* — was zeige ich, während Daten fehlen? (2) *Änderung* — was passiert, wenn der Nutzer X verändert, nachdem Daten geladen sind? (3) *Grenzen* — gibt es Zeiträume/Monate/Teams außerhalb des aktuellen Scope? Erst dann implementieren. Ziel: Code-Review-Runden durch frühes Durchdenken vermeiden statt durch Iteration.
 
 ## Stack & Betrieb
 
