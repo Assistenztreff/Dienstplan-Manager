@@ -4,6 +4,7 @@ import express, {
   type Response,
   type NextFunction,
 } from "express";
+import path from "path";
 import cors from "cors";
 import session from "express-session";
 import ConnectPgSimple from "connect-pg-simple";
@@ -130,6 +131,22 @@ app.use("/api", (req, res, next) => {
 });
 
 app.use("/api", router);
+
+// ---------------------------------------------------------------------------
+// Production SPA-Auslieferung: Alle Nicht-API-Pfade liefern das Vite-Build.
+// So funktionieren direkte Links (z. B. /passwort-zuruecksetzen?token=...)
+// zuverlässig, ohne auf den eingebauten Static-Handler von Replit angewiesen
+// zu sein.
+// ---------------------------------------------------------------------------
+if (isProduction) {
+  const frontendDir = path.resolve("artifacts/dienstplan/dist/public");
+  // Statische Assets (JS, CSS, Bilder) zuerst — ohne index.html-Fallback.
+  app.use(express.static(frontendDir, { index: false }));
+  // Catch-all: jeder unbekannte GET-Pfad liefert die SPA-Shell.
+  app.get("*", (_req, res) => {
+    res.sendFile(path.join(frontendDir, "index.html"));
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Zentraler Error-Handler: JEDER unbehandelte Fehler (Express 5 leitet auch
