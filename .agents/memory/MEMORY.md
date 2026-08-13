@@ -1,4 +1,6 @@
 - [Scaleway Prod-DB & Publish-Workflow](scaleway-prod-publish-workflow.md) — Scaleway = einzige Prod-DB; check-prod-schema vor Publish; bei neuen Spalten immer explizit warnen.
+- [Express 5 Wildcard Route](express5-wildcard-route.md) — app.get("*",...) wirft PathError in Express 5; Regex /.*/ oder benannte Wildcard verwenden.
+- [Artifact paths Konflikt](artifact-paths-conflict.md) — zwei Artifacts mit paths=["/"] hängen den Publish-Vorgang; nur der aktiv-serving Service setzt paths.
 - [Arbeitstage-Rechner & workdaysConfirm](workdays-confirm-pattern.md) — Vorschau muss Server-Formel spiegeln; Bestätigungen als Steuerfeld, nie Ist-Wert erneut senden (Race).
 - [Externe Postgres-URL Kodierung & TLS](scaleway-db-url-tls.md) — normalizeDatabaseUrl repariert unkodierte Passwörter; selbstsignierte Zertifikate brauchen Opt-in DATABASE_SSL_NO_VERIFY=1 (kein stiller Downgrade).
 - [DATABASE_URL secret shadows managed DB](database-url-secret-shadowing.md) — a user's DATABASE_URL secret overrides the managed URL; malformed value = 500 on all DB ops; agent can't delete secrets, env change needs workflow restart.

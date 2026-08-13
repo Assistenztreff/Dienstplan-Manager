@@ -151,10 +151,11 @@ if (isProduction) {
   app.use(express.static(frontendDir, { index: false }));
 
   // Catch-all: jeder unbekannte GET-Pfad liefert die SPA-Shell.
+  // Regex statt "*" — Express 5 wirft PathError bei unbenannten Wildcards.
   // Fehlerbehandlung: Falls index.html nicht gefunden wird (z. B. weil der
   // Frontend-Build im Container fehlt), wird statt eines 500-Fehlers eine
   // einfache 503-Antwort gesendet — so schlägt der Healthcheck nicht fehl.
-  app.get("*", (_req, res) => {
+  app.get(/.*/, (_req, res) => {
     res.sendFile(path.join(frontendDir, "index.html"), (err) => {
       if (err) {
         res
