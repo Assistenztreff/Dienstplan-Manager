@@ -25,6 +25,7 @@ export default function Login() {
   const [verificationRequired, setVerificationRequired] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendDone, setResendDone] = useState(false);
+  const [resendError, setResendError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,12 +50,29 @@ export default function Login() {
 
   const handleResend = async () => {
     setResendLoading(true);
+    setResendError("");
     try {
       await resendVerification(email.trim());
       setResendDone(true);
-    } catch {
-      // Immer als "gesendet" anzeigen — kein Existenz-Orakel.
-      setResendDone(true);
+    } catch (err) {
+      const status = (err as { status?: number }).status;
+      if (status === 429) {
+        // Rate-Limit: Wartezeit anzeigen statt falscher Erfolgsmeldung.
+        const retryAfterSeconds = (err as { retryAfterSeconds?: number }).retryAfterSeconds;
+        if (typeof retryAfterSeconds === "number" && retryAfterSeconds > 0) {
+          const minuten = Math.max(1, Math.ceil(retryAfterSeconds / 60));
+          setResendError(
+            minuten === 1
+              ? "Zu viele Versuche — bitte in 1 Minute erneut versuchen."
+              : `Zu viele Versuche — bitte in ${minuten} Minuten erneut versuchen.`,
+          );
+        } else {
+          setResendError("Zu viele Versuche — bitte später erneut versuchen.");
+        }
+      } else {
+        // Alle anderen Fehler: Existenz-Orakel schützen, als "gesendet" anzeigen.
+        setResendDone(true);
+      }
     } finally {
       setResendLoading(false);
     }
@@ -73,6 +91,8 @@ export default function Login() {
                 <p className="text-blue-800 font-medium">
                   Bestätigungsmail wurde erneut gesendet — bitte prüfen Sie Ihr Postfach (inkl. Spam).
                 </p>
+              ) : resendError ? (
+                <p className="text-amber-800 font-medium">{resendError}</p>
               ) : (
                 <>
                   <p className="text-blue-800">Keine Bestätigungsmail erhalten?</p>

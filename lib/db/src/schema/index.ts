@@ -13,3 +13,4 @@ export * from "./time_tracking";
 export * from "./month_closings";
 export * from "./session";
 export * from "./register_attempts";
+export * from "./email_rate_limit_attempts";

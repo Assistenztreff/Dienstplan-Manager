@@ -8,6 +8,7 @@ import { isEmailEnabled, sendPasswordResetEmail, sendVerificationEmail } from ".
 import { logger } from "../lib/logger";
 import { seedDefaultShiftModels } from "../lib/default-shift-models";
 import { checkRegisterRateLimit } from "../lib/register-rate-limit";
+import { checkEmailRateLimit } from "../lib/email-rate-limit";
 import { getHighestTeamAccessLevel, type TeamAccessLevel } from "../lib/teams";
 
 const router = Router();
@@ -544,6 +545,16 @@ router.post("/auth/forgot-password", async (req, res) => {
     return res.status(400).json({ error: "E-Mail-Adresse erforderlich" });
   }
   const normalizedEmail = email.toLowerCase().trim();
+
+  // Rate-Limit: max. 5 Versuche pro IP/Stunde (ENV: EMAIL_RATE_LIMIT_MAX / EMAIL_RATE_LIMIT_WINDOW_MS).
+  // req.ip verwendet die Express-trust-proxy-Konfiguration — sicher gegen X-Forwarded-For-Spoofing.
+  const ip = req.ip ?? "unknown";
+  const rl = await checkEmailRateLimit(ip);
+  if (!rl.allowed) {
+    res.setHeader("Retry-After", String(rl.retryAfterSeconds));
+    return res.status(429).json({ error: "Zu viele Versuche — bitte später erneut versuchen." });
+  }
+
   // Immer 200 zurückgeben — kein Existenz-Orakel.
   try {
     const [user] = await db
@@ -632,6 +643,16 @@ router.post("/auth/resend-verification", async (req, res) => {
     return res.status(400).json({ error: "E-Mail-Adresse erforderlich" });
   }
   const normalizedEmail = email.toLowerCase().trim();
+
+  // Rate-Limit: dieselbe IP-basierte Bremse wie forgot-password.
+  // req.ip verwendet die Express-trust-proxy-Konfiguration — sicher gegen X-Forwarded-For-Spoofing.
+  const ip = req.ip ?? "unknown";
+  const rl = await checkEmailRateLimit(ip);
+  if (!rl.allowed) {
+    res.setHeader("Retry-After", String(rl.retryAfterSeconds));
+    return res.status(429).json({ error: "Zu viele Versuche — bitte später erneut versuchen." });
+  }
+
   // Immer 200 zurückgeben — kein Existenz-Orakel.
   try {
     const [user] = await db

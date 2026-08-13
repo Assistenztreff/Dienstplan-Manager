@@ -371,7 +371,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     if (!r.ok) {
       const data = await r.json().catch(() => ({})) as { error?: string };
-      throw new Error(safeErrorText(data.error, "Fehler beim Anfordern des Reset-Links"));
+      const err = new Error(safeErrorText(data.error, "Fehler beim Anfordern des Reset-Links")) as Error & {
+        status?: number;
+        retryAfterSeconds?: number;
+      };
+      err.status = r.status;
+      if (r.status === 429) {
+        const retryAfter = Number(r.headers.get("Retry-After"));
+        if (Number.isFinite(retryAfter) && retryAfter > 0) {
+          err.retryAfterSeconds = retryAfter;
+        }
+      }
+      throw err;
     }
   };
 
@@ -395,7 +406,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     if (!r.ok) {
       const data = await r.json().catch(() => ({})) as { error?: string };
-      throw new Error(safeErrorText(data.error, "Fehler beim Senden der Bestätigungsmail"));
+      const err = new Error(safeErrorText(data.error, "Fehler beim Senden der Bestätigungsmail")) as Error & {
+        status?: number;
+        retryAfterSeconds?: number;
+      };
+      err.status = r.status;
+      if (r.status === 429) {
+        const retryAfter = Number(r.headers.get("Retry-After"));
+        if (Number.isFinite(retryAfter) && retryAfter > 0) {
+          err.retryAfterSeconds = retryAfter;
+        }
+      }
+      throw err;
     }
   };
 

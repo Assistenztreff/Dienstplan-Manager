@@ -31,6 +31,20 @@ export default function PasswortVergessen() {
         body: JSON.stringify({ email: email.trim() }),
       });
       if (!r.ok) {
+        if (r.status === 429) {
+          const retryAfter = Number(r.headers.get("Retry-After"));
+          if (Number.isFinite(retryAfter) && retryAfter > 0) {
+            const minuten = Math.max(1, Math.ceil(retryAfter / 60));
+            setError(
+              minuten === 1
+                ? "Zu viele Versuche — bitte in 1 Minute erneut versuchen."
+                : `Zu viele Versuche — bitte in ${minuten} Minuten erneut versuchen.`,
+            );
+          } else {
+            setError("Zu viele Versuche — bitte später erneut versuchen.");
+          }
+          return;
+        }
         const data = (await r.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error ?? "Fehler beim Anfordern des Reset-Links");
       }
