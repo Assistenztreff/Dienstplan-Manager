@@ -632,9 +632,10 @@ export default defineConfig({
               APP_DATABASE_URL: testDatabaseUrl,
               NODE_ENV: "development",
               // E2E-Laeufe registrieren dutzende Konten von 127.0.0.1 —
-              // Registrierungs-Rate-Limit (Task #553) hier abschalten
-              // (Limiter selbst ist unit-getestet).
+              // Registrierungs- und E-Mail-Rate-Limits hier abschalten
+              // (Limiter selbst sind unit-getestet).
               REGISTER_RATE_LIMIT_MAX: "0",
+              EMAIL_RATE_LIMIT_MAX: "0",
             },
           },
           {

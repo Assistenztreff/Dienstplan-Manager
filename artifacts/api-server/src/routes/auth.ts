@@ -10,17 +10,9 @@ import { seedDefaultShiftModels } from "../lib/default-shift-models";
 import { checkRegisterRateLimit } from "../lib/register-rate-limit";
 import { checkEmailRateLimit } from "../lib/email-rate-limit";
 import { getHighestTeamAccessLevel, type TeamAccessLevel } from "../lib/teams";
+import { getBaseUrl } from "../lib/base-url";
 
 const router = Router();
-
-function getBaseUrl(): string {
-  return (
-    process.env.APP_URL?.trim() ||
-    (process.env.REPLIT_DOMAINS
-      ? `https://${(process.env.REPLIT_DOMAINS as string).split(",")[0]}`
-      : "http://localhost")
-  );
-}
 
 const USER_SELECT = {
   id: usersTable.id,

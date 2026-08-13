@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { generateInviteToken } from "../lib/auth-utils";
+import { getBaseUrl } from "../lib/base-url";
 import { requireAdmin } from "../middleware/auth";
 import { requirePlanFeature } from "../lib/plan";
 import { isUserInAllowedTeams } from "../lib/teams";
@@ -56,12 +57,7 @@ router.post("/users/:id/invite", requireAdmin, requirePlanFeature("caregiverLogi
     .set({ inviteToken: token, inviteTokenExpiry: expiresAt })
     .where(eq(usersTable.id, user.id));
 
-  const baseUrl =
-    process.env.REPLIT_DOMAINS
-      ? `https://${(process.env.REPLIT_DOMAINS as string).split(",")[0]}`
-      : "http://localhost";
-
-  const inviteUrl = `${baseUrl}/einladung?token=${token}`;
+  const inviteUrl = `${getBaseUrl()}/einladung?token=${token}`;
 
   res.json({
     userId: user.id,
