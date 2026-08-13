@@ -1,4 +1,5 @@
 import "./lib/normalize-db-url";
+import { assertNotProdDb } from "./lib/normalize-db-url";
 import pg from "pg";
 import { RETENTION_SEED_CONTEXT } from "@workspace/test-fixtures";
 
@@ -32,6 +33,9 @@ import { RETENTION_SEED_CONTEXT } from "@workspace/test-fixtures";
  * eindeutig waehlen.
  */
 async function main(): Promise<void> {
+  // Sicherheitsabbruch: dieses Script ist NICHT fuer Produktionsdaten gedacht.
+  assertNotProdDb();
+
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
     throw new Error("DATABASE_URL muss gesetzt sein.");

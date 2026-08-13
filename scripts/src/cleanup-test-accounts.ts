@@ -1,4 +1,5 @@
 import "./lib/normalize-db-url";
+import { assertNotProdDb } from "./lib/normalize-db-url";
 import pg from "pg";
 import { deleteAccountTrees } from "@workspace/test-fixtures";
 
@@ -21,6 +22,9 @@ import { deleteAccountTrees } from "@workspace/test-fixtures";
  * (`@workspace/test-fixtures`, account-tree). Idempotent: keine Treffer = Erfolg (Exit 0).
  */
 async function main(): Promise<void> {
+  // Sicherheitsabbruch: dieses Script ist NICHT fuer Produktionsdaten gedacht.
+  assertNotProdDb();
+
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
     throw new Error("DATABASE_URL muss gesetzt sein.");

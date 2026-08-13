@@ -1,4 +1,5 @@
 import "./lib/normalize-db-url";
+import { assertNotProdDb } from "./lib/normalize-db-url";
 import pg from "pg";
 import { DEFAULT_SHIFT_MODELS } from "@workspace/shift-defaults";
 import { deleteAccountTrees } from "@workspace/test-fixtures";
@@ -55,12 +56,14 @@ const BETREIBER_TEAM_NAME = "Betreiber-Team";
 const VERIFY_ASSISTANT_PATTERN = "verify.assistenzkraft%@dienstplan.local";
 const isVerifyAssistantEmail = (email: string): boolean =>
   /^verify\.assistenzkraft.*@dienstplan\.local$/i.test(email);
+// HINWEIS: Echte Produktions-E-Mail-Adressen duerfen hier NICHT stehen.
+// Diese Liste gilt nur fuer die Dev-/Test-DB. Kein "kontakt@assistenztreff.de"
+// oder aehnliche echte Adressen — sie werden in Prod als echte Konten behandelt.
 const REAL_ASSISTANT_EMAILS = [
   "tolga_kahraman@hotmail.de",
   "florian.thierer@gmail.com",
   "camillo.neubert@web.de",
   "tortuenomade@hotmail.fr",
-  "kontakt@assistenztreff.de",
   "centaury82@gmail.com",
   "ollie@exemple.com",
 ] as const;
@@ -210,6 +213,9 @@ async function removeLegacyMembers(
 }
 
 async function main(): Promise<void> {
+  // Sicherheitsabbruch: dieses Script ist NICHT fuer Produktionsdaten gedacht.
+  assertNotProdDb();
+
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) throw new Error("DATABASE_URL muss gesetzt sein.");
 

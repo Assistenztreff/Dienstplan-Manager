@@ -1,4 +1,5 @@
 import "./lib/normalize-db-url";
+import { assertNotProdDb } from "./lib/normalize-db-url";
 import pg from "pg";
 
 /**
@@ -19,6 +20,9 @@ import pg from "pg";
  *   BACKDATE_PLAN_CHANGE_CREATED_AT – neuer Zeitstempel, ISO-8601 (Pflicht)
  */
 async function main(): Promise<void> {
+  // Sicherheitsabbruch: dieses Script ist NICHT fuer Produktionsdaten gedacht.
+  assertNotProdDb();
+
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
     throw new Error("DATABASE_URL muss gesetzt sein.");

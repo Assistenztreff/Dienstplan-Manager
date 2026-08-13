@@ -1,4 +1,5 @@
 import "./lib/normalize-db-url";
+import { assertNotProdDb } from "./lib/normalize-db-url";
 import { randomBytes, scryptSync } from "node:crypto";
 import pg from "pg";
 
@@ -9,6 +10,9 @@ function hashPassword(password: string): string {
 }
 
 async function main() {
+  // Sicherheitsabbruch: dieses Script ist NICHT fuer Produktionsdaten gedacht.
+  assertNotProdDb();
+
   const rawArgs = process.argv.slice(2).filter((a) => a !== "--");
   const allowPromote =
     rawArgs.includes("--promote") || process.env.SUPERADMIN_ALLOW_PROMOTE === "1";

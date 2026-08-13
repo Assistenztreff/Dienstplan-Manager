@@ -1,4 +1,5 @@
 import "./lib/normalize-db-url";
+import { assertNotProdDb } from "./lib/normalize-db-url";
 import { execSync, spawnSync } from "node:child_process";
 import pg from "pg";
 import { deriveTestDbUrl } from "./lib/test-db-url.js";
@@ -24,6 +25,9 @@ import { deriveTestDbUrl } from "./lib/test-db-url.js";
  */
 
 async function main(): Promise<void> {
+  // Sicherheitsabbruch: dieses Script ist NICHT fuer Produktionsdaten gedacht.
+  assertNotProdDb();
+
   const base = process.env.DATABASE_URL;
   if (!base) {
     throw new Error("DATABASE_URL muss gesetzt sein.");

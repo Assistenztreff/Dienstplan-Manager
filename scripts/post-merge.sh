@@ -1,5 +1,17 @@
 #!/bin/bash
 set -e
+# SICHERHEITSHINWEIS: Seed- und Test-Scripts (setup-test-accounts, setup-admin,
+# setup-test-db, setup-superadmin, delete-account, seed-*, backdate-plan-change,
+# set-plan, add-team-member, cleanup-test-accounts) laufen NIE gegen die
+# Produktionsdatenbank. Sie enthalten assertNotProdDb() aus
+# scripts/src/lib/normalize-db-url.ts: der Guard prueft ob DATABASE_URL auf
+# denselben Host wie PROD_DATABASE_URL zeigt und bricht dann mit einem klaren
+# Fehler ab. PROD_DATABASE_URL (nicht APP_DATABASE_URL) wird als Fingerprint
+# genutzt, weil setup-test-db.ts APP_DATABASE_URL in Kind-Prozessen bewusst
+# auf die Test-DB-URL ueberschreibt (damit normalize-db-url dort die Test-DB
+# trifft); PROD_DATABASE_URL bleibt in Kind-Prozessen unveraendert.
+# Explizites Opt-in nur via: ALLOW_PROD_SEED=1 <Skript>
+# Echte Produktions-E-Mail-Adressen duerfen NIE in REAL_ASSISTANT_EMAILS stehen.
 pnpm install --frozen-lockfile
 pnpm --filter @workspace/scripts run migrate-teams
 # Zuschlags-Einstellungen von der globalen Singleton-Zeile auf Pro-Konto-Zeilen

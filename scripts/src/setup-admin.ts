@@ -1,4 +1,5 @@
 import "./lib/normalize-db-url";
+import { assertNotProdDb } from "./lib/normalize-db-url";
 import { randomBytes, scryptSync } from "node:crypto";
 import pg from "pg";
 
@@ -9,6 +10,9 @@ function hashPassword(password: string): string {
 }
 
 async function main() {
+  // Sicherheitsabbruch: dieses Script ist NICHT fuer Produktionsdaten gedacht.
+  assertNotProdDb();
+
   const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
 
