@@ -21,7 +21,20 @@ export function isEmailEnabled(): boolean {
   return !!(process.env.RESEND_API_KEY?.trim());
 }
 
+/** E-Mail-Domains, an die niemals echte Mails geschickt werden.
+ *  @dienstplan.test: wegwerfbare Konten der E2E-Suite. */
+const TEST_EMAIL_DOMAINS = ["dienstplan.test"];
+
+function isTestEmail(address: string): boolean {
+  const lower = address.toLowerCase();
+  return TEST_EMAIL_DOMAINS.some((d) => lower.endsWith(`@${d}`));
+}
+
 async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
+  if (isTestEmail(to)) {
+    logger.info({ to, subject }, "E-Mail-Versand übersprungen (Testdomäne)");
+    return true;
+  }
   const apiKey = process.env.RESEND_API_KEY?.trim();
   if (!apiKey) {
     logger.warn("Transaktionale E-Mail übersprungen: kein RESEND_API_KEY hinterlegt");

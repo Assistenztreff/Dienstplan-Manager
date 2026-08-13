@@ -191,7 +191,10 @@ router.post("/auth/register", async (req, res) => {
   await seedDefaultShiftModels(team.id);
 
   // E-Mail-Verifizierung: Wenn RESEND_API_KEY gesetzt ist, erst nach Bestätigung anmelden.
-  if (isEmailEnabled()) {
+  // Ausnahme: @dienstplan.test-Adressen (E2E-Suite) werden sofort verifiziert —
+  // auch wenn der Key gesetzt ist — damit Tests sich direkt einloggen können.
+  const isTestAddress = user.email.toLowerCase().endsWith("@dienstplan.test");
+  if (isEmailEnabled() && !isTestAddress) {
     const verifyToken = generateSecureToken();
     await db
       .update(usersTable)
