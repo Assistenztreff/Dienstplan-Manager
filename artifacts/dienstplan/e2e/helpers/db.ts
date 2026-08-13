@@ -265,6 +265,98 @@ export async function dbDeletePlatformErrorsByContextPrefix(
  * geseedete Admin bleibt also team-los — genau das brauchen die
  * Isolations-Specs).
  */
+/**
+ * Markiert ein Konto als E-Mail-verifiziert direkt in der (Test-)DB —
+ * benoetigt, wenn die Test-Umgebung RESEND_API_KEY gesetzt hat und die
+ * Registrierung deshalb mit emailVerified=false startet. Setzt auch den
+ * Verifikationstoken auf NULL (wie nach einem echten Klick).
+ */
+export async function dbMarkEmailVerified(email: string): Promise<void> {
+  await withDbClient(async (client) => {
+    const res = await client.query(
+      "UPDATE users SET email_verified = true, email_verification_token = NULL WHERE email = $1",
+      [email],
+    );
+    if (res.rowCount === 0) {
+      throw new Error(`Kein Nutzer mit E-Mail "${email}" gefunden.`);
+    }
+  });
+}
+
+/**
+ * Liest den aktuellen E-Mail-Verifikationstoken eines Nutzers aus der
+ * (Test-)DB — benoetigt fuer E2E-Tests des E-Mail-Flows, weil keine echte
+ * Inbox verfuegbar ist. Gibt null zurueck, wenn kein Token gesetzt ist.
+ */
+export async function dbGetEmailVerificationToken(email: string): Promise<string | null> {
+  return withDbClient(async (client) => {
+    const res = await client.query(
+      "SELECT email_verification_token FROM users WHERE email = $1",
+      [email],
+    );
+    const row = res.rows[0] as { email_verification_token: string | null } | undefined;
+    if (!row) throw new Error(`Kein Nutzer mit E-Mail "${email}" gefunden.`);
+    return row.email_verification_token;
+  });
+}
+
+/**
+ * Setzt emailVerified = false und einen frei waehlbaren Verifikationstoken
+ * direkt in der (Test-)DB — simuliert einen gerade registrierten, noch nicht
+ * verifizierten Nutzer ohne echten Resend-Versand.
+ */
+export async function dbSetEmailVerification(
+  email: string,
+  token: string,
+): Promise<void> {
+  await withDbClient(async (client) => {
+    const res = await client.query(
+      "UPDATE users SET email_verified = false, email_verification_token = $1 WHERE email = $2",
+      [token, email],
+    );
+    if (res.rowCount === 0) {
+      throw new Error(`Kein Nutzer mit E-Mail "${email}" gefunden.`);
+    }
+  });
+}
+
+/**
+ * Liest den aktuellen Passwort-Reset-Token eines Nutzers aus der (Test-)DB.
+ * Gibt null zurueck, wenn kein Token gesetzt ist.
+ */
+export async function dbGetPasswordResetToken(email: string): Promise<string | null> {
+  return withDbClient(async (client) => {
+    const res = await client.query(
+      "SELECT password_reset_token FROM users WHERE email = $1",
+      [email],
+    );
+    const row = res.rows[0] as { password_reset_token: string | null } | undefined;
+    if (!row) throw new Error(`Kein Nutzer mit E-Mail "${email}" gefunden.`);
+    return row.password_reset_token;
+  });
+}
+
+/**
+ * Setzt einen Passwort-Reset-Token mit Ablaufzeit direkt in der (Test-)DB.
+ * Erlaubt Tests mit kuenstlich abgelaufenen Tokens (expiresAt in der
+ * Vergangenheit) ohne auf den Server-Ablauf warten zu muessen.
+ */
+export async function dbSetPasswordResetToken(
+  email: string,
+  token: string,
+  expiresAt: Date,
+): Promise<void> {
+  await withDbClient(async (client) => {
+    const res = await client.query(
+      "UPDATE users SET password_reset_token = $1, password_reset_token_expiry = $2 WHERE email = $3",
+      [token, expiresAt.toISOString(), email],
+    );
+    if (res.rowCount === 0) {
+      throw new Error(`Kein Nutzer mit E-Mail "${email}" gefunden.`);
+    }
+  });
+}
+
 export async function dbSeedAdmin(
   email: string,
   password: string,

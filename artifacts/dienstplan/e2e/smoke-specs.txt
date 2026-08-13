@@ -26,3 +26,5 @@ dienstplan-dashboard-urlaubstag-bewertung-assistent-ui.spec.ts
 # - Operator-Fehlerliste: Zeitraum-Schnellauswahl (Presets befuellen Felder,
 #   serverseitige Filterung an den Raendern; ~1,2 min solo)
 dienstplan-operator-fehler-schnellauswahl.spec.ts
+# - E-Mail-Flows: Verifizierung, Passwort-Reset, Login-Resend (neu)
+dienstplan-auth-email-flows.spec.ts

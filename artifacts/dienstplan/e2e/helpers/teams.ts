@@ -6,6 +6,7 @@ import {
 import {
   dbAddTeamMember,
   dbDeleteAccountByEmail,
+  dbMarkEmailVerified,
   dbSeedAdmin,
   dbSetAccountPlan,
   dbSetUserActive,
@@ -87,10 +88,24 @@ export async function registerFreeAccount(
     },
   });
   expect(res.status(), `Registrierung fehlgeschlagen (${res.status()})`).toBe(201);
-  const body = (await res.json()) as { id: number; plan: string };
+  const body = (await res.json()) as { id: number; plan: string; emailVerificationSent?: boolean };
   // Absicherung: Ein frisch registriertes Konto MUSS auf dem Free-Plan starten,
   // sonst würden die Free-Gate-Assertions dieses Specs nichts beweisen.
   expect(body.plan, "Frisch registriertes Konto muss Free sein").toBe("free");
+  // Wenn RESEND_API_KEY gesetzt ist, setzt die Registrierung emailVerified=false
+  // und legt keine Session an. Im Test-Stack brauchen wir immer ein sofort
+  // nutzbares Konto — daher direkt verifizieren und einloggen, damit ctx eine
+  // echte Session hat und API-Calls nicht mit 401/403 scheitern.
+  if (body.emailVerificationSent) {
+    await dbMarkEmailVerified(email);
+    const loginRes = await ctx.post("/api/auth/login", {
+      data: { email, password: FREE_ACCOUNT_PASSWORD },
+    });
+    expect(
+      loginRes.status(),
+      `Auto-Login nach E-Mail-Verifikation fehlgeschlagen (${loginRes.status()})`,
+    ).toBe(200);
+  }
   return { ctx, id: body.id, email };
 }
 
