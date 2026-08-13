@@ -1,4 +1,5 @@
-- [Scaleway Prod-DB & Publish-Workflow](scaleway-prod-publish-workflow.md) — Scaleway = einzige Prod-DB; check-prod-schema vor Publish; bei neuen Spalten immer explizit warnen.
+- [Drei-Datenbanken-Architektur](drei-datenbanken-architektur.md) — heliumdb (Replit dev, echte Nutzerdaten), Replit Prod DB (deployed app, read-only aus Workspace), Scaleway (APP/PROD_DATABASE_URL, dev-server+scripts).
+- [Scaleway Prod-DB & Publish-Workflow](scaleway-prod-publish-workflow.md) — Scaleway = Staging-DB für Dev-Server; check-prod-schema vor Publish; bei neuen Spalten immer explizit warnen.
 - [Express 5 Wildcard Route](express5-wildcard-route.md) — app.get("*",...) wirft PathError in Express 5; Regex /.*/ oder benannte Wildcard verwenden.
 - [Artifact paths Konflikt](artifact-paths-conflict.md) — zwei Artifacts mit paths=["/"] hängen den Publish-Vorgang; nur der aktiv-serving Service setzt paths.
 - [Arbeitstage-Rechner & workdaysConfirm](workdays-confirm-pattern.md) — Vorschau muss Server-Formel spiegeln; Bestätigungen als Steuerfeld, nie Ist-Wert erneut senden (Race).
