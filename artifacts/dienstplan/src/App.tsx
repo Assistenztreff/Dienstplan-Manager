@@ -3,7 +3,7 @@ import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@ta
 import { ApiError } from "@workspace/api-client-react";
 import { toast } from "sonner";
 import { registerUserSwitchHandler, resyncAuthAfter401 } from "@/context/auth";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -11,15 +11,7 @@ import { Layout } from "@/components/layout";
 import { OfflineBanner } from "@/components/offline-banner";
 import { AuthProvider, useAuth, hasTeamAccessLevel } from "@/context/auth";
 import { TeamProvider } from "@/context/team";
-import Dashboard from "@/pages/dashboard";
-import Dienstplan from "@/pages/dienstplan";
-import Zeiterfassung from "@/pages/zeiterfassung";
-import Abwesenheiten from "@/pages/abwesenheiten";
-import Auswertungen from "@/pages/auswertungen";
-import Einstellungen from "@/pages/einstellungen";
-import TeamVerwaltung from "@/pages/team-verwaltung";
-import Preise from "@/pages/preise";
-import OperatorDashboard from "@/pages/operator-dashboard";
+// Kleine öffentliche Seiten: bleiben im Haupt-Bundle (direkt nach dem Öffnen nötig)
 import Login from "@/pages/login";
 import Registrierung from "@/pages/registrierung";
 import Einladung from "@/pages/einladung";
@@ -27,21 +19,34 @@ import PasswortVergessen from "@/pages/passwort-vergessen";
 import PasswortZuruecksetzen from "@/pages/passwort-zuruecksetzen";
 import EmailBestaetigen from "@/pages/email-bestaetigen";
 import { Impressum, Datenschutz, Kontakt, Barrierefreiheit } from "@/pages/rechtliches";
-import {
-  HandbuchStart,
-  HandbuchDienstplan,
-  HandbuchTeamVerwaltung,
-  HandbuchRegistrierung,
-  HandbuchRollen,
-  HandbuchDashboard,
-  HandbuchAssistenten,
-  HandbuchZeiterfassung,
-  HandbuchAbwesenheiten,
-  HandbuchAuswertungen,
-  HandbuchEinstellungen,
-} from "@/pages/handbuch";
 import Startseite from "@/pages/startseite";
 import NotFound from "@/pages/not-found";
+
+// Schwere Seiten: lazy-loaded → Vite erzeugt separate JS-Chunks pro Seite.
+// Der initiale Bundle schrumpft von ~1 MB auf ~150 KB; jede Seite wird erst
+// beim ersten Besuch nachgeladen (danach Browser-gecacht).
+const Dashboard = lazy(() => import("@/pages/dashboard"));
+const Dienstplan = lazy(() => import("@/pages/dienstplan"));
+const Zeiterfassung = lazy(() => import("@/pages/zeiterfassung"));
+const Abwesenheiten = lazy(() => import("@/pages/abwesenheiten"));
+const Auswertungen = lazy(() => import("@/pages/auswertungen"));
+const Einstellungen = lazy(() => import("@/pages/einstellungen"));
+const TeamVerwaltung = lazy(() => import("@/pages/team-verwaltung"));
+const Preise = lazy(() => import("@/pages/preise"));
+const OperatorDashboard = lazy(() => import("@/pages/operator-dashboard"));
+// Handbuch-Seiten: alle aus derselben Datei → ein gemeinsamer Chunk
+const HandbuchStart = lazy(() => import("@/pages/handbuch").then((m) => ({ default: m.HandbuchStart })));
+const HandbuchDienstplan = lazy(() => import("@/pages/handbuch").then((m) => ({ default: m.HandbuchDienstplan })));
+const HandbuchTeamVerwaltung = lazy(() => import("@/pages/handbuch").then((m) => ({ default: m.HandbuchTeamVerwaltung })));
+const HandbuchRegistrierung = lazy(() => import("@/pages/handbuch").then((m) => ({ default: m.HandbuchRegistrierung })));
+const HandbuchRollen = lazy(() => import("@/pages/handbuch").then((m) => ({ default: m.HandbuchRollen })));
+const HandbuchDashboard = lazy(() => import("@/pages/handbuch").then((m) => ({ default: m.HandbuchDashboard })));
+const HandbuchAssistenten = lazy(() => import("@/pages/handbuch").then((m) => ({ default: m.HandbuchAssistenten })));
+const HandbuchZeiterfassung = lazy(() => import("@/pages/handbuch").then((m) => ({ default: m.HandbuchZeiterfassung })));
+const HandbuchAbwesenheiten = lazy(() => import("@/pages/handbuch").then((m) => ({ default: m.HandbuchAbwesenheiten })));
+const HandbuchAuswertungen = lazy(() => import("@/pages/handbuch").then((m) => ({ default: m.HandbuchAuswertungen })));
+const HandbuchEinstellungen = lazy(() => import("@/pages/handbuch").then((m) => ({ default: m.HandbuchEinstellungen })));
+
 import { isAdminRole } from "@/lib/roles";
 import { Loader2 } from "lucide-react";
 
@@ -133,6 +138,11 @@ const queryClient: QueryClient = new QueryClient({
   }),
   defaultOptions: {
     queries: {
+      // 5 Minuten Cache: Navigation zwischen Seiten (Dashboard → Dienstplan →
+      // Auswertungen) löst keinen erneuten API-Aufruf aus, solange die Daten
+      // nicht älter als 5 Minuten sind. Mutations rufen invalidateQueries auf
+      // und erzwingen so sofortige Aktualisierungen nach Schreiboperationen.
+      staleTime: 5 * 60 * 1000,
       retry: false,
       refetchOnWindowFocus: false,
     },
@@ -172,6 +182,15 @@ const PUBLIC_PATHS = [
   "/handbuch",
 ];
 
+/** Wird angezeigt, während ein lazy-geladener Seiten-Chunk heruntergeladen wird. */
+function PageLoader() {
+  return (
+    <div className="flex h-full items-center justify-center py-24">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
+
 function Router() {
   const { currentUser, isLoading } = useAuth();
   const [location, navigate] = useLocation();
@@ -198,8 +217,9 @@ function Router() {
 
   if (!currentUser) {
     return (
-      <Switch>
-        <Route path="/" component={Startseite} />
+      <Suspense fallback={<PageLoader />}>
+        <Switch>
+          <Route path="/" component={Startseite} />
         <Route path="/login" component={Login} />
         <Route path="/registrierung" component={Registrierung} />
         <Route path="/einladung" component={Einladung} />
@@ -222,13 +242,15 @@ function Router() {
         <Route path="/handbuch/auswertungen" component={HandbuchAuswertungen} />
         <Route path="/handbuch/einstellungen" component={HandbuchEinstellungen} />
         <Route>{() => null}</Route>
-      </Switch>
+        </Switch>
+      </Suspense>
     );
   }
 
   return (
     <Layout>
-      <Switch>
+      <Suspense fallback={<PageLoader />}>
+        <Switch>
         <Route path="/" component={Dashboard} />
         <Route path="/dienstplan" component={Dienstplan} />
         <Route path="/zeiterfassung" component={Zeiterfassung} />
@@ -282,7 +304,8 @@ function Router() {
           <Route path="/operator-dashboard" component={OperatorDashboard} />
         )}
         <Route component={NotFound} />
-      </Switch>
+        </Switch>
+      </Suspense>
     </Layout>
   );
 }

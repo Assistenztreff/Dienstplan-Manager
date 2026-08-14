@@ -119,3 +119,4 @@
 - [Shift-abgeleitete Cache-Invalidierung](shift-derived-query-invalidation.md) — nach Schicht-Writes zentralen Helfer nutzen (Contracts/Time-Tracking/Dashboard hängen dran), nie nur /api/shifts.
 - [Bulk-Write-DTOs für Cache-Patches](bulk-write-dto-cache-patch.md) — Sammel-Routen liefern volle Zeilen + aufgelöstes teamId (Shift-DTO strippt es); Client patcht Listen sofort, 409 = atomar, nichts invalidieren.
 - [Dienstplan Monats-Cache-Muster](dienstplan-month-cache-pattern.md) — keepPreviousData + Nachbarmonat-Prefetch für stabile Monatswechsel; staleTime auf Referenzdaten nur sicher, wenn Mutations invalidateQueries aufrufen.
+- [QueryClient staleTime & Code-Splitting](frontend-perf-staletime-splitting.md) — globales staleTime 5 min im QueryClient + React.lazy() pro Seite; Handbuch-Seiten teilen einen Chunk via .then(m=>({default:m.X})).
