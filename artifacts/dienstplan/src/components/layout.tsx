@@ -797,7 +797,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             className={`w-full flex-1 ${
               location.startsWith("/handbuch")
                 ? "" // Handbuch: farbige Flaechen bis an den Rand, ohne Innenabstand
-                : `p-4 md:p-6 ${fullBleed ? "" : "mx-auto max-w-7xl"}`
+                : `px-2 py-4 md:px-6 md:py-6 ${fullBleed ? "" : "mx-auto max-w-7xl"}`
             }`}
           >
             {children}
