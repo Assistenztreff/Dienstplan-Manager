@@ -308,11 +308,13 @@ export async function dbGetEmailVerificationToken(email: string): Promise<string
 export async function dbSetEmailVerification(
   email: string,
   token: string,
+  /** Optionale Ablaufzeit für den Verifikationslink — null = kein Ablauf (Bestandsverhalten). */
+  expiryDate?: Date | null,
 ): Promise<void> {
   await withDbClient(async (client) => {
     const res = await client.query(
-      "UPDATE users SET email_verified = false, email_verification_token = $1 WHERE email = $2",
-      [token, email],
+      "UPDATE users SET email_verified = false, email_verification_token = $1, email_verification_token_expiry = $2 WHERE email = $3",
+      [token, expiryDate ?? null, email],
     );
     if (res.rowCount === 0) {
       throw new Error(`Kein Nutzer mit E-Mail "${email}" gefunden.`);

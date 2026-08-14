@@ -54,6 +54,8 @@ export const usersTable = pgTable("users", {
   // Default true damit bestehende Accounts weiter funktionieren.
   emailVerified: boolean("email_verified").notNull().default(true),
   emailVerificationToken: text("email_verification_token"),
+  // Ablaufzeit für den E-Mail-Verifizierungslink (48h ab Versand). NULL = kein Limit (Bestandskonten).
+  emailVerificationTokenExpiry: timestamp("email_verification_token_expiry"),
   // Geheimer Abo-Token fuer den oeffentlichen Kalender-Feed (ICS-Abo in
   // Google/Apple/Outlook). Kalender-Clients koennen keine Session-Cookies
   // senden, daher authentifiziert der Token die Feed-URL. NULL = kein Abo.

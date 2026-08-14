@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/auth";
+import { Button } from "@/components/ui/button";
 import { Check, CheckCircle2, Lock, Mail, User } from "lucide-react";
 import {
   AuthErrorBox,
@@ -24,7 +25,7 @@ const KONTO_TYPEN = [
 type KontoTyp = (typeof KONTO_TYPEN)[number]["value"];
 
 export default function Registrierung() {
-  const { register } = useAuth();
+  const { register, resendVerification } = useAuth();
   const [, navigate] = useLocation();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -35,6 +36,9 @@ export default function Registrierung() {
   const [emailError, setEmailError] = useState("");
   const [loading, setLoading] = useState(false);
   const [emailVerificationSent, setEmailVerificationSent] = useState(false);
+  const [emailDeliveryFailed, setEmailDeliveryFailed] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendDone, setResendDone] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,6 +57,7 @@ export default function Registrierung() {
       const result = await register({ name: name.trim(), email: email.trim(), password, accountType });
       if (result.emailVerificationSent) {
         setEmailVerificationSent(true);
+        if (result.emailDeliveryFailed) setEmailDeliveryFailed(true);
       } else {
         navigate("/");
       }
@@ -94,14 +99,49 @@ export default function Registrierung() {
     return (
       <AuthLayout title="Fast geschafft!">
         <div className="flex flex-col items-center gap-4 py-2 text-center">
-          <CheckCircle2 className="h-10 w-10 text-green-600" aria-hidden />
-          <h2 className="text-base font-bold text-brand-dark">Bestätigungsmail verschickt!</h2>
-          <p className="text-sm text-slate-600">
-            Wir haben eine Bestätigungsmail an{" "}
-            <span className="font-semibold text-brand-dark">{email.trim()}</span>{" "}
-            gesendet. Bitte klicken Sie auf den Link in der E-Mail, um sich anzumelden.
-          </p>
-          <p className="text-xs text-slate-500">Kein E-Mail? Prüfen Sie auch den Spam-Ordner.</p>
+          {emailDeliveryFailed ? (
+            <Mail className="h-10 w-10 text-amber-500" aria-hidden />
+          ) : (
+            <CheckCircle2 className="h-10 w-10 text-green-600" aria-hidden />
+          )}
+          <h2 className="text-base font-bold text-brand-dark">
+            {emailDeliveryFailed ? "E-Mail konnte nicht zugestellt werden" : "Bestätigungsmail verschickt!"}
+          </h2>
+          {emailDeliveryFailed ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 space-y-2">
+              <p>
+                Leider konnte die Bestätigungsmail an{" "}
+                <span className="font-semibold">{email.trim()}</span> nicht zugestellt werden.
+              </p>
+              {resendDone ? (
+                <p className="font-medium text-green-700">Neuer Link angefordert — bitte E-Mail prüfen.</p>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={resendLoading}
+                  onClick={() => {
+                    setResendLoading(true);
+                    void resendVerification(email.trim()).finally(() => {
+                      setResendLoading(false);
+                      setResendDone(true);
+                    });
+                  }}
+                >
+                  {resendLoading ? "Wird gesendet …" : "Bestätigungsmail erneut senden"}
+                </Button>
+              )}
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-slate-600">
+                Wir haben eine Bestätigungsmail an{" "}
+                <span className="font-semibold text-brand-dark">{email.trim()}</span>{" "}
+                gesendet. Bitte klicken Sie auf den Link in der E-Mail, um sich anzumelden.
+              </p>
+              <p className="text-xs text-slate-500">Kein E-Mail? Prüfen Sie auch den Spam-Ordner.</p>
+            </>
+          )}
         </div>
       </AuthLayout>
     );

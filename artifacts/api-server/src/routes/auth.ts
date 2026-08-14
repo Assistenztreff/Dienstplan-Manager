@@ -188,17 +188,20 @@ router.post("/auth/register", async (req, res) => {
   const isTestAddress = user.email.toLowerCase().endsWith("@dienstplan.test");
   if (isEmailEnabled() && !isTestAddress) {
     const verifyToken = generateSecureToken();
+    // Link läuft nach 48 Stunden ab — wie in der Bestätigungsmail angekündigt.
+    const verifyExpiry = new Date(Date.now() + 48 * 60 * 60 * 1000);
     await db
       .update(usersTable)
-      .set({ emailVerificationToken: verifyToken, emailVerified: false })
+      .set({ emailVerificationToken: verifyToken, emailVerified: false, emailVerificationTokenExpiry: verifyExpiry })
       .where(eq(usersTable.id, user.id));
     const verifyUrl = `${getBaseUrl()}/email-bestaetigen?token=${verifyToken}`;
-    await sendVerificationEmail(user.email, verifyUrl);
+    const emailSent = await sendVerificationEmail(user.email, verifyUrl);
     // Noch keine Session — Nutzer muss erst E-Mail bestätigen.
     return res.status(201).json({
       id: user.id, name: user.name, email: user.email,
       role: user.role, accountType: user.accountType, plan: user.plan,
       isTeamleiter: false, emailVerificationSent: true,
+      ...(emailSent ? {} : { emailDeliveryFailed: true }),
     });
   }
 
@@ -619,9 +622,13 @@ router.post("/auth/verify-email", async (req, res) => {
   if (!user.isActive) {
     return res.status(400).json({ error: "Konto ist deaktiviert" });
   }
+  // Ablaufzeit prüfen: Tokens ohne Ablaufzeit (Bestandskonten) bleiben unbegrenzt gültig.
+  if (user.emailVerificationTokenExpiry && user.emailVerificationTokenExpiry < new Date()) {
+    return res.status(400).json({ error: "Bestätigungslink abgelaufen — bitte einen neuen anfordern" });
+  }
   await db
     .update(usersTable)
-    .set({ emailVerified: true, emailVerificationToken: null })
+    .set({ emailVerified: true, emailVerificationToken: null, emailVerificationTokenExpiry: null })
     .where(eq(usersTable.id, user.id));
   // Nutzer nach erfolgreicher Verifizierung direkt anmelden.
   req.session.userId = user.id;
@@ -656,9 +663,11 @@ router.post("/auth/resend-verification", async (req, res) => {
       .where(eq(usersTable.email, normalizedEmail));
     if (user?.isActive && user.emailVerified === false) {
       const token = generateSecureToken();
+      // Frische Ablaufzeit: 48 Stunden ab dem Erneut-Senden.
+      const expiry = new Date(Date.now() + 48 * 60 * 60 * 1000);
       await db
         .update(usersTable)
-        .set({ emailVerificationToken: token })
+        .set({ emailVerificationToken: token, emailVerificationTokenExpiry: expiry })
         .where(eq(usersTable.id, user.id));
       const verifyUrl = `${getBaseUrl()}/email-bestaetigen?token=${token}`;
       await sendVerificationEmail(normalizedEmail, verifyUrl);

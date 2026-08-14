@@ -124,6 +124,21 @@ test("Kein Fehler-Toast bei Query-/Netzwerkfehler offline (#664)", async ({
   // Sicherstellen, dass kein Toast initial da ist.
   await expect(page.locator("[data-sonner-toast]")).not.toBeVisible();
 
+  // Auswertungen-Modul vorab via client-side Navigation laden: dynamische
+  // Imports (React.lazy) bleiben im Browser-Modul-Register gecacht. Ohne diesen
+  // Schritt schlägt der import() offline mit "Failed to fetch dynamically
+  // imported module" fehl und zerstört den React-Baum.
+  await page.evaluate(() => {
+    window.history.pushState({}, "", "/auswertungen");
+    window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
+  });
+  await expect(page.getByRole("heading", { name: "Auswertungen", exact: true })).toBeVisible({ timeout: 10_000 });
+  await page.evaluate(() => {
+    window.history.pushState({}, "", "/dienstplan");
+    window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
+  });
+  await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible({ timeout: 10_000 });
+
   // Netzwerk trennen → Banner erscheint, navigator.onLine = false.
   await context.setOffline(true);
   await expect(page.getByTestId("offline-banner")).toBeVisible({ timeout: 5_000 });

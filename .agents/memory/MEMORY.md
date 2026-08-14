@@ -120,3 +120,5 @@
 - [Bulk-Write-DTOs für Cache-Patches](bulk-write-dto-cache-patch.md) — Sammel-Routen liefern volle Zeilen + aufgelöstes teamId (Shift-DTO strippt es); Client patcht Listen sofort, 409 = atomar, nichts invalidieren.
 - [Dienstplan Monats-Cache-Muster](dienstplan-month-cache-pattern.md) — keepPreviousData + Nachbarmonat-Prefetch für stabile Monatswechsel; staleTime auf Referenzdaten nur sicher, wenn Mutations invalidateQueries aufrufen.
 - [QueryClient staleTime & Code-Splitting](frontend-perf-staletime-splitting.md) — globales staleTime 5 min im QueryClient + React.lazy() pro Seite; Handbuch-Seiten teilen einen Chunk via .then(m=>({default:m.X})).
+- [E-Mail-Verifizierungs-Ablauf und Zustellfehler](email-verification-expiry-and-delivery.md) — Token-Ablauf 48h; emailDeliveryFailed-Flag in Registrierung; NULL-Expiry = Bestandskonto immer gültig.
+- [Offline-Lazy-Modul-Vorladen in E2E-Tests](offline-lazy-module-preload.md) — React.lazy-Module müssen vor setOffline(true) per client-side Navigation gecacht sein; page.goto() resettet JS-Kontext.

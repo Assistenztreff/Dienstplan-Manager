@@ -49,7 +49,7 @@ type AuthContextType = {
     email: string;
     password: string;
     accountType: "privat" | "dienstleister";
-  }) => Promise<{ emailVerificationSent: boolean }>;
+  }) => Promise<{ emailVerificationSent: boolean; emailDeliveryFailed?: boolean }>;
   logout: () => Promise<void>;
   setPassword: (token: string, password: string) => Promise<AuthUser>;
   refreshUser: () => Promise<void>;
@@ -335,7 +335,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     email: string;
     password: string;
     accountType: "privat" | "dienstleister";
-  }): Promise<{ emailVerificationSent: boolean }> => {
+  }): Promise<{ emailVerificationSent: boolean; emailDeliveryFailed?: boolean }> => {
     const r = await apiFetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -356,11 +356,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       throw err;
     }
-    const data = (await r.json()) as AuthUser & { emailVerificationSent?: boolean };
+    const data = (await r.json()) as AuthUser & {
+      emailVerificationSent?: boolean;
+      emailDeliveryFailed?: boolean;
+    };
     if (!data.emailVerificationSent) {
       applyUser(data);
     }
-    return { emailVerificationSent: !!data.emailVerificationSent };
+    return {
+      emailVerificationSent: !!data.emailVerificationSent,
+      ...(data.emailDeliveryFailed ? { emailDeliveryFailed: true } : {}),
+    };
   };
 
   const forgotPassword = async (email: string): Promise<void> => {
