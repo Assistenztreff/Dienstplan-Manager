@@ -17,8 +17,11 @@ process.env.DATABASE_URL = databaseUrl;
 // Remote-DB (Scaleway): Verbindungen lange halten und per TCP-Keepalive stützen,
 // damit keine Reconnect-Stürme entstehen — schnelle Auth-Wiederholungen quittiert
 // der Server sporadisch mit 28P01 ("password authentication failed").
+// min:2 sorgt dafür, dass der Pool beim Start sofort 2 Verbindungen aufbaut
+// und diese dauerhaft vorhält — so entfällt der Kaltstart-Overhead beim ersten Request.
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  min: 2,
   idleTimeoutMillis: 300_000,
   connectionTimeoutMillis: 20_000,
   keepAlive: true,

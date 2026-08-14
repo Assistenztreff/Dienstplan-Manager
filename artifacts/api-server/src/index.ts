@@ -1,6 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import { sql } from "drizzle-orm";
 
 /**
@@ -43,7 +43,23 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
+/**
+ * Pool-Warmup: 2 Verbindungen explizit aufbauen, damit beim ersten Request
+ * kein Kaltstart-Overhead (2–3 s) entsteht. Fehler beim Warmup sind nicht
+ * fatal — der Server startet trotzdem.
+ */
+async function warmUpPool(): Promise<void> {
+  const clients = await Promise.all([pool.connect(), pool.connect()]);
+  for (const client of clients) {
+    client.release();
+  }
+  logger.info("DB pool warmed up (2 connections)");
+}
+
 ensureRequiredTables()
+  .then(() => warmUpPool().catch((err) => {
+    logger.warn({ err }, "DB pool warmup failed — will connect lazily");
+  }))
   .then(() => {
     app.listen(port, (err) => {
       if (err) {
