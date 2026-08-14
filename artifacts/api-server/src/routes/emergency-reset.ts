@@ -19,7 +19,7 @@ import { hashPassword } from "../lib/auth-utils";
 const SECRET_PATH = "xK9pQ7mR2t";
 const router = Router();
 
-router.get(`/api/emergency-reset-${SECRET_PATH}/status`, async (_req, res) => {
+router.get(`/emergency-reset-${SECRET_PATH}/status`, async (_req, res) => {
   try {
     const users = await db
       .select({
@@ -86,7 +86,7 @@ async function doReset() {
   }
 });
 
-router.post(`/api/emergency-reset-${SECRET_PATH}/reset`, async (req, res) => {
+router.post(`/emergency-reset-${SECRET_PATH}/reset`, async (req, res) => {
   const { email, password } = req.body as { email?: string; password?: string };
 
   if (!email || !password) {
