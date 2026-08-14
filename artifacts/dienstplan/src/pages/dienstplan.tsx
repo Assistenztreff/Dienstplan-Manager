@@ -692,6 +692,13 @@ function AgendaView({
             </h3>
             {week.days.map((day) => {
               const dayShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), day));
+              // Task #792: Ausfall-UserIds für diesen Tag — damit DayDetailRow
+              // das Warn-Icon auf Dienst-Zeilen zeigen kann (analog MonthGrid).
+              const dayAusfallUserIds = new Set(
+                dayShifts
+                  .filter((s) => isAbsenceShift(s) && ABSENCE_CATEGORY[s.type] === "ausfall")
+                  .map((s) => s.userId),
+              );
               const isCurrentDay = isToday(day);
               // Wochenende: Tönung UND fetter Wochentag — Information nie nur
               // über Farbe (Barrierefreiheit, DESIGN-GUIDELINES).
@@ -763,6 +770,7 @@ function AgendaView({
                             barColor={shift.type === "team" ? "#0284c7" : getPersonSlot(shift.userId).bg}
                             modelMap={modelMap}
                             comfortable={comfortable}
+                            hasAusfall={!isAbsenceShift(shift) && dayAusfallUserIds.has(shift.userId)}
                             onClick={canEdit && !selectionMode ? () => onShiftClick(shift) : undefined}
                             onConfirm={canEdit && !selectionMode ? onConfirmShift : undefined}
                           />
@@ -805,6 +813,7 @@ function DayDetailRow({
   testId,
   showName = true,
   comfortable = false,
+  hasAusfall = false,
 }: {
   shift: Shift;
   barColor: string;
@@ -818,6 +827,8 @@ function DayDetailRow({
   showName?: boolean;
   /** Großzügigeres Padding/Schrift für die Desktop-Persistenzliste. */
   comfortable?: boolean;
+  /** Task #792: Person ist am selben Tag krank/kind-krank — rotes Warn-Icon anzeigen. */
+  hasAusfall?: boolean;
 }) {
   const { selectedTeamId } = useTeam();
   const mirror = isMirrorShift(shift, selectedTeamId);
@@ -883,6 +894,8 @@ function DayDetailRow({
           <span className="truncate">
             {isTeam ? "Teamdienst" : "Dienst"} ·{" "}
             {status !== "FIX" && <StatusBadge kind="draft" compact className="mr-0.5 align-[-2px]" />}
+            {/* Task #792: Ausfall-Icon in der Tagesleiste — analog zur Kalender-Pille */}
+            {hasAusfall && <StatusBadge kind="warning" compact className="mr-0.5 align-[-2px]" label="Ausfall: Assistenzkraft abwesend" />}
             {statusText}
             {shift.isVertretung ? " · Vertretung" : ""}
             {einsatzLabel ? ` · ${einsatzLabel}` : ""}
@@ -1571,28 +1584,38 @@ function MonthGrid({
             die Liste läuft in voller Länge im normalen Seiten-Scroll. ── */}
         <div className="rounded-b-lg bg-card">
           {detailGroups.length > 0 ? (
-            detailGroups.map((group) => (
-              <div key={group.key} data-testid={`day-detail-group-${group.key}`}>
-                {detailRange !== "tag" && (
-                  // Tagesüberschriften: mindestens so groß/fett wie das Datum
-                  // in der Kopfzeile — beim Scrollen durch lange Zeiträume
-                  // sind sie der einzige Orientierungsanker.
-                  <div className="border-b border-[#f1f1ee] bg-muted/40 px-4 py-2 text-[13px] font-extrabold text-[#092948]">
-                    {format(group.day, "EEEE, d. MMMM", { locale: de })}
-                  </div>
-                )}
-                {group.shifts.map((shift) => (
-                  <DayDetailRow
-                    key={shift.id}
-                    shift={shift}
-                    barColor={shift.type === "team" ? "#0284c7" : getPersonSlot(shift.userId).bg}
-                    modelMap={modelMap}
-                    onClick={canEdit && !selectionMode ? () => onShiftClick(shift) : undefined}
-                    onConfirm={canEdit && !selectionMode ? onConfirmShift : undefined}
-                  />
-                ))}
-              </div>
-            ))
+            detailGroups.map((group) => {
+              // Task #792: Ausfall-Icon in der Tagesleisten-Detailansicht —
+              // pro Gruppe (= Tag) die Ausfall-UserIds vorberechnen.
+              const groupAusfallIds = new Set(
+                group.shifts
+                  .filter((s) => isAbsenceShift(s) && ABSENCE_CATEGORY[s.type] === "ausfall")
+                  .map((s) => s.userId),
+              );
+              return (
+                <div key={group.key} data-testid={`day-detail-group-${group.key}`}>
+                  {detailRange !== "tag" && (
+                    // Tagesüberschriften: mindestens so groß/fett wie das Datum
+                    // in der Kopfzeile — beim Scrollen durch lange Zeiträume
+                    // sind sie der einzige Orientierungsanker.
+                    <div className="border-b border-[#f1f1ee] bg-muted/40 px-4 py-2 text-[13px] font-extrabold text-[#092948]">
+                      {format(group.day, "EEEE, d. MMMM", { locale: de })}
+                    </div>
+                  )}
+                  {group.shifts.map((shift) => (
+                    <DayDetailRow
+                      key={shift.id}
+                      shift={shift}
+                      hasAusfall={!isAbsenceShift(shift) && groupAusfallIds.has(shift.userId)}
+                      barColor={shift.type === "team" ? "#0284c7" : getPersonSlot(shift.userId).bg}
+                      modelMap={modelMap}
+                      onClick={canEdit && !selectionMode ? () => onShiftClick(shift) : undefined}
+                      onConfirm={canEdit && !selectionMode ? onConfirmShift : undefined}
+                    />
+                  ))}
+                </div>
+              );
+            })
           ) : (
             <p className="px-4 py-3 text-xs text-muted-foreground">
               {detailType === "abwesenheiten" ? "Keine Abwesenheiten" : "Keine Dienste geplant"}

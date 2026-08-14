@@ -1,12 +1,14 @@
 import { Router, type IRouter } from "express";
 import { HealthCheckResponse } from "@workspace/api-zod";
 import { DEV_BOOM_ROUTE_PATH } from "@workspace/test-fixtures";
+import { getBaseUrl } from "../lib/base-url";
 
 const router: IRouter = Router();
 
 router.get("/healthz", (_req, res) => {
+  // Task #810/#819: emailBaseUrl zur Betreiberprüfung nach Domain-Änderungen.
   const data = HealthCheckResponse.parse({ status: "ok" });
-  res.json(data);
+  res.json({ ...data, emailBaseUrl: getBaseUrl() });
 });
 
 // Dev-only: loest absichtlich einen unbehandelten Fehler aus, um den

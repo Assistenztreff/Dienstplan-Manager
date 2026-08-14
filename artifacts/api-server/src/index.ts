@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { db, pool } from "@workspace/db";
 import { sql } from "drizzle-orm";
+import { getBaseUrl } from "./lib/base-url";
 
 /**
  * Idempotente Startup-Migration: legt Tabellen an, die im Drizzle-Schema
@@ -67,6 +68,17 @@ ensureRequiredTables()
         process.exit(1);
       }
       logger.info({ port }, "Server listening");
+      // Task #810: Beim Start protokollieren, welche Basis-URL für E-Mail-Links
+      // verwendet wird. Fehlt APP_URL, wird die Replit-Domain als Fallback
+      // genutzt — nach einer Domain-Änderung muss APP_URL aktualisiert werden.
+      const emailBaseUrl = getBaseUrl();
+      logger.info({ emailBaseUrl }, "E-Mail-Links Basis-URL");
+      if (!process.env["APP_URL"]?.trim()) {
+        logger.warn(
+          "APP_URL ist nicht gesetzt — E-Mail-Links nutzen die Replit-Domain als Fallback. " +
+          "Nach einer Domain-Änderung APP_URL auf die neue Produktions-URL setzen.",
+        );
+      }
     });
   })
   .catch((err) => {

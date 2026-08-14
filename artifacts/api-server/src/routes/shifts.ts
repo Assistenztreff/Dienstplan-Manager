@@ -700,10 +700,25 @@ router.get("/shifts", requireAuth, async (req, res): Promise<void> => {
   // Aushilfe-Spiegel: Schichten anderer (eigener) Teams, die als "Einsatz für"
   // ein Team im Scope markiert sind, erscheinen zusätzlich in dessen Kalender
   // (dort schreibgeschützt; Stunden zählen weiterhin nur im Stammteam).
+  // Task #793: Abwesenheits-Zeilen von Aushilfe-Nutzern ebenfalls mitliefern,
+  // damit der Kalender das Ausfall-Icon auch für Fremdeinsätze korrekt zeigt.
+  // Abwesenheiten können kein einsatzTeamId tragen (Validierung schlägt das
+  // fehl, ~Z. 1015), daher erkennt das EXISTS die Nutzer über ihren Aushilfe-
+  // Arbeitsdienst im Ziel-Team am selben Kalendertag.
+  const aushilfeTeamScopeAny = sql`ANY(ARRAY[${sql.join(teamScope.map((id) => sql`${id}`), sql`, `)}]::int[])`;
   const conditions = [
     or(
       inArray(shiftsTable.teamId, teamScope),
-      inArray(shiftsTable.einsatzTeamId, teamScope)
+      inArray(shiftsTable.einsatzTeamId, teamScope),
+      and(
+        sql`${shiftsTable.type} IN ('vacation','sick','freizeitausgleich','kind_krank','freistellung','abgesagt_ag','abgesagt_an','urlaubsabgeltung')`,
+        sql`EXISTS (
+          SELECT 1 FROM shifts a
+          WHERE a.user_id = ${shiftsTable.userId}
+            AND a.einsatz_team_id = ${aushilfeTeamScopeAny}
+            AND a.start_time::date = ${shiftsTable.startTime}::date
+        )`
+      )
     )!,
   ];
   if (effectiveUserId) conditions.push(eq(shiftsTable.userId, effectiveUserId));
