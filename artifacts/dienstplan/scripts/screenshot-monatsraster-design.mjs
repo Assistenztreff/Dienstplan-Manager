@@ -17,7 +17,8 @@ const y = today.getFullYear();
 const m = String(today.getMonth() + 1).padStart(2, "0");
 const d1 = today.getDate() <= 24 ? today.getDate() + 1 : today.getDate() - 3;
 const dayKey = `${y}-${m}-${String(d1).padStart(2, "0")}`;
-// Heute-Markierung: 2-px-Rahmen in Dunkelblau um die ganze Zelle.
+// Heute-Markierung (Task #826): 3-px-Rahmen in Dunkelblau um die ganze
+// Zelle; bei ausgewähltem Heute-Tag KEIN zusätzlicher innerer Auswahl-Ring.
 const todayKey = `${y}-${m}-${String(today.getDate()).padStart(2, "0")}`;
 
 const created = [];
@@ -204,7 +205,27 @@ try {
       if (emptyStyles.emptyGrayHeight !== null && emptyStyles.emptyGrayHeight < 40) throw new Error(`Grauzone-Mindesthöhe < 40px (${emptyStyles.emptyGrayHeight})`);
       if (!styles.pillBorder?.includes("199, 206, 216")) throw new Error("Pillen-Kontur #c7ced8 fehlt");
       if (!styles.pillShadow || styles.pillShadow === "none") throw new Error("Pillen-Schatten fehlt");
-      if (!styles.todayBorder?.startsWith("2px rgb(9, 41, 72)") || !styles.todayBorder?.includes("/ 2px rgb(9, 41, 72)")) throw new Error(`Heute-Rahmen 2px #092948 fehlt (${styles.todayBorder})`);
+      if (!styles.todayBorder?.startsWith("3px rgb(9, 41, 72)") || !styles.todayBorder?.includes("/ 3px rgb(9, 41, 72)")) throw new Error(`Heute-Rahmen 3px #092948 fehlt (${styles.todayBorder})`);
+    }
+
+    // ── Abnahme 4 (Task #826): Heute AUSGEWÄHLT → Rahmen bleibt 3 px,
+    // kein innerer Auswahl-Ring, Auswahl über Mint-Fläche erkennbar. ────────
+    if (width >= 900) {
+      await desktop.getByTestId(`day-cell-${todayKey}`).click();
+      await page.waitForTimeout(400);
+      const sel = await page.evaluate((tKey) => {
+        const c = document.querySelector(`[data-testid="dienstplan-desktop"] [data-testid="day-cell-${tKey}"]`);
+        const st = getComputedStyle(c);
+        return {
+          border: `${st.borderTopWidth} ${st.borderTopColor} / ${st.borderBottomWidth} ${st.borderBottomColor}`,
+          boxShadow: st.boxShadow,
+          bg: st.backgroundColor,
+        };
+      }, todayKey);
+      console.log(`[${label}] Heute ausgewählt:`, JSON.stringify(sel));
+      if (!sel.border.startsWith("3px rgb(9, 41, 72)")) throw new Error(`Heute-Rahmen bei Auswahl nicht 3px (${sel.border})`);
+      if (sel.boxShadow.includes("5, 48, 91")) throw new Error("Auswahl-Ring doppelt die Heute-Kante (innere Linie im Kopfbereich)");
+      if (sel.bg === "rgb(255, 255, 255)") throw new Error("Auswahl am Heute-Tag nicht erkennbar (Hintergrund bleibt weiß)");
     }
 
     fs.mkdirSync(OUT, { recursive: true });

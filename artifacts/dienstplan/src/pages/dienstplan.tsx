@@ -1312,16 +1312,25 @@ function MonthGrid({
                   ? "min-w-0 rounded-none p-0"
                   : "min-w-0 rounded-[5px] p-0.5",
                 // Zellhintergrund, exklusiv: Auswahl (Mint) > Weiß.
+                // Task #826: Am Heute-Tag zeigt NUR die Mint-Fläche die
+                // Auswahl an — der Auswahl-Ring entfällt dort, damit der
+                // Heute-Rahmen die einzige Kante bleibt (der innen anliegende
+                // Ring ließ ihn oben dicker wirken als unten, wo ihn die
+                // Grauzone überdeckt).
                 bulkSelected
-                  ? "bg-assistenz-mint ring-2 ring-inset ring-assistenz-brand"
+                  ? today
+                    ? "bg-assistenz-mint"
+                    : "bg-assistenz-mint ring-2 ring-inset ring-assistenz-brand"
                   : selected && !selectionMode
-                    ? "bg-assistenz-mint/60 ring-2 ring-inset ring-assistenz-brand"
+                    ? today
+                      ? "bg-assistenz-mint/60"
+                      : "bg-assistenz-mint/60 ring-2 ring-inset ring-assistenz-brand"
                     : "bg-white hover:bg-accent/20",
-                // Heute (15.08.2026): 2-px-Rahmen in Dunkelblau (#092948, wie
+                // Heute (Task #826): 3-px-Rahmen in Dunkelblau (#092948, wie
                 // das Datums-Badge) um die GANZE Zelle inkl. Dienstpillen-
                 // Bereich. Border statt Ring: ein Inset-Ring würde unten von
                 // der Grauzone überdeckt, der Border bleibt immer sichtbar.
-                today ? "border-2 border-[#092948]" : "",
+                today ? "border-[3px] border-[#092948]" : "",
               ].filter(Boolean).join(" ")}
             >
               {/* Kopfzeile (3.4): Datum LINKS, Plus RECHTS in derselben Zeile.
