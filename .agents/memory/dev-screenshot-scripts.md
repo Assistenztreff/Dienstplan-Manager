@@ -11,3 +11,5 @@ Einmalige Skripte (z. B. `artifacts/dienstplan/scripts/screenshot-*.mjs`) gegen 
 3. **Dev-DB ist belegt:** Schicht-Seeding muss Overlaps tolerieren (über Assistenzkräfte rotieren, bei `shift_overlap` die nächste nehmen; bestehende 24h-Dienste anderer Nutzer NICHT löschen). Seeds vor page load anlegen (React-Query-Cache) und im finally wieder löschen.
 
 **How to apply:** Bei neuen Screenshot-/Seed-Skripten das Muster aus `scripts/screenshot-710.mjs` kopieren (api()-Helper via curl, Rotations-Seeding, view-toggle-Klick, Abnahme-Assertions, finally-Cleanup). Browser weiterhin mit `REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE` starten (siehe playwright-oneoff-chromium).
+
+4. **Dev-DB kann den ganzen Monat belegt haben:** Prüfungen, die einen LEEREN Tag brauchen (z. B. Grauzone in leeren Zellen), finden im aktuellen Monat evtl. keinen — per `next-month`-Button weiterblättern (max. ~4 Monate) statt die Prüfung stillschweigend auf `undefined` laufen zu lassen.

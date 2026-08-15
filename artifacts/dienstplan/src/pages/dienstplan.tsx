@@ -230,6 +230,9 @@ function usePersistentState<T extends string>(key: string, fallback: T, allowed:
 }
 
 const WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+// Arbeitsauftrag 15.08.2026 (Monatsraster Desktop, Punkt 1): volle Wochentags-
+// namen im Desktop-Kopf; wird der Platz knapp (<900 px), greifen die Kürzel.
+const WEEKDAY_LABELS_FULL = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
 
 const SHIFT_TYPE_DOTS: Record<string, string> = {
   active: "bg-primary",
@@ -1157,23 +1160,54 @@ function MonthGrid({
       {/* ── Sticky Wochentag-Zeile (klebt direkt unter dem Dienstplan-Header) ─ */}
       <div
         ref={weekdayRowRef}
-        className="sticky z-20 grid grid-cols-7 border-b border-border/30 bg-[#f1f1ee]"
+        className={[
+          "sticky z-20 grid grid-cols-7 bg-[#f1f1ee]",
+          // Punkt 2 (15.08.2026): Der 1-px-Rahmen (#dfe4ea) läuft um das gesamte
+          // Raster inklusive Wochentag-Zeile; mobil bleibt der bisherige Look.
+          variant === "full"
+            ? "border-x border-t border-b border-[#dfe4ea]"
+            : "border-b border-border/30",
+        ].join(" ")}
         style={{ top: headerH || 0 }}
       >
-        {WEEKDAY_LABELS.map((d) => (
-          // Arbeitspaket 07.08.2026, Punkt 1: graues Band, Kürzel größer +
-          // schwarz, auf dem Smartphone in derselben Größe wie am Desktop.
-          <div key={d} className="py-1 text-center text-[11px] font-semibold uppercase tracking-wider text-[#151515]">
-            {d}
+        {WEEKDAY_LABELS.map((d, i) => (
+          // Desktop (Punkt 1, 15.08.2026): volle Wochentagsnamen, 15 px — unter
+          // 900 px reicht der Platz für „Donnerstag" nicht mehr, dann Kürzel.
+          // Smartphone (Arbeitspaket 07.08.2026): Kürzel, 11 px, Versalien.
+          <div
+            key={d}
+            className={
+              variant === "full"
+                ? "py-1.5 text-center text-[15px] font-semibold text-[#151515]"
+                : "py-1 text-center text-[11px] font-semibold uppercase tracking-wider text-[#151515]"
+            }
+          >
+            {variant === "full" ? (
+              <>
+                <span className="hidden min-[900px]:inline">{WEEKDAY_LABELS_FULL[i]}</span>
+                <span className="min-[900px]:hidden">{d}</span>
+              </>
+            ) : (
+              d
+            )}
           </div>
         ))}
       </div>
 
       {/* ── Kalender-Grid ─────────────────────────────────────────────────── */}
-      {/* Spec §3: Bei ≤2 Einträgen/Tag → feste Viewport-Höhe (scrollfrei);
-          Bei ≥3 Einträgen → auto-Zeilen, Seite darf wachsen/scrollen. */}
+      {/* Bei ≤2 Einträgen/Tag füllt das Grid MINDESTENS den Viewport (ruhiges
+          Bild in dünnen Monaten); Zeilen dürfen aber immer mit dem Inhalt
+          wachsen — Punkt 4 (15.08.2026): keine Maximalhöhe, nichts wird
+          abgeschnitten. Bei ≥3 Einträgen → reine auto-Zeilen. */}
       <div
-        className="grid grid-cols-7 gap-px rounded-b-lg border border-t-0 border-border/30 bg-border/20"
+        className={[
+          "grid grid-cols-7 gap-px",
+          // Punkt 2 (15.08.2026): 1 px #dfe4ea als Außenrahmen UND als Spalten-/
+          // Zeilentrennlinien — gap-px lässt die Hintergrundfarbe durchscheinen.
+          variant === "full"
+            ? "border border-t-0 border-[#dfe4ea] bg-[#dfe4ea]"
+            : "rounded-b-lg border border-t-0 border-border/30 bg-border/20",
+        ].join(" ")}
         style={
           variant !== "full"
             ? // Smartphone (Punkt 4): keine feste Grid-Höhe — die Zellen sind
@@ -1182,14 +1216,18 @@ function MonthGrid({
             : useDynamicRows
               ? { gridTemplateColumns: "repeat(7, 1fr)", overflow: "visible" }
               : {
-                  ...(gridHeight ? { height: gridHeight, overflow: "hidden" } : {}),
-                  gridTemplateRows: `repeat(${numWeeks}, 1fr)`,
+                  ...(gridHeight ? { minHeight: gridHeight } : {}),
+                  gridTemplateRows: `repeat(${numWeeks}, minmax(min-content, 1fr))`,
                 }
         }
         data-testid="month-grid"
       >
         {blanks.map((_, i) => (
-          <div key={`blank-${i}`} className="rounded-[5px] bg-muted/10" data-testid="month-grid-blank" />
+          <div
+            key={`blank-${i}`}
+            className={variant === "full" ? "bg-muted/10" : "rounded-[5px] bg-muted/10"}
+            data-testid="month-grid-blank"
+          />
         ))}
         {days.map((day, dayIdx) => {
           const dayShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), day));
@@ -1264,8 +1302,15 @@ function MonthGrid({
               // unterdrücken (overflow:hidden würde das Zeilenwachstum killen).
               style={variant !== "full" ? { aspectRatio: "1 / 1", overflowX: "clip" } : undefined}
               className={[
-                "relative flex w-full flex-col items-stretch rounded-[5px] p-0.5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
-                variant === "full" ? "min-h-0 overflow-hidden" : "min-w-0",
+                "relative flex w-full flex-col items-stretch transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
+                // Desktop (Punkt 3, 15.08.2026): keine Rundung/kein Außen-Padding
+                // mehr — die Grauzone (Pillenbereich) stößt bündig an die
+                // Trennlinien. Smartphone behält Rundung + 2-px-Innenabstand.
+                // min-w-0 statt overflow-hidden: Spaltenbreite bleibt stabil
+                // (truncate greift), aber Zeilen wachsen mit dem Inhalt.
+                variant === "full"
+                  ? "min-w-0 rounded-none p-0"
+                  : "min-w-0 rounded-[5px] p-0.5",
                 // Punkt 1: Zelle innen weiß, leicht abgerundete Ecken.
                 "bg-white",
                 bulkSelected
@@ -1277,8 +1322,14 @@ function MonthGrid({
               ].filter(Boolean).join(" ")}
             >
               {/* Kopfzeile (3.4): Datum LINKS, Plus RECHTS in derselben Zeile.
-                  Nur das Plus legt einen neuen Dienst an; der Zellenklick wählt. */}
-              <span className="flex items-center justify-between gap-1">
+                  Nur das Plus legt einen neuen Dienst an; der Zellenklick wählt.
+                  Desktop (Punkt 3): weißer oberer Bereich mit eigenem Padding,
+                  da die Zelle selbst dort kein Padding mehr trägt. */}
+              <span
+                className={`flex items-center justify-between gap-1 ${
+                  variant === "full" ? "px-1 py-1" : ""
+                }`}
+              >
                 <span
                   className={[
                     "leading-none font-semibold rounded-md",
@@ -1352,10 +1403,21 @@ function MonthGrid({
                     </span>
                   )}
                 </>
-              ) : visiblePills.length > 0 && (
+              ) : (variant === "full" || visiblePills.length > 0) && (
                 /* Desktop/Tablet: zweizeilige Pille mit Uhrzeit. Aufgeklapptes
-                   Smartphone: einzeilige Pille mit Kürzel und Abweichungs-Icon. */
-                <div className={`flex flex-col min-w-0 ${variant === "compact" ? "gap-[2px] px-[1px]" : "gap-[3px] px-0.5"}`}>
+                   Smartphone: einzeilige Pille mit Kürzel und Abweichungs-Icon.
+                   Desktop (Punkte 3+4, 15.08.2026): Grauzone #eef0f3 unter der
+                   Kopfzeile, Trennlinie in Rahmenfarbe, füllt die Zelle bis
+                   unten (flex-1) — auch an leeren Tagen. Mindesthöhe ≈ 1,2
+                   Pillenhöhen (zweizeilige Pille ~33 px → 40 px); nach oben
+                   wächst die Zelle unbegrenzt mit den Diensten. */
+                <div
+                  className={
+                    variant === "compact"
+                      ? "flex flex-col min-w-0 gap-[2px] px-[1px]"
+                      : "flex min-h-[40px] min-w-0 flex-1 flex-col gap-[3px] border-t border-[#dfe4ea] bg-[#eef0f3] px-1 py-1"
+                  }
+                >
                   {visiblePills.map((s) => {
                     const isTeam = s.type === "team";
                     const slot = getPersonSlot(s.userId);
@@ -1388,7 +1450,12 @@ function MonthGrid({
                           if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onShiftClick(s); }
                         } : undefined}
                         className={[
-                          "relative overflow-hidden border border-[#e6e6e2]",
+                          "relative overflow-hidden border",
+                          // Punkt 5 (15.08.2026): Desktop-Pillen leicht erhaben —
+                          // Kontur #c7ced8 + weicher Schatten. Smartphone unverändert.
+                          compact
+                            ? "border-[#e6e6e2]"
+                            : "border-[#c7ced8] shadow-[0_1.5px_3px_rgba(9,41,72,0.09)]",
                           compact ? "flex h-5 items-center" : "flex flex-col items-stretch",
                           compact ? "rounded-[5px]" : "rounded-[6px]",
                           chipClickable ? "cursor-pointer" : "",
@@ -1484,11 +1551,24 @@ function MonthGrid({
                       </span>
                     );
                   })}
+                  {/* Überlauf-Zähler Desktop: liegt IM Pillen-Container, damit
+                      er innerhalb der Grauzone bleibt — die füllt die Zelle
+                      seit Punkt 3 bis ganz unten. */}
+                  {variant === "full" && hiddenCount > 0 && (
+                    <span
+                      data-testid={`day-more-${format(day, "yyyy-MM-dd")}`}
+                      className="self-start px-1 text-[7px] font-semibold text-muted-foreground/60 leading-none"
+                    >
+                      +{hiddenCount}
+                    </span>
+                  )}
                 </div>
               )}
 
-              {/* Überlauf-Zähler (nur Pillen-Modi; eingeklappt zählt der Zähler-Text) */}
-              {variant !== "collapsed" && hiddenCount > 0 && (
+              {/* Überlauf-Zähler Smartphone (aufgeklappt): wie zuvor als
+                  eigenes Zellen-Kind NEBEN dem Pillen-Container — dessen
+                  gap-[2px] darf den Abstand nicht verändern. */}
+              {variant === "compact" && hiddenCount > 0 && (
                 <span
                   data-testid={`day-more-${format(day, "yyyy-MM-dd")}`}
                   className="self-start px-1 text-[7px] font-semibold text-muted-foreground/60 leading-none"
@@ -1496,10 +1576,16 @@ function MonthGrid({
                   +{hiddenCount}
                 </span>
               )}
-
             </div>
           );
         })}
+        {/* Punkt 2 (15.08.2026): Auffüller NACH dem Monatsende, damit auch die
+            letzte Zeile durchgehende Trennlinien statt einer grauen Fläche
+            zeigt. Eigene testid — e2e zählt month-grid-blank == Monats-Offset. */}
+        {variant === "full" &&
+          Array.from({ length: numWeeks * 7 - blanks.length - days.length }).map((_, i) => (
+            <div key={`tail-blank-${i}`} className="bg-muted/10" data-testid="month-grid-tail-blank" />
+          ))}
       </div>
 
       {/* ── Tagesdetail-Panel ──────────────────────────────────────────────── */}

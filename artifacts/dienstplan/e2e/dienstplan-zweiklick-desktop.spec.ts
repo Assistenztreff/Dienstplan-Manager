@@ -239,7 +239,7 @@ test("Desktop-Tagesleiste (Admin): Zeile ist per Tastatur erreichbar und öffnet
     await desktop.getByTestId(dayCellId(target.year, target.month1, target.dayA)).click({
       position: { x: 8, y: 8 },
     });
-    const row = desktop.getByTestId(`shift-badge-${shiftId}`);
+    const row = desktop.getByTestId(`day-detail-shift-${shiftId}`);
     await expect(row).toBeVisible();
     await expect(row).toHaveAttribute("role", "button");
     await row.focus();
@@ -270,7 +270,7 @@ test("Desktop-Tagesleiste (Assistent): Name sichtbar, Zeile ohne Bearbeitungsrec
     await desktop.getByTestId(dayCellId(target.year, target.month1, target.dayA)).click({
       position: { x: 8, y: 8 },
     });
-    const row = desktop.getByTestId(`shift-badge-${shiftId}`);
+    const row = desktop.getByTestId(`day-detail-shift-${shiftId}`);
     await expect(row).toBeVisible();
     // Der Name gehört zum Zeilen-Layout — auch ohne Bearbeitungsrecht.
     await expect(row).toContainText("Zweiklick Desktop Assistent");
