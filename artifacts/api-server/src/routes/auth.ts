@@ -454,7 +454,16 @@ router.post("/auth/set-password", async (req, res) => {
   const passwordHash = hashPassword(password);
   await db
     .update(usersTable)
-    .set({ passwordHash, inviteToken: null, inviteTokenExpiry: null })
+    .set({
+      passwordHash,
+      inviteToken: null,
+      inviteTokenExpiry: null,
+      // Task #722: Einladungs-Flow = Admin hat die Identität/E-Mail-Adresse
+      // bereits geprüft. Nach erfolgreichem set-password gilt die E-Mail als
+      // verifiziert, damit der folgende Login nicht mit email_not_verified
+      // abgewiesen wird.
+      emailVerified: true,
+    })
     .where(eq(usersTable.id, userId));
 
   req.session.userId = user.id;

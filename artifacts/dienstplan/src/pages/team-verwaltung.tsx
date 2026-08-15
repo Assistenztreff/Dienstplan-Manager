@@ -267,7 +267,11 @@ function TransferDialog({ team, teams, onClose }: TransferDialogProps) {
       if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast({
         title: "Überführen fehlgeschlagen",
-        description: readableApiError(err, "Bitte erneut versuchen."),
+        // Task #743: Kontowechsel-Hinweis auch beim Überführen zeigen.
+        description:
+          planUpgradeMessage(err) ??
+          ownerSessionMessage(err) ??
+          readableApiError(err, "Bitte erneut versuchen."),
         variant: "destructive",
       });
     } finally {
@@ -755,8 +759,13 @@ function KoordinatorenBereich({ teams }: { teams: Team[] }) {
     if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
     toast({
       title,
+      // Task #743: planUpgradeMessage zuerst prüfen (Plan-403 hat Vorrang),
+      // dann ownerSessionMessage (Kontowechsel-Hinweis für nicht-Plan-403),
+      // zuletzt generischer Fallback.
       description:
-        ownerSessionMessage(err) ?? readableApiError(err, "Bitte erneut versuchen."),
+        planUpgradeMessage(err) ??
+        ownerSessionMessage(err) ??
+        readableApiError(err, "Bitte erneut versuchen."),
       variant: "destructive",
     });
   }
@@ -1189,7 +1198,11 @@ export default function TeamVerwaltung() {
       if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
       toast({
         title: "Team kann nicht gelöscht werden",
-        description: readableApiError(err, "Es sind noch Daten oder Mitglieder zugeordnet."),
+        // Task #743: Kontowechsel-Hinweis auch beim Team-Löschen zeigen.
+        description:
+          planUpgradeMessage(err) ??
+          ownerSessionMessage(err) ??
+          readableApiError(err, "Es sind noch Daten oder Mitglieder zugeordnet."),
         variant: "destructive",
       });
     } finally {

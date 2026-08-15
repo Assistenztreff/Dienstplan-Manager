@@ -83,6 +83,8 @@ export function AssistenzkraftListe({ teamId, canManageMembers }: Props) {
   const queryClient = useQueryClient();
 
   const teamScope = teamId != null;
+  // staleTime wird vom globalen QueryClient (5 min) übernommen — kein
+  // lokaler Override nötig, der Orval-Typ-Inferenz stört.
   const { data: users, isLoading: usersLoading } = useListUsers(
     teamScope ? { role: "assistant", teamId } : { role: "assistant" },
   );

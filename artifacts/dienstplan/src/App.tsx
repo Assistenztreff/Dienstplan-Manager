@@ -162,6 +162,12 @@ const queryClient: QueryClient = new QueryClient({
 // verwerfen (inkl. pausierter Offline-Mutationen) und kurz erklären, warum
 // sich die Ansicht gerade ändert.
 registerUserSwitchHandler((next) => {
+  // Task #744: Alle laufenden Abfragen vor dem Leeren abbrechen, damit
+  // verspätete Antworten der alten Session nicht in den Cache des neuen Kontos
+  // schreiben. cancelQueries() sendet Abort-Signale an fetch()-Aufrufe, die
+  // signal propagieren — übrige Request liefern zwar noch ab, aber da der
+  // Cache-Eintrag durch clear() entfernt wurde, wird das Ergebnis verworfen.
+  void queryClient.cancelQueries();
   queryClient.clear();
   toast.info("Anmeldung gewechselt", {
     description: `Du bist jetzt als ${next.name} angemeldet. Die Ansicht wurde entsprechend aktualisiert.`,

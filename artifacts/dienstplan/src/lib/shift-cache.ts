@@ -26,8 +26,13 @@ export const SHIFT_LIST_GC_TIME_MS = 15 * 60_000;
  * Gültigkeitsdauer vermeidet unnötige Neuladungen beim Wechseln zwischen
  * Dienstplan-Unterseiten oder beim Öffnen eines Dialogs kurz nach dem
  * Seitenaufruf.
+ *
+ * Task #794: 5 Minuten (= globaler QueryClient-Standard) statt 1 Minute,
+ * damit Nutzerlisten und Einstellungen bei normaler Navigation nicht
+ * unnötig neu geladen werden. Mutationen rufen invalidateQueries auf und
+ * erzwingen so sofortige Aktualisierungen nach Schreiboperationen.
  */
-export const REFERENCE_DATA_STALE_TIME_MS = 60_000;
+export const REFERENCE_DATA_STALE_TIME_MS = 5 * 60_000;
 
 /**
  * Läd die Schichten des Vor- und Folgemonats (gleicher Team-Scope) im

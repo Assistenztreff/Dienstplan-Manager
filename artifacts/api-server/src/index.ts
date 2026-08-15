@@ -57,10 +57,17 @@ async function warmUpPool(): Promise<void> {
   logger.info("DB pool warmed up (2 connections)");
 }
 
-ensureRequiredTables()
-  .then(() => warmUpPool().catch((err) => {
+// Task #819: Startup-Migration und Pool-Warmup parallel ausführen, damit
+// der Server schneller bereit ist. Beide Tasks sind unabhängig voneinander:
+// die Migration schreibt DDL, der Warmup baut Verbindungen auf.
+// warmUpPool-Fehler sind nicht fatal (server startet trotzdem mit lazy connect);
+// ensureRequiredTables-Fehler brechen den Start ab.
+Promise.all([
+  ensureRequiredTables(),
+  warmUpPool().catch((err) => {
     logger.warn({ err }, "DB pool warmup failed — will connect lazily");
-  }))
+  }),
+])
   .then(() => {
     app.listen(port, (err) => {
       if (err) {
@@ -77,6 +84,26 @@ ensureRequiredTables()
         logger.warn(
           "APP_URL ist nicht gesetzt — E-Mail-Links nutzen die Replit-Domain als Fallback. " +
           "Nach einer Domain-Änderung APP_URL auf die neue Produktions-URL setzen.",
+        );
+      }
+
+      // Task #818: Keepalive-Interval hält den DB-Pool und den Server nach
+      // längerem Leerlauf (z. B. auf Replit nach > 5 Min ohne Anfragen) schnell.
+      // Eine Verbindung alle 4 Minuten hält die Pool-Verbindungen offen
+      // (Pool-Idle-Timeout: 5 Min). Nur in Produktion aktiv — Dev-Server startet
+      // häufig neu, dort ist kein Keepalive nötig.
+      if (process.env["NODE_ENV"] === "production") {
+        const KEEPALIVE_INTERVAL_MS = 4 * 60 * 1000;
+        setInterval(() => {
+          pool.connect().then((client) => {
+            client.release();
+          }).catch((err) => {
+            logger.warn({ err }, "Keepalive-Ping fehlgeschlagen");
+          });
+        }, KEEPALIVE_INTERVAL_MS);
+        logger.info(
+          { intervalMs: KEEPALIVE_INTERVAL_MS },
+          "DB-Keepalive-Interval gestartet (Prod)",
         );
       }
     });

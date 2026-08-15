@@ -28,3 +28,5 @@ dienstplan-dashboard-urlaubstag-bewertung-assistent-ui.spec.ts
 dienstplan-operator-fehler-schnellauswahl.spec.ts
 # - E-Mail-Flows: Verifizierung, Passwort-Reset, Login-Resend (neu)
 dienstplan-auth-email-flows.spec.ts
+# - DST-Regression: Abwesenheiten am Zeitumstellungstag im Dienstplan-Mobilkalender (Task #779)
+dienstplan-dst-abwesenheit-mobilkalender.spec.ts
