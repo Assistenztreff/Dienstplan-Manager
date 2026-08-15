@@ -1330,7 +1330,7 @@ function MonthGrid({
                 // das Datums-Badge) um die GANZE Zelle inkl. Dienstpillen-
                 // Bereich. Border statt Ring: ein Inset-Ring würde unten von
                 // der Grauzone überdeckt, der Border bleibt immer sichtbar.
-                today ? "border-[3px] border-[#092948]" : "",
+                today ? "border-[2px] border-[#092948]" : "",
               ].filter(Boolean).join(" ")}
             >
               {/* Kopfzeile (3.4): Datum LINKS, Plus RECHTS in derselben Zeile.
