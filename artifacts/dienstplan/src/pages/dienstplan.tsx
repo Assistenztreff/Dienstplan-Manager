@@ -1912,14 +1912,14 @@ function DienstplanHeader({
     </>
   );
 
-  const confirmAllButton = isAdmin && confirmableCount > 0 && (
+  const confirmAllButton = isAdmin && (
     <Button
       variant="outline"
       size="sm"
       className={showLabels ? "gap-1.5" : `relative h-9 shrink-0 px-0 ${stacked ? "w-8" : "w-9"}`}
       onClick={onConfirmAll}
-      disabled={isBulkConfirming}
-      title="Vorschlag senden"
+      disabled={isBulkConfirming || confirmableCount === 0}
+      title={confirmableCount === 0 ? "Keine Entwürfe zum Versenden" : "Vorschlag senden"}
       aria-label="Vorschlag senden"
       data-testid="confirm-all-drafts"
     >
@@ -1927,15 +1927,17 @@ function DienstplanHeader({
       {showLabels ? (
         <>
           <span>Vorschlag senden</span>
-          <span className="rounded-full bg-primary/20 px-1.5 text-xs font-semibold text-assistenz-brand">
-            {confirmableCount}
-          </span>
+          {confirmableCount > 0 && (
+            <span className="rounded-full bg-primary/20 px-1.5 text-xs font-semibold text-assistenz-brand">
+              {confirmableCount}
+            </span>
+          )}
         </>
-      ) : (
+      ) : confirmableCount > 0 ? (
         <span className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary/20 px-1 text-[10px] font-semibold text-assistenz-brand ring-1 ring-assistenz-brand/20 backdrop-blur-sm">
           {confirmableCount}
         </span>
-      )}
+      ) : null}
     </Button>
   );
 
