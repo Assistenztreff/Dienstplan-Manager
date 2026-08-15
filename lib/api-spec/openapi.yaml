@@ -514,6 +514,59 @@ paths:
         "404":
           description: Mindestens ein Eintrag ist nicht vorhanden oder nicht zugänglich.
 
+  /shifts/send-proposals:
+    post:
+      operationId: sendShiftProposals
+      tags: [shifts]
+      summary: Entwürfe als Vorschlag versenden
+      description: >-
+        Setzt alle Dienste mit Planungsstatus VORLAEUFIG im angegebenen Monat auf
+        ANGEBOTEN und benachrichtigt jede betroffene Assistenzkraft per E-Mail mit
+        einer Auflistung ihrer Dienste und einem Login-Link. Falls userId angegeben
+        ist, werden nur die Dienste dieser Person versendet. Nur für Admins.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendShiftProposalsInput"
+      responses:
+        "200":
+          description: Vorschläge versendet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendShiftProposalsResult"
+        "400":
+          description: Ungültiger Request-Body
+        "403":
+          description: Nicht autorisiert (nur Admins)
+
+  /shifts/bulk-confirm-own:
+    post:
+      operationId: bulkConfirmOwnShifts
+      tags: [shifts]
+      summary: Eigene Vorschläge für einen Monat bestätigen
+      description: >-
+        Setzt alle Dienste mit Planungsstatus ANGEBOTEN des angemeldeten Nutzers
+        im angegebenen Monat auf FIX (verbindlich bestätigt). Jeder Nutzer kann
+        nur seine eigenen Dienste bestätigen.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkConfirmOwnShiftsInput"
+      responses:
+        "200":
+          description: Dienste bestätigt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkConfirmOwnShiftsResult"
+        "400":
+          description: Ungültiger Request-Body
+
   /shifts/{id}:
     get:
       operationId: getShift
@@ -3048,6 +3101,59 @@ components:
           description: Die angelegten Einträge in Listen-Form (wie GET /shifts).
           items:
             $ref: "#/components/schemas/Shift"
+
+    SendShiftProposalsInput:
+      type: object
+      required: [month, year]
+      properties:
+        month:
+          type: integer
+          minimum: 1
+          maximum: 12
+        year:
+          type: integer
+        teamId:
+          type: integer
+          description: Team-Scope; fehlt er, werden alle erlaubten Teams einbezogen.
+        userId:
+          type: integer
+          description: Falls gesetzt, werden nur die Dienste dieser Assistenzkraft versendet.
+
+    SendShiftProposalsResult:
+      type: object
+      required: [updated, emailsSent, emailsFailed]
+      properties:
+        updated:
+          type: integer
+          description: Anzahl auf ANGEBOTEN gesetzter Dienste.
+        emailsSent:
+          type: integer
+          description: Anzahl erfolgreich versendeter E-Mails.
+        emailsFailed:
+          type: integer
+          description: Anzahl fehlgeschlagener E-Mail-Sendeversuche.
+
+    BulkConfirmOwnShiftsInput:
+      type: object
+      required: [month, year]
+      properties:
+        month:
+          type: integer
+          minimum: 1
+          maximum: 12
+        year:
+          type: integer
+        teamId:
+          type: integer
+          description: Optionaler Team-Scope.
+
+    BulkConfirmOwnShiftsResult:
+      type: object
+      required: [confirmed]
+      properties:
+        confirmed:
+          type: integer
+          description: Anzahl auf FIX gesetzter Dienste.
 
     BulkDeleteShiftsInput:
       type: object

@@ -803,6 +803,44 @@ export interface BulkShiftsResult {
   shifts: Shift[];
 }
 
+export interface SendShiftProposalsInput {
+  /**
+     * @minimum 1
+     * @maximum 12
+     */
+  month: number;
+  year: number;
+  /** Team-Scope; fehlt er, werden alle erlaubten Teams einbezogen. */
+  teamId?: number;
+  /** Falls gesetzt, werden nur die Dienste dieser Assistenzkraft versendet. */
+  userId?: number;
+}
+
+export interface SendShiftProposalsResult {
+  /** Anzahl auf ANGEBOTEN gesetzter Dienste. */
+  updated: number;
+  /** Anzahl erfolgreich versendeter E-Mails. */
+  emailsSent: number;
+  /** Anzahl fehlgeschlagener E-Mail-Sendeversuche. */
+  emailsFailed: number;
+}
+
+export interface BulkConfirmOwnShiftsInput {
+  /**
+     * @minimum 1
+     * @maximum 12
+     */
+  month: number;
+  year: number;
+  /** Optionaler Team-Scope. */
+  teamId?: number;
+}
+
+export interface BulkConfirmOwnShiftsResult {
+  /** Anzahl auf FIX gesetzter Dienste. */
+  confirmed: number;
+}
+
 export interface BulkDeleteShiftsInput {
   /**
      * @minItems 1

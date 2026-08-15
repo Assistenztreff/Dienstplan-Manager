@@ -7,6 +7,8 @@ import {
   useListUsers,
   useListShiftModels,
   useUpdateShift,
+  useSendShiftProposals,
+  useBulkConfirmOwnShifts,
   getListShiftsQueryKey,
   type User,
   type ShiftModel,
@@ -490,7 +492,8 @@ type DialogState =
   | { mode: "bulk-create"; dates: string[] }
   | { mode: "bulk-edit"; dates: string[] }
   | { mode: "bulk-delete"; dates: string[] }
-  | { mode: "confirm-all" };
+  | { mode: "confirm-all" }
+  | { mode: "send-proposals" };
 
 
 // Aushilfe-Spiegel: Die Schicht gehört einem ANDEREN eigenen Team und ist nur
@@ -1916,14 +1919,14 @@ function DienstplanHeader({
       className={showLabels ? "gap-1.5" : `relative h-9 shrink-0 px-0 ${stacked ? "w-8" : "w-9"}`}
       onClick={onConfirmAll}
       disabled={isBulkConfirming}
-      title="Alle Entwürfe bestätigen"
-      aria-label="Alle Entwürfe bestätigen"
+      title="Vorschlag senden"
+      aria-label="Vorschlag senden"
       data-testid="confirm-all-drafts"
     >
       <Check className="h-4 w-4" />
       {showLabels ? (
         <>
-          <span>Alle bestätigen</span>
+          <span>Vorschlag senden</span>
           <span className="rounded-full bg-primary/20 px-1.5 text-xs font-semibold text-assistenz-brand">
             {confirmableCount}
           </span>
@@ -2344,6 +2347,8 @@ export default function Dienstplan() {
   }, [queryClient, month, year, selectedTeamId]);
 
   const updateShift = useUpdateShift();
+  const sendProposalsMutation = useSendShiftProposals();
+  const bulkConfirmOwnMutation = useBulkConfirmOwnShifts();
   const [confirmingShiftId, setConfirmingShiftId] = useState<number | null>(null);
   const [isBulkConfirming, setIsBulkConfirming] = useState(false);
   const { data: users, isLoading: usersLoading } = useListUsers(
@@ -2498,52 +2503,81 @@ export default function Dienstplan() {
     }
   }
 
-  // Aushilfe-Spiegel werden im Ziel-Team NICHT mitbestätigt — das macht das
-  // Stammteam (dort liegt die Schicht).
-  const confirmableShifts = allShifts.filter(
-    (s) => isConfirmableShift(s) && !isMirrorShift(s, selectedTeamId),
+  // Sendbare Entwürfe (VORLAEUFIG) — Basis für "Vorschlag senden".
+  // Aushilfe-Spiegel werden im Ziel-Team NICHT mitversendet.
+  const sendableShifts = allShifts.filter(
+    (s) =>
+      s.planningStatus === "VORLAEUFIG" &&
+      s.type !== "vacation" &&
+      s.type !== "sick" &&
+      !isMirrorShift(s, selectedTeamId),
   );
 
-  async function confirmAllDrafts() {
+  // Für die Assistenzkraft: eigene ANGEBOTEN-Dienste des aktuellen Monats.
+  const myAngebotenShifts = !isAdmin
+    ? allShifts.filter(
+        (s) =>
+          s.planningStatus === "ANGEBOTEN" &&
+          s.userId === currentUser?.id &&
+          !isMirrorShift(s, selectedTeamId),
+      )
+    : [];
+
+  async function sendProposals() {
     if (!isAdmin || isBulkConfirming) return;
-    const targets = confirmableShifts;
-    if (targets.length === 0) {
+    if (sendableShifts.length === 0) {
       closeDialog();
       return;
     }
     setIsBulkConfirming(true);
-    let confirmed = 0;
-    let failed = 0;
     try {
-      for (const shift of targets) {
-        try {
-          await updateShift.mutateAsync({
-            id: shift.id,
-            data: { planningStatus: "FIX", force: true } as { planningStatus: "FIX" },
-          });
-          confirmed++;
-        } catch {
-          failed++;
-        }
-      }
-    } finally {
+      const result = await sendProposalsMutation.mutateAsync({
+        data: {
+          month,
+          year,
+          teamId: selectedTeamId ?? undefined,
+          userId: selectedAssistant !== "all" ? selectedAssistant : undefined,
+        },
+      });
       await queryClient.invalidateQueries({ queryKey: getListShiftsQueryKey({ month, year }) });
-      setIsBulkConfirming(false);
       closeDialog();
+      if (!navigator.onLine) return;
+      const { updated, emailsSent } = result;
+      if (updated === 0) {
+        toast.info("Keine Entwürfe zum Versenden gefunden.");
+      } else if (emailsSent === 0) {
+        toast.success(
+          `${updated} ${updated === 1 ? "Dienst" : "Dienste"} auf „Vorschlag" gesetzt. E-Mail-Versand nicht konfiguriert.`,
+        );
+      } else {
+        toast.success(
+          `Vorschlag versendet — ${emailsSent} ${emailsSent === 1 ? "Assistenzkraft" : "Assistenzkräfte"} per E-Mail benachrichtigt.`,
+        );
+      }
+    } catch {
+      if (!navigator.onLine) return;
+      toast.error("Versenden fehlgeschlagen. Bitte erneut versuchen.");
+    } finally {
+      setIsBulkConfirming(false);
     }
-    if (failed > 0 && !navigator.onLine) return; // Banner erklärt den Grund bereits.
-    if (failed === 0) {
+  }
+
+  async function confirmOwnProposals() {
+    if (myAngebotenShifts.length === 0) return;
+    try {
+      const result = await bulkConfirmOwnMutation.mutateAsync({
+        data: { month, year, teamId: selectedTeamId ?? undefined },
+      });
+      await queryClient.invalidateQueries({ queryKey: getListShiftsQueryKey({ month, year }) });
+      const { confirmed } = result;
       toast.success(
         confirmed === 1
           ? "1 Dienst bestätigt — zählt jetzt in Auswertungen und Stundennachweis."
           : `${confirmed} Dienste bestätigt — zählen jetzt in Auswertungen und Stundennachweis.`,
       );
-    } else if (confirmed === 0) {
+    } catch {
+      if (!navigator.onLine) return;
       toast.error("Bestätigen fehlgeschlagen. Bitte erneut versuchen.");
-    } else {
-      toast.error(
-        `${confirmed} ${confirmed === 1 ? "Dienst" : "Dienste"} bestätigt, ${failed} fehlgeschlagen. Bitte erneut versuchen.`,
-      );
     }
   }
 
@@ -2622,9 +2656,9 @@ export default function Dienstplan() {
       }
       desktopView={desktopView}
       onDesktopView={setDesktopView}
-      confirmableCount={confirmableShifts.length}
+      confirmableCount={sendableShifts.length}
       isBulkConfirming={isBulkConfirming}
-      onConfirmAll={() => setDialog({ mode: "confirm-all" })}
+      onConfirmAll={() => setDialog({ mode: "send-proposals" })}
       canBasicExport={canBasicExport}
       isExporting={isExporting}
       onExport={handleSimpleExport}
@@ -2667,6 +2701,29 @@ export default function Dienstplan() {
           Im Free-Tarif nur bis nächsten Monat planbar. Für eine längere Vorausplanung ist ein
           Upgrade auf Premium nötig.
         </PlanLimitBanner>
+      )}
+
+      {/* Assistenz-Banner: Vorgeschlagene Dienste bestätigen */}
+      {!isAdmin && myAngebotenShifts.length > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3">
+          <div className="flex items-center gap-2 text-sky-900">
+            <Check className="h-4 w-4 shrink-0 text-sky-600" />
+            <span className="text-sm font-medium">
+              {myAngebotenShifts.length === 1
+                ? "1 Dienstvorschlag wartet auf Ihre Bestätigung."
+                : `${myAngebotenShifts.length} Dienstvorschläge warten auf Ihre Bestätigung.`}
+            </span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="shrink-0 border-sky-300 bg-white text-sky-900 hover:bg-sky-100"
+            disabled={bulkConfirmOwnMutation.isPending}
+            onClick={() => void confirmOwnProposals()}
+          >
+            {bulkConfirmOwnMutation.isPending ? "Wird bestätigt …" : "Alle bestätigen"}
+          </Button>
+        </div>
       )}
 
       <div className="flex flex-col md:hidden" data-testid="dienstplan-mobile">
@@ -2891,19 +2948,21 @@ export default function Dienstplan() {
 
       {isAdmin && (
         <AlertDialog
-          open={dialog.mode === "confirm-all"}
+          open={dialog.mode === "send-proposals"}
           onOpenChange={(open) => {
             if (!open && !isBulkConfirming) closeDialog();
           }}
         >
           <AlertDialogContent data-testid="confirm-all-dialog">
             <AlertDialogHeader>
-              <AlertDialogTitle>Alle Entwürfe dieses Monats bestätigen?</AlertDialogTitle>
+              <AlertDialogTitle>Vorschlag versenden?</AlertDialogTitle>
               <AlertDialogDescription data-testid="confirm-all-description">
-                {confirmableShifts.length === 1
-                  ? `1 Entwurf bzw. Vorschlag in ${format(currentDate, "MMMM yyyy", { locale: de })} wird verbindlich (FIX) und zählt danach in Auswertungen und Stundennachweis.`
-                  : `${confirmableShifts.length} Entwürfe bzw. Vorschläge in ${format(currentDate, "MMMM yyyy", { locale: de })} werden verbindlich (FIX) und zählen danach in Auswertungen und Stundennachweis.`}{" "}
-                Abwesenheiten sind nicht betroffen.
+                {selectedAssistant !== "all"
+                  ? `Die Entwürfe der gewählten Assistenzkraft in ${format(currentDate, "MMMM yyyy", { locale: de })} werden auf „Vorschlag" gesetzt und per E-Mail versandt.`
+                  : sendableShifts.length === 1
+                  ? `1 Entwurf in ${format(currentDate, "MMMM yyyy", { locale: de })} wird auf „Vorschlag" gesetzt — die Assistenzkraft erhält eine E-Mail.`
+                  : `${sendableShifts.length} Entwürfe in ${format(currentDate, "MMMM yyyy", { locale: de })} werden auf „Vorschlag" gesetzt — jede Assistenzkraft erhält eine E-Mail mit ihren Diensten.`}{" "}
+                Die Assistenzkräfte können danach in ihrem Konto bestätigen.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -2914,11 +2973,11 @@ export default function Dienstplan() {
                 disabled={isBulkConfirming}
                 onClick={(e) => {
                   e.preventDefault();
-                  void confirmAllDrafts();
+                  void sendProposals();
                 }}
                 data-testid="confirm-all-submit"
               >
-                {isBulkConfirming ? "Wird bestätigt …" : "Jetzt bestätigen"}
+                {isBulkConfirming ? "Wird versendet …" : "Jetzt versenden"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

@@ -27,6 +27,8 @@ import type {
   BrandingSettingsInput,
   BulkAbsenceInput,
   BulkAbsenceResult,
+  BulkConfirmOwnShiftsInput,
+  BulkConfirmOwnShiftsResult,
   BulkDeleteShiftsInput,
   BulkDeleteShiftsResult,
   BulkShiftsInput,
@@ -82,6 +84,8 @@ import type {
   OperatorPlanChange,
   OperatorPlanUpdate,
   RegisterInput,
+  SendShiftProposalsInput,
+  SendShiftProposalsResult,
   SetPasswordInput,
   Shift,
   ShiftInput,
@@ -1617,6 +1621,150 @@ export const useBulkDeleteShifts = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getBulkDeleteShiftsMutationOptions(options));
+    }
+
+export const getSendShiftProposalsUrl = () => {
+
+
+
+
+  return `/api/shifts/send-proposals`
+}
+
+/**
+ * Setzt alle Dienste mit Planungsstatus VORLAEUFIG im angegebenen Monat auf ANGEBOTEN und benachrichtigt jede betroffene Assistenzkraft per E-Mail mit einer Auflistung ihrer Dienste und einem Login-Link. Falls userId angegeben ist, werden nur die Dienste dieser Person versendet. Nur für Admins.
+ * @summary Entwürfe als Vorschlag versenden
+ */
+export const sendShiftProposals = async (sendShiftProposalsInput: SendShiftProposalsInput, options?: RequestInit): Promise<SendShiftProposalsResult> => {
+
+  return customFetch<SendShiftProposalsResult>(getSendShiftProposalsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      sendShiftProposalsInput,)
+  }
+);}
+
+
+
+
+export const getSendShiftProposalsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendShiftProposals>>, TError,{data: BodyType<SendShiftProposalsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendShiftProposals>>, TError,{data: BodyType<SendShiftProposalsInput>}, TContext> => {
+
+const mutationKey = ['sendShiftProposals'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendShiftProposals>>, {data: BodyType<SendShiftProposalsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  sendShiftProposals(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendShiftProposalsMutationResult = NonNullable<Awaited<ReturnType<typeof sendShiftProposals>>>
+    export type SendShiftProposalsMutationBody = BodyType<SendShiftProposalsInput>
+    export type SendShiftProposalsMutationError = ErrorType<void>
+
+    /**
+ * @summary Entwürfe als Vorschlag versenden
+ */
+export const useSendShiftProposals = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendShiftProposals>>, TError,{data: BodyType<SendShiftProposalsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendShiftProposals>>,
+        TError,
+        {data: BodyType<SendShiftProposalsInput>},
+        TContext
+      > => {
+      return useMutation(getSendShiftProposalsMutationOptions(options));
+    }
+
+export const getBulkConfirmOwnShiftsUrl = () => {
+
+
+
+
+  return `/api/shifts/bulk-confirm-own`
+}
+
+/**
+ * Setzt alle Dienste mit Planungsstatus ANGEBOTEN des angemeldeten Nutzers im angegebenen Monat auf FIX (verbindlich bestätigt). Jeder Nutzer kann nur seine eigenen Dienste bestätigen.
+ * @summary Eigene Vorschläge für einen Monat bestätigen
+ */
+export const bulkConfirmOwnShifts = async (bulkConfirmOwnShiftsInput: BulkConfirmOwnShiftsInput, options?: RequestInit): Promise<BulkConfirmOwnShiftsResult> => {
+
+  return customFetch<BulkConfirmOwnShiftsResult>(getBulkConfirmOwnShiftsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      bulkConfirmOwnShiftsInput,)
+  }
+);}
+
+
+
+
+export const getBulkConfirmOwnShiftsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkConfirmOwnShifts>>, TError,{data: BodyType<BulkConfirmOwnShiftsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bulkConfirmOwnShifts>>, TError,{data: BodyType<BulkConfirmOwnShiftsInput>}, TContext> => {
+
+const mutationKey = ['bulkConfirmOwnShifts'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkConfirmOwnShifts>>, {data: BodyType<BulkConfirmOwnShiftsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  bulkConfirmOwnShifts(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BulkConfirmOwnShiftsMutationResult = NonNullable<Awaited<ReturnType<typeof bulkConfirmOwnShifts>>>
+    export type BulkConfirmOwnShiftsMutationBody = BodyType<BulkConfirmOwnShiftsInput>
+    export type BulkConfirmOwnShiftsMutationError = ErrorType<void>
+
+    /**
+ * @summary Eigene Vorschläge für einen Monat bestätigen
+ */
+export const useBulkConfirmOwnShifts = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkConfirmOwnShifts>>, TError,{data: BodyType<BulkConfirmOwnShiftsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof bulkConfirmOwnShifts>>,
+        TError,
+        {data: BodyType<BulkConfirmOwnShiftsInput>},
+        TContext
+      > => {
+      return useMutation(getBulkConfirmOwnShiftsMutationOptions(options));
     }
 
 export const getGetShiftUrl = (id: number,) => {

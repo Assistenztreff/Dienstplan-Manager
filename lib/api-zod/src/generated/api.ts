@@ -552,6 +552,47 @@ export const BulkDeleteShiftsResponse = zod.object({
 
 
 /**
+ * Setzt alle Dienste mit Planungsstatus VORLAEUFIG im angegebenen Monat auf ANGEBOTEN und benachrichtigt jede betroffene Assistenzkraft per E-Mail mit einer Auflistung ihrer Dienste und einem Login-Link. Falls userId angegeben ist, werden nur die Dienste dieser Person versendet. Nur für Admins.
+ * @summary Entwürfe als Vorschlag versenden
+ */
+export const sendShiftProposalsBodyMonthMax = 12;
+
+
+
+export const SendShiftProposalsBody = zod.object({
+  "month": zod.number().min(1).max(sendShiftProposalsBodyMonthMax),
+  "year": zod.number(),
+  "teamId": zod.number().optional().describe('Team-Scope; fehlt er, werden alle erlaubten Teams einbezogen.'),
+  "userId": zod.number().optional().describe('Falls gesetzt, werden nur die Dienste dieser Assistenzkraft versendet.')
+})
+
+export const SendShiftProposalsResponse = zod.object({
+  "updated": zod.number().describe('Anzahl auf ANGEBOTEN gesetzter Dienste.'),
+  "emailsSent": zod.number().describe('Anzahl erfolgreich versendeter E-Mails.'),
+  "emailsFailed": zod.number().describe('Anzahl fehlgeschlagener E-Mail-Sendeversuche.')
+})
+
+
+/**
+ * Setzt alle Dienste mit Planungsstatus ANGEBOTEN des angemeldeten Nutzers im angegebenen Monat auf FIX (verbindlich bestätigt). Jeder Nutzer kann nur seine eigenen Dienste bestätigen.
+ * @summary Eigene Vorschläge für einen Monat bestätigen
+ */
+export const bulkConfirmOwnShiftsBodyMonthMax = 12;
+
+
+
+export const BulkConfirmOwnShiftsBody = zod.object({
+  "month": zod.number().min(1).max(bulkConfirmOwnShiftsBodyMonthMax),
+  "year": zod.number(),
+  "teamId": zod.number().optional().describe('Optionaler Team-Scope.')
+})
+
+export const BulkConfirmOwnShiftsResponse = zod.object({
+  "confirmed": zod.number().describe('Anzahl auf FIX gesetzter Dienste.')
+})
+
+
+/**
  * @summary Schicht abrufen
  */
 export const GetShiftParams = zod.object({

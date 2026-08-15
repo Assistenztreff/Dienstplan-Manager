@@ -20,11 +20,15 @@ import {
   BulkCreateAbsenceBody,
   BulkCreateShiftsBody,
   BulkDeleteShiftsBody,
+  SendShiftProposalsBody,
+  BulkConfirmOwnShiftsBody,
   GetShiftParams,
   UpdateShiftParams,
   UpdateShiftBody,
   DeleteShiftParams,
 } from "@workspace/api-zod";
+import { sendProposalEmail } from "../lib/mailer";
+import { getBaseUrl } from "../lib/base-url";
 import { requireAuth, requireAdmin, requireTeamPlanningOrAdmin, isAdminLikeRole } from "../middleware/auth";
 import {
   resolveReadTeamScope,
@@ -2479,6 +2483,146 @@ router.post("/shifts/bulk-delete", requireAuth, async (req, res): Promise<void> 
   }
 
   res.json({ deletedIds: ids });
+});
+
+// POST /shifts/send-proposals — setzt VORLAEUFIG→ANGEBOTEN und versendet
+// pro Assistenzkraft eine E-Mail mit allen vorgeschlagenen Diensten des Monats.
+// Falls userId angegeben ist, werden nur diese Person's Dienste versendet.
+router.post("/shifts/send-proposals", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const body = SendShiftProposalsBody.safeParse(req.body ?? {});
+  if (!body.success) {
+    res.status(400).json({ error: "Invalid request body" });
+    return;
+  }
+  const { month, year, teamId, userId } = body.data;
+
+  const allowedTeams = await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!);
+
+  let teamScope: number[];
+  if (teamId != null) {
+    if (!allowedTeams.includes(teamId)) {
+      res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
+      return;
+    }
+    teamScope = [teamId];
+  } else {
+    teamScope = allowedTeams;
+  }
+
+  if (teamScope.length === 0) {
+    res.json({ updated: 0, emailsSent: 0, emailsFailed: 0 });
+    return;
+  }
+
+  const monthStart = new Date(Date.UTC(year, month - 1, 1));
+  const monthEnd = new Date(Date.UTC(year, month, 1));
+
+  const conditions = [
+    inArray(shiftsTable.teamId, teamScope),
+    eq(shiftsTable.planningStatus, "VORLAEUFIG"),
+    gte(shiftsTable.startTime, monthStart),
+    lt(shiftsTable.startTime, monthEnd),
+    // Keine Abwesenheiten — nur buchbare Arbeitsdienste senden
+    // (Abwesenheiten sind serveitig immer FIX und landen nie als Entwurf)
+  ] as ReturnType<typeof and>[];
+  if (userId != null) {
+    conditions.push(eq(shiftsTable.userId, userId));
+  }
+
+  const shifts = await db
+    .select({
+      id: shiftsTable.id,
+      userId: shiftsTable.userId,
+      startTime: shiftsTable.startTime,
+      endTime: shiftsTable.endTime,
+      type: shiftsTable.type,
+      userName: usersTable.name,
+      userEmail: usersTable.email,
+    })
+    .from(shiftsTable)
+    .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
+    .where(and(...conditions));
+
+  if (shifts.length === 0) {
+    res.json({ updated: 0, emailsSent: 0, emailsFailed: 0 });
+    return;
+  }
+
+  // Alle gefundenen Dienste auf ANGEBOTEN setzen
+  const shiftIds = shifts.map((s) => s.id);
+  await db
+    .update(shiftsTable)
+    .set({ planningStatus: "ANGEBOTEN" })
+    .where(inArray(shiftsTable.id, shiftIds));
+
+  // Pro Assistenzkraft eine E-Mail versenden
+  const byUser = new Map<number, { name: string; email: string; shifts: typeof shifts }>();
+  for (const s of shifts) {
+    if (!s.userEmail || !s.userName) continue;
+    const existing = byUser.get(s.userId) ?? { name: s.userName, email: s.userEmail, shifts: [] };
+    existing.shifts.push(s);
+    byUser.set(s.userId, existing);
+  }
+
+  const loginUrl = `${getBaseUrl()}/dienstplan`;
+  let emailsSent = 0;
+  let emailsFailed = 0;
+
+  for (const { name, email, shifts: userShifts } of byUser.values()) {
+    const sent = await sendProposalEmail(
+      email,
+      name,
+      userShifts.map((s) => ({
+        startTime: new Date(s.startTime),
+        endTime: new Date(s.endTime),
+        type: s.type,
+      })),
+      loginUrl,
+    );
+    if (sent) emailsSent++;
+    else emailsFailed++;
+  }
+
+  res.json({ updated: shifts.length, emailsSent, emailsFailed });
+});
+
+// POST /shifts/bulk-confirm-own — Assistenzkraft bestätigt alle ihre
+// ANGEBOTEN-Dienste eines Monats auf einmal (→ FIX).
+router.post("/shifts/bulk-confirm-own", requireAuth, async (req, res): Promise<void> => {
+  const body = BulkConfirmOwnShiftsBody.safeParse(req.body ?? {});
+  if (!body.success) {
+    res.status(400).json({ error: "Invalid request body" });
+    return;
+  }
+  const { month, year, teamId } = body.data;
+  const userId = req.session.userId!;
+
+  const monthStart = new Date(Date.UTC(year, month - 1, 1));
+  const monthEnd = new Date(Date.UTC(year, month, 1));
+
+  const conditions = [
+    eq(shiftsTable.userId, userId),
+    eq(shiftsTable.planningStatus, "ANGEBOTEN"),
+    gte(shiftsTable.startTime, monthStart),
+    lt(shiftsTable.startTime, monthEnd),
+  ] as ReturnType<typeof and>[];
+
+  if (teamId != null) {
+    const memberTeams = await getAllowedTeamIds(userId);
+    if (!memberTeams.includes(teamId)) {
+      res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
+      return;
+    }
+    conditions.push(eq(shiftsTable.teamId, teamId));
+  }
+
+  const updated = await db
+    .update(shiftsTable)
+    .set({ planningStatus: "FIX" })
+    .where(and(...conditions))
+    .returning({ id: shiftsTable.id });
+
+  res.json({ confirmed: updated.length });
 });
 
 export default router;

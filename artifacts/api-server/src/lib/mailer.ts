@@ -98,6 +98,85 @@ function linkButton(url: string, label: string): string {
   return `<a href="${url}" style="display:inline-block;padding:14px 28px;background:#0d3050;color:#f5c842;text-decoration:none;border-radius:8px;font-weight:bold;font-size:15px;margin:20px 0;">${label}</a>`;
 }
 
+const PROPOSAL_SHIFT_TYPE_LABELS: Record<string, string> = {
+  active: "Aktivdienst",
+  standby: "Bereitschaft",
+  night: "Nachtdienst",
+  full_day: "Ganztägig",
+  work: "Arbeitsdienst",
+  team: "Teamdienst",
+};
+
+/** Sendet eine Vorschlags-E-Mail an eine Assistenzkraft mit all ihren vorgeschlagenen Diensten. */
+export async function sendProposalEmail(
+  to: string,
+  name: string,
+  shifts: Array<{ startTime: Date; endTime: Date; type: string }>,
+  loginUrl: string,
+): Promise<boolean> {
+  if (shifts.length === 0) return false;
+  const monthLabel = shifts[0]!.startTime.toLocaleDateString("de-DE", {
+    month: "long",
+    year: "numeric",
+    timeZone: "Europe/Berlin",
+  });
+  const rows = shifts
+    .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
+    .map((s) => {
+      const date = s.startTime.toLocaleDateString("de-DE", {
+        weekday: "short",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        timeZone: "Europe/Berlin",
+      });
+      const start = s.startTime.toLocaleTimeString("de-DE", {
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Europe/Berlin",
+      });
+      const end = s.endTime.toLocaleTimeString("de-DE", {
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Europe/Berlin",
+      });
+      const typeLabel = PROPOSAL_SHIFT_TYPE_LABELS[s.type] ?? s.type;
+      return `<tr>
+        <td style="padding:7px 12px 7px 0;border-bottom:1px solid #e9ecef;color:#333;font-size:14px;">${date}</td>
+        <td style="padding:7px 12px;border-bottom:1px solid #e9ecef;color:#333;font-size:14px;">${typeLabel}</td>
+        <td style="padding:7px 0;border-bottom:1px solid #e9ecef;color:#333;font-size:14px;white-space:nowrap;">${start}–${end} Uhr</td>
+      </tr>`;
+    })
+    .join("");
+
+  const html = emailLayout(`
+    <h2 style="margin:0 0 16px;color:#0d3050;font-size:22px;">Dienstvorschlag für ${monthLabel}</h2>
+    <p style="margin:0 0 20px;color:#333;line-height:1.6;">
+      Hallo ${name},<br><br>
+      für Sie liegen neue Dienstvorschläge vor. Bitte prüfen und bestätigen Sie Ihre Dienste im Dienstplan:
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:24px;">
+      <thead>
+        <tr>
+          <th style="text-align:left;padding:8px 12px 8px 0;border-bottom:2px solid #0d3050;color:#0d3050;font-size:13px;font-weight:bold;">Datum</th>
+          <th style="text-align:left;padding:8px 12px;border-bottom:2px solid #0d3050;color:#0d3050;font-size:13px;font-weight:bold;">Art</th>
+          <th style="text-align:left;padding:8px 0;border-bottom:2px solid #0d3050;color:#0d3050;font-size:13px;font-weight:bold;">Zeit</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>
+    ${linkButton(loginUrl, "Dienste ansehen & bestätigen")}
+    <p style="margin:24px 0 0;color:#555;font-size:13px;line-height:1.6;">
+      Klicken Sie auf den Button, um sich anzumelden und Ihre Dienste mit einem Klick zu bestätigen.
+      Bis zur Bestätigung gelten die Einträge als <em>Vorschlag</em>.
+    </p>
+  `);
+
+  return sendEmail(to, `Dienstvorschlag für ${monthLabel} – Dienstplan`, html);
+}
+
 /** Sendet eine Passwort-Reset-E-Mail. Gibt true zurück wenn gesendet. */
 export async function sendPasswordResetEmail(to: string, resetUrl: string): Promise<boolean> {
   const html = emailLayout(`
