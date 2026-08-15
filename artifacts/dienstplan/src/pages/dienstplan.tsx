@@ -1311,19 +1311,17 @@ function MonthGrid({
                 variant === "full"
                   ? "min-w-0 rounded-none p-0"
                   : "min-w-0 rounded-[5px] p-0.5",
-                // Zellhintergrund, exklusiv: Auswahl (Mint) > Heute > Weiß.
-                // Heute (15.08.2026): der aktuelle Tag ist als GANZE Zelle
-                // markiert — heller Ton des Primär-Hellgelbs statt Weiß (wie
-                // bg-primary/10 in der Wochenansicht); die Grauzone unten
-                // erhält ihren eigenen Heute-Ton (s. Pillen-Container).
+                // Zellhintergrund, exklusiv: Auswahl (Mint) > Weiß.
                 bulkSelected
                   ? "bg-assistenz-mint ring-2 ring-inset ring-assistenz-brand"
                   : selected && !selectionMode
                     ? "bg-assistenz-mint/60 ring-2 ring-inset ring-assistenz-brand"
-                    : today
-                      ? "bg-[#fafce3] hover:bg-[#f4f7d5]"
-                      : "bg-white hover:bg-accent/20",
-                today ? "ring-1 ring-inset ring-amber-400/60" : "",
+                    : "bg-white hover:bg-accent/20",
+                // Heute (15.08.2026): 2-px-Rahmen in Dunkelblau (#092948, wie
+                // das Datums-Badge) um die GANZE Zelle inkl. Dienstpillen-
+                // Bereich. Border statt Ring: ein Inset-Ring würde unten von
+                // der Grauzone überdeckt, der Border bleibt immer sichtbar.
+                today ? "border-2 border-[#092948]" : "",
               ].filter(Boolean).join(" ")}
             >
               {/* Kopfzeile (3.4): Datum LINKS, Plus RECHTS in derselben Zeile.
@@ -1420,11 +1418,7 @@ function MonthGrid({
                   className={
                     variant === "compact"
                       ? "flex flex-col min-w-0 gap-[2px] px-[1px]"
-                      : `flex min-h-[40px] min-w-0 flex-1 flex-col gap-[3px] border-t border-[#dfe4ea] px-1 py-1 ${
-                          // Heute: Grauzone im gelblichen Heute-Ton, damit die
-                          // GANZE Zelle inkl. Dienstplan-Bereich markiert ist.
-                          today ? "bg-[#edf0d4]" : "bg-[#eef0f3]"
-                        }`
+                      : "flex min-h-[40px] min-w-0 flex-1 flex-col gap-[3px] border-t border-[#dfe4ea] bg-[#eef0f3] px-1 py-1"
                   }
                 >
                   {visiblePills.map((s) => {

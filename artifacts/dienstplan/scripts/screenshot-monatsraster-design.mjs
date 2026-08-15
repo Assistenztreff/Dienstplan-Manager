@@ -17,7 +17,7 @@ const y = today.getFullYear();
 const m = String(today.getMonth() + 1).padStart(2, "0");
 const d1 = today.getDate() <= 24 ? today.getDate() + 1 : today.getDate() - 3;
 const dayKey = `${y}-${m}-${String(d1).padStart(2, "0")}`;
-// Heute-Markierung: ganze Zelle inkl. Grauzone im Hellgelb-Ton.
+// Heute-Markierung: 2-px-Rahmen in Dunkelblau um die ganze Zelle.
 const todayKey = `${y}-${m}-${String(today.getDate()).padStart(2, "0")}`;
 
 const created = [];
@@ -179,9 +179,6 @@ try {
       const grid = desk.querySelector('[data-testid="month-grid"]');
       const cellSeed = desk.querySelector(`[data-testid="day-cell-${seedDay}"]`);
       const cellToday = desk.querySelector(`[data-testid="day-cell-${tKey}"]`);
-      const todayZone = cellToday && Array.from(cellToday.children).find(
-        (ch) => getComputedStyle(ch).backgroundColor === "rgb(237, 240, 212)",
-      );
       const cells = Array.from(desk.querySelectorAll('[data-testid^="day-cell-"]'));
       const emptyCell = cells.find((c) => !c.querySelector('[data-testid^="day-chip-"]'));
       const grayZone = (c) => c && Array.from(c.children).find((ch) => getComputedStyle(ch).backgroundColor === "rgb(238, 240, 243)");
@@ -192,8 +189,9 @@ try {
         seedHasGray: !!grayZone(cellSeed),
         pillBorder: pill ? getComputedStyle(pill).borderTopColor : null,
         pillShadow: pill ? getComputedStyle(pill).boxShadow : null,
-        todayCellBg: cellToday ? getComputedStyle(cellToday).backgroundColor : null,
-        todayZoneTinted: !!todayZone,
+        todayBorder: cellToday
+          ? `${getComputedStyle(cellToday).borderTopWidth} ${getComputedStyle(cellToday).borderTopColor} / ${getComputedStyle(cellToday).borderBottomWidth} ${getComputedStyle(cellToday).borderBottomColor}`
+          : null,
       };
     }, { seedDay: dayKey, tKey: todayKey });
     console.log(`[${label}] Styles:`, JSON.stringify({ ...styles, ...emptyStyles }, null, 2));
@@ -206,8 +204,7 @@ try {
       if (emptyStyles.emptyGrayHeight !== null && emptyStyles.emptyGrayHeight < 40) throw new Error(`Grauzone-Mindesthöhe < 40px (${emptyStyles.emptyGrayHeight})`);
       if (!styles.pillBorder?.includes("199, 206, 216")) throw new Error("Pillen-Kontur #c7ced8 fehlt");
       if (!styles.pillShadow || styles.pillShadow === "none") throw new Error("Pillen-Schatten fehlt");
-      if (!styles.todayCellBg?.includes("250, 252, 227")) throw new Error("Heute-Zelle nicht als ganze Zelle markiert (oberer Bereich nicht #fafce3)");
-      if (!styles.todayZoneTinted) throw new Error("Heute-Grauzone nicht im Heute-Ton #edf0d4");
+      if (!styles.todayBorder?.startsWith("2px rgb(9, 41, 72)") || !styles.todayBorder?.includes("/ 2px rgb(9, 41, 72)")) throw new Error(`Heute-Rahmen 2px #092948 fehlt (${styles.todayBorder})`);
     }
 
     fs.mkdirSync(OUT, { recursive: true });
