@@ -24,6 +24,12 @@ import { loginViaUi } from "./helpers/auth";
  * das Erlaubte als auch das Nicht-Erlaubte.
  */
 
+// Die Desktop-Subnavigation ("app-subnav-desktop") ist unterhalb der
+// md-Breakpoint per CSS ausgeblendet; der Standard-Viewport dieses Projekts
+// ist mobil (400x720). Fuer die hier geprueften Nav-Sichtbarkeiten braucht es
+// die Desktop-Ansicht.
+test.use({ viewport: { width: 1280, height: 800 } });
+
 const RUN = Date.now();
 const HELFER_EMAIL = `e2e.stufenui.helfer.${RUN}@dienstplan.test`;
 const HELFER_PASSWORD = `Pw${RUN}!stufenui`;
@@ -44,6 +50,17 @@ async function setAccess(level: AccessLevel): Promise<void> {
     data: { accessLevel: level },
   });
   expect(res.ok(), `Stufe ${level} setzen fehlgeschlagen (${res.status()})`).toBe(true);
+}
+
+/** Klickt "Nächster Monat", bis der Kalender bei November 2026 (Testdaten) landet. */
+async function gotoNovember2026(page: import("@playwright/test").Page): Promise<void> {
+  const label = page.getByTestId("month-label");
+  for (let i = 0; i < 24; i++) {
+    const text = await label.innerText();
+    if (text.includes("November") && text.includes("2026")) return;
+    await page.getByTestId("next-month").click();
+  }
+  throw new Error("November 2026 im Kalender nicht erreicht");
 }
 
 test.beforeAll(async () => {
@@ -127,6 +144,10 @@ test.describe("Gestufte Team-Freischaltung im Browser", () => {
     await setAccess("basis");
     await loginViaUi(page, HELFER_EMAIL, HELFER_PASSWORD);
 
+    // "Dienstplan" ist ein Kind der "Planen"-Gruppe und erscheint nur in der
+    // zweiten Tab-Zeile, wenn die Gruppe aktiv ist — dafuer erst hierher
+    // navigieren, statt es direkt nach dem Login (Route "/") zu erwarten.
+    await page.goto("/dienstplan");
     const nav = page.getByTestId("app-subnav-desktop");
     await expect(nav.getByRole("link", { name: "Dienstplan" })).toBeVisible();
     await expect(nav.getByRole("link", { name: "Auswerten" })).toHaveCount(0);
@@ -144,6 +165,7 @@ test.describe("Gestufte Team-Freischaltung im Browser", () => {
     // Planungsversuch im Dienstplan: der Server lehnt ab (403) — die
     // Fehlermeldung darf nicht stillschweigend verschluckt werden.
     await page.goto("/dienstplan");
+    await gotoNovember2026(page);
     const addButton = page.getByTestId(/^day-add-2026-11-/).first();
     await expect(addButton).toBeVisible();
     await addButton.click();
@@ -161,20 +183,27 @@ test.describe("Gestufte Team-Freischaltung im Browser", () => {
     await setAccess("stufe1");
     await loginViaUi(page, HELFER_EMAIL, HELFER_PASSWORD);
 
+    // "Team-Verwaltung" ist ein Kind der "Verwalten"-Gruppe und erscheint nur
+    // in der zweiten Tab-Zeile, wenn diese Gruppe aktiv ist — dafuer erst
+    // dorthin navigieren. "Auswerten" ist ein eigenstaendiger Punkt und daher
+    // schon vorher sichtbar.
     const nav = page.getByTestId("app-subnav-desktop");
-    await expect(nav.getByRole("link", { name: "Team-Verwaltung" })).toBeVisible();
     await expect(nav.getByRole("link", { name: "Auswerten" })).toBeVisible();
 
     // Team-Verwaltung: Assistenzkraft anlegen ist sichtbar; ein bestehender
     // Assistent laesst sich zum Bearbeiten oeffnen (Bearbeiten-Dialog prefill).
     await page.goto("/team-verwaltung");
+    await expect(nav.getByRole("link", { name: "Team-Verwaltung" })).toBeVisible();
     await expect(page.getByTestId("assistenzkraft-anlegen")).toBeVisible();
     await page.getByTestId(`assistant-card-${kollegeId}`).click();
-    await expect(page.getByDisplayValue(kollegeName)).toBeVisible();
+    // Playwright kennt kein getByDisplayValue (das ist Testing-Library) —
+    // ueber das value-Attribut des kontrollierten Inputs pruefen.
+    await expect(page.locator(`input[value="${kollegeName}"]`)).toBeVisible();
     await page.keyboard.press("Escape");
 
     // Dienstplan: derselbe Anlegeversuch wie bei Basis gelingt jetzt.
     await page.goto("/dienstplan");
+    await gotoNovember2026(page);
     const addButton = page.getByTestId(/^day-add-2026-11-/).first();
     await addButton.click();
     await page.getByTestId("shift-dialog-user").click();
