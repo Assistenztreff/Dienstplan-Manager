@@ -27,7 +27,7 @@ import { BulkDeleteDialog } from "@/components/bulk-delete-dialog";
 import { BulkEditDialog } from "@/components/bulk-edit-dialog";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
-import { useAuth } from "@/context/auth";
+import { useAuth, hasTeamAccessLevel } from "@/context/auth";
 import {
   Tooltip,
   TooltipContent,
@@ -1768,6 +1768,7 @@ function ViewToggle({
 
 function DienstplanHeader({
   isAdmin,
+  canPlan,
   assistants,
   selectedAssistant,
   onSelectAssistant,
@@ -1793,6 +1794,7 @@ function DienstplanHeader({
   onNextMonth,
 }: {
   isAdmin: boolean;
+  canPlan: boolean;
   assistants: Assistant[];
   selectedAssistant: number | "all";
   onSelectAssistant: (v: number | "all") => void;
@@ -1827,6 +1829,7 @@ function DienstplanHeader({
   const [, navigateHeader] = useLocation();
   const contentKey = [
     isAdmin,
+    canPlan,
     assistants.length,
     String(selectedAssistant),
     selectedTeamId ?? "none",
@@ -1848,7 +1851,7 @@ function DienstplanHeader({
     </h1>
   );
 
-  const assistantFilter = isAdmin && assistants.length > 0 && (
+  const assistantFilter = canPlan && assistants.length > 0 && (
     <Select
       value={String(selectedAssistant)}
       onValueChange={(v) => onSelectAssistant(v === "all" ? "all" : Number(v))}
@@ -1958,7 +1961,7 @@ function DienstplanHeader({
   );
 
   const selectionButton =
-    isAdmin &&
+    canPlan &&
     (canBulkEdit ? (
       isSelectionMode ? (
         <Button
@@ -2279,8 +2282,25 @@ function DienstplanTableView({
 export default function Dienstplan() {
   const { currentUser } = useAuth();
   const isAdmin = isAdminRole(currentUser?.role);
+  // Freigeschaltete Mitarbeiter (Task #735/#734): Stufe 1 UND Teamleiter
+  // dürfen planen (Dienste anlegen/bearbeiten/bestätigen) — dieselbe
+  // Schwelle wie die Team-Verwaltung-Route in App.tsx. Bewusst getrennt von
+  // isAdmin, damit Stufe 1 NICHT automatisch Stufe-2-Rechte (Zeiterfassung
+  // bestätigen, Team-Verwaltung-Struktur) mit erbt.
+  const canPlan =
+    isAdmin || Boolean(currentUser?.isTeamleiter) || hasTeamAccessLevel(currentUser, "stufe1");
   const canBulkEdit = hasAccess(currentUser, "bulkEdit");
-  const forwardLimit = getLimit(currentUser, "historyMonths");
+  // historyMonths ist ein Konto-Limit (Plan des TEAM-EIGENTUEMERS), aber
+  // currentUser.plan spiegelt nur den eigenen Plan wider — bei Assistenzkräften
+  // (accessLevel-Planungsrecht, Task #735) praktisch immer "free", selbst wenn
+  // der Arbeitgeber Premium ist (Memory feature-via-team-owner-plan.md). Der
+  // clientseitige Vorab-Check ist nur fuer den Inhaber (isAdmin) aussagekraeftig
+  // — bei allen anderen macht der Server (getUserLimit ueber den Team-Owner)
+  // die verbindliche Pruefung; ein 403 zeigt ShiftDialog bereits ueber
+  // planUpgradeMessage() korrekt an. Ohne diese Einschraenkung wuerde der
+  // Knopf fuer Stufe-1/2-Assistenzkräfte eines Premium-Arbeitgebers
+  // faelschlich blockieren (stiller No-Op statt Dialog).
+  const forwardLimit = isAdmin ? getLimit(currentUser, "historyMonths") : null;
 
   const [searchParams] = useSearchParams();
   const [, navigate] = useLocation();
@@ -2383,7 +2403,7 @@ export default function Dienstplan() {
   const end = endOfMonth(currentDate);
   const days = eachDayOfInterval({ start, end });
 
-  const assistants: Assistant[] = isAdmin
+  const assistants: Assistant[] = canPlan
     ? (users ?? []).filter((u) => u.role === "assistant").map((u) => ({ id: u.id, name: u.name }))
     : currentUser
     ? [{ id: currentUser.id, name: currentUser.name }]
@@ -2391,7 +2411,7 @@ export default function Dienstplan() {
 
   const [selectedAssistant, setSelectedAssistant] = useSelectedAssistant(
     assistants,
-    !(isAdmin && usersLoading),
+    !(canPlan && usersLoading),
   );
 
   // Kollisionsarme Farbzuordnung fürs ganze Team: die ersten 8 Personen
@@ -2440,7 +2460,7 @@ export default function Dienstplan() {
     selectedAssistant === "all"
       ? assistants
       : assistants.filter((a) => a.id === selectedAssistant);
-  const isLoading = shiftsLoading || (isAdmin && usersLoading);
+  const isLoading = shiftsLoading || (canPlan && usersLoading);
   // Dezenter Hinweis auf einen Hintergrund-Reload (Platzhalterdaten aus
   // keepPreviousData sind sichtbar, z. B. kurz nach einem Monatswechsel) —
   // KEIN Ersatz für isLoading: Grid/Liste bleiben voll bedienbar, nur
@@ -2448,7 +2468,7 @@ export default function Dienstplan() {
   const isTransitioning = shiftsFetching && !isLoading;
 
   function openCreate(date: Date, userId?: number) {
-    if (!isAdmin) return;
+    if (!canPlan) return;
     if (forwardLimit !== null && monthsAhead(date, new Date()) > forwardLimit) {
       toast.error(
         "Im Free-Tarif nur bis nächsten Monat planbar. Für eine längere Vorausplanung auf Premium upgraden.",
@@ -2476,7 +2496,7 @@ export default function Dienstplan() {
   }
 
   function openEdit(shift: Shift) {
-    if (!isAdmin) return;
+    if (!canPlan) return;
     // Aushilfe-Spiegel ist im Ziel-Team schreibgeschützt.
     if (isMirrorShift(shift, selectedTeamId)) {
       toast.info(
@@ -2488,7 +2508,7 @@ export default function Dienstplan() {
   }
 
   async function confirmShift(shift: Shift) {
-    if (!isAdmin || confirmingShiftId !== null) return;
+    if (!canPlan || confirmingShiftId !== null) return;
     setConfirmingShiftId(shift.id);
     try {
       await updateShift.mutateAsync({
@@ -2647,6 +2667,7 @@ export default function Dienstplan() {
   const header = (
     <DienstplanHeader
       isAdmin={isAdmin}
+      canPlan={canPlan}
       assistants={assistants}
       selectedAssistant={selectedAssistant}
       onSelectAssistant={setSelectedAssistant}
@@ -2691,7 +2712,7 @@ export default function Dienstplan() {
   }
 
   const forwardPlanningBlocked =
-    isAdmin && forwardLimit !== null && monthsAhead(currentDate, new Date()) > forwardLimit;
+    canPlan && forwardLimit !== null && monthsAhead(currentDate, new Date()) > forwardLimit;
 
   return (
     <PersonColorsContext.Provider value={personColors}>
@@ -2738,7 +2759,7 @@ export default function Dienstplan() {
             onDayClick={(day) => openCreate(day)}
             onShiftClick={openEdit}
             onConfirmShift={confirmShift}
-            canEdit={isAdmin}
+            canEdit={canPlan}
             selectionMode={isSelectionMode}
             selectedDates={selectedDates}
             onToggleDate={toggleDate}
@@ -2756,7 +2777,7 @@ export default function Dienstplan() {
             onAddShift={(day) => openCreate(day)}
             onShiftClick={openEdit}
             onConfirmShift={confirmShift}
-            canEdit={isAdmin}
+            canEdit={canPlan}
             selectionMode={isSelectionMode}
             selectedDates={selectedDates}
             onToggleDate={toggleDate}
@@ -2782,7 +2803,7 @@ export default function Dienstplan() {
             onAddShift={(day) => openCreate(day)}
             onShiftClick={openEdit}
             onConfirmShift={confirmShift}
-            canEdit={isAdmin}
+            canEdit={canPlan}
             selectionMode={isSelectionMode}
             selectedDates={selectedDates}
             onToggleDate={toggleDate}
@@ -2797,7 +2818,7 @@ export default function Dienstplan() {
             month={month}
             tableAssistants={tableAssistants}
             allShifts={allShifts}
-            isAdmin={isAdmin}
+            isAdmin={canPlan}
             isSelectionMode={isSelectionMode}
             selectedDates={selectedDates}
             toggleDate={toggleDate}
@@ -2826,7 +2847,7 @@ export default function Dienstplan() {
           onDayClick={(day) => openCreate(day)}
           onShiftClick={openEdit}
           onConfirmShift={confirmShift}
-          canEdit={isAdmin}
+          canEdit={canPlan}
           selectionMode={isSelectionMode}
           selectedDates={selectedDates}
           onToggleDate={toggleDate}
@@ -2841,7 +2862,7 @@ export default function Dienstplan() {
           onDayClick={(day) => openCreate(day)}
           onShiftClick={openEdit}
           onConfirmShift={confirmShift}
-          canEdit={isAdmin}
+          canEdit={canPlan}
           selectionMode={isSelectionMode}
           selectedDates={selectedDates}
           onToggleDate={toggleDate}
@@ -2849,16 +2870,16 @@ export default function Dienstplan() {
         />
       </div>
 
-      {isAdmin && assistants.length > 0 && (
+      {canPlan && assistants.length > 0 && (
         <TeamAbsenceOverview
           shifts={allShifts}
           assistants={assistants}
           onShiftClick={openEdit}
-          canEdit={isAdmin}
+          canEdit={canPlan}
         />
       )}
 
-      {isAdmin && isSelectionMode && selectedDates.length > 0 && createPortal(
+      {canPlan && isSelectionMode && selectedDates.length > 0 && createPortal(
         <div
           className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex w-max max-w-[calc(100vw-1rem)] flex-wrap items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 py-2.5 shadow-lg md:rounded-full"
           data-testid="bulk-action-bar"
@@ -2912,7 +2933,7 @@ export default function Dienstplan() {
         document.body,
       )}
 
-      {isAdmin && (
+      {canPlan && (
         <ShiftDialog
           open={dialog.mode === "create" || dialog.mode === "edit" || dialog.mode === "bulk-create"}
           onClose={closeDialog}
@@ -2931,7 +2952,7 @@ export default function Dienstplan() {
         />
       )}
 
-      {isAdmin && (
+      {canPlan && (
         <BulkEditDialog
           open={dialog.mode === "bulk-edit"}
           onClose={closeDialog}
@@ -2986,7 +3007,7 @@ export default function Dienstplan() {
         </AlertDialog>
       )}
 
-      {isAdmin && (
+      {canPlan && (
         <BulkDeleteDialog
           open={dialog.mode === "bulk-delete"}
           onClose={closeDialog}

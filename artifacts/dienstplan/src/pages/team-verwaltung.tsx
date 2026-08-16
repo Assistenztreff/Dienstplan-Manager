@@ -158,7 +158,11 @@ function TeamDialog({ open, onClose, editTeam }: TeamDialogProps) {
       onClose();
     } catch (err) {
       setError(
+        // Task #743: Team anlegen/umbenennen ist requireDienstleister-gated
+        // (Inhaber-Aktion) — Kontowechsel-Hinweis ebenso wie bei den anderen
+        // Inhaber-Aktionen dieser Seite anzeigen.
         planUpgradeMessage(err) ??
+          ownerSessionMessage(err) ??
           readableApiError(err, "Speichern fehlgeschlagen. Bitte erneut versuchen."),
       );
     } finally {

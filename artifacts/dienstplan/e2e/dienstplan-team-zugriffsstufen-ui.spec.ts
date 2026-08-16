@@ -43,6 +43,7 @@ let teamA = 0;
 let helferId = 0;
 let kollegeId = 0;
 let kollegeName = "";
+let kollegeEmail = "";
 let timeEntryId = 0;
 
 async function setAccess(level: AccessLevel): Promise<void> {
@@ -74,10 +75,11 @@ test.beforeAll(async () => {
   teamA = teams[0]!.id;
 
   kollegeName = `E2E Kollege UI ${RUN}`;
+  kollegeEmail = `e2e.stufenui.kollege.${RUN}@dienstplan.test`;
   const kollegeRes = await owner.ctx.post("/api/users", {
     data: {
       name: kollegeName,
-      email: `e2e.stufenui.kollege.${RUN}@dienstplan.test`,
+      email: kollegeEmail,
       role: "assistant",
       teamId: teamA,
     },
@@ -162,19 +164,13 @@ test.describe("Gestufte Team-Freischaltung im Browser", () => {
     await page.goto("/team-verwaltung");
     await expect(page.getByTestId("assistenzkraft-anlegen")).toHaveCount(0);
 
-    // Planungsversuch im Dienstplan: der Server lehnt ab (403) — die
-    // Fehlermeldung darf nicht stillschweigend verschluckt werden.
+    // Planen ist ab Basis (noch) nicht erlaubt: der "Dienst hinzufügen"-Knopf
+    // wird dem Frontend zufolge gar nicht erst angeboten — konsistent mit dem
+    // serverseitigen 403 (dienstplan-team-zugriffsstufen-api.spec.ts), aber
+    // ohne den Umweg über einen Knopf, der sowieso nur scheitern wuerde.
     await page.goto("/dienstplan");
     await gotoNovember2026(page);
-    const addButton = page.getByTestId(/^day-add-2026-11-/).first();
-    await expect(addButton).toBeVisible();
-    await addButton.click();
-    await page.getByTestId("shift-dialog-user").click();
-    await page.getByRole("option", { name: kollegeName }).click();
-    await page.getByTestId("shift-dialog-save").click();
-    await expect(page.getByText(/Keine Berechtigung|nicht berechtigt/i).first()).toBeVisible({
-      timeout: 10_000,
-    });
+    await expect(page.getByTestId(/^day-add-2026-11-/).first()).toHaveCount(0);
   });
 
   test("stufe1: planen erlaubt, Team-Verwaltung mit Assistenzkraft-Pflege, Zeiterfassung-Bestaetigen NICHT", async ({
@@ -195,16 +191,24 @@ test.describe("Gestufte Team-Freischaltung im Browser", () => {
     await page.goto("/team-verwaltung");
     await expect(nav.getByRole("link", { name: "Team-Verwaltung" })).toBeVisible();
     await expect(page.getByTestId("assistenzkraft-anlegen")).toBeVisible();
-    await page.getByTestId(`assistant-card-${kollegeId}`).click();
-    // Playwright kennt kein getByDisplayValue (das ist Testing-Library) —
-    // ueber das value-Attribut des kontrollierten Inputs pruefen.
-    await expect(page.locator(`input[value="${kollegeName}"]`)).toBeVisible();
+    const kollegeCard = page.getByTestId(`assistant-card-${kollegeId}`);
+    await kollegeCard.getByRole("button", { name: "Bearbeiten" }).click();
+    // Vorname/Nachname sind getrennte Felder (kollegeName wird beim Anlegen
+    // gesplittet) — die E-Mail bleibt ein einzelnes, eindeutiges Feld und
+    // eignet sich daher als Prefill-Nachweis fuer den Bearbeiten-Dialog.
+    await expect(page.locator('input[type="email"]')).toHaveValue(kollegeEmail);
     await page.keyboard.press("Escape");
 
-    // Dienstplan: derselbe Anlegeversuch wie bei Basis gelingt jetzt.
+    // Dienstplan: derselbe Anlegeversuch wie bei Basis gelingt jetzt. Die
+    // Desktop-Ansicht startet standardmaessig in der Tabellenansicht (kein
+    // MonthGrid, kein "day-add"); erst auf "Monat" umschalten, dann den
+    // sichtbaren "dienstplan-desktop"-Container scopen (die mobile
+    // MonthGrid-Instanz bleibt parallel im DOM, aber unsichtbar).
     await page.goto("/dienstplan");
+    await page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-grid").click();
     await gotoNovember2026(page);
-    const addButton = page.getByTestId(/^day-add-2026-11-/).first();
+    const desktopCalendar = page.getByTestId("dienstplan-desktop");
+    const addButton = desktopCalendar.getByTestId(/^day-add-2026-11-/).first();
     await addButton.click();
     await page.getByTestId("shift-dialog-user").click();
     await page.getByRole("option", { name: kollegeName }).click();
