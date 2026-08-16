@@ -123,3 +123,4 @@
 - [E-Mail-Verifizierungs-Ablauf und Zustellfehler](email-verification-expiry-and-delivery.md) — Token-Ablauf 48h; emailDeliveryFailed-Flag in Registrierung; NULL-Expiry = Bestandskonto immer gültig.
 - [set-password setzt emailVerified](set-password-email-verified.md) — POST /auth/set-password (Einladungsflow) muss emailVerified=true setzen, sonst Login-403; Grund: Admin-invite = implizite E-Mail-Prüfung.
 - [Offline-Lazy-Modul-Vorladen in E2E-Tests](offline-lazy-module-preload.md) — React.lazy-Module müssen vor setOffline(true) per client-side Navigation gecacht sein; page.goto() resettet JS-Kontext.
+- [pnpm Workspace-Member-Install](pnpm-workspace-member-install.md) — installLanguagePackages scheitert für einzelne Artifacts (ERR_PNPM_ADDING_TO_ROOT); package.json manuell editieren + `pnpm install --filter <pkg>...`.

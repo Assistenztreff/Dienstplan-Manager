@@ -18,6 +18,10 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["src/**/*.test.ts"],
+    // Reine Logik-Tests laufen ohne DOM (Standard-Node-Environment, schnell).
+    // Einzelne Dateien mit React-Komponenten/-Hooks holen sich ihr eigenes
+    // DOM per `// @vitest-environment jsdom`-Pragma (z. B. auth.test.tsx) —
+    // kein globaler jsdom-Zwang für alle Tests.
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
   },
 });

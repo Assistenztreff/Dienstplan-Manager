@@ -145,3 +145,53 @@ test("Typwechsel zu Abwesenheit nullt den Einsatz", async () => {
 
   await h.ctx.delete(`/api/shifts/${shift.id}`);
 });
+
+// Task #793: Wenn die Aushilfe an ihrem Vertretungstag im STAMMTEAM krank
+// gemeldet ist, muss das Ausfall-Warn-Icon auch im ZIEL-Team erscheinen (dort
+// zeigt nur die Vertretungs-Pille, die Krankmeldung selbst liegt im
+// Stammteam). Die Kalender-Seite berechnet `ausfallUserIds` rein aus den
+// Abwesenheits-Zeilen, die GET /shifts für das jeweils angezeigte Team
+// mitliefert — dieser Test sichert die Datengrundlage dafür auf Server-Ebene ab.
+const DAY_AUSFALL = `${new Date().getFullYear()}-09-16`;
+
+test("GET /shifts liefert die Stammteam-Krankmeldung einer Aushilfe auch im Ziel-Team mit (Ausfall-Icon-Datengrundlage)", async () => {
+  // Reihenfolge wichtig: eine neue Abwesenheit ersetzt bereits geplante
+  // Dienste desselben Tages im selben Team (Primary-Lookup, s. POST /shifts) —
+  // die Krankmeldung muss also VOR dem Vertretungsdienst angelegt werden.
+  const sick = await h.ctx.post("/api/shifts", {
+    data: {
+      userId: assistantA,
+      teamId: teamA,
+      startTime: `${DAY_AUSFALL}T00:00:00.000Z`,
+      endTime: `${DAY_AUSFALL}T23:59:00.000Z`,
+      type: "sick",
+    },
+  });
+  expect(sick.status(), `Krank-Abwesenheit anlegen (${sick.status()})`).toBe(201);
+  const sickShift = (await sick.json()) as ShiftDto;
+
+  const mirrorRes = await h.ctx.post("/api/shifts", {
+    data: {
+      userId: assistantA,
+      teamId: teamA,
+      startTime: `${DAY_AUSFALL}T08:00:00.000Z`,
+      endTime: `${DAY_AUSFALL}T16:00:00.000Z`,
+      type: "work",
+      einsatzTeamId: teamB,
+    },
+  });
+  expect(mirrorRes.status(), `Vertretungsdienst anlegen (${mirrorRes.status()})`).toBe(201);
+  const mirror = (await mirrorRes.json()) as ShiftDto;
+
+  // Ziel-Team-Liste muss BEIDE Zeilen enthalten: die Vertretungs-Pille selbst
+  // und — obwohl sie im Stammteam liegt — die Krankmeldung, aus der das
+  // Frontend `ausfallUserIds` (dienstplan.tsx) für den Tag ableitet.
+  const listB = (await (await h.ctx.get(`/api/shifts?teamId=${teamB}`)).json()) as ShiftDto[];
+  expect(listB.some((s) => s.id === mirror.id), "Vertretungs-Pille muss im Ziel-Team erscheinen").toBe(true);
+  const sickInB = listB.find((s) => s.id === sickShift.id);
+  expect(sickInB, "Krank-Zeile des Stammteams muss im Ziel-Team sichtbar sein").toBeTruthy();
+  expect(sickInB!.userId).toBe(assistantA);
+
+  await h.ctx.delete(`/api/shifts/${mirror.id}`);
+  await h.ctx.delete(`/api/shifts/${sickShift.id}`);
+});
