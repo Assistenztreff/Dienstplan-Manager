@@ -199,6 +199,59 @@ export async function sendPasswordResetEmail(to: string, resetUrl: string): Prom
   return sendEmail(to, "Passwort zurücksetzen – Dienstplan", html);
 }
 
+/**
+ * Benachrichtigt den Team-Eigentümer, wenn sich eine Assistenzkraft selbst
+ * krankmeldelt. Gibt true zurück, wenn die Mail gesendet wurde.
+ */
+export async function sendSickLeaveNotification(
+  to: string,
+  assistantName: string,
+  dates: Date[],
+  appUrl: string,
+): Promise<boolean> {
+  if (dates.length === 0) return false;
+  const sorted = [...dates].sort((a, b) => a.getTime() - b.getTime());
+  const first = sorted[0]!;
+  const last = sorted[sorted.length - 1]!;
+
+  const fmt = (d: Date) =>
+    d.toLocaleDateString("de-DE", {
+      weekday: "short",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      timeZone: "Europe/Berlin",
+    });
+
+  const rangeLabel =
+    sorted.length === 1 ? fmt(first) : `${fmt(first)} – ${fmt(last)}`;
+
+  const html = emailLayout(`
+    <h2 style="margin:0 0 16px;color:#0d3050;font-size:22px;">Neue Krankmeldung</h2>
+    <p style="margin:0 0 20px;color:#333;line-height:1.6;">
+      <strong>${assistantName}</strong> hat sich krank gemeldet.
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:24px;">
+      <tr>
+        <td style="padding:12px 16px;background:#f8f9fa;border-radius:8px;font-size:15px;color:#0d3050;">
+          <strong>Zeitraum:</strong>&nbsp;${rangeLabel}
+          ${sorted.length > 1 ? `<br><span style="font-size:13px;color:#555;">(${sorted.length} Krankheitstage)</span>` : ""}
+        </td>
+      </tr>
+    </table>
+    ${linkButton(`${appUrl}/dienstplan`, "Zum Dienstplan")}
+    <p style="margin:24px 0 0;color:#555;font-size:13px;line-height:1.6;">
+      Die Krankmeldung wurde automatisch eingetragen. Bitte planen Sie ggf. eine Vertretung.
+    </p>
+  `);
+
+  return sendEmail(
+    to,
+    `Krankmeldung: ${assistantName} (${rangeLabel})`,
+    html,
+  );
+}
+
 /** Sendet eine E-Mail-Verifizierungs-E-Mail. Gibt true zurück wenn gesendet. */
 export async function sendVerificationEmail(to: string, verifyUrl: string): Promise<boolean> {
   const html = emailLayout(`

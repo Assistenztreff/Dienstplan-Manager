@@ -102,7 +102,15 @@ const queryClient: QueryClient = new QueryClient({
         if (!resync) return; // Auth-Kontext gerade nicht montiert — kein Cooldown starten
         lastResyncAt = now;
         void resync.then((ok) => {
-          if (ok) void queryClient.invalidateQueries();
+          if (ok) {
+            // Nach 401-Recovery mit GLEICHER Identität: nur die Abfragen,
+            // die tatsächlich im Fehlerzustand sind, neu laden — nicht den
+            // gesamten Cache verwerfen. Referenzdaten (Teams, Users, …) bleiben
+            // gültig; ihr staleTime schützt vor unnötigen Roundtrips.
+            void queryClient.invalidateQueries({
+              predicate: (q) => q.state.status === "error",
+            });
+          }
         });
         return;
       }

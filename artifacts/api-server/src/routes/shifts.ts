@@ -27,7 +27,7 @@ import {
   UpdateShiftBody,
   DeleteShiftParams,
 } from "@workspace/api-zod";
-import { sendProposalEmail } from "../lib/mailer";
+import { sendProposalEmail, sendSickLeaveNotification } from "../lib/mailer";
 import { getBaseUrl } from "../lib/base-url";
 import { requireAuth, requireAdmin, requireTeamPlanningOrAdmin, isAdminLikeRole } from "../middleware/auth";
 import {
@@ -1563,6 +1563,47 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
     replaced: replacedShiftIds,
     skippedDates,
   } = txResult;
+
+  // Krankmeldungs-Benachrichtigung: wenn sich eine Assistenzkraft selbst krank
+  // meldet (nicht privilegiert, Typ = sick, mind. ein Tag angelegt), bekommt
+  // der Team-Eigentümer per E-Mail Bescheid. Fire-and-forget — blockiert die
+  // Antwort nicht und scheitert still (nur console.warn bei Fehler).
+  if (type === "sick" && !isPrivileged && createdShifts.length > 0) {
+    void (async () => {
+      try {
+        const [team] = await db
+          .select({ ownerId: teamsTable.ownerId })
+          .from(teamsTable)
+          .where(eq(teamsTable.id, write.teamId))
+          .limit(1);
+        if (!team?.ownerId) return;
+        const [ownerRow, assistantRow] = await Promise.all([
+          db
+            .select({ email: usersTable.email })
+            .from(usersTable)
+            .where(eq(usersTable.id, team.ownerId))
+            .limit(1)
+            .then((r) => r[0]),
+          db
+            .select({ name: usersTable.name })
+            .from(usersTable)
+            .where(eq(usersTable.id, userId))
+            .limit(1)
+            .then((r) => r[0]),
+        ]);
+        if (ownerRow?.email && assistantRow?.name) {
+          await sendSickLeaveNotification(
+            ownerRow.email,
+            assistantRow.name,
+            createdShifts.map((s) => new Date(s.startTime)),
+            getBaseUrl(),
+          );
+        }
+      } catch (err) {
+        console.warn("Krankmeldungs-Benachrichtigung fehlgeschlagen:", err);
+      }
+    })();
+  }
 
   // Angelegte Einträge in Listen-Form (wie GET /shifts) mitliefern: der Client
   // fügt sie direkt in den Cache ein, statt auf einen Monats-Reload zu warten.

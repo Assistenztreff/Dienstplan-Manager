@@ -52,8 +52,15 @@ export default function Login() {
     setResendLoading(true);
     setResendError("");
     try {
-      await resendVerification(email.trim());
-      setResendDone(true);
+      const result = await resendVerification(email.trim());
+      if (result.emailDeliveryFailed) {
+        // Zustellfehler: dem Nutzer helfen, bevor er dauerhaft ausgesperrt bleibt.
+        setResendError(
+          "E-Mail konnte nicht zugestellt werden — bitte E-Mail-Adresse prüfen oder Support kontaktieren.",
+        );
+      } else {
+        setResendDone(true);
+      }
     } catch (err) {
       const status = (err as { status?: number }).status;
       if (status === 429) {

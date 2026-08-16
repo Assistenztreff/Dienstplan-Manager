@@ -55,7 +55,7 @@ type AuthContextType = {
   refreshUser: () => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   resetPassword: (token: string, password: string) => Promise<void>;
-  resendVerification: (email: string) => Promise<void>;
+  resendVerification: (email: string) => Promise<{ emailDeliveryFailed?: boolean }>;
   /** Dev-only: vorhandene Test-Nutzer zum Umschalten auflisten. Leer in Produktion. */
   devListUsers: () => Promise<AuthUser[]>;
   /** Dev-only: als anderer vorhandener Test-Nutzer agieren. No-op in Produktion. */
@@ -72,7 +72,7 @@ const AuthContext = createContext<AuthContextType>({
   refreshUser: async () => {},
   forgotPassword: async () => {},
   resetPassword: async () => {},
-  resendVerification: async () => {},
+  resendVerification: async () => ({}),
   devListUsers: async () => [],
   devSwitchUser: async () => {},
 });
@@ -404,7 +404,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const resendVerification = async (email: string): Promise<void> => {
+  const resendVerification = async (email: string): Promise<{ emailDeliveryFailed?: boolean }> => {
     const r = await apiFetch("/api/auth/resend-verification", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -425,6 +425,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       throw err;
     }
+    // Zustellfehler-Flag aus der Antwort auslesen (kein Orakel: fehlt bei
+    // nicht-existierenden E-Mail-Adressen, gesetzt nur wenn wirklich versucht).
+    const data = await r.json().catch(() => ({})) as { emailDeliveryFailed?: boolean };
+    return { emailDeliveryFailed: data.emailDeliveryFailed };
   };
 
   const logout = async () => {

@@ -665,6 +665,9 @@ router.post("/auth/resend-verification", async (req, res) => {
   }
 
   // Immer 200 zurückgeben — kein Existenz-Orakel.
+  // emailDeliveryFailed wird nur gesetzt, wenn für einen existierenden
+  // unverifizierter Nutzer der Versand tatsächlich scheitert.
+  let emailDeliveryFailed = false;
   try {
     const [user] = await db
       .select()
@@ -679,12 +682,13 @@ router.post("/auth/resend-verification", async (req, res) => {
         .set({ emailVerificationToken: token, emailVerificationTokenExpiry: expiry })
         .where(eq(usersTable.id, user.id));
       const verifyUrl = `${getBaseUrl()}/email-bestaetigen?token=${token}`;
-      await sendVerificationEmail(normalizedEmail, verifyUrl);
+      const delivered = await sendVerificationEmail(normalizedEmail, verifyUrl);
+      if (!delivered) emailDeliveryFailed = true;
     }
   } catch (err) {
     logger.error({ err }, "Fehler beim Erneut-Senden der Verifizierungsmail");
   }
-  return res.json({ ok: true });
+  return res.json({ ok: true, ...(emailDeliveryFailed ? { emailDeliveryFailed: true } : {}) });
 });
 
 export default router;

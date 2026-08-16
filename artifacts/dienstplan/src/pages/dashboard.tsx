@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { isAdminRole } from "@/lib/roles";
 import { planFeatureMessage } from "@/lib/api-error";
 import {
@@ -14,7 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
-import { AlertTriangle, CalendarX, Clock, CheckCircle2, Plane, ChevronRight, Info } from "lucide-react";
+import { AlertTriangle, AlertCircle, CalendarX, Clock, CheckCircle2, Plane, ChevronRight, Info } from "lucide-react";
 import { useLocation } from "wouter";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
@@ -24,6 +25,7 @@ import { formatDays, formatDaysWithUnit, formatHours } from "@/lib/utils";
 import { useTimeTrackingEnabled } from "@/hooks/use-time-tracking-enabled";
 import { StatusBadge } from "@/components/status-badge";
 import { MeineStundenKarte } from "@/components/meine-stunden-karte";
+import { KrankmeldungDialog } from "@/components/krankmeldung-dialog";
 import { HourBudgetDashboardCard } from "@/components/hour-budget-card";
 
 // Beispielhafte Einbindung der zentralen Planungstypen (siehe @/types/dienstplan):
@@ -482,6 +484,50 @@ function MonthClosingReminder({ teamId }: { teamId: number | null }) {
   );
 }
 
+/**
+ * Schnell-Krankmeldung für Assistenzkräfte: zeigt eine klickbare Karte,
+ * solange kein Krank-Eintrag für heute existiert. Öffnet den KrankmeldungDialog.
+ */
+function KrankmeldungSection({ userId }: { userId: number }) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const { data: sickShifts } = useListShifts({ type: "sick" });
+  const now = new Date();
+  const isSickToday = (sickShifts ?? []).some(
+    (s) => new Date(s.startTime) <= now && now <= new Date(s.endTime),
+  );
+
+  if (isSickToday) return null;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setDialogOpen(true)}
+        className="w-full text-left"
+        data-testid="krank-melden-btn"
+      >
+        <Card className="border-destructive/30 bg-destructive/5 shadow-sm transition-colors hover:border-destructive/50">
+          <CardContent className="flex items-center gap-3 py-4">
+            <AlertCircle className="h-5 w-5 text-destructive shrink-0" aria-hidden />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-destructive">Krank melden</p>
+              <p className="text-xs text-destructive/70 mt-0.5">
+                Heute oder mehrere Tage — der Koordinator wird informiert.
+              </p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-destructive/60 shrink-0" />
+          </CardContent>
+        </Card>
+      </button>
+      <KrankmeldungDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        userId={userId}
+      />
+    </>
+  );
+}
+
 export default function Dashboard() {
   const now = new Date();
   const month = now.getMonth() + 1;
@@ -582,6 +628,7 @@ export default function Dashboard() {
 
           {!isAdmin && (
             <>
+              {currentUser && <KrankmeldungSection userId={currentUser.id} />}
               <MeineStundenKarte />
               <AssistantVacationCard />
             </>

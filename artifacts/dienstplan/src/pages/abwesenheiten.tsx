@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Plane, Stethoscope, Info, ChevronLeft, ChevronRight, Calculator, X } from "lucide-react";
+import { Plus, Trash2, Plane, Stethoscope, Info, ChevronLeft, ChevronRight, Calculator, X, AlertCircle } from "lucide-react";
 import { eachDayOfInterval, format, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
 import { de } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
@@ -53,6 +53,7 @@ import { PlanUpgradeLink } from "@/components/plan-limit-banner";
 import { MonthYearPicker } from "@/components/month-year-picker";
 import { AbwesenheitsKalender } from "@/components/abwesenheits-kalender";
 import { ArbeitstageRechnerDialog } from "@/components/arbeitstage-rechner-dialog";
+import { KrankmeldungDialog } from "@/components/krankmeldung-dialog";
 import { formatDays, formatHours } from "@/lib/utils";
 import {
   buildRanges,
@@ -238,6 +239,9 @@ export default function Abwesenheiten() {
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+
+  // Schnell-Krankmeldung für Assistenzkräfte (Dialog).
+  const [krankmeldungOpen, setKrankmeldungOpen] = useState(false);
 
   // Schneller Monatssprung: Navigiert Von/Bis-Datum auf den gesamten Monat.
   const [currentNavMonth, setCurrentNavMonth] = useState<Date>(() => startOfMonth(new Date()));
@@ -522,6 +526,37 @@ export default function Abwesenheiten() {
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
+
+      {/* Schnell-Krankmeldung: nur für Assistenzkräfte sichtbar (kein canManage),
+          damit sie sich schnell krank melden können, ohne das Formular auszufüllen. */}
+      {!canManage && currentUser && (
+        <>
+          <button
+            type="button"
+            onClick={() => setKrankmeldungOpen(true)}
+            className="w-full text-left"
+            data-testid="abwesenheiten-krank-melden-btn"
+          >
+            <Card className="border-destructive/30 bg-destructive/5 shadow-sm transition-colors hover:border-destructive/50">
+              <CardContent className="flex items-center gap-3 py-4">
+                <AlertCircle className="h-5 w-5 text-destructive shrink-0" aria-hidden />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-destructive">Krank melden</p>
+                  <p className="text-xs text-destructive/70 mt-0.5">
+                    Heute oder mehrere Tage krankmelden — Koordinator wird informiert.
+                  </p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-destructive/60 shrink-0" />
+              </CardContent>
+            </Card>
+          </button>
+          <KrankmeldungDialog
+            open={krankmeldungOpen}
+            onClose={() => setKrankmeldungOpen(false)}
+            userId={currentUser.id}
+          />
+        </>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Erfassung */}

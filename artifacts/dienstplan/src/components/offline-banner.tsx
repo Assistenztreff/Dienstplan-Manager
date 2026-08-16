@@ -37,10 +37,22 @@ export function OfflineBanner() {
     select: (mutation) => (mutation.state.isPaused ? 1 : 0) as 0 | 1,
   }).reduce((sum, v) => sum + v, 0);
 
-  // Wieder online: Abfragen aktualisieren und pausierte Mutations absenden.
+  // Wieder online: zeitkritische Abfragen aktualisieren und pausierte Mutations absenden.
+  // Referenzdaten (Nutzerlisten, Teams, Schichtmodelle) bleiben im Cache —
+  // nur Schicht-/Zeiterfassungs-/Dashboard-Queries müssen nach einem Offline-Unterbruch
+  // sofort frisch geladen werden. Die 5-Min-staleTime schützt alles andere.
   useEffect(() => {
     if (isOnline) {
-      void queryClient.invalidateQueries();
+      const REFRESH_PREFIXES = ["/api/shifts", "/api/time-tracking", "/api/dashboard"];
+      void queryClient.invalidateQueries({
+        predicate: (q) => {
+          const key = q.queryKey[0];
+          return (
+            typeof key === "string" &&
+            REFRESH_PREFIXES.some((p) => key === p || key.startsWith(`${p}/`))
+          );
+        },
+      });
       void queryClient.resumePausedMutations();
     }
   }, [isOnline, queryClient]);

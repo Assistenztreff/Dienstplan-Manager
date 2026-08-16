@@ -30,3 +30,7 @@ dienstplan-operator-fehler-schnellauswahl.spec.ts
 dienstplan-auth-email-flows.spec.ts
 # - DST-Regression: Abwesenheiten am Zeitumstellungstag im Dienstplan-Mobilkalender (Task #779)
 dienstplan-dst-abwesenheit-mobilkalender.spec.ts
+# - Assistenten-Seite: Löschen mit Sicherheitsabfrage (Lösch-Dialog, Backend-Cascade)
+dienstplan-assistant-delete.spec.ts
+# - Assistenten-Seite: Bearbeiten-Dialog zeigt immer die angeklickte Person (kein Stale-State)
+dienstplan-assistant-edit-prefill.spec.ts
