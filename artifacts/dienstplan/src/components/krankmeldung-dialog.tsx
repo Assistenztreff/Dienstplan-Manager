@@ -104,11 +104,13 @@ export function KrankmeldungDialog({ open, onClose, userId }: Props) {
         data: { userId, type: "sick" as const, days },
       });
       await invalidateShiftDerivedQueries(queryClient);
-      toast.success(
-        count === 1
+      const successMsg =
+        mode === "today"
           ? "Krankmeldung für heute eingetragen."
-          : `Krankmeldung für ${count} Tage eingetragen.`,
-      );
+          : mode === "tomorrow"
+            ? "Krankmeldung für morgen eingetragen."
+            : `Krankmeldung für ${count} Tage eingetragen.`;
+      toast.success(successMsg);
       handleClose();
     } catch (err) {
       // 409 = bereits krank an diesen Tagen — Server überspringt sie, Client
@@ -204,7 +206,11 @@ export function KrankmeldungDialog({ open, onClose, userId }: Props) {
             {mode === "until" && (
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Letzter Krankheitstag</label>
-                <DatePickerField value={untilDate} onChange={setUntilDate} />
+                <DatePickerField
+                  value={untilDate}
+                  onChange={setUntilDate}
+                  data-testid="krankmeldung-until-date"
+                />
               </div>
             )}
           </div>
