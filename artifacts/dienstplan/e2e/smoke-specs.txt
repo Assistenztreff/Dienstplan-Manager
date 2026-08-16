@@ -34,3 +34,5 @@ dienstplan-dst-abwesenheit-mobilkalender.spec.ts
 dienstplan-assistant-delete.spec.ts
 # - Assistenten-Seite: Bearbeiten-Dialog zeigt immer die angeklickte Person (kein Stale-State)
 dienstplan-assistant-edit-prefill.spec.ts
+# - Assistenzkraft: Schnell-Krankmeldung ueber den Dialog (Dashboard + /abwesenheiten, Task #828)
+dienstplan-krankmeldung-dialog-ui.spec.ts
