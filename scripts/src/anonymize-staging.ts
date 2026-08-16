@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID, scryptSync } from "node:crypto";
 import pg from "pg";
 import { resolveDatabaseUrl } from "@workspace/db/database-url";
 
@@ -11,12 +11,29 @@ import { resolveDatabaseUrl } from "@workspace/db/database-url";
  *   E-Mail assistenz1@test.de, … Sensible Felder (Adresse, Geburtsdatum,
  *   SV-Nummer, Steuer-ID, Steuerklasse, Krankenkasse, IBAN, Telefon) werden
  *   mit plausiblen Beispieldaten gefüllt.
- * - Stundenlohn (hourly_wage), Passwörter, Schichten/Verträge bleiben unangetastet.
+ * - Stundenlohn (hourly_wage), Schichten/Verträge bleiben unangetastet.
+ * - Die ersten MUSTER_ASSISTENT_COUNT Muster-Accounts (Assistenz 1..N) bekommen
+ *   zusätzlich ein bekanntes Test-Passwort, damit die Assistenten-Sicht in der
+ *   Entwicklung ohne Passwort-Recherche geprüft werden kann. Läuft nur auf
+ *   Staging (derselbe DB-Namens-Guard); alle übrigen Passwörter bleiben unangetastet.
  * - Idempotent: mehrfaches Ausführen ergibt dasselbe Ergebnis.
  */
 
 const SAMPLE_INSURANCES = ["AOK Bayern", "Techniker Krankenkasse", "Barmer", "DAK-Gesundheit", "IKK classic"];
 const SAMPLE_STREETS = ["Musterstraße", "Beispielweg", "Testallee", "Probegasse", "Demoplatz"];
+
+// Nur fuer Staging: bekanntes Test-Passwort fuer die ersten N Muster-Assistenzkraefte
+// (Assistenz 1..N), damit man sich in der Entwicklung ohne Passwort-Recherche als
+// Assistenzkraft einloggen kann. Gleiche scrypt-Hash-Logik wie in auth-utils.ts /
+// setup-admin.ts (kein gemeinsames Modul zwischen api-server und scripts).
+const MUSTER_ASSISTENT_COUNT = 5;
+export const MUSTER_ASSISTENT_TEST_PASSWORD = "Muster1234!";
+
+function hashPassword(password: string): string {
+  const salt = randomBytes(16).toString("hex");
+  const hash = scryptSync(password, salt, 64).toString("hex");
+  return `${salt}:${hash}`;
+}
 
 async function main(): Promise<void> {
   // resolveDatabaseUrl beruecksichtigt APP_DATABASE_URL-Vorrang UND das
@@ -94,9 +111,19 @@ async function main(): Promise<void> {
       );
       // Bewusst KEINE Alt-Daten (Name/E-Mail) loggen — das wäre ein neuer PII-Leak-Pfad.
       console.log(`  Nutzer-ID ${a.id} → "Assistenz ${n}" <assistenz${n}@test.de>`);
+
+      if (n <= MUSTER_ASSISTENT_COUNT) {
+        await client.query("UPDATE users SET password_hash = $1 WHERE id = $2", [
+          hashPassword(MUSTER_ASSISTENT_TEST_PASSWORD),
+          a.id,
+        ]);
+      }
     }
     await client.query("COMMIT");
-    console.log("Fertig: Personaldaten anonymisiert (Stundenlohn, Passwörter, Dienstplan unverändert).");
+    console.log(
+      `Fertig: Personaldaten anonymisiert (Stundenlohn, Dienstplan unverändert). ` +
+        `Assistenz 1..${Math.min(MUSTER_ASSISTENT_COUNT, assistants.length)} haben das Test-Passwort "${MUSTER_ASSISTENT_TEST_PASSWORD}".`,
+    );
   } catch (e) {
     await client.query("ROLLBACK").catch(() => {});
     throw e;
