@@ -19,7 +19,7 @@ import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, Check, CheckSquare, X, CalendarPlus, Trash2, Pencil, ChevronDown, ChevronUp, Users, Lock, Download, MessageSquare } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, Check, CheckSquare, X, CalendarPlus, Trash2, Pencil, ChevronDown, Users, Lock, Download, MessageSquare } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import type { LucideIcon } from "lucide-react";
 import { ShiftDialog } from "@/components/shift-dialog";
@@ -985,10 +985,10 @@ function MonthGrid({
   onNavigateMonth?: (targetDate: Date) => void;
   focusDate?: Date | null;
   onFocusDateHandled?: () => void;
-  /** Darstellungsdichte (Arbeitsanweisung 3.2/3.3): full = Desktop/Tablet,
-   *  compact = aufgeklapptes Smartphone (kompakte Initialen-Pillen),
-   *  collapsed = eingeklapptes Smartphone (Mini-Balken + Zähler). */
-  variant?: "full" | "compact" | "collapsed";
+  /** Darstellungsdichte: full = Desktop/Tablet (zweizeilige Pille), collapsed =
+   *  Smartphone-Dauerzustand (einzeilige Initialen-Pille, Arbeitsanweisung
+   *  16.08.2026 Punkt 3 — der frühere „compact"-Zwischenzustand entfällt). */
+  variant?: "full" | "collapsed";
 }) {
   const personColors = usePersonColors();
   const selectedDateSet = new Set(selectedDates ?? []);
@@ -1242,9 +1242,10 @@ function MonthGrid({
             .filter((s) => !isAbsenceShift(s))
             .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
           const absences = dayShifts.filter((s) => isAbsenceShift(s));
-           // Desktop/Tablet zeigen bis zu vier Pillen; aufgeklappte Smartphone-
-           // Zellen bleiben mit höchstens zwei einzeiligen Pillen gleich hoch.
-           const pillLimit = variant === "compact" ? 2 : 4;
+           // Desktop/Tablet zeigen bis zu vier Pillen; die Smartphone-Zelle
+           // (Dauerzustand „collapsed") bleibt mit höchstens zwei einzeiligen
+           // Initialen-Pillen gleich hoch.
+           const pillLimit = variant === "collapsed" ? 2 : 4;
            const visiblePills = nonAbsence.slice(0, pillLimit);
           const hiddenCount = nonAbsence.length - visiblePills.length;
           // Eingeklappte Smartphone-Zelle (3.3): ein Streifen je Abwesenheits-
@@ -1259,14 +1260,6 @@ function MonthGrid({
               .filter((s) => ABSENCE_CATEGORY[s.type] === "ausfall")
               .map((s) => s.userId),
           );
-          const countLabel = [
-            nonAbsence.length > 0
-              ? `${nonAbsence.length} ${nonAbsence.length === 1 ? "Dienst" : "Dienste"}`
-              : "",
-            absences.length > 0 ? `${absences.length} Abw.` : "",
-          ]
-            .filter(Boolean)
-            .join(" · ");
           const prevDay = dayIdx > 0 ? days[dayIdx - 1] : undefined;
           const nextDay = dayIdx < days.length - 1 ? days[dayIdx + 1] : undefined;
           const bulkSelected = selectionMode && selectedDateSet.has(format(day, "yyyy-MM-dd"));
@@ -1381,126 +1374,66 @@ function MonthGrid({
                 )}
               </span>
 
-              {/* 3.3 eingeklappt: Mini-Balken je Dienst (Personenfarbe),
-                  Abwesenheitsstreifen je Kategorie + Zähler — keine Pillen. */}
+              {/* 3.3 Dauerzustand (Arbeitsanweisung 16.08.2026): das ehemals
+                  „aufgeklappte" einzeilige Pillendesign ist jetzt die EINZIGE
+                  Smartphone-Darstellung — der bisherige Mini-Balken-Zweig und
+                  der Auf-/Zuklapp-Umschalter entfallen ersatzlos. */}
               {variant === "collapsed" ? (
                 <>
-                  {nonAbsence.length > 0 && (
-                    <span
-                      aria-hidden="true"
-                      className="mt-[3px] flex flex-col gap-[2px] px-[1px]"
-                      data-testid={`day-bars-${format(day, "yyyy-MM-dd")}`}
+                  {visiblePills.length > 0 && (
+                    <div
+                      className="flex flex-col min-w-0 gap-[2px] px-[1px]"
+                      data-testid={`day-pills-${format(day, "yyyy-MM-dd")}`}
                     >
-                      {nonAbsence.slice(0, 4).map((s) => (
-                        <span
-                          key={s.id}
-                          className="h-[5px] rounded-[2px]"
-                          style={{ backgroundColor: s.type === "team" ? "#0284c7" : getPersonSlot(s.userId).bg }}
-                        />
-                      ))}
-                    </span>
-                  )}
-                  {absenceCategories.map((cat) => (
-                    <span
-                      key={cat}
-                      aria-hidden="true"
-                      className="mx-[1px] mt-[2px] h-[3px] rounded-[2px]"
-                      style={{ backgroundColor: ABSENCE_CATEGORY_HEX[cat] }}
-                      data-testid={`day-strip-${format(day, "yyyy-MM-dd")}`}
-                    />
-                  ))}
-                  {countLabel && (
-                    <span
-                      className="mt-[2px] px-[1px] text-[9px] leading-tight text-[#666666]"
-                      data-testid={`day-count-${format(day, "yyyy-MM-dd")}`}
-                    >
-                      {countLabel}
-                    </span>
-                  )}
-                </>
-              ) : (variant === "full" || visiblePills.length > 0) && (
-                /* Desktop/Tablet: zweizeilige Pille mit Uhrzeit. Aufgeklapptes
-                   Smartphone: einzeilige Pille mit Kürzel und Abweichungs-Icon.
-                   Desktop (Punkte 3+4, 15.08.2026): Grauzone #eef0f3 unter der
-                   Kopfzeile, Trennlinie in Rahmenfarbe, füllt die Zelle bis
-                   unten (flex-1) — auch an leeren Tagen. Mindesthöhe ≈ 1,2
-                   Pillenhöhen (zweizeilige Pille ~33 px → 40 px); nach oben
-                   wächst die Zelle unbegrenzt mit den Diensten. */
-                <div
-                  className={
-                    variant === "compact"
-                      ? "flex flex-col min-w-0 gap-[2px] px-[1px]"
-                      : "flex min-h-[40px] min-w-0 flex-1 flex-col gap-[3px] border-t border-[#dfe4ea] bg-[#eef0f3] px-1 py-1"
-                  }
-                >
-                  {visiblePills.map((s) => {
-                    const isTeam = s.type === "team";
-                    const slot = getPersonSlot(s.userId);
-                    const status = s.planningStatus ?? "FIX";
-                    // Task #726: eingeplante Assistenzkraft ist am selben Tag
-                    // krank/Kind krank → roter Ausfall-Hinweis an der Pille.
-                    const hasAusfall = !isTeam && ausfallUserIds.has(s.userId);
-                    const chipClickable = canEdit && !selectionMode;
-                    const compact = variant === "compact";
-                    const timeRange = `${format(new Date(s.startTime), "HH:mm")}–${format(new Date(s.endTime), "HH:mm")}`;
-                    // Tablet/Smartphone: Minuten „:00" weglassen (Vorlage 3.2: „19–09").
-                    const shortRange = timeRange.replace(/:00/g, "");
-                    const barColor = isTeam ? "#0284c7" : slot.bg;
-                    const nameLabel = isTeam
-                      ? "Team"
-                      : s.user?.name
-                        ? compact
-                          ? nameInitials(s.user.name)
-                          : lastName(s.user.name)
-                        : "?";
-                    return (
-                      <span
-                        key={s.id}
-                        data-testid={`day-chip-${s.id}`}
-                        role={chipClickable ? "button" : undefined}
-                        tabIndex={chipClickable ? -1 : undefined}
-                        title={`${s.user?.name ?? ""} · ${timeRange}${s.isVertretung ? " · Vertretung" : ""}`.trim()}
-                        onClick={chipClickable ? (e) => { e.stopPropagation(); onShiftClick(s); } : undefined}
-                        onKeyDown={chipClickable ? (e) => {
-                          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onShiftClick(s); }
-                        } : undefined}
-                        className={[
-                          "relative overflow-hidden border",
-                          // Punkt 5 (15.08.2026): Desktop-Pillen leicht erhaben —
-                          // Kontur #c7ced8 + weicher Schatten. Smartphone unverändert.
-                          compact
-                            ? "border-[#e6e6e2]"
-                            : "border-[#c7ced8] shadow-[0_1.5px_3px_rgba(9,41,72,0.09)]",
-                          compact ? "flex h-5 items-center" : "flex flex-col items-stretch",
-                          compact ? "rounded-[5px]" : "rounded-[6px]",
-                          chipClickable ? "cursor-pointer" : "",
-                        ].filter(Boolean).join(" ")}
-                      >
-                        {/* Farbbalken links (volle Höhe) — einzige Stelle mit der Slot-Farbe */}
-                        <span
-                          aria-hidden="true"
-                          className={`absolute left-0 top-0 bottom-0 ${compact ? "w-[4px]" : "w-[3px]"}`}
-                          style={{ backgroundColor: barColor }}
-                        />
-                        {/* Enge Abstände im Compact-Zweig: bei ~57 px Zellbreite
-                            müssen Kürzel UND bis zu zwei 12-px-Icons passen. */}
-                        {compact ? (
-                          <span className="flex w-full items-center justify-between gap-[2px] bg-white py-0 pl-[5px] pr-[1px] leading-none">
-                            <span data-testid={`day-chip-label-${s.id}`} className="truncate text-[11px] font-bold text-[#151515]">
-                              {nameLabel}
-                            </span>
-                            {/* Alle Abweichungen sind unabhängig — eine
-                                Vertretung kann zugleich Entwurf/Vorschlag sein
-                                und zeigt dann beide Icons. Priorität von links
-                                nach rechts aufsteigend: Entwurf < Vertretung <
-                                Ausfall — das wichtigste Icon liegt im Badge-
-                                Stack rechts oben und bleibt voll sichtbar. */}
-                            {(status !== "FIX" || s.isVertretung || hasAusfall) && (
-                              /* Im Kombinationsfall überlappen die
-                                 12-px-Icons leicht (Badge-Stack), damit das
-                                 Kürzel in der ~57-px-Zelle sichtbar bleibt. */
+                      {visiblePills.map((s) => {
+                        const isTeam = s.type === "team";
+                        const slot = getPersonSlot(s.userId);
+                        const status = s.planningStatus ?? "FIX";
+                        // Task #726: eingeplante Assistenzkraft ist am selben Tag
+                        // krank/Kind krank → roter Ausfall-Hinweis an der Pille.
+                        const hasAusfall = !isTeam && ausfallUserIds.has(s.userId);
+                        const chipClickable = canEdit && !selectionMode;
+                        const timeRange = `${format(new Date(s.startTime), "HH:mm")}–${format(new Date(s.endTime), "HH:mm")}`;
+                        const barColor = isTeam ? "#0284c7" : slot.bg;
+                        const nameLabel = isTeam ? "Team" : s.user?.name ? nameInitials(s.user.name) : "?";
+                        return (
+                          <span
+                            key={s.id}
+                            data-testid={`day-chip-${s.id}`}
+                            role={chipClickable ? "button" : undefined}
+                            tabIndex={chipClickable ? -1 : undefined}
+                            title={`${s.user?.name ?? ""} · ${timeRange}${s.isVertretung ? " · Vertretung" : ""}`.trim()}
+                            onClick={chipClickable ? (e) => { e.stopPropagation(); onShiftClick(s); } : undefined}
+                            onKeyDown={chipClickable ? (e) => {
+                              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onShiftClick(s); }
+                            } : undefined}
+                            className={[
+                              "relative flex h-5 items-center overflow-hidden rounded-[5px] border border-[#e6e6e2]",
+                              chipClickable ? "cursor-pointer" : "",
+                            ].filter(Boolean).join(" ")}
+                          >
+                            {/* Farbbalken links (volle Höhe) — einzige Stelle mit der Slot-Farbe */}
+                            <span
+                              aria-hidden="true"
+                              className="absolute left-0 top-0 bottom-0 w-[4px]"
+                              style={{ backgroundColor: barColor }}
+                            />
+                            {/* Enge Abstände: bei ~57 px Zellbreite müssen Kürzel
+                                UND bis zu drei 12-px-Icons passen. */}
+                            <span className="flex w-full items-center justify-between gap-[2px] bg-white py-0 pl-[5px] pr-[1px] leading-none">
+                              <span data-testid={`day-chip-label-${s.id}`} className="truncate text-[11px] font-bold text-[#151515]">
+                                {nameLabel}
+                              </span>
+                              {/* Arbeitsanweisung 16.08.2026: Status-Icon jetzt
+                                  IMMER sichtbar (inkl. grünem Bestätigt-Haken),
+                                  nicht mehr nur bei Abweichung. Priorität von
+                                  links nach rechts aufsteigend: Basis-Status <
+                                  Vertretung < Ausfall — das wichtigste Icon
+                                  liegt im Badge-Stack rechts oben. */}
                               <span className="flex shrink-0 items-center -space-x-[7px]">
-                                {status !== "FIX" && (
+                                {status === "FIX" ? (
+                                  <StatusBadge kind="confirmed" label="Bestätigt" calendarCompact />
+                                ) : (
                                   <StatusBadge
                                     kind="draft"
                                     label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
@@ -1518,58 +1451,126 @@ function MonthGrid({
                                   />
                                 )}
                               </span>
+                            </span>
+                          </span>
+                        );
+                      })}
+                      {hiddenCount > 0 && (
+                        <span
+                          data-testid={`day-more-${format(day, "yyyy-MM-dd")}`}
+                          className="self-start px-1 text-[7px] font-semibold text-muted-foreground/60 leading-none"
+                        >
+                          +{hiddenCount}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {/* Arbeitsanweisung 16.08.2026: Abwesenheiten als kurzer Text
+                      statt der bisherigen einfarbigen Streifen. */}
+                  {absenceCategories.length > 0 && (
+                    <span
+                      className="mt-[2px] flex flex-col gap-px px-[1px] text-[8px] font-semibold leading-tight"
+                      data-testid={`day-absence-text-${format(day, "yyyy-MM-dd")}`}
+                    >
+                      {absenceCategories.map((cat) => (
+                        <span key={cat} style={{ color: ABSENCE_CATEGORY_HEX[cat] }}>
+                          {cat === "geplant" ? "Geplant" : cat === "ausfall" ? "Ausfall" : "Absage"}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                </>
+              ) : variant === "full" && (
+                /* Desktop/Tablet: zweizeilige Pille mit Uhrzeit. Grauzone
+                   #eef0f3 unter der Kopfzeile, Trennlinie in Rahmenfarbe,
+                   füllt die Zelle bis unten (flex-1) — auch an leeren Tagen.
+                   Mindesthöhe ≈ 1,2 Pillenhöhen (zweizeilige Pille ~33 px →
+                   40 px); nach oben wächst die Zelle unbegrenzt mit den
+                   Diensten. */
+                <div className="flex min-h-[40px] min-w-0 flex-1 flex-col gap-[3px] border-t border-[#dfe4ea] bg-[#eef0f3] px-1 py-1">
+                  {visiblePills.map((s) => {
+                    const isTeam = s.type === "team";
+                    const slot = getPersonSlot(s.userId);
+                    const status = s.planningStatus ?? "FIX";
+                    // Task #726: eingeplante Assistenzkraft ist am selben Tag
+                    // krank/Kind krank → roter Ausfall-Hinweis an der Pille.
+                    const hasAusfall = !isTeam && ausfallUserIds.has(s.userId);
+                    const chipClickable = canEdit && !selectionMode;
+                    const timeRange = `${format(new Date(s.startTime), "HH:mm")}–${format(new Date(s.endTime), "HH:mm")}`;
+                    // Tablet: Minuten „:00" weglassen (Vorlage 3.2: „19–09").
+                    const shortRange = timeRange.replace(/:00/g, "");
+                    const barColor = isTeam ? "#0284c7" : slot.bg;
+                    const nameLabel = isTeam ? "Team" : s.user?.name ? lastName(s.user.name) : "?";
+                    return (
+                      <span
+                        key={s.id}
+                        data-testid={`day-chip-${s.id}`}
+                        role={chipClickable ? "button" : undefined}
+                        tabIndex={chipClickable ? -1 : undefined}
+                        title={`${s.user?.name ?? ""} · ${timeRange}${s.isVertretung ? " · Vertretung" : ""}`.trim()}
+                        onClick={chipClickable ? (e) => { e.stopPropagation(); onShiftClick(s); } : undefined}
+                        onKeyDown={chipClickable ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onShiftClick(s); }
+                        } : undefined}
+                        className={[
+                          "relative flex flex-col items-stretch overflow-hidden rounded-[6px] border",
+                          // Punkt 5 (15.08.2026): Desktop-Pillen leicht erhaben —
+                          // Kontur #c7ced8 + weicher Schatten.
+                          "border-[#c7ced8] shadow-[0_1.5px_3px_rgba(9,41,72,0.09)]",
+                          chipClickable ? "cursor-pointer" : "",
+                        ].filter(Boolean).join(" ")}
+                      >
+                        {/* Farbbalken links (volle Höhe) — einzige Stelle mit der Slot-Farbe */}
+                        <span
+                          aria-hidden="true"
+                          className="absolute left-0 top-0 bottom-0 w-[3px]"
+                          style={{ backgroundColor: barColor }}
+                        />
+                        {/* Zeile 1: Name + Status-Badge Variante C.
+                            Ausfall-Warnung (Task #726) rechts außen. */}
+                        <span className="flex items-center justify-between gap-1 bg-white py-[2px] pl-[7px] pr-1 leading-none">
+                          <span className="truncate text-[10px] font-bold text-[#151515]">{nameLabel}</span>
+                          <span className="flex shrink-0 items-center gap-[3px]">
+                            {status === "FIX" ? (
+                              <StatusBadge kind="confirmed" label="Bestätigt" />
+                            ) : (
+                              <StatusBadge
+                                kind="draft"
+                                label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
+                              />
+                            )}
+                            {hasAusfall && (
+                              <StatusBadge
+                                kind="krank"
+                                label="Ausfall: Assistenzkraft abwesend"
+                              />
                             )}
                           </span>
-                        ) : (
-                          <>
-                            {/* Zeile 1: Name + Status-Badge Variante C.
-                                Ausfall-Warnung (Task #726) rechts außen —
-                                gleiche Priorität wie im Compact-Zweig. */}
-                            <span className="flex items-center justify-between gap-1 bg-white py-[2px] pl-[7px] pr-1 leading-none">
-                              <span className="truncate text-[10px] font-bold text-[#151515]">{nameLabel}</span>
-                              <span className="flex shrink-0 items-center gap-[3px]">
-                                {status === "FIX" ? (
-                                  <StatusBadge kind="confirmed" label="Bestätigt" />
-                                ) : (
-                                  <StatusBadge
-                                    kind="draft"
-                                    label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
-                                  />
-                                )}
-                                {hasAusfall && (
-                                  <StatusBadge
-                                    kind="krank"
-                                    label="Ausfall: Assistenzkraft abwesend"
-                                  />
-                                )}
-                              </span>
+                        </span>
+                        {/* Zeile 2: Uhr-Badge + Uhrzeit (+ Vertretung rechts) auf Grauweiß */}
+                        <span className="flex items-center gap-[3px] bg-[#f1f1ee] py-[2px] pl-[7px] pr-1 leading-none">
+                          <StatusBadge kind="clock" />
+                          <span className="truncate text-[9px] text-[#444444]">
+                            <span className="min-[900px]:hidden">{isTeam ? "Teamdienst" : shortRange}</span>
+                            <span className="hidden min-[900px]:inline">{isTeam ? "Teamdienst" : timeRange}</span>
+                          </span>
+                          {s.isVertretung && (
+                            <span
+                              className="ml-auto inline-flex shrink-0 items-center gap-[2px] text-[#0f6e8c]"
+                              title="Vertretung"
+                            >
+                              <StatusBadge kind="vertretung" />
+                              <span className="hidden min-[900px]:inline text-[8px] font-semibold">Vertretung</span>
                             </span>
-                            {/* Zeile 2: Uhr-Badge + Uhrzeit (+ Vertretung rechts) auf Grauweiß */}
-                            <span className="flex items-center gap-[3px] bg-[#f1f1ee] py-[2px] pl-[7px] pr-1 leading-none">
-                              <StatusBadge kind="clock" />
-                              <span className="truncate text-[9px] text-[#444444]">
-                                <span className="min-[900px]:hidden">{isTeam ? "Teamdienst" : shortRange}</span>
-                                <span className="hidden min-[900px]:inline">{isTeam ? "Teamdienst" : timeRange}</span>
-                              </span>
-                              {s.isVertretung && (
-                                <span
-                                  className="ml-auto inline-flex shrink-0 items-center gap-[2px] text-[#0f6e8c]"
-                                  title="Vertretung"
-                                >
-                                  <StatusBadge kind="vertretung" />
-                                  <span className="hidden min-[900px]:inline text-[8px] font-semibold">Vertretung</span>
-                                </span>
-                              )}
-                            </span>
-                          </>
-                        )}
+                          )}
+                        </span>
                       </span>
                     );
                   })}
-                  {/* Überlauf-Zähler Desktop: liegt IM Pillen-Container, damit
-                      er innerhalb der Grauzone bleibt — die füllt die Zelle
-                      seit Punkt 3 bis ganz unten. */}
-                  {variant === "full" && hiddenCount > 0 && (
+                  {/* Überlauf-Zähler: liegt IM Pillen-Container, damit er
+                      innerhalb der Grauzone bleibt — die füllt die Zelle seit
+                      Punkt 3 (15.08.2026) bis ganz unten. */}
+                  {hiddenCount > 0 && (
                     <span
                       data-testid={`day-more-${format(day, "yyyy-MM-dd")}`}
                       className="self-start px-1 text-[7px] font-semibold text-muted-foreground/60 leading-none"
@@ -1578,18 +1579,6 @@ function MonthGrid({
                     </span>
                   )}
                 </div>
-              )}
-
-              {/* Überlauf-Zähler Smartphone (aufgeklappt): wie zuvor als
-                  eigenes Zellen-Kind NEBEN dem Pillen-Container — dessen
-                  gap-[2px] darf den Abstand nicht verändern. */}
-              {variant === "compact" && hiddenCount > 0 && (
-                <span
-                  data-testid={`day-more-${format(day, "yyyy-MM-dd")}`}
-                  className="self-start px-1 text-[7px] font-semibold text-muted-foreground/60 leading-none"
-                >
-                  +{hiddenCount}
-                </span>
               )}
             </div>
           );
@@ -1785,8 +1774,6 @@ function DienstplanHeader({
   canBulkEdit,
   isSelectionMode,
   onToggleSelection,
-  mobileGridExpanded,
-  onToggleMobileGridExpanded,
   month,
   year,
   onMonthSelect,
@@ -1811,8 +1798,6 @@ function DienstplanHeader({
   canBulkEdit: boolean;
   isSelectionMode: boolean;
   onToggleSelection: () => void;
-  mobileGridExpanded: boolean;
-  onToggleMobileGridExpanded: () => void;
   month: number;
   year: number;
   onMonthSelect: (month: number, year: number) => void;
@@ -2023,21 +2008,6 @@ function DienstplanHeader({
       actions={
         <>
           {viewToggles}
-          {/* 3.3: Auf-/Zuklappen des Smartphone-Monatsrasters (oben rechts) */}
-          {mobileView === "grid" && (
-            <Button
-              variant="outline"
-              size="sm"
-              className={`md:hidden ${showLabels ? "gap-1.5" : "h-9 w-9 shrink-0 px-0"}`}
-              onClick={onToggleMobileGridExpanded}
-              title={mobileGridExpanded ? "Monatsraster zuklappen" : "Monatsraster aufklappen"}
-              aria-label={mobileGridExpanded ? "Monatsraster zuklappen" : "Monatsraster aufklappen"}
-              data-testid="toggle-mobile-expand"
-            >
-              {mobileGridExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              {showLabels && <span>{mobileGridExpanded ? "Zuklappen" : "Aufklappen"}</span>}
-            </Button>
-          )}
           {confirmAllButton}
           {exportButton}
           {selectionButton}
@@ -2324,7 +2294,6 @@ export default function Dienstplan() {
   // (Mini-Balken + Zähler); der Header-Button klappt für die laufende Ansicht
   // auf (kompakte Initialen-Pillen). Bewusst nicht persistiert — die Vorlage
   // sieht den eingeklappten Zustand als festen Startpunkt vor.
-  const [mobileExpanded, setMobileExpanded] = useState<"collapsed" | "expanded">("collapsed");
   const [desktopView, setDesktopView] = usePersistentState<"table" | "grid">(
     "dienstplan.desktopView",
     "table",
@@ -2673,10 +2642,6 @@ export default function Dienstplan() {
       onSelectAssistant={setSelectedAssistant}
       mobileView={mobileView}
       onMobileView={setMobileView}
-      mobileGridExpanded={mobileExpanded === "expanded"}
-      onToggleMobileGridExpanded={() =>
-        setMobileExpanded(mobileExpanded === "expanded" ? "collapsed" : "expanded")
-      }
       desktopView={desktopView}
       onDesktopView={setDesktopView}
       confirmableCount={sendableShifts.length}
@@ -2784,7 +2749,7 @@ export default function Dienstplan() {
             onNavigateMonth={navigateMonthWithFocus}
             focusDate={monthGridFocusDate}
             onFocusDateHandled={() => setMonthGridFocusDate(null)}
-            variant={mobileExpanded === "expanded" ? "compact" : "collapsed"}
+            variant="collapsed"
           />
         )}
         </div>

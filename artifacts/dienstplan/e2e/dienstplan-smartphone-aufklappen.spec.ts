@@ -8,21 +8,30 @@ import {
 } from "./helpers/teams";
 
 /**
- * E2E-Test für das Smartphone-Monatsraster (Arbeitsanweisung 06.08.2026,
- * Punkte 3.2–3.4, Task #709).
+ * E2E-Test für das Smartphone-Monatsraster (Arbeitsanweisung 16.08.2026,
+ * Punkt 3, Task #836).
+ *
+ * Der frühere Auf-/Zuklapp-Umschalter ist ersatzlos entfallen: das Smartphone
+ * zeigt jetzt DAUERHAFT die einzeilige Kurz-Pille (vormals „aufgeklappt").
+ * Neu gegenüber der alten Kurz-Pille: das Status-Icon ist jetzt IMMER
+ * sichtbar (auch „Bestätigt", nicht mehr nur bei Abweichung), und
+ * Abwesenheiten erscheinen als kurzer Kategorie-Text statt als Farbstreifen.
  *
  * Geprüft (mobil 400px):
- * 1. Eingeklappt (Standard): Mini-Balken je Dienst, Abwesenheitsstreifen und
- *    Zähler („2 Dienste" / „1 Abw."), keine Pillen. Tap auf einen Tag wählt
- *    ihn aus und zeigt die Tagesleiste (Scroll) — KEIN Dialog.
- * 2. Aufklappen über den Button oben rechts: kompakte Pillen mit INITIALEN
- *    und kompakten Variante-C-Badges; Klick auf eine Pille öffnet den
- *    Schichtdialog dieser Assistenzkraft. Zuklappen stellt den Farbcode wieder her.
- * 3. Zellen-Kopfzeile (3.4): Datum links, Plus rechts; der Zellenklick wählt
- *    nur, nur das Plus öffnet den Anlege-Dialog.
+ * 1. Kein Umschalter mehr vorhanden — die Pillen-Ansicht ist der einzige
+ *    Smartphone-Zustand.
+ * 2. Einzeilige Kurz-Pillen mit INITIALEN; Status-Icon immer sichtbar
+ *    (Bestätigt/Entwurf), Vertretung/Krankheit als zusätzliche Icons im
+ *    Kombinationsfall. Klick auf eine Pille öffnet den Schichtdialog dieser
+ *    Assistenzkraft.
+ * 3. Abwesenheiten als Kategorie-Text („Geplant"/„Ausfall"/„Absage") in der
+ *    jeweiligen Kategoriefarbe statt als Streifen.
+ * 4. Zellen-Kopfzeile (3.4): Datum links, Plus rechts; der Zellenklick wählt
+ *    nur und scrollt zur Tagesleiste, nur das Plus öffnet den Anlege-Dialog.
  *
- * Aufbau: frisches Free-Konto mit einer Assistenzkraft, zwei Diensten an Tag A
- * (FIX + VORLAEUFIG) und einem Urlaub an Tag B (feste Monatsmitte-Tage).
+ * Aufbau: frisches Free-Konto mit einer Assistenzkraft, drei Diensten an Tag A
+ * (2× FIX + 1× VORLAEUFIG/Vertretung), einem Urlaub an Tag B und einem
+ * Krank+Dienst-Kombinationsfall an Tag C (feste Monatsmitte-Tage).
  * Cleanup über deleteFreeAccount (SQL).
  */
 
@@ -87,7 +96,7 @@ test.beforeAll(async () => {
     }
   }
 
-  // Urlaub an Tag B (Kategorie geplant → gelber Streifen).
+  // Urlaub an Tag B (Kategorie geplant → gelber Text).
   const vac = await acc.ctx.post("/api/shifts", {
     data: {
       userId: assistantId,
@@ -131,116 +140,80 @@ test.afterAll(async () => {
   await deleteFreeAccount(acc);
 });
 
-test("Eingeklappt: Mini-Balken + Zähler statt Pillen, Tap wählt nur und zeigt die Tagesleiste", async ({
+test("Smartphone-Dauerzustand: kein Umschalter mehr, Kurz-Pillen mit immer sichtbarem Status-Icon", async ({
   page,
 }) => {
   await login(page);
   await page.goto("./dienstplan");
   const mobile = page.getByTestId("dienstplan-mobile");
+  // Kaltstart/Netzwerklast: erst auf die befüllte Zelle warten, bevor die
+  // Pillen-Details geprüft werden (sonst flackert die Zusicherung während
+  // die Monatsdaten noch laden, vgl. Skeleton-Platzhalter).
+  await expect(mobile.getByTestId(`day-chip-${shiftIdFix}`)).toBeVisible({ timeout: 15_000 });
 
-  // Farbcode-Darstellung: zwei Mini-Balken + Zähler an Tag A, Abw.-Zähler an Tag B.
-  await expect(mobile.getByTestId(`day-bars-${DAY_A}`)).toBeVisible();
+  // Arbeitsanweisung 16.08.2026 Punkt 3: der Umschalter ist ersatzlos
+  // entfallen — es gibt nur noch den einen Pillen-Zustand.
   await expect(
-    mobile.getByTestId(`day-bars-${DAY_A}`).locator("> span"),
-    "Drei Dienste = drei Mini-Balken",
-  ).toHaveCount(3);
-  await expect(mobile.getByTestId(`day-count-${DAY_A}`)).toHaveText("3 Dienste");
-  await expect(mobile.getByTestId(`day-count-${DAY_B}`)).toHaveText("1 Abw.");
-
-  // Abwesenheitsstreifen (3.3): Urlaub = Kategorie „geplant" (gelb #e5b73b).
-  const strip = mobile.getByTestId(`day-strip-${DAY_B}`);
-  await expect(strip, "Ein Urlaub = ein Abwesenheitsstreifen").toHaveCount(1);
-  await expect(strip, "Urlaub-Streifen muss geplant-gelb (#e5b73b) sein").toHaveCSS(
-    "background-color",
-    "rgb(229, 183, 59)",
-  );
+    page.getByTestId("toggle-mobile-expand"),
+    "Der Auf-/Zuklapp-Umschalter darf nicht mehr existieren",
+  ).toHaveCount(0);
   await expect(
-    mobile.locator('[data-testid^="day-chip-"]'),
-    "Eingeklappt gibt es keine Pillen im Monatsraster",
+    mobile.getByTestId(`day-bars-${DAY_A}`),
+    "Die alten Mini-Balken (eingeklappter Zustand) sind entfallen",
   ).toHaveCount(0);
 
-  // 3.4: Kopfzeile hat Datum links und Plus rechts; Zellenklick wählt nur.
-  const cellA = mobile.getByTestId(`day-cell-${DAY_A}`);
-  await expect(mobile.getByTestId(`day-add-${DAY_A}`)).toBeVisible();
-  // Klickpunkt oben links: die Zelle ist seit Arbeitspaket 07.08.2026 (Punkt 4)
-  // quadratisch (bei 400 px Viewport ~56 px hoch) — y=60 läge in der Zeile darunter.
-  await cellA.click({ position: { x: 20, y: 20 } });
-  await expect(cellA).toHaveAttribute("data-selected", "true");
-  await expect(mobile.getByTestId("day-detail-header")).toContainText("12.");
-  await expect(
-    mobile.getByTestId("day-detail-panel"),
-    "Der Tap auf eine eingeklappte Zelle muss zur Tagesleiste scrollen (3.3)",
-  ).toBeInViewport();
-  await expect(
-    page.getByTestId("shift-dialog"),
-    "Der Zellenklick darf keinen Dialog öffnen (3.4)",
-  ).toHaveCount(0);
-
-  // Nur das Plus öffnet den Anlege-Dialog.
-  await mobile.getByTestId(`day-add-${DAY_A}`).click();
-  await expect(page.getByTestId("shift-dialog")).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.getByTestId("shift-dialog")).toHaveCount(0);
-});
-
-test("Aufklappen: einzeilige Kurz-Pillen mit Abweichungs-Icons, Pille öffnet den Schichtdialog", async ({
-  page,
-}) => {
-  await login(page);
-  await page.goto("./dienstplan");
-  const mobile = page.getByTestId("dienstplan-mobile");
-
-  // Standard ist eingeklappt — Button oben rechts (im Sticky-Header) klappt auf.
-  const toggle = page.getByTestId("toggle-mobile-expand");
-  await expect(toggle).toHaveAttribute("aria-label", "Monatsraster aufklappen");
-  await toggle.click();
-
-  // Kompakte Pillen mit Initialen statt vollem Nachnamen. Uhrzeit und
-  // Bestätigt-Icon entfallen; Entwurf bleibt als 12-px-Abweichungs-Icon sichtbar.
+  // Kurz-Pillen mit Initialen statt vollem Nachnamen.
   const pill = mobile.getByTestId(`day-chip-${shiftIdFix}`);
   await expect(pill).toBeVisible();
-  await expect(pill, "Aufgeklappt zeigt die Pille die Initialen der Assistenzkraft").toContainText(
-    "EA",
-  );
+  await expect(pill, "Die Pille zeigt die Initialen der Assistenzkraft").toContainText("EA");
+  await expect(mobile.getByTestId(`day-chip-label-${shiftIdFix}`)).toHaveCSS("font-size", "11px");
+
+  // Neu (16.08.2026): das Status-Icon ist IMMER sichtbar, auch „Bestätigt“.
   await expect(
     pill.locator('[data-status-badge="confirmed"]'),
-    "Bestätigte Dienste erhalten in der Smartphone-Zelle kein Status-Icon",
-  ).toHaveCount(0);
+    "Bestätigte Dienste zeigen jetzt dauerhaft das Bestätigt-Icon",
+  ).toBeVisible();
   await expect(
     pill.locator('[data-status-badge="clock"]'),
-    "Die Uhrzeitzeile entfällt in der Smartphone-Zelle",
+    "Die Uhrzeitzeile gibt es in der Smartphone-Zelle weiterhin nicht",
   ).toHaveCount(0);
-  await expect(mobile.getByTestId(`day-chip-label-${shiftIdFix}`)).toHaveCSS("font-size", "11px");
+
   const draftPill = mobile.getByTestId(`day-chip-${shiftIdDraft}`);
   const draftBadge = draftPill.locator('[data-status-badge="draft"][aria-label="Entwurf"]');
-  await expect(draftBadge, "Entwurf bleibt als Abweichung in der Smartphone-Zelle markiert").toBeVisible();
+  await expect(draftBadge, "Entwurf-Dienste zeigen das Entwurf-Icon").toBeVisible();
   await expect(draftBadge).toHaveCSS("width", "12px");
   await expect(draftBadge).toHaveCSS("height", "12px");
   await expect(
     draftPill.locator('[data-status-badge="vertretung"]'),
-    "Vertretung + Entwurf zeigen BEIDE Icons in der Kompakt-Pille",
+    "Vertretung + Entwurf zeigen BEIDE Icons in der Kurz-Pille",
   ).toBeVisible();
+  await expect(
+    draftPill.locator('[data-status-badge="confirmed"]'),
+    "Ein Entwurf zeigt kein Bestätigt-Icon",
+  ).toHaveCount(0);
 
   // Task #726/#835: Dienst an Tag C, dessen Assistenzkraft am selben Tag krank
-  // ist, zeigt das rote Krankheits-Icon (medizinisches Kreuz); Dienste ohne
-  // Ausfall (Tag A) nicht.
+  // ist, zeigt zusätzlich das rote Krankheits-Icon (medizinisches Kreuz);
+  // Dienste ohne Ausfall (Tag A) nicht.
   const ausfallPill = mobile.getByTestId(`day-chip-${shiftIdAusfall}`);
   const krankBadge = ausfallPill.locator(
     '[data-status-badge="krank"][aria-label="Ausfall: Assistenzkraft abwesend"]',
   );
-  await expect(
-    krankBadge,
-    "Krank am Diensttag → Krankheits-Icon an der Dienst-Pille",
-  ).toBeVisible();
+  await expect(krankBadge, "Krank am Diensttag → Krankheits-Icon an der Dienst-Pille").toBeVisible();
   await expect(krankBadge).toHaveCSS("width", "12px");
   await expect(krankBadge).toHaveCSS("height", "12px");
+  await expect(
+    ausfallPill.locator('[data-status-badge="confirmed"]'),
+    "Der Ausfall-Kombinationsfall bleibt zusätzlich als bestätigt markiert",
+  ).toBeVisible();
   await expect(
     pill.locator('[data-status-badge="krank"]'),
     "Ohne Abwesenheit der eingeplanten Assistenzkraft gibt es kein Krankheits-Icon",
   ).toHaveCount(0);
-  // Geometrieprüfung: Auch im Kombinationsfall (zwei Icons) darf das Kürzel
-  // nicht abgeschnitten sein — DOM-Text allein würde eine Ellipse verdecken.
-  for (const id of [shiftIdFix, shiftIdDraft]) {
+
+  // Geometrieprüfung: Auch im Kombinationsfall (zwei/drei Icons) darf das
+  // Kürzel nicht abgeschnitten sein — DOM-Text allein würde eine Ellipse verdecken.
+  for (const id of [shiftIdFix, shiftIdDraft, shiftIdAusfall]) {
     const label = mobile.getByTestId(`day-chip-label-${id}`);
     const geo = await label.evaluate((el) => ({
       scrollWidth: el.scrollWidth,
@@ -251,17 +224,15 @@ test("Aufklappen: einzeilige Kurz-Pillen mit Abweichungs-Icons, Pille öffnet de
       `Kürzel der Pille ${id} muss vollständig sichtbar sein (kein truncate)`,
     ).toBeLessThanOrEqual(geo.clientWidth);
   }
+
+  // Zwei-Pillen-Limit: die dritte FIX-Schicht an Tag A fällt hinter „+1“.
   await expect(
     mobile
       .getByTestId(`day-cell-${DAY_A}`)
       .locator('[data-testid^="day-chip-"]:not([data-testid^="day-chip-label-"])'),
-    "Aufgeklappt sind höchstens zwei Pillen sichtbar",
+    "Höchstens zwei Pillen sind sichtbar",
   ).toHaveCount(2);
   await expect(mobile.getByTestId(`day-more-${DAY_A}`)).toHaveText("+1");
-  await expect(
-    mobile.getByTestId(`day-bars-${DAY_A}`),
-    "Aufgeklappt gibt es keine Mini-Balken mehr",
-  ).toHaveCount(0);
 
   // Klick auf die Pille öffnet den Schichtdialog genau dieser Assistenzkraft
   // (Edit-Modus: das Nutzerfeld ist ein deaktiviertes Input mit dem Namen).
@@ -274,9 +245,56 @@ test("Aufklappen: einzeilige Kurz-Pillen mit Abweichungs-Icons, Pille öffnet de
   );
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
+});
 
-  // Zuklappen stellt die Farbcode-Anzeige wieder her.
-  await page.getByTestId("toggle-mobile-expand").click();
-  await expect(mobile.getByTestId(`day-bars-${DAY_A}`)).toBeVisible();
-  await expect(mobile.getByTestId(`day-count-${DAY_A}`)).toHaveText("3 Dienste");
+test("Abwesenheiten erscheinen als Kategorie-Text statt als Streifen", async ({ page }) => {
+  await login(page);
+  await page.goto("./dienstplan");
+  const mobile = page.getByTestId("dienstplan-mobile");
+  const absenceText = mobile.getByTestId(`day-absence-text-${DAY_B}`);
+  // Kaltstart/Netzwerklast: erst auf den befüllten Text warten (s. o.).
+  await expect(absenceText).toBeVisible({ timeout: 15_000 });
+
+  await expect(
+    mobile.getByTestId(`day-strip-${DAY_B}`),
+    "Die alten Abwesenheitsstreifen sind entfallen",
+  ).toHaveCount(0);
+
+  await expect(absenceText, "Urlaub (Kategorie geplant) erscheint als Text").toHaveText("Geplant");
+  await expect(
+    absenceText.locator("span").first(),
+    "Der Text ist in der geplant-gelben Kategoriefarbe (#e5b73b)",
+  ).toHaveCSS("color", "rgb(229, 183, 59)");
+});
+
+test("Zellen-Kopfzeile: Zellenklick wählt nur und scrollt, nur das Plus öffnet den Anlege-Dialog", async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto("./dienstplan");
+  const mobile = page.getByTestId("dienstplan-mobile");
+
+  const cellA = mobile.getByTestId(`day-cell-${DAY_A}`);
+  // Kaltstart/Netzwerklast: erst auf den befüllten Tag warten (s. o.).
+  await expect(mobile.getByTestId(`day-add-${DAY_A}`)).toBeVisible({ timeout: 15_000 });
+  // Klickpunkt in der Datums-Kopfzeile: seit dem Dauerzustand (16.08.2026)
+  // beginnen die Kurz-Pillen direkt UNTER der Kopfzeile ohne Zwischenraum —
+  // y=8 trifft sicher das Datums-Badge und nicht die erste Pille darunter.
+  await cellA.click({ position: { x: 12, y: 8 } });
+  await expect(cellA).toHaveAttribute("data-selected", "true");
+  await expect(mobile.getByTestId("day-detail-header")).toContainText("12.");
+  await expect(
+    mobile.getByTestId("day-detail-panel"),
+    "Der Tap auf eine Zelle muss zur Tagesleiste scrollen (3.3)",
+  ).toBeInViewport();
+  await expect(
+    page.getByTestId("shift-dialog"),
+    "Der Zellenklick darf keinen Dialog öffnen (3.4)",
+  ).toHaveCount(0);
+
+  // Nur das Plus öffnet den Anlege-Dialog.
+  await mobile.getByTestId(`day-add-${DAY_A}`).click();
+  await expect(page.getByTestId("shift-dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("shift-dialog")).toHaveCount(0);
 });
