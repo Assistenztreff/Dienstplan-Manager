@@ -1683,9 +1683,9 @@ function MonthGrid({
                             tatsächliche Pillenbreite (< 215 px → reduziert).
                             Feste Mindesthöhe (Punkt 5) aus demselben Grund wie
                             Zeile 1. */}
-                        <span className="flex min-h-[19px] items-center gap-[3px] bg-[#f1f1ee] py-[2px] pl-[6px] pr-[6px] leading-none">
+                        <span className="flex min-h-[23px] items-center gap-[3px] bg-[#f1f1ee] py-[2px] pl-[6px] pr-[6px] leading-none">
                           <StatusBadge kind="clock" />
-                          <span className="truncate text-[10px] font-semibold text-[#444444]">
+                          <span className="truncate text-[11px] font-semibold text-[#444444]">
                             {isTeam ? (
                               "Teamdienst"
                             ) : (
