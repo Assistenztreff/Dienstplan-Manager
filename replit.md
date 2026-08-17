@@ -3,7 +3,7 @@
 Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermodell.
 
 ## User preferences
-- **Sprache (verbindlich)**: Alle Tasks, Beschreibungen, Kommentare und sämtliche nutzersichtbaren Texte immer auf **Deutsch** verfassen — keine englischen Task-Titel oder Erklärungen.
+- **Sprache (verbindlich)**: Alle Tasks, Beschreibungen, Kommentare und sämtliche nutzersichtbaren Texte immer auf **Deutsch** verfassen — keine englischen Task-Titel oder Erklärungen. Gilt auch für die Chat-Antworten des Agents an den Auftraggeber selbst — immer auf Deutsch antworten.
 
 - **Geschlechtsneutrales Wording (verbindlich)**: Nie „Assistent"/„Assistenten" in nutzersichtbaren Texten. Singular = „Assistenzkraft" (feminin: die/eine/keine Assistenzkraft), Plural = „Assistenzkräfte". Gilt für UI, Toasts, Fehlermeldungen, PDFs, Handbuch und E-Mails; Code-Bezeichner, Routen (`/assistenten`), Rollenwerte (`assistant`) und data-testids bleiben unverändert.
 
