@@ -7,8 +7,11 @@ description: Wo Abwesenheiten im Dienstplan sichtbar sind (und wo bewusst nicht)
 
 Abwesenheiten (Urlaub, Krank, Freizeitausgleich …) erscheinen **nicht** als Dienst-Eintrag
 in Kalenderzellen, Monatsgitter-Pillen oder der Tabellen-/Listenansicht. Sichtbar sind sie
-ausschließlich in der zusammengefassten Übersicht „Team-Abwesenheiten“ (dort zu Zeiträumen
-gebündelt) sowie in der Tagesleiste.
+in der zusammengefassten Übersicht „Team-Abwesenheiten“ (dort zu Zeiträumen gebündelt),
+in der Tagesleiste — und seit der Pillen-Spez (Aug 2026) zusätzlich als kurzer Text je
+Kategorie („Geplant“/„Ausfall“/„Absage“ in Kategoriefarbe, testid
+`day-absence-text-<datum>`) in der Smartphone-Monatszelle. Eine Dienst-PILLE wird eine
+Abwesenheit weiterhin nie.
 
 **Why:** Abwesenheiten würden die Dienstplanung optisch überlagern; die Trennung ist eine
 bewusste Produktentscheidung, keine Lücke.
