@@ -24,8 +24,9 @@ import {
  *    (Bestätigt/Entwurf), Vertretung/Krankheit als zusätzliche Icons im
  *    Kombinationsfall. Klick auf eine Pille öffnet den Schichtdialog dieser
  *    Assistenzkraft.
- * 3. Abwesenheiten als Kategorie-Text („Geplant"/„Ausfall"/„Absage") in der
- *    jeweiligen Kategoriefarbe statt als Streifen.
+ * 3. Abwesenheiten als kurzer Gesamtzahl-Text ("<N> Abw.") in Schwarz statt
+ *    als Streifen oder Kategorie-Aufzählung (Arbeitsanweisung 17.08.2026,
+ *    Punkt 7).
  * 4. Zellen-Kopfzeile (3.4): Datum links, Plus rechts; der Zellenklick wählt
  *    nur und scrollt zur Tagesleiste, nur das Plus öffnet den Anlege-Dialog.
  *
@@ -245,7 +246,7 @@ test("Smartphone-Dauerzustand: kein Umschalter mehr, Kurz-Pillen mit immer sicht
   await expect(dialog).toHaveCount(0);
 });
 
-test("Abwesenheiten erscheinen als Kategorie-Text statt als Streifen", async ({ page }) => {
+test("Abwesenheiten erscheinen als schwarzer Gesamtzahl-Text statt als Streifen", async ({ page }) => {
   await login(page);
   await page.goto("./dienstplan");
   const mobile = page.getByTestId("dienstplan-mobile");
@@ -258,11 +259,14 @@ test("Abwesenheiten erscheinen als Kategorie-Text statt als Streifen", async ({ 
     "Die alten Abwesenheitsstreifen sind entfallen",
   ).toHaveCount(0);
 
-  await expect(absenceText, "Urlaub (Kategorie geplant) erscheint als Text").toHaveText("Geplant");
+  // Arbeitsanweisung 17.08.2026 Punkt 7: eine Gesamtzahl aller Abwesenheits-
+  // Einträge des Tages statt der Kategorie-Aufzählung — Tag B hat genau einen
+  // Urlaubseintrag.
+  await expect(absenceText, "Urlaub an Tag B erscheint als Gesamtzahl-Text").toHaveText("1 Abw.");
   await expect(
-    absenceText.locator("span").first(),
-    "Der Text ist in der geplant-gelben Kategoriefarbe (#e5b73b)",
-  ).toHaveCSS("color", "rgb(229, 183, 59)");
+    absenceText,
+    "Der Text ist schwarz statt kategoriefarben (#151515)",
+  ).toHaveCSS("color", "rgb(21, 21, 21)");
 });
 
 test("Zellen-Kopfzeile: Zellenklick wählt nur und scrollt, nur das Plus öffnet den Anlege-Dialog", async ({

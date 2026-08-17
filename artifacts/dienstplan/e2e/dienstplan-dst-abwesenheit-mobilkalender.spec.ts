@@ -23,7 +23,8 @@ const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
 const DST_YEAR = 2026;
 
 // Mobile Viewport – MonthGrid zeigt bei 400 px den Dauerzustand mit
-// Abwesenheits-Kategorie-Text ("Ausfall" bei Krankmeldung/sick, Arbeitsanweisung 16.08.2026).
+// Abwesenheits-Gesamtzahl-Text ("1 Abw." bei genau einer Krankmeldung/sick,
+// Arbeitsanweisung 17.08.2026 Punkt 7 — vormals Kategorie-Text "Ausfall").
 test.use({ viewport: { width: 400, height: 900 } });
 
 test.setTimeout(90_000);
@@ -153,18 +154,18 @@ test("Dienstplan Mobil – Winterzeit-Umstellungstag (25. Oktober): Abwesenheit 
     const monthGrid = page.getByTestId("month-grid");
     await expect(monthGrid).toBeVisible({ timeout: 10_000 });
 
-    // 25. Oktober muss die Abwesenheit tragen (Kategorie-Text "Ausfall" bei sick).
+    // 25. Oktober muss die Abwesenheit tragen (Gesamtzahl-Text "1 Abw." bei sick).
     const cell25 = page.getByTestId(`day-cell-${DST_YEAR}-10-25`);
     await expect(cell25).toBeVisible({ timeout: 10_000 });
-    await expect(cell25).toContainText("Ausfall", { timeout: 10_000 });
+    await expect(cell25).toContainText("1 Abw.", { timeout: 10_000 });
 
     // Vortag und Folgetag dürfen keine Abwesenheit dieser Kraft tragen.
     // (Beide Zellen können generell leer sein, da keine anderen Daten im
     // Test-Scope liegen.)
     const cell24 = page.getByTestId(`day-cell-${DST_YEAR}-10-24`);
     const cell26 = page.getByTestId(`day-cell-${DST_YEAR}-10-26`);
-    await expect(cell24).not.toContainText("Ausfall");
-    await expect(cell26).not.toContainText("Ausfall");
+    await expect(cell24).not.toContainText("Abw.");
+    await expect(cell26).not.toContainText("Abw.");
   } finally {
     await deleteShiftsOf(page, assistant.id);
     await page.request.delete(`/api/users/${assistant.id}`);
@@ -197,16 +198,16 @@ test("Dienstplan Mobil – Sommerzeit-Umstellungstag (29. März): Abwesenheit er
     const monthGrid = page.getByTestId("month-grid");
     await expect(monthGrid).toBeVisible({ timeout: 10_000 });
 
-    // 29. März muss die Abwesenheit tragen (Kategorie-Text "Ausfall" bei sick).
+    // 29. März muss die Abwesenheit tragen (Gesamtzahl-Text "1 Abw." bei sick).
     const cell29 = page.getByTestId(`day-cell-${DST_YEAR}-03-29`);
     await expect(cell29).toBeVisible({ timeout: 10_000 });
-    await expect(cell29).toContainText("Ausfall", { timeout: 10_000 });
+    await expect(cell29).toContainText("1 Abw.", { timeout: 10_000 });
 
     // Vortag und Folgetag ohne Abwesenheit.
     const cell28 = page.getByTestId(`day-cell-${DST_YEAR}-03-28`);
     const cell30 = page.getByTestId(`day-cell-${DST_YEAR}-03-30`);
-    await expect(cell28).not.toContainText("Ausfall");
-    await expect(cell30).not.toContainText("Ausfall");
+    await expect(cell28).not.toContainText("Abw.");
+    await expect(cell30).not.toContainText("Abw.");
   } finally {
     await deleteShiftsOf(page, assistant.id);
     await page.request.delete(`/api/users/${assistant.id}`);

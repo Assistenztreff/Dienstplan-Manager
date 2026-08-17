@@ -69,7 +69,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { MonthYearPicker } from "@/components/month-year-picker";
 import { PageStickyHeader } from "@/components/page-sticky-header";
-import { AbwesenheitsKalender, ABSENCE_CATEGORY, type AbsenceCategory } from "@/components/abwesenheits-kalender";
+import { AbwesenheitsKalender, ABSENCE_CATEGORY } from "@/components/abwesenheits-kalender";
 import {
   Dialog,
   DialogContent,
@@ -322,14 +322,6 @@ function nameLines(name: string): { firstName: string; lastName: string } {
     lastName: parts.slice(1).join(" "),
   };
 }
-
-/** Kategoriefarben der Abwesenheits-Streifen in eingeklappten Smartphone-Zellen
- *  (Arbeitsanweisung 3.3, Vorlage: geplant gelb / ausfall rot / absage grau). */
-const ABSENCE_CATEGORY_HEX: Record<AbsenceCategory, string> = {
-  geplant: "#e5b73b",
-  ausfall: "#c23b34",
-  absage: "#8a8a86",
-};
 
 type AbsenceRange = {
   userId: number;
@@ -800,7 +792,6 @@ function AgendaView({
                             shift={shift}
                             testId={`shift-badge-${shift.id}`}
                             showName={canEdit}
-                            barColor={shift.type === "team" ? "#0284c7" : getPersonSlot(shift.userId).bg}
                             modelMap={modelMap}
                             comfortable={comfortable}
                             hasAusfall={!isAbsenceShift(shift) && dayAusfallUserIds.has(shift.userId)}
@@ -839,7 +830,6 @@ function AgendaView({
  *  Keine flächenhafte Einfärbung mehr. */
 function DayDetailRow({
   shift,
-  barColor,
   modelMap,
   onClick,
   onConfirm,
@@ -849,7 +839,6 @@ function DayDetailRow({
   hasAusfall = false,
 }: {
   shift: Shift;
-  barColor: string;
   modelMap: Map<number, ShiftModelInfo>;
   onClick?: () => void;
   onConfirm?: (shift: Shift) => void;
@@ -913,8 +902,6 @@ function DayDetailRow({
           : ""
       }`}
     >
-      {/* 3-px-Farbbalken links — identisch zur Kalender-Pille */}
-      <span aria-hidden="true" className="absolute bottom-0 left-0 top-0 w-[3px]" style={{ backgroundColor: barColor }} />
       {/* Name gehört zum Zeilen-Layout (Punkt 5) — für alle sichtbar, die die
           Zeile sehen dürfen; Autorisierung gilt nur für Aktionen. */}
       {showName && shift.user && (
@@ -1280,11 +1267,6 @@ function MonthGrid({
            const pillLimit = variant === "collapsed" ? 2 : 4;
            const visiblePills = nonAbsence.slice(0, pillLimit);
           const hiddenCount = nonAbsence.length - visiblePills.length;
-          // Eingeklappte Smartphone-Zelle (3.3): ein Streifen je Abwesenheits-
-          // Kategorie in Dominanzreihenfolge ausfall > geplant > absage.
-          const absenceCategories = (["ausfall", "geplant", "absage"] as const).filter(
-            (cat) => absences.some((s) => ABSENCE_CATEGORY[s.type] === cat),
-          );
           // Task #726: Personen mit einer Ausfall-Abwesenheit (Krank/Kind krank)
           // am selben Tag — deren Dienst-Pillen erhalten das rote Warn-Icon.
           const ausfallUserIds = new Set(
@@ -1411,10 +1393,14 @@ function MonthGrid({
                   Smartphone-Darstellung — der bisherige Mini-Balken-Zweig und
                   der Auf-/Zuklapp-Umschalter entfallen ersatzlos. */}
               {variant === "collapsed" ? (
-                <>
+                (visiblePills.length > 0 || absences.length > 0) && (
+                  // Arbeitsanweisung 17.08.2026 Punkt 6: gleiche graue Zeile
+                  // wie am Desktop (dort bg-[#eef0f3] am Zellenkörper) — bisher
+                  // hatte der Smartphone-Pillenbereich keinen Hintergrund.
+                  <div className="flex flex-col gap-[2px] rounded-b-[4px] border-t border-[#dfe4ea] bg-[#eef0f3] px-[1px] py-[2px]">
                   {visiblePills.length > 0 && (
                     <div
-                      className="flex flex-col min-w-0 gap-[2px] px-[1px]"
+                      className="flex flex-col min-w-0 gap-[2px]"
                       data-testid={`day-pills-${format(day, "yyyy-MM-dd")}`}
                     >
                       {visiblePills.map((s) => {
@@ -1455,14 +1441,10 @@ function MonthGrid({
                               chipClickable ? "cursor-pointer" : "",
                             ].filter(Boolean).join(" ")}
                           >
-                            {/* Farbbalken links (volle Höhe) — Personen-/Slot-Farbe */}
-                            <span
-                              aria-hidden="true"
-                              className="absolute left-0 top-0 bottom-0 w-[4px]"
-                              style={{ backgroundColor: barColor }}
-                            />
                             {/* Punkt 3 (17.08.2026): rechter 4px-Statusfarbbalken —
-                                zeigt den Dienststatus, nicht die Person. */}
+                                zeigt den Dienststatus, nicht die Person. Kein
+                                linker Farbbalken mehr (Punkt 1, 17.08.2026):
+                                nur die Avatar-Farbe bleibt als Personenkennung. */}
                             <span
                               aria-hidden="true"
                               className="absolute right-0 top-0 bottom-0 w-[4px]"
@@ -1514,21 +1496,21 @@ function MonthGrid({
                       )}
                     </div>
                   )}
-                  {/* Arbeitsanweisung 16.08.2026: Abwesenheiten als kurzer Text
-                      statt der bisherigen einfarbigen Streifen. */}
-                  {absenceCategories.length > 0 && (
+                  {/* Arbeitsanweisung 17.08.2026 Punkt 7: statt der bisherigen
+                      Kategorie-Aufzählung ("Geplant"/"Ausfall"/"Absage" in
+                      Kategoriefarbe) jetzt eine einzige Gesamtzahl aller
+                      Abwesenheits-Einträge des Tages, dunkel statt bunt —
+                      besser von den (farbigen) Status-Labels unterscheidbar. */}
+                  {absences.length > 0 && (
                     <span
-                      className="mt-[2px] flex flex-col gap-px px-[1px] text-[8px] font-semibold leading-tight"
+                      className="mt-[2px] px-[1px] text-[8px] font-semibold leading-tight text-[#151515]"
                       data-testid={`day-absence-text-${format(day, "yyyy-MM-dd")}`}
                     >
-                      {absenceCategories.map((cat) => (
-                        <span key={cat} style={{ color: ABSENCE_CATEGORY_HEX[cat] }}>
-                          {cat === "geplant" ? "Geplant" : cat === "ausfall" ? "Ausfall" : "Absage"}
-                        </span>
-                      ))}
+                      {absences.length} Abw.
                     </span>
                   )}
-                </>
+                  </div>
+                )
               ) : variant === "full" && (
                 /* Desktop/Tablet: zweizeilige Pille mit Uhrzeit. Grauzone
                    #eef0f3 unter der Kopfzeile, Trennlinie in Rahmenfarbe,
@@ -1607,11 +1589,11 @@ function MonthGrid({
                             chipClickable ? "cursor-pointer" : "",
                           ].filter(Boolean).join(" ")}
                         >
-                          <span
-                            aria-hidden="true"
-                            className="absolute left-0 top-0 bottom-0 w-[3px]"
-                            style={{ backgroundColor: barColor }}
-                          />
+                          {/* Punkt 3 (17.08.2026): rechter 4px-Statusfarbbalken —
+                              zeigt den Dienststatus, nicht die Person. Kein
+                              linker Farbbalken mehr (Arbeitsanweisung
+                              17.08.2026 Punkt 1: nur die Avatar-Farbe bleibt
+                              als Personenkennung). */}
                           <span
                             aria-hidden="true"
                             className="absolute right-0 top-0 bottom-0 w-[4px]"
@@ -1619,10 +1601,10 @@ function MonthGrid({
                           />
                           <span className="flex w-full items-center gap-[4px] bg-white py-[2px] pl-[6px] pr-[6px] leading-none">
                             <PillAvatar color={barColor} label={avatarLabel} />
-                            <span data-testid={`day-chip-label-${s.id}`} className="min-w-0 shrink-0 truncate text-[10px] font-bold text-[#151515]">
+                            <span data-testid={`day-chip-label-${s.id}`} className="min-w-0 shrink-0 truncate text-[12px] font-bold text-[#151515]">
                               {shortNameLabel}
                             </span>
-                            <span className="min-w-0 flex-1 truncate text-[9px] text-[#444444]">
+                            <span className="min-w-0 flex-1 truncate text-[10px] font-semibold text-[#444444]">
                               {isTeam ? (
                                 "Teamdienst"
                               ) : (
@@ -1650,25 +1632,25 @@ function MonthGrid({
                           chipClickable ? "cursor-pointer" : "",
                         ].filter(Boolean).join(" ")}
                       >
-                        {/* Farbbalken links (volle Höhe) — Personen-/Slot-Farbe */}
-                        <span
-                          aria-hidden="true"
-                          className="absolute left-0 top-0 bottom-0 w-[3px]"
-                          style={{ backgroundColor: barColor }}
-                        />
                         {/* Punkt 3 (17.08.2026): rechter 4px-Statusfarbbalken —
-                            zeigt den Dienststatus, nicht die Person. */}
+                            zeigt den Dienststatus, nicht die Person. Kein
+                            linker Farbbalken mehr (Arbeitsanweisung
+                            17.08.2026 Punkt 1: nur die Avatar-Farbe bleibt
+                            als Personenkennung). */}
                         <span
                           aria-hidden="true"
                           className="absolute right-0 top-0 bottom-0 w-[4px]"
                           style={{ backgroundColor: statusColor }}
                         />
                         {/* Zeile 1: Avatar + Name + Status-Badge Variante C.
-                            Ausfall-Warnung (Task #726) rechts außen. */}
-                        <span className="flex items-center justify-between gap-1 bg-white py-[2px] pl-[6px] pr-[6px] leading-none">
+                            Ausfall-Warnung (Task #726) rechts außen. Feste
+                            Mindesthöhe (Punkt 5, 17.08.2026): die Zeile darf
+                            bei schmalen Containern nicht schrumpfen, sonst
+                            wirken die Status-Icons überproportional groß. */}
+                        <span className="flex min-h-[23px] items-center justify-between gap-1 bg-white py-[2px] pl-[6px] pr-[6px] leading-none">
                           <span className="flex min-w-0 items-center gap-[4px]">
                             <PillAvatar color={barColor} label={avatarLabel} />
-                            <span className="min-w-0 truncate text-[10px] font-bold text-[#151515]">
+                            <span className="min-w-0 truncate text-[12px] font-bold text-[#151515]">
                               <span className="@max-[154px]:hidden">{fullName}</span>
                               <span className="hidden @max-[154px]:inline">{shortNameLabel}</span>
                             </span>
@@ -1678,10 +1660,12 @@ function MonthGrid({
                         {/* Zeile 2: Uhr-Badge + Uhrzeit (+ Vertretung rechts) auf
                             Grauweiß. Punkt 2 (17.08.2026): Container-Query statt
                             fixem Viewport-Breakpoint — reagiert auf die
-                            tatsächliche Pillenbreite (< 215 px → reduziert). */}
-                        <span className="flex items-center gap-[3px] bg-[#f1f1ee] py-[2px] pl-[6px] pr-[6px] leading-none">
+                            tatsächliche Pillenbreite (< 215 px → reduziert).
+                            Feste Mindesthöhe (Punkt 5) aus demselben Grund wie
+                            Zeile 1. */}
+                        <span className="flex min-h-[19px] items-center gap-[3px] bg-[#f1f1ee] py-[2px] pl-[6px] pr-[6px] leading-none">
                           <StatusBadge kind="clock" />
-                          <span className="truncate text-[9px] text-[#444444]">
+                          <span className="truncate text-[10px] font-semibold text-[#444444]">
                             <span className="@max-[214px]:hidden">{isTeam ? "Teamdienst" : timeRange}</span>
                             <span className="hidden @max-[214px]:inline">{isTeam ? "Teamdienst" : shortRange}</span>
                           </span>
@@ -1828,7 +1812,6 @@ function MonthGrid({
                       key={shift.id}
                       shift={shift}
                       hasAusfall={!isAbsenceShift(shift) && groupAusfallIds.has(shift.userId)}
-                      barColor={shift.type === "team" ? "#0284c7" : getPersonSlot(shift.userId).bg}
                       modelMap={modelMap}
                       onClick={canEdit && !selectionMode ? () => onShiftClick(shift) : undefined}
                       onConfirm={canEdit && !selectionMode ? onConfirmShift : undefined}

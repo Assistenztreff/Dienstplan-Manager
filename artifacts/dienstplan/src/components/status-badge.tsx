@@ -16,7 +16,14 @@ export type StatusBadgeKind =
 
 const KIND_CONFIG: Record<
   StatusBadgeKind,
-  { circle: number; compactCircle: number; bg: string; symbol: (s: number) => ReactElement }
+  {
+    circle: number;
+    compactCircle: number;
+    bg: string;
+    /** Anteil des Kreisdurchmessers, den das Symbol einnimmt (Default 0.75). */
+    symbolScale?: number;
+    symbol: (s: number) => ReactElement;
+  }
 > = {
   // Entwurf: Kreis 16px #b5790a, weißer Stift 9px
   draft: {
@@ -88,19 +95,25 @@ const KIND_CONFIG: Record<
       </svg>
     ),
   },
-  // Uhr: Kreis 15px #444, weiße Uhr 9px (stroke 2)
+  // Uhr: Kreis 15px, hell (Arbeitsanweisung 17.08.2026 Punkt 3 — vormals
+  // dunkel #444/weiß, wirkte in der grauen Zeile 2 zu schwer). Jetzt helles
+  // Rund #eef0f3 mit dunklem Uhr-Symbol, das Symbol selbst etwas größer als
+  // bei den übrigen Icons (symbolScale 0.9 statt 0.75) und mittig zentriert.
   clock: {
     circle: 15,
     compactCircle: 9,
-    bg: "#444444",
+    bg: "#eef0f3",
+    symbolScale: 0.9,
     symbol: (s) => (
       <svg
         width={s}
         height={s}
         viewBox="0 0 20 20"
         fill="none"
-        stroke="#fff"
+        stroke="#444444"
         strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
         aria-hidden="true"
       >
         <circle cx="10" cy="10" r="7.2" />
@@ -110,12 +123,14 @@ const KIND_CONFIG: Record<
   },
 };
 
-/** Innensymbol bei 75 % der Kreisgröße (Icon-Set final, 16.08.2026).
- *  Das Symbol behält dieselbe Parität wie der Kreis, damit (Kreis − Symbol)
- *  durch 2 teilbar ist und das Symbol pixelgenau zentriert sitzt —
- *  z. B. 8px im 12px-Kompakt-Kreis statt gerundeter (schiefer) 9px. */
-function symbolSize(circle: number): number {
-  const raw = Math.round(circle * 0.75);
+/** Innensymbol bei standardmäßig 75 % der Kreisgröße (Icon-Set final,
+ *  16.08.2026; pro Kind über `symbolScale` überschreibbar, z. B. die Uhr mit
+ *  90 % seit Arbeitsanweisung 17.08.2026 Punkt 3). Das Symbol behält dieselbe
+ *  Parität wie der Kreis, damit (Kreis − Symbol) durch 2 teilbar ist und das
+ *  Symbol pixelgenau zentriert sitzt — z. B. 8px im 12px-Kompakt-Kreis statt
+ *  gerundeter (schiefer) 9px. */
+function symbolSize(circle: number, scale = 0.75): number {
+  const raw = Math.round(circle * scale);
   return raw % 2 === circle % 2 ? raw : raw - 1;
 }
 
@@ -150,7 +165,7 @@ export function StatusBadge({
       }}
       data-status-badge={kind}
     >
-      {cfg.symbol(symbolSize(circle))}
+      {cfg.symbol(symbolSize(circle, cfg.symbolScale))}
     </span>
   );
 }
