@@ -1703,24 +1703,38 @@ function MonthGrid({
                               "Teamdienst"
                             ) : (
                               <>
-                                <span className="@max-[214px]:hidden">{timeRange}</span>
-                                <span className="hidden @max-[214px]:inline">{startOnly}</span>
+                                {/* Schwelle messtechnisch ermittelt (headless
+                                    Overflow-Test mit dieser Schrift/Icon-Breite):
+                                    98 px sind die tatsächlich benötigte Breite
+                                    für "HH:MM–HH:MM" inkl. Uhr-Icon + Innenabstand
+                                    — nicht mehr der zuvor geschätzte Rundwert
+                                    214 px, der die Endzeit weit vor dem echten
+                                    Platzmangel abgeschnitten hat. */}
+                                <span className="@max-[97px]:hidden">{timeRange}</span>
+                                <span className="hidden @max-[97px]:inline">{startOnly}</span>
                               </>
                             )}
                           </span>
                           {/* Status-Beschriftung rechts (auf Nutzerwunsch wieder
                               eingeführt): dieselbe Priorität wie statusColor/
                               statusBadgeStack (Krank > Vertretung > Bestätigt/
-                              Entwurf). Nur bei genug Breite sichtbar — darunter
-                              bleibt Zeile 2 auf Uhr-Icon + Uhrzeit beschränkt.
-                              Vertretung behält zusätzlich ihr Wechsel-Icon. */}
+                              Entwurf). Schwelle ebenfalls messtechnisch ermittelt:
+                              168 px sind die tatsächlich benötigte Breite für
+                              Uhr-Icon + volle Uhrzeit + Wechsel-Icon + längste
+                              Beschriftung "Vertretung" (Worst Case) — deutlich
+                              unter dem alten Schätzwert 215 px, der die
+                              Beschriftung schon wegfallen ließ, obwohl noch
+                              sichtbar Platz zwischen Uhrzeit und Pillenrand war.
+                              Zwischen 98–167 px bleibt jetzt die volle Uhrzeit
+                              sichtbar, nur die Beschriftung entfällt zuerst
+                              (weniger wichtig als Start-/Endzeit). */}
                           <span
-                            className="ml-auto hidden shrink-0 items-center gap-[2px] @[215px]:inline-flex"
+                            className="ml-auto hidden shrink-0 items-center gap-[2px] @[168px]:inline-flex"
                             style={{ color: statusColor }}
                             title={statusLabel}
                           >
                             {s.isVertretung && <StatusBadge kind="vertretung" />}
-                            <span className="text-[8px] font-semibold">{statusLabel}</span>
+                            <span className="text-[10px] font-semibold">{statusLabel}</span>
                           </span>
                         </span>
                       </span>
