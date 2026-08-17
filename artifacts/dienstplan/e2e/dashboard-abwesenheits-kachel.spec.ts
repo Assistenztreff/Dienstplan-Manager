@@ -15,8 +15,9 @@ import {
  * Geprüft:
  * 1. Free-Konto: Die Kachel bleibt trotz laufender Krankmeldung unsichtbar
  *    (Premium-Gate).
- * 2. Premium-Konto (manuelles Upgrade): Die Kachel erscheint mit dem
- *    Warn-Badge (data-status-badge="warning") und navigiert zu /abwesenheiten.
+ * 2. Premium-Konto (manuelles Upgrade): Die Kachel erscheint mit ihrem
+ *    eigenen Warn-Icon (absence-reminder-icon, seit Task #835 unabhängig vom
+ *    Status-Badge-Set) und navigiert zu /abwesenheiten.
  * 3. Dienstplan-Pillen: Ein bestätigter Dienst trägt data-status-badge
  *    „confirmed" mit aria-label „Bestätigt", ein Entwurf „draft" mit
  *    aria-label „Entwurf".
@@ -109,10 +110,12 @@ test("Premium: Kachel erscheint mit Warn-Badge und navigiert zum Abwesenheitskal
   await page.goto("./");
 
   const kachel = page.getByTestId("absence-reminder");
-  await expect(kachel).toBeVisible();
+  // Die Kachel erscheint erst, wenn die Shift-Listen (vacation + sick) geladen
+  // sind — auf einem kalten Stack dauert das länger als die 5s-Voreinstellung.
+  await expect(kachel).toBeVisible({ timeout: 15000 });
   await expect(
-    kachel.locator('[data-status-badge="warning"]'),
-    "Die Kachel zeigt das Warn-Badge (Variante C)",
+    kachel.getByTestId("absence-reminder-icon"),
+    "Die Kachel zeigt ihr eigenes Warn-Icon (unabhängig vom Status-Badge-Set)",
   ).toBeVisible();
   await expect(kachel).toContainText("laufende Abwesenheit");
 

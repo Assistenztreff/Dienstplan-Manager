@@ -900,8 +900,8 @@ function DayDetailRow({
           <span className="truncate">
             {isTeam ? "Teamdienst" : "Dienst"} ·{" "}
             {status !== "FIX" && <StatusBadge kind="draft" compact className="mr-0.5 align-[-2px]" />}
-            {/* Task #792: Ausfall-Icon in der Tagesleiste — analog zur Kalender-Pille */}
-            {hasAusfall && <StatusBadge kind="warning" compact className="mr-0.5 align-[-2px]" label="Ausfall: Assistenzkraft abwesend" />}
+            {/* Task #792: Krankheits-Icon in der Tagesleiste — analog zur Kalender-Pille */}
+            {hasAusfall && <StatusBadge kind="krank" compact className="mr-0.5 align-[-2px]" label="Ausfall: Assistenzkraft abwesend" />}
             {statusText}
             {shift.isVertretung ? " · Vertretung" : ""}
             {einsatzLabel ? ` · ${einsatzLabel}` : ""}
@@ -1512,7 +1512,7 @@ function MonthGrid({
                                 )}
                                 {hasAusfall && (
                                   <StatusBadge
-                                    kind="warning"
+                                    kind="krank"
                                     label="Ausfall: Assistenzkraft abwesend"
                                     calendarCompact
                                   />
@@ -1538,7 +1538,7 @@ function MonthGrid({
                                 )}
                                 {hasAusfall && (
                                   <StatusBadge
-                                    kind="warning"
+                                    kind="krank"
                                     label="Ausfall: Assistenzkraft abwesend"
                                   />
                                 )}

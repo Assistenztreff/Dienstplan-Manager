@@ -34,7 +34,7 @@ const pad2 = (n: number) => String(n).padStart(2, "0");
 const DAY_A = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-12`;
 const DAY_B = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-13`;
 // Tag C (Task #726): Dienst + Krank-Abwesenheit derselben Assistenzkraft am
-// selben Tag → die Dienst-Pille muss das rote Ausfall-Warn-Icon zeigen.
+// selben Tag → die Dienst-Pille muss das rote Krankheits-Icon zeigen.
 const DAY_C = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-14`;
 
 let acc: FreeAccount;
@@ -221,21 +221,22 @@ test("Aufklappen: einzeilige Kurz-Pillen mit Abweichungs-Icons, Pille öffnet de
     "Vertretung + Entwurf zeigen BEIDE Icons in der Kompakt-Pille",
   ).toBeVisible();
 
-  // Task #726: Dienst an Tag C, dessen Assistenzkraft am selben Tag krank ist,
-  // zeigt das rote Ausfall-Warn-Icon; Dienste ohne Ausfall (Tag A) nicht.
+  // Task #726/#835: Dienst an Tag C, dessen Assistenzkraft am selben Tag krank
+  // ist, zeigt das rote Krankheits-Icon (medizinisches Kreuz); Dienste ohne
+  // Ausfall (Tag A) nicht.
   const ausfallPill = mobile.getByTestId(`day-chip-${shiftIdAusfall}`);
-  const warnBadge = ausfallPill.locator(
-    '[data-status-badge="warning"][aria-label="Ausfall: Assistenzkraft abwesend"]',
+  const krankBadge = ausfallPill.locator(
+    '[data-status-badge="krank"][aria-label="Ausfall: Assistenzkraft abwesend"]',
   );
   await expect(
-    warnBadge,
-    "Krank am Diensttag → Ausfall-Warn-Icon an der Dienst-Pille",
+    krankBadge,
+    "Krank am Diensttag → Krankheits-Icon an der Dienst-Pille",
   ).toBeVisible();
-  await expect(warnBadge).toHaveCSS("width", "12px");
-  await expect(warnBadge).toHaveCSS("height", "12px");
+  await expect(krankBadge).toHaveCSS("width", "12px");
+  await expect(krankBadge).toHaveCSS("height", "12px");
   await expect(
-    pill.locator('[data-status-badge="warning"]'),
-    "Ohne Abwesenheit der eingeplanten Assistenzkraft gibt es kein Ausfall-Icon",
+    pill.locator('[data-status-badge="krank"]'),
+    "Ohne Abwesenheit der eingeplanten Assistenzkraft gibt es kein Krankheits-Icon",
   ).toHaveCount(0);
   // Geometrieprüfung: Auch im Kombinationsfall (zwei Icons) darf das Kürzel
   // nicht abgeschnitten sein — DOM-Text allein würde eine Ellipse verdecken.

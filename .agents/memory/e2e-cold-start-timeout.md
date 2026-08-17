@@ -40,3 +40,13 @@ calls** — they produce empty output files. So:
   between calls, so spawning long runs there fails the same way as nohup.
 
 Update (Jul 2026): background/detached (`setsid nohup … &`) Playwright runs still get reaped mid-run in this environment. Reliable pattern: run spec files in foreground batches of 2–4 that each fit the 120s bash limit, with `E2E_SKIP_DB_SETUP=1 E2E_SKIP_SEPARATION_CHECK=1 E2E_SKIP_CLEANUP_CHECK=1` after the first full-setup batch. A killed run leaves e2e.* accounts in the _test DB (setup then fails "Ziel-Belegung nicht erreicht") — clean via cleanup-test-accounts with DATABASE_URL rewritten to the `_test` DB, and remove the stale run.lock only if its PID is dead. Beware: `pkill -f chrome-linux` matches your own bash -c command line (exit 143) — use a bracket pattern like `chrome-linu[x]`.
+
+# Expect-Timeout auf nachgelagerte Dashboard-Karten (Aug 2026)
+
+Dashboard-Karten, die erst nach SEKUNDÄREN Listen-Queries rendern (z. B. die
+Abwesenheits-Kachel wartet auf /shifts?type=vacation UND ?type=sick und gibt
+bis dahin `null` zurück), überschreiten auf kaltem Stack die 5s-Default von
+`expect(...).toBeVisible()` — obwohl der Rest der Seite schon steht. Erste
+Sichtbarkeits-Asserts auf solche Karten brauchen ein explizites
+`{ timeout: 15000 }`; der Fehler sieht sonst wie eine fehlende Kachel aus
+(Snapshot zeigt die Seite ohne Karte), ist aber reine Ladezeit.

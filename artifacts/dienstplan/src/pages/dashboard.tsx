@@ -23,7 +23,6 @@ import { useAuth } from "@/context/auth";
 import { DienstStatus, type SchichtVorlage } from "@/types/dienstplan";
 import { formatDays, formatDaysWithUnit, formatHours } from "@/lib/utils";
 import { useTimeTrackingEnabled } from "@/hooks/use-time-tracking-enabled";
-import { StatusBadge } from "@/components/status-badge";
 import { MeineStundenKarte } from "@/components/meine-stunden-karte";
 import { KrankmeldungDialog } from "@/components/krankmeldung-dialog";
 import { HourBudgetDashboardCard } from "@/components/hour-budget-card";
@@ -423,7 +422,13 @@ function AbsenceReminder() {
     >
       <Card className="border-amber-200 bg-amber-50/40 shadow-sm transition-colors hover:border-amber-300">
         <CardContent className="flex items-center gap-3 py-4">
-          <StatusBadge kind="warning" label="Warnung" />
+          {/* Eigenes, lokales Icon — der frühere Warndreieck-Status-Badge
+              (kind="warning") ist aus dem Icon-Set gestrichen (16.08.2026). */}
+          <AlertTriangle
+            className="h-5 w-5 shrink-0 text-amber-600"
+            aria-label="Warnung"
+            data-testid="absence-reminder-icon"
+          />
           <div className="flex-1">
             <p className="text-sm font-medium text-amber-900">
               {parts.join(" · ")}

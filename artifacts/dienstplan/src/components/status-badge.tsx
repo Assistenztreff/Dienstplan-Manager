@@ -10,13 +10,13 @@ import type { ReactElement } from "react";
 export type StatusBadgeKind =
   | "draft"
   | "confirmed"
-  | "warning"
+  | "krank"
   | "vertretung"
   | "clock";
 
 const KIND_CONFIG: Record<
   StatusBadgeKind,
-  { circle: number; compactCircle: number; bg: string; ring?: string; compactRing?: string; symbol: (s: number) => ReactElement }
+  { circle: number; compactCircle: number; bg: string; symbol: (s: number) => ReactElement }
 > = {
   // Entwurf: Kreis 16px #b5790a, weißer Stift 9px
   draft: {
@@ -50,20 +50,21 @@ const KIND_CONFIG: Record<
       </svg>
     ),
   },
-  // Warnung: Kreis 17px #c23b34, weißes Dreieck 10px, Außenring
-  warning: {
-    circle: 17,
+  // Krankheit: Kreis 16px #b23b3b, weißes medizinisches Kreuz. Erscheint
+  // zusätzlich zum Bestätigt-Haken, sobald die Backend-Automatik die Schicht
+  // als „Assistenzkraft krankgemeldet" markiert (Icon-Set final, 16.08.2026).
+  krank: {
+    circle: 16,
     compactCircle: 10,
-    bg: "#c23b34",
-    ring: "0 0 0 2px #fff, 0 0 0 3.5px #f3c9c5",
-    compactRing: "0 0 0 1.2px #fff, 0 0 0 2px #f3c9c5",
+    bg: "#b23b3b",
     symbol: (s) => (
       <svg width={s} height={s} viewBox="0 0 20 20" fill="#fff" stroke="none" aria-hidden="true">
-        <path d="M10 3L18 16.5H2z" />
+        <path d="M8 2h4v6h6v4h-6v6H8v-6H2V8h6z" />
       </svg>
     ),
   },
-  // Vertretung: Kreis 15px #0f6e8c, weißes Rotations-Symbol 9px (stroke 2.4)
+  // Vertretung: Kreis 15px #0f6e8c, weiße Rotationspfeile MIT Pfeilspitzen
+  // (überarbeitet, Icon-Set final 16.08.2026 — ersetzt die offenen Bögen).
   vertretung: {
     circle: 15,
     compactCircle: 9,
@@ -72,7 +73,7 @@ const KIND_CONFIG: Record<
       <svg
         width={s}
         height={s}
-        viewBox="0 0 20 20"
+        viewBox="0 0 24 24"
         fill="none"
         stroke="#fff"
         strokeWidth={2.4}
@@ -80,7 +81,10 @@ const KIND_CONFIG: Record<
         strokeLinejoin="round"
         aria-hidden="true"
       >
-        <path d="M4 8a6 6 0 0110-4.2M16 12a6 6 0 01-10 4.2" />
+        <polyline points="17 1 21 5 17 9" />
+        <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+        <polyline points="7 23 3 19 7 15" />
+        <path d="M21 13v2a4 4 0 0 1-4 4H3" />
       </svg>
     ),
   },
@@ -106,10 +110,13 @@ const KIND_CONFIG: Record<
   },
 };
 
-/** Innensymbol etwas über halber Kreisgröße (Vorlage: 9–10px in 15–17px,
- *  kompakt 5–6px in 9–10px wie badge-warn-sm der Smartphone-Vorlage). */
-function symbolSize(circle: number, compact: boolean): number {
-  return Math.round(circle * (compact ? 0.55 : 0.6));
+/** Innensymbol bei 75 % der Kreisgröße (Icon-Set final, 16.08.2026).
+ *  Das Symbol behält dieselbe Parität wie der Kreis, damit (Kreis − Symbol)
+ *  durch 2 teilbar ist und das Symbol pixelgenau zentriert sitzt —
+ *  z. B. 8px im 12px-Kompakt-Kreis statt gerundeter (schiefer) 9px. */
+function symbolSize(circle: number): number {
+  const raw = Math.round(circle * 0.75);
+  return raw % 2 === circle % 2 ? raw : raw - 1;
 }
 
 export function StatusBadge({
@@ -140,11 +147,10 @@ export function StatusBadge({
         width: circle,
         height: circle,
         backgroundColor: cfg.bg,
-        boxShadow: compact ? cfg.compactRing ?? cfg.ring : cfg.ring,
       }}
       data-status-badge={kind}
     >
-      {cfg.symbol(symbolSize(circle, compact))}
+      {cfg.symbol(symbolSize(circle))}
     </span>
   );
 }
