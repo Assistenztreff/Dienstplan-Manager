@@ -213,16 +213,6 @@ function dienstStatusColor(status: string, hasAusfall: boolean, isVertretung: bo
   return status === "FIX" ? "#1e8f4e" : "#b5790a";
 }
 
-/** Textlabel zum Statusfarbbalken (Arbeitsanweisung 17.08.2026, Folgeauftrag):
- *  dieselbe Prioritätsreihenfolge wie dienstStatusColor(), damit Farbe und
- *  Text der Kalender-Pille immer zusammenpassen. */
-function dienstStatusLabel(status: string, hasAusfall: boolean, isVertretung: boolean | null | undefined): string {
-  if (hasAusfall) return "Krank";
-  if (isVertretung) return "Vertretung";
-  if (status === "FIX") return "Bestätigt";
-  return status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf";
-}
-
 /** Avatar-Kreis mit Initiale (Arbeitsanweisung 17.08.2026, Folgeauftrag: 1–2 px
  *  kleiner als zuvor — 17×17 px statt 19×19 px, dafür nur noch der eine
  *  Nachnamen-Anfangsbuchstabe statt zweier Initialen, siehe lastNameInitial()),
@@ -1449,8 +1439,6 @@ function MonthGrid({
                         // einzige Personen-Kennung (voller Name im title-Attribut).
                         const avatarLabel = isTeam ? "T" : s.user?.name ? lastNameInitial(s.user.name) : "?";
                         const statusColor = dienstStatusColor(status, hasAusfall, s.isVertretung);
-                        const statusLabel = dienstStatusLabel(status, hasAusfall, s.isVertretung);
-                        const startOnly = format(new Date(s.startTime), "HH:mm");
                         return (
                           <span
                             key={s.id}
@@ -1463,7 +1451,7 @@ function MonthGrid({
                               if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onShiftClick(s); }
                             } : undefined}
                             className={[
-                              "@container relative flex flex-col items-stretch overflow-hidden rounded-[5px] border border-[#e6e6e2]",
+                              "relative flex items-stretch overflow-hidden rounded-[5px] border border-[#e6e6e2]",
                               "shadow-[0_2px_3px_rgba(9,41,72,0.12)]",
                               chipClickable ? "cursor-pointer" : "",
                             ].filter(Boolean).join(" ")}
@@ -1509,36 +1497,6 @@ function MonthGrid({
                                     calendarCompact
                                   />
                                 )}
-                              </span>
-                            </span>
-                            {/* Zeile 2 (Arbeitsanweisung 17.08.2026, Folgeauftrag):
-                                Uhrzeit + Dienstzustands-Beschriftung, analog zur
-                                Desktop-Pille per Container-Query. Bei genug
-                                Breite volle Spanne + Beschriftung; wird die
-                                Pille schmaler, fällt zuerst die Beschriftung
-                                weg, dann schrumpft die Uhrzeit auf den Beginn. */}
-                            <span className="flex items-center gap-[2px] bg-[#f1f1ee] py-0 pl-[3px] pr-[6px] leading-none">
-                              <StatusBadge kind="clock" calendarCompact />
-                              <span className="truncate text-[7px] font-semibold text-[#444444]">
-                                {isTeam ? (
-                                  "Teamdienst"
-                                ) : (
-                                  <>
-                                    <span className="@max-[59px]:hidden">{timeRange}</span>
-                                    <span className="hidden @max-[59px]:inline">{startOnly}</span>
-                                  </>
-                                )}
-                              </span>
-                              {/* Die Zellenspalte reicht von ~48 px (schmales
-                                  Smartphone) bis ~100 px (oberes Ende des
-                                  md:hidden-Bereichs kurz vor 768 px) — die
-                                  Schwellen sind bewusst deutlich niedriger als
-                                  bei der Desktop-Pille kalibriert. */}
-                              <span
-                                className="ml-auto hidden shrink-0 truncate text-[7px] font-bold @[78px]:inline"
-                                style={{ color: statusColor }}
-                              >
-                                {statusLabel}
                               </span>
                             </span>
                           </span>

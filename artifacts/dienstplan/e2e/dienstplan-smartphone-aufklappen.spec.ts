@@ -177,13 +177,13 @@ test("Smartphone-Dauerzustand: kein Umschalter mehr, Kurz-Pillen mit immer sicht
     pill.locator('[data-status-badge="confirmed"]'),
     "Bestätigte Dienste zeigen jetzt dauerhaft das Bestätigt-Icon",
   ).toBeVisible();
-  // Folgeauftrag 17.08.2026: die Smartphone-Zelle bekam eine zweite Zeile
-  // mit Uhrzeit + Status-Beschriftung (Container-Query-gesteuert) — die
-  // Uhrzeitzeile fehlt nicht mehr.
+  // Folgeauftrag 17.08.2026 (kurz darauf wieder verworfen): die zweite Zeile
+  // mit Uhrzeit + Status-Beschriftung wurde entfernt — die Kurz-Pille bleibt
+  // einzeilig (Avatar + Status-Icons), keine Uhrzeit sichtbar.
   await expect(
     pill.locator('[data-status-badge="clock"]'),
-    "Die Uhrzeitzeile ist jetzt Teil der Smartphone-Zelle (Zeile 2)",
-  ).toBeVisible();
+    "Die Kurz-Pille zeigt keine Uhrzeitzeile",
+  ).toHaveCount(0);
 
   const draftPill = mobile.getByTestId(`day-chip-${shiftIdDraft}`);
   const draftBadge = draftPill.locator('[data-status-badge="draft"][aria-label="Entwurf"]');
@@ -224,12 +224,7 @@ test("Smartphone-Dauerzustand: kein Umschalter mehr, Kurz-Pillen mit immer sicht
   // Kennung. Prüfen, dass der Avatar auch im Kombinationsfall (zwei/drei
   // Icons) selbst nicht kollabiert.
   for (const id of [shiftIdFix, shiftIdDraft, shiftIdAusfall]) {
-    // Seit der neuen Zeile 2 (Uhr-Icon) trägt auch der Uhr-Badge
-    // aria-hidden="true" + rounded-full — [data-status-badge] grenzt den
-    // reinen Avatar-Kreis eindeutig ab.
-    const avatar = mobile
-      .getByTestId(`day-chip-${id}`)
-      .locator("span[aria-hidden='true'].rounded-full:not([data-status-badge])");
+    const avatar = mobile.getByTestId(`day-chip-${id}`).locator("span[aria-hidden='true'].rounded-full");
     const box = await avatar.boundingBox();
     expect(box?.width ?? 0, `Avatar der Pille ${id} muss vollständig sichtbar sein`).toBeGreaterThanOrEqual(16);
   }
