@@ -213,6 +213,18 @@ function dienstStatusColor(status: string, hasAusfall: boolean, isVertretung: bo
   return status === "FIX" ? "#1e8f4e" : "#b5790a";
 }
 
+/** Textlabel zum Statusfarbbalken der Desktop-/Tablet-Pille (wiedereingeführt
+ *  auf Nutzerwunsch, s. Bildvergleich Monatsraster vs. Referenz-Mockup):
+ *  dieselbe Prioritätsreihenfolge wie dienstStatusColor(), damit Farbe und
+ *  Text immer zusammenpassen. Nur in der zweizeiligen Desktop-Pille genutzt
+ *  (@[215px]-Schwelle in Zeile 2) — die Smartphone-Pille hat keine Zeile 2. */
+function dienstStatusLabel(status: string, hasAusfall: boolean, isVertretung: boolean | null | undefined): string {
+  if (hasAusfall) return "Krank";
+  if (isVertretung) return "Vertretung";
+  if (status === "FIX") return "Bestätigt";
+  return status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf";
+}
+
 /** Avatar-Kreis mit Initiale (Arbeitsanweisung 17.08.2026, Folgeauftrag: 1–2 px
  *  kleiner als zuvor — 17×17 px statt 19×19 px, dafür nur noch der eine
  *  Nachnamen-Anfangsbuchstabe statt zweier Initialen, siehe lastNameInitial()),
@@ -1553,6 +1565,7 @@ function MonthGrid({
                     const shortNameLabel = isTeam ? "Team" : s.user?.name ? lastName(s.user.name) : "?";
                     const avatarLabel = isTeam ? "T" : s.user?.name ? nameInitials(s.user.name) : "?";
                     const statusColor = dienstStatusColor(status, hasAusfall, s.isVertretung);
+                    const statusLabel = dienstStatusLabel(status, hasAusfall, s.isVertretung);
                     const commonHandlers = {
                       role: chipClickable ? ("button" as const) : undefined,
                       tabIndex: chipClickable ? -1 : undefined,
@@ -1695,15 +1708,20 @@ function MonthGrid({
                               </>
                             )}
                           </span>
-                          {s.isVertretung && (
-                            <span
-                              className="ml-auto inline-flex shrink-0 items-center gap-[2px] text-[#0f6e8c]"
-                              title="Vertretung"
-                            >
-                              <StatusBadge kind="vertretung" />
-                              <span className="hidden @[215px]:inline text-[8px] font-semibold">Vertretung</span>
-                            </span>
-                          )}
+                          {/* Status-Beschriftung rechts (auf Nutzerwunsch wieder
+                              eingeführt): dieselbe Priorität wie statusColor/
+                              statusBadgeStack (Krank > Vertretung > Bestätigt/
+                              Entwurf). Nur bei genug Breite sichtbar — darunter
+                              bleibt Zeile 2 auf Uhr-Icon + Uhrzeit beschränkt.
+                              Vertretung behält zusätzlich ihr Wechsel-Icon. */}
+                          <span
+                            className="ml-auto hidden shrink-0 items-center gap-[2px] @[215px]:inline-flex"
+                            style={{ color: statusColor }}
+                            title={statusLabel}
+                          >
+                            {s.isVertretung && <StatusBadge kind="vertretung" />}
+                            <span className="text-[8px] font-semibold">{statusLabel}</span>
+                          </span>
                         </span>
                       </span>
                     );
