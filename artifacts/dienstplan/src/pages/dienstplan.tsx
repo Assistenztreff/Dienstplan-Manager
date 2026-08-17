@@ -1431,7 +1431,12 @@ function MonthGrid({
                         // zeigt jetzt die Initialen — das Namensfeld daneben zeigt
                         // deshalb den Nachnamen (dieselbe Funktion wie Desktop/
                         // Tablet), nicht mehr die Initialen als Text-Duplikat.
-                        const nameLabel = isTeam ? "Team" : s.user?.name ? lastName(s.user.name) : "?";
+                        // Arbeitsanweisung 17.08.2026 Punkt 4 (nach Messung korrigiert):
+                        // bei ~48 px Pillenbreite kollabiert ein zusaetzliches
+                        // Namensfeld neben Avatar + bis zu drei 12-px-Icons auf 0 px
+                        // Breite. Entscheidung: kein separates Namensfeld in der
+                        // Smartphone-Pille, die Avatar-Initialen sind hier die
+                        // einzige Personen-Kennung (voller Name im title-Attribut).
                         const avatarLabel = isTeam ? "T" : s.user?.name ? nameInitials(s.user.name) : "?";
                         const statusColor = dienstStatusColor(status, hasAusfall, s.isVertretung);
                         return (
@@ -1463,13 +1468,11 @@ function MonthGrid({
                               className="absolute right-0 top-0 bottom-0 w-[4px]"
                               style={{ backgroundColor: statusColor }}
                             />
-                            {/* Enge Abstände: bei ~57 px Zellbreite müssen Avatar,
-                                Kürzel UND bis zu drei 12-px-Icons passen. */}
-                            <span className="flex w-full items-center gap-[3px] bg-white py-0 pl-[3px] pr-[6px] leading-none">
+                            {/* Enge Abstände: bei ~57 px Zellbreite müssen Avatar
+                                UND bis zu drei 12-px-Icons passen (kein
+                                Namensfeld mehr, s. Kommentar oben). */}
+                            <span className="flex w-full items-center justify-between gap-[3px] bg-white py-0 pl-[3px] pr-[6px] leading-none">
                               <PillAvatar color={barColor} label={avatarLabel} />
-                              <span data-testid={`day-chip-label-${s.id}`} className="min-w-0 flex-1 truncate text-[11px] font-bold text-[#151515]">
-                                {nameLabel}
-                              </span>
                               {/* Arbeitsanweisung 16.08.2026: Status-Icon jetzt
                                   IMMER sichtbar (inkl. grünem Bestätigt-Haken),
                                   nicht mehr nur bei Abweichung. Priorität von

@@ -162,11 +162,13 @@ test("Smartphone-Dauerzustand: kein Umschalter mehr, Kurz-Pillen mit immer sicht
     "Die alten Mini-Balken (eingeklappter Zustand) sind entfallen",
   ).toHaveCount(0);
 
-  // Kurz-Pillen mit Initialen statt vollem Nachnamen.
+  // Kurz-Pillen: kein separates Namensfeld mehr (Arbeitsanweisung 17.08.2026
+  // Punkt 4, nach Messung korrigiert — bei ~48px Pillenbreite kollabiert ein
+  // zusätzliches Namensfeld neben Avatar + Icons auf 0px); die 19×19px-
+  // Avatar-Initialen sind die einzige Personen-Kennung.
   const pill = mobile.getByTestId(`day-chip-${shiftIdFix}`);
   await expect(pill).toBeVisible();
-  await expect(pill, "Die Pille zeigt die Initialen der Assistenzkraft").toContainText("EA");
-  await expect(mobile.getByTestId(`day-chip-label-${shiftIdFix}`)).toHaveCSS("font-size", "11px");
+  await expect(pill, "Die Pille zeigt die Initialen der Assistenzkraft im Avatar").toContainText("EA");
 
   // Neu (16.08.2026): das Status-Icon ist IMMER sichtbar, auch „Bestätigt“.
   await expect(
@@ -211,18 +213,14 @@ test("Smartphone-Dauerzustand: kein Umschalter mehr, Kurz-Pillen mit immer sicht
     "Ohne Abwesenheit der eingeplanten Assistenzkraft gibt es kein Krankheits-Icon",
   ).toHaveCount(0);
 
-  // Geometrieprüfung: Auch im Kombinationsfall (zwei/drei Icons) darf das
-  // Kürzel nicht abgeschnitten sein — DOM-Text allein würde eine Ellipse verdecken.
+  // Geometrieprüfung (Arbeitsanweisung 17.08.2026 Punkt 4): es gibt kein
+  // separates Namensfeld mehr, das abschneiden könnte — die Avatar-Initialen
+  // (immer 1–2 Zeichen) sind die einzige Personen-Kennung. Prüfen, dass der
+  // Avatar auch im Kombinationsfall (zwei/drei Icons) selbst nicht kollabiert.
   for (const id of [shiftIdFix, shiftIdDraft, shiftIdAusfall]) {
-    const label = mobile.getByTestId(`day-chip-label-${id}`);
-    const geo = await label.evaluate((el) => ({
-      scrollWidth: el.scrollWidth,
-      clientWidth: el.clientWidth,
-    }));
-    expect(
-      geo.scrollWidth,
-      `Kürzel der Pille ${id} muss vollständig sichtbar sein (kein truncate)`,
-    ).toBeLessThanOrEqual(geo.clientWidth);
+    const avatar = mobile.getByTestId(`day-chip-${id}`).locator("span[aria-hidden='true'].rounded-full");
+    const box = await avatar.boundingBox();
+    expect(box?.width ?? 0, `Avatar der Pille ${id} muss vollständig sichtbar sein`).toBeGreaterThanOrEqual(18);
   }
 
   // Zwei-Pillen-Limit: die dritte FIX-Schicht an Tag A fällt hinter „+1“.
