@@ -147,11 +147,13 @@ export function StatusBadge({
   className?: string;
   /** Kompakt-Größe für die Smartphone-Pille (Arbeitsanweisung 3.2/3.3). */
   compact?: boolean;
-  /** 12-px-Kreis für Statusabweichungen in der aufgeklappten Kalenderzelle. */
+  /** 13-px-Kreis für Statusabweichungen in der aufgeklappten Kalenderzelle
+   *  (Arbeitsanweisung 17.08.2026, Folgeauftrag: 1px größer als zuvor, um den
+   *  gleichzeitig verkleinerten Avatar auszugleichen). */
   calendarCompact?: boolean;
 }) {
   const cfg = KIND_CONFIG[kind];
-  const circle = calendarCompact ? 12 : compact ? cfg.compactCircle : cfg.circle;
+  const circle = calendarCompact ? 13 : compact ? cfg.compactCircle : cfg.circle;
   return (
     <span
       role={label ? "img" : undefined}

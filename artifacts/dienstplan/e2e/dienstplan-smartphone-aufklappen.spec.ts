@@ -165,27 +165,31 @@ test("Smartphone-Dauerzustand: kein Umschalter mehr, Kurz-Pillen mit immer sicht
 
   // Kurz-Pillen: kein separates Namensfeld mehr (Arbeitsanweisung 17.08.2026
   // Punkt 4, nach Messung korrigiert — bei ~48px Pillenbreite kollabiert ein
-  // zusätzliches Namensfeld neben Avatar + Icons auf 0px); die 19×19px-
-  // Avatar-Initialen sind die einzige Personen-Kennung.
+  // zusätzliches Namensfeld neben Avatar + Icons auf 0px); die 17×17px-
+  // Avatar-Initiale (Folgeauftrag: nur noch der eine Nachnamen-Anfangs-
+  // buchstabe, s. lastNameInitial()) ist die einzige Personen-Kennung.
   const pill = mobile.getByTestId(`day-chip-${shiftIdFix}`);
   await expect(pill).toBeVisible();
-  await expect(pill, "Die Pille zeigt die Initialen der Assistenzkraft im Avatar").toContainText("EA");
+  await expect(pill, "Die Pille zeigt die Nachnamen-Initiale der Assistenzkraft im Avatar").toContainText("A");
 
   // Neu (16.08.2026): das Status-Icon ist IMMER sichtbar, auch „Bestätigt“.
   await expect(
     pill.locator('[data-status-badge="confirmed"]'),
     "Bestätigte Dienste zeigen jetzt dauerhaft das Bestätigt-Icon",
   ).toBeVisible();
+  // Folgeauftrag 17.08.2026: die Smartphone-Zelle bekam eine zweite Zeile
+  // mit Uhrzeit + Status-Beschriftung (Container-Query-gesteuert) — die
+  // Uhrzeitzeile fehlt nicht mehr.
   await expect(
     pill.locator('[data-status-badge="clock"]'),
-    "Die Uhrzeitzeile gibt es in der Smartphone-Zelle weiterhin nicht",
-  ).toHaveCount(0);
+    "Die Uhrzeitzeile ist jetzt Teil der Smartphone-Zelle (Zeile 2)",
+  ).toBeVisible();
 
   const draftPill = mobile.getByTestId(`day-chip-${shiftIdDraft}`);
   const draftBadge = draftPill.locator('[data-status-badge="draft"][aria-label="Entwurf"]');
   await expect(draftBadge, "Entwurf-Dienste zeigen das Entwurf-Icon").toBeVisible();
-  await expect(draftBadge).toHaveCSS("width", "12px");
-  await expect(draftBadge).toHaveCSS("height", "12px");
+  await expect(draftBadge).toHaveCSS("width", "13px");
+  await expect(draftBadge).toHaveCSS("height", "13px");
   await expect(
     draftPill.locator('[data-status-badge="vertretung"]'),
     "Vertretung + Entwurf zeigen BEIDE Icons in der Kurz-Pille",
@@ -203,8 +207,8 @@ test("Smartphone-Dauerzustand: kein Umschalter mehr, Kurz-Pillen mit immer sicht
     '[data-status-badge="krank"][aria-label="Ausfall: Assistenzkraft abwesend"]',
   );
   await expect(krankBadge, "Krank am Diensttag → Krankheits-Icon an der Dienst-Pille").toBeVisible();
-  await expect(krankBadge).toHaveCSS("width", "12px");
-  await expect(krankBadge).toHaveCSS("height", "12px");
+  await expect(krankBadge).toHaveCSS("width", "13px");
+  await expect(krankBadge).toHaveCSS("height", "13px");
   await expect(
     ausfallPill.locator('[data-status-badge="confirmed"]'),
     "Der Ausfall-Kombinationsfall bleibt zusätzlich als bestätigt markiert",
@@ -214,14 +218,20 @@ test("Smartphone-Dauerzustand: kein Umschalter mehr, Kurz-Pillen mit immer sicht
     "Ohne Abwesenheit der eingeplanten Assistenzkraft gibt es kein Krankheits-Icon",
   ).toHaveCount(0);
 
-  // Geometrieprüfung (Arbeitsanweisung 17.08.2026 Punkt 4): es gibt kein
-  // separates Namensfeld mehr, das abschneiden könnte — die Avatar-Initialen
-  // (immer 1–2 Zeichen) sind die einzige Personen-Kennung. Prüfen, dass der
-  // Avatar auch im Kombinationsfall (zwei/drei Icons) selbst nicht kollabiert.
+  // Geometrieprüfung (Arbeitsanweisung 17.08.2026 Punkt 4, Folgeauftrag:
+  // Avatar 19px→17px verkleinert): es gibt kein separates Namensfeld mehr,
+  // das abschneiden könnte — die Avatar-Initiale ist die einzige Personen-
+  // Kennung. Prüfen, dass der Avatar auch im Kombinationsfall (zwei/drei
+  // Icons) selbst nicht kollabiert.
   for (const id of [shiftIdFix, shiftIdDraft, shiftIdAusfall]) {
-    const avatar = mobile.getByTestId(`day-chip-${id}`).locator("span[aria-hidden='true'].rounded-full");
+    // Seit der neuen Zeile 2 (Uhr-Icon) trägt auch der Uhr-Badge
+    // aria-hidden="true" + rounded-full — [data-status-badge] grenzt den
+    // reinen Avatar-Kreis eindeutig ab.
+    const avatar = mobile
+      .getByTestId(`day-chip-${id}`)
+      .locator("span[aria-hidden='true'].rounded-full:not([data-status-badge])");
     const box = await avatar.boundingBox();
-    expect(box?.width ?? 0, `Avatar der Pille ${id} muss vollständig sichtbar sein`).toBeGreaterThanOrEqual(18);
+    expect(box?.width ?? 0, `Avatar der Pille ${id} muss vollständig sichtbar sein`).toBeGreaterThanOrEqual(16);
   }
 
   // Zwei-Pillen-Limit: die dritte FIX-Schicht an Tag A fällt hinter „+1“.

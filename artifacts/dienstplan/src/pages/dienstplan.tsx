@@ -213,15 +213,27 @@ function dienstStatusColor(status: string, hasAusfall: boolean, isVertretung: bo
   return status === "FIX" ? "#1e8f4e" : "#b5790a";
 }
 
-/** Avatar-Kreis mit Initialen (Arbeitsanweisung 17.08.2026 Punkt 4): 19×19 px,
+/** Textlabel zum Statusfarbbalken (Arbeitsanweisung 17.08.2026, Folgeauftrag):
+ *  dieselbe Prioritätsreihenfolge wie dienstStatusColor(), damit Farbe und
+ *  Text der Kalender-Pille immer zusammenpassen. */
+function dienstStatusLabel(status: string, hasAusfall: boolean, isVertretung: boolean | null | undefined): string {
+  if (hasAusfall) return "Krank";
+  if (isVertretung) return "Vertretung";
+  if (status === "FIX") return "Bestätigt";
+  return status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf";
+}
+
+/** Avatar-Kreis mit Initiale (Arbeitsanweisung 17.08.2026, Folgeauftrag: 1–2 px
+ *  kleiner als zuvor — 17×17 px statt 19×19 px, dafür nur noch der eine
+ *  Nachnamen-Anfangsbuchstabe statt zweier Initialen, siehe lastNameInitial()),
  *  Hintergrund = Personen-/Slot-Farbe (barColor/slot.bg, keine neue
- *  Farbquelle), 1–2 weiße fette zentrierte Initialen. Gemeinsam für alle drei
+ *  Farbquelle), zentrierte weiße fette Initiale. Gemeinsam für alle drei
  *  Pillen-Varianten (zweizeilig, minimiert, Smartphone-einzeilig). */
 function PillAvatar({ color, label }: { color: string; label: string }) {
   return (
     <span
       aria-hidden="true"
-      className="flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full text-[8px] font-bold leading-none text-white"
+      className="flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full text-[8px] font-bold leading-none text-white"
       style={{ backgroundColor: color }}
     >
       {label}
@@ -312,6 +324,16 @@ function dayKey(date: Date): string {
 function lastName(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return parts.length > 0 ? parts[parts.length - 1]! : name.trim();
+}
+
+/** Arbeitsanweisung 17.08.2026 (Folgeauftrag): Avatar-Initiale der Kalender-
+ *  Pille zeigt nur noch EINEN Buchstaben — den Anfangsbuchstaben des
+ *  Nachnamens (Vorbild: schlankere Vergleichs-Ansicht) statt der bisherigen
+ *  zwei Buchstaben (Vor-/Nachname). Andere Initialen-Anzeigen (Filterleiste,
+ *  Auswertungstabellen) bleiben unverändert bei nameInitials().  */
+function lastNameInitial(name: string): string {
+  const ln = lastName(name);
+  return ln.length > 0 ? ln[0]!.toUpperCase() : "?";
 }
 
 /** Zweizeilige Namensdarstellung für die Tabellenansicht. */
@@ -1394,10 +1416,12 @@ function MonthGrid({
                   der Auf-/Zuklapp-Umschalter entfallen ersatzlos. */}
               {variant === "collapsed" ? (
                 (visiblePills.length > 0 || absences.length > 0) && (
-                  // Arbeitsanweisung 17.08.2026 Punkt 6: gleiche graue Zeile
-                  // wie am Desktop (dort bg-[#eef0f3] am Zellenkörper) — bisher
-                  // hatte der Smartphone-Pillenbereich keinen Hintergrund.
-                  <div className="flex flex-col gap-[2px] rounded-b-[4px] border-t border-[#dfe4ea] bg-[#eef0f3] px-[1px] py-[2px]">
+                  // Arbeitsanweisung 17.08.2026 Punkt 6, Folgeauftrag: die
+                  // Grauzone war mit #eef0f3 kaum vom weißen Zellenkopf zu
+                  // unterscheiden — auf #e4e8ee (spürbar dunkler, dieselbe
+                  // Farbe wie am Desktop, s. u.) angehoben, damit sich die
+                  // weißen Pillen sichtbar abheben.
+                  <div className="flex flex-col gap-[2px] rounded-b-[4px] border-t border-[#dfe4ea] bg-[#e4e8ee] px-[1px] py-[2px]">
                   {visiblePills.length > 0 && (
                     <div
                       className="flex flex-col min-w-0 gap-[2px]"
@@ -1423,8 +1447,10 @@ function MonthGrid({
                         // Breite. Entscheidung: kein separates Namensfeld in der
                         // Smartphone-Pille, die Avatar-Initialen sind hier die
                         // einzige Personen-Kennung (voller Name im title-Attribut).
-                        const avatarLabel = isTeam ? "T" : s.user?.name ? nameInitials(s.user.name) : "?";
+                        const avatarLabel = isTeam ? "T" : s.user?.name ? lastNameInitial(s.user.name) : "?";
                         const statusColor = dienstStatusColor(status, hasAusfall, s.isVertretung);
+                        const statusLabel = dienstStatusLabel(status, hasAusfall, s.isVertretung);
+                        const startOnly = format(new Date(s.startTime), "HH:mm");
                         return (
                           <span
                             key={s.id}
@@ -1437,7 +1463,8 @@ function MonthGrid({
                               if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onShiftClick(s); }
                             } : undefined}
                             className={[
-                              "relative flex h-5 items-center overflow-hidden rounded-[5px] border border-[#e6e6e2]",
+                              "@container relative flex flex-col items-stretch overflow-hidden rounded-[5px] border border-[#e6e6e2]",
+                              "shadow-[0_2px_3px_rgba(9,41,72,0.12)]",
                               chipClickable ? "cursor-pointer" : "",
                             ].filter(Boolean).join(" ")}
                           >
@@ -1450,9 +1477,10 @@ function MonthGrid({
                               className="absolute right-0 top-0 bottom-0 w-[4px]"
                               style={{ backgroundColor: statusColor }}
                             />
-                            {/* Enge Abstände: bei ~57 px Zellbreite müssen Avatar
-                                UND bis zu drei 12-px-Icons passen (kein
-                                Namensfeld mehr, s. Kommentar oben). */}
+                            {/* Zeile 1: Avatar + Status-Icons. Enge Abstände: bei
+                                ~57 px Zellbreite müssen Avatar UND bis zu drei
+                                13-px-Icons passen (kein Namensfeld, s. Kommentar
+                                oben). */}
                             <span className="flex w-full items-center justify-between gap-[3px] bg-white py-0 pl-[3px] pr-[6px] leading-none">
                               <PillAvatar color={barColor} label={avatarLabel} />
                               {/* Arbeitsanweisung 16.08.2026: Status-Icon jetzt
@@ -1481,6 +1509,36 @@ function MonthGrid({
                                     calendarCompact
                                   />
                                 )}
+                              </span>
+                            </span>
+                            {/* Zeile 2 (Arbeitsanweisung 17.08.2026, Folgeauftrag):
+                                Uhrzeit + Dienstzustands-Beschriftung, analog zur
+                                Desktop-Pille per Container-Query. Bei genug
+                                Breite volle Spanne + Beschriftung; wird die
+                                Pille schmaler, fällt zuerst die Beschriftung
+                                weg, dann schrumpft die Uhrzeit auf den Beginn. */}
+                            <span className="flex items-center gap-[2px] bg-[#f1f1ee] py-0 pl-[3px] pr-[6px] leading-none">
+                              <StatusBadge kind="clock" calendarCompact />
+                              <span className="truncate text-[7px] font-semibold text-[#444444]">
+                                {isTeam ? (
+                                  "Teamdienst"
+                                ) : (
+                                  <>
+                                    <span className="@max-[59px]:hidden">{timeRange}</span>
+                                    <span className="hidden @max-[59px]:inline">{startOnly}</span>
+                                  </>
+                                )}
+                              </span>
+                              {/* Die Zellenspalte reicht von ~48 px (schmales
+                                  Smartphone) bis ~100 px (oberes Ende des
+                                  md:hidden-Bereichs kurz vor 768 px) — die
+                                  Schwellen sind bewusst deutlich niedriger als
+                                  bei der Desktop-Pille kalibriert. */}
+                              <span
+                                className="ml-auto hidden shrink-0 truncate text-[7px] font-bold @[78px]:inline"
+                                style={{ color: statusColor }}
+                              >
+                                {statusLabel}
                               </span>
                             </span>
                           </span>
@@ -1518,7 +1576,7 @@ function MonthGrid({
                    Mindesthöhe ≈ 1,2 Pillenhöhen (zweizeilige Pille ~33 px →
                    40 px); nach oben wächst die Zelle unbegrenzt mit den
                    Diensten. */
-                <div className="flex min-h-[40px] min-w-0 flex-1 flex-col gap-[3px] border-t border-[#dfe4ea] bg-[#eef0f3] px-1 py-1">
+                <div className="flex min-h-[40px] min-w-0 flex-1 flex-col gap-[3px] border-t border-[#dfe4ea] bg-[#e4e8ee] px-1 py-1">
                   {visiblePills.map((s) => {
                     const isTeam = s.type === "team";
                     const slot = getPersonSlot(s.userId);
@@ -1529,8 +1587,6 @@ function MonthGrid({
                     const chipClickable = canEdit && !selectionMode;
                     const startOnly = format(new Date(s.startTime), "HH:mm");
                     const timeRange = `${startOnly}–${format(new Date(s.endTime), "HH:mm")}`;
-                    // Tablet: Minuten „:00" weglassen (Vorlage 3.2: „19–09").
-                    const shortRange = timeRange.replace(/:00/g, "");
                     const barColor = isTeam ? "#0284c7" : slot.bg;
                     // Arbeitsanweisung 17.08.2026 Punkt 2: bei genug Platz voller
                     // Name, sonst (Container < 155px bzw. Minimiert-Modus immer)
@@ -1585,7 +1641,7 @@ function MonthGrid({
                           {...commonHandlers}
                           className={[
                             "@container relative flex h-6 items-center overflow-hidden rounded-[6px] border",
-                            "border-[#c7ced8] shadow-[0_1.5px_3px_rgba(9,41,72,0.09)]",
+                            "border-[#c7ced8] shadow-[0_3px_5px_rgba(9,41,72,0.13)]",
                             chipClickable ? "cursor-pointer" : "",
                           ].filter(Boolean).join(" ")}
                         >
@@ -1601,7 +1657,13 @@ function MonthGrid({
                           />
                           <span className="flex w-full items-center gap-[4px] bg-white py-[2px] pl-[6px] pr-[6px] leading-none">
                             <PillAvatar color={barColor} label={avatarLabel} />
-                            <span data-testid={`day-chip-label-${s.id}`} className="min-w-0 shrink-0 truncate text-[12px] font-bold text-[#151515]">
+                            {/* Arbeitsanweisung 17.08.2026, Folgeauftrag: kein
+                                shrink-0 mehr — der Name soll bei wenig Platz
+                                wie im ausgeklappten Modus per truncate mit „…"
+                                abgekürzt werden, statt starr seine volle Breite
+                                zu behaupten und dabei die Status-Icons daneben
+                                aus der Pille zu drängen. */}
+                            <span data-testid={`day-chip-label-${s.id}`} className="min-w-0 truncate text-[12px] font-bold text-[#151515]">
                               {shortNameLabel}
                             </span>
                             <span className="min-w-0 flex-1 truncate text-[10px] font-semibold text-[#444444]">
@@ -1628,7 +1690,7 @@ function MonthGrid({
                           "@container relative flex flex-col items-stretch overflow-hidden rounded-[6px] border",
                           // Punkt 5 (15.08.2026): Desktop-Pillen leicht erhaben —
                           // Kontur #c7ced8 + weicher Schatten.
-                          "border-[#c7ced8] shadow-[0_1.5px_3px_rgba(9,41,72,0.09)]",
+                          "border-[#c7ced8] shadow-[0_3px_5px_rgba(9,41,72,0.13)]",
                           chipClickable ? "cursor-pointer" : "",
                         ].filter(Boolean).join(" ")}
                       >
@@ -1666,8 +1728,14 @@ function MonthGrid({
                         <span className="flex min-h-[19px] items-center gap-[3px] bg-[#f1f1ee] py-[2px] pl-[6px] pr-[6px] leading-none">
                           <StatusBadge kind="clock" />
                           <span className="truncate text-[10px] font-semibold text-[#444444]">
-                            <span className="@max-[214px]:hidden">{isTeam ? "Teamdienst" : timeRange}</span>
-                            <span className="hidden @max-[214px]:inline">{isTeam ? "Teamdienst" : shortRange}</span>
+                            {isTeam ? (
+                              "Teamdienst"
+                            ) : (
+                              <>
+                                <span className="@max-[214px]:hidden">{timeRange}</span>
+                                <span className="hidden @max-[214px]:inline">{startOnly}</span>
+                              </>
+                            )}
                           </span>
                           {s.isVertretung && (
                             <span
