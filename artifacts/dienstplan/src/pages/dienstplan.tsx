@@ -19,7 +19,7 @@ import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, Check, CheckSquare, X, CalendarPlus, Trash2, Pencil, ChevronDown, Users, Lock, Download, MessageSquare } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, Check, CheckSquare, X, CalendarPlus, Trash2, Pencil, ChevronDown, Users, Lock, Download, MessageSquare, Rows2 } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import type { LucideIcon } from "lucide-react";
 import { ShiftDialog } from "@/components/shift-dialog";
@@ -199,6 +199,33 @@ function usePersonSlotLookup(): (userId: number) => PersonSlot {
       return activeSlots[hash % activeSlots.length]!;
     },
     [personSlots, activeSlots],
+  );
+}
+
+/** Rechter 4px-Statusfarbbalken der Kalender-Pille (Arbeitsanweisung
+ *  17.08.2026 Punkt 3): zeigt den Dienst-/Schichtstatus (nicht die Person).
+ *  Priorität — dieselbe Reihenfolge wie der Icon-Stack —: Krankheit >
+ *  Vertretung > Basis-Status (Entwurf/Bestätigt). Exakt dieselben Hex-Werte
+ *  wie StatusBadge (status-badge.tsx), keine neue Farbquelle. */
+function dienstStatusColor(status: string, hasAusfall: boolean, isVertretung: boolean | null | undefined): string {
+  if (hasAusfall) return "#b23b3b";
+  if (isVertretung) return "#0f6e8c";
+  return status === "FIX" ? "#1e8f4e" : "#b5790a";
+}
+
+/** Avatar-Kreis mit Initialen (Arbeitsanweisung 17.08.2026 Punkt 4): 19×19 px,
+ *  Hintergrund = Personen-/Slot-Farbe (barColor/slot.bg, keine neue
+ *  Farbquelle), 1–2 weiße fette zentrierte Initialen. Gemeinsam für alle drei
+ *  Pillen-Varianten (zweizeilig, minimiert, Smartphone-einzeilig). */
+function PillAvatar({ color, label }: { color: string; label: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full text-[8px] font-bold leading-none text-white"
+      style={{ backgroundColor: color }}
+    >
+      {label}
+    </span>
   );
 }
 
@@ -968,6 +995,7 @@ function MonthGrid({
   focusDate,
   onFocusDateHandled,
   variant = "full",
+  pillMinimiert = false,
 }: {
   days: Date[];
   monthStart: Date;
@@ -989,6 +1017,10 @@ function MonthGrid({
    *  Smartphone-Dauerzustand (einzeilige Initialen-Pille, Arbeitsanweisung
    *  16.08.2026 Punkt 3 — der frühere „compact"-Zwischenzustand entfällt). */
   variant?: "full" | "collapsed";
+  /** Arbeitsanweisung 17.08.2026 Punkt 1: globaler Minimiert-Umschalter für
+   *  Desktop/Tablet (nur bei variant="full" relevant) — kollabiert die
+   *  zweizeilige Pille auf eine Zeile. */
+  pillMinimiert?: boolean;
 }) {
   const personColors = usePersonColors();
   const selectedDateSet = new Set(selectedDates ?? []);
@@ -1395,7 +1427,13 @@ function MonthGrid({
                         const chipClickable = canEdit && !selectionMode;
                         const timeRange = `${format(new Date(s.startTime), "HH:mm")}–${format(new Date(s.endTime), "HH:mm")}`;
                         const barColor = isTeam ? "#0284c7" : slot.bg;
-                        const nameLabel = isTeam ? "Team" : s.user?.name ? nameInitials(s.user.name) : "?";
+                        // Arbeitsanweisung 17.08.2026 Punkt 4: der Avatar-Kreis
+                        // zeigt jetzt die Initialen — das Namensfeld daneben zeigt
+                        // deshalb den Nachnamen (dieselbe Funktion wie Desktop/
+                        // Tablet), nicht mehr die Initialen als Text-Duplikat.
+                        const nameLabel = isTeam ? "Team" : s.user?.name ? lastName(s.user.name) : "?";
+                        const avatarLabel = isTeam ? "T" : s.user?.name ? nameInitials(s.user.name) : "?";
+                        const statusColor = dienstStatusColor(status, hasAusfall, s.isVertretung);
                         return (
                           <span
                             key={s.id}
@@ -1412,16 +1450,24 @@ function MonthGrid({
                               chipClickable ? "cursor-pointer" : "",
                             ].filter(Boolean).join(" ")}
                           >
-                            {/* Farbbalken links (volle Höhe) — einzige Stelle mit der Slot-Farbe */}
+                            {/* Farbbalken links (volle Höhe) — Personen-/Slot-Farbe */}
                             <span
                               aria-hidden="true"
                               className="absolute left-0 top-0 bottom-0 w-[4px]"
                               style={{ backgroundColor: barColor }}
                             />
-                            {/* Enge Abstände: bei ~57 px Zellbreite müssen Kürzel
-                                UND bis zu drei 12-px-Icons passen. */}
-                            <span className="flex w-full items-center justify-between gap-[2px] bg-white py-0 pl-[5px] pr-[1px] leading-none">
-                              <span data-testid={`day-chip-label-${s.id}`} className="truncate text-[11px] font-bold text-[#151515]">
+                            {/* Punkt 3 (17.08.2026): rechter 4px-Statusfarbbalken —
+                                zeigt den Dienststatus, nicht die Person. */}
+                            <span
+                              aria-hidden="true"
+                              className="absolute right-0 top-0 bottom-0 w-[4px]"
+                              style={{ backgroundColor: statusColor }}
+                            />
+                            {/* Enge Abstände: bei ~57 px Zellbreite müssen Avatar,
+                                Kürzel UND bis zu drei 12-px-Icons passen. */}
+                            <span className="flex w-full items-center gap-[3px] bg-white py-0 pl-[3px] pr-[6px] leading-none">
+                              <PillAvatar color={barColor} label={avatarLabel} />
+                              <span data-testid={`day-chip-label-${s.id}`} className="min-w-0 flex-1 truncate text-[11px] font-bold text-[#151515]">
                                 {nameLabel}
                               </span>
                               {/* Arbeitsanweisung 16.08.2026: Status-Icon jetzt
@@ -1496,63 +1542,145 @@ function MonthGrid({
                     // krank/Kind krank → roter Ausfall-Hinweis an der Pille.
                     const hasAusfall = !isTeam && ausfallUserIds.has(s.userId);
                     const chipClickable = canEdit && !selectionMode;
-                    const timeRange = `${format(new Date(s.startTime), "HH:mm")}–${format(new Date(s.endTime), "HH:mm")}`;
+                    const startOnly = format(new Date(s.startTime), "HH:mm");
+                    const timeRange = `${startOnly}–${format(new Date(s.endTime), "HH:mm")}`;
                     // Tablet: Minuten „:00" weglassen (Vorlage 3.2: „19–09").
                     const shortRange = timeRange.replace(/:00/g, "");
                     const barColor = isTeam ? "#0284c7" : slot.bg;
-                    const nameLabel = isTeam ? "Team" : s.user?.name ? lastName(s.user.name) : "?";
+                    // Arbeitsanweisung 17.08.2026 Punkt 2: bei genug Platz voller
+                    // Name, sonst (Container < 155px bzw. Minimiert-Modus immer)
+                    // nur der Nachname.
+                    const fullName = isTeam ? "Team" : s.user?.name ?? "?";
+                    const shortNameLabel = isTeam ? "Team" : s.user?.name ? lastName(s.user.name) : "?";
+                    const avatarLabel = isTeam ? "T" : s.user?.name ? nameInitials(s.user.name) : "?";
+                    const statusColor = dienstStatusColor(status, hasAusfall, s.isVertretung);
+                    const commonHandlers = {
+                      role: chipClickable ? ("button" as const) : undefined,
+                      tabIndex: chipClickable ? -1 : undefined,
+                      title: `${s.user?.name ?? ""} · ${timeRange}${s.isVertretung ? " · Vertretung" : ""}`.trim(),
+                      onClick: chipClickable ? (e: React.MouseEvent) => { e.stopPropagation(); onShiftClick(s); } : undefined,
+                      onKeyDown: chipClickable ? (e: React.KeyboardEvent) => {
+                        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onShiftClick(s); }
+                      } : undefined,
+                    };
+                    const statusBadgeStack = (
+                      <>
+                        {status === "FIX" ? (
+                          <StatusBadge kind="confirmed" label="Bestätigt" calendarCompact={pillMinimiert} />
+                        ) : (
+                          <StatusBadge
+                            kind="draft"
+                            label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
+                            calendarCompact={pillMinimiert}
+                          />
+                        )}
+                        {pillMinimiert && s.isVertretung && (
+                          <StatusBadge kind="vertretung" label="Vertretung" calendarCompact />
+                        )}
+                        {hasAusfall && (
+                          <StatusBadge
+                            kind="krank"
+                            label="Ausfall: Assistenzkraft abwesend"
+                            calendarCompact={pillMinimiert}
+                          />
+                        )}
+                      </>
+                    );
+                    // Punkt 1 (17.08.2026): globaler Minimiert-Umschalter —
+                    // kollabiert die zweizeilige Pille auf eine Zeile (Avatar/
+                    // Farbbalken · Nachname · Uhrzeit · Status-Icon), Zeile 2
+                    // entfällt komplett. Punkt 2: Uhrzeit reagiert per
+                    // Container-Query auf die tatsächliche Pillenbreite
+                    // (< 115 px im Minimiert-Modus → nur Dienstbeginn).
+                    if (pillMinimiert) {
+                      return (
+                        <span
+                          key={s.id}
+                          data-testid={`day-chip-${s.id}`}
+                          {...commonHandlers}
+                          className={[
+                            "@container relative flex h-6 items-center overflow-hidden rounded-[6px] border",
+                            "border-[#c7ced8] shadow-[0_1.5px_3px_rgba(9,41,72,0.09)]",
+                            chipClickable ? "cursor-pointer" : "",
+                          ].filter(Boolean).join(" ")}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="absolute left-0 top-0 bottom-0 w-[3px]"
+                            style={{ backgroundColor: barColor }}
+                          />
+                          <span
+                            aria-hidden="true"
+                            className="absolute right-0 top-0 bottom-0 w-[4px]"
+                            style={{ backgroundColor: statusColor }}
+                          />
+                          <span className="flex w-full items-center gap-[4px] bg-white py-[2px] pl-[6px] pr-[6px] leading-none">
+                            <PillAvatar color={barColor} label={avatarLabel} />
+                            <span data-testid={`day-chip-label-${s.id}`} className="min-w-0 shrink-0 truncate text-[10px] font-bold text-[#151515]">
+                              {shortNameLabel}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate text-[9px] text-[#444444]">
+                              {isTeam ? (
+                                "Teamdienst"
+                              ) : (
+                                <>
+                                  <span className="@max-[114px]:hidden">{timeRange}</span>
+                                  <span className="hidden @max-[114px]:inline">{startOnly}</span>
+                                </>
+                              )}
+                            </span>
+                            <span className="flex shrink-0 items-center -space-x-[7px]">{statusBadgeStack}</span>
+                          </span>
+                        </span>
+                      );
+                    }
                     return (
                       <span
                         key={s.id}
                         data-testid={`day-chip-${s.id}`}
-                        role={chipClickable ? "button" : undefined}
-                        tabIndex={chipClickable ? -1 : undefined}
-                        title={`${s.user?.name ?? ""} · ${timeRange}${s.isVertretung ? " · Vertretung" : ""}`.trim()}
-                        onClick={chipClickable ? (e) => { e.stopPropagation(); onShiftClick(s); } : undefined}
-                        onKeyDown={chipClickable ? (e) => {
-                          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onShiftClick(s); }
-                        } : undefined}
+                        {...commonHandlers}
                         className={[
-                          "relative flex flex-col items-stretch overflow-hidden rounded-[6px] border",
+                          "@container relative flex flex-col items-stretch overflow-hidden rounded-[6px] border",
                           // Punkt 5 (15.08.2026): Desktop-Pillen leicht erhaben —
                           // Kontur #c7ced8 + weicher Schatten.
                           "border-[#c7ced8] shadow-[0_1.5px_3px_rgba(9,41,72,0.09)]",
                           chipClickable ? "cursor-pointer" : "",
                         ].filter(Boolean).join(" ")}
                       >
-                        {/* Farbbalken links (volle Höhe) — einzige Stelle mit der Slot-Farbe */}
+                        {/* Farbbalken links (volle Höhe) — Personen-/Slot-Farbe */}
                         <span
                           aria-hidden="true"
                           className="absolute left-0 top-0 bottom-0 w-[3px]"
                           style={{ backgroundColor: barColor }}
                         />
-                        {/* Zeile 1: Name + Status-Badge Variante C.
+                        {/* Punkt 3 (17.08.2026): rechter 4px-Statusfarbbalken —
+                            zeigt den Dienststatus, nicht die Person. */}
+                        <span
+                          aria-hidden="true"
+                          className="absolute right-0 top-0 bottom-0 w-[4px]"
+                          style={{ backgroundColor: statusColor }}
+                        />
+                        {/* Zeile 1: Avatar + Name + Status-Badge Variante C.
                             Ausfall-Warnung (Task #726) rechts außen. */}
-                        <span className="flex items-center justify-between gap-1 bg-white py-[2px] pl-[7px] pr-1 leading-none">
-                          <span className="truncate text-[10px] font-bold text-[#151515]">{nameLabel}</span>
-                          <span className="flex shrink-0 items-center gap-[3px]">
-                            {status === "FIX" ? (
-                              <StatusBadge kind="confirmed" label="Bestätigt" />
-                            ) : (
-                              <StatusBadge
-                                kind="draft"
-                                label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
-                              />
-                            )}
-                            {hasAusfall && (
-                              <StatusBadge
-                                kind="krank"
-                                label="Ausfall: Assistenzkraft abwesend"
-                              />
-                            )}
+                        <span className="flex items-center justify-between gap-1 bg-white py-[2px] pl-[6px] pr-[6px] leading-none">
+                          <span className="flex min-w-0 items-center gap-[4px]">
+                            <PillAvatar color={barColor} label={avatarLabel} />
+                            <span className="min-w-0 truncate text-[10px] font-bold text-[#151515]">
+                              <span className="@max-[154px]:hidden">{fullName}</span>
+                              <span className="hidden @max-[154px]:inline">{shortNameLabel}</span>
+                            </span>
                           </span>
+                          <span className="flex shrink-0 items-center gap-[3px]">{statusBadgeStack}</span>
                         </span>
-                        {/* Zeile 2: Uhr-Badge + Uhrzeit (+ Vertretung rechts) auf Grauweiß */}
-                        <span className="flex items-center gap-[3px] bg-[#f1f1ee] py-[2px] pl-[7px] pr-1 leading-none">
+                        {/* Zeile 2: Uhr-Badge + Uhrzeit (+ Vertretung rechts) auf
+                            Grauweiß. Punkt 2 (17.08.2026): Container-Query statt
+                            fixem Viewport-Breakpoint — reagiert auf die
+                            tatsächliche Pillenbreite (< 215 px → reduziert). */}
+                        <span className="flex items-center gap-[3px] bg-[#f1f1ee] py-[2px] pl-[6px] pr-[6px] leading-none">
                           <StatusBadge kind="clock" />
                           <span className="truncate text-[9px] text-[#444444]">
-                            <span className="min-[900px]:hidden">{isTeam ? "Teamdienst" : shortRange}</span>
-                            <span className="hidden min-[900px]:inline">{isTeam ? "Teamdienst" : timeRange}</span>
+                            <span className="@max-[214px]:hidden">{isTeam ? "Teamdienst" : timeRange}</span>
+                            <span className="hidden @max-[214px]:inline">{isTeam ? "Teamdienst" : shortRange}</span>
                           </span>
                           {s.isVertretung && (
                             <span
@@ -1560,7 +1688,7 @@ function MonthGrid({
                               title="Vertretung"
                             >
                               <StatusBadge kind="vertretung" />
-                              <span className="hidden min-[900px]:inline text-[8px] font-semibold">Vertretung</span>
+                              <span className="hidden @[215px]:inline text-[8px] font-semibold">Vertretung</span>
                             </span>
                           )}
                         </span>
@@ -1779,6 +1907,8 @@ function DienstplanHeader({
   onMonthSelect,
   onPrevMonth,
   onNextMonth,
+  pillMinimiert,
+  onTogglePillMinimiert,
 }: {
   isAdmin: boolean;
   canPlan: boolean;
@@ -1803,6 +1933,11 @@ function DienstplanHeader({
   onMonthSelect: (month: number, year: number) => void;
   onPrevMonth: () => void;
   onNextMonth: () => void;
+  /** Arbeitsanweisung 17.08.2026 Punkt 1: globaler Minimiert-Umschalter,
+   *  nur auf Desktop/Tablet relevant (Smartphone hat bereits einen eigenen
+   *  einzeiligen Dauerzustand). */
+  pillMinimiert: boolean;
+  onTogglePillMinimiert: () => void;
 }) {
   const { selectedTeamId } = useTeam();
   const personColors = usePersonColors();
@@ -1897,6 +2032,26 @@ function DienstplanHeader({
           ]}
         />
       </div>
+      {/* Arbeitsanweisung 17.08.2026 Punkt 1: globaler Minimiert-Umschalter
+          für die Monatsraster-Pillen, nur relevant auf Desktop/Tablet UND nur
+          in der Monatsansicht (Tabelle hat keine Pillen). */}
+      {desktopView === "grid" && (
+        <div className="hidden md:block" data-testid="pill-minimiert-toggle-wrapper">
+          <Button
+            variant={pillMinimiert ? "default" : "outline"}
+            size="sm"
+            className={showLabels ? "gap-1.5" : `h-9 shrink-0 px-0 ${stacked ? "w-8" : "w-9"}`}
+            onClick={onTogglePillMinimiert}
+            title={pillMinimiert ? "Pillen wieder zweizeilig anzeigen" : "Pillen minimieren (einzeilig)"}
+            aria-label="Dienst-Pillen minimieren"
+            aria-pressed={pillMinimiert}
+            data-testid="toggle-pill-minimiert"
+          >
+            <Rows2 className="h-4 w-4" />
+            {showLabels && <span>Minimiert</span>}
+          </Button>
+        </div>
+      )}
     </>
   );
 
@@ -2299,6 +2454,16 @@ export default function Dienstplan() {
     "table",
     ["table", "grid"],
   );
+  // Punkt 1 (Arbeitsanweisung 17.08.2026): globaler Minimiert-Umschalter für
+  // die Desktop/Tablet-Monatsansicht — kollabiert die zweizeilige Pille auf
+  // eine Zeile. Persistiert wie desktopView, damit die Wahl über Sitzungen
+  // hinweg erhalten bleibt.
+  const [pillMinimiertFlag, setPillMinimiertFlag] = usePersistentState<"1" | "0">(
+    "dienstplan.pillMinimiert",
+    "0",
+    ["1", "0"],
+  );
+  const pillMinimiert = pillMinimiertFlag === "1";
   const [selectedDay, setSelectedDay] = useState<Date>(() => initialDate);
 
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -2658,6 +2823,8 @@ export default function Dienstplan() {
       onMonthSelect={(m, y) => goToMonth(new Date(y, m - 1, 1))}
       onPrevMonth={prevMonth}
       onNextMonth={nextMonth}
+      pillMinimiert={pillMinimiert}
+      onTogglePillMinimiert={() => setPillMinimiertFlag(pillMinimiert ? "0" : "1")}
     />
   );
 
@@ -2775,6 +2942,7 @@ export default function Dienstplan() {
             onNavigateMonth={navigateMonthWithFocus}
             focusDate={monthGridFocusDate}
             onFocusDateHandled={() => setMonthGridFocusDate(null)}
+            pillMinimiert={pillMinimiert}
           />
         ) : (
           <DienstplanTableView
