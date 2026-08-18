@@ -270,8 +270,12 @@ test.describe("Aktionsleiste auf schmalem Handy-Viewport", () => {
     // Auswahl-Modus an, drei Tage in der Listenansicht waehlen (nur Auswahl,
     // keine Schreiboperation — daher kollisionsfrei zu anderen Specs).
     await page.getByTestId("toggle-selection-mode").click();
+    // agenda-day-Zellen existieren dreifach (Mobil-Listenansicht + persistente
+    // Wochen-Listen mobil/desktop) — auf den Mobil-Container scopen, sonst
+    // bricht der Strict Mode mit "resolved to 3 elements" ab.
+    const mobileList = page.getByTestId("dienstplan-mobile");
     for (const d of [6, 7, 8]) {
-      const cell = page.getByTestId(`agenda-day-${dateKey(year, month, d)}`);
+      const cell = mobileList.getByTestId(`agenda-day-${dateKey(year, month, d)}`);
       await cell.scrollIntoViewIfNeeded();
       await cell.getByRole("button").first().click();
       await expect(cell).toHaveAttribute("data-selected", "true");
