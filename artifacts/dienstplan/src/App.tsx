@@ -1,6 +1,6 @@
 import { Switch, Route, Redirect, Router as WouterRouter, useLocation } from "wouter";
 import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
-import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import { PersistQueryClientProvider, type Persister } from "@tanstack/react-query-persist-client";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { ApiError } from "@workspace/api-client-react";
 import { toast } from "sonner";
@@ -205,12 +205,35 @@ function isPersistableQueryKey(key: unknown): boolean {
   );
 }
 
-const queryPersister = createSyncStoragePersister({
+/**
+ * Cache-Eigentümer-Kennung ("u:<id>" bzw. "u:anon"). Muss bei JEDEM Aufruf
+ * frisch berechnet werden: Der PersistQueryClientProvider friert seine
+ * Optionen beim Mount ein — ein beim App-Start (Login-Seite) berechneter
+ * Wert wäre für die gesamte Sitzung "u:anon". Alles, was nach einem Login
+ * in derselben Sitzung persistiert würde, trüge dann den falschen Stempel,
+ * und der nächste Reload würde den kompletten Cache verwerfen statt nutzen.
+ */
+function cacheOwnerTag(): string {
+  return `u:${storedSessionUserId() ?? "anon"}`;
+}
+
+const baseQueryPersister = createSyncStoragePersister({
   storage: typeof window !== "undefined" ? window.localStorage : undefined,
   key: "dienstplan.query-cache",
   // Schreibvorgänge bündeln: höchstens alle 2 s in localStorage serialisieren.
   throttleTime: 2_000,
 });
+
+// Wrapper um den Persister: stempelt den Cache-Eigentümer zum Zeitpunkt des
+// SCHREIBENS (statt des beim Mount eingefrorenen Options-Busters). Nach einem
+// Login/Kontowechsel in laufender Sitzung tragen neue Persist-Vorgänge damit
+// sofort die richtige Nutzer-ID, und der nächste Reload kann den Cache nutzen.
+const queryPersister: Persister = {
+  persistClient: (client) =>
+    baseQueryPersister.persistClient({ ...client, buster: cacheOwnerTag() }),
+  restoreClient: () => baseQueryPersister.restoreClient(),
+  removeClient: () => baseQueryPersister.removeClient(),
+};
 
 // Kontowechsel-Handler: Meldet /auth/me eine andere Nutzer-ID als zuvor
 // (Einladungslink im selben Browser geöffnet, Dev-Nutzerwechsel, …), gehören
@@ -393,7 +416,9 @@ function App() {
         maxAge: 24 * 60 * 60 * 1000,
         // Cache-Eigentümer: Ein unter anderer Nutzer-ID (oder abgemeldet)
         // geschriebener Cache wird beim Start verworfen statt angezeigt.
-        buster: `u:${storedSessionUserId() ?? "anon"}`,
+        // Nur für die Restore-Prüfung beim Mount relevant — beim Schreiben
+        // stempelt der queryPersister-Wrapper den Eigentümer dynamisch.
+        buster: cacheOwnerTag(),
         dehydrateOptions: {
           // Nur erfolgreich geladene, unkritische Anzeigedaten speichern —
           // Fehlerzustände und alles außerhalb der Allowlist bleiben außen vor.

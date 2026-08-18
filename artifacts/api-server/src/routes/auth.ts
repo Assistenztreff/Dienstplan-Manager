@@ -66,6 +66,37 @@ async function computeTeamAccessLevel(userId: number): Promise<TeamAccessLevel> 
   return getHighestTeamAccessLevel(userId);
 }
 
+/**
+ * Vollständiges Auth-Profil wie /auth/me: Basisfelder PLUS die drei
+ * Sichtbarkeits-Flags (isTeamleiter, canViewPayroll, teamAccessLevel).
+ *
+ * JEDE Antwort, die eine Session herstellt (login, set-password,
+ * verify-email, dev-login), MUSS dieses Profil liefern: Das Frontend wendet
+ * die Antwort direkt als Nutzerzustand an und blendet ohne die Flags
+ * Menüpunkte wie „Auswerten"/„Team-Verwaltung" für Teamleiter/Stufe-1-Nutzer
+ * aus, bis irgendwann ein /auth/me-Abgleich läuft (Fokus-Check/Reload).
+ */
+async function fullAuthProfile(
+  user: Pick<User, "id" | "name" | "email" | "role" | "accountType" | "plan">,
+) {
+  const [isTeamleiter, canViewPayroll, teamAccessLevel] = await Promise.all([
+    computeIsTeamleiter(user.id),
+    computeCanViewPayroll(user.id),
+    computeTeamAccessLevel(user.id),
+  ]);
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    accountType: user.accountType,
+    plan: user.plan,
+    isTeamleiter,
+    canViewPayroll,
+    teamAccessLevel,
+  };
+}
+
 router.post("/auth/login", async (req, res) => {
   const { email, password } = req.body as { email?: string; password?: string };
   if (!email || !password) {
@@ -95,7 +126,7 @@ router.post("/auth/login", async (req, res) => {
   req.session.userId = user.id;
   req.session.role = user.role;
 
-  return res.json({ id: user.id, name: user.name, email: user.email, role: user.role, accountType: user.accountType, plan: user.plan });
+  return res.json(await fullAuthProfile(user));
 });
 
 router.post("/auth/register", async (req, res) => {
@@ -379,7 +410,7 @@ if (process.env.NODE_ENV !== "production") {
     const user = await ensureDefaultAdmin();
     req.session.userId = user.id;
     req.session.role = user.role;
-    res.json({ id: user.id, name: user.name, email: user.email, role: user.role, accountType: user.accountType, plan: user.plan });
+    res.json(await fullAuthProfile(user));
   });
 
   // Liste verfügbarer Test-Nutzer für den Dev-Umschalter. Seedet die Test-Nutzer
@@ -469,7 +500,10 @@ router.post("/auth/set-password", async (req, res) => {
   req.session.userId = user.id;
   req.session.role = user.role;
 
-  return res.json({ id: user.id, name: user.name, email: user.email, role: user.role, accountType: user.accountType, plan: user.plan });
+  // Vollprofil wie /auth/me: Eingeladene Nutzer können bereits als Teamleiter
+  // bzw. mit Team-Freischaltung eingetragen sein — ohne die Flags würde das
+  // Frontend deren Menüpunkte direkt nach dem Setzen des Passworts ausblenden.
+  return res.json(await fullAuthProfile(user));
 });
 
 router.post("/auth/change-password", async (req, res) => {
@@ -642,10 +676,7 @@ router.post("/auth/verify-email", async (req, res) => {
   // Nutzer nach erfolgreicher Verifizierung direkt anmelden.
   req.session.userId = user.id;
   req.session.role = user.role;
-  return res.json({
-    id: user.id, name: user.name, email: user.email,
-    role: user.role, accountType: user.accountType, plan: user.plan,
-  });
+  return res.json(await fullAuthProfile(user));
 });
 
 router.post("/auth/resend-verification", async (req, res) => {
