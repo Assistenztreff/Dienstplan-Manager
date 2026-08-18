@@ -1106,31 +1106,27 @@ function MonthGrid({
   //    Listenansicht, damit die Farbzuordnung überall identisch ist) ────────
   const getPersonSlot = usePersonSlotLookup();
 
-  // ── Dynamische Zeilenhöhe abhängig von max. Einträgen pro Tag ─────────────
-  // Spec §3: 1–2 Einträge → scrollfrei; erst ab 3 Einträgen darf die Ansicht
-  // nach unten wachsen. "Einträge" = Dienste (Abwesenheiten erscheinen nicht
-  // mehr in den Zellen, sondern im Abwesenheitskalender, HANDOFF 05.08.2026).
-  const maxDayEntries = useMemo(() => {
-    let max = 0;
-    for (const day of days) {
-      const count = shifts.filter(
-        (s) => isSameDay(new Date(s.startTime), day) && !isAbsenceShift(s),
-      ).length;
-      max = Math.max(max, count);
-    }
-    return max;
-  }, [shifts, days]);
-
-  // Bei ≤2 Einträgen: feste Viewport-Höhe (alle Wochen passen ohne Scrollen).
-  // Bei ≥3 Einträgen: Zellen wachsen mit Inhalt → Seite kann scrollen.
-  const useDynamicRows = maxDayEntries >= 3;
+  // ── Zeilenhöhe: immer inhaltsbasiert (Task #847) ──────────────────────────
+  // Früher gab es zwei Modi: bei ≤2 Einträgen/Tag wurde das Grid künstlich auf
+  // 100svh minus Kopfzeilen gestreckt (gleichmäßige 1fr-Verteilung), ab 3
+  // Einträgen wurden reine Inhalts-Zeilen verwendet. Das erzeugte zwei Fehler:
+  // (1) der Abstand von der Pille zur nächsten Tageszeile war Restfläche vom
+  // Viewport, nicht fix — bei Browser-Zoom <100% wuchs er sichtbar mit, weil
+  // 100svh in CSS-Pixeln bei kleinerem Zoom größer wird; (2) ein einzelner
+  // dritter Eintrag an einem Tag kippte das Layout-Modell des GESAMTEN Monats
+  // von "gestreckt" auf "kompakt" (sichtbarer Sprung). Jetzt gilt immer die
+  // Inhalts-Variante: jede Wochenzeile ist so hoch wie ihre "belegteste"
+  // Zelle (CSS-Grid-Auto-Sizing), der Abstand unter der letzten Pille ist ein
+  // fixes Padding (siehe Grauzone unten) und skaliert damit 1:1 mit dem Zoom.
+  // Ist ein Monat dienst-arm, ist er dadurch von selbst kompakt genug, um
+  // unter der Sticky-Kopfzeile vollständig sichtbar zu sein — ohne dass wir
+  // ihn künstlich auf Bildschirmhöhe ziehen müssen.
 
   // ── Sticky-Header-Höhe messen (ResizeObserver) ────────────────────────────
-  // Der Dienstplan-Header klebt bei top:0; die Wochenzeile klebt direkt darunter.
-  // Das Grid-Container-Height = 100svh − headerH − weekdayRowH füllt den Rest.
+  // Der Dienstplan-Header klebt bei top:0; die Wochenzeile klebt direkt
+  // darunter und braucht dessen Höhe als eigenen `top`-Versatz.
   const [headerH, setHeaderH] = useState(0);
   const weekdayRowRef = useRef<HTMLDivElement>(null);
-  const [weekdayRowH, setWeekdayRowH] = useState(0);
   // 3.3: Im eingeklappten Smartphone-Modus scrollt der Tages-Tap zur Tagesleiste.
   const detailPanelRef = useRef<HTMLDivElement>(null);
 
@@ -1143,23 +1139,6 @@ function MonthGrid({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-
-  useEffect(() => {
-    const el = weekdayRowRef.current;
-    if (!el) return;
-    const update = () => setWeekdayRowH(el.getBoundingClientRect().height);
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  // Sobald beide Höhen bekannt sind, füllt das Grid den sichtbaren Bereich
-  // unterhalb der sticky Header (kleines gap-px-Puffer für den Rahmen).
-  const gridHeight =
-    headerH > 0 && weekdayRowH > 0
-      ? `calc(100svh - ${headerH + weekdayRowH}px - 0.5rem)`
-      : undefined;
 
   // ── Roving Tabindex (WAI-ARIA-Grid-Pattern) ───────────────────────────────
   const cellRefs = useRef<(HTMLElement | null)[]>([]);
@@ -1259,10 +1238,12 @@ function MonthGrid({
       </div>
 
       {/* ── Kalender-Grid ─────────────────────────────────────────────────── */}
-      {/* Bei ≤2 Einträgen/Tag füllt das Grid MINDESTENS den Viewport (ruhiges
-          Bild in dünnen Monaten); Zeilen dürfen aber immer mit dem Inhalt
-          wachsen — Punkt 4 (15.08.2026): keine Maximalhöhe, nichts wird
-          abgeschnitten. Bei ≥3 Einträgen → reine auto-Zeilen. */}
+      {/* Task #847: Zeilen sind immer reine Inhalts-Zeilen (auto) — keine
+          Viewport-Streckung mehr. Jede Wochenzeile ist so hoch wie ihre
+          belegteste Zelle; ein zusätzlicher Eintrag an einem Tag ändert nur
+          diese eine Zeile, nie das Layout-Modell des ganzen Monats. Ist ein
+          Monat dienst-arm, ist er dadurch von selbst kompakt genug, um unter
+          der Sticky-Kopfzeile ganz sichtbar zu sein — ohne Zutun. */}
       <div
         className={[
           "grid grid-cols-7 gap-px",
@@ -1277,12 +1258,7 @@ function MonthGrid({
             ? // Smartphone (Punkt 4): keine feste Grid-Höhe — die Zellen sind
               // quadratisch (1:1) als Mindestmaß und Zeilen wachsen mit Inhalt.
               { gridTemplateColumns: "repeat(7, 1fr)" }
-            : useDynamicRows
-              ? { gridTemplateColumns: "repeat(7, 1fr)", overflow: "visible" }
-              : {
-                  ...(gridHeight ? { minHeight: gridHeight } : {}),
-                  gridTemplateRows: `repeat(${numWeeks}, minmax(min-content, 1fr))`,
-                }
+            : { gridTemplateColumns: "repeat(7, 1fr)", overflow: "visible" }
         }
         data-testid="month-grid"
       >
@@ -1559,12 +1535,16 @@ function MonthGrid({
                 )
               ) : variant === "full" && (
                 /* Desktop/Tablet: zweizeilige Pille mit Uhrzeit. Grauzone
-                   #eef0f3 unter der Kopfzeile, Trennlinie in Rahmenfarbe,
-                   füllt die Zelle bis unten (flex-1) — auch an leeren Tagen.
-                   Mindesthöhe ≈ 1,2 Pillenhöhen (zweizeilige Pille ~33 px →
-                   40 px); nach oben wächst die Zelle unbegrenzt mit den
-                   Diensten. */
-                <div className="flex min-h-[40px] min-w-0 flex-1 flex-col gap-[3px] border-t border-[#dfe4ea] bg-[#e4e8ee] px-1 py-1">
+                   #eef0f3 unter der Kopfzeile, Trennlinie in Rahmenfarbe.
+                   Task #847: Mindesthöhe an leeren Tagen ist jetzt exakt
+                   "Platz für eine einzeilige Pille" (23 px, siehe minimierte
+                   Pille) + das eigene py-1-Padding (4 px oben/unten) = 31 px —
+                   kein künstlicher Puffer mehr. flex-1 lässt die Grauzone bei
+                   einem geschäftigeren Nachbartag INNERHALB derselben Woche
+                   trotzdem mitwachsen (CSS-Grid-Zeilen stretchen die Zellen
+                   einer Reihe auf die Höhe der belegtesten Zelle); nach oben
+                   wächst die Zelle unbegrenzt mit den eigenen Diensten. */
+                <div className="flex min-h-[31px] min-w-0 flex-1 flex-col gap-[3px] border-t border-[#dfe4ea] bg-[#e4e8ee] px-1 py-1">
                   {visiblePills.map((s) => {
                     const isTeam = s.type === "team";
                     const slot = getPersonSlot(s.userId);
@@ -1629,7 +1609,13 @@ function MonthGrid({
                           data-testid={`day-chip-${s.id}`}
                           {...commonHandlers}
                           className={[
-                            "@container relative flex h-6 items-center overflow-hidden rounded-[6px] border",
+                            // Task #847: keine feste h-6 mehr — die Höhe ergibt
+                            // sich aus dem Inhalt (min-h-[23px] unten), damit die
+                            // minimierte Pille exakt so hoch ist wie Zeile 1 der
+                            // zweizeiligen Pille (dieselbe Mindesthöhe, Punkt 5,
+                            // 17.08.2026). Vorher: h-6 (24px) vs. natürliche
+                            // Inhaltshöhe 21px → wirkte 2px niedriger als Zeile 1.
+                            "@container relative flex items-center overflow-hidden rounded-[6px] border",
                             "border-[#c7ced8] shadow-[0_3px_5px_rgba(9,41,72,0.13)]",
                             chipClickable ? "cursor-pointer" : "",
                           ].filter(Boolean).join(" ")}
@@ -1644,7 +1630,7 @@ function MonthGrid({
                             className="absolute right-0 top-0 bottom-0 w-[4px]"
                             style={{ backgroundColor: statusColor }}
                           />
-                          <span className="flex w-full items-center gap-[4px] bg-white py-[2px] pl-[6px] pr-[6px] leading-none">
+                          <span className="flex min-h-[23px] w-full items-center gap-[4px] bg-white py-[2px] pl-[6px] pr-[6px] leading-none">
                             <PillAvatar color={barColor} label={avatarLabel} />
                             {/* Arbeitsanweisung 17.08.2026, Folgeauftrag: kein
                                 shrink-0 mehr — der Name soll bei wenig Platz
