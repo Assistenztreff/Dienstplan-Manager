@@ -19,7 +19,7 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, Check, CheckSquare, X, CalendarPlus, Trash2, Pencil, ChevronDown, Users, Lock, Download, MessageSquare, Rows2 } from "lucide-react";
-import { StatusBadge } from "@/components/status-badge";
+import { StatusBadge, type StatusBadgeKind } from "@/components/status-badge";
 import type { LucideIcon } from "lucide-react";
 import { ShiftDialog } from "@/components/shift-dialog";
 import { BulkDeleteDialog } from "@/components/bulk-delete-dialog";
@@ -865,12 +865,12 @@ function AgendaView({
   );
 }
 
-/** Einzeilige Tagesleisten-Zeile (Arbeitspaket 07.08.2026, Punkt 5):
- *  3-px-Farbbalken links in der Assistenzfarbe (gemeinsamer Nenner mit der
- *  Kalender-Pille), dann Name, Eintragsart („Dienst · bestätigt" /
- *  „Abwesenheit · Urlaub"), bei Entwurf ein kompakter „Bestätigen"-Button
- *  direkt daneben, rechtsbündig die Uhrzeit bzw. „ganztägig".
- *  Keine flächenhafte Einfärbung mehr. */
+/** Einzeilige Tagesleisten-Zeile — Pillen-Design (18.08.2026, Task #850):
+ *  Links Avatar (Personenfarbe) + Name + Uhrzeit; rechts Statustext
+ *  („Dienst · bestätigt", Zustandswort eingefärbt) + Icon-Stack + 4-px-
+ *  Statusfarbbalken. Gleiche Farb-/Icon-Quellen wie die Kalender-Pille
+ *  (dienstStatusColor / StatusBadge). Zeilenhöhe unverändert.
+ *  Abwesenheiten und Teamdienste folgen dem selben Layout. */
 function DayDetailRow({
   shift,
   modelMap,
@@ -896,6 +896,7 @@ function DayDetailRow({
   hasAusfall?: boolean;
 }) {
   const { selectedTeamId } = useTeam();
+  const getPersonSlot = usePersonSlotLookup();
   const mirror = isMirrorShift(shift, selectedTeamId);
   const isAbsence = isAbsenceShift(shift);
   const isTeam = shift.type === "team";
@@ -914,6 +915,22 @@ function DayDetailRow({
       ? ""
       : `${format(new Date(shift.startTime), "HH:mm")}–${format(new Date(shift.endTime), "HH:mm")}`;
   const clickable = !!onClick && !mirror;
+
+  // Avatar-Farbe: Personenslot für Arbeits-/Abwesenheitsschichten,
+  // Himmelblau (#0284c7) für Teamdienste (wie in der Kalender-Pille).
+  const slot = getPersonSlot(shift.userId);
+  const avatarColor = isTeam ? "#0284c7" : slot.bg;
+  const avatarLabel = isTeam ? "T" : shift.user?.name ? lastNameInitial(shift.user.name) : "?";
+
+  // Rechter Statusfarbbalken: exakt dieselbe Prioritätslogik wie in der Pille.
+  const statusBarColor = dienstStatusColor(status, hasAusfall, shift.isVertretung);
+
+  // Basis-Status-Icon (ohne Vertretung/Krank-Overlay).
+  const baseIconKind: StatusBadgeKind =
+    status === "FIX" ? "confirmed" : status === "ANGEBOTEN" ? "sent" : "draft";
+
+  const confirmable = onConfirm && !mirror && isConfirmableShift(shift);
+
   return (
     <div
       data-testid={testId ?? `day-detail-shift-${shift.id}`}
@@ -939,39 +956,40 @@ function DayDetailRow({
             }
           : undefined
       }
-      className={`relative flex items-center border-b border-[#f1f1ee] last:border-b-0 ${comfortable ? "gap-3 py-3 pl-5 pr-4 text-sm" : "min-h-[44px] gap-2.5 py-1.5 pl-4 pr-3 text-[12.5px]"} ${planningStatusBadgeOutline(shift)} ${
+      className={`relative flex items-center overflow-hidden border-b border-[#f1f1ee] last:border-b-0 ${comfortable ? "gap-2.5 py-3 pl-4 pr-[8px] text-sm" : "min-h-[44px] gap-2 py-1.5 pl-3 pr-[8px] text-[12.5px]"} ${planningStatusBadgeOutline(shift)} ${
         clickable
           ? "cursor-pointer transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
           : ""
       }`}
     >
-      {/* Name gehört zum Zeilen-Layout (Punkt 5) — für alle sichtbar, die die
-          Zeile sehen dürfen; Autorisierung gilt nur für Aktionen. */}
-      {showName && shift.user && (
-        <span className={`shrink truncate font-semibold text-[#151515] ${comfortable ? "min-w-[130px]" : "min-w-[110px]"}`}>{shift.user.name}</span>
-      )}
-      <span className="flex min-w-0 items-center gap-1 text-[#555555]">
-        {isAbsence ? (
-          <span className="truncate">Abwesenheit · {label}</span>
-        ) : (
-          <span className="truncate">
-            {isTeam ? "Teamdienst" : "Dienst"} ·{" "}
-            {status !== "FIX" && (
-              <StatusBadge
-                kind={status === "ANGEBOTEN" ? "sent" : "draft"}
-                compact
-                className="mr-0.5 align-[-2px]"
-              />
-            )}
-            {/* Task #792: Krankheits-Icon in der Tagesleiste — analog zur Kalender-Pille */}
-            {hasAusfall && <StatusBadge kind="krank" compact className="mr-0.5 align-[-2px]" label="Ausfall: Assistenzkraft abwesend" />}
-            {statusText}
-            {shift.isVertretung ? " · Vertretung" : ""}
-            {einsatzLabel ? ` · ${einsatzLabel}` : ""}
+      {/* Avatar: runder Initialen-Kreis in der Personenfarbe (wie in der
+          Kalender-Pille); 2 px größer als die Schriftgröße des Namens. */}
+      <span
+        aria-hidden="true"
+        className={`flex shrink-0 items-center justify-center rounded-full font-bold leading-none text-white ${comfortable ? "h-[17px] w-[17px] text-[8px]" : "h-[15px] w-[15px] text-[7.5px]"}`}
+        style={{ backgroundColor: avatarColor }}
+      >
+        {avatarLabel}
+      </span>
+
+      {/* Linke Gruppe: Name + Uhrzeit — nimmt den verfügbaren Platz auf;
+          der Rest der Zeile bleibt rechts-ausgerichtet (shrink-0). */}
+      <span className="flex min-w-0 flex-1 items-center gap-1.5">
+        {showName && shift.user && (
+          <span className="shrink truncate font-semibold text-[#151515]">
+            {shift.user.name}
+          </span>
+        )}
+        {timeLabel && (
+          <span className="shrink-0 whitespace-nowrap tabular-nums text-[11.5px] text-[#555555]">
+            {timeLabel}
           </span>
         )}
       </span>
-      {onConfirm && !mirror && isConfirmableShift(shift) && (
+
+      {/* Bestätigen-Button (Entwurf/Vorschlag): stoppt das Bubbling,
+          damit der Zeilenklick (Bearbeiten) nicht feuert. */}
+      {confirmable && (
         <button
           type="button"
           data-testid={`shift-confirm-${shift.id}`}
@@ -980,12 +998,14 @@ function DayDetailRow({
             e.stopPropagation();
             onConfirm(shift);
           }}
-          className={`relative inline-flex shrink-0 items-center gap-1 rounded-md border border-[#d8d8d4] bg-white px-2 py-0.5 font-semibold text-[#092948] transition-colors hover:border-[#092948] ${comfortable ? "text-xs" : "text-[11px] after:absolute after:content-[''] after:inset-x-0 after:top-1/2 after:-translate-y-1/2 after:h-[44px]"}`}
+          className={`relative inline-flex shrink-0 items-center gap-1 rounded-md border border-[#d8d8d4] bg-white px-2 py-0.5 font-semibold text-[#092948] transition-colors hover:border-[#092948] ${comfortable ? "text-xs" : "text-[11px] after:absolute after:inset-x-0 after:top-1/2 after:h-[44px] after:-translate-y-1/2 after:content-['']"}`}
         >
           <Check className="h-3 w-3" />
           Bestätigen
         </button>
       )}
+
+      {/* Notiz-Icon */}
       {shift.notes && (
         <TooltipProvider>
           <Tooltip>
@@ -1004,11 +1024,49 @@ function DayDetailRow({
           </Tooltip>
         </TooltipProvider>
       )}
-      {timeLabel && (
-        <span className="ml-auto shrink-0 whitespace-nowrap tabular-nums text-[11.5px] text-[#555555]">
-          {timeLabel}
+
+      {/* Rechte Statusgruppe: Statustext (Zustandswort eingefärbt) +
+          Icon-Stack + 4-px-Farbbalken (absolute).
+          4-px-Abstand zum Balken durch pr-[8px] auf dem Elternelement. */}
+      <span className={`flex shrink-0 items-center gap-1 text-[11.5px] text-[#555555] ${comfortable ? "" : "max-w-[160px]"}`}>
+        {/* Statustext */}
+        <span className="truncate">
+          {isAbsence ? (
+            <>Abwesenheit · {label}</>
+          ) : (
+            <>
+              {isTeam ? "Teamdienst" : "Dienst"}
+              {einsatzLabel ? ` · ${einsatzLabel}` : ""}
+              {shift.isVertretung ? " · Vertretung" : ""}
+              {" · "}
+              <span style={{ color: statusBarColor }}>{statusText}</span>
+            </>
+          )}
         </span>
-      )}
+        {/* Icon-Stack: aufsteigend wichtig — Basis-Status links, Ausfall ganz
+            rechts (wie in der Kalender-Pille). */}
+        <span className="flex shrink-0 items-center -space-x-[5px]">
+          <StatusBadge
+            kind={baseIconKind}
+            compact
+            label={status === "FIX" ? "Bestätigt" : status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
+          />
+          {shift.isVertretung && (
+            <StatusBadge kind="vertretung" compact label="Vertretung" />
+          )}
+          {hasAusfall && (
+            <StatusBadge kind="krank" compact label="Ausfall: Assistenzkraft abwesend" />
+          )}
+        </span>
+      </span>
+
+      {/* Rechter 4-px-Statusfarbbalken — gleiche Farbe wie in der Kalender-
+          Pille; overflow:hidden auf dem Elternelement clippt ihn bündig. */}
+      <span
+        aria-hidden="true"
+        className="absolute bottom-0 right-0 top-0 w-[4px]"
+        style={{ backgroundColor: statusBarColor }}
+      />
     </div>
   );
 }
