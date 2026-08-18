@@ -2552,7 +2552,7 @@ export default function Dienstplan() {
   const month = currentDate.getMonth() + 1;
   const year = currentDate.getFullYear();
 
-  const { selectedTeamId } = useTeam();
+  const { selectedTeamId, isTeamScopeReady } = useTeam();
   const teamParam = selectedTeamId != null ? { teamId: selectedTeamId } : {};
 
   // placeholderData: keepPreviousData (Task #758) hält beim Monatswechsel
@@ -2564,6 +2564,9 @@ export default function Dienstplan() {
     { month, year, ...teamParam },
     {
       query: {
+        // Erst laden, wenn der Team-Scope settled ist — sonst feuert die
+        // Monatsliste doppelt (ohne, dann mit teamId nach der Auto-Auswahl).
+        enabled: isTeamScopeReady,
         placeholderData: keepPreviousData,
         staleTime: SHIFT_LIST_STALE_TIME_MS,
         gcTime: SHIFT_LIST_GC_TIME_MS,
@@ -2578,9 +2581,12 @@ export default function Dienstplan() {
   // bei jedem Render neu erzeugt wird und den Effekt sonst dauerhaft
   // auslösen würde).
   useEffect(() => {
+    // Auch das Vorladen wartet auf den settled Team-Scope — sonst würden die
+    // Nachbarmonate zuerst unscoped (und damit doppelt) geladen.
+    if (!isTeamScopeReady) return;
     prefetchAdjacentMonthShifts(queryClient, month, year, teamParam);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queryClient, month, year, selectedTeamId]);
+  }, [queryClient, month, year, selectedTeamId, isTeamScopeReady]);
 
   const updateShift = useUpdateShift();
   const sendProposalsMutation = useSendShiftProposals();
@@ -2589,7 +2595,9 @@ export default function Dienstplan() {
   const [isBulkConfirming, setIsBulkConfirming] = useState(false);
   const { data: users, isLoading: usersLoading } = useListUsers(
     selectedTeamId != null ? { teamId: selectedTeamId } : undefined,
-    { query: { staleTime: REFERENCE_DATA_STALE_TIME_MS } } as unknown as Parameters<typeof useListUsers>[1],
+    {
+      query: { enabled: isTeamScopeReady, staleTime: REFERENCE_DATA_STALE_TIME_MS },
+    } as unknown as Parameters<typeof useListUsers>[1],
   ) as { data?: User[]; isLoading: boolean };
 
   const goToMonth = (newDate: Date) => {
@@ -2625,7 +2633,9 @@ export default function Dienstplan() {
 
   const [selectedAssistant, setSelectedAssistant] = useSelectedAssistant(
     assistants,
-    !(canPlan && usersLoading),
+    // Erst "ready", wenn Team-Scope UND Nutzerliste stehen — sonst würde eine
+    // gespeicherte Auswahl gegen die noch leere Liste geprüft und verworfen.
+    isTeamScopeReady && !(canPlan && usersLoading),
   );
 
   // Kollisionsarme Farbzuordnung fürs ganze Team: die ersten 8 Personen
@@ -2642,7 +2652,9 @@ export default function Dienstplan() {
 
   const { data: shiftModels } = useListShiftModels(
     teamParam,
-    { query: { staleTime: REFERENCE_DATA_STALE_TIME_MS } } as unknown as Parameters<typeof useListShiftModels>[1],
+    {
+      query: { enabled: isTeamScopeReady, staleTime: REFERENCE_DATA_STALE_TIME_MS },
+    } as unknown as Parameters<typeof useListShiftModels>[1],
   ) as { data?: ShiftModel[] };
   const modelMap = new Map<number, ShiftModelInfo>(
     (shiftModels ?? []).map((m) => [m.id, { name: m.name }])
@@ -2674,7 +2686,7 @@ export default function Dienstplan() {
     selectedAssistant === "all"
       ? assistants
       : assistants.filter((a) => a.id === selectedAssistant);
-  const isLoading = shiftsLoading || (canPlan && usersLoading);
+  const isLoading = !isTeamScopeReady || shiftsLoading || (canPlan && usersLoading);
   // Dezenter Hinweis auf einen Hintergrund-Reload (Platzhalterdaten aus
   // keepPreviousData sind sichtbar, z. B. kurz nach einem Monatswechsel) —
   // KEIN Ersatz für isLoading: Grid/Liste bleiben voll bedienbar, nur

@@ -286,12 +286,15 @@ export default function Auswertungen() {
   const month = currentDate.getMonth() + 1;
   const year = currentDate.getFullYear();
 
-  const { selectedTeamId } = useTeam();
+  const { selectedTeamId, isTeamScopeReady } = useTeam();
   const teamParam = selectedTeamId != null ? { teamId: selectedTeamId } : {};
   // placeholderData: keepPreviousData hält beim Monatswechsel die Zahlen des
   // vorherigen Monats sichtbar, während der neue geladen wird — kein Aufblitzen
   // auf leere Skelette (analog zu Task #758 im Dienstplan-Kalender).
-  const { data: balances, isLoading } = useGetHoursBalance(
+  // enabled zusätzlich an isTeamScopeReady gekoppelt: verhindert den Doppel-
+  // Request beim ersten Öffnen (erst ohne, dann mit teamId nach der
+  // Team-Auto-Auswahl des TeamProviders).
+  const { data: balances, isLoading: balancesLoading } = useGetHoursBalance(
     {
       month,
       year,
@@ -299,13 +302,14 @@ export default function Auswertungen() {
     },
     {
       query: {
-        enabled: !analyticsLocked,
+        enabled: !analyticsLocked && isTeamScopeReady,
         placeholderData: keepPreviousData,
         staleTime: SHIFT_LIST_STALE_TIME_MS,
         gcTime: SHIFT_LIST_GC_TIME_MS,
       },
     } as any,
   ) as any;
+  const isLoading = !isTeamScopeReady || balancesLoading;
 
   // Stundenliste (Free-Export): FIX-Dienste + Abwesenheiten aus der
   // Schichtliste — bewusst kein Premium-Gate, damit Free-Konten ihre
@@ -318,7 +322,7 @@ export default function Auswertungen() {
     },
     {
       query: {
-        enabled: isAdmin,
+        enabled: isAdmin && isTeamScopeReady,
         staleTime: SHIFT_LIST_STALE_TIME_MS,
         gcTime: SHIFT_LIST_GC_TIME_MS,
       },
@@ -327,7 +331,9 @@ export default function Auswertungen() {
 
   const { data: users, isLoading: usersLoading } = useListUsers(
     selectedTeamId != null ? { teamId: selectedTeamId } : undefined,
-    { query: { staleTime: REFERENCE_DATA_STALE_TIME_MS } } as any,
+    {
+      query: { enabled: isTeamScopeReady, staleTime: REFERENCE_DATA_STALE_TIME_MS },
+    } as any,
   );
 
   const assistants: Assistant[] = isAdmin
@@ -335,7 +341,9 @@ export default function Auswertungen() {
     : [];
   const [selectedAssistant, setSelectedAssistant] = useSelectedAssistant(
     assistants,
-    !(isAdmin && usersLoading),
+    // Erst "ready", wenn Team-Scope UND Nutzerliste stehen — sonst würde eine
+    // gespeicherte Auswahl gegen die noch leere Liste geprüft und verworfen.
+    isTeamScopeReady && !(isAdmin && usersLoading),
   );
 
   // Ansichts-Umschalter (nur Admin): Gesamtübersichts-Matrix vs. Einzelkarten.
@@ -357,7 +365,7 @@ export default function Auswertungen() {
       year: prevOfShown.getFullYear(),
       ...teamParam,
     },
-    { query: { enabled: isAdmin && !analyticsLocked } } as any,
+    { query: { enabled: isAdmin && !analyticsLocked && isTeamScopeReady } } as any,
   ) as { data: MonthClosingDiff | undefined };
   const recalcByUser = new Map<number, { diffPay: number; diffBasePay: number; diffSurchargePay: number }>();
   // Abwesenheits-Anteil der Nachberechnung (Urlaubs-/Krankheitsstunden des

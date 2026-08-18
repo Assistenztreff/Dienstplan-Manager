@@ -14,6 +14,7 @@
 
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTeam } from "@/context/team";
 import {
   useGetMonthClosings,
   useGetMonthClosingDiff,
@@ -66,9 +67,12 @@ export function MonthClosingCard({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const queryClient = useQueryClient();
 
+  // Erst abfragen, wenn der Team-Scope settled ist (Team-Auto-Auswahl),
+  // sonst feuert die Anfrage doppelt: erst ohne, dann mit teamId.
+  const { isTeamScopeReady } = useTeam();
   const params = { month, year, ...(teamId != null ? { teamId } : {}) };
   const { data } = useGetMonthClosings(params, {
-    query: { enabled: true },
+    query: { enabled: isTeamScopeReady },
   } as any) as { data: MonthClosingStatus | undefined };
 
   const createClosing = useCreateMonthClosing();
@@ -237,7 +241,9 @@ export function PayrollTotalsCard({
   assistantFilter: number | "all";
 }) {
   // Nachberechnung des Vormonats — dieselben Daten wie die Detail-Sektion
-  // (React Query dedupliziert die Anfrage).
+  // (React Query dedupliziert die Anfrage). enabled: isTeamScopeReady
+  // verhindert den unscoped Doppel-Request vor der Team-Auto-Auswahl.
+  const { isTeamScopeReady } = useTeam();
   const prev = new Date(year, month - 2, 1);
   const prevLabel = format(prev, "MMMM yyyy", { locale: de });
   const params = {
@@ -246,7 +252,7 @@ export function PayrollTotalsCard({
     ...(teamId != null ? { teamId } : {}),
   };
   const { data } = useGetMonthClosingDiff(params, {
-    query: { enabled: true },
+    query: { enabled: isTeamScopeReady },
   } as any) as { data: MonthClosingDiff | undefined };
 
   const diffRows =
@@ -343,9 +349,11 @@ export function RecalculationSection({
   const prevYear = prev.getFullYear();
   const prevLabel = format(prev, "MMMM yyyy", { locale: de });
 
+  // enabled: isTeamScopeReady — kein unscoped Request vor der Team-Auto-Auswahl.
+  const { isTeamScopeReady } = useTeam();
   const params = { month: prevMonth, year: prevYear, ...(teamId != null ? { teamId } : {}) };
   const { data } = useGetMonthClosingDiff(params, {
-    query: { enabled: true },
+    query: { enabled: isTeamScopeReady },
   } as any) as { data: MonthClosingDiff | undefined };
 
   if (!data?.closed || data.rows.length === 0) return null;

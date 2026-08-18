@@ -10,7 +10,7 @@ import {
 } from "@workspace/api-client-react";
 import type { MonthClosingStatus } from "@workspace/api-client-react";
 import { hasAccess } from "@/lib/entitlements";
-import type { DashboardWarnings, VacationBalance } from "@workspace/api-client-react";
+import type { DashboardSummary, DashboardWarnings, Shift, VacationBalance } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from "date-fns";
@@ -373,8 +373,18 @@ function AbsenceReminder() {
   const now = new Date();
   const month = now.getMonth();
   const year = now.getFullYear();
-  const { data: vacationShifts } = useListShifts({ type: "vacation" });
-  const { data: sickShifts } = useListShifts({ type: "sick" });
+  // enabled: isTeamScopeReady — erst laden, wenn der Team-Scope settled ist
+  // (sonst feuert die Liste doppelt: erst ohne, dann mit Team-Auswahl). Für
+  // Nutzer ohne Team-Switcher ist isTeamScopeReady sofort true.
+  const { isTeamScopeReady } = useTeam();
+  const { data: vacationShifts } = useListShifts(
+    { type: "vacation" },
+    { query: { enabled: isTeamScopeReady } } as Parameters<typeof useListShifts>[1],
+  ) as { data?: Shift[] };
+  const { data: sickShifts } = useListShifts(
+    { type: "sick" },
+    { query: { enabled: isTeamScopeReady } } as Parameters<typeof useListShifts>[1],
+  ) as { data?: Shift[] };
 
   if (!vacationShifts || !sickShifts) return null;
 
@@ -495,7 +505,13 @@ function MonthClosingReminder({ teamId }: { teamId: number | null }) {
  */
 function KrankmeldungSection({ userId }: { userId: number }) {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const { data: sickShifts } = useListShifts({ type: "sick" });
+  // Für Assistenzkräfte ist isTeamScopeReady sofort true — das Gate wirkt nur
+  // bei Konten mit Team-Switcher (verhindert den unscoped Doppel-Request).
+  const { isTeamScopeReady } = useTeam();
+  const { data: sickShifts } = useListShifts(
+    { type: "sick" },
+    { query: { enabled: isTeamScopeReady } } as Parameters<typeof useListShifts>[1],
+  ) as { data?: Shift[] };
   const now = new Date();
   const isSickToday = (sickShifts ?? []).some(
     (s) => new Date(s.startTime) <= now && now <= new Date(s.endTime),
@@ -538,13 +554,19 @@ export default function Dashboard() {
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
   
-  const { selectedTeamId } = useTeam();
+  const { selectedTeamId, isTeamScopeReady } = useTeam();
   const { currentUser } = useAuth();
   const isAdmin = isAdminRole(currentUser?.role);
 
-  const { data: summary, isLoading } = useGetDashboardSummary(
-    { month, year, ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}) }
-  );
+  // enabled: isTeamScopeReady — verhindert den Doppel-Request beim ersten
+  // Öffnen (erst ohne, gleich darauf mit teamId), sobald der TeamProvider das
+  // erste Team automatisch ausgewählt hat. Solange der Scope nicht settled
+  // ist, zeigen wir weiter die Lade-Skelette (isLoading unten).
+  const { data: summary, isLoading: summaryLoading } = useGetDashboardSummary(
+    { month, year, ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}) },
+    { query: { enabled: isTeamScopeReady } } as Parameters<typeof useGetDashboardSummary>[1],
+  ) as { data?: DashboardSummary; isLoading: boolean };
+  const isLoading = !isTeamScopeReady || summaryLoading;
 
   // Konto-Schalter „Zeiterfassung": bei AUS verschwinden alle Querverweise
   // (KPI-Kachel, offene-Einträge-Warnung, Nachbestätigungs-Hinweis).
