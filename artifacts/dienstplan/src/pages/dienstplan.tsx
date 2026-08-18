@@ -2288,6 +2288,8 @@ function DienstplanTableView({
   onPrevMonth,
   onNextMonth,
   absenceByUser,
+  selectedDay,
+  onSelectDay,
 }: {
   days: Date[];
   year: number;
@@ -2306,6 +2308,8 @@ function DienstplanTableView({
   onPrevMonth: () => void;
   onNextMonth: () => void;
   absenceByUser: Map<number, Set<string>>;
+  selectedDay: Date;
+  onSelectDay: (day: Date) => void;
 }) {
   return (
     <Card
@@ -2334,20 +2338,28 @@ function DienstplanTableView({
             {days.map((day) => {
               const colSelected =
                 isSelectionMode && selectedDates.includes(format(day, "yyyy-MM-dd"));
+              const isDayActive = !isSelectionMode && isSameDay(day, selectedDay);
               return (
               <th
                 key={day.toISOString()}
                 scope="col"
-                data-testid={isSelectionMode ? `col-header-${format(day, "yyyy-MM-dd")}` : undefined}
+                data-testid={isSelectionMode ? `col-header-${format(day, "yyyy-MM-dd")}` : "table-day-header"}
                 data-selected={colSelected ? "true" : "false"}
-                onClick={isSelectionMode && isAdmin ? () => toggleDate(day) : undefined}
-                className={`p-2 font-medium text-center w-[88px] min-w-[88px] ${
+                data-active={isDayActive ? "true" : "false"}
+                onClick={
+                  isSelectionMode && isAdmin
+                    ? () => toggleDate(day)
+                    : () => onSelectDay(day)
+                }
+                className={`p-2 font-medium text-center w-[88px] min-w-[88px] cursor-pointer hover:bg-primary/5 ${
                   colSelected
                     ? "bg-assistenz-mint ring-1 ring-inset ring-assistenz-brand"
-                    : isToday(day)
-                      ? "bg-primary/10"
-                      : ""
-                } ${isSelectionMode && isAdmin ? "cursor-pointer hover:bg-primary/5" : ""}`}
+                    : isDayActive
+                      ? "bg-assistenz-mint/60 ring-2 ring-inset ring-assistenz-brand"
+                      : isToday(day)
+                        ? "bg-primary/10"
+                        : ""
+                }`}
               >
                 <div className="text-xs text-muted-foreground">{format(day, "E", { locale: de })}</div>
                 <div
@@ -2404,6 +2416,7 @@ function DienstplanTableView({
                   const isAbsent =
                     isAdmin && !isSelectionMode && (absenceByUser.get(assistant.id)?.has(dk) ?? false);
                   const cellClickable = isAdmin;
+                  const isDayActive = !isSelectionMode && isSameDay(day, selectedDay);
                   return (
                     <td
                       key={day.toISOString()}
@@ -2412,19 +2425,24 @@ function DienstplanTableView({
                       } ${
                         colSelected
                           ? "bg-assistenz-mint/60"
-                          : isAbsent
-                            ? "bg-muted/40"
-                            : isToday(day)
-                              ? "bg-primary/5"
-                              : isAdmin && !isSelectionMode
-                                ? "hover:bg-muted/30"
-                                : ""
+                          : isDayActive
+                            ? "bg-assistenz-mint/30 ring-2 ring-inset ring-assistenz-brand"
+                            : isAbsent
+                              ? "bg-muted/40"
+                              : isToday(day)
+                                ? "bg-primary/5"
+                                : isAdmin && !isSelectionMode
+                                  ? "hover:bg-muted/30"
+                                  : ""
                       }`}
                       onClick={
                         isAdmin
                           ? isSelectionMode
                             ? () => toggleDate(day)
-                            : () => openCreate(day, assistant.id)
+                            : () => {
+                                onSelectDay(day);
+                                openCreate(day, assistant.id);
+                              }
                           : undefined
                       }
                       aria-disabled={isAbsent || undefined}
@@ -3024,6 +3042,8 @@ export default function Dienstplan() {
             onPrevMonth={prevMonth}
             onNextMonth={nextMonth}
             absenceByUser={absenceByUser}
+            selectedDay={selectedDay}
+            onSelectDay={setSelectedDay}
           />
         )}
         </div>
