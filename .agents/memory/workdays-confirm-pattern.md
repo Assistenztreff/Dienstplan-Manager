@@ -16,3 +16,13 @@ Zwei dauerhafte Regeln:
 2. **Bestätigungen über Steuerfeld, nicht Wert-Erneutsendung.** `PATCH /api/contracts` akzeptiert `workdaysConfirm: true` (wird vor dem UPDATE entfernt, setzt nur den Zeitstempel). Das Hinweis-X schickt keinen (ggf. veralteten) Ist-Wert mehr mit.
    **Why:** Ein Wert-Resend konnte mit einem parallelen Rechner-PATCH racen und inkonsistente Paare (alte Arbeitstage + neue Wochenstunden) speichern.
    **How to apply:** Neue „als geprüft markieren"-Flows als reines Steuerfeld im Update-Schema, nie als verstecktes Wert-Update.
+
+## Untergrenze Arbeitstage/Woche = 0,1 (Minijob-Fall)
+Seit dem Minijob-Feedback (1×24-h-Dienst/Monat = 0,23 Tage/Woche) gilt min 0,1 statt 0,5.
+Die Grenze lebt an MEHREREN Stellen, die in Gleichschritt geändert werden müssen:
+openapi.yaml (ContractCreate+ContractUpdate, minimum + descriptions inkl. Response-Texte) → orval-codegen,
+arbeitstage-rechner.ts (Rechenkern), arbeitstage-rechner-dialog.tsx (Hinweistext + Input-min),
+assistenzkraft-formular.tsx (validate() + Fehlertext + Input-min), lib/db Schema-Kommentar, Unit-Tests.
+**Why:** vergessene Stellen erzeugen widersprüchliche UI (Rechner sagt „geht nicht", API würde annehmen).
+Kleine Nenner sind mathematisch unkritisch (Tagessoll = weeklyHours/workdaysPerWeek, kein Cap);
+Fallback auf 5 greift weiterhin nur bei <= 0.

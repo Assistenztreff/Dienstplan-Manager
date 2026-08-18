@@ -421,7 +421,7 @@ export interface Contract {
   id: number;
   userId: number;
   weeklyHours: number;
-  /** Arbeitstage pro Woche (0,5–7, Dezimalwerte erlaubt); Basis für den Vertrags-Fallback der bwavg-Urlaubsbewertung. */
+  /** Arbeitstage pro Woche (0,1–7, Dezimalwerte erlaubt); Basis für den Vertrags-Fallback der bwavg-Urlaubsbewertung. */
   workdaysPerWeek?: number;
   /**
      * Zeitpunkt der letzten bewussten Arbeitstage-Festlegung; null = Migrations-Default, Datenpflege-Hinweis anzeigen.
@@ -447,8 +447,8 @@ export interface ContractInput {
   /** @minimum 0 */
   weeklyHours: number;
   /**
-     * Arbeitstage pro Woche (0,5–7, Dezimalwerte erlaubt), Default 5.
-     * @minimum 0.5
+     * Arbeitstage pro Woche (0,1–7, Dezimalwerte erlaubt, z. B. 0,23 bei einem 24-h-Dienst pro Monat), Default 5.
+     * @minimum 0.1
      * @maximum 7
      */
   workdaysPerWeek?: number;
@@ -463,8 +463,8 @@ export interface ContractUpdate {
   /** @minimum 0 */
   weeklyHours?: number;
   /**
-     * Arbeitstage pro Woche (0,5–7, Dezimalwerte erlaubt). Bei Angabe wird workdaysConfirmedAt gesetzt.
-     * @minimum 0.5
+     * Arbeitstage pro Woche (0,1–7, Dezimalwerte erlaubt). Bei Angabe wird workdaysConfirmedAt gesetzt.
+     * @minimum 0.1
      * @maximum 7
      */
   workdaysPerWeek?: number;

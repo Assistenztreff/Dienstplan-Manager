@@ -2648,7 +2648,7 @@ components:
           type: number
         workdaysPerWeek:
           type: number
-          description: Arbeitstage pro Woche (0,5–7, Dezimalwerte erlaubt); Basis für den Vertrags-Fallback der bwavg-Urlaubsbewertung.
+          description: Arbeitstage pro Woche (0,1–7, Dezimalwerte erlaubt); Basis für den Vertrags-Fallback der bwavg-Urlaubsbewertung.
         workdaysConfirmedAt:
           type: ["string", "null"]
           format: date-time
@@ -2685,9 +2685,9 @@ components:
           minimum: 0
         workdaysPerWeek:
           type: number
-          minimum: 0.5
+          minimum: 0.1
           maximum: 7
-          description: Arbeitstage pro Woche (0,5–7, Dezimalwerte erlaubt), Default 5.
+          description: Arbeitstage pro Woche (0,1–7, Dezimalwerte erlaubt, z. B. 0,23 bei einem 24-h-Dienst pro Monat), Default 5.
         vacationDays:
           type: integer
           minimum: 0
@@ -2708,9 +2708,9 @@ components:
           minimum: 0
         workdaysPerWeek:
           type: number
-          minimum: 0.5
+          minimum: 0.1
           maximum: 7
-          description: Arbeitstage pro Woche (0,5–7, Dezimalwerte erlaubt). Bei Angabe wird workdaysConfirmedAt gesetzt.
+          description: Arbeitstage pro Woche (0,1–7, Dezimalwerte erlaubt). Bei Angabe wird workdaysConfirmedAt gesetzt.
         workdaysConfirm:
           type: boolean
           description: true = Arbeitstage/Woche als geprüft bestätigen (setzt nur workdaysConfirmedAt, ohne Werte zu ändern).

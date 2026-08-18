@@ -10,8 +10,8 @@ export interface ContractUpdate {
   /** @minimum 0 */
   weeklyHours?: number;
   /**
-     * Arbeitstage pro Woche (0,5–7, Dezimalwerte erlaubt). Bei Angabe wird workdaysConfirmedAt gesetzt.
-     * @minimum 0.5
+     * Arbeitstage pro Woche (0,1–7, Dezimalwerte erlaubt). Bei Angabe wird workdaysConfirmedAt gesetzt.
+     * @minimum 0.1
      * @maximum 7
      */
   workdaysPerWeek?: number;

@@ -342,8 +342,8 @@ export function AssistentDialog({ open, onClose, editUser, editContract, teamId 
     if (!form.address.trim()) errs.address = "Pflichtfeld";
     if (!form.weeklyHours || Number(form.weeklyHours) <= 0) errs.weeklyHours = "Muss groesser als 0 sein";
     const workdays = Number(form.workdaysPerWeek);
-    if (!form.workdaysPerWeek || !Number.isFinite(workdays) || workdays < 0.5 || workdays > 7)
-      errs.workdaysPerWeek = "Zahl zwischen 0,5 und 7";
+    if (!form.workdaysPerWeek || !Number.isFinite(workdays) || workdays < 0.1 || workdays > 7)
+      errs.workdaysPerWeek = "Zahl zwischen 0,1 und 7";
     if (!form.vacationDays || Number(form.vacationDays) < 0) errs.vacationDays = "Muss mindestens 0 sein";
     if (!form.startDate) errs.startDate = "Pflichtfeld";
     setErrors(errs);
@@ -692,7 +692,7 @@ export function AssistentDialog({ open, onClose, editUser, editContract, teamId 
                     <Input
                       className="bg-card"
                       type="number"
-                      min="0.5"
+                      min="0.1"
                       max="7"
                       step="any"
                       value={form.workdaysPerWeek}

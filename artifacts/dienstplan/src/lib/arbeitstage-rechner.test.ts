@@ -36,9 +36,15 @@ describe("computeArbeitstage", () => {
     expect(Math.abs(r!.dailyHours - 24.01)).toBeLessThanOrEqual(0.02);
   });
 
-  it("Grenze 0,5 Arbeitstage: 2,17 Dienste ok, 2,1 Dienste zu wenig", () => {
-    expect(computeArbeitstage(2.17, 8)).not.toBeNull();
-    expect(computeArbeitstage(2.1, 8)).toBeNull();
+  it("Grenze 0,1 Arbeitstage: 1 Dienst/Monat ok (Minijob), 0,4 Dienste zu wenig", () => {
+    // Der Kernfall aus #Minijob-Feedback: EIN 24-h-Dienst pro Monat.
+    expect(computeArbeitstage(1, 24)).toEqual({
+      workdaysPerWeek: 0.23,
+      weeklyHours: 5.52,
+      dailyHours: 24,
+    });
+    expect(computeArbeitstage(0.42, 8)).not.toBeNull();
+    expect(computeArbeitstage(0.4, 8)).toBeNull();
   });
 
   it("Grenze 7 Arbeitstage: 30,4 Dienste ok, 30,5 Dienste zu viel", () => {

@@ -13,8 +13,8 @@ export interface ContractInput {
   /** @minimum 0 */
   weeklyHours: number;
   /**
-     * Arbeitstage pro Woche (0,5–7, Dezimalwerte erlaubt), Default 5.
-     * @minimum 0.5
+     * Arbeitstage pro Woche (0,1–7, Dezimalwerte erlaubt, z. B. 0,23 bei einem 24-h-Dienst pro Monat), Default 5.
+     * @minimum 0.1
      * @maximum 7
      */
   workdaysPerWeek?: number;

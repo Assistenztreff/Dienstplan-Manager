@@ -38,7 +38,9 @@ export function computeArbeitstage(
   )
     return null;
   const workdaysPerWeek = round2(shiftsPerMonth / WEEKS_PER_MONTH);
-  if (workdaysPerWeek < 0.5 || workdaysPerWeek > 7) return null;
+  // Untergrenze 0,1: auch Minijobs mit nur einem 24-h-Dienst pro Monat (0,23)
+  // oder alle zwei Monate (0,11) müssen abbildbar sein (Server-Grenze identisch).
+  if (workdaysPerWeek < 0.1 || workdaysPerWeek > 7) return null;
   // Wochenstunden aus den GERUNDETEN Arbeitstagen ableiten, damit beide
   // Vertragswerte zusammenpassen (statt unabhängig gerundeter Einzelwerte).
   const weeklyHours = round2(workdaysPerWeek * shiftLengthHours);

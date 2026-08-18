@@ -171,7 +171,7 @@ export function ArbeitstageRechnerDialog({
             <Input
               id="rechner-dienste-pro-monat"
               type="number"
-              min="1"
+              min="0.5"
               step="any"
               placeholder="z. B. 5"
               value={shiftsPerMonth}
@@ -196,7 +196,7 @@ export function ArbeitstageRechnerDialog({
           )}
           {!result && shiftsPerMonth !== "" && Number(shiftsPerMonth) > 0 && (
             <p className="text-sm text-muted-foreground" data-testid="rechner-hinweis">
-              Mit diesen Angaben kommen wir nicht zwischen 0,5 und 7
+              Mit diesen Angaben kommen wir nicht zwischen 0,1 und 7
               Arbeitstage pro Woche — bitte prüfe die Eingaben.
             </p>
           )}
