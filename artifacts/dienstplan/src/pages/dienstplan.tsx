@@ -771,11 +771,18 @@ function AgendaView({
                   key={day.toISOString()}
                   data-testid={`agenda-day-${format(day, "yyyy-MM-dd")}`}
                   data-selected={bulkSelected ? "true" : "false"}
-                  className={`border-b border-border/30 last:border-b-0 ${
+                  // Task #846: wie im Monatsraster deckt die Detailzeilen-Liste
+                  // (bg-card, s. u.) einen ring-inset ab — echter Rand statt
+                  // Ring, damit die Auswahl auch bei Tagen MIT Einträgen um die
+                  // ganze Karte sichtbar bleibt. border-[2px] ist IMMER gesetzt
+                  // (sonst transparent) statt nur bei Auswahl, sonst würde die
+                  // Karte beim Aus-/Abwählen um die Randbreite wachsen/
+                  // schrumpfen (Layout-Sprung) — nur die Farbe wechselt.
+                  className={
                     bulkSelected
-                      ? "bg-assistenz-mint ring-2 ring-inset ring-assistenz-brand"
-                      : ""
-                  }`}
+                      ? "border-[2px] border-assistenz-brand bg-assistenz-mint"
+                      : "border-[2px] border-transparent border-b-border/30 last:border-b-transparent"
+                  }
                 >
                   <button
                     type="button"
@@ -1341,24 +1348,33 @@ function MonthGrid({
                   : "min-w-0 rounded-[5px] p-0.5",
                 // Zellhintergrund, exklusiv: Auswahl (Mint) > Weiß.
                 // Task #826: Am Heute-Tag zeigt NUR die Mint-Fläche die
-                // Auswahl an — der Auswahl-Ring entfällt dort, damit der
-                // Heute-Rahmen die einzige Kante bleibt (der innen anliegende
-                // Ring ließ ihn oben dicker wirken als unten, wo ihn die
-                // Grauzone überdeckt).
+                // Auswahl an — der Auswahl-Rahmen entfällt dort, damit der
+                // Heute-Rahmen die einzige Kante bleibt.
                 bulkSelected
                   ? today
                     ? "bg-assistenz-mint"
-                    : "bg-assistenz-mint ring-2 ring-inset ring-assistenz-brand"
+                    : "bg-assistenz-mint"
                   : selected && !selectionMode
                     ? today
                       ? "bg-assistenz-mint/60"
-                      : "bg-assistenz-mint/60 ring-2 ring-inset ring-assistenz-brand"
+                      : "bg-assistenz-mint/60"
                     : "bg-white hover:bg-accent/20",
-                // Heute (Task #826): 3-px-Rahmen in Dunkelblau (#092948, wie
-                // das Datums-Badge) um die GANZE Zelle inkl. Dienstpillen-
-                // Bereich. Border statt Ring: ein Inset-Ring würde unten von
-                // der Grauzone überdeckt, der Border bleibt immer sichtbar.
-                today ? "border-[2px] border-[#092948]" : "",
+                // Heute (Task #826) + Auswahl (Task #846): 2-px-Rahmen um die
+                // GANZE Zelle inkl. Dienstpillen-Bereich — echter Border statt
+                // ring-inset, weil ein Ring Teil der Box-Shadow-Ebene der
+                // Zelle ist und von der opaken Pillen-Grauzone (Kind-Element)
+                // darunter überdeckt wird; ein Border bleibt immer sichtbar.
+                // Die Randbreite (border-[2px]) ist IMMER gesetzt, auch ohne
+                // Auswahl (dort transparent) — sonst würde eine Zelle beim
+                // Anklicken/Abwählen um die Randbreite wachsen/schrumpfen
+                // (Layout-Sprung). Nur die Randfarbe wechselt:
+                // Heute > Auswahl > unsichtbar.
+                "border-[2px]",
+                today
+                  ? "border-[#092948]"
+                  : bulkSelected || (selected && !selectionMode)
+                    ? "border-assistenz-brand"
+                    : "border-transparent",
               ].filter(Boolean).join(" ")}
             >
               {/* Kopfzeile (3.4): Datum LINKS, Plus RECHTS in derselben Zeile.
