@@ -35,3 +35,13 @@ ohne Modell bekommen NIE Nachtzuschlag (kein Bug, dokumentierte Grenze).
 ## Einstellungen-Hinweis
 Info-Box in `artifacts/dienstplan/src/components/allowance-settings-form.tsx` nach
 dem Feiertagszuschlag-Input erklärt die SV-Pflichtig-Regel für Nutzer.
+
+## Support-Diagnose: „Nachtzuschlag fehlt trotz Dienst-Auswahl-Feature"
+Die „Dienst (optional)"-Auswahl (Dialog + Abwesenheiten-Seite) listet NUR aktive Schichtmodelle.
+Wenn das Nacht-Modell des Teams deaktiviert ist oder Tages-Standardzeiten trägt (Seed-Default
+08:00–16:00), ist der Nachtzuschlag für Abwesenheiten praktisch unerreichbar — ohne Codefehler.
+**Prüfreihenfolge:** (1) Schicht ganztägig 00:00–23:59 + shift_model_id NULL? → ohne Dienst gebucht.
+(2) shift_models: is_active + default_start/end_time des Nacht-Modells prüfen. Fix = Modell
+aktivieren + echte Nachtzeiten setzen (PATCH /shift-models/:id), dann Tage NEU buchen (bestehende
+Einträge werden nicht rückwirkend neu bewertet). Übernacht-Defaults (20:00–06:00) funktionieren:
+bulk-absence löst sie korrekt zu Ende=Folgetag auf.
