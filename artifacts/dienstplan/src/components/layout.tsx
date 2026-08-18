@@ -763,6 +763,28 @@ export function Layout({ children }: { children: React.ReactNode }) {
     scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
+  // Die schweren Seiten-Chunks (Dienstplan, Auswertungen, …) im Browser-
+  // Leerlauf vorladen: Der erste Klick auf einen Menüpunkt wartet dann nicht
+  // mehr auf den JS-Download des lazy-Chunks (App.tsx), sondern rendert
+  // sofort. Läuft einmal pro Sitzung, nach dem ersten Rendern der App-Shell.
+  useEffect(() => {
+    const warm = () => {
+      void import("@/pages/dienstplan");
+      void import("@/pages/auswertungen");
+      void import("@/pages/zeiterfassung");
+      void import("@/pages/abwesenheiten");
+      void import("@/pages/team-verwaltung");
+    };
+    // requestIdleCallback fehlt in älteren Safari-Versionen — dann reicht ein
+    // kurzer Timeout nach dem ersten Rendern.
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(warm, { timeout: 4_000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const t = window.setTimeout(warm, 2_000);
+    return () => window.clearTimeout(t);
+  }, []);
+
   return (
     <div className="flex h-dvh w-full flex-col overflow-hidden bg-brand-white font-sans text-foreground">
       <a

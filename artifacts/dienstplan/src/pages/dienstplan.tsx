@@ -9,7 +9,6 @@ import {
   useUpdateShift,
   useSendShiftProposals,
   useBulkConfirmOwnShifts,
-  getListShiftsQueryKey,
   type User,
   type ShiftModel,
 } from "@workspace/api-client-react";
@@ -82,6 +81,8 @@ import {
   SHIFT_LIST_GC_TIME_MS,
   REFERENCE_DATA_STALE_TIME_MS,
   prefetchAdjacentMonthShifts,
+  upsertShiftsInCache,
+  invalidateShiftDerivedQueries,
 } from "@/lib/shift-cache";
 
 type Shift = {
@@ -2689,11 +2690,17 @@ export default function Dienstplan() {
     if (!canPlan || confirmingShiftId !== null) return;
     setConfirmingShiftId(shift.id);
     try {
-      await updateShift.mutateAsync({
+      const updated = await updateShift.mutateAsync({
         id: shift.id,
         data: { planningStatus: "FIX", force: true } as { planningStatus: "FIX" },
       });
-      await queryClient.invalidateQueries({ queryKey: getListShiftsQueryKey({ month, year }) });
+      // Sofort reagieren: den bestätigten Dienst direkt in die geladenen
+      // Listen schreiben statt auf den kompletten Monats-Reload zu warten;
+      // der Abgleich abgeleiteter Daten (Salden, Dashboard) läuft im
+      // Hintergrund. Macht das Bestätigen vieler Dienste nacheinander
+      // spürbar schneller (ein Roundtrip statt zwei je Dienst).
+      upsertShiftsInCache(queryClient, [{ ...shift, ...updated }], selectedTeamId);
+      void invalidateShiftDerivedQueries(queryClient);
       toast.success("Dienst bestätigt — zählt jetzt in Auswertungen und Stundennachweis.");
     } catch {
       if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
@@ -2739,7 +2746,17 @@ export default function Dienstplan() {
           userId: selectedAssistant !== "all" ? selectedAssistant : undefined,
         },
       });
-      await queryClient.invalidateQueries({ queryKey: getListShiftsQueryKey({ month, year }) });
+      // Sofort reagieren: versendete Entwürfe im Cache auf "Vorschlag"
+      // stellen; der vollständige Abgleich läuft im Hintergrund, statt den
+      // Dialog bis zum Monats-Reload blockiert zu halten.
+      upsertShiftsInCache(
+        queryClient,
+        sendableShifts
+          .filter((s) => selectedAssistant === "all" || s.userId === selectedAssistant)
+          .map((s) => ({ ...s, planningStatus: "ANGEBOTEN" })),
+        selectedTeamId,
+      );
+      void invalidateShiftDerivedQueries(queryClient);
       closeDialog();
       if (!navigator.onLine) return;
       const { updated, emailsSent } = result;
@@ -2768,7 +2785,14 @@ export default function Dienstplan() {
       const result = await bulkConfirmOwnMutation.mutateAsync({
         data: { month, year, teamId: selectedTeamId ?? undefined },
       });
-      await queryClient.invalidateQueries({ queryKey: getListShiftsQueryKey({ month, year }) });
+      // Sofort reagieren: die eigenen Vorschläge im Cache auf "FIX" stellen;
+      // der vollständige Abgleich (Salden, Dashboard) läuft im Hintergrund.
+      upsertShiftsInCache(
+        queryClient,
+        myAngebotenShifts.map((s) => ({ ...s, planningStatus: "FIX" })),
+        selectedTeamId,
+      );
+      void invalidateShiftDerivedQueries(queryClient);
       const { confirmed } = result;
       toast.success(
         confirmed === 1

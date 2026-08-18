@@ -1,8 +1,15 @@
 import { Switch, Route, Redirect, Router as WouterRouter, useLocation } from "wouter";
-import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { ApiError } from "@workspace/api-client-react";
 import { toast } from "sonner";
-import { registerUserSwitchHandler, resyncAuthAfter401 } from "@/context/auth";
+import {
+  registerSignOutHandler,
+  registerUserSwitchHandler,
+  resyncAuthAfter401,
+  storedSessionUserId,
+} from "@/context/auth";
 import { lazy, Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
@@ -164,6 +171,47 @@ const queryClient: QueryClient = new QueryClient({
   },
 });
 
+// ---------------------------------------------------------------------------
+// Persistenter Query-Cache (Stale-While-Revalidate über Seiten-Reloads):
+// Dashboard, Dienstplan und Auswertungen zeigen beim Öffnen sofort die zuletzt
+// gesehenen Werte aus localStorage; sind die Daten älter als staleTime, lädt
+// React Query im Hintergrund nach und die Zahlen aktualisieren sich von selbst.
+// ---------------------------------------------------------------------------
+
+// Nur unkritische, wiederverwendbare Anzeigedaten persistieren. Bewusst NICHT
+// dabei: /api/operator/* (Betreiber-Daten), /api/calendar-token (Geheimnis),
+// /api/storage/* und /api/healthz.
+const PERSIST_KEY_PREFIXES = [
+  "/api/shifts",
+  "/api/dashboard",
+  "/api/users",
+  "/api/teams",
+  "/api/shift-models",
+  "/api/contracts",
+  "/api/time-tracking", // deckt auch /api/time-tracking-status ab
+  "/api/month-closings",
+  "/api/hour-budgets",
+  "/api/allowance-settings",
+  "/api/branding-settings",
+  "/api/koordinatoren",
+] as const;
+
+function isPersistableQueryKey(key: unknown): boolean {
+  return (
+    typeof key === "string" &&
+    PERSIST_KEY_PREFIXES.some(
+      (p) => key === p || key.startsWith(`${p}/`) || key.startsWith(`${p}-`),
+    )
+  );
+}
+
+const queryPersister = createSyncStoragePersister({
+  storage: typeof window !== "undefined" ? window.localStorage : undefined,
+  key: "dienstplan.query-cache",
+  // Schreibvorgänge bündeln: höchstens alle 2 s in localStorage serialisieren.
+  throttleTime: 2_000,
+});
+
 // Kontowechsel-Handler: Meldet /auth/me eine andere Nutzer-ID als zuvor
 // (Einladungslink im selben Browser geöffnet, Dev-Nutzerwechsel, …), gehören
 // alle zwischengespeicherten Daten dem vorherigen Konto — vollständig
@@ -177,9 +225,19 @@ registerUserSwitchHandler((next) => {
   // Cache-Eintrag durch clear() entfernt wurde, wird das Ergebnis verworfen.
   void queryClient.cancelQueries();
   queryClient.clear();
+  // Persistierten Cache des vorherigen Kontos ebenfalls verwerfen.
+  void queryPersister.removeClient();
   toast.info("Anmeldung gewechselt", {
     description: `Du bist jetzt als ${next.name} angemeldet. Die Ansicht wurde entsprechend aktualisiert.`,
   });
+});
+
+// Abmeldung (Logout oder tote Session): zwischengespeicherte Daten dürfen —
+// gerade auf geteilten Geräten — nicht bis zur nächsten Anmeldung überleben.
+registerSignOutHandler(() => {
+  void queryClient.cancelQueries();
+  queryClient.clear();
+  void queryPersister.removeClient();
 });
 
 const PUBLIC_PATHS = [
@@ -326,7 +384,24 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{
+        persister: queryPersister,
+        // Ein Tag: Danach gelten gespeicherte Werte als zu alt für die
+        // Sofort-Anzeige — die App lädt dann wieder klassisch mit Skeletons.
+        maxAge: 24 * 60 * 60 * 1000,
+        // Cache-Eigentümer: Ein unter anderer Nutzer-ID (oder abgemeldet)
+        // geschriebener Cache wird beim Start verworfen statt angezeigt.
+        buster: `u:${storedSessionUserId() ?? "anon"}`,
+        dehydrateOptions: {
+          // Nur erfolgreich geladene, unkritische Anzeigedaten speichern —
+          // Fehlerzustände und alles außerhalb der Allowlist bleiben außen vor.
+          shouldDehydrateQuery: (query) =>
+            query.state.status === "success" && isPersistableQueryKey(query.queryKey[0]),
+        },
+      }}
+    >
       <TooltipProvider>
         {/* Offline-Hinweis global über allen Seiten (auch Login/Startseite). */}
         <OfflineBanner />
@@ -343,7 +418,7 @@ function App() {
             diese Hinweise (z.B. Free-Limit beim Vorausplanen) still verschluckt. */}
         <SonnerToaster position="top-center" />
       </TooltipProvider>
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   );
 }
 

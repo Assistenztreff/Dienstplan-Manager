@@ -95,6 +95,8 @@
     "zod": "catalog:"
   },
   "dependencies": {
+    "@tanstack/query-sync-storage-persister": "5.100.9",
+    "@tanstack/react-query-persist-client": "5.100.9",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "jszip": "^3.10.1",

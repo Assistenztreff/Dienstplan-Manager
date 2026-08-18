@@ -97,12 +97,19 @@ function safeErrorText(value: unknown, fallback: string): string {
 // Passwörter oder Tokens. Die echte Authentifizierung bleibt die serverseitige
 // httpOnly-Session (Cookie `connect.sid`). `import.meta.env.DEV` wird beim
 // Production-Build statisch entfernt, der Bypass existiert dort also gar nicht.
-const DEV_SESSION_KEY = "assistenz_treff_session";
+const SESSION_KEY = "assistenz_treff_session";
 
+// Session-Snapshot (Anzeigedaten, KEINE Berechtigung): Das zuletzt bekannte
+// Nutzerprofil wird lokal gespeichert, damit die App beim nächsten Aufruf
+// SOFORT rendert, statt hinter einem Vollbild-Spinner auf /auth/me zu warten.
+// Sicherheit: Der Snapshot gewährt nichts — jede API-Anfrage wird serverseitig
+// über das Session-Cookie geprüft; ist die Session tot, greifen 401-Resync
+// bzw. bootstrap() und leeren den Zustand (→ Login-Seite). Eine im Hintergrund
+// erkannte andere Nutzer-ID meldet applyUser an den Kontowechsel-Handler,
+// der alle zwischengespeicherten Daten verwirft.
 function readStoredSession(): AuthUser | null {
-  if (!import.meta.env.DEV) return null;
   try {
-    const raw = localStorage.getItem(DEV_SESSION_KEY);
+    const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<AuthUser>;
     if (
@@ -126,13 +133,21 @@ function readStoredSession(): AuthUser | null {
 }
 
 function storeSession(user: AuthUser | null): void {
-  if (!import.meta.env.DEV) return;
   try {
-    if (user) localStorage.setItem(DEV_SESSION_KEY, JSON.stringify(user));
-    else localStorage.removeItem(DEV_SESSION_KEY);
+    if (user) localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+    else localStorage.removeItem(SESSION_KEY);
   } catch {
     // localStorage nicht verfügbar (z. B. privater Modus) — ignorieren
   }
+}
+
+/**
+ * Nutzer-ID des gespeicherten Session-Snapshots (oder null). Wird vom
+ * persistierten Query-Cache (App.tsx) als Cache-Eigentümer-Kennung genutzt:
+ * Ein unter anderer ID gespeicherter Cache wird beim Start verworfen.
+ */
+export function storedSessionUserId(): number | null {
+  return readStoredSession()?.id ?? null;
 }
 
 // Globaler Hook für die Selbstheilung bei toten Sessions: Wenn eine beliebige
@@ -165,19 +180,32 @@ export function registerUserSwitchHandler(handler: (next: AuthUser) => void): ()
   };
 }
 
+// Abmelde-Handler: Wird ein angemeldeter Nutzer zu null (Logout, tote
+// Session), müssen In-Memory- UND persistierter Query-Cache geleert werden —
+// gerade auf geteilten Geräten dürfen die zuletzt gesehenen Daten den
+// nächsten Anmeldenden nicht erreichen.
+let signOutHandler: (() => void) | null = null;
+
+/** Registriert den globalen Abmelde-Handler. Liefert eine Abmeldefunktion. */
+export function registerSignOutHandler(handler: () => void): () => void {
+  signOutHandler = handler;
+  return () => {
+    if (signOutHandler === handler) signOutHandler = null;
+  };
+}
+
 /** Mindestabstand zwischen zwei Session-Frischeprüfungen beim Tab-Fokus. */
 const SESSION_RECHECK_MIN_INTERVAL_MS = 10_000;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => readStoredSession());
-  const [isLoading, setIsLoading] = useState(true);
+  // Mit Session-Snapshot rendert die App SOFORT (Stale-While-Revalidate):
+  // Der Vollbild-Spinner erscheint nur noch beim allerersten Besuch bzw. nach
+  // Logout; bootstrap() verifiziert die Session parallel im Hintergrund.
+  const [isLoading, setIsLoading] = useState(currentUser === null);
 
   // ID des zuletzt angewendeten Nutzers — Grundlage der Kontowechsel-Erkennung.
   const lastUserIdRef = useRef<number | null>(currentUser?.id ?? null);
-  // Erst nach dem ersten Bootstrap scharf: Die initiale Hydration aus dem
-  // Dev-localStorage-Cache darf keinen "Kontowechsel" melden (die Abfragen
-  // liefen ohnehin schon unter der Cookie-Session des echten Nutzers).
-  const readyRef = useRef(false);
   // Auth-Epoche: wird bei JEDER Zustandsanwendung erhöht. Frischeprüfungen
   // (/auth/me aus Bootstrap, Fokus-Check, 401/403-Resync) merken sich die
   // Epoche vor ihrem Request und wenden ihre Antwort nur an, wenn sich die
@@ -204,8 +232,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return user;
     });
     storeSession(user);
-    if (readyRef.current && prevId != null && user != null && user.id !== prevId) {
+    // Kontowechsel AUCH beim ersten Bootstrap melden: Der Session-Snapshot
+    // (und der persistierte Query-Cache) können zu Nutzer A gehören, während
+    // das Cookie inzwischen Nutzer B angehört — dann müssen alle
+    // zwischengespeicherten Daten sofort verworfen werden.
+    if (prevId != null && user != null && user.id !== prevId) {
       userSwitchHandler?.(user);
+    }
+    // Abmeldung (angemeldet → null): Caches leeren, siehe registerSignOutHandler.
+    if (prevId != null && user == null) {
+      signOutHandler?.();
     }
   }, []);
 
@@ -302,7 +338,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     bootstrap().finally(() => {
       if (!cancelled) {
         setIsLoading(false);
-        readyRef.current = true;
       }
     });
     return () => {
