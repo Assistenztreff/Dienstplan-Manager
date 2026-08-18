@@ -816,7 +816,10 @@ export default function Auswertungen() {
           })
           )
         ) : (
-          <div className="p-12 text-center border rounded-xl bg-card">
+          <div
+            className="p-12 text-center border rounded-xl bg-card"
+            data-testid="no-balance-data"
+          >
             <p className="text-muted-foreground">Keine Auswertungsdaten fuer diesen Zeitraum gefunden.</p>
           </div>
         )}
