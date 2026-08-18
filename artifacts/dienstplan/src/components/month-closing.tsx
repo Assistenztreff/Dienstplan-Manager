@@ -20,6 +20,7 @@ import {
   useCreateMonthClosing,
   getGetMonthClosingsQueryKey,
   getGetMonthClosingDiffQueryKey,
+  getGetHoursBalanceQueryKey,
 } from "@workspace/api-client-react";
 import type { MonthClosingStatus, MonthClosingDiff } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -96,6 +97,11 @@ export function MonthClosingCard({
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetMonthClosingsQueryKey(params) }),
         queryClient.invalidateQueries({ queryKey: getGetMonthClosingDiffQueryKey(params) }),
+        // Ohne dies bleibt die Live-Auswertung (Auswertungen-Seite) auf ihrem
+        // zwischengespeicherten Stand stehen (ggf. "keine Daten", wenn die
+        // Seite geladen wurde, bevor Dienste final bestätigt waren) — der
+        // Abschluss selbst ändert die angezeigten Zahlen nicht automatisch.
+        queryClient.invalidateQueries({ queryKey: getGetHoursBalanceQueryKey(params) }),
       ]);
       setConfirmOpen(false);
       toast.success("Monat abgeschlossen", {
