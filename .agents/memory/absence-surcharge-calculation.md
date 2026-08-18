@@ -24,6 +24,14 @@ Diese Zuschläge sind **SV-pflichtig und lohnsteuerpflichtig** (§3b EStG gilt n
 geleistete Arbeit). Das PDF-Export und die Auswertung unterscheiden diese Kategorien
 aktuell NICHT — separate Darstellung ist Folge-Task.
 
+## UI-Affordanz „Dienst (optional)"
+Nachtzuschlag bei Abwesenheit setzt ein konkretes Zeitfenster voraus: geplanter Dienst am Tag
+(Zeiten werden geerbt) ODER beim Buchen gewähltes Schichtmodell mit Standardzeiten
+(Server-Fallback in POST /shifts + /shifts/bulk-absence). Beide Buchungsoberflächen
+(Abwesenheiten-Seite UND ShiftDialog) bieten dafür ein „Dienst (optional)"-Select —
+bei Erweiterungen der Abwesenheits-Buchung beide synchron halten. Ganztags-Einträge
+ohne Modell bekommen NIE Nachtzuschlag (kein Bug, dokumentierte Grenze).
+
 ## Einstellungen-Hinweis
 Info-Box in `artifacts/dienstplan/src/components/allowance-settings-form.tsx` nach
 dem Feiertagszuschlag-Input erklärt die SV-Pflichtig-Regel für Nutzer.

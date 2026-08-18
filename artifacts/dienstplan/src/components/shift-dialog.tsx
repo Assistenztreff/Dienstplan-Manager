@@ -170,6 +170,11 @@ type FormState = {
   startTime: string;
   endTime: string;
   selection: string;
+  // Optionaler Dienst (Schichtmodell) für Abwesenheiten: legt bei leeren Tagen
+  // die Uhrzeiten fest, damit Nacht-/Sonntags-/Feiertagszuschläge wie beim
+  // geplanten Dienst fortgezahlt werden (Lohnausfallprinzip). "" = ganztägig.
+  // Gleiche Funktion wie „Dienst (optional)" auf der Abwesenheiten-Seite.
+  absenceModelId: string;
   planningStatus: PlanningStatus;
   notes: string;
   // Aushilfe-Einsatz: ID eines anderen eigenen Teams als String, "" = keiner.
@@ -350,6 +355,7 @@ export function ShiftDialog({
         ? toTimeString(editShift.endTime)
         : firstModel?.defaultEndTime || "16:00",
       selection: initialSelection(editShift, firstModelId),
+      absenceModelId: "",
       // Beim Bearbeiten den gespeicherten Status übernehmen; neue Schichten
       // starten bewusst als Entwurf (Beginn des Planungs-Workflows).
       planningStatus: isPlanningStatus(editShift?.planningStatus)
@@ -645,6 +651,15 @@ export function ShiftDialog({
       return {
         type: form.selection.slice("legacy:".length) as ShiftInputType & ShiftUpdateType,
         shiftModelId: null,
+      };
+    }
+    // Abwesenheit: optional gewählter Dienst (Schichtmodell) — der Server
+    // übernimmt dessen Standardzeiten, wenn am Tag kein Dienst geplant ist,
+    // und zahlt die Zuschläge daraus fort. Nur beim Anlegen wählbar.
+    if (isAbsence && !isEditing && form.absenceModelId) {
+      return {
+        type: form.selection as ShiftInputType & ShiftUpdateType,
+        shiftModelId: Number(form.absenceModelId),
       };
     }
     return { type: form.selection as ShiftInputType & ShiftUpdateType, shiftModelId: null };
@@ -1360,6 +1375,38 @@ export function ShiftDialog({
               </p>
             )}
           </div>
+
+          {/* Optionaler Dienst für Abwesenheiten (nur Anlegen): legt bei leeren
+              Tagen die Uhrzeiten fest, damit Nacht-/Sonntags-/Feiertagszuschläge
+              wie beim geplanten Dienst fortgezahlt werden. Gleiche Funktion wie
+              „Dienst (optional)" auf der Abwesenheiten-Seite. */}
+          {!isEditing && isAbsence && activeModels.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Dienst (optional)</Label>
+              <Select
+                value={form.absenceModelId || "none"}
+                onValueChange={(v) => set("absenceModelId", v === "none" ? "" : v)}
+              >
+                <SelectTrigger data-testid="shift-dialog-absence-model">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Ganztägig (Standard)</SelectItem>
+                  {activeModels.map((m) => (
+                    <SelectItem key={m.id} value={String(m.id)}>
+                      {m.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Ersetzt die Abwesenheit einen geplanten Dienst, werden dessen Zeiten
+                automatisch übernommen. Ohne geplanten Dienst legt ein gewählter
+                Dienst die Stunden fest — inklusive Nacht-, Sonntags- und
+                Feiertagszuschlägen (sonst ganztägig, ohne Nachtzuschlag).
+              </p>
+            </div>
+          )}
 
           {/* Planungsstatus (nur für reguläre Dienste; Abwesenheiten und
               Team-Einträge sind kein Planungs-Entwurf, sondern sofort
