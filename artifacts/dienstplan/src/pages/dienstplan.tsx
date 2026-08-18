@@ -205,12 +205,17 @@ function usePersonSlotLookup(): (userId: number) => PersonSlot {
 /** Rechter 4px-Statusfarbbalken der Kalender-Pille (Arbeitsanweisung
  *  17.08.2026 Punkt 3): zeigt den Dienst-/Schichtstatus (nicht die Person).
  *  Priorität — dieselbe Reihenfolge wie der Icon-Stack —: Krankheit >
- *  Vertretung > Basis-Status (Entwurf/Bestätigt). Exakt dieselben Hex-Werte
- *  wie StatusBadge (status-badge.tsx), keine neue Farbquelle. */
+ *  Vertretung > Basis-Status (Entwurf/Versendet/Bestätigt). Exakt dieselben
+ *  Hex-Werte wie StatusBadge (status-badge.tsx), keine neue Farbquelle.
+ *  ANGEBOTEN ("Vorschlag versendet, wartet auf Bestätigung") bekommt seit
+ *  18.08.2026 eine eigene Farbe (Himmelblau), statt wie zuvor dieselbe wie
+ *  der noch unversendete Entwurf (VORLAEUFIG). */
 function dienstStatusColor(status: string, hasAusfall: boolean, isVertretung: boolean | null | undefined): string {
   if (hasAusfall) return "#b23b3b";
   if (isVertretung) return "#0f6e8c";
-  return status === "FIX" ? "#1e8f4e" : "#b5790a";
+  if (status === "FIX") return "#1e8f4e";
+  if (status === "ANGEBOTEN") return "#0284c7";
+  return "#b5790a";
 }
 
 /** Textlabel zum Statusfarbbalken der Desktop-/Tablet-Pille (wiedereingeführt
@@ -607,7 +612,13 @@ function ShiftBadge({
           className={`mb-0.5 inline-flex items-center gap-1 rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide ${PLANNING_STATUS_BADGE_CLASSES[shift.planningStatus ?? ""] ?? ""}`}
         >
           <StatusBadge
-            kind={shift.planningStatus === "FIX" ? "confirmed" : "draft"}
+            kind={
+              shift.planningStatus === "FIX"
+                ? "confirmed"
+                : shift.planningStatus === "ANGEBOTEN"
+                  ? "sent"
+                  : "draft"
+            }
           />
           {statusLabel}
         </div>
@@ -937,7 +948,13 @@ function DayDetailRow({
         ) : (
           <span className="truncate">
             {isTeam ? "Teamdienst" : "Dienst"} ·{" "}
-            {status !== "FIX" && <StatusBadge kind="draft" compact className="mr-0.5 align-[-2px]" />}
+            {status !== "FIX" && (
+              <StatusBadge
+                kind={status === "ANGEBOTEN" ? "sent" : "draft"}
+                compact
+                className="mr-0.5 align-[-2px]"
+              />
+            )}
             {/* Task #792: Krankheits-Icon in der Tagesleiste — analog zur Kalender-Pille */}
             {hasAusfall && <StatusBadge kind="krank" compact className="mr-0.5 align-[-2px]" label="Ausfall: Assistenzkraft abwesend" />}
             {statusText}
@@ -1494,7 +1511,7 @@ function MonthGrid({
                                   <StatusBadge kind="confirmed" label="Bestätigt" calendarCompact />
                                 ) : (
                                   <StatusBadge
-                                    kind="draft"
+                                    kind={status === "ANGEBOTEN" ? "sent" : "draft"}
                                     label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
                                     calendarCompact
                                   />
@@ -1581,7 +1598,7 @@ function MonthGrid({
                           <StatusBadge kind="confirmed" label="Bestätigt" calendarCompact={pillMinimiert} />
                         ) : (
                           <StatusBadge
-                            kind="draft"
+                            kind={status === "ANGEBOTEN" ? "sent" : "draft"}
                             label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
                             calendarCompact={pillMinimiert}
                           />

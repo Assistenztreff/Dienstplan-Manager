@@ -9,6 +9,7 @@ import type { ReactElement } from "react";
 
 export type StatusBadgeKind =
   | "draft"
+  | "sent"
   | "confirmed"
   | "krank"
   | "vertretung"
@@ -33,6 +34,21 @@ const KIND_CONFIG: Record<
     symbol: (s) => (
       <svg width={s} height={s} viewBox="0 0 20 20" fill="#fff" stroke="none" aria-hidden="true">
         <path d="M14.5 2.3l3.2 3.2-9.6 9.6-4.3 1.1 1.1-4.3z" />
+      </svg>
+    ),
+  },
+  // Versendet: Kreis 16px #0284c7 (Himmelblau — dieselbe Farbfamilie wie die
+  // bestehende ANGEBOTEN-Badge-Klasse "bg-sky-200 text-sky-900"), weißes
+  // Papierflieger-Symbol. Markiert Dienste im Status ANGEBOTEN (Vorschlag an
+  // den Assistenten verschickt, noch unbestätigt) sichtbar getrennt vom
+  // gelben Entwurf (VORLAEUFIG, noch nicht versendet).
+  sent: {
+    circle: 16,
+    compactCircle: 10,
+    bg: "#0284c7",
+    symbol: (s) => (
+      <svg width={s} height={s} viewBox="0 0 20 20" fill="#fff" stroke="none" aria-hidden="true">
+        <path d="M2 10.5l16-8.4-4.4 16-3.9-6-6-1.9z" />
       </svg>
     ),
   },
