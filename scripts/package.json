@@ -21,6 +21,7 @@
     "migrate-teams": "tsx ./src/migrate-teams.ts",
     "migrate-prod": "tsx ./src/migrate-prod.ts",
     "check-prod-schema": "tsx ./src/migrate-prod.ts",
+    "check-prod-schema-drift": "tsx ./src/check-prod-schema-drift.ts",
     "pre-push-sql": "tsx ./src/pre-push-sql.ts",
     "migrate-allowance-settings": "tsx ./src/migrate-allowance-settings.ts",
     "migrate-absences-fix": "tsx ./src/migrate-absences-fix.ts",

@@ -52,6 +52,24 @@ export function normalizeDatabaseUrl(raw: string): string {
 }
 
 /**
+ * Wendet ein rotiertes DB-Passwort (Secret, z. B. SCALEWAY_DB_PASSWORD) auf
+ * eine bereits normalisierte URL an: das Secret hat Vorrang vor dem in der
+ * URL eingebetteten Passwort. No-op ohne Secret oder bei unparsebarer URL.
+ * Gemeinsame Quelle fuer resolveDatabaseUrl UND explizite Prod-Zugriffe
+ * (z. B. den Publish-Schema-Guard) — sonst verbindet sich der Guard nach
+ * einer Passwort-Rotation mit dem alten URL-Passwort.
+ */
+export function applyRotatedDbPassword(
+  url: string,
+  rotated: string | undefined,
+): string {
+  if (!rotated || !isParseableUrl(url)) return url;
+  const parsed = new URL(url);
+  parsed.password = encodeURIComponent(rotated);
+  return parsed.toString();
+}
+
+/**
  * Liefert die effektive Datenbank-URL:
  * - In Produktion (NODE_ENV=production) hat `PROD_DATABASE_URL` hoechste
  *   Prioritaet, damit das Deploy auf eine eigene Produktions-DB zeigt.
@@ -73,11 +91,8 @@ export function resolveDatabaseUrl(): string | undefined {
   // Rotiertes DB-Passwort: SCALEWAY_DB_PASSWORD (Secret) hat Vorrang vor dem
   // in der URL eingebetteten Passwort. Gilt fuer APP_DATABASE_URL und
   // PROD_DATABASE_URL (beide zeigen auf denselben Scaleway-Server).
-  const rotated = process.env.SCALEWAY_DB_PASSWORD;
-  if (overrideUrl && rotated && isParseableUrl(url)) {
-    const parsed = new URL(url);
-    parsed.password = encodeURIComponent(rotated);
-    url = parsed.toString();
+  if (overrideUrl) {
+    url = applyRotatedDbPassword(url, process.env.SCALEWAY_DB_PASSWORD);
   }
   return url;
 }

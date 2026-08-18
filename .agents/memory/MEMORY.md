@@ -87,6 +87,7 @@
 - [E2E floating-promise lint](e2e-floating-promise-lint.md) — lint:e2e (no-floating-promises + missing-playwright-await) is chained into typecheck; discarded async calls must be awaited or `void`-marked.
 - [Shared staging _test DB race](shared-staging-test-db-race.md) — HISTORISCH (nur noch bei E2E_SHARED_TEST_DB=1): geteilte `_test`-DB, Fremd-Läufe kippen Checks.
 - [Private E2E-Test-DBs](private-test-dbs.md) — Standard: eigene `<dbname>_test_<suffix>`-DB pro Umgebung via deriveTestDbTarget; Lock entfällt; Aufräumen über DB-Kommentar, nie Registry-Tabellen.
+- [Automatischer Prod-Schema-Guard beim Publish](prod-schema-publish-guard.md) — Deployment-postBuild (publish-preflight.sh) bricht Publishes bei fehlenden Prod-Tabellen/-Spalten fail-closed ab.
 - [migrate-prod & drizzle dry-run](migrate-prod-dry-run.md) — prod schema sync via migrate-prod; `push --strict --verbose` without TTY = safe dry-run (prints statements, applies nothing, exits 0 — check prompt text).
 - [401 self-heal in web client](query-401-self-heal.md) — DB restore wipes sessions; stale cookies loop 401 with "logged-in" UI. Client resyncs via QueryCache onError; suspect stale session before missing data.
 - [Unpaid info-only shift types](unpaid-info-shift-types.md) — info categories keep valuedHours (no surcharges); Soll/Lohn exclusion lives only in the hours-balance INFO_ONLY filter.
