@@ -118,7 +118,12 @@ export interface AssistantContractInfo {
   vacationDays?: number | null;
   /** Stundengenau verbrauchter Urlaub (maßgeblicher Zähler, Point 7). */
   vacationHoursUsed?: number | null;
+  /** Vertragliche Wochenstunden — Basis für das monatliche Vertrags-Soll. */
+  weeklyHours?: number | null;
 }
+
+/** Wochen-zu-Monats-Umrechnung: fester Durchschnittsfaktor (52 / 12), für jeden Monat gleich. */
+const WEEKLY_TO_MONTHLY_FACTOR = 52 / 12;
 
 export interface HoursBalanceRow {
   userId: number;
@@ -126,6 +131,17 @@ export interface HoursBalanceRow {
   plannedHours: number;
   actualHours: number;
   balance: number;
+  /**
+   * Monatliches Vertrags-Soll (Bedarfsseite der Planung): vertragliche
+   * Wochenstunden × 52/12 (fester Monats-Durchschnitt, für jeden Monat
+   * gleich — keine Prorierung bei unterjährigem Vertragsbeginn/-ende,
+   * analog zur contractForMonth-Regel: ein den Monat überlappender Vertrag
+   * zählt voll). 0 ohne (passenden) Vertrag oder ohne hinterlegte
+   * Wochenstunden. Dient dem Dienstplan-Stundenkonto als Planungs-Check
+   * (Vertrag vs. bereits geplante Schichten) — unabhängig von `balance`
+   * (das den Ist-Zeiten-Vergleich für die Lohnauswertung abbildet).
+   */
+  contractMonthlyTargetHours: number;
   workedHours: number;
   sickHours: number;
   vacationDaysTaken: number;
@@ -547,12 +563,17 @@ export function computeHoursBalanceRow(params: {
     totalPay = round2(basePay + nightSurchargePay + sundaySurchargePay + holidaySurchargePay);
   }
 
+  const contractMonthlyTargetHours = round2(
+    (contract?.weeklyHours ?? 0) * WEEKLY_TO_MONTHLY_FACTOR,
+  );
+
   return {
     userId,
     userName,
     plannedHours: round2(plannedHours),
     actualHours: round2(totalFulfilledHours),
     balance: round2(totalFulfilledHours - plannedHours),
+    contractMonthlyTargetHours,
     workedHours: round2(trackedHours),
     sickHours: round2(sickHours),
     vacationDaysTaken,

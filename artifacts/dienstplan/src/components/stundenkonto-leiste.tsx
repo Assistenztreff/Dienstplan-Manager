@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { buildPersonColorAssignment, userInitialsClass, nameInitials } from "@/lib/shift-model-colors";
+import { formatHours } from "@/lib/utils";
 import { StatusBadge, STATUS_BADGE_COLORS, type StatusBadgeKind } from "@/components/status-badge";
 import type { HoursBalance } from "@workspace/api-client-react";
 import { Check } from "lucide-react";
@@ -243,10 +244,11 @@ export function StundenkontoPanel({
         ) : (
           assistants.map((a) => {
             const b = balanceMap.get(a.id);
+            const contractTarget = b?.contractMonthlyTargetHours ?? 0;
             const planned = b?.plannedHours ?? 0;
-            const actual = b?.actualHours ?? 0;
-            const bal = b?.balance ?? 0;
-            const percentage = planned > 0 ? Math.min(100, Math.max(0, (actual / planned) * 100)) : 0;
+            const bal = planned - contractTarget;
+            const percentage =
+              contractTarget > 0 ? Math.min(100, Math.max(0, (planned / contractTarget) * 100)) : 0;
             
             const isSelected = selectedUserIds === "all" || selectedUserIds.includes(a.id);
             const status = getUserStatus(a.id, shifts);
@@ -292,7 +294,7 @@ export function StundenkontoPanel({
                 
                 <div className="flex items-center justify-between text-xs pr-2">
                   <span className="text-muted-foreground">
-                    {actual} / {planned} h
+                    Vertrag {formatHours(contractTarget)} h &middot; Geplant {formatHours(planned)} h
                   </span>
                   <span className={`flex items-center gap-1 font-medium ${bal > 0 ? "text-green-600" : bal < 0 ? "text-amber-600" : "text-muted-foreground"}`}>
                     {formatBalance(bal)}
@@ -358,9 +360,9 @@ export function StundenkontoReihe({
       ) : (
         assistants.map((a) => {
           const b = balanceMap.get(a.id);
+          const contractTarget = b?.contractMonthlyTargetHours ?? 0;
           const planned = b?.plannedHours ?? 0;
-          const actual = b?.actualHours ?? 0;
-          const bal = b?.balance ?? 0;
+          const bal = planned - contractTarget;
           
           const isSelected = selectedUserIds === "all" || selectedUserIds.includes(a.id);
           const status = getUserStatus(a.id, shifts);
@@ -410,7 +412,7 @@ export function StundenkontoReihe({
                     )}
                   </div>
                   <div className="flex items-center gap-1.5 text-[11px] mt-1 leading-none text-muted-foreground">
-                    <span>{actual}/{planned} h</span>
+                    <span>Vertrag {formatHours(contractTarget)} &middot; Geplant {formatHours(planned)} h</span>
                     <span className={`flex items-center gap-0.5 font-medium ${bal > 0 ? "text-green-600" : bal < 0 ? "text-amber-600" : "text-muted-foreground"}`}>
                       {formatBalance(bal)}
                       <BalanceIcon balance={bal} className="w-2.5 h-2.5" />

@@ -1473,6 +1473,8 @@ export interface HoursBalance {
   plannedHours: number;
   actualHours: number;
   balance: number;
+  /** Monatliches Vertrags-Soll (vertragliche Wochenstunden × 52/12, fester Monats-Durchschnitt). 0 ohne (passenden) Vertrag. Planungs-Check fürs Dienstplan-Stundenkonto — unabhängig von balance. */
+  contractMonthlyTargetHours: number;
   workedHours: number;
   sickHours: number;
   /** Genommene Urlaubstage des gewählten Monats (Anzahl der Urlaubs-Schichten in diesem Monat). */
