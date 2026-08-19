@@ -235,6 +235,16 @@ function dienstStatusColor(status: string, hasAusfall: boolean, isVertretung: bo
   return "#b5790a";
 }
 
+/** Kontraststarke Textfarbe für die Statusbeschriftung auf dem hellgrauen
+ *  Hintergrund der zweiten Desktop-Pillenzeile (mindestens WCAG AA). */
+function dienstStatusTextColor(status: string, hasAusfall: boolean, isVertretung: boolean | null | undefined): string {
+  if (hasAusfall) return "#b23b3b";
+  if (isVertretung) return "#0f6e8c";
+  if (status === "FIX") return "#1a7e45";
+  if (status === "ANGEBOTEN") return "#0267a0";
+  return "#966408";
+}
+
 /** Textlabel zum Statusfarbbalken der Desktop-/Tablet-Pille (wiedereingeführt
  *  auf Nutzerwunsch, s. Bildvergleich Monatsraster vs. Referenz-Mockup):
  *  dieselbe Prioritätsreihenfolge wie dienstStatusColor(), damit Farbe und
@@ -1824,7 +1834,7 @@ function MonthGrid({
                               (weniger wichtig als Start-/Endzeit). */}
                           <span
                             className="ml-auto hidden shrink-0 items-center gap-[2px] @[168px]:inline-flex"
-                            style={{ color: statusColor }}
+                            style={{ color: dienstStatusTextColor(status, hasAusfall, s.isVertretung) }}
                             title={statusLabel}
                           >
                             {s.isVertretung && <StatusBadge kind="vertretung" />}
