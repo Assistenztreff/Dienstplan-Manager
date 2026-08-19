@@ -15,3 +15,6 @@ Die volle E2E-Kette dauert typischerweise 36–45 Minuten und kann die Poll-Gren
 - Bei angeblich hängendem Lauf Prozess/Lock-PID prüfen; bei tatsächlich abgebrochenem Poll-Lauf Zombies beenden und einen stale Lock erst dann entfernen. `acquireRunLock` wartet bis `E2E_LOCK_WAIT_MS` (15 Minuten) auf einen lebenden Inhaber.
 - `playwright.config` nicht aus Teardown-Code importieren: Konfigurations-Import hat Seiteneffekte (u. a. Lock-Setup).
 - Handbuchrelevante UI-Änderungen: Capture nur auf ausdrücklichen Auftrag des Nutzers ausführen; dann Fingerprint aktualisieren, sonst blockiert der Validierungsgate.
+## Rote Specs auf main (Stand 18.08.2026)
+`dienstplan-absence-bar.spec.ts` und `dienstplan-bulk-delete-assistant-filter.spec.ts` schlagen auf main fehl (shift-badge-Sichtbarkeit in `dienstplan-desktop` bzw. `day-detail-panel`; teils 60s-Gesamttimeout im Cleanup). Unabhängig vom Tabellenzellen-Redesign nachgewiesen (git stash → gleicher Fehler ohne die Änderung).
+**How to apply:** Bevor man bei Tabellen-/Tagesleisten-UI-Änderungen eine Spec-Rotfärbung der eigenen Änderung zuschreibt: Änderung stashen und die Spec auf main gegenlaufen lassen.

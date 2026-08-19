@@ -2364,6 +2364,114 @@ function monthsAhead(target: Date, now: Date): number {
   );
 }
 
+/** Zweizeiliges Zellen-Feld der Tabellenansicht (Task #855): flacheres
+ *  Gegenstück zur Kalender-Pille mit denselben Farb- und Icon-Quellen.
+ *  Zeile 1: Status-Icon-Stack (StatusBadge — dieselbe Darstellung wie in der
+ *  Dienstpille) + Personen-Farbbalken (slot.bg, dieselbe Farbquelle wie der
+ *  Pillen-Avatar; Teamdienste Himmelblau wie in der Pille).
+ *  Zeile 2: Uhr-Icon (StatusBadge kind="clock", identisch zur Pille) +
+ *  Uhrzeit „HH:mm – HH:mm". Hintergrund weiß, Klick öffnet wie bisher den
+ *  Bearbeiten-Dialog. Testids/Attribute bleiben unverändert
+ *  (shift-badge-<id>, data-planning-status, shift-confirm-<id>,
+ *  shift-note-icon-<id>), damit die bestehenden E2E-Specs weiter greifen. */
+function TableShiftCell({
+  shift,
+  modelMap,
+  onClick,
+  onConfirm,
+}: {
+  shift: Shift;
+  modelMap: Map<number, ShiftModelInfo>;
+  onClick?: (e: React.MouseEvent) => void;
+  onConfirm?: (shift: Shift) => void;
+}) {
+  const { selectedTeamId } = useTeam();
+  const getPersonSlot = usePersonSlotLookup();
+  const mirror = isMirrorShift(shift, selectedTeamId);
+  const isTeam = shift.type === "team";
+  const status = shift.planningStatus ?? "FIX";
+  const label = shiftLabel(shift, modelMap);
+  const einsatzLabel =
+    shift.einsatzTeamId != null
+      ? mirror
+        ? `Aushilfe aus ${shift.homeTeamName ?? "anderem Team"}`
+        : `Aushilfe für ${shift.einsatzTeamName ?? "anderes Team"}`
+      : null;
+  // Titel wie bisher: Label + Statuswort (FIX → „Bestätigt", sonst Entwurf/Vorschlag).
+  const statusWord = status === "FIX" ? "Bestätigt" : (PLANNING_STATUS_LABELS[status] ?? status);
+  const slot = getPersonSlot(shift.userId);
+  const barColor = isTeam ? "#0284c7" : slot.bg;
+  const timeRange = `${format(new Date(shift.startTime), "HH:mm")} – ${format(new Date(shift.endTime), "HH:mm")}`;
+  const baseIconKind: StatusBadgeKind =
+    status === "FIX" ? "confirmed" : status === "ANGEBOTEN" ? "sent" : "draft";
+  return (
+    <div
+      data-testid={`shift-badge-${shift.id}`}
+      data-planning-status={status}
+      className={`w-full overflow-hidden rounded-[4px] border border-[#c7ced8] bg-white px-[3px] py-[2px] leading-none ${mirror ? "cursor-default opacity-90" : "cursor-pointer"} transition-colors`}
+      onClick={mirror ? undefined : onClick}
+      title={
+        mirror && einsatzLabel
+          ? `${label} · ${einsatzLabel} (wird im Stammteam bearbeitet)`
+          : `${label}${einsatzLabel ? ` · ${einsatzLabel}` : ""} · ${statusWord}`
+      }
+    >
+      {/* Zeile 1: Status-Icon(s) + Personen-Farbbalken. */}
+      <div className="flex min-h-[20px] items-center gap-[4px]">
+        <span className="flex shrink-0 items-center gap-[3px]">
+          <StatusBadge kind={baseIconKind} label={statusWord} />
+          {shift.isVertretung && <StatusBadge kind="vertretung" label="Vertretung" />}
+        </span>
+        <span
+          aria-hidden="true"
+          className="h-[5px] min-w-[8px] flex-1 rounded-full"
+          style={{ backgroundColor: barColor }}
+        />
+        {shift.notes && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  data-testid={`shift-note-icon-${shift.id}`}
+                  className="inline-flex shrink-0 items-center text-[#555555] cursor-default"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MessageSquare className="h-2.5 w-2.5 shrink-0" />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[240px] break-words text-xs">
+                {shift.notes}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+      </div>
+      {/* Zeile 2: Uhr-Icon + Uhrzeit (Teamdienste ohne Uhrzeit, wie in der Pille). */}
+      <div className="flex min-h-[20px] items-center gap-[2px]">
+        <StatusBadge kind="clock" />
+        <span className="min-w-0 flex-1 truncate whitespace-nowrap text-[10px] font-semibold tracking-[-0.2px] tabular-nums text-[#444444]">
+          {isTeam ? "Teamdienst" : timeRange}
+        </span>
+      </div>
+      {onConfirm && !mirror && isConfirmableShift(shift) && (
+        <button
+          type="button"
+          data-testid={`shift-confirm-${shift.id}`}
+          title="Als verbindlich bestätigen"
+          onClick={(e) => {
+            e.stopPropagation();
+            onConfirm(shift);
+          }}
+          className="mb-[1px] mt-[2px] inline-flex w-full items-center justify-center gap-1 rounded border border-[#c7ced8] bg-card/60 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#444444] hover:bg-muted transition-colors"
+        >
+          <Check className="h-3 w-3" />
+          Bestätigen
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** Tabellenansicht (Zeile pro Assistenzkraft, Spalte pro Tag). Wird sowohl am
  * Desktop als auch — mit der vorhandenen Assistenzkraft-Filterung, die die
  * Zeilenzahl reduziert — am Smartphone verwendet (per Horizontal-Scroll). */
@@ -2553,7 +2661,7 @@ function DienstplanTableView({
                     >
                       <div className="space-y-1 min-h-[26px]">
                         {regular.map((s) => (
-                          <ShiftBadge
+                          <TableShiftCell
                             key={s.id}
                             shift={s}
                             modelMap={modelMap}
