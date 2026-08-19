@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
+import { openHeaderOverflow } from "./helpers/header";
 import {
   registerFreeAccount,
   deleteFreeAccount,
@@ -118,8 +119,9 @@ test("Monats-PDF ohne verbindliche Eintraege: kein Download, ehrlicher Hinweis-T
 
   // Sichtprobe: Die unverbindlichen Einträge sind im Kalender vorhanden — der
   // Monat ist also NICHT leer, nur eben ohne verbindliche Einträge.
+  await openHeaderOverflow(page);
   const exportButton = page.getByTestId("simple-month-export");
-  await expect(exportButton, "Monats-PDF-Button muss sichtbar sein").toBeVisible();
+  await expect(exportButton, "PDF-Menüpunkt muss sichtbar sein").toBeVisible();
 
   await exportButton.click();
 

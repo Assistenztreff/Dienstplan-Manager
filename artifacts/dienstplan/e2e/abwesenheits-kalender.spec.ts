@@ -1,5 +1,6 @@
 import path from "node:path";
 import { test, expect, type Page } from "@playwright/test";
+import { openAbwesenheitsKalender } from "./helpers/header";
 
 /**
  * E2E-Test: Abwesenheitskalender (Jahresansicht).
@@ -309,11 +310,11 @@ test("Dienstplan-Popup: Abwesenheitskalender aus Kalender- und Tabellenansicht (
   test.setTimeout(90_000);
   await loginAsAdmin(page);
   await page.goto("/dienstplan");
-  await expect(page.getByTestId("open-abwesenheits-kalender")).toBeVisible();
+  await expect(page.getByTestId("header-overflow")).toBeVisible();
 
   // Kalenderansicht (Desktop): Button öffnet den Jahreskalender als Popup.
   await page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-grid").click();
-  await page.getByTestId("open-abwesenheits-kalender").click();
+  await openAbwesenheitsKalender(page);
   const popup = page.getByTestId("abwesenheits-kalender-popup");
   await expect(popup).toBeVisible();
   await expect(popup.getByTestId("abwesenheits-kalender")).toBeVisible();
@@ -327,7 +328,7 @@ test("Dienstplan-Popup: Abwesenheitskalender aus Kalender- und Tabellenansicht (
   // Tabellenansicht (Desktop): derselbe Button, gleiches Popup.
   await page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-table").click();
   await expect(page.getByLabel(/Tabellenansicht/)).toBeVisible();
-  await page.getByTestId("open-abwesenheits-kalender").click();
+  await openAbwesenheitsKalender(page);
   await expect(popup).toBeVisible();
   await expect(popup.getByTestId("abwesenheits-kalender")).toBeVisible();
   await page.screenshot({
@@ -339,7 +340,7 @@ test("Dienstplan-Popup: Abwesenheitskalender aus Kalender- und Tabellenansicht (
 
   // Tablet-Viewport: 3-spaltige Monatslogik, Popup weiterhin erreichbar.
   await page.setViewportSize({ width: 820, height: 1180 });
-  await page.getByTestId("open-abwesenheits-kalender").click();
+  await openAbwesenheitsKalender(page);
   await expect(popup).toBeVisible();
   await expect(popup.getByTestId("abwesenheits-kalender")).toBeVisible();
   await page.screenshot({

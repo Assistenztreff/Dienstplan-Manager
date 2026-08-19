@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
+import { startSelectionMode } from "./helpers/header";
 import {
   registerFreeAccount,
   setAccountPlan,
@@ -114,7 +115,7 @@ test("Bulk-Anlegen im abgeschlossenen Monat: genau EIN Warn-Toast, EINE Statusab
   await gotoMonth(page, YEAR, MONTH);
 
   // Auswahl-Modus aktivieren und drei Tage im abgeschlossenen Monat wählen.
-  await page.getByTestId("toggle-selection-mode").click();
+  await startSelectionMode(page);
   const mm = String(MONTH).padStart(2, "0");
   for (const d of DAYS) {
     const header = page.getByTestId(`col-header-${YEAR}-${mm}-${String(d).padStart(2, "0")}`);

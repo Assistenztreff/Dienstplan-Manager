@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { test, expect, type Download, type Page } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
+import { openHeaderOverflow } from "./helpers/header";
 import {
   registerFreeAccount,
   deleteFreeAccount,
@@ -116,8 +117,9 @@ async function createShift(
 
 /** Löst den Monats-PDF-Export aus und liefert das rohe PDF als latin1-String. */
 async function exportMonthPdf(page: Page): Promise<{ raw: string; download: Download }> {
+  await openHeaderOverflow(page);
   const exportButton = page.getByTestId("simple-month-export");
-  await expect(exportButton, "Monats-PDF-Button muss sichtbar sein").toBeVisible();
+  await expect(exportButton, "PDF-Menüpunkt muss sichtbar sein").toBeVisible();
   const downloadPromise = page.waitForEvent("download");
   await exportButton.click();
   const download = await downloadPromise;

@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
+import { startSelectionMode } from "./helpers/header";
 import {
   deleteFreeAccount,
   registerFreeAccount,
@@ -142,7 +143,7 @@ test.describe("ShiftDialog: Wochentags-/Vorlagen-Hinweis im Mehrfach-Modus", () 
     const expectedMismatch = 2; // Sa + So passen nicht zu Mo–Fr
 
     // --- Mehrfach-Modus aktivieren und Tage auswählen ---------------------
-    await page.getByTestId("toggle-selection-mode").click();
+    await startSelectionMode(page);
     for (const day of selectedDays) {
       const cell = mobile.getByTestId(dayCellId(year, month, day));
       await cell.click();

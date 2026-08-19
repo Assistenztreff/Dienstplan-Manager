@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
+import { openHeaderOverflow } from "./helpers/header";
 import {
   registerFreeAccount,
   deleteFreeAccount,
@@ -100,8 +101,9 @@ test("Monats-Export ohne FIX-Eintraege: kein Download, Fehler-Toast", async ({ p
   await page.goto("/dienstplan");
   await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible();
 
+  await openHeaderOverflow(page);
   const exportButton = page.getByTestId("simple-month-export");
-  await expect(exportButton, "Monats-PDF-Button muss sichtbar sein").toBeVisible();
+  await expect(exportButton, "PDF-Menüpunkt muss sichtbar sein").toBeVisible();
 
   // Download-Beobachtung VOR dem Klick starten, damit kein Event verpasst
   // wird; kurze Frist genügt, da der (synchron gebaute) Export sofort

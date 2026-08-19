@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
+import { startSelectionMode } from "./helpers/header";
 
 /**
  * E2E-Test: Massen-Eintragen und Massen-Löschen über mehrere Tage.
@@ -139,7 +140,7 @@ test("Massen-Eintragen und Massen-Löschen über mehrere Tage funktioniert", asy
     const days = [6, 7, 8];
 
     // --- Auswahl-Modus aktivieren und drei Tage wählen --------------------
-    await page.getByTestId("toggle-selection-mode").click();
+    await startSelectionMode(page);
     for (const d of days) {
       const header = page.getByTestId(`col-header-${dateKey(year, month, d)}`);
       await header.click();
@@ -173,7 +174,7 @@ test("Massen-Eintragen und Massen-Löschen über mehrere Tage funktioniert", asy
     // warten statt der 5s-Default-Frist.
     await expect(dialog).toHaveCount(0, { timeout: 30_000 });
     await expect(page.getByTestId("bulk-action-bar")).toHaveCount(0);
-    await expect(page.getByTestId("toggle-selection-mode")).toContainText("Mehrfachauswahl");
+    await expect(page.getByTestId("toggle-selection-mode")).toHaveCount(0);
 
     // Genau drei Schichten angelegt (eine pro gewähltem Tag).
     let created: ApiShift[] = [];
@@ -204,7 +205,7 @@ test("Massen-Eintragen und Massen-Löschen über mehrere Tage funktioniert", asy
     await absenceOverview.getByTestId("team-absence-toggle").click();
 
     // --- Wieder alle Tage auswählen und per BulkDeleteDialog löschen ------
-    await page.getByTestId("toggle-selection-mode").click();
+    await startSelectionMode(page);
     for (const d of days) {
       const header = page.getByTestId(`col-header-${dateKey(year, month, d)}`);
       await header.click();
@@ -269,7 +270,7 @@ test.describe("Aktionsleiste auf schmalem Handy-Viewport", () => {
 
     // Auswahl-Modus an, drei Tage in der Listenansicht waehlen (nur Auswahl,
     // keine Schreiboperation — daher kollisionsfrei zu anderen Specs).
-    await page.getByTestId("toggle-selection-mode").click();
+    await startSelectionMode(page);
     // agenda-day-Zellen existieren dreifach (Mobil-Listenansicht + persistente
     // Wochen-Listen mobil/desktop) — auf den Mobil-Container scopen, sonst
     // bricht der Strict Mode mit "resolved to 3 elements" ab.
@@ -317,7 +318,7 @@ test("Monatswechsel im Auswahl-Modus leert die Auswahl", async ({ page }) => {
   );
 
   // Auswahl-Modus an, zwei Tage wählen.
-  await page.getByTestId("toggle-selection-mode").click();
+  await startSelectionMode(page);
   for (const d of [12, 13]) {
     await page.getByTestId(`col-header-${dateKey(year, month, d)}`).click();
   }
@@ -328,7 +329,7 @@ test("Monatswechsel im Auswahl-Modus leert die Auswahl", async ({ page }) => {
   await page.getByTestId("next-month").click();
 
   await expect(page.getByTestId("bulk-action-bar")).toHaveCount(0);
-  await expect(page.getByTestId("toggle-selection-mode")).toContainText("Mehrfachauswahl");
+  await expect(page.getByTestId("toggle-selection-mode")).toHaveCount(0);
 
   // Zurück zum Ausgangsmonat: die vormals gewählten Tage sind nicht mehr
   // ausgewählt (Auswahl-Modus ist aus, daher gibt es keine col-header mehr).

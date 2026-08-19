@@ -18,7 +18,7 @@ import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Table2, Check, CheckSquare, X, CalendarPlus, Trash2, Pencil, ChevronDown, Users, Lock, Download, MessageSquare, Rows2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, List, LayoutGrid, Table2, Check, X, CalendarPlus, Trash2, Pencil, ChevronDown, Users, Lock, MessageSquare, ChevronsDownUp, Send, Palmtree, MoreHorizontal, FileDown, SquareDashedMousePointer } from "lucide-react";
 import { StatusBadge, type StatusBadgeKind } from "@/components/status-badge";
 import type { LucideIcon } from "lucide-react";
 import { ShiftDialog } from "@/components/shift-dialog";
@@ -76,6 +76,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import {
   SHIFT_LIST_STALE_TIME_MS,
   SHIFT_LIST_GC_TIME_MS,
@@ -2094,6 +2101,7 @@ function DienstplanHeader({
   );
 
   const assistantFilter = canPlan && assistants.length > 0 && (
+    <>
     <Select
       value={String(selectedAssistant)}
       onValueChange={(v) => onSelectAssistant(v === "all" ? "all" : Number(v))}
@@ -2128,6 +2136,12 @@ function DienstplanHeader({
         ))}
       </SelectContent>
     </Select>
+    {/* Gruppentrennlinie nach dem Assistenzkraft-Filter (Task #856),
+        nur in den einzeiligen Stufen. */}
+    {!stacked && (
+      <span aria-hidden="true" className="h-6 w-px shrink-0 bg-border" />
+    )}
+    </>
   );
 
   const viewToggles = (
@@ -2139,7 +2153,7 @@ function DienstplanHeader({
           showLabels={showLabels}
           options={[
             { value: "list", label: "Liste", icon: List },
-            { value: "grid", label: "Monat", icon: CalendarDays },
+            { value: "grid", label: "Monat", icon: LayoutGrid },
           ]}
         />
       </div>
@@ -2150,7 +2164,7 @@ function DienstplanHeader({
           showLabels={showLabels}
           options={[
             { value: "table", label: "Tabelle", icon: Table2 },
-            { value: "grid", label: "Monat", icon: CalendarDays },
+            { value: "grid", label: "Monat", icon: LayoutGrid },
           ]}
         />
       </div>
@@ -2169,7 +2183,7 @@ function DienstplanHeader({
             aria-pressed={pillMinimiert}
             data-testid="toggle-pill-minimiert"
           >
-            <Rows2 className="h-4 w-4" />
+            <ChevronsDownUp className="h-4 w-4" />
             {showLabels && <span>Minimiert</span>}
           </Button>
         </div>
@@ -2188,10 +2202,10 @@ function DienstplanHeader({
       aria-label="Vorschlag senden"
       data-testid="confirm-all-drafts"
     >
-      <Check className="h-4 w-4" />
+      <Send className="h-4 w-4" />
       {showLabels ? (
         <>
-          <span>Vorschlag senden</span>
+          <span>Senden</span>
           {confirmableCount > 0 && (
             <span className="rounded-full bg-primary/20 px-1.5 text-xs font-semibold text-assistenz-brand">
               {confirmableCount}
@@ -2206,67 +2220,100 @@ function DienstplanHeader({
     </Button>
   );
 
-  const exportButton = canBasicExport && (
+  // Aktive Mehrfachauswahl bleibt als eigener Beenden-Button in der
+  // Hauptleiste sichtbar (ein Klick zum Verlassen des Modus); der Einstieg
+  // wandert ins Überlauf-Menü (Task #856).
+  const endSelectionButton = canPlan && canBulkEdit && isSelectionMode && (
     <Button
-      variant="outline"
-      size="sm"
-      className={showLabels ? "gap-1.5" : `h-9 shrink-0 px-0 ${stacked ? "w-8" : "w-9"}`}
-      onClick={onExport}
-      disabled={isExporting}
-      title="Monatsübersicht als PDF: bestätigte Dienste und Abwesenheiten, ohne Zeiterfassung."
-      aria-label="Monatsübersicht als PDF exportieren"
-      data-testid="simple-month-export"
+      variant="default"
+      size="icon"
+      className="relative h-9 w-9 shrink-0 after:absolute after:-inset-1 after:content-['']"
+      onClick={onToggleSelection}
+      title="Auswahl beenden"
+      aria-label="Auswahl beenden"
+      data-testid="toggle-selection-mode"
     >
-      <Download className="h-4 w-4" />
-      {showLabels && <span>{isExporting ? "Exportiere..." : "Monats-PDF"}</span>}
+      <X className="h-4 w-4" />
     </Button>
   );
 
-  const selectionButton =
-    canPlan &&
-    (canBulkEdit ? (
-      isSelectionMode ? (
-        <Button
-          variant="default"
-          size="icon"
-          className={`h-9 shrink-0 ${stacked ? "w-8" : "w-9"}`}
-          onClick={onToggleSelection}
-          title="Auswahl beenden"
-          aria-label="Auswahl beenden"
-          data-testid="toggle-selection-mode"
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      ) : (
+  // Überlauf-Menü (Task #856): seltener genutzte Aktionen — PDF-Export,
+  // Mehrfachauswahl-Einstieg und Abwesenheitskalender — hinter einem
+  // „Weitere Aktionen"-Trigger. Labels im Menü sind immer sichtbar,
+  // unabhängig von der Header-Stufe.
+  const showSelectionEntry = canPlan && !isSelectionMode;
+  const overflowMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
           size="sm"
-          className={showLabels ? "gap-1.5" : `h-9 shrink-0 px-0 ${stacked ? "w-8" : "w-9"}`}
-          onClick={onToggleSelection}
-          title="Mehrfachauswahl"
-          aria-label="Mehrfachauswahl"
-          data-testid="toggle-selection-mode"
+          className="relative h-9 w-9 shrink-0 px-0 after:absolute after:-inset-1 after:content-['']"
+          title="Weitere Aktionen"
+          aria-label="Weitere Aktionen"
+          data-testid="header-overflow"
         >
-          <CheckSquare className="h-4 w-4" />
-          {showLabels && <span>Mehrfachauswahl</span>}
+          <MoreHorizontal className="h-4 w-4" />
         </Button>
-      )
-    ) : (
-      // Bewusst klickbar statt `disabled`: auf Touch-Geräten gibt es keinen
-      // Tooltip — der Klick führt direkt zur Preise-/Premium-Seite.
-      <Button
-        variant="outline"
-        size="sm"
-        className={showLabels ? "gap-1.5" : `h-9 shrink-0 px-0 ${stacked ? "w-8" : "w-9"}`}
-        onClick={() => navigateHeader("/preise")}
-        title="Massenbearbeitung ist in Premium enthalten. Preise & Premium ansehen."
-        aria-label="Mehrfachauswahl (Premium) — Preise & Premium ansehen"
-        data-testid="toggle-selection-mode-locked"
-      >
-        <Lock className="h-4 w-4" />
-        {showLabels && <span>Mehrfachauswahl</span>}
-      </Button>
-    ));
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {canBasicExport && (
+          <DropdownMenuItem
+            className="min-h-[44px] gap-2"
+            onSelect={onExport}
+            disabled={isExporting}
+            title="Monatsübersicht als PDF: bestätigte Dienste und Abwesenheiten, ohne Zeiterfassung."
+            data-testid="simple-month-export"
+          >
+            <FileDown className="h-4 w-4" />
+            <span>{isExporting ? "Exportiere..." : "Monat als PDF exportieren"}</span>
+          </DropdownMenuItem>
+        )}
+        {showSelectionEntry &&
+          (canBulkEdit ? (
+            <DropdownMenuItem
+              className="min-h-[44px] gap-2"
+              onSelect={onToggleSelection}
+              title="Auswählen"
+              aria-label="Auswählen"
+              data-testid="toggle-selection-mode"
+            >
+              <SquareDashedMousePointer className="h-4 w-4" />
+              <span>Auswählen</span>
+            </DropdownMenuItem>
+          ) : (
+            // Bewusst klickbar statt `disabled`: auf Touch-Geräten gibt es
+            // keinen Tooltip — der Klick führt direkt zur Preise-/Premium-Seite.
+            <DropdownMenuItem
+              className="min-h-[44px] gap-2"
+              onSelect={() => navigateHeader("/preise")}
+              title="Massenbearbeitung ist in Premium enthalten. Preise & Premium ansehen."
+              aria-label="Auswählen (Premium) — Preise & Premium ansehen"
+              data-testid="toggle-selection-mode-locked"
+            >
+              <Lock className="h-4 w-4" />
+              <span>Auswählen</span>
+            </DropdownMenuItem>
+          ))}
+        {(canBasicExport || showSelectionEntry) && <DropdownMenuSeparator />}
+        <DropdownMenuItem
+          className="min-h-[44px] gap-2"
+          onSelect={() => setAbsCalOpen(true)}
+          title="Abwesenheitskalender öffnen (Jahresübersicht)"
+          aria-label="Abwesenheitskalender öffnen"
+          data-testid="open-abwesenheits-kalender"
+        >
+          <Palmtree className="h-4 w-4" />
+          <span>Abwesenheit eintragen</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  // Gruppentrennlinie zwischen Aktions-Gruppen (nur einzeilige Stufen).
+  const groupDivider = !stacked && (
+    <span aria-hidden="true" className="h-6 w-px shrink-0 bg-border" />
+  );
 
   return (
     <>
@@ -2285,21 +2332,10 @@ function DienstplanHeader({
       actions={
         <>
           {viewToggles}
+          {groupDivider}
           {confirmAllButton}
-          {exportButton}
-          {selectionButton}
-          <Button
-            variant="outline"
-            size="sm"
-            className={showLabels ? "gap-1.5" : `h-9 shrink-0 px-0 ${stacked ? "w-8" : "w-9"}`}
-            onClick={() => setAbsCalOpen(true)}
-            title="Abwesenheitskalender öffnen (Jahresübersicht)"
-            aria-label="Abwesenheitskalender öffnen"
-            data-testid="open-abwesenheits-kalender"
-          >
-            <CalendarDays className="h-4 w-4" />
-            {showLabels && <span>Abwesenheiten</span>}
-          </Button>
+          {endSelectionButton}
+          {overflowMenu}
         </>
       }
     />

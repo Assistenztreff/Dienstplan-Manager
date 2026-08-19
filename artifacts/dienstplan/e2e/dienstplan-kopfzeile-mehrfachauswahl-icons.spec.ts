@@ -1,32 +1,38 @@
 import { test, expect, type Page } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
 import { TeamTestHarness } from "./helpers/teams";
+import { openHeaderOverflow, startSelectionMode } from "./helpers/header";
 
 /**
- * Regressionstest: Mehrfachauswahl-Klick wirft die adaptive Kopfzeile nicht
- * mehr auf die Labels-Stufe zurueck, und Team-Menue + Assistenten-Filter
- * ueberlappen sich in keinem Zustand.
+ * Regressionstest: Mehrfachauswahl- und Export-Aktionen werfen die adaptive
+ * Kopfzeile nicht auf die Labels-Stufe zurueck, und Team-Menue +
+ * Assistenten-Filter ueberlappen sich in keinem Zustand.
  *
  * Hintergrund (Bug): `isSelectionMode` war Teil des Mess-Schluessels der
- * Kopfzeile — jeder Klick auf Mehrfachauswahl setzte die Stufe hart auf
- * "labels" zurueck. Die Neumessung eskalierte nicht zuverlaessig zurueck auf
- * "icons", weil die schrumpfbaren Selects (Team-Switcher via min-w-0-Wrapper)
- * sich visuell UEBERLAPPTEN statt messbar ueberzulaufen (scrollWidth blieb
- * <= clientWidth). Ergebnis: Buttons sprangen auf Labels, Team-Menue und
- * Assistenten-Filter schoben sich uebereinander (Dienstleister, ~1024px).
+ * Kopfzeile — jeder Zustandswechsel setzte die Stufe hart auf "labels"
+ * zurueck. Die Neumessung eskalierte nicht zuverlaessig zurueck auf "icons",
+ * weil die schrumpfbaren Selects sich visuell UEBERLAPPTEN statt messbar
+ * ueberzulaufen. Ergebnis: Buttons sprangen auf Labels, Team-Menue und
+ * Assistenten-Filter schoben sich uebereinander.
+ *
+ * Seit Task #856 liegen PDF-Export, Mehrfachauswahl-Einstieg und
+ * Abwesenheitskalender im Ueberlauf-Menue (`header-overflow`); als
+ * beschriftbarer Referenz-Button in der Hauptleiste dient der
+ * "Senden"-Button (`confirm-all-drafts`).
  *
  * Deckt ab:
- * - Icon-Stufe bei ~1024px (Dienstleister mit Team-Switcher + Filter) bleibt
- *   nach Aktivieren UND Beenden der Mehrfachauswahl erhalten (Buttons
- *   unbeschriftet, kein Ruecksprung auf Labels).
+ * - Icon-Stufe (schmaler Desktop-Viewport): bleibt nach Aktivieren UND
+ *   Beenden der Mehrfachauswahl erhalten (Senden-Button unbeschriftet,
+ *   kein Ruecksprung auf Labels).
  * - Team-Switcher und Assistenten-Filter ueberlappen sich horizontal nicht
  *   (boundingBox), weder vor noch waehrend noch nach der Auswahl.
  * - Labels-Stufe (breiter Viewport): Beschriftungen bleiben beim Umschalten
- *   erhalten — keine Regression durch den geaenderten Mess-Schluessel.
- * - Monats-PDF-Klick in der Icon-Stufe: `isExporting` haengt (wie
- *   `isSelectionMode`) am remeasureKey statt am contentKey — die Buttons
- *   springen waehrend des Exports nicht mehr kurz auf Beschriftungen
- *   (MutationObserver faengt auch nur wenige Frames sichtbare Label-Blitzer).
+ *   erhalten; die Menue-Eintraege im Ueberlauf-Menue sind IMMER beschriftet,
+ *   unabhaengig von der Header-Stufe.
+ * - PDF-Export aus dem Menue in der Icon-Stufe: `isExporting` haengt am
+ *   remeasureKey statt am contentKey — der Senden-Button springt waehrend
+ *   des Exports nicht kurz auf seine Beschriftung (MutationObserver faengt
+ *   auch nur wenige Frames sichtbare Label-Blitzer).
  */
 
 let h: TeamTestHarness;
@@ -68,8 +74,11 @@ async function expectNoSelectOverlap(page: Page, label: string) {
   ).toBeLessThanOrEqual(assistantBox.x + 1);
 }
 
-test.describe("Icon-Stufe bei ~1024px (Fall aus dem Screenshot)", () => {
-  test.use({ viewport: { width: 1024, height: 800 } });
+test.describe("Icon-Stufe bei schmalem Desktop-Viewport", () => {
+  // Seit dem Ueberlauf-Menue (Task #856) ist die Hauptleiste deutlich
+  // schmaler — 1024px reicht nicht mehr zuverlaessig fuer die Icon-Stufe,
+  // daher ein engerer Viewport (immer noch md+, also Desktop-Layout).
+  test.use({ viewport: { width: 900, height: 800 } });
 
   test("Mehrfachauswahl an/aus laesst die Icon-Stufe stehen, ohne Ueberlappung", async ({ page }) => {
     test.setTimeout(60000);
@@ -77,35 +86,31 @@ test.describe("Icon-Stufe bei ~1024px (Fall aus dem Screenshot)", () => {
     await page.goto("/dienstplan");
     await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible();
 
-    const toggle = page.getByTestId("toggle-selection-mode");
-    const exportBtn = page.getByTestId("simple-month-export");
+    const sendBtn = page.getByTestId("confirm-all-drafts");
 
-    // Vorbedingung: Bei 1024px MUSS die Icon-Stufe aktiv sein (Buttons ohne
+    // Vorbedingung: Icon-Stufe MUSS aktiv sein (Senden-Button ohne
     // Beschriftung) — sonst prueft der Test nicht den Bug-Fall.
-    await expect(toggle).toBeVisible();
-    await expect(toggle).toHaveText("");
-    await expect(exportBtn).toHaveText("");
+    await expect(sendBtn).toBeVisible();
+    await expect(sendBtn).toHaveText("");
     await expectNoSelectOverlap(page, "vor der Auswahl");
 
-    // --- Mehrfachauswahl aktivieren -------------------------------------
-    await toggle.click();
-    // Aktiver Zustand: X-Button ("Auswahl beenden"), weiterhin unbeschriftet.
+    // --- Mehrfachauswahl ueber das Ueberlauf-Menue aktivieren -------------
+    await startSelectionMode(page);
+    // Aktiver Zustand: X-Button ("Auswahl beenden") in der Hauptleiste; die
+    // uebrigen Buttons springen NICHT auf Labels zurueck.
     const endButton = page.getByRole("button", { name: "Auswahl beenden" });
-    await expect(endButton).toBeVisible();
-    // Die uebrigen Buttons springen NICHT auf Labels zurueck.
-    await expect(exportBtn).toHaveText("");
+    await expect(sendBtn).toHaveText("");
     await expectNoSelectOverlap(page, "waehrend der Auswahl");
 
     // --- Auswahl wieder beenden ------------------------------------------
     await endButton.click();
-    await expect(toggle).toBeVisible();
-    await expect(toggle).toHaveText("");
-    await expect(exportBtn).toHaveText("");
+    await expect(page.getByTestId("toggle-selection-mode")).toHaveCount(0);
+    await expect(sendBtn).toHaveText("");
     await expectNoSelectOverlap(page, "nach dem Beenden");
 
-    // --- Monats-PDF-Klick: kein kurzes Aufspringen auf Labels -------------
+    // --- PDF-Export aus dem Menue: kein kurzes Aufspringen auf Labels -----
     // Ein MutationObserver auf der Kopfzeile protokolliert JEDE
-    // Textaenderung der beiden Buttons — auch ein nur wenige Frames
+    // Textaenderung des Senden-Buttons — auch ein nur wenige Frames
     // sichtbares Label-Flackern (der alte Bug: isExporting im contentKey
     // setzte die Mess-Stufe hart auf "labels" zurueck) wird so erkannt.
     await page.evaluate(() => {
@@ -115,12 +120,14 @@ test.describe("Icon-Stufe bei ~1024px (Fall aus dem Screenshot)", () => {
       };
       w.__labelFlashes = [];
       const record = () => {
-        for (const id of ["toggle-selection-mode", "simple-month-export"]) {
-          const text =
-            document
-              .querySelector(`[data-testid="${id}"]`)
-              ?.textContent?.trim() ?? "";
-          if (text !== "") w.__labelFlashes.push(`${id}: ${text}`);
+        const text =
+          document
+            .querySelector('[data-testid="confirm-all-drafts"]')
+            ?.textContent?.trim() ?? "";
+        // Der Icon-only-Button darf hoechstens den Entwurfszaehler-Badge
+        // tragen (reine Ziffern) — jede Wort-Beschriftung ist ein Blitzer.
+        if (text !== "" && !/^\d+$/.test(text)) {
+          w.__labelFlashes.push(`confirm-all-drafts: ${text}`);
         }
       };
       const observer = new MutationObserver(record);
@@ -136,11 +143,11 @@ test.describe("Icon-Stufe bei ~1024px (Fall aus dem Screenshot)", () => {
     // Download) — fuer den Bug zaehlt nur der isExporting-Zustandswechsel.
     // Der Toast markiert zuverlaessig das ENDE des Export-Laufs (erst danach
     // den Observer auslesen, sonst wird zu frueh abgeklemmt).
-    await exportBtn.click();
+    await openHeaderOverflow(page);
+    await page.getByTestId("simple-month-export").click();
     await expect(
       page.getByText("Keine bestätigten Dienste oder Abwesenheiten in diesem Monat."),
     ).toBeVisible();
-    await expect(exportBtn).toBeEnabled();
 
     const flashes = await page.evaluate(() => {
       const w = window as unknown as {
@@ -152,10 +159,9 @@ test.describe("Icon-Stufe bei ~1024px (Fall aus dem Screenshot)", () => {
     });
     expect(
       flashes,
-      `Buttons sprangen waehrend des Exports kurz auf Labels: ${flashes.join(", ")}`,
+      `Senden-Button sprang waehrend des Exports kurz auf sein Label: ${flashes.join(", ")}`,
     ).toEqual([]);
-    await expect(toggle).toHaveText("");
-    await expect(exportBtn).toHaveText("");
+    await expect(sendBtn).toHaveText("");
     await expectNoSelectOverlap(page, "nach dem Export");
   });
 });
@@ -169,25 +175,54 @@ test.describe("Labels-Stufe bei breitem Viewport (keine Regression)", () => {
     await page.goto("/dienstplan");
     await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible();
 
-    const toggle = page.getByTestId("toggle-selection-mode");
-    const exportBtn = page.getByTestId("simple-month-export");
+    const sendBtn = page.getByTestId("confirm-all-drafts");
 
-    // Vorbedingung: Labels-Stufe (Buttons beschriftet).
-    await expect(toggle).toContainText("Mehrfachauswahl");
-    await expect(exportBtn).toContainText("Monats-PDF");
+    // Vorbedingung: Labels-Stufe (Senden-Button beschriftet).
+    await expect(sendBtn).toContainText("Senden");
     await expectNoSelectOverlap(page, "vor der Auswahl (breit)");
 
-    // Auswahl aktivieren: der Toggle wird zum X-Button, die uebrigen Buttons
-    // behalten ihre Beschriftung (kein Stufenwechsel noetig).
-    await toggle.click();
+    // Menue-Eintraege sind unabhaengig von der Header-Stufe IMMER
+    // beschriftet.
+    await openHeaderOverflow(page);
+    await expect(page.getByTestId("simple-month-export")).toContainText(
+      "Monat als PDF exportieren",
+    );
+    await expect(page.getByTestId("toggle-selection-mode")).toContainText("Auswählen");
+    await expect(page.getByTestId("open-abwesenheits-kalender")).toContainText(
+      "Abwesenheit eintragen",
+    );
+
+    // Touch-Ziele: jeder Menue-Eintrag muss mind. 44px hoch sein
+    // (DESIGN-GUIDELINES, Touch-Ziele auf Mobile) — das Menue ist der
+    // einzige Zugang zu diesen Aktionen.
+    for (const testId of [
+      "simple-month-export",
+      "toggle-selection-mode",
+      "open-abwesenheits-kalender",
+    ]) {
+      // offsetHeight statt boundingBox: die Radix-Oeffnungsanimation
+      // skaliert das Menue kurzzeitig (<1), was die Bounding-Box unter
+      // 44px druecken wuerde; die Layout-Hoehe ist transform-unabhaengig.
+      const height = await page
+        .getByTestId(testId)
+        .evaluate((el) => (el as HTMLElement).offsetHeight);
+      expect(
+        height,
+        `${testId} ist nur ${height}px hoch (mind. 44px gefordert)`,
+      ).toBeGreaterThanOrEqual(44);
+    }
+
+    // Auswahl aktivieren: X-Button erscheint, die uebrigen Buttons behalten
+    // ihre Beschriftung (kein Stufenwechsel noetig).
+    await page.getByTestId("toggle-selection-mode").click();
     await expect(page.getByRole("button", { name: "Auswahl beenden" })).toBeVisible();
-    await expect(exportBtn).toContainText("Monats-PDF");
+    await expect(sendBtn).toContainText("Senden");
     await expectNoSelectOverlap(page, "waehrend der Auswahl (breit)");
 
-    // Beenden: beschrifteter Mehrfachauswahl-Button kommt zurueck.
+    // Beenden: der X-Button verschwindet, die Beschriftungen bleiben.
     await page.getByRole("button", { name: "Auswahl beenden" }).click();
-    await expect(toggle).toContainText("Mehrfachauswahl");
-    await expect(exportBtn).toContainText("Monats-PDF");
+    await expect(page.getByTestId("toggle-selection-mode")).toHaveCount(0);
+    await expect(sendBtn).toContainText("Senden");
     await expectNoSelectOverlap(page, "nach dem Beenden (breit)");
   });
 });

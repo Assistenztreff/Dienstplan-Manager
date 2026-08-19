@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
+import { startSelectionMode } from "./helpers/header";
 
 /**
  * E2E-Test: Gezieltes Massen-Löschen pro Assistent löscht NUR dessen Einträge.
@@ -150,7 +151,7 @@ test("Gezieltes Löschen pro Assistent entfernt nur dessen Einträge", async ({ 
     }
 
     // --- Auswahl-Modus aktivieren und beide Tage wählen --------------------
-    await page.getByTestId("toggle-selection-mode").click();
+    await startSelectionMode(page);
     for (const d of days) {
       const header = page.getByTestId(`col-header-${dateKey(year, month, d)}`);
       await header.click();
