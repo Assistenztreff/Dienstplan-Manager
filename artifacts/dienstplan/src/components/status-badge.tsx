@@ -150,6 +150,16 @@ function symbolSize(circle: number, scale = 0.75): number {
   return raw % 2 === circle % 2 ? raw : raw - 1;
 }
 
+/**
+ * Kreisfarben je Status — abgeleitet aus KIND_CONFIG, damit andere Stellen
+ * (z. B. das Stundenkonto) dieselbe Farbe referenzieren können, ohne die
+ * Hex-Werte ein zweites Mal zu pflegen. Farbe allein bleibt auch dort nie
+ * die einzige Information (Text/Icon-Pflicht besteht unabhängig fort).
+ */
+export const STATUS_BADGE_COLORS: Record<StatusBadgeKind, string> = Object.fromEntries(
+  (Object.keys(KIND_CONFIG) as StatusBadgeKind[]).map((k) => [k, KIND_CONFIG[k].bg]),
+) as Record<StatusBadgeKind, string>;
+
 export function StatusBadge({
   kind,
   label,

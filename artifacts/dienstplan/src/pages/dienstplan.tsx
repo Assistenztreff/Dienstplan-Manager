@@ -9,8 +9,10 @@ import {
   useUpdateShift,
   useSendShiftProposals,
   useBulkConfirmOwnShifts,
+  useGetHoursBalance,
   type User,
   type ShiftModel,
+  type HoursBalance,
 } from "@workspace/api-client-react";
 import { useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, getDay, getISOWeek, isValid, startOfDay, endOfDay, startOfWeek, endOfWeek, addDays, addMonths, differenceInCalendarDays, isWithinInterval } from "date-fns";
@@ -18,7 +20,7 @@ import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, List, LayoutGrid, Table2, Check, X, CalendarPlus, Trash2, Pencil, ChevronDown, Users, Lock, MessageSquare, ChevronsDownUp, Send, Palmtree, MoreHorizontal, FileDown, SquareDashedMousePointer } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, List, LayoutGrid, Table2, Check, X, CalendarPlus, Trash2, Pencil, ChevronDown, Users, Lock, MessageSquare, ChevronsDownUp, Send, Palmtree, MoreHorizontal, FileDown, SquareDashedMousePointer, Scale, ChevronsLeft } from "lucide-react";
 import { StatusBadge, type StatusBadgeKind } from "@/components/status-badge";
 import type { LucideIcon } from "lucide-react";
 import { ShiftDialog } from "@/components/shift-dialog";
@@ -45,8 +47,15 @@ import { type PersonSlot, getPersonSlots } from "@/lib/barrierefreie-farben";
 import { useAssistantPalette } from "@/lib/use-assistant-palette";
 import { hasAccess, getLimit } from "@/lib/entitlements";
 import { type HeaderTier, useIsMobileViewport, useHeaderTier } from "@/lib/header-tier";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import { useSelectedAssistant, type Assistant } from "@/components/assistant-filter";
+import {
+  StundenkontoPanel,
+  StundenkontoReihe,
+  useSelectedUserIds,
+  useIsWideStundenkontoLayout,
+} from "@/components/stundenkonto-leiste";
 import {
   Select,
   SelectContent,
@@ -2038,6 +2047,9 @@ function DienstplanHeader({
   onNextMonth,
   pillMinimiert,
   onTogglePillMinimiert,
+  canSeeStundenkonto,
+  stundenkontoOpen,
+  onToggleStundenkonto,
 }: {
   isAdmin: boolean;
   canPlan: boolean;
@@ -2067,6 +2079,13 @@ function DienstplanHeader({
    *  einzeiligen Dauerzustand). */
   pillMinimiert: boolean;
   onTogglePillMinimiert: () => void;
+  /** Task #857: Stundenkonto ersetzt für berechtigte Admins den einfachen
+   *  Assistenzkraft-Dropdown (assistantFilter unten) durch das Panel/die
+   *  Reihe im Seitenkörper. Der Umschalter hier ist nur ≥1100px relevant
+   *  (darunter ist die Reihe immer sichtbar, kein Ein-/Ausklappen nötig). */
+  canSeeStundenkonto: boolean;
+  stundenkontoOpen: boolean;
+  onToggleStundenkonto: () => void;
 }) {
   const { selectedTeamId } = useTeam();
   const personColors = usePersonColors();
@@ -2085,6 +2104,7 @@ function DienstplanHeader({
     confirmableCount,
     canBasicExport,
     canBulkEdit,
+    canSeeStundenkonto,
     `${month}/${year}`,
   ].join("|");
   const { measureRef, tier } = useHeaderTier(
@@ -2100,8 +2120,13 @@ function DienstplanHeader({
     </h1>
   );
 
+  // Task #857: Für canSeeStundenkonto-Admins ersetzt das Stundenkonto (Panel/
+  // Reihe) den Filter nur im Desktop-Kalenderkörper (≥768px). Auf
+  // Smartphone-Breite gibt es dort kein Äquivalent — der klassische
+  // Einzel-Filter bleibt daher unterhalb von md sichtbar (display:contents
+  // reicht die Kinder unverändert an den Kopfzeilen-Flex weiter).
   const assistantFilter = canPlan && assistants.length > 0 && (
-    <>
+    <div className={canSeeStundenkonto ? "contents md:hidden" : "contents"}>
     <Select
       value={String(selectedAssistant)}
       onValueChange={(v) => onSelectAssistant(v === "all" ? "all" : Number(v))}
@@ -2141,7 +2166,7 @@ function DienstplanHeader({
     {!stacked && (
       <span aria-hidden="true" className="h-6 w-px shrink-0 bg-border" />
     )}
-    </>
+    </div>
   );
 
   const viewToggles = (
@@ -2185,6 +2210,27 @@ function DienstplanHeader({
           >
             <ChevronsDownUp className="h-4 w-4" />
             {showLabels && <span>Minimiert</span>}
+          </Button>
+        </div>
+      )}
+      {/* Task #857: Ein-/Ausklappen des Stundenkonto-Panels — nur ≥1100px
+          relevant (min-[1100px] identisch zur JS-Schwelle in
+          stundenkonto-leiste.tsx); darunter zeigt der Seitenkörper die
+          Reihe immer, ein Umschalten wäre wirkungslos. */}
+      {canSeeStundenkonto && (
+        <div className="hidden min-[1100px]:block" data-testid="stundenkonto-toggle-wrapper">
+          <Button
+            variant={stundenkontoOpen ? "default" : "outline"}
+            size="sm"
+            className={showLabels ? "gap-1.5" : `h-9 shrink-0 px-0 ${stacked ? "w-8" : "w-9"}`}
+            onClick={onToggleStundenkonto}
+            title={stundenkontoOpen ? "Stundenkonto ausblenden" : "Stundenkonto einblenden"}
+            aria-label="Stundenkonto ein-/ausblenden"
+            aria-pressed={stundenkontoOpen}
+            data-testid="toggle-stundenkonto"
+          >
+            <Scale className="h-4 w-4" />
+            {showLabels && <span>Stundenkonto</span>}
           </Button>
         </div>
       )}
@@ -2842,6 +2888,63 @@ export default function Dienstplan() {
     isTeamScopeReady && !(canPlan && usersLoading),
   );
 
+  // Task #857: Für berechtigte Admins (Premium-Feature wie in Auswertungen)
+  // ersetzt das Stundenkonto den einfachen Dropdown-Filter durch eine
+  // Mehrfachauswahl. Alle anderen Nutzer sehen weiterhin exakt den
+  // bisherigen Einzel-Filter (selectedAssistant oben) — "unverändert" ist
+  // hier Teil der Anforderung, kein Zufall.
+  const canSeeStundenkonto = isAdmin && hasAccess(currentUser, "advancedAnalytics");
+  const {
+    selectedUserIds: multiSelectedUserIds,
+    toggleUser: toggleStundenkontoUser,
+    selectAll: selectAllStundenkonto,
+  } = useSelectedUserIds(
+    assistants,
+    isTeamScopeReady && !(canPlan && usersLoading),
+  );
+  // Unterhalb von md (<768px, siehe useIsMobile) zeigen wir für
+  // canSeeStundenkonto-Admins NUR das klassische Einzel-Dropdown (kein
+  // Stundenkonto-Panel/-Reihe, s. contents/md:hidden-Header weiter unten).
+  // Der effektive Scope MUSS deshalb dort ebenfalls selectedAssistant folgen
+  // — sonst kann eine auf Desktop persistierte Mehrfachauswahl (z. B. "all"
+  // oder eine Teilmenge) mobil unsichtbar bleiben, während sie weiterhin
+  // Sichtbarkeit UND Versand-Scope bestimmt (Review-Fund: Mobil zeigt eine
+  // Person, Request geht trotzdem teamweit raus, oder umgekehrt).
+  const isMobileViewport = useIsMobile();
+  const effectiveSelectedUserIds: number[] | "all" = canSeeStundenkonto && !isMobileViewport
+    ? multiSelectedUserIds
+    : selectedAssistant === "all"
+    ? "all"
+    : [selectedAssistant];
+  // Ziel-Scope für "Vorschlag senden": undefined = ganzes Team (kein Filter
+  // aktiv). Bei 1+ ausgewählten Personen NIE stillschweigend auf "alle"
+  // erweitern — sonst würden auch abgewählte Assistenzkräfte einen
+  // Vorschlag erhalten. Der Endpunkt kennt nur "eine Person" oder "alle"
+  // (kein Batch-userId-Array); bei Mehrfachauswahl sendet sendProposals()
+  // deshalb einen Request pro ausgewählter Person (siehe dort).
+  const sendScopeUserIds: number[] | undefined =
+    effectiveSelectedUserIds === "all" ? undefined : effectiveSelectedUserIds;
+
+  const [stundenkontoOpenFlag, setStundenkontoOpenFlag] = usePersistentState<"1" | "0">(
+    "dienstplan.stundenkontoOpen",
+    "1",
+    ["1", "0"],
+  );
+  const stundenkontoOpen = stundenkontoOpenFlag === "1";
+  const isWideStundenkontoLayout = useIsWideStundenkontoLayout();
+
+  const { data: hoursBalances, isLoading: hoursBalancesLoading } = useGetHoursBalance(
+    { month, year, ...teamParam },
+    {
+      query: {
+        enabled: canSeeStundenkonto && isTeamScopeReady,
+        placeholderData: keepPreviousData,
+        staleTime: SHIFT_LIST_STALE_TIME_MS,
+        gcTime: SHIFT_LIST_GC_TIME_MS,
+      },
+    } as unknown as Parameters<typeof useGetHoursBalance>[1],
+  ) as { data?: HoursBalance[]; isLoading: boolean };
+
   // Kollisionsarme Farbzuordnung fürs ganze Team: die ersten 8 Personen
   // bekommen garantiert 8 verschiedene Farben (statt reinem ID-Hash).
   // Memo über die ID-Liste, damit der Provider-Wert referenzstabil bleibt.
@@ -2883,13 +2986,13 @@ export default function Dienstplan() {
   }, [allShifts]);
 
   const visibleShifts: Shift[] =
-    selectedAssistant === "all"
+    effectiveSelectedUserIds === "all"
       ? allShifts
-      : allShifts.filter((s) => s.userId === selectedAssistant);
+      : allShifts.filter((s) => effectiveSelectedUserIds.includes(s.userId));
   const tableAssistants: Assistant[] =
-    selectedAssistant === "all"
+    effectiveSelectedUserIds === "all"
       ? assistants
-      : assistants.filter((a) => a.id === selectedAssistant);
+      : assistants.filter((a) => effectiveSelectedUserIds.includes(a.id));
   const isLoading = !isTeamScopeReady || shiftsLoading || (canPlan && usersLoading);
   // Dezenter Hinweis auf einen Hintergrund-Reload (Platzhalterdaten aus
   // keepPreviousData sind sichtbar, z. B. kurz nach einem Monatswechsel) —
@@ -2970,6 +3073,13 @@ export default function Dienstplan() {
       s.type !== "sick" &&
       !isMirrorShift(s, selectedTeamId),
   );
+  // Auf den aktiven Scope eingeschränkt — treibt Button-Zähler, Dialogtext
+  // UND den tatsächlichen Versand (siehe sendProposals()), damit nie mehr
+  // Personen benachrichtigt werden als in der Auswahl sichtbar sind.
+  const scopedSendableShifts =
+    sendScopeUserIds === undefined
+      ? sendableShifts
+      : sendableShifts.filter((s) => sendScopeUserIds.includes(s.userId));
 
   // Für die Assistenzkraft: eigene ANGEBOTEN-Dienste des aktuellen Monats.
   const myAngebotenShifts = !isAdmin
@@ -2983,43 +3093,76 @@ export default function Dienstplan() {
 
   async function sendProposals() {
     if (!isAdmin || isBulkConfirming) return;
-    if (sendableShifts.length === 0) {
+    if (scopedSendableShifts.length === 0) {
       closeDialog();
       return;
     }
     setIsBulkConfirming(true);
     try {
-      const result = await sendProposalsMutation.mutateAsync({
-        data: {
-          month,
-          year,
-          teamId: selectedTeamId ?? undefined,
-          userId: selectedAssistant !== "all" ? selectedAssistant : undefined,
-        },
-      });
-      // Sofort reagieren: versendete Entwürfe im Cache auf "Vorschlag"
-      // stellen; der vollständige Abgleich läuft im Hintergrund, statt den
-      // Dialog bis zum Monats-Reload blockiert zu halten.
+      let totalUpdated = 0;
+      let totalEmailsSent = 0;
+      let anyFailed = false;
+      const succeededUserIds = new Set<number>();
+      if (sendScopeUserIds === undefined) {
+        try {
+          const result = await sendProposalsMutation.mutateAsync({
+            data: { month, year, teamId: selectedTeamId ?? undefined, userId: undefined },
+          });
+          totalUpdated += result.updated;
+          totalEmailsSent += result.emailsSent;
+          for (const s of scopedSendableShifts) succeededUserIds.add(s.userId);
+        } catch {
+          anyFailed = true;
+        }
+      } else {
+        // Der Endpunkt kennt nur "eine Person" oder "alle" (kein
+        // Batch-userId-Array). Bei Mehrfachauswahl deshalb EIN Request pro
+        // ausgewählter Person — niemals mit userId=undefined ("alle")
+        // senden, sonst erhielten auch abgewählte Assistenzkräfte einen
+        // Vorschlag. Fehlschläge einzelner Personen brechen die übrigen
+        // Requests nicht ab (Teilerfolg möglich, siehe Toast unten).
+        for (const uid of sendScopeUserIds) {
+          try {
+            const result = await sendProposalsMutation.mutateAsync({
+              data: { month, year, teamId: selectedTeamId ?? undefined, userId: uid },
+            });
+            totalUpdated += result.updated;
+            totalEmailsSent += result.emailsSent;
+            succeededUserIds.add(uid);
+          } catch {
+            anyFailed = true;
+          }
+        }
+      }
+      // Sofort reagieren: nur die tatsächlich erfolgreich versendeten
+      // Entwürfe im Cache auf "Vorschlag" stellen; der vollständige
+      // Abgleich läuft im Hintergrund, statt den Dialog bis zum
+      // Monats-Reload blockiert zu halten.
       upsertShiftsInCache(
         queryClient,
-        sendableShifts
-          .filter((s) => selectedAssistant === "all" || s.userId === selectedAssistant)
+        scopedSendableShifts
+          .filter((s) => succeededUserIds.has(s.userId))
           .map((s) => ({ ...s, planningStatus: "ANGEBOTEN" })),
         selectedTeamId,
       );
       void invalidateShiftDerivedQueries(queryClient);
       closeDialog();
       if (!navigator.onLine) return;
-      const { updated, emailsSent } = result;
-      if (updated === 0) {
+      if (anyFailed) {
+        toast.error(
+          totalUpdated > 0
+            ? `${totalUpdated} ${totalUpdated === 1 ? "Dienst" : "Dienste"} versendet, ein Teil ist fehlgeschlagen. Bitte erneut versuchen.`
+            : "Versenden fehlgeschlagen. Bitte erneut versuchen.",
+        );
+      } else if (totalUpdated === 0) {
         toast.info("Keine Entwürfe zum Versenden gefunden.");
-      } else if (emailsSent === 0) {
+      } else if (totalEmailsSent === 0) {
         toast.success(
-          `${updated} ${updated === 1 ? "Dienst" : "Dienste"} auf „Vorschlag" gesetzt. E-Mail-Versand nicht konfiguriert.`,
+          `${totalUpdated} ${totalUpdated === 1 ? "Dienst" : "Dienste"} auf „Vorschlag" gesetzt. E-Mail-Versand nicht konfiguriert.`,
         );
       } else {
         toast.success(
-          `Vorschlag versendet — ${emailsSent} ${emailsSent === 1 ? "Assistenzkraft" : "Assistenzkräfte"} per E-Mail benachrichtigt.`,
+          `Vorschlag versendet — ${totalEmailsSent} ${totalEmailsSent === 1 ? "Assistenzkraft" : "Assistenzkräfte"} per E-Mail benachrichtigt.`,
         );
       }
     } catch {
@@ -3087,9 +3230,9 @@ export default function Dienstplan() {
     setIsExporting(true);
     try {
       const exportUsers =
-        selectedAssistant === "all"
+        effectiveSelectedUserIds === "all"
           ? assistants
-          : assistants.filter((a) => a.id === selectedAssistant);
+          : assistants.filter((a) => effectiveSelectedUserIds.includes(a.id));
       const namePart =
         exportUsers.length === 1
           ? exportUsers[0].name.replace(/[^\p{L}\p{N}]+/gu, "_").replace(/^_+|_+$/g, "")
@@ -3128,7 +3271,7 @@ export default function Dienstplan() {
       onMobileView={setMobileView}
       desktopView={desktopView}
       onDesktopView={setDesktopView}
-      confirmableCount={sendableShifts.length}
+      confirmableCount={scopedSendableShifts.length}
       isBulkConfirming={isBulkConfirming}
       onConfirmAll={() => setDialog({ mode: "send-proposals" })}
       canBasicExport={canBasicExport}
@@ -3144,6 +3287,9 @@ export default function Dienstplan() {
       onNextMonth={nextMonth}
       pillMinimiert={pillMinimiert}
       onTogglePillMinimiert={() => setPillMinimiertFlag(pillMinimiert ? "0" : "1")}
+      canSeeStundenkonto={canSeeStundenkonto}
+      stundenkontoOpen={stundenkontoOpen}
+      onToggleStundenkonto={() => setStundenkontoOpenFlag(stundenkontoOpen ? "0" : "1")}
     />
   );
 
@@ -3242,7 +3388,25 @@ export default function Dienstplan() {
       </div>
 
       <div className="hidden flex-col md:flex" data-testid="dienstplan-desktop">
-        <div className={`w-full transition-opacity duration-150 ${isTransitioning ? "opacity-60" : ""}`}>
+        {/* Task #857: unterhalb der Panel-Breite (< 1100px) steht das
+            Stundenkonto als horizontale Reihe über dem Kalender, statt
+            seitlich daneben — auf Tablet-Breite wäre neben dem Kalender
+            kein Platz mehr fürs Panel. */}
+        {canSeeStundenkonto && !isWideStundenkontoLayout && (
+          <div className="mb-3 rounded-lg border bg-card" data-testid="stundenkonto-reihe-wrapper">
+            <StundenkontoReihe
+              balances={hoursBalances}
+              assistants={assistants}
+              shifts={allShifts}
+              selectedUserIds={multiSelectedUserIds}
+              onToggleUser={toggleStundenkontoUser}
+              onSelectAll={selectAllStundenkonto}
+              isLoading={hoursBalancesLoading}
+            />
+          </div>
+        )}
+        <div className={`flex w-full items-start gap-4 transition-opacity duration-150 ${isTransitioning ? "opacity-60" : ""}`}>
+        <div className="min-w-0 flex-1">
         {desktopView === "grid" ? (
           <MonthGrid
             days={days}
@@ -3285,6 +3449,48 @@ export default function Dienstplan() {
             selectedDay={selectedDay}
             onSelectDay={setSelectedDay}
           />
+        )}
+        </div>
+        {/* ≥1100px: Panel oder eingeklappte Registerkarte neben dem
+            Kalender/der Tabelle (sibling, nicht in MonthGrid verschachtelt —
+            siehe monthgrid-content-based-rows.md: Kalenderzeilen bleiben
+            content-basiert, keine gekoppelte Höhe zu einer Nachbarspalte). */}
+        {canSeeStundenkonto && isWideStundenkontoLayout && (
+          stundenkontoOpen ? (
+            <div className="shrink-0" data-testid="stundenkonto-panel-wrapper">
+              <StundenkontoPanel
+                balances={hoursBalances}
+                assistants={assistants}
+                shifts={allShifts}
+                selectedUserIds={multiSelectedUserIds}
+                onToggleUser={toggleStundenkontoUser}
+                onSelectAll={selectAllStundenkonto}
+                isLoading={hoursBalancesLoading}
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setStundenkontoOpenFlag("1")}
+              title="Stundenkonto einblenden"
+              aria-label="Stundenkonto einblenden"
+              data-testid="stundenkonto-collapsed-tab"
+              className="flex min-h-[220px] w-7 shrink-0 flex-col items-center justify-between rounded-lg border bg-card py-2 text-muted-foreground transition-colors hover:bg-muted"
+            >
+              <ChevronsLeft className="h-3.5 w-3.5" aria-hidden="true" />
+              <span
+                className="text-[11px] font-medium tracking-wide"
+                style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
+              >
+                Stundenkonto
+              </span>
+              <div className="flex flex-col items-center gap-1" aria-hidden="true">
+                {assistants.slice(0, 6).map((a) => (
+                  <span key={a.id} className={`h-1.5 w-1.5 rounded-full ${userDotClass(a.id, personColors)}`} />
+                ))}
+              </div>
+            </button>
+          )
         )}
         </div>
       </div>
@@ -3434,11 +3640,13 @@ export default function Dienstplan() {
             <AlertDialogHeader>
               <AlertDialogTitle>Vorschlag versenden?</AlertDialogTitle>
               <AlertDialogDescription data-testid="confirm-all-description">
-                {selectedAssistant !== "all"
-                  ? `Die Entwürfe der gewählten Assistenzkraft in ${format(currentDate, "MMMM yyyy", { locale: de })} werden auf „Vorschlag" gesetzt und per E-Mail versandt.`
-                  : sendableShifts.length === 1
+                {sendScopeUserIds !== undefined
+                  ? scopedSendableShifts.length === 1
+                    ? `1 Entwurf der ausgewählten Assistenzkraft in ${format(currentDate, "MMMM yyyy", { locale: de })} wird auf „Vorschlag" gesetzt und per E-Mail versandt.`
+                    : `${scopedSendableShifts.length} Entwürfe der ausgewählten Assistenzkräfte in ${format(currentDate, "MMMM yyyy", { locale: de })} werden auf „Vorschlag" gesetzt — jede erhält eine E-Mail mit ihren Diensten.`
+                  : scopedSendableShifts.length === 1
                   ? `1 Entwurf in ${format(currentDate, "MMMM yyyy", { locale: de })} wird auf „Vorschlag" gesetzt — die Assistenzkraft erhält eine E-Mail.`
-                  : `${sendableShifts.length} Entwürfe in ${format(currentDate, "MMMM yyyy", { locale: de })} werden auf „Vorschlag" gesetzt — jede Assistenzkraft erhält eine E-Mail mit ihren Diensten.`}{" "}
+                  : `${scopedSendableShifts.length} Entwürfe in ${format(currentDate, "MMMM yyyy", { locale: de })} werden auf „Vorschlag" gesetzt — jede Assistenzkraft erhält eine E-Mail mit ihren Diensten.`}{" "}
                 Die Assistenzkräfte können danach in ihrem Konto bestätigen.
               </AlertDialogDescription>
             </AlertDialogHeader>
