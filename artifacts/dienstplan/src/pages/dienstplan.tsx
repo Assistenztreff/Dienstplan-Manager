@@ -1,4 +1,5 @@
 import { isAdminRole } from "@/lib/roles";
+import { isPlainFullDayIso, formatAbsenceTimeSpan } from "@/lib/absence-time";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams, useLocation } from "wouter";
@@ -387,6 +388,8 @@ type AbsenceRange = {
   end: Date;
   days: number;
   shift: Shift;
+  /** Halbtägiger Urlaub (#862): nur bei einem einzelnen Teil-Tag gesetzt. */
+  timeSpan?: string;
 };
 
 function buildAbsenceRanges(shifts: Shift[], nameById: Map<number, string>): AbsenceRange[] {
@@ -402,14 +405,25 @@ function buildAbsenceRanges(shifts: Shift[], nameById: Map<number, string>): Abs
   const ranges: AbsenceRange[] = [];
   for (const group of byKey.values()) {
     const sorted = group
-      .map((s) => ({ s, d: startOfDay(new Date(s.startTime)) }))
+      .map((s) => ({
+        s,
+        d: startOfDay(new Date(s.startTime)),
+        // Halbtägiger Urlaub (#862) darf nicht unsichtbar in einen
+        // angrenzenden ganztägigen Lauf desselben Typs verschmelzen — sonst
+        // würde die Zeitspanne beim Zusammenfassen verlorengehen. Ein Lauf
+        // bricht deshalb zusätzlich am Wechsel ganztägig↔teilweise.
+        fullDay: isPlainFullDayIso(s.startTime, s.endTime),
+      }))
       .sort((a, b) => a.d.getTime() - b.d.getTime());
 
     let runStartIdx = 0;
     for (let i = 1; i <= sorted.length; i++) {
       const prev = sorted[i - 1];
       const cur = i < sorted.length ? sorted[i] : undefined;
-      const consecutive = cur != null && differenceInCalendarDays(cur.d, prev.d) <= 1;
+      const consecutive =
+        cur != null &&
+        differenceInCalendarDays(cur.d, prev.d) <= 1 &&
+        cur.fullDay === prev.fullDay;
       if (!consecutive) {
         const first = sorted[runStartIdx];
         ranges.push({
@@ -420,6 +434,10 @@ function buildAbsenceRanges(shifts: Shift[], nameById: Map<number, string>): Abs
           end: prev.d,
           days: differenceInCalendarDays(prev.d, first.d) + 1,
           shift: first.s,
+          timeSpan:
+            !first.fullDay && isSameDay(first.d, prev.d)
+              ? formatAbsenceTimeSpan(first.s.startTime, first.s.endTime)
+              : undefined,
         });
         runStartIdx = i;
       }
@@ -434,7 +452,12 @@ function buildAbsenceRanges(shifts: Shift[], nameById: Map<number, string>): Abs
 }
 
 function absenceRangeLabel(r: AbsenceRange): string {
-  if (isSameDay(r.start, r.end)) return format(r.start, "EEEE, d. MMMM", { locale: de });
+  if (isSameDay(r.start, r.end)) {
+    const dayLabel = format(r.start, "EEEE, d. MMMM", { locale: de });
+    // Halbtägiger Urlaub (#862): Zeitspanne direkt am Tag anzeigen, statt sie
+    // wie einen ganztägigen Eintrag ohne Uhrzeit erscheinen zu lassen.
+    return r.timeSpan ? `${dayLabel}, ${r.timeSpan}` : dayLabel;
+  }
   if (r.start.getMonth() === r.end.getMonth()) {
     return `${format(r.start, "d.")} – ${format(r.end, "d. MMMM", { locale: de })}`;
   }
@@ -935,8 +958,12 @@ function DayDetailRow({
         : `Aushilfe für ${shift.einsatzTeamName ?? "anderes Team"}`
       : null;
   const statusText = status === "FIX" ? "bestätigt" : (PLANNING_STATUS_LABELS[status] ?? status);
+  // Halbtägiger Urlaub (#862): eigene Zeitspanne statt "ganztägig" zeigen,
+  // damit die Tagesleiste den echten Zeitraum erkennbar macht.
   const timeLabel = isAbsence
-    ? "ganztägig"
+    ? isPlainFullDayIso(shift.startTime, shift.endTime)
+      ? "ganztägig"
+      : formatAbsenceTimeSpan(shift.startTime, shift.endTime)
     : isTeam
       ? ""
       : `${format(new Date(shift.startTime), "HH:mm")}–${format(new Date(shift.endTime), "HH:mm")}`;

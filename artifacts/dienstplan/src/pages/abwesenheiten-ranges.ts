@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { isPlainFullDayIso, formatAbsenceTimeSpan } from "@/lib/absence-time";
 
 export type AbsenceType = "vacation" | "sick";
 
@@ -18,6 +19,8 @@ export type AbsenceRange = {
   endDate: Date;
   days: number;
   shiftIds: number[];
+  /** Halbtägiger Urlaub (#862): nur bei einem einzelnen Teil-Tag gesetzt. */
+  timeSpan?: string;
 };
 
 export function dayKey(d: Date): string {
@@ -43,17 +46,28 @@ export function buildRanges(shifts: AbsenceShift[]): AbsenceRange[] {
   // Offener Zeitraum je (Assistent, Typ), an den ein Folgetag angehängt werden kann.
   const openByGroup = new Map<string, AbsenceRange>();
 
+  // Halbtägiger Urlaub (#862): pro offenem Zeitraum merken, ob er (bisher)
+  // ganztägig ist — ein Wechsel ganztägig↔teilweise bricht den Zeitraum,
+  // sonst würde die Zeitspanne eines Teil-Tags beim Zusammenfassen mit einem
+  // angrenzenden ganztägigen Tag unsichtbar.
+  const fullDayByGroup = new Map<string, boolean>();
+
   for (const shift of sorted) {
     const type = shift.type as AbsenceType;
     const date = new Date(shift.startTime);
     const groupKey = `${shift.userId}-${type}`;
     const open = openByGroup.get(groupKey);
-    const isConsecutive = open && dayKey(addDays(open.endDate, 1)) === dayKey(date);
+    const fullDay = isPlainFullDayIso(shift.startTime, shift.endTime);
+    const isConsecutive =
+      open &&
+      dayKey(addDays(open.endDate, 1)) === dayKey(date) &&
+      fullDayByGroup.get(groupKey) === fullDay;
 
     if (open && isConsecutive) {
       open.endDate = date;
       open.days += 1;
       open.shiftIds.push(shift.id);
+      open.timeSpan = undefined; // mehrtägig: Zeitspanne eines Einzeltags entfällt
     } else {
       const range: AbsenceRange = {
         key: `${shift.userId}-${type}-${shift.id}`,
@@ -63,9 +77,11 @@ export function buildRanges(shifts: AbsenceShift[]): AbsenceRange[] {
         endDate: date,
         days: 1,
         shiftIds: [shift.id],
+        timeSpan: fullDay ? undefined : formatAbsenceTimeSpan(shift.startTime, shift.endTime),
       };
       ranges.push(range);
       openByGroup.set(groupKey, range);
+      fullDayByGroup.set(groupKey, fullDay);
     }
   }
 

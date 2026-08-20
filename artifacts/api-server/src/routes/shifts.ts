@@ -48,6 +48,7 @@ import {
 } from "../lib/shift-metrics-resolve";
 import {
   absenceHoursFor,
+  bwavgDailyHoursForDates,
   resolveVacationHours,
 } from "../lib/vacation-hours";
 import { userHasFeature, getUserLimit } from "../lib/plan";
@@ -177,6 +178,13 @@ function dailyTargetHoursFromContracts(contracts: BulkContract[], day: Date): nu
   if (!contract) return 8;
   const workdays = contract.workdaysPerWeek > 0 ? contract.workdaysPerWeek : 5;
   return Math.round((contract.weeklyHours / workdays) * 100) / 100;
+}
+
+function isContractOlderThan13Weeks(contract: BulkContract, refDate: Date): boolean {
+  return (
+    refDate.getTime() - new Date(`${contract.startDate}T00:00:00Z`).getTime() >=
+    91 * 24 * 3_600_000
+  );
 }
 
 // Vertragliche Soll-Stunden des Tages (Wochenstunden / Arbeitstage pro Woche,
@@ -614,10 +622,10 @@ async function findOverlappingShifts(
 ): Promise<ShiftConflict[]> {
   const conditions = [
     eq(shiftsTable.userId, userId),
-    // Abwesenheiten UND Team-Einträge (Teamsitzungen) lösen keine
-    // Überschneidungswarnung mit regulären Schichten aus.
+    // Abwesenheiten (außer ganztägigem Urlaub, s. u.) UND Team-Einträge
+    // (Teamsitzungen) lösen keine Überschneidungswarnung mit regulären
+    // Schichten aus.
     notInArray(shiftsTable.type, [
-      "vacation",
       "sick",
       "team",
       "kind_krank",
@@ -630,7 +638,7 @@ async function findOverlappingShifts(
     gt(shiftsTable.endTime, startTime),
   ];
   if (excludeShiftId !== null) conditions.push(ne(shiftsTable.id, excludeShiftId));
-  return db
+  const rows = await db
     .select({
       id: shiftsTable.id,
       startTime: shiftsTable.startTime,
@@ -639,6 +647,11 @@ async function findOverlappingShifts(
     })
     .from(shiftsTable)
     .where(and(...conditions));
+  // Halbtägiger Urlaub (#862) hat echte Uhrzeiten und muss wie ein Dienst
+  // kollidieren können; ganztägiger Urlaub (00:00–23:59) bleibt wie bisher
+  // von der Kollisionsprüfung ausgenommen (das Anlegen wird bereits auf
+  // anderem Weg verhindert/aufgelöst — Lohnausfallprinzip beim Ersetzen).
+  return rows.filter((r) => r.type !== "vacation" || !isPlainFullDay(r.startTime, r.endTime));
 }
 
 // Strukturierte 409-Antwort mit den kollidierenden Schichten (ISO-Zeitstempel,
@@ -1423,15 +1436,31 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
       // geplanter Dienst am Tag → Zeiten erben; sonst optionale Modell-
       // Standardzeiten; sonst ganztägig. Ersetzt werden NUR Dienste an Tagen,
       // die auch wirklich angelegt werden (übersprungene Tage bleiben unberührt).
+      //
+      // Halbtägiger Urlaub (#862): ein Tageseintrag mit echten (nicht-
+      // ganztägigen) Uhrzeiten gilt als bewusst gewählter Zeitraum — die
+      // Uhrzeiten kommen vom Nutzer und werden NICHT durch einen geplanten
+      // Dienst überschrieben (kein Zeiten-Erben). Ersetzt wird nur, was sich
+      // ECHT zeitlich überschneidet; ein Dienst außerhalb des Zeitfensters
+      // bleibt unangetastet (anders als beim ganztägigen Fall, der den ganzen
+      // Kalendertag beansprucht).
       const resolved = toCreate.map(([key, day]) => {
-        const planned = plannedByDay.get(key) ?? [];
-        const inherited = planned[0];
+        const candidates = plannedByDay.get(key) ?? [];
+        if (!isPlainFullDay(day.startTime, day.endTime)) {
+          const overlapping = candidates.filter(
+            (s) =>
+              s.startTime.getTime() < day.endTime.getTime() &&
+              s.endTime.getTime() > day.startTime.getTime(),
+          );
+          return { times: day, planned: overlapping };
+        }
+        const inherited = candidates[0];
         const times = inherited
           ? { startTime: inherited.startTime, endTime: inherited.endTime }
           : modelDefaults
             ? shiftModelTimesForDay(day.startTime, modelDefaults.start, modelDefaults.end)
             : day;
-        return { times, planned };
+        return { times, planned: candidates };
       });
 
       const replaced = resolved.flatMap(({ planned }) => planned.map((shift) => shift.id));
@@ -1450,11 +1479,25 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
         await tx.delete(shiftsTable).where(inArray(shiftsTable.id, replaced));
       }
 
-      // AP 3: der 13-Wochen-Schnitt wird für die Bewertung nicht mehr
-      // verwendet — ein Urlaubstag wird immer mit der Dienstlänge bewertet.
+      // 13-Wochen-Durchschnitt je Stichtag (rollierendes Fenster wie im
+      // Einzelpfad), aber gesammelt in EINER Abfrage statt einer pro Tag.
+      const averages =
+        ops.vacationMethod === "bwavg"
+          ? await bwavgDailyHoursForDates(
+              userId,
+              resolved.map(({ times }) => times.startTime),
+              tx,
+            )
+          : new Map<string, number | null>();
+
       const prepared = resolved.map(({ times }) => {
         const targetHours = dailyTargetHoursFromContracts(contracts, times.startTime);
         const teamContract = contractForDay(contracts, times.startTime, write.teamId);
+        const average =
+          ops.vacationMethod === "bwavg" &&
+          (!teamContract || isContractOlderThan13Weeks(teamContract, times.startTime))
+            ? averages.get(times.startTime.toISOString()) ?? null
+            : null;
         const contractHours =
           teamContract && teamContract.weeklyHours > 0 && teamContract.workdaysPerWeek > 0
             ? Math.round((teamContract.weeklyHours / teamContract.workdaysPerWeek) * 100) / 100
@@ -1464,7 +1507,9 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
           Math.round(((times.endTime.getTime() - times.startTime.getTime()) / 3_600_000) * 100) /
           100;
         const absenceHours = (fallback: number) =>
-          !isFullDay ? durationHours : contractHours ?? fallback;
+          !isFullDay
+            ? durationHours
+            : average ?? (ops.vacationMethod === "bwavg" ? contractHours ?? fallback : fallback);
         const plannedHours = absenceHours(targetHours);
         const metrics = resolveShiftMetrics(
           { type, startTime: times.startTime, endTime: times.endTime, plannedHours, valuationPercent: 100 },

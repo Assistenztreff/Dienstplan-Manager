@@ -873,8 +873,12 @@ export default function Abwesenheiten() {
                 <div className="space-y-2" data-testid="absence-list">
                   {ranges.map((range) => {
                     const sameDay = dayKey(range.startDate) === dayKey(range.endDate);
+                    // Halbtägiger Urlaub (#862): Zeitspanne ergänzen, damit ein
+                    // Teil-Tag von einem ganztägigen Eintrag unterscheidbar bleibt.
                     const dateLabel = sameDay
-                      ? format(range.startDate, "dd.MM.yyyy", { locale: de })
+                      ? range.timeSpan
+                        ? `${format(range.startDate, "dd.MM.yyyy", { locale: de })}, ${range.timeSpan}`
+                        : format(range.startDate, "dd.MM.yyyy", { locale: de })
                       : `${format(range.startDate, "dd.MM.yyyy", { locale: de })} – ${format(
                           range.endDate,
                           "dd.MM.yyyy",

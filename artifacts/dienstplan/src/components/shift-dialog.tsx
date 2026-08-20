@@ -9,6 +9,8 @@ import {
   useListShifts,
   useListShiftModels,
   useGetAllowanceSettings,
+  useListContracts,
+  useGetVacationBalance,
   ApiError,
   type BulkAbsenceInput,
   type BulkShiftsInput,
@@ -17,6 +19,8 @@ import {
   type Shift,
   type ShiftModel,
   type AllowanceSettings,
+  type Contract,
+  type VacationBalance,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -65,6 +69,7 @@ import { computeAutoPauseMinutes } from "@/lib/pause";
 import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
 import { isAdminRole } from "@/lib/roles";
+import { isPlainFullDayIso } from "@/lib/absence-time";
 
 type Assistant = { id: number; name: string };
 
@@ -375,6 +380,34 @@ export function ShiftDialog({
   const [form, setForm] = useState<FormState>(buildInitialForm);
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
 
+  // Resturlaub-Prüfung für den Halbtags-Zeitraum (#862): Verträge sind bereits
+  // team-/rollenscoped (wie GET /contracts sonst überall); der Balance-Query
+  // ist günstig gecacht (staleTime) und läuft nur bei einem gültigen
+  // Nutzer/Datum — kein zusätzlicher Overhead für die weit häufigeren
+  // Dialogaufrufe ohne Urlaubs-Zeitraum.
+  const { data: contractsForBalance } = useListContracts(undefined, {
+    query: { staleTime: REFERENCE_DATA_STALE_TIME_MS },
+  } as unknown as Parameters<typeof useListContracts>[1]) as { data?: Contract[] };
+  const activeContractForUser = useMemo(() => {
+    if (!form.userId || !form.date) return undefined;
+    const uid = Number(form.userId);
+    const refDate = new Date(`${form.date}T00:00:00`);
+    return (contractsForBalance ?? [])
+      .filter((c) => c.userId === uid)
+      .filter(
+        (c) =>
+          new Date(c.startDate) <= refDate && (!c.endDate || new Date(c.endDate) >= refDate),
+      )
+      .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())[0];
+  }, [contractsForBalance, form.userId, form.date]);
+  const { data: vacationBalanceForForm } = useGetVacationBalance(
+    activeContractForUser?.id ?? 0,
+    {
+      query: { enabled: !!activeContractForUser, retry: false, staleTime: REFERENCE_DATA_STALE_TIME_MS },
+    } as unknown as Parameters<typeof useGetVacationBalance>[1],
+  ) as { data?: VacationBalance };
+  const vacationRemainingHours = vacationBalanceForForm?.vacationHoursRemaining ?? null;
+
   // Abwesenheits-Query für den Monat des aktuell gewählten Datums.
   // Ist das Datum noch nicht gesetzt oder liegt es im selben Monat wie der
   // übergebene Kalendermonat, trifft der Request auf einen bereits warmen
@@ -462,6 +495,10 @@ export function ShiftDialog({
     setForm((f) => ({
       ...f,
       selection: value,
+      // Zeitraum "Von-bis" ist nur für Urlaub wählbar (#862): beim Wechsel zu
+      // einem anderen Typ zurück auf "Ganztägig", sonst bliebe ein Halbtags-
+      // Zeitraum unsichtbar aktiv für einen Typ, der ihn nicht unterstützt.
+      ...(value !== "vacation" ? { absenceRangeMode: "full" as const } : {}),
       ...(m && m.defaultStartTime && m.defaultEndTime
         ? { startTime: m.defaultStartTime, endTime: m.defaultEndTime }
         : {}),
@@ -477,6 +514,12 @@ export function ShiftDialog({
     form.selection === "abgesagt_ag" ||
     form.selection === "abgesagt_an" ||
     form.selection === "urlaubsabgeltung";
+  // Halbtägiger Zeitraum ("Von-bis") ist bewusst NUR für Urlaub anlegbar
+  // (#862) — andere Abwesenheitsarten bleiben ganztägig, wie im Auftrag
+  // festgelegt (kein zusätzlicher Bedarf, weniger Sonderfälle in Auswertung
+  // und Urlaubskonto).
+  const isVacationSelection = form.selection === "vacation";
+  const isRangeAbsence = isVacationSelection && !isEditing && form.absenceRangeMode === "range";
   // Team-Eintrag (Teamsitzung): ganztägig, immer FIX (Server erzwingt beides),
   // keine Zeit-/Status-Felder.
   const isTeam = form.selection === "team";
@@ -525,7 +568,14 @@ export function ShiftDialog({
     const ids = new Set<number>();
     for (const s of dialogMonthShifts) {
       if (!DIALOG_ABSENCE_TYPES.has(s.type)) continue;
-      if (format(new Date(s.startTime), "yyyy-MM-dd") === form.date) ids.add(s.userId);
+      if (format(new Date(s.startTime), "yyyy-MM-dd") !== form.date) continue;
+      // Halbtägiger Urlaub (#862) blockiert die Auswahl NICHT: an dem Tag
+      // kann noch ein regulärer Dienst außerhalb der Urlaubszeit angelegt
+      // werden. Eine echte zeitliche Überschneidung fängt stattdessen die
+      // (serverseitige) Kollisionsprüfung ab. Nur ganztägige Abwesenheiten
+      // sperren den Picker weiterhin komplett.
+      if (!isPlainFullDayIso(s.startTime, s.endTime)) continue;
+      ids.add(s.userId);
     }
     return ids.size > 0 ? ids : undefined;
   }, [isEditing, dialogMonthShifts, form.date]);
@@ -628,11 +678,27 @@ export function ShiftDialog({
       // (Ende am Folgetag); eine kleinere Endzeit bedeutet "endet am Folgetag"
       // (Nachtdienst über Mitternacht). Beides wird in handleSave aufgelöst.
     }
-    // Abwesenheit mit Zeitraum "Von-bis" (AP 5): dieselben Pflichtfelder wie
-    // ein regulärer Dienst, nur beim Anlegen wählbar.
-    if (isAbsence && !isEditing && form.absenceRangeMode === "range") {
+    // Abwesenheit mit Zeitraum "Von-bis" (AP 5 / #862, nur Urlaub, nur beim
+    // Anlegen wählbar): dieselben Pflichtfelder wie ein regulärer Dienst, plus
+    // Ende-nach-Start am selben Tag (Mitternachtsübergang ist für Urlaub nicht
+    // vorgesehen) und eine Prüfung gegen den verfügbaren Resturlaub.
+    if (isRangeAbsence) {
       if (!form.startTime) errs.startTime = "Startzeit angeben";
       if (!form.endTime) errs.endTime = "Endzeit angeben";
+      if (form.startTime && form.endTime && TIME_RE.test(form.startTime) && TIME_RE.test(form.endTime)) {
+        if (form.endTime <= form.startTime) {
+          errs.endTime = "Endzeit muss nach der Startzeit liegen (am selben Tag).";
+        } else if (vacationRemainingHours != null) {
+          const requestedHours =
+            (Number(form.endTime.slice(0, 2)) * 60 +
+              Number(form.endTime.slice(3, 5)) -
+              (Number(form.startTime.slice(0, 2)) * 60 + Number(form.startTime.slice(3, 5)))) /
+            60;
+          if (requestedHours > vacationRemainingHours + 0.01) {
+            errs.endTime = `Nur noch ${vacationRemainingHours.toLocaleString("de-DE", { maximumFractionDigits: 1 })} h Resturlaub verfügbar.`;
+          }
+        }
+      }
     }
     if (form.notes.length > 500) {
       errs.notes = `Notiz darf maximal 500 Zeichen lang sein (aktuell ${form.notes.length}).`;
@@ -670,10 +736,25 @@ export function ShiftDialog({
       const fullDay = fullDayTimes(dateStr);
       return { startIso: fullDay.startTime, endIso: fullDay.endTime };
     }
-    // Abwesenheit "Von-bis" (AP 5, nur beim Anlegen wählbar): echte Uhrzeiten
-    // statt Ganztages-Fallback — Endzeit <= Startzeit bedeutet Tagesübergang,
-    // identisch zur Logik regulärer Dienste.
-    if (isAbsence && !isEditing && form.absenceRangeMode === "range") {
+    // Abwesenheit "Von-bis" (AP 5 / #862, nur Urlaub, nur beim Anlegen
+    // wählbar): echte Uhrzeiten statt Ganztages-Fallback — Endzeit <= Startzeit
+    // bedeutet Tagesübergang, identisch zur Logik regulärer Dienste.
+    if (isRangeAbsence) {
+      const endsNextDay = form.endTime <= form.startTime;
+      return {
+        startIso: buildIso(dateStr, form.startTime),
+        endIso: endsNextDay
+          ? buildIso(nextDayString(dateStr), form.endTime)
+          : buildIso(dateStr, form.endTime),
+      };
+    }
+    // Bearbeiten eines bereits halbtägig angelegten Urlaubs (#862): keine
+    // eigene Zeitraum-Auswahl beim Bearbeiten, aber die ursprünglichen
+    // Uhrzeiten dürfen nicht stillschweigend auf "ganztägig" zurückspringen,
+    // nur weil der Dialog erneut gespeichert wird (z. B. nur die Notiz
+    // geändert). form.startTime/-endTime sind bereits mit den Original-
+    // Uhrzeiten vorbelegt (buildInitialForm), nur das Datum kann sich ändern.
+    if (isAbsence && isEditing && editShift && !isPlainFullDayIso(editShift.startTime, editShift.endTime)) {
       const endsNextDay = form.endTime <= form.startTime;
       return {
         startIso: buildIso(dateStr, form.startTime),
@@ -748,6 +829,10 @@ export function ShiftDialog({
       // bei nur einem Tag — die Antwort liefert die angelegten Einträge samt
       // ersetzter Arbeitsdienste, sodass die Oberfläche sofort reagieren kann.
       // Tage mit bestehender Abwesenheit desselben Typs überspringt der Server.
+      // Halbtägiger Urlaub (#862, nur EIN Tag, kein Bis-Datum): die echten
+      // Uhrzeiten aus buildTimes() statt des Ganztages-Fallbacks übergeben —
+      // der Server erkennt daran (isPlainFullDay), dass Zeiten/Ersetzung nach
+      // der Zeitüberschneidung statt nach Kalendertag laufen.
       if (!isEditing && !isBulk && isAbsence) {
         const rangeDays = eachDayOfInterval({
           start: new Date(`${form.date}T00:00:00`),
@@ -757,7 +842,10 @@ export function ShiftDialog({
           data: {
             userId: Number(form.userId),
             type: type as BulkAbsenceInput["type"],
-            days: rangeDays.map((d) => fullDayTimes(format(d, "yyyy-MM-dd"))),
+            days:
+              isRangeAbsence && rangeDays.length === 1
+                ? [{ startTime: startIso, endTime: endIso }]
+                : rangeDays.map((d) => fullDayTimes(format(d, "yyyy-MM-dd"))),
             shiftModelId,
             notes: form.notes || undefined,
             ...(teamId != null ? { teamId } : {}),
@@ -1395,7 +1483,7 @@ export function ShiftDialog({
               gewählte Zeitraum mit einem geplanten Dienst, übernimmt der Server
               dessen Zeiten wie bisher (Lohnausfallprinzip) — Dienste außerhalb
               des Zeitraums bleiben unberührt. */}
-          {!isEditing && isAbsence && (
+          {!isEditing && isVacationSelection && (
             <div className="space-y-1.5">
               <Label>Zeitraum</Label>
               <Select
