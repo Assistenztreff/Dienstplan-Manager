@@ -1,4 +1,5 @@
 - [Scaleway Prod-DB & Publish-Workflow](scaleway-prod-publish-workflow.md) — Scaleway = Staging-DB für Dev-Server; check-prod-schema vor Publish; bei neuen Spalten immer explizit warnen.
+- [Task MERGED aber Code nie angewendet](task-merged-but-code-unapplied.md) — MERGED-State ist kein Beweis für den Code; markTaskComplete/InProgress hart abgelehnt = permanent, nicht erneut versuchen, stattdessen App/Code direkt prüfen.
 - [Express 5 Wildcard Route](express5-wildcard-route.md) — app.get("*",...) wirft PathError in Express 5; Regex /.*/ oder benannte Wildcard verwenden.
 - [Artifact paths Konflikt](artifact-paths-conflict.md) — zwei Artifacts mit paths=["/"] hängen den Publish-Vorgang; nur der aktiv-serving Service setzt paths.
 - [Arbeitstage-Rechner & workdaysConfirm](workdays-confirm-pattern.md) — Vorschau muss Server-Formel spiegeln; Bestätigungen als Steuerfeld, nie Ist-Wert erneut senden (Race).

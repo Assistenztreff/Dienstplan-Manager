@@ -2421,10 +2421,11 @@ function monthsAhead(target: Date, now: Date): number {
 }
 
 /** Zweizeiliges Zellen-Feld der Tabellenansicht (Task #855): flacheres
- *  Gegenstück zur Kalender-Pille mit denselben Farb- und Icon-Quellen.
+ *  Gegenstück zur Kalender-Pille mit denselben Icon-Quellen.
  *  Zeile 1: Status-Icon-Stack (StatusBadge — dieselbe Darstellung wie in der
- *  Dienstpille) + Personen-Farbbalken (slot.bg, dieselbe Farbquelle wie der
- *  Pillen-Avatar; Teamdienste Himmelblau wie in der Pille).
+ *  Dienstpille) + Zustandstext (Bestätigt/Entwurf/Vorschlag, Task #863: ersetzt
+ *  den früheren Personen-Farbbalken; kürzt bei schmalen Spalten statt die
+ *  Zeit-Zeile darunter zu verdrängen).
  *  Zeile 2: Uhr-Icon (StatusBadge kind="clock", identisch zur Pille) +
  *  Uhrzeit „HH:mm – HH:mm". Hintergrund weiß, Klick öffnet wie bisher den
  *  Bearbeiten-Dialog. Testids/Attribute bleiben unverändert
@@ -2442,7 +2443,6 @@ function TableShiftCell({
   onConfirm?: (shift: Shift) => void;
 }) {
   const { selectedTeamId } = useTeam();
-  const getPersonSlot = usePersonSlotLookup();
   const mirror = isMirrorShift(shift, selectedTeamId);
   const isTeam = shift.type === "team";
   const status = shift.planningStatus ?? "FIX";
@@ -2455,8 +2455,6 @@ function TableShiftCell({
       : null;
   // Titel wie bisher: Label + Statuswort (FIX → „Bestätigt", sonst Entwurf/Vorschlag).
   const statusWord = status === "FIX" ? "Bestätigt" : (PLANNING_STATUS_LABELS[status] ?? status);
-  const slot = getPersonSlot(shift.userId);
-  const barColor = isTeam ? "#0284c7" : slot.bg;
   const timeRange = `${format(new Date(shift.startTime), "HH:mm")} – ${format(new Date(shift.endTime), "HH:mm")}`;
   const baseIconKind: StatusBadgeKind =
     status === "FIX" ? "confirmed" : status === "ANGEBOTEN" ? "sent" : "draft";
@@ -2472,17 +2470,15 @@ function TableShiftCell({
           : `${label}${einsatzLabel ? ` · ${einsatzLabel}` : ""} · ${statusWord}`
       }
     >
-      {/* Zeile 1: Status-Icon(s) + Personen-Farbbalken. */}
+      {/* Zeile 1: Status-Icon(s) + Zustandstext (Task #863: ersetzt den früheren Personen-Farbbalken). */}
       <div className="flex min-h-[20px] items-center gap-[4px]">
         <span className="flex shrink-0 items-center gap-[3px]">
           <StatusBadge kind={baseIconKind} label={statusWord} />
           {shift.isVertretung && <StatusBadge kind="vertretung" label="Vertretung" />}
         </span>
-        <span
-          aria-hidden="true"
-          className="h-[5px] min-w-[8px] flex-1 rounded-full"
-          style={{ backgroundColor: barColor }}
-        />
+        <span className="min-w-0 flex-1 truncate text-[9px] font-semibold uppercase tracking-wide text-[#444444]">
+          {statusWord}
+        </span>
         {shift.notes && (
           <TooltipProvider>
             <Tooltip>
