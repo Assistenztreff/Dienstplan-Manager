@@ -1106,6 +1106,12 @@ export interface AllowanceSettings {
   vacationHoursPerDay: number;
   /** Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor. */
   vacationFactor: number;
+  /** Referenz-Arbeitstage/Woche bei Vollzeit (AP 2). "30 Tage Urlaub" im Arbeitsvertrag meint immer eine Vollzeitstelle; zusammen mit fulltimeWeeklyHours Basis der anteiligen Urlaubsberechnung. */
+  fulltimeWorkdaysPerWeek: number;
+  /** Referenz-Wochenstunden bei Vollzeit (AP 2). */
+  fulltimeWeeklyHours: number;
+  /** Vorbelegung des Feldes "Urlaubsanspruch bei Vollzeit" bei neuen Verträgen. */
+  defaultVacationDays: number;
   /** Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktiv? Bei false verdient Feiertagsarbeit keinen Ausgleichs-Ruhetag. */
   ersatzruhetagEnabled: boolean;
   /** Team-Dienst (Teamsitzung) aktiv? Konto-global (kein Team-Override); Standard AUS. Bei AUS lehnen POST/PATCH /shifts den Typ team mit 400 ab; bestehende Team-Einträge bleiben sichtbar (Bestandsschutz). */
@@ -1207,6 +1213,21 @@ export interface AllowanceSettingsInput {
   vacationHoursPerDay?: number;
   /** @minimum 0 */
   vacationFactor?: number;
+  /**
+     * @minimum 1
+     * @maximum 7
+     */
+  fulltimeWorkdaysPerWeek?: number;
+  /**
+     * @minimum 1
+     * @maximum 60
+     */
+  fulltimeWeeklyHours?: number;
+  /**
+     * @minimum 0
+     * @maximum 365
+     */
+  defaultVacationDays?: number;
   /** Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktivieren/deaktivieren. */
   ersatzruhetagEnabled?: boolean;
   /** Team-Dienst (Teamsitzung) aktivieren/deaktivieren (konto-global, kein Team-Override). */

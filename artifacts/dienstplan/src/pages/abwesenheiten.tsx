@@ -8,6 +8,7 @@ import {
   useBulkDeleteShifts,
   useUpdateContract,
   useGetVacationBalance,
+  useGetAllowanceSettings,
   ApiError,
   type BulkAbsenceInput,
   type VacationBalance,
@@ -15,6 +16,7 @@ import {
   type User,
   type Shift,
   type ShiftModel,
+  type AllowanceSettings,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -229,6 +231,13 @@ export default function Abwesenheiten() {
       query: { staleTime: SHIFT_LIST_STALE_TIME_MS, gcTime: SHIFT_LIST_GC_TIME_MS },
     } as unknown as Parameters<typeof useListShifts>[1],
   ) as { data?: Shift[]; isLoading: boolean };
+
+  // Vollzeit-Referenz (AP 2) für den Urlaubstopf — Konto-globale Einstellung,
+  // daher ohne teamId abgefragt (wie im Einstellungen-Formular editiert).
+  const { data: allowanceSettings } = useGetAllowanceSettings(undefined, {
+    query: { enabled: canManage, staleTime: REFERENCE_DATA_STALE_TIME_MS },
+  } as unknown as Parameters<typeof useGetAllowanceSettings>[1]) as { data?: AllowanceSettings };
+  const fulltimeWorkdaysPerWeek = allowanceSettings?.fulltimeWorkdaysPerWeek ?? 5;
 
   const bulkCreateAbsence = useBulkCreateAbsence();
   const bulkDeleteShifts = useBulkDeleteShifts();
@@ -698,7 +707,16 @@ export default function Abwesenheiten() {
                       (contract.workdaysPerWeek ?? 0) > 0
                         ? Math.round((contract.weeklyHours / contract.workdaysPerWeek!) * 100) / 100
                         : 8;
-                    const hoursTotal = entitlement !== null ? entitlement * dailyHours : null;
+                    // Urlaubstopf (AP 2): Urlaubswochen × Wochenstunden statt
+                    // Urlaubstage × Stundenzahl/Tag — Teilzeit bekommt so einen
+                    // fairen Topf. Ohne nutzbaren Vertrag (weeklyHours) bleibt
+                    // der alte tagesbasierte Fallback bestehen.
+                    const hoursTotal =
+                      entitlement === null
+                        ? null
+                        : contract != null && contract.weeklyHours > 0 && fulltimeWorkdaysPerWeek > 0
+                          ? Math.round((entitlement / fulltimeWorkdaysPerWeek) * contract.weeklyHours * 100) / 100
+                          : entitlement * dailyHours;
                     const hoursUsed = contract?.vacationHoursUsed ?? 0;
                     const hoursLeft = hoursTotal !== null ? hoursTotal - hoursUsed : null;
                     // Ohne Vertrag fehlt der Stundenzähler → Fallback: geplante

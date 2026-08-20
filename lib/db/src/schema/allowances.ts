@@ -56,6 +56,13 @@ export const allowanceSettingsTable = pgTable(
     vacationMethod: vacationMethodEnum("vacation_method").notNull().default("bwavg"),
     vacationHoursPerDay: real("vacation_hours_per_day").notNull().default(8),
     vacationFactor: real("vacation_factor").notNull().default(0.0941),
+    // Referenz für die anteilige Urlaubsberechnung. "30 Tage Urlaub" im
+    // Arbeitsvertrag meint immer eine Vollzeitstelle; Teilzeit wird daraus
+    // abgeleitet.
+    fulltimeWorkdaysPerWeek: real("fulltime_workdays_per_week").notNull().default(5),
+    fulltimeWeeklyHours: real("fulltime_weekly_hours").notNull().default(39),
+    // Vorbelegung des Feldes "Urlaubsanspruch bei Vollzeit" bei neuen Verträgen.
+    defaultVacationDays: integer("default_vacation_days").notNull().default(30),
     // Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG): steuert, ob Feiertagsarbeit einen
     // Ausgleichs-Ruhetag verdient. Aus Förder-/Kostenträger-Gründen abschaltbar;
     // Default true = Bestandsschutz (bisheriges Verhalten bleibt gleich).

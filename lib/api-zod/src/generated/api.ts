@@ -1017,6 +1017,9 @@ export const GetAllowanceSettingsResponse = zod.object({
   "vacationMethod": zod.enum(['bwavg', 'factor']).describe('Urlaubs-Berechnung — bwavg = §11 BUrlG 13-Wochen-Schnitt, factor = prozentualer Stunden-Faktor.'),
   "vacationHoursPerDay": zod.number().describe('Stunden je Urlaubstag (Anzeige Tage = Stunden \/ diesem Wert).'),
   "vacationFactor": zod.number().describe('Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor.'),
+  "fulltimeWorkdaysPerWeek": zod.number().describe('Referenz-Arbeitstage\/Woche bei Vollzeit (AP 2). \"30 Tage Urlaub\" im Arbeitsvertrag meint immer eine Vollzeitstelle; zusammen mit fulltimeWeeklyHours Basis der anteiligen Urlaubsberechnung.'),
+  "fulltimeWeeklyHours": zod.number().describe('Referenz-Wochenstunden bei Vollzeit (AP 2).'),
+  "defaultVacationDays": zod.number().describe('Vorbelegung des Feldes \"Urlaubsanspruch bei Vollzeit\" bei neuen Verträgen.'),
   "ersatzruhetagEnabled": zod.boolean().describe('Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktiv? Bei false verdient Feiertagsarbeit keinen Ausgleichs-Ruhetag.'),
   "teamMeetingEnabled": zod.boolean().describe('Team-Dienst (Teamsitzung) aktiv? Konto-global (kein Team-Override); Standard AUS. Bei AUS lehnen POST\/PATCH \/shifts den Typ team mit 400 ab; bestehende Team-Einträge bleiben sichtbar (Bestandsschutz).'),
   "teamMeetingHours": zod.number().describe('Gutgeschriebene Stunden je Teamsitzung und Assistenzkraft (Konto-global, Standard 1,0).'),
@@ -1052,6 +1055,13 @@ export const updateAllowanceSettingsBodyVacationHoursPerDayMin = 0.1;
 
 export const updateAllowanceSettingsBodyVacationFactorMin = 0;
 
+export const updateAllowanceSettingsBodyFulltimeWorkdaysPerWeekMax = 7;
+
+export const updateAllowanceSettingsBodyFulltimeWeeklyHoursMax = 60;
+
+export const updateAllowanceSettingsBodyDefaultVacationDaysMin = 0;
+export const updateAllowanceSettingsBodyDefaultVacationDaysMax = 365;
+
 export const updateAllowanceSettingsBodyTeamMeetingHoursMin = 0.1;
 
 export const updateAllowanceSettingsBodyPauseThreshold1HoursMin = 0.1;
@@ -1079,6 +1089,9 @@ export const UpdateAllowanceSettingsBody = zod.object({
   "vacationMethod": zod.enum(['bwavg', 'factor']).optional(),
   "vacationHoursPerDay": zod.number().min(updateAllowanceSettingsBodyVacationHoursPerDayMin).optional(),
   "vacationFactor": zod.number().min(updateAllowanceSettingsBodyVacationFactorMin).optional(),
+  "fulltimeWorkdaysPerWeek": zod.number().min(1).max(updateAllowanceSettingsBodyFulltimeWorkdaysPerWeekMax).optional(),
+  "fulltimeWeeklyHours": zod.number().min(1).max(updateAllowanceSettingsBodyFulltimeWeeklyHoursMax).optional(),
+  "defaultVacationDays": zod.number().min(updateAllowanceSettingsBodyDefaultVacationDaysMin).max(updateAllowanceSettingsBodyDefaultVacationDaysMax).optional(),
   "ersatzruhetagEnabled": zod.boolean().optional().describe('Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktivieren\/deaktivieren.'),
   "teamMeetingEnabled": zod.boolean().optional().describe('Team-Dienst (Teamsitzung) aktivieren\/deaktivieren (konto-global, kein Team-Override).'),
   "teamMeetingHours": zod.number().min(updateAllowanceSettingsBodyTeamMeetingHoursMin).optional().describe('Gutgeschriebene Stunden je Teamsitzung und Assistenzkraft.'),
@@ -1106,6 +1119,9 @@ export const UpdateAllowanceSettingsResponse = zod.object({
   "vacationMethod": zod.enum(['bwavg', 'factor']).describe('Urlaubs-Berechnung — bwavg = §11 BUrlG 13-Wochen-Schnitt, factor = prozentualer Stunden-Faktor.'),
   "vacationHoursPerDay": zod.number().describe('Stunden je Urlaubstag (Anzeige Tage = Stunden \/ diesem Wert).'),
   "vacationFactor": zod.number().describe('Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor.'),
+  "fulltimeWorkdaysPerWeek": zod.number().describe('Referenz-Arbeitstage\/Woche bei Vollzeit (AP 2). \"30 Tage Urlaub\" im Arbeitsvertrag meint immer eine Vollzeitstelle; zusammen mit fulltimeWeeklyHours Basis der anteiligen Urlaubsberechnung.'),
+  "fulltimeWeeklyHours": zod.number().describe('Referenz-Wochenstunden bei Vollzeit (AP 2).'),
+  "defaultVacationDays": zod.number().describe('Vorbelegung des Feldes \"Urlaubsanspruch bei Vollzeit\" bei neuen Verträgen.'),
   "ersatzruhetagEnabled": zod.boolean().describe('Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktiv? Bei false verdient Feiertagsarbeit keinen Ausgleichs-Ruhetag.'),
   "teamMeetingEnabled": zod.boolean().describe('Team-Dienst (Teamsitzung) aktiv? Konto-global (kein Team-Override); Standard AUS. Bei AUS lehnen POST\/PATCH \/shifts den Typ team mit 400 ab; bestehende Team-Einträge bleiben sichtbar (Bestandsschutz).'),
   "teamMeetingHours": zod.number().describe('Gutgeschriebene Stunden je Teamsitzung und Assistenzkraft (Konto-global, Standard 1,0).'),

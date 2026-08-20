@@ -48,6 +48,9 @@ type FormState = {
   vacationMethod: string;
   vacationHoursPerDay: string;
   vacationFactor: string;
+  fulltimeWorkdaysPerWeek: string;
+  fulltimeWeeklyHours: string;
+  defaultVacationDays: string;
   ersatzruhetagEnabled: boolean;
   teamMeetingEnabled: boolean;
   teamMeetingHours: string;
@@ -186,6 +189,9 @@ export function AllowanceSettingsForm() {
     vacationMethod: "bwavg",
     vacationHoursPerDay: "8",
     vacationFactor: "0.0941",
+    fulltimeWorkdaysPerWeek: "5",
+    fulltimeWeeklyHours: "39",
+    defaultVacationDays: "30",
     ersatzruhetagEnabled: true,
     teamMeetingEnabled: false,
     teamMeetingHours: "1",
@@ -222,6 +228,9 @@ export function AllowanceSettingsForm() {
         vacationMethod: settings.vacationMethod ?? "bwavg",
         vacationHoursPerDay: String(settings.vacationHoursPerDay ?? 8),
         vacationFactor: String(settings.vacationFactor ?? 0.0941),
+        fulltimeWorkdaysPerWeek: String(settings.fulltimeWorkdaysPerWeek ?? 5),
+        fulltimeWeeklyHours: String(settings.fulltimeWeeklyHours ?? 39),
+        defaultVacationDays: String(settings.defaultVacationDays ?? 30),
         ersatzruhetagEnabled: settings.ersatzruhetagEnabled ?? true,
         teamMeetingEnabled: settings.teamMeetingEnabled ?? false,
         teamMeetingHours: String(settings.teamMeetingHours ?? 1),
@@ -271,6 +280,15 @@ export function AllowanceSettingsForm() {
         if (form.vacationFactor === "" || Number.isNaN(vf) || vf < 0)
           errs.vacationFactor = "Mindestens 0";
       }
+      const fwd = Number(form.fulltimeWorkdaysPerWeek);
+      if (form.fulltimeWorkdaysPerWeek === "" || Number.isNaN(fwd) || fwd < 1 || fwd > 7)
+        errs.fulltimeWorkdaysPerWeek = "Zahl zwischen 1 und 7";
+      const fwh = Number(form.fulltimeWeeklyHours);
+      if (form.fulltimeWeeklyHours === "" || Number.isNaN(fwh) || fwh < 1 || fwh > 60)
+        errs.fulltimeWeeklyHours = "Zahl zwischen 1 und 60";
+      const dvd = Number(form.defaultVacationDays);
+      if (form.defaultVacationDays === "" || Number.isNaN(dvd) || dvd < 0 || dvd > 365)
+        errs.defaultVacationDays = "Zahl zwischen 0 und 365";
       const tmh = Number(form.teamMeetingHours);
       if (form.teamMeetingHours === "" || Number.isNaN(tmh) || tmh < 0.1)
         errs.teamMeetingHours = "Mindestens 0,1";
@@ -330,6 +348,9 @@ export function AllowanceSettingsForm() {
                 vacationMethod: f.vacationMethod as AllowanceSettingsInputVacationMethod,
                 vacationHoursPerDay: Number(f.vacationHoursPerDay),
                 vacationFactor: Number(f.vacationFactor),
+                fulltimeWorkdaysPerWeek: Number(f.fulltimeWorkdaysPerWeek),
+                fulltimeWeeklyHours: Number(f.fulltimeWeeklyHours),
+                defaultVacationDays: Number(f.defaultVacationDays),
                 ersatzruhetagEnabled: f.ersatzruhetagEnabled,
                 teamMeetingEnabled: f.teamMeetingEnabled,
                 teamMeetingHours: Number(f.teamMeetingHours),
@@ -816,72 +837,117 @@ export function AllowanceSettingsForm() {
 
                   <div className="border-t border-border/60 pt-5 space-y-3">
                     <div className="space-y-1.5">
-                      <Label htmlFor="vacationMethod" className="text-sm font-semibold">
-                        Urlaubsberechnung
-                      </Label>
-                      <Select
-                        value={form.vacationMethod}
-                        onValueChange={(v) => set("vacationMethod", v)}
-                      >
-                        <SelectTrigger id="vacationMethod" data-testid="allowance-vacation-method-select">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="bwavg">
-                            §11 BUrlG – Durchschnitt der letzten 13 Wochen
-                          </SelectItem>
-                          <SelectItem value="factor">
-                            Faktor – feste Urlaubsstunden je Arbeitsstunde
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Label className="text-sm font-semibold">Vollzeit entspricht</Label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <div className="relative">
+                            <Input
+                              id="fulltimeWorkdaysPerWeek"
+                              data-testid="allowance-fulltime-workdays"
+                              type="number"
+                              min="1"
+                              max="7"
+                              step="0.1"
+                              value={form.fulltimeWorkdaysPerWeek}
+                              onChange={(e) => set("fulltimeWorkdaysPerWeek", e.target.value)}
+                              className={errors.fulltimeWorkdaysPerWeek ? "border-destructive pr-32" : "pr-32"}
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                              Arbeitstage/Woche
+                            </span>
+                          </div>
+                          {errors.fulltimeWorkdaysPerWeek && (
+                            <p className="text-xs text-destructive">{errors.fulltimeWorkdaysPerWeek}</p>
+                          )}
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="relative">
+                            <Input
+                              id="fulltimeWeeklyHours"
+                              data-testid="allowance-fulltime-weekly-hours"
+                              type="number"
+                              min="1"
+                              max="60"
+                              step="0.5"
+                              value={form.fulltimeWeeklyHours}
+                              onChange={(e) => set("fulltimeWeeklyHours", e.target.value)}
+                              className={errors.fulltimeWeeklyHours ? "border-destructive pr-28" : "pr-28"}
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                              Wochenstunden
+                            </span>
+                          </div>
+                          {errors.fulltimeWeeklyHours && (
+                            <p className="text-xs text-destructive">{errors.fulltimeWeeklyHours}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="defaultVacationDays">Urlaub bei Vollzeit</Label>
+                      <div className="relative">
+                        <Input
+                          id="defaultVacationDays"
+                          data-testid="allowance-default-vacation-days"
+                          type="number"
+                          min="0"
+                          max="365"
+                          value={form.defaultVacationDays}
+                          onChange={(e) => set("defaultVacationDays", e.target.value)}
+                          className={errors.defaultVacationDays ? "border-destructive pr-14" : "pr-14"}
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                          Tage
+                        </span>
+                      </div>
+                      {errors.defaultVacationDays && (
+                        <p className="text-xs text-destructive">{errors.defaultVacationDays}</p>
+                      )}
+                      {(() => {
+                        const fwd = Number(form.fulltimeWorkdaysPerWeek);
+                        const dvd = Number(form.defaultVacationDays);
+                        if (!(fwd > 0) || Number.isNaN(dvd)) return null;
+                        const weeks = dvd / fwd;
+                        const factor = weeks / 51.96;
+                        return (
+                          <p className="text-xs text-muted-foreground">
+                            = {weeks.toFixed(1)} Wochen · Faktor {factor.toFixed(4)} je bezahlter Stunde
+                          </p>
+                        );
+                      })()}
                       <p className="text-xs text-muted-foreground">
-                        Bestimmt, wie viele Stunden ein Urlaubstag wert ist. Der §11-BUrlG-Schnitt
-                        rechnet nach dem Durchschnitt der letzten 13 Wochen; der Faktor rechnet einen
-                        festen Anteil pro geleisteter Arbeitsstunde.
+                        Vorbelegung für neue Verträge, je Person änderbar.
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="vacationHoursPerDay">Stunden je Urlaubstag</Label>
-                        <Input
-                          id="vacationHoursPerDay"
-                          type="number"
-                          min="0.1"
-                          step="0.1"
-                          value={form.vacationHoursPerDay}
-                          onChange={(e) => set("vacationHoursPerDay", e.target.value)}
-                          className={errors.vacationHoursPerDay ? "border-destructive" : ""}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Anzeige: Tage = Urlaubsstunden ÷ diesem Wert (Standard 8).
-                        </p>
-                        {errors.vacationHoursPerDay && (
-                          <p className="text-xs text-destructive">{errors.vacationHoursPerDay}</p>
-                        )}
-                      </div>
-                      {form.vacationMethod === "factor" && (
-                        <div className="space-y-1.5">
-                          <Label htmlFor="vacationFactor">Urlaubsstunden je Arbeitsstunde</Label>
-                          <Input
-                            id="vacationFactor"
-                            type="number"
-                            min="0"
-                            step="0.0001"
-                            value={form.vacationFactor}
-                            onChange={(e) => set("vacationFactor", e.target.value)}
-                            className={errors.vacationFactor ? "border-destructive" : ""}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Nur bei Methode „Faktor" (Standard 0,0941).
-                          </p>
-                          {errors.vacationFactor && (
-                            <p className="text-xs text-destructive">{errors.vacationFactor}</p>
-                          )}
-                        </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="vacationHoursPerDay">Stunden je Urlaubstag</Label>
+                      <Input
+                        id="vacationHoursPerDay"
+                        type="number"
+                        min="0.1"
+                        step="0.1"
+                        value={form.vacationHoursPerDay}
+                        onChange={(e) => set("vacationHoursPerDay", e.target.value)}
+                        className={errors.vacationHoursPerDay ? "border-destructive" : ""}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Nur als Rückfallwert, wenn kein Vertrag hinterlegt ist.
+                      </p>
+                      {errors.vacationHoursPerDay && (
+                        <p className="text-xs text-destructive">{errors.vacationHoursPerDay}</p>
                       )}
                     </div>
+
+                    <p className="text-xs text-muted-foreground">
+                      Ein Urlaubstag zieht die Stunden des Dienstes an diesem Tag ab — ohne
+                      geplanten Dienst die typische Dienstlänge, etwa 8,0 h.
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Der Anspruch wächst mit jeder bezahlten Stunde, die Vertragsstunden sind die
+                      Untergrenze. Jahresprognose aus dem 13-Wochen-Schnitt (§ 11 BUrlG).
+                    </p>
                   </div>
                 </>
               )}

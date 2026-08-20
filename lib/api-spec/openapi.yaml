@@ -3358,6 +3358,9 @@ components:
           vacationMethod,
           vacationHoursPerDay,
           vacationFactor,
+          fulltimeWorkdaysPerWeek,
+          fulltimeWeeklyHours,
+          defaultVacationDays,
           ersatzruhetagEnabled,
           teamMeetingEnabled,
           teamMeetingHours,
@@ -3414,6 +3417,18 @@ components:
         vacationFactor:
           type: number
           description: Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor.
+        fulltimeWorkdaysPerWeek:
+          type: number
+          description: >-
+            Referenz-Arbeitstage/Woche bei Vollzeit (AP 2). "30 Tage Urlaub"
+            im Arbeitsvertrag meint immer eine Vollzeitstelle; zusammen mit
+            fulltimeWeeklyHours Basis der anteiligen Urlaubsberechnung.
+        fulltimeWeeklyHours:
+          type: number
+          description: Referenz-Wochenstunden bei Vollzeit (AP 2).
+        defaultVacationDays:
+          type: integer
+          description: Vorbelegung des Feldes "Urlaubsanspruch bei Vollzeit" bei neuen Verträgen.
         ersatzruhetagEnabled:
           type: boolean
           description: >-
@@ -3504,6 +3519,18 @@ components:
         vacationFactor:
           type: number
           minimum: 0
+        fulltimeWorkdaysPerWeek:
+          type: number
+          minimum: 1
+          maximum: 7
+        fulltimeWeeklyHours:
+          type: number
+          minimum: 1
+          maximum: 60
+        defaultVacationDays:
+          type: integer
+          minimum: 0
+          maximum: 365
         ersatzruhetagEnabled:
           type: boolean
           description: Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktivieren/deaktivieren.

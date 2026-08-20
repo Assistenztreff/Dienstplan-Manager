@@ -44,6 +44,21 @@ export interface AllowanceSettingsInput {
   vacationHoursPerDay?: number;
   /** @minimum 0 */
   vacationFactor?: number;
+  /**
+     * @minimum 1
+     * @maximum 7
+     */
+  fulltimeWorkdaysPerWeek?: number;
+  /**
+     * @minimum 1
+     * @maximum 60
+     */
+  fulltimeWeeklyHours?: number;
+  /**
+     * @minimum 0
+     * @maximum 365
+     */
+  defaultVacationDays?: number;
   /** Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktivieren/deaktivieren. */
   ersatzruhetagEnabled?: boolean;
   /** Team-Dienst (Teamsitzung) aktivieren/deaktivieren (konto-global, kein Team-Override). */

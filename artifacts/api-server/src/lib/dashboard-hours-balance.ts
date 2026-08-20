@@ -5,6 +5,8 @@
 // Urlaub/Krank, Zählung der Urlaubstage pro Monat) isoliert per Unit-Test
 // abgesichert werden kann.
 
+import { vacationPoolHours } from "./vacation-hours";
+
 export const DEFAULT_NIGHT_PERCENT = 25;
 export const DEFAULT_SUNDAY_PERCENT = 50;
 export const DEFAULT_HOLIDAY_PERCENT = 100;
@@ -290,6 +292,12 @@ export function computeHoursBalanceRow(params: {
    */
   vacationHoursPerDay?: number | null;
   /**
+   * Referenz-Arbeitstage/Woche bei Vollzeit (AP 2, fulltimeWorkdaysPerWeek des
+   * Team-Kontos); ohne Angabe 5. Bestimmt zusammen mit den vertraglichen
+   * Wochenstunden den Urlaubstopf in Stunden (vacationPoolHours).
+   */
+  fulltimeWorkdaysPerWeek?: number | null;
+  /**
    * Teamsitzungs-Gutschrift (Anzahl Team-Tage der Teams der Assistenzkraft ×
    * konfigurierte teamMeetingHours des jeweiligen Konto-Eigentümers). Wird vom
    * Aufrufer team-weise ermittelt (ein Team-Eintrag gilt für ALLE Mitglieder,
@@ -525,7 +533,17 @@ export function computeHoursBalanceRow(params: {
   const hoursPerDay = typicalShiftHoursLocal(contract ?? null, params.vacationHoursPerDay ?? 8);
   const vacationDaysUsed =
     Math.round(((contract?.vacationHoursUsed ?? 0) / hoursPerDay) * 10) / 10;
-  const vacationHoursTotal = round2(vacationDays * hoursPerDay);
+  // Urlaubstopf (AP 2): Urlaubswochen (aus dem Vollzeit-Anspruch) × TATSÄCHLICHE
+  // Wochenstunden — ersetzt vacationDays × hoursPerDay, das Teilzeit über die
+  // typische Dienstlänge indirekt schon berücksichtigte, aber nicht konsistent
+  // mit der direkten Wochen-Umrechnung war.
+  const vacationHoursTotal =
+    contract && (contract.weeklyHours ?? 0) > 0
+      ? vacationPoolHours(
+          { vacationDays, weeklyHours: contract.weeklyHours as number },
+          { fulltimeWorkdaysPerWeek: params.fulltimeWorkdaysPerWeek ?? 5 },
+        )
+      : round2(vacationDays * hoursPerDay);
   const vacationHoursUsedTotal = round2(contract?.vacationHoursUsed ?? 0);
 
   // Premium-Lohnauswertung: Geldwerte folgen der Abrechnungsart (billingMethod)

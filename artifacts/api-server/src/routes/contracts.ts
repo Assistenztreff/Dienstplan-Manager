@@ -18,7 +18,12 @@ import {
   DeleteContractParams,
 } from "@workspace/api-zod";
 import { requireAdmin, requireAuth, requireTeamPlanningOrAdmin, isAdminLikeRole } from "../middleware/auth";
-import { recalcVacationHoursUsed, resolveDailyRateInfo, typicalShiftHours } from "../lib/vacation-hours";
+import {
+  recalcVacationHoursUsed,
+  resolveDailyRateInfo,
+  typicalShiftHours,
+  vacationPoolHours,
+} from "../lib/vacation-hours";
 import { requirePlanFeatureViaTeamOwner } from "../lib/plan";
 import { resolveAllowanceOps } from "../lib/allowance-resolve";
 import { round2 } from "../lib/dashboard-hours-balance";
@@ -391,14 +396,18 @@ router.get(
       return;
     }
 
-    // Urlaub wird stundengenau gefuehrt (Point 7): Pool = vacationDays *
-    // vacationHoursPerDay (Standard 8h/Tag), Verbrauch stundenweise in
+    // Urlaub wird stundengenau gefuehrt (Point 7): Verbrauch stundenweise in
     // vacationHoursUsed. Ein 24h-Dienst verbraucht 24h = 3,0 Tage. Der
     // Umrechnungsfaktor und die Berechnungsmethode kommen aus den
     // Einstellungen des Team-Eigentuemers (Fallback-Kette).
     const ops = await resolveAllowanceOps(contract.teamId);
     const hoursPerDay = typicalShiftHours(contract, ops.vacationHoursPerDay);
-    const vacationHoursTotal = round2(contract.vacationDays * hoursPerDay);
+    // Urlaubstopf (AP 2): Urlaubswochen (aus dem Vollzeit-Anspruch, z. B.
+    // 30 Tage / 5 Arbeitstage = 6 Wochen) × vertragliche Wochenstunden —
+    // ersetzt vacationDays * vacationHoursPerDay, das Teilzeit systematisch
+    // benachteiligte (eine Teilzeitkraft mit weniger Wochenstunden bekam
+    // trotzdem den vollen Vollzeit-Stundenwert je Urlaubstag).
+    const vacationHoursTotal = vacationPoolHours(contract, ops);
     const vacationHoursUsed = round2(contract.vacationHoursUsed);
     const vacationHoursRemaining = round2(vacationHoursTotal - vacationHoursUsed);
     const daysUsed = Math.round((vacationHoursUsed / hoursPerDay) * 10) / 10;

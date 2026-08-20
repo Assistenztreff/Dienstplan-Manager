@@ -25,6 +25,26 @@ export function typicalShiftHours(
   return fallbackPerDay;
 }
 
+// Urlaubswochen aus dem Vollzeit-Anspruch (AP 2): "30 Tage Urlaub" im
+// Arbeitsvertrag meint immer eine Vollzeitstelle — z. B. 30 / 5 = 6 Wochen.
+export function vacationWeeks(vacationDays: number, fulltimeWorkdaysPerWeek: number): number {
+  if (fulltimeWorkdaysPerWeek <= 0) return 0;
+  return vacationDays / fulltimeWorkdaysPerWeek;
+}
+
+// Urlaubstopf einer Assistenzkraft in Stunden (AP 2): entsteht aus den
+// Urlaubswochen (aus dem Vollzeit-Anspruch) mal den TATSÄCHLICHEN
+// Wochenstunden der Person — ersetzt die alte Rechnung vacationDays ×
+// globale Stunden/Tag, die Teilzeit systematisch benachteiligte.
+export function vacationPoolHours(
+  contract: { vacationDays: number; weeklyHours: number },
+  ops: { fulltimeWorkdaysPerWeek: number },
+): number {
+  if (ops.fulltimeWorkdaysPerWeek <= 0 || contract.weeklyHours <= 0) return 0;
+  const weeks = vacationWeeks(contract.vacationDays, ops.fulltimeWorkdaysPerWeek);
+  return Math.round(weeks * contract.weeklyHours * 100) / 100;
+}
+
 // Ein ganztägiger Urlaubstag (00:00–23:59, kein zugrundeliegender Dienst)
 // verbraucht hoursPerDay (Standard 8h). Ersetzt der Urlaub einen konkret
 // geplanten Dienst (echte Schichtzeiten — vom Primary-Lookup geerbt oder aus

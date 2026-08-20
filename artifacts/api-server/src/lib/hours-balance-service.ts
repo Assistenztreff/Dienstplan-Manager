@@ -473,6 +473,7 @@ export async function computeHoursBalances(
         billingMethod,
         hourlyWage: assistant.hourlyWage,
         vacationHoursPerDay: vacationOps?.vacationHoursPerDay,
+        fulltimeWorkdaysPerWeek: vacationOps?.fulltimeWorkdaysPerWeek,
         teamsitzungStunden,
         deductPausesByTeam,
       });

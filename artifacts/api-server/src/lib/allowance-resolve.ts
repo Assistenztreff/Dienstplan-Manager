@@ -14,6 +14,13 @@ export interface ResolvedAllowanceOps {
   vacationMethod: "bwavg" | "factor";
   vacationHoursPerDay: number;
   vacationFactor: number;
+  // Referenz für die anteilige Urlaubsberechnung (AP 2): "30 Tage Urlaub"
+  // im Arbeitsvertrag meint immer eine Vollzeitstelle, Teilzeit wird daraus
+  // abgeleitet.
+  fulltimeWorkdaysPerWeek: number;
+  fulltimeWeeklyHours: number;
+  // Vorbelegung des Feldes "Urlaubsanspruch bei Vollzeit" bei neuen Verträgen.
+  defaultVacationDays: number;
   // Bundesland für die Feiertagserkennung (z. B. Ersatzruhetag-Konto). null =
   // nur bundesweite Feiertage.
   state: string | null;
@@ -27,6 +34,9 @@ export const DEFAULT_ALLOWANCE_OPS: ResolvedAllowanceOps = {
   vacationMethod: "bwavg",
   vacationHoursPerDay: 8,
   vacationFactor: 0.0941,
+  fulltimeWorkdaysPerWeek: 5,
+  fulltimeWeeklyHours: 39,
+  defaultVacationDays: 30,
   state: null,
   ersatzruhetagEnabled: true,
 };
@@ -36,6 +46,9 @@ const opsColumns = {
   vacationMethod: allowanceSettingsTable.vacationMethod,
   vacationHoursPerDay: allowanceSettingsTable.vacationHoursPerDay,
   vacationFactor: allowanceSettingsTable.vacationFactor,
+  fulltimeWorkdaysPerWeek: allowanceSettingsTable.fulltimeWorkdaysPerWeek,
+  fulltimeWeeklyHours: allowanceSettingsTable.fulltimeWeeklyHours,
+  defaultVacationDays: allowanceSettingsTable.defaultVacationDays,
   state: allowanceSettingsTable.state,
   ersatzruhetagEnabled: allowanceSettingsTable.ersatzruhetagEnabled,
 };

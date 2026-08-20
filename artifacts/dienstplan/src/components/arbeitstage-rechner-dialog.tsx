@@ -15,7 +15,12 @@
  *   Aufrufer (z. B. Vertragsformular), es wird nichts gespeichert.
  */
 import { useMemo, useState } from "react";
-import { useUpdateContract, type Contract } from "@workspace/api-client-react";
+import {
+  useUpdateContract,
+  useGetAllowanceSettings,
+  type AllowanceSettings,
+  type Contract,
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -73,6 +78,22 @@ export function ArbeitstageRechnerDialog({
     () => computeArbeitstage(shifts, length),
     [length, shifts],
   );
+
+  // Vollzeit-Referenz (AP 2) für die dritte Vorschau-Zeile "Urlaub: ...".
+  // Konto-globale Einstellung (nicht team-überschreibbar), daher ohne
+  // teamId abgefragt — Contract trägt teamId nicht in seinem DTO.
+  const { data: allowanceSettings } = useGetAllowanceSettings(
+    undefined,
+    { query: { enabled: !!contract } } as Parameters<typeof useGetAllowanceSettings>[1],
+  ) as { data?: AllowanceSettings };
+  const vacationPreview = useMemo(() => {
+    const fulltimeWorkdays = allowanceSettings?.fulltimeWorkdaysPerWeek;
+    if (!result || !contract || !fulltimeWorkdays || !(contract.vacationDays >= 0)) return null;
+    const eigeneUrlaubstage = contract.vacationDays * (result.workdaysPerWeek / fulltimeWorkdays);
+    const vacationWeeksValue = contract.vacationDays / fulltimeWorkdays;
+    const poolHours = vacationWeeksValue * result.weeklyHours;
+    return { eigeneUrlaubstage, poolHours };
+  }, [result, contract, allowanceSettings]);
 
   async function handleApply() {
     if (!result) return;
@@ -192,6 +213,12 @@ export function ArbeitstageRechnerDialog({
               <p className="font-medium mt-0.5">
                 1 Urlaubstag = {formatHours(result.dailyHours)} h
               </p>
+              {vacationPreview && (
+                <p className="mt-0.5" data-testid="rechner-vorschau-urlaub">
+                  Urlaub: {vacationPreview.eigeneUrlaubstage.toFixed(1)} Tage ·{" "}
+                  {vacationPreview.poolHours.toFixed(1)} h im Jahr
+                </p>
+              )}
             </div>
           )}
           {!result && shiftsPerMonth !== "" && Number(shiftsPerMonth) > 0 && (

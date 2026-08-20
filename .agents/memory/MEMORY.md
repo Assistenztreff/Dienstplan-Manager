@@ -129,3 +129,4 @@
 - [Offline-Lazy-Modul-Vorladen in E2E-Tests](offline-lazy-module-preload.md) — React.lazy-Module müssen vor setOffline(true) per client-side Navigation gecacht sein; page.goto() resettet JS-Kontext.
 - [pnpm Workspace-Member-Install](pnpm-workspace-member-install.md) — installLanguagePackages scheitert für einzelne Artifacts (ERR_PNPM_ADDING_TO_ROOT); package.json manuell editieren + `pnpm install --filter <pkg>...`.
 - [MonthGrid content-based rows](monthgrid-content-based-rows.md) — Kalenderzeilen nie mit svh/vh oder JS-Höhe koppeln (zoomabhängig, koppelt Wochen); nur min-height + flex-1 für zeilenlokales Stretchen.
+- [Contract DTO has no teamId](contract-dto-no-teamid.md) — client Contract type/DTO omits teamId; need it via explicit prop or account-scope fetch, not contract.teamId.

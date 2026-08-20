@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   useCreateUser,
   useUpdateUser,
@@ -6,8 +6,10 @@ import {
   useCreateContract,
   useUpdateContract,
   useInviteUser,
+  useGetAllowanceSettings,
   getListUsersQueryKey,
   getListContractsQueryKey,
+  type AllowanceSettings,
 } from "@workspace/api-client-react";
 import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
@@ -292,6 +294,14 @@ export function AssistentDialog({ open, onClose, editUser, editContract, teamId 
 
   const isEditing = !!editUser;
 
+  // Vollzeit-Referenz (AP 2) fürs Vorbelegen des Urlaubsanspruchs bei
+  // Neuanlage und für die "eigene Urlaubstage/poolHours"-Vorschau.
+  const { data: allowanceSettings } = useGetAllowanceSettings(
+    selectedTeamId != null ? { teamId: selectedTeamId } : undefined,
+    { query: {} } as Parameters<typeof useGetAllowanceSettings>[1],
+  ) as { data?: AllowanceSettings };
+  const defaultVacationDaysAppliedRef = useRef(false);
+
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -319,8 +329,33 @@ export function AssistentDialog({ open, onClose, editUser, editContract, teamId 
         notes: editContract?.notes ?? "",
       };
     }
-    return EMPTY_FORM;
+    return {
+      ...EMPTY_FORM,
+      vacationDays:
+        allowanceSettings?.defaultVacationDays != null
+          ? String(allowanceSettings.defaultVacationDays)
+          : EMPTY_FORM.vacationDays,
+    };
   });
+
+  // Neuanlage: sobald die Vollzeit-Referenz nachträglich eintrifft (Query war
+  // beim ersten Render noch nicht geladen), den Urlaubsanspruch EINMAL
+  // vorbelegen — nur solange das Feld noch den Formular-Standardwert trägt,
+  // damit eine bereits vom Nutzer vorgenommene Eingabe nie überschrieben wird.
+  useEffect(() => {
+    if (
+      !isEditing &&
+      !defaultVacationDaysAppliedRef.current &&
+      allowanceSettings?.defaultVacationDays != null
+    ) {
+      defaultVacationDaysAppliedRef.current = true;
+      setForm((f) =>
+        f.vacationDays === EMPTY_FORM.vacationDays
+          ? { ...f, vacationDays: String(allowanceSettings.defaultVacationDays) }
+          : f,
+      );
+    }
+  }, [isEditing, allowanceSettings]);
 
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [planError, setPlanError] = useState<string | null>(null);
@@ -669,7 +704,7 @@ export function AssistentDialog({ open, onClose, editUser, editContract, teamId 
                     onChange={(e) => set("weeklyHours", e.target.value)}
                   />
                 </FieldRow>
-                <FieldRow label="Urlaubsanspruch *" error={errors.vacationDays}>
+                <FieldRow label="Urlaubsanspruch bei Vollzeit *" error={errors.vacationDays}>
                   <div className="relative">
                     <Input
                       className="bg-card"
@@ -683,6 +718,28 @@ export function AssistentDialog({ open, onClose, editUser, editContract, teamId 
                       Tage
                     </span>
                   </div>
+                  {(() => {
+                    const fulltimeWorkdays = allowanceSettings?.fulltimeWorkdaysPerWeek;
+                    const weeklyHours = Number(form.weeklyHours);
+                    const workdaysPerWeek = Number(form.workdaysPerWeek);
+                    const vacationDays = Number(form.vacationDays);
+                    if (
+                      !fulltimeWorkdays ||
+                      !(weeklyHours > 0) ||
+                      !(workdaysPerWeek > 0) ||
+                      Number.isNaN(vacationDays)
+                    ) {
+                      return null;
+                    }
+                    const eigeneUrlaubstage = vacationDays * (workdaysPerWeek / fulltimeWorkdays);
+                    const vacationWeeksValue = vacationDays / fulltimeWorkdays;
+                    const poolHours = vacationWeeksValue * weeklyHours;
+                    return (
+                      <p className="text-xs text-muted-foreground">
+                        ≈ {eigeneUrlaubstage.toFixed(1)} eigene Urlaubstage · {poolHours.toFixed(1)} h im Jahr
+                      </p>
+                    );
+                  })()}
                 </FieldRow>
               </div>
 
