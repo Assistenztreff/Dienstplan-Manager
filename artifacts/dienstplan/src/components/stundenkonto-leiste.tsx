@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Progress } from "@/components/ui/progress";
 import { buildPersonColorAssignment, userInitialsClass, nameInitials } from "@/lib/shift-model-colors";
 import { formatHours } from "@/lib/utils";
 import { StatusBadge, STATUS_BADGE_COLORS, type StatusBadgeKind } from "@/components/status-badge";
@@ -22,6 +21,11 @@ export type StundenkontoProps = {
   onToggleUser: (userId: number) => void;
   onSelectAll: () => void;
   isLoading?: boolean;
+  /** Schmalstmögliche Smartphone-Variante der Reihe: nur Avatar, Nachname
+   *  und ein einzelnes Ausgleichs-Symbol (Haken bei ausgeglichenem Konto,
+   *  sonst die Plus-/Minusstunden) — Status-Badge sowie Vertrags-/Geplant-
+   *  Stunden entfallen, da auf dem Smartphone kein Platz für Details ist. */
+  minimal?: boolean;
 };
 
 function formatBalance(b: number) {
@@ -49,15 +53,11 @@ function BalanceIcon({ balance, className }: { balance: number; className?: stri
   );
 }
 
-function lastNameInitial(name: string): string {
+// Für die Pillen (Reihe oben & Sidebar-Panel) wird nur der Nachname gezeigt —
+// bei vollem Vor-/Nachnamen sprengen lange Kombinationen die schmalen Pillen.
+function getLastName(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
-  const ln = parts.length > 0 ? parts[parts.length - 1]! : name.trim();
-  return ln.length > 0 ? ln[0]!.toUpperCase() : "?";
-}
-
-function getFirstName(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  return parts.length > 0 ? parts[0]! : name.trim();
+  return parts.length > 0 ? parts[parts.length - 1]! : name.trim();
 }
 
 // Eigene Schwelle (1100px), da 3 Layout-Stufen (Panel/Reiter vs. Reihe)
@@ -206,13 +206,13 @@ export function StundenkontoPanel({
   const balanceMap = useMemo(() => new Map(balances.map(b => [b.userId, b])), [balances]);
 
   return (
-    <aside className="w-[284px] shrink-0 flex flex-col border-r bg-card h-full">
+    <aside className="w-[256px] shrink-0 flex flex-col border-r bg-card h-full">
       <div className="p-4 border-b">
         <h2 className="font-semibold text-lg">Stundenkonto</h2>
       </div>
       
       <div 
-        className="flex-1 overflow-y-auto p-3 space-y-2" 
+        className="flex-1 overflow-y-auto p-2.5 space-y-1.5" 
         role="group" 
         aria-label="Assistenzkräfte filtern"
       >
@@ -233,9 +233,9 @@ export function StundenkontoPanel({
 
         {isLoading ? (
           <>
-            <Skeleton className="h-[76px] w-full rounded-lg" />
-            <Skeleton className="h-[76px] w-full rounded-lg" />
-            <Skeleton className="h-[76px] w-full rounded-lg" />
+            <Skeleton className="h-[52px] w-full rounded-lg" />
+            <Skeleton className="h-[52px] w-full rounded-lg" />
+            <Skeleton className="h-[52px] w-full rounded-lg" />
           </>
         ) : assistants.length === 0 ? (
           <div className="text-sm text-muted-foreground p-4 text-center">
@@ -247,8 +247,6 @@ export function StundenkontoPanel({
             const contractTarget = b?.contractMonthlyTargetHours ?? 0;
             const planned = b?.plannedHours ?? 0;
             const bal = planned - contractTarget;
-            const percentage =
-              contractTarget > 0 ? Math.min(100, Math.max(0, (planned / contractTarget) * 100)) : 0;
             
             const isSelected = selectedUserIds === "all" || selectedUserIds.includes(a.id);
             const status = getUserStatus(a.id, shifts);
@@ -260,7 +258,7 @@ export function StundenkontoPanel({
                 data-testid={`stundenkonto-pill-${a.id}`}
                 aria-pressed={isSelected}
                 onClick={() => onToggleUser(a.id)}
-                className={`relative w-full flex flex-col text-left px-3 py-2 rounded-lg border transition-colors overflow-hidden ${
+                className={`relative w-full flex flex-col text-left px-2.5 py-1.5 rounded-lg border transition-colors overflow-hidden ${
                   isSelected
                     ? "bg-primary/5 border-primary/30"
                     : "bg-card border-border hover:bg-muted"
@@ -274,36 +272,38 @@ export function StundenkontoPanel({
                   />
                 )}
                 
-                <div className="flex items-center justify-between mb-1.5 pr-2">
-                  <div className="flex items-center gap-2">
+                {/* Zeile 1: Avatar, Name, Status */}
+                <div className="flex items-center justify-between gap-1 pr-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
                     <span
                       aria-hidden="true"
-                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold leading-none ${userInitialsClass(a.id, personColors)}`}
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none ${userInitialsClass(a.id, personColors)}`}
                     >
                       {nameInitials(a.name)}
                     </span>
-                    <span className="font-medium text-sm truncate max-w-[120px]">{a.name}</span>
+                    <span className="font-medium text-xs truncate">{getLastName(a.name)}</span>
                   </div>
-                  {status.hasShifts && (
-                    <div className="flex items-center gap-1">
-                      <StatusBadge kind={status.kind} compact />
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{status.label}</span>
-                    </div>
-                  )}
+                  {status.hasShifts && <StatusBadge kind={status.kind} label={status.label} compact />}
                 </div>
                 
-                <div className="flex items-center justify-between text-xs pr-2">
-                  <span className="text-muted-foreground">
-                    Vertrag {formatHours(contractTarget)} h &middot; Geplant {formatHours(planned)} h
+                {/* Zeile 2: Vertrags-/Geplant-Stunden als Icons (statt Text)
+                    + Saldo — hält die Pille auf zwei Zeilen/minimaler Höhe,
+                    dieselben Icons wie in der Stundenkonto-Reihe oben. */}
+                <div className="flex items-center gap-1.5 text-[10px] leading-none text-muted-foreground pr-2 mt-1">
+                  <span className="flex items-center gap-0.5">
+                    <FileSignature className="w-3 h-3 shrink-0" aria-hidden="true" />
+                    <span className="sr-only">Vertrag</span>
+                    {formatHours(contractTarget)} h
                   </span>
-                  <span className={`flex items-center gap-1 font-medium ${bal > 0 ? "text-green-600" : bal < 0 ? "text-amber-600" : "text-muted-foreground"}`}>
+                  <span className="flex items-center gap-0.5">
+                    <CalendarClock className="w-3 h-3 shrink-0" aria-hidden="true" />
+                    <span className="sr-only">Geplant</span>
+                    {formatHours(planned)} h
+                  </span>
+                  <span className={`ml-auto flex items-center gap-0.5 font-medium ${bal > 0 ? "text-green-600" : bal < 0 ? "text-amber-600" : "text-muted-foreground"}`}>
                     {formatBalance(bal)}
-                    <BalanceIcon balance={bal} className="w-3 h-3" />
+                    <BalanceIcon balance={bal} className="w-2.5 h-2.5" />
                   </span>
-                </div>
-                
-                <div className="mt-2 pr-2">
-                  <Progress value={percentage} className="h-1.5" />
                 </div>
               </button>
             );
@@ -324,7 +324,8 @@ export function StundenkontoReihe({
   selectedUserIds,
   onToggleUser,
   onSelectAll,
-  isLoading
+  isLoading,
+  minimal = false
 }: StundenkontoProps) {
   const personColors = useMemo(
     () => buildPersonColorAssignment(assistants.map((a) => a.id)),
@@ -366,6 +367,7 @@ export function StundenkontoReihe({
           
           const isSelected = selectedUserIds === "all" || selectedUserIds.includes(a.id);
           const status = getUserStatus(a.id, shifts);
+          const balanced = Math.abs(bal) < 0.05;
           
           return (
             <button
@@ -398,30 +400,40 @@ export function StundenkontoReihe({
                 {nameInitials(a.name)}
               </span>
 
-              <span className="hidden md:inline text-xs font-medium leading-none truncate max-w-[84px]">
-                {a.name}
-              </span>
-              <span className="md:hidden text-xs font-medium leading-none truncate max-w-[64px]">
-                {getFirstName(a.name)} {lastNameInitial(a.name)}.
+              <span className="text-xs font-medium leading-none truncate max-w-[84px]">
+                {getLastName(a.name)}
               </span>
 
-              {status.hasShifts && <StatusBadge kind={status.kind} label={status.label} compact />}
+              {minimal ? (
+                balanced ? (
+                  <Check className="w-3.5 h-3.5 text-green-600 shrink-0" aria-label="Ausgeglichen" />
+                ) : (
+                  <span className="flex items-center gap-0.5 text-[11px] font-medium leading-none text-amber-600">
+                    {formatBalance(bal)}
+                    <BalanceIcon balance={bal} className="w-2.5 h-2.5" />
+                  </span>
+                )
+              ) : (
+                <>
+                  {status.hasShifts && <StatusBadge kind={status.kind} label={status.label} compact />}
 
-              <span className="flex items-center gap-0.5 text-[11px] leading-none text-muted-foreground">
-                <FileSignature className="w-3 h-3 shrink-0" aria-hidden="true" />
-                <span className="sr-only">Vertrag</span>
-                {formatHours(contractTarget)} h
-              </span>
-              <span className="flex items-center gap-0.5 text-[11px] leading-none text-muted-foreground">
-                <CalendarClock className="w-3 h-3 shrink-0" aria-hidden="true" />
-                <span className="sr-only">Geplant</span>
-                {formatHours(planned)} h
-              </span>
+                  <span className="flex items-center gap-0.5 text-[11px] leading-none text-muted-foreground">
+                    <FileSignature className="w-3 h-3 shrink-0" aria-hidden="true" />
+                    <span className="sr-only">Vertrag</span>
+                    {formatHours(contractTarget)} h
+                  </span>
+                  <span className="flex items-center gap-0.5 text-[11px] leading-none text-muted-foreground">
+                    <CalendarClock className="w-3 h-3 shrink-0" aria-hidden="true" />
+                    <span className="sr-only">Geplant</span>
+                    {formatHours(planned)} h
+                  </span>
 
-              <span className={`flex items-center gap-0.5 text-[11px] font-medium leading-none ${bal > 0 ? "text-green-600" : bal < 0 ? "text-amber-600" : "text-muted-foreground"}`}>
-                {formatBalance(bal)}
-                <BalanceIcon balance={bal} className="w-2.5 h-2.5" />
-              </span>
+                  <span className={`flex items-center gap-0.5 text-[11px] font-medium leading-none ${bal > 0 ? "text-green-600" : bal < 0 ? "text-amber-600" : "text-muted-foreground"}`}>
+                    {formatBalance(bal)}
+                    <BalanceIcon balance={bal} className="w-2.5 h-2.5" />
+                  </span>
+                </>
+              )}
             </button>
           );
         })
