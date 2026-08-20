@@ -5,7 +5,7 @@ import { buildPersonColorAssignment, userInitialsClass, nameInitials } from "@/l
 import { formatHours } from "@/lib/utils";
 import { StatusBadge, STATUS_BADGE_COLORS, type StatusBadgeKind } from "@/components/status-badge";
 import type { HoursBalance } from "@workspace/api-client-react";
-import { Check } from "lucide-react";
+import { Check, FileSignature, CalendarClock } from "lucide-react";
 
 export type StundenkontoUserShift = {
   userId: number;
@@ -343,7 +343,7 @@ export function StundenkontoReihe({
         data-testid="stundenkonto-alle"
         aria-pressed={selectedUserIds === "all"}
         onClick={onSelectAll}
-        className={`shrink-0 flex items-center justify-center min-h-[44px] px-5 rounded-full border text-sm font-medium transition-colors ${
+        className={`shrink-0 flex items-center justify-center h-9 px-4 rounded-full border text-sm font-medium transition-colors ${
           selectedUserIds === "all"
             ? "bg-primary text-primary-foreground border-primary"
             : "bg-card text-foreground border-border hover:bg-muted"
@@ -354,8 +354,8 @@ export function StundenkontoReihe({
 
       {isLoading ? (
         <>
-          <Skeleton className="h-[44px] w-[140px] rounded-full shrink-0" />
-          <Skeleton className="h-[44px] w-[140px] rounded-full shrink-0" />
+          <Skeleton className="h-9 w-[176px] rounded-full shrink-0" />
+          <Skeleton className="h-9 w-[176px] rounded-full shrink-0" />
         </>
       ) : (
         assistants.map((a) => {
@@ -373,53 +373,55 @@ export function StundenkontoReihe({
               type="button"
               data-testid={`stundenkonto-pill-${a.id}`}
               aria-pressed={isSelected}
+              title={`${a.name} — Vertrag ${formatHours(contractTarget)} h, Geplant ${formatHours(planned)} h`}
               onClick={() => onToggleUser(a.id)}
-              className={`relative shrink-0 flex items-center min-h-[44px] py-1 pl-1.5 pr-4 rounded-full border transition-colors overflow-hidden ${
+              className={`relative shrink-0 flex items-center gap-1.5 h-9 pl-1 pr-2.5 rounded-full border transition-colors overflow-hidden ${
                 isSelected
                   ? "bg-primary/10 border-primary/30"
                   : "bg-card border-border hover:bg-muted"
               }`}
             >
-              {status.hasShifts && (
-                <div
-                  aria-hidden="true"
-                  className="absolute right-0 top-0 bottom-0 w-1"
-                  style={{ backgroundColor: STATUS_BADGE_COLORS[status.kind] }}
-                />
-              )}
-              
-              <div className="flex items-center gap-2 pr-2">
-                <span
-                  aria-hidden="true"
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold leading-none ${userInitialsClass(a.id, personColors)}`}
-                >
-                  {nameInitials(a.name)}
-                </span>
-                
-                <div className="flex flex-col items-start justify-center">
-                  <div className="flex items-center gap-1.5">
-                    <span className="hidden md:inline text-sm font-medium leading-none truncate max-w-[120px]">
-                      {a.name}
-                    </span>
-                    <span className="md:hidden text-sm font-medium leading-none truncate max-w-[90px]">
-                      {getFirstName(a.name)} {lastNameInitial(a.name)}.
-                    </span>
-                    {status.hasShifts && (
-                      <span className="inline-flex items-center gap-1 text-[10px] leading-none text-muted-foreground">
-                        <StatusBadge kind={status.kind} compact />
-                        {status.label}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[11px] mt-1 leading-none text-muted-foreground">
-                    <span>Vertrag {formatHours(contractTarget)} &middot; Geplant {formatHours(planned)} h</span>
-                    <span className={`flex items-center gap-0.5 font-medium ${bal > 0 ? "text-green-600" : bal < 0 ? "text-amber-600" : "text-muted-foreground"}`}>
-                      {formatBalance(bal)}
-                      <BalanceIcon balance={bal} className="w-2.5 h-2.5" />
-                    </span>
-                  </div>
-                </div>
-              </div>
+              {/* Farbbalken unten (Corporate Dunkelblau) — Statusfarbe wird
+                  weiterhin über den StatusBadge-Punkt vermittelt, dieser Balken
+                  ist reiner Marken-Akzent und ersetzt den früheren rechten
+                  statusfarbenen Rand (Platzbedarf für die zweizeilige Pille
+                  entfällt in der einzeiligen Kompaktversion). */}
+              <div
+                aria-hidden="true"
+                className="absolute left-0 right-0 bottom-0 h-[3px] bg-assistenz-brand"
+              />
+
+              <span
+                aria-hidden="true"
+                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none ${userInitialsClass(a.id, personColors)}`}
+              >
+                {nameInitials(a.name)}
+              </span>
+
+              <span className="hidden md:inline text-xs font-medium leading-none truncate max-w-[84px]">
+                {a.name}
+              </span>
+              <span className="md:hidden text-xs font-medium leading-none truncate max-w-[64px]">
+                {getFirstName(a.name)} {lastNameInitial(a.name)}.
+              </span>
+
+              {status.hasShifts && <StatusBadge kind={status.kind} label={status.label} compact />}
+
+              <span className="flex items-center gap-0.5 text-[11px] leading-none text-muted-foreground">
+                <FileSignature className="w-3 h-3 shrink-0" aria-hidden="true" />
+                <span className="sr-only">Vertrag</span>
+                {formatHours(contractTarget)} h
+              </span>
+              <span className="flex items-center gap-0.5 text-[11px] leading-none text-muted-foreground">
+                <CalendarClock className="w-3 h-3 shrink-0" aria-hidden="true" />
+                <span className="sr-only">Geplant</span>
+                {formatHours(planned)} h
+              </span>
+
+              <span className={`flex items-center gap-0.5 text-[11px] font-medium leading-none ${bal > 0 ? "text-green-600" : bal < 0 ? "text-amber-600" : "text-muted-foreground"}`}>
+                {formatBalance(bal)}
+                <BalanceIcon balance={bal} className="w-2.5 h-2.5" />
+              </span>
             </button>
           );
         })
