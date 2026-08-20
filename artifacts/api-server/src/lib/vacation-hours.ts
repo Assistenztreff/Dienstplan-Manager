@@ -12,6 +12,19 @@ import { resolveAllowanceOps } from "./allowance-resolve";
 // Globale db-Instanz ODER eine offene Drizzle-Transaktion.
 type VacationDbx = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+// Typische Dienstlänge einer Assistenzkraft: Wochenstunden ÷ Arbeitstage/Woche
+// des Vertrags. Ohne (nutzbaren) Vertrag greift der übergebene Standardwert
+// (Stunden je Urlaubstag der Konto-Einstellungen, Bestandsschutz-Default 8h).
+export function typicalShiftHours(
+  contract: { weeklyHours: number; workdaysPerWeek: number } | null,
+  fallbackPerDay: number,
+): number {
+  if (contract && contract.weeklyHours > 0 && contract.workdaysPerWeek > 0) {
+    return Math.round((contract.weeklyHours / contract.workdaysPerWeek) * 100) / 100;
+  }
+  return fallbackPerDay;
+}
+
 // Ein ganztägiger Urlaubstag (00:00–23:59, kein zugrundeliegender Dienst)
 // verbraucht hoursPerDay (Standard 8h). Ersetzt der Urlaub einen konkret
 // geplanten Dienst (echte Schichtzeiten — vom Primary-Lookup geerbt oder aus

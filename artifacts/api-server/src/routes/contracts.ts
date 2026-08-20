@@ -18,7 +18,7 @@ import {
   DeleteContractParams,
 } from "@workspace/api-zod";
 import { requireAdmin, requireAuth, requireTeamPlanningOrAdmin, isAdminLikeRole } from "../middleware/auth";
-import { recalcVacationHoursUsed, resolveDailyRateInfo } from "../lib/vacation-hours";
+import { recalcVacationHoursUsed, resolveDailyRateInfo, typicalShiftHours } from "../lib/vacation-hours";
 import { requirePlanFeatureViaTeamOwner } from "../lib/plan";
 import { resolveAllowanceOps } from "../lib/allowance-resolve";
 import { round2 } from "../lib/dashboard-hours-balance";
@@ -397,7 +397,7 @@ router.get(
     // Umrechnungsfaktor und die Berechnungsmethode kommen aus den
     // Einstellungen des Team-Eigentuemers (Fallback-Kette).
     const ops = await resolveAllowanceOps(contract.teamId);
-    const hoursPerDay = ops.vacationHoursPerDay;
+    const hoursPerDay = typicalShiftHours(contract, ops.vacationHoursPerDay);
     const vacationHoursTotal = round2(contract.vacationDays * hoursPerDay);
     const vacationHoursUsed = round2(contract.vacationHoursUsed);
     const vacationHoursRemaining = round2(vacationHoursTotal - vacationHoursUsed);

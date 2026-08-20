@@ -688,15 +688,24 @@ export default function Abwesenheiten() {
                   {displayUsers.map((u) => {
                     const contract = activeContractFor(u.id);
                     const entitlement = contract?.vacationDays ?? null;
-                    // Urlaub wird stundengenau geführt (Point 7): 1 Tag = 8 h,
-                    // ein 24h-Dienst zählt als 3,0 Tage. Für die Anzeige rechnen
-                    // wir die verbrauchten Stunden in Tage um (Stunden / 8). Ohne
-                    // Vertrag fehlt der Stundenzähler → Fallback: geplante Tage
-                    // (Anzahl Urlaubs-Schichten dieses Jahres).
-                    const HOURS_PER_DAY = 8;
+                    // Urlaub wird stundengenau geführt (Point 7): die typische
+                    // Dienstlänge (Wochenstunden ÷ Arbeitstage/Woche des
+                    // Vertrags) bestimmt die Umrechnung Stunden ↔ Tage — statt
+                    // pauschal 8h. Ohne (nutzbaren) Vertrag Fallback auf 8h.
+                    const dailyHours =
+                      contract != null &&
+                      contract.weeklyHours > 0 &&
+                      (contract.workdaysPerWeek ?? 0) > 0
+                        ? Math.round((contract.weeklyHours / contract.workdaysPerWeek!) * 100) / 100
+                        : 8;
+                    const hoursTotal = entitlement !== null ? entitlement * dailyHours : null;
+                    const hoursUsed = contract?.vacationHoursUsed ?? 0;
+                    const hoursLeft = hoursTotal !== null ? hoursTotal - hoursUsed : null;
+                    // Ohne Vertrag fehlt der Stundenzähler → Fallback: geplante
+                    // Tage (Anzahl Urlaubs-Schichten dieses Jahres).
                     const taken =
                       contract != null
-                        ? Math.round(((contract.vacationHoursUsed ?? 0) / HOURS_PER_DAY) * 10) / 10
+                        ? Math.round((hoursUsed / dailyHours) * 10) / 10
                         : vacationByUser.get(u.id) ?? 0;
                     const remaining =
                       entitlement !== null ? Math.round((entitlement - taken) * 10) / 10 : null;
@@ -720,21 +729,32 @@ export default function Abwesenheiten() {
                             )}
                           </span>
                         ) : (
-                          <span className="text-muted-foreground">
-                            <span
-                              className={
-                                remaining !== null && remaining < 0
-                                  ? "font-semibold text-destructive"
-                                  : "font-semibold text-foreground"
-                              }
-                              data-testid={`vacation-remaining-${u.id}`}
-                            >
-                              {remaining !== null ? formatDays(remaining) : remaining}
-                            </span>{" "}
-                            von{" "}
-                            <span data-testid={`vacation-entitlement-${u.id}`}>{formatDays(entitlement)}</span>{" "}
-                            Tagen (<span data-testid={`vacation-taken-${u.id}`}>{formatDays(taken)}</span>{" "}
-                            genommen)
+                          <span className="flex flex-col items-end text-muted-foreground">
+                            <span>
+                              <span
+                                className={
+                                  hoursLeft !== null && hoursLeft < 0
+                                    ? "font-semibold text-destructive"
+                                    : "font-semibold text-foreground"
+                                }
+                                data-testid={`vacation-remaining-${u.id}`}
+                              >
+                                {hoursLeft !== null ? formatDays(hoursLeft) : hoursLeft}
+                              </span>{" "}
+                              h
+                            </span>
+                            <span className="text-xs">
+                              entspricht{" "}
+                              {hoursLeft !== null
+                                ? formatDays(Math.round((hoursLeft / dailyHours) * 10) / 10)
+                                : "–"}{" "}
+                              Diensten à {formatDays(dailyHours)} h · Anspruch{" "}
+                              <span data-testid={`vacation-entitlement-${u.id}`}>
+                                {formatDays(entitlement)}
+                              </span>{" "}
+                              Tage (<span data-testid={`vacation-taken-${u.id}`}>{formatDays(taken)}</span>{" "}
+                              genommen)
+                            </span>
                           </span>
                         )}
                         {/* Arbeitstage-Rechner jederzeit wieder erreichbar —

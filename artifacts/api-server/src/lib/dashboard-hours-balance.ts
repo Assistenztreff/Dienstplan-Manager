@@ -120,6 +120,21 @@ export interface AssistantContractInfo {
   vacationHoursUsed?: number | null;
   /** Vertragliche Wochenstunden — Basis für das monatliche Vertrags-Soll. */
   weeklyHours?: number | null;
+  /** Vertragliche Arbeitstage/Woche — Basis der typischen Dienstlänge (Urlaubsstunden). */
+  workdaysPerWeek?: number | null;
+}
+
+// Typische Dienstlänge (Wochenstunden ÷ Arbeitstage/Woche) — identisch zu
+// typicalShiftHours in vacation-hours.ts, hier bewusst lokal dupliziert, damit
+// dieses Modul DB-/Express-frei bleibt (siehe Dateikopf-Kommentar).
+function typicalShiftHoursLocal(
+  contract: { weeklyHours?: number | null; workdaysPerWeek?: number | null } | null,
+  fallbackPerDay: number,
+): number {
+  if (contract && (contract.weeklyHours ?? 0) > 0 && (contract.workdaysPerWeek ?? 0) > 0) {
+    return Math.round(((contract.weeklyHours as number) / (contract.workdaysPerWeek as number)) * 100) / 100;
+  }
+  return fallbackPerDay;
 }
 
 /** Wochen-zu-Monats-Umrechnung: fester Durchschnittsfaktor (52 / 12), für jeden Monat gleich. */
@@ -147,6 +162,12 @@ export interface HoursBalanceRow {
   vacationDaysTaken: number;
   vacationDaysUsed: number;
   vacationDaysRemaining: number;
+  /** Stundengenau verbrauchter Urlaub (Point 7, AP 1) — spiegelt contract.vacationHoursUsed. */
+  vacationHoursUsed: number;
+  /** Verbleibender Urlaub in Stunden: vacationDays × vacationDailyHours − vacationHoursUsed. */
+  vacationHoursRemaining: number;
+  /** Typische Dienstlänge (Std/Urlaubstag) dieser Bilanz-Zeile — Vertrag oder Konto-Standardwert. */
+  vacationDailyHours: number;
   valuedHours: number;
   vacationFulfilledHours: number;
   totalFulfilledHours: number;
@@ -498,10 +519,14 @@ export function computeHoursBalanceRow(params: {
   const sickHours = sickFulfilledHours;
   const vacationDays = contract?.vacationDays ?? DEFAULT_VACATION_DAYS;
   // Urlaubstage IMMER aus der stundengenauen Buchhaltung ableiten (gerundet
-  // auf 0,1 Tage, identisch zur Resturlaub-Bilanz in contracts.ts).
-  const hoursPerDay = params.vacationHoursPerDay ?? 8;
+  // auf 0,1 Tage, identisch zur Resturlaub-Bilanz in contracts.ts). Die
+  // Stunden/Tag-Umrechnung nutzt die typische Dienstlänge aus dem Vertrag
+  // (Wochenstunden ÷ Arbeitstage/Woche), sonst den Konto-Standardwert.
+  const hoursPerDay = typicalShiftHoursLocal(contract ?? null, params.vacationHoursPerDay ?? 8);
   const vacationDaysUsed =
     Math.round(((contract?.vacationHoursUsed ?? 0) / hoursPerDay) * 10) / 10;
+  const vacationHoursTotal = round2(vacationDays * hoursPerDay);
+  const vacationHoursUsedTotal = round2(contract?.vacationHoursUsed ?? 0);
 
   // Premium-Lohnauswertung: Geldwerte folgen der Abrechnungsart (billingMethod)
   // — dieselbe Basis wie die Stunden-Spalten, damit Stunden und Geld auf einer
@@ -579,6 +604,9 @@ export function computeHoursBalanceRow(params: {
     vacationDaysTaken,
     vacationDaysUsed,
     vacationDaysRemaining: Math.round((vacationDays - vacationDaysUsed) * 10) / 10,
+    vacationHoursUsed: vacationHoursUsedTotal,
+    vacationHoursRemaining: round2(vacationHoursTotal - vacationHoursUsedTotal),
+    vacationDailyHours: hoursPerDay,
     valuedHours: round2(valuedHours),
     vacationFulfilledHours: round2(vacationFulfilledHours),
     totalFulfilledHours: round2(totalFulfilledHours),

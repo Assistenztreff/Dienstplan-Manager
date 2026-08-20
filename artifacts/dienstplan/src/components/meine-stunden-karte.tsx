@@ -165,6 +165,16 @@ export function MeineStundenKarte() {
           }
           testId="meine-stunden-urlaub"
         />
+        {data.vacationHoursRemaining != null && data.vacationDailyHours != null && (
+          <StatRow
+            label="Resturlaub"
+            value={`${formatHours(data.vacationHoursRemaining)} h`}
+            sub={`≈ ${formatDays(
+              Math.round((data.vacationHoursRemaining / (data.vacationDailyHours || 1)) * 10) / 10,
+            )} Dienste`}
+            testId="meine-stunden-resturlaub"
+          />
+        )}
 
         {/* ---- Kind-krank-Tage (immer sichtbar wenn > 0) ---- */}
         {(data.kindKrankTage ?? 0) > 0 && (

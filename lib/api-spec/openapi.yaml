@@ -3868,7 +3868,7 @@ components:
 
     HoursBalance:
       type: object
-      required: [userId, userName, plannedHours, actualHours, balance, contractMonthlyTargetHours, workedHours, sickHours, vacationDaysTaken, vacationDaysUsed, vacationDaysRemaining, valuedHours, vacationFulfilledHours, totalFulfilledHours, nightHours, nightSurchargeHours, sundayHours, sundaySurchargeHours, holidayHours, holidaySurchargeHours, nightPercent, sundayPercent, holidayPercent, billingMethod]
+      required: [userId, userName, plannedHours, actualHours, balance, contractMonthlyTargetHours, workedHours, sickHours, vacationDaysTaken, vacationDaysUsed, vacationDaysRemaining, vacationHoursUsed, vacationHoursRemaining, vacationDailyHours, valuedHours, vacationFulfilledHours, totalFulfilledHours, nightHours, nightSurchargeHours, sundayHours, sundaySurchargeHours, holidayHours, holidaySurchargeHours, nightPercent, sundayPercent, holidayPercent, billingMethod]
       properties:
         userId:
           type: integer
@@ -3896,6 +3896,15 @@ components:
         vacationDaysRemaining:
           type: number
           description: Resturlaub in Tagen (vacationDays - vacationDaysUsed), abgeleitet aus der Stunden-Buchhaltung.
+        vacationHoursUsed:
+          type: number
+          description: Stundengenau verbrauchter Urlaub (spiegelt contract.vacationHoursUsed, 0 ohne Vertrag).
+        vacationHoursRemaining:
+          type: number
+          description: Resturlaub in Stunden (vacationDays × vacationDailyHours − vacationHoursUsed).
+        vacationDailyHours:
+          type: number
+          description: Typische Dienstlänge (Std/Urlaubstag) dieser Bilanz-Zeile — Vertrag (Wochenstunden ÷ Arbeitstage/Woche) oder Konto-Standardwert.
         valuedHours:
           type: number
         vacationFulfilledHours:

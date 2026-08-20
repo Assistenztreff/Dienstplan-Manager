@@ -1483,6 +1483,12 @@ export interface HoursBalance {
   vacationDaysUsed: number;
   /** Resturlaub in Tagen (vacationDays - vacationDaysUsed), abgeleitet aus der Stunden-Buchhaltung. */
   vacationDaysRemaining: number;
+  /** Stundengenau verbrauchter Urlaub (spiegelt contract.vacationHoursUsed, 0 ohne Vertrag). */
+  vacationHoursUsed: number;
+  /** Resturlaub in Stunden (vacationDays × vacationDailyHours − vacationHoursUsed). */
+  vacationHoursRemaining: number;
+  /** Typische Dienstlänge (Std/Urlaubstag) dieser Bilanz-Zeile — Vertrag (Wochenstunden ÷ Arbeitstage/Woche) oder Konto-Standardwert. */
+  vacationDailyHours: number;
   valuedHours: number;
   vacationFulfilledHours: number;
   totalFulfilledHours: number;
