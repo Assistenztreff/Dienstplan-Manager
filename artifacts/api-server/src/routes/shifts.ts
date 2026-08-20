@@ -48,7 +48,6 @@ import {
 } from "../lib/shift-metrics-resolve";
 import {
   absenceHoursFor,
-  bwavgDailyHoursForDates,
   resolveVacationHours,
 } from "../lib/vacation-hours";
 import { userHasFeature, getUserLimit } from "../lib/plan";
@@ -178,13 +177,6 @@ function dailyTargetHoursFromContracts(contracts: BulkContract[], day: Date): nu
   if (!contract) return 8;
   const workdays = contract.workdaysPerWeek > 0 ? contract.workdaysPerWeek : 5;
   return Math.round((contract.weeklyHours / workdays) * 100) / 100;
-}
-
-function isContractOlderThan13Weeks(contract: BulkContract, refDate: Date): boolean {
-  return (
-    refDate.getTime() - new Date(`${contract.startDate}T00:00:00Z`).getTime() >=
-    91 * 24 * 3_600_000
-  );
 }
 
 // Vertragliche Soll-Stunden des Tages (Wochenstunden / Arbeitstage pro Woche,
@@ -797,17 +789,21 @@ async function forwardPlanningBlocked(
 // zugaenglich; die Buchhaltung (vacationDaysUsed) laeuft planunabhaengig
 // weiter, damit beim Upgrade sofort korrekte Salden vorliegen.
 
-// Alle geplanten Arbeitsschichten (keine Abwesenheiten) eines Assistenten an
-// einem Kalendertag im angegebenen Team — längste zuerst. Grundlage der
-// Primary-Lookup-Ersetzung: eine neue Abwesenheit "überschreibt" den an dem Tag
-// geplanten Dienst und erbt dessen Zeiten (damit Stunden + Zuschlagspotenzial).
+// Alle geplanten Arbeitsschichten (keine Abwesenheiten) eines Assistenten, die
+// sich ZEITLICH mit dem angegebenen Abwesenheits-Zeitraum überschneiden — nicht
+// nur am selben Kalendertag liegen (AP 5: eine Von-bis-Abwesenheit darf einen
+// Dienst außerhalb ihres Zeitfensters unberührt lassen, z. B. Urlaub 09–15 Uhr
+// neben einem Dienst 15–21 Uhr). Längste zuerst. Grundlage der Primary-Lookup-
+// Ersetzung: eine neue Abwesenheit "überschreibt" den überlappenden Dienst und
+// erbt dessen Zeiten (damit Stunden + Zuschlagspotenzial). Ein ganztägiger
+// Eintrag (00:00–23:59) überschneidet sich weiterhin mit jedem Dienst des Tages
+// — dafür ändert sich das Verhalten nicht.
 async function findPlannedWorkShiftsForDay(
   userId: number,
   teamId: number,
-  day: Date
+  rangeStart: Date,
+  rangeEnd: Date
 ): Promise<{ id: number; startTime: Date; endTime: Date }[]> {
-  // Sargable Tagesgrenze statt DATE(): ermöglicht Indexnutzung auf start_time.
-  const dateStr = day.toISOString().split("T")[0];
   const rows = await db
     .select({
       id: shiftsTable.id,
@@ -830,8 +826,8 @@ async function findPlannedWorkShiftsForDay(
           "abgesagt_an",
           "urlaubsabgeltung",
         ]),
-        gte(shiftsTable.startTime, new Date(`${dateStr}T00:00:00.000Z`)),
-        lt(shiftsTable.startTime, new Date(new Date(`${dateStr}T00:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000)),
+        lt(shiftsTable.startTime, rangeEnd),
+        gt(shiftsTable.endTime, rangeStart),
       )
     );
   return rows.sort(
@@ -1098,7 +1094,8 @@ router.post("/shifts", requireAuth, async (req, res): Promise<void> => {
     const planned = await findPlannedWorkShiftsForDay(
       body.data.userId,
       write.teamId,
-      new Date(body.data.startTime)
+      new Date(body.data.startTime),
+      new Date(body.data.endTime)
     );
     if (planned.length > 0) {
       insertValues.startTime = planned[0]!.startTime;
@@ -1453,25 +1450,11 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
         await tx.delete(shiftsTable).where(inArray(shiftsTable.id, replaced));
       }
 
-      // 13-Wochen-Durchschnitt je Stichtag (rollierendes Fenster wie im
-      // Einzelpfad), aber gesammelt in EINER Abfrage statt einer pro Tag.
-      const averages =
-        ops.vacationMethod === "bwavg"
-          ? await bwavgDailyHoursForDates(
-              userId,
-              resolved.map(({ times }) => times.startTime),
-              tx,
-            )
-          : new Map<string, number | null>();
-
+      // AP 3: der 13-Wochen-Schnitt wird für die Bewertung nicht mehr
+      // verwendet — ein Urlaubstag wird immer mit der Dienstlänge bewertet.
       const prepared = resolved.map(({ times }) => {
         const targetHours = dailyTargetHoursFromContracts(contracts, times.startTime);
         const teamContract = contractForDay(contracts, times.startTime, write.teamId);
-        const average =
-          ops.vacationMethod === "bwavg" &&
-          (!teamContract || isContractOlderThan13Weeks(teamContract, times.startTime))
-            ? averages.get(times.startTime.toISOString()) ?? null
-            : null;
         const contractHours =
           teamContract && teamContract.weeklyHours > 0 && teamContract.workdaysPerWeek > 0
             ? Math.round((teamContract.weeklyHours / teamContract.workdaysPerWeek) * 100) / 100
@@ -1481,9 +1464,7 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
           Math.round(((times.endTime.getTime() - times.startTime.getTime()) / 3_600_000) * 100) /
           100;
         const absenceHours = (fallback: number) =>
-          !isFullDay
-            ? durationHours
-            : average ?? (ops.vacationMethod === "bwavg" ? contractHours ?? fallback : fallback);
+          !isFullDay ? durationHours : contractHours ?? fallback;
         const plannedHours = absenceHours(targetHours);
         const metrics = resolveShiftMetrics(
           { type, startTime: times.startTime, endTime: times.endTime, plannedHours, valuationPercent: 100 },

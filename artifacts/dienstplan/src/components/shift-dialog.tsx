@@ -170,11 +170,10 @@ type FormState = {
   startTime: string;
   endTime: string;
   selection: string;
-  // Optionaler Dienst (Schichtmodell) für Abwesenheiten: legt bei leeren Tagen
-  // die Uhrzeiten fest, damit Nacht-/Sonntags-/Feiertagszuschläge wie beim
-  // geplanten Dienst fortgezahlt werden (Lohnausfallprinzip). "" = ganztägig.
-  // Gleiche Funktion wie „Dienst (optional)" auf der Abwesenheiten-Seite.
-  absenceModelId: string;
+  // Zeitraum einer Abwesenheit (AP 5): "full" = ganztägig (00:00–23:59, wie
+  // bisher), "range" = Von-bis über die normalen startTime/endTime-Felder
+  // (z. B. halbtägiger Urlaub). Nur beim Anlegen wählbar, nicht beim Bearbeiten.
+  absenceRangeMode: "full" | "range";
   planningStatus: PlanningStatus;
   notes: string;
   // Aushilfe-Einsatz: ID eines anderen eigenen Teams als String, "" = keiner.
@@ -355,7 +354,7 @@ export function ShiftDialog({
         ? toTimeString(editShift.endTime)
         : firstModel?.defaultEndTime || "16:00",
       selection: initialSelection(editShift, firstModelId),
-      absenceModelId: "",
+      absenceRangeMode: "full",
       // Beim Bearbeiten den gespeicherten Status übernehmen; neue Schichten
       // starten bewusst als Entwurf (Beginn des Planungs-Workflows).
       planningStatus: isPlanningStatus(editShift?.planningStatus)
@@ -629,6 +628,12 @@ export function ShiftDialog({
       // (Ende am Folgetag); eine kleinere Endzeit bedeutet "endet am Folgetag"
       // (Nachtdienst über Mitternacht). Beides wird in handleSave aufgelöst.
     }
+    // Abwesenheit mit Zeitraum "Von-bis" (AP 5): dieselben Pflichtfelder wie
+    // ein regulärer Dienst, nur beim Anlegen wählbar.
+    if (isAbsence && !isEditing && form.absenceRangeMode === "range") {
+      if (!form.startTime) errs.startTime = "Startzeit angeben";
+      if (!form.endTime) errs.endTime = "Endzeit angeben";
+    }
     if (form.notes.length > 500) {
       errs.notes = `Notiz darf maximal 500 Zeichen lang sein (aktuell ${form.notes.length}).`;
     }
@@ -653,15 +658,6 @@ export function ShiftDialog({
         shiftModelId: null,
       };
     }
-    // Abwesenheit: optional gewählter Dienst (Schichtmodell) — der Server
-    // übernimmt dessen Standardzeiten, wenn am Tag kein Dienst geplant ist,
-    // und zahlt die Zuschläge daraus fort. Nur beim Anlegen wählbar.
-    if (isAbsence && !isEditing && form.absenceModelId) {
-      return {
-        type: form.selection as ShiftInputType & ShiftUpdateType,
-        shiftModelId: Number(form.absenceModelId),
-      };
-    }
     return { type: form.selection as ShiftInputType & ShiftUpdateType, shiftModelId: null };
   }
 
@@ -670,7 +666,23 @@ export function ShiftDialog({
   // damit beide Pfade dieselbe Zeitlogik (Abwesenheit / 24h / Tagesübergang)
   // verwenden.
   function buildTimes(dateStr: string): { startIso: string; endIso: string } {
-    if (isAbsence || isTeam) {
+    if (isTeam) {
+      const fullDay = fullDayTimes(dateStr);
+      return { startIso: fullDay.startTime, endIso: fullDay.endTime };
+    }
+    // Abwesenheit "Von-bis" (AP 5, nur beim Anlegen wählbar): echte Uhrzeiten
+    // statt Ganztages-Fallback — Endzeit <= Startzeit bedeutet Tagesübergang,
+    // identisch zur Logik regulärer Dienste.
+    if (isAbsence && !isEditing && form.absenceRangeMode === "range") {
+      const endsNextDay = form.endTime <= form.startTime;
+      return {
+        startIso: buildIso(dateStr, form.startTime),
+        endIso: endsNextDay
+          ? buildIso(nextDayString(dateStr), form.endTime)
+          : buildIso(dateStr, form.endTime),
+      };
+    }
+    if (isAbsence) {
       const fullDay = fullDayTimes(dateStr);
       return { startIso: fullDay.startTime, endIso: fullDay.endTime };
     }
@@ -1376,35 +1388,62 @@ export function ShiftDialog({
             )}
           </div>
 
-          {/* Optionaler Dienst für Abwesenheiten (nur Anlegen): legt bei leeren
-              Tagen die Uhrzeiten fest, damit Nacht-/Sonntags-/Feiertagszuschläge
-              wie beim geplanten Dienst fortgezahlt werden. Gleiche Funktion wie
-              „Dienst (optional)" auf der Abwesenheiten-Seite. */}
-          {!isEditing && isAbsence && activeModels.length > 0 && (
+          {/* Zeitraum für Abwesenheiten (AP 5, nur Anlegen): Ganztägig bleibt der
+              Standard (00:00–23:59, wie bisher). "Von-bis" erlaubt einen echten
+              Teil-Tag (z. B. halbtägiger Urlaub) und nutzt dafür dieselben
+              Uhrzeit-Felder wie ein regulärer Dienst. Überschneidet sich der
+              gewählte Zeitraum mit einem geplanten Dienst, übernimmt der Server
+              dessen Zeiten wie bisher (Lohnausfallprinzip) — Dienste außerhalb
+              des Zeitraums bleiben unberührt. */}
+          {!isEditing && isAbsence && (
             <div className="space-y-1.5">
-              <Label>Dienst (optional)</Label>
+              <Label>Zeitraum</Label>
               <Select
-                value={form.absenceModelId || "none"}
-                onValueChange={(v) => set("absenceModelId", v === "none" ? "" : v)}
+                value={form.absenceRangeMode}
+                onValueChange={(v) => set("absenceRangeMode", v as "full" | "range")}
               >
-                <SelectTrigger data-testid="shift-dialog-absence-model">
+                <SelectTrigger data-testid="shift-dialog-absence-range">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Ganztägig (Standard)</SelectItem>
-                  {activeModels.map((m) => (
-                    <SelectItem key={m.id} value={String(m.id)}>
-                      {m.name}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="full">Ganztägig (Standard)</SelectItem>
+                  <SelectItem value="range">Von – bis</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                Ersetzt die Abwesenheit einen geplanten Dienst, werden dessen Zeiten
-                automatisch übernommen. Ohne geplanten Dienst legt ein gewählter
-                Dienst die Stunden fest — inklusive Nacht-, Sonntags- und
-                Feiertagszuschlägen (sonst ganztägig, ohne Nachtzuschlag).
-              </p>
+              {form.absenceRangeMode === "range" ? (
+                <div className="grid grid-cols-2 gap-4 pt-1">
+                  <div className="space-y-1.5">
+                    <Label>Startzeit *</Label>
+                    <Input
+                      type="time"
+                      data-testid="shift-dialog-absence-from"
+                      value={form.startTime}
+                      onChange={(e) => set("startTime", e.target.value)}
+                      className={errors.startTime ? "border-destructive" : ""}
+                    />
+                    {errors.startTime && (
+                      <p className="text-xs text-destructive">{errors.startTime}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Endzeit *</Label>
+                    <Input
+                      type="time"
+                      data-testid="shift-dialog-absence-to"
+                      value={form.endTime}
+                      onChange={(e) => set("endTime", e.target.value)}
+                      className={errors.endTime ? "border-destructive" : ""}
+                    />
+                    {errors.endTime && <p className="text-xs text-destructive">{errors.endTime}</p>}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Überschneidet sich der Tag mit einem geplanten Dienst, übernimmt die
+                  Abwesenheit dessen Zeiten automatisch (Stunden + Zuschläge wie
+                  gearbeitet). Ohne Dienst zählt der volle Vertragstag, ohne Nachtzuschlag.
+                </p>
+              )}
             </div>
           )}
 

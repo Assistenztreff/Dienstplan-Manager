@@ -23,6 +23,7 @@ import {
   resolveDailyRateInfo,
   typicalShiftHours,
   vacationPoolHours,
+  vacationForecastHours,
 } from "../lib/vacation-hours";
 import { requirePlanFeatureViaTeamOwner } from "../lib/plan";
 import { resolveAllowanceOps } from "../lib/allowance-resolve";
@@ -471,6 +472,17 @@ router.get(
       hoursPerDay,
     );
 
+    // Jahresprognose (AP 4): Sockel + Mehrarbeits-Aufbau, hochgerechnet aus
+    // dem §11-BUrlG-13-Wochen-Durchschnitt. Der heute verfügbare Reststand
+    // (vacationHoursRemaining oben) bleibt die Hauptzahl der UI.
+    const forecast = await vacationForecastHours(
+      contract.userId,
+      contract.teamId,
+      contract,
+      ops,
+      new Date(),
+    );
+
     res.json({
       contractId: contract.id,
       userId: contract.userId,
@@ -490,6 +502,10 @@ router.get(
       dailyHours: round2(rateInfo.dailyHours),
       contractWorkdaysPerWeek: rateInfo.workdaysPerWeek,
       contractWeeklyHours: rateInfo.weeklyHours,
+      vacationSockelHours: forecast.sockel,
+      vacationAufbauHours: forecast.aufbau,
+      vacationForecastHours: forecast.prognose,
+      avgWeeklyHours: forecast.avgWeeklyHours,
     });
   },
 );

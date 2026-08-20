@@ -52,9 +52,15 @@ export const allowanceSettingsTable = pgTable(
     // Team-Override). Bei AUS blocken die Zeiterfassungs-Schreibrouten mit 403;
     // GET bleibt erlaubt, Bestandsdaten bleiben unangetastet.
     timeTrackingEnabled: boolean("time_tracking_enabled").notNull().default(false),
-    // Urlaubs-Berechnung (Point 7).
+    // VERALTET (bewusst behalten, um einen destruktiven Spalten-Drop bei
+    // nicht-interaktivem db push zu vermeiden): Die Methodenwahl wird
+    // NIRGENDS mehr gelesen (AP 3) — ein Urlaubstag wird immer mit der
+    // Dienstlänge bewertet. Nachfolger: fulltimeWorkdaysPerWeek/
+    // fulltimeWeeklyHours/defaultVacationDays unten.
     vacationMethod: vacationMethodEnum("vacation_method").notNull().default("bwavg"),
     vacationHoursPerDay: real("vacation_hours_per_day").notNull().default(8),
+    // VERALTET (bewusst behalten, siehe vacationMethod oben): der
+    // Stunden-Faktor der "factor"-Methode wird NIRGENDS mehr gelesen (AP 3).
     vacationFactor: real("vacation_factor").notNull().default(0.0941),
     // Referenz für die anteilige Urlaubsberechnung. "30 Tage Urlaub" im
     // Arbeitsvertrag meint immer eine Vollzeitstelle; Teilzeit wird daraus

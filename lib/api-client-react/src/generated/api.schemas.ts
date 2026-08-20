@@ -1783,6 +1783,17 @@ export interface VacationBalance {
      * @nullable
      */
   contractWeeklyHours?: number | null;
+  /** Sockel des Urlaubstopfs (Urlaubswochen × Vertragsstunden), ohne Mehrarbeits-Aufbau. */
+  vacationSockelHours?: number;
+  /** Zusätzlicher Anspruch aus tatsächlich geleisteter Mehrarbeit über die Vertragsstunden des laufenden Kalenderjahres hinaus. */
+  vacationAufbauHours?: number;
+  /** Prognostizierter Jahresanspruch auf Basis des 13-Wochen-Schnitts der bestätigten Ist-Stunden (§ 11 BUrlG). */
+  vacationForecastHours?: number;
+  /**
+     * Ø Wochenstunden der letzten 13 Wochen aus bestätigten Ist-Zeiten; null ohne ausreichende Historie.
+     * @nullable
+     */
+  avgWeeklyHours?: number | null;
 }
 
 export type AuthUserRole = typeof AuthUserRole[keyof typeof AuthUserRole];

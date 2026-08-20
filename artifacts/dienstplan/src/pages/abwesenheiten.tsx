@@ -181,6 +181,50 @@ function WorkdaysHint({
   );
 }
 
+// Jahresprognose (AP 4): der Anspruch wächst über die Vertragsstunden hinaus
+// mit tatsächlich geleisteter Arbeit — zwei rein informative Zusatzzeilen,
+// hochgerechnet aus dem 13-Wochen-Schnitt. Die Hauptzahl bleibt der heute
+// verfügbare Reststand (AP 1, oben). Blendet sich aus, solange die Felder
+// (noch) nicht vorliegen (z. B. Free-Plan ohne absenceTracking-Zugriff).
+function VacationForecastLines({
+  contractId,
+  dailyHours,
+  userId,
+}: {
+  contractId: number;
+  dailyHours: number;
+  userId: number;
+}) {
+  const { data: balance } = useGetVacationBalance(contractId, {
+    query: { retry: false },
+  } as Parameters<typeof useGetVacationBalance>[1]) as {
+    data?: VacationBalance;
+  };
+
+  if (!balance) return null;
+  const { vacationAufbauHours, vacationForecastHours } = balance;
+
+  return (
+    <>
+      {vacationAufbauHours != null && vacationAufbauHours > 0 && (
+        <span className="text-xs" data-testid={`vacation-aufbau-${userId}`}>
+          Zusätzlich durch Mehrarbeit + {formatDays(vacationAufbauHours)} h
+        </span>
+      )}
+      {vacationForecastHours != null && (
+        <span className="text-xs" data-testid={`vacation-forecast-${userId}`}>
+          Prognose Jahresende {formatDays(vacationForecastHours)} h
+          <br />
+          <span className="text-[11px]">
+            entspricht{" "}
+            {formatDays(Math.round((vacationForecastHours / dailyHours) * 10) / 10)} Diensten
+          </span>
+        </span>
+      )}
+    </>
+  );
+}
+
 export default function Abwesenheiten() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -773,6 +817,13 @@ export default function Abwesenheiten() {
                               Tage (<span data-testid={`vacation-taken-${u.id}`}>{formatDays(taken)}</span>{" "}
                               genommen)
                             </span>
+                            {contract && (
+                              <VacationForecastLines
+                                contractId={contract.id}
+                                dailyHours={dailyHours}
+                                userId={u.id}
+                              />
+                            )}
                           </span>
                         )}
                         {/* Arbeitstage-Rechner jederzeit wieder erreichbar —

@@ -32,17 +32,42 @@ export function vacationWeeks(vacationDays: number, fulltimeWorkdaysPerWeek: num
   return vacationDays / fulltimeWorkdaysPerWeek;
 }
 
-// Urlaubstopf einer Assistenzkraft in Stunden (AP 2): entsteht aus den
+// 52 Wochen / 12 Monate * 12. Nur für Urlaubsrechnungen. Bewusst abweichend
+// von WEEKS_PER_MONTH (4,35) im Arbeitstage-Rechner — nicht angleichen.
+export const WEEKS_PER_YEAR = 51.96;
+
+// Stunden-Faktor der Mehrarbeits-Aufbaukomponente (AP 4): je bezahlter Stunde
+// über die Vertragsstunden des Jahres hinaus wächst der Urlaubsanspruch um
+// diesen Faktor — hergeleitet aus dem Vollzeit-Anspruch (z. B. 30 Tage / 5
+// Arbeitstage / 51,96 Wochen ≈ 0,1155 h Urlaub je bezahlter Stunde).
+export function vacationFactorFor(vacationDays: number, fulltimeWorkdaysPerWeek: number): number {
+  if (fulltimeWorkdaysPerWeek <= 0) return 0;
+  const weeks = vacationWeeks(vacationDays, fulltimeWorkdaysPerWeek);
+  return Math.round((weeks / WEEKS_PER_YEAR) * 10_000) / 10_000;
+}
+
+// Urlaubstopf einer Assistenzkraft in Stunden (AP 2 + AP 4): Sockel aus den
 // Urlaubswochen (aus dem Vollzeit-Anspruch) mal den TATSÄCHLICHEN
 // Wochenstunden der Person — ersetzt die alte Rechnung vacationDays ×
 // globale Stunden/Tag, die Teilzeit systematisch benachteiligte.
+//
+// Mit optionalem paidHoursYear (AP 4) kommt ein Mehrarbeits-Aufbau hinzu: der
+// Anspruch wächst über die Vertragsstunden des Jahres hinaus mit tatsächlich
+// geleisteter (bezahlter) Arbeit. Der Sockel ist dabei eine Untergrenze —
+// liegt paidHoursYear unter den Vertragsstunden, bleibt es beim Sockel. Ohne
+// Übergabe verhält sich die Funktion exakt wie in AP 2.
 export function vacationPoolHours(
   contract: { vacationDays: number; weeklyHours: number },
   ops: { fulltimeWorkdaysPerWeek: number },
+  paidHoursYear?: number,
 ): number {
   if (ops.fulltimeWorkdaysPerWeek <= 0 || contract.weeklyHours <= 0) return 0;
   const weeks = vacationWeeks(contract.vacationDays, ops.fulltimeWorkdaysPerWeek);
-  return Math.round(weeks * contract.weeklyHours * 100) / 100;
+  const sockel = weeks * contract.weeklyHours;
+  if (paidHoursYear == null) return Math.round(sockel * 100) / 100;
+  const factor = vacationFactorFor(contract.vacationDays, ops.fulltimeWorkdaysPerWeek);
+  const aufbau = Math.max(0, (paidHoursYear - contract.weeklyHours * WEEKS_PER_YEAR) * factor);
+  return Math.round((sockel + aufbau) * 100) / 100;
 }
 
 // Ein ganztägiger Urlaubstag (00:00–23:59, kein zugrundeliegender Dienst)
@@ -150,6 +175,50 @@ export async function bwavgDailyHoursForDates(
   return result;
 }
 
+// Jahresprognose des Urlaubsanspruchs (AP 4): Sockel + Mehrarbeits-Aufbau, der
+// Aufbau-Anteil hochgerechnet aus dem §11-BUrlG-Durchschnitt der letzten 13
+// Wochen (dieselbe Datenquelle wie bwavgDailyHours, aber als Wochen- statt
+// Tages-Durchschnitt — ohne Division durch die Anzahl gearbeiteter Tage).
+// Ohne Historie fällt die Prognose auf die Vertragsstunden zurück (entspricht
+// dann dem heutigen Sockel + Aufbau bei genau Vertragsstunden geleisteter
+// Arbeit, also Sockel).
+export async function vacationForecastHours(
+  userId: number,
+  teamId: number,
+  contract: { vacationDays: number; weeklyHours: number },
+  ops: { fulltimeWorkdaysPerWeek: number },
+  refDate: Date,
+  dbx: VacationDbx = db
+): Promise<{ sockel: number; aufbau: number; prognose: number; avgWeeklyHours: number | null }> {
+  const end = new Date(refDate);
+  const start = new Date(end.getTime() - 91 * 24 * 3_600_000); // 13 Wochen
+  const [row] = await dbx
+    .select({
+      total: sql<number>`COALESCE(SUM(${timeTrackingTable.actualHours}), 0)`,
+      days: sql<number>`COUNT(DISTINCT DATE(${timeTrackingTable.actualStart}))`,
+    })
+    .from(timeTrackingTable)
+    .innerJoin(shiftsTable, eq(timeTrackingTable.shiftId, shiftsTable.id))
+    .where(
+      and(
+        eq(timeTrackingTable.userId, userId),
+        eq(timeTrackingTable.teamId, teamId),
+        eq(timeTrackingTable.status, "confirmed"),
+        eq(shiftsTable.type, "work"),
+        sql`${timeTrackingTable.actualStart} >= ${start.toISOString()}`,
+        sql`${timeTrackingTable.actualStart} < ${end.toISOString()}`
+      )
+    );
+  const workedDays = Number(row?.days ?? 0);
+  const avgWeeklyHours =
+    workedDays > 0 ? Math.round((Number(row?.total ?? 0) / 13) * 100) / 100 : null;
+  const paidHoursYear = (avgWeeklyHours ?? contract.weeklyHours) * WEEKS_PER_YEAR;
+  const sockel = vacationPoolHours(contract, ops);
+  const prognose = vacationPoolHours(contract, ops, paidHoursYear);
+  const aufbau = Math.round((prognose - sockel) * 100) / 100;
+  return { sockel, aufbau, prognose, avgWeeklyHours };
+}
+
 // Aktiver Vertrag des Nutzers IM TEAM der Schicht zum Stichtag (jüngster
 // Beginn gewinnt). Team-gescoped, damit kein Vertrag eines fremden Teams die
 // Urlaubsbewertung hier beeinflusst (Team-Scoping-Invariante).
@@ -180,26 +249,14 @@ async function activeTeamContractFor(
   return contract ?? null;
 }
 
-// Liegt der Vertragsbeginn mindestens 13 Wochen (91 Tage) vor dem Stichtag?
-// Erst dann kann das 13-Wochen-Fenster überhaupt vollständig gefüllt sein.
-function contractOlderThan13Weeks(startDate: string, refDate: Date): boolean {
-  const start = new Date(`${startDate}T00:00:00Z`);
-  return refDate.getTime() - start.getTime() >= 91 * 24 * 3_600_000;
-}
-
 // Effektive Tages-Stunden einer GANZTÄGIGEN Abwesenheit (kein zugrundeliegender
-// Dienst), abhängig von der aktiven Urlaubsmethode des Team-Eigentümers:
-//   bwavg  → Kette:
-//            1. Vertragsbeginn ≥ 13 Wochen vor dem Stichtag UND bestätigte
-//               Arbeits-IST-Historie im Fenster → §11-BUrlG-Durchschnitt.
-//            2. Sonst, aktiver team-gescopter Vertrag mit Wochenstunden und
-//               Arbeitstagen → Wochenstunden ÷ Arbeitstage pro Woche.
-//            3. Sonst → übergebener Standardwert („Stunden pro Urlaubstag");
-//               ganz ohne Vertrag zählt eine vorhandene Historie weiter wie
-//               bisher (Bestandsschutz).
-//   factor → Standardwert (der Anspruch baut sich stundenweise auf).
+// Dienst) — AP 3: der 13-Wochen-Schnitt wird für die Bewertung nicht mehr
+// verwendet, ein Urlaubstag wird immer mit der Dienstlänge bewertet:
+//   1. Aktiver team-gescopter Vertrag mit Wochenstunden und Arbeitstagen
+//      → Wochenstunden ÷ Arbeitstage pro Woche (typicalShiftHours).
+//   2. Sonst → übergebener Standardwert („Stunden pro Urlaubstag").
 // Ersetzt die Abwesenheit einen konkreten Dienst (echte Zeiten), zählt immer
-// dessen tatsächliche Dauer — unabhängig von der Methode.
+// dessen tatsächliche Dauer — unabhängig von der Quelle.
 export async function absenceHoursFor(
   userId: number,
   teamId: number | null,
@@ -217,11 +274,14 @@ export async function absenceHoursFor(
   return vacationHoursForShift(start, end, info.dailyHours);
 }
 
-// Löst die Tages-Stunden-Kette (bwavg → Vertrag → Standard) für einen Stichtag
-// auf und benennt zusätzlich die verwendete Quelle — damit die UI anzeigen
-// kann, WENN ein Urlaubstag aus Vertragsdaten (statt 13-Wochen-Schnitt)
-// bewertet wurde, inkl. der verwendeten Arbeitstage/Woche (Datenpflege-Hinweis:
-// Bestandsverträge stehen nach der Migration oft pauschal auf 5).
+// Löst die Tages-Stunden-Kette (Vertrag → Standard) für einen Stichtag auf und
+// benennt zusätzlich die verwendete Quelle — damit die UI anzeigen kann, WENN
+// ein Urlaubstag aus Vertragsdaten bewertet wurde, inkl. der verwendeten
+// Arbeitstage/Woche (Datenpflege-Hinweis: Bestandsverträge stehen nach der
+// Migration oft pauschal auf 5).
+// "bwavg" bleibt als DailyRateSource-Wert erhalten — wird ab AP 4 nur noch von
+// der Jahresprognose (vacationForecastHours) gesetzt, nicht mehr von dieser
+// Funktion (AP 3: der 13-Wochen-Schnitt bewertet keinen Urlaubstag mehr).
 export type DailyRateSource = "bwavg" | "contract" | "default";
 export interface DailyRateInfo {
   dailyHours: number;
@@ -240,7 +300,6 @@ export async function resolveDailyRateInfo(
   fallbackPerDay: number,
   dbx: VacationDbx = db
 ): Promise<DailyRateInfo> {
-  const ops = await resolveAllowanceOps(teamId, dbx);
   const contract =
     teamId != null ? await activeTeamContractFor(userId, teamId, refDate, dbx) : null;
   const info: DailyRateInfo = {
@@ -249,27 +308,9 @@ export async function resolveDailyRateInfo(
     workdaysPerWeek: contract?.workdaysPerWeek ?? null,
     weeklyHours: contract?.weeklyHours ?? null,
   };
-  if (ops.vacationMethod !== "bwavg") return info;
-  if (contract) {
-    const avg = contractOlderThan13Weeks(contract.startDate, refDate)
-      ? await bwavgDailyHours(userId, refDate, dbx)
-      : null;
-    if (avg != null) {
-      info.dailyHours = avg;
-      info.source = "bwavg";
-    } else if (contract.weeklyHours > 0 && contract.workdaysPerWeek > 0) {
-      info.dailyHours =
-        Math.round((contract.weeklyHours / contract.workdaysPerWeek) * 100) / 100;
-      info.source = "contract";
-    }
-  } else {
-    // Ohne Vertrag: bisheriges Verhalten (Schnitt, falls Historie; sonst
-    // Standardwert) — kein Verhaltensbruch für vertragslose Nutzer.
-    const avg = await bwavgDailyHours(userId, refDate, dbx);
-    if (avg != null) {
-      info.dailyHours = avg;
-      info.source = "bwavg";
-    }
+  if (contract && contract.weeklyHours > 0 && contract.workdaysPerWeek > 0) {
+    info.dailyHours = typicalShiftHours(contract, fallbackPerDay);
+    info.source = "contract";
   }
   return info;
 }

@@ -4268,6 +4268,26 @@ components:
         contractWeeklyHours:
           type: ["number", "null"]
           description: Wochenstunden des aktiven Vertrags (null ohne Vertrag).
+        vacationSockelHours:
+          type: number
+          description: >-
+            Sockel des Urlaubstopfs (Urlaubswochen × Vertragsstunden), ohne
+            Mehrarbeits-Aufbau.
+        vacationAufbauHours:
+          type: number
+          description: >-
+            Zusätzlicher Anspruch aus tatsächlich geleisteter Mehrarbeit über
+            die Vertragsstunden des laufenden Kalenderjahres hinaus.
+        vacationForecastHours:
+          type: number
+          description: >-
+            Prognostizierter Jahresanspruch auf Basis des 13-Wochen-Schnitts
+            der bestätigten Ist-Stunden (§ 11 BUrlG).
+        avgWeeklyHours:
+          type: ["number", "null"]
+          description: >-
+            Ø Wochenstunden der letzten 13 Wochen aus bestätigten Ist-Zeiten;
+            null ohne ausreichende Historie.
 
     AuthUser:
       type: object

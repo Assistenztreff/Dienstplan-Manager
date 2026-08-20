@@ -1632,7 +1632,11 @@ export const GetVacationBalanceResponse = zod.object({
   "dailyHoursSource": zod.enum(['bwavg', 'contract', 'default']).optional().describe('Quelle der Tages-Stunden-Bewertung eines ganztägigen Urlaubstags zum heutigen Stichtag: 13-Wochen-Schnitt (bwavg), Vertragsdaten (Wochenstunden ÷ Arbeitstage\/Woche) oder Standardwert. Bei \"contract\" sollte die UI auf die Datenpflege der Arbeitstage\/Woche hinweisen (Migrations-Default 5).'),
   "dailyHours": zod.number().optional().describe('Verwendete Stunden je Urlaubstag zum heutigen Stichtag.'),
   "contractWorkdaysPerWeek": zod.number().nullish().describe('Arbeitstage\/Woche des aktiven Vertrags (null ohne Vertrag).'),
-  "contractWeeklyHours": zod.number().nullish().describe('Wochenstunden des aktiven Vertrags (null ohne Vertrag).')
+  "contractWeeklyHours": zod.number().nullish().describe('Wochenstunden des aktiven Vertrags (null ohne Vertrag).'),
+  "vacationSockelHours": zod.number().optional().describe('Sockel des Urlaubstopfs (Urlaubswochen × Vertragsstunden), ohne Mehrarbeits-Aufbau.'),
+  "vacationAufbauHours": zod.number().optional().describe('Zusätzlicher Anspruch aus tatsächlich geleisteter Mehrarbeit über die Vertragsstunden des laufenden Kalenderjahres hinaus.'),
+  "vacationForecastHours": zod.number().optional().describe('Prognostizierter Jahresanspruch auf Basis des 13-Wochen-Schnitts der bestätigten Ist-Stunden (§ 11 BUrlG).'),
+  "avgWeeklyHours": zod.number().nullish().describe('Ø Wochenstunden der letzten 13 Wochen aus bestätigten Ist-Zeiten; null ohne ausreichende Historie.')
 })
 
 
