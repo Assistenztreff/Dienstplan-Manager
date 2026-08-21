@@ -249,14 +249,28 @@ async function activeTeamContractFor(
   return contract ?? null;
 }
 
+// Liegt der Vertragsbeginn mindestens 13 Wochen (91 Tage) vor dem Stichtag?
+// Erst dann kann das 13-Wochen-Fenster überhaupt vollständig gefüllt sein.
+// Grenzfall exakt 91 Tage zählt bereits als "erfüllt" (>=), identisch zum
+// Sammelauftrags-Pfad (isContractOlderThan13Weeks in routes/shifts.ts).
+function contractOlderThan13Weeks(startDate: string, refDate: Date): boolean {
+  const start = new Date(`${startDate}T00:00:00Z`);
+  return refDate.getTime() - start.getTime() >= 91 * 24 * 3_600_000;
+}
+
 // Effektive Tages-Stunden einer GANZTÄGIGEN Abwesenheit (kein zugrundeliegender
-// Dienst) — AP 3: der 13-Wochen-Schnitt wird für die Bewertung nicht mehr
-// verwendet, ein Urlaubstag wird immer mit der Dienstlänge bewertet:
-//   1. Aktiver team-gescopter Vertrag mit Wochenstunden und Arbeitstagen
-//      → Wochenstunden ÷ Arbeitstage pro Woche (typicalShiftHours).
-//   2. Sonst → übergebener Standardwert („Stunden pro Urlaubstag").
+// Dienst), abhängig von der aktiven Urlaubsmethode des Team-Eigentümers:
+//   bwavg  → Kette:
+//            1. Vertragsbeginn ≥ 13 Wochen vor dem Stichtag UND bestätigte
+//               Arbeits-IST-Historie im Fenster → §11-BUrlG-Durchschnitt.
+//            2. Sonst, aktiver team-gescopter Vertrag mit Wochenstunden und
+//               Arbeitstagen → Wochenstunden ÷ Arbeitstage pro Woche.
+//            3. Sonst → übergebener Standardwert („Stunden pro Urlaubstag");
+//               ganz ohne Vertrag zählt eine vorhandene Historie weiter wie
+//               bisher (Bestandsschutz).
+//   factor → immer Vertrag/Standard (kein 13-Wochen-Schnitt).
 // Ersetzt die Abwesenheit einen konkreten Dienst (echte Zeiten), zählt immer
-// dessen tatsächliche Dauer — unabhängig von der Quelle.
+// dessen tatsächliche Dauer — unabhängig von der Methode.
 export async function absenceHoursFor(
   userId: number,
   teamId: number | null,
@@ -274,14 +288,11 @@ export async function absenceHoursFor(
   return vacationHoursForShift(start, end, info.dailyHours);
 }
 
-// Löst die Tages-Stunden-Kette (Vertrag → Standard) für einen Stichtag auf und
-// benennt zusätzlich die verwendete Quelle — damit die UI anzeigen kann, WENN
-// ein Urlaubstag aus Vertragsdaten bewertet wurde, inkl. der verwendeten
-// Arbeitstage/Woche (Datenpflege-Hinweis: Bestandsverträge stehen nach der
-// Migration oft pauschal auf 5).
-// "bwavg" bleibt als DailyRateSource-Wert erhalten — wird ab AP 4 nur noch von
-// der Jahresprognose (vacationForecastHours) gesetzt, nicht mehr von dieser
-// Funktion (AP 3: der 13-Wochen-Schnitt bewertet keinen Urlaubstag mehr).
+// Löst die Tages-Stunden-Kette (bwavg → Vertrag → Standard) für einen Stichtag
+// auf und benennt zusätzlich die verwendete Quelle — damit die UI anzeigen
+// kann, WENN ein Urlaubstag aus Vertragsdaten (statt 13-Wochen-Schnitt)
+// bewertet wurde, inkl. der verwendeten Arbeitstage/Woche (Datenpflege-Hinweis:
+// Bestandsverträge stehen nach der Migration oft pauschal auf 5).
 export type DailyRateSource = "bwavg" | "contract" | "default";
 export interface DailyRateInfo {
   dailyHours: number;
@@ -300,6 +311,7 @@ export async function resolveDailyRateInfo(
   fallbackPerDay: number,
   dbx: VacationDbx = db
 ): Promise<DailyRateInfo> {
+  const ops = await resolveAllowanceOps(teamId, dbx);
   const contract =
     teamId != null ? await activeTeamContractFor(userId, teamId, refDate, dbx) : null;
   const info: DailyRateInfo = {
@@ -308,9 +320,32 @@ export async function resolveDailyRateInfo(
     workdaysPerWeek: contract?.workdaysPerWeek ?? null,
     weeklyHours: contract?.weeklyHours ?? null,
   };
-  if (contract && contract.weeklyHours > 0 && contract.workdaysPerWeek > 0) {
-    info.dailyHours = typicalShiftHours(contract, fallbackPerDay);
-    info.source = "contract";
+  if (ops.vacationMethod !== "bwavg") {
+    if (contract && contract.weeklyHours > 0 && contract.workdaysPerWeek > 0) {
+      info.dailyHours = typicalShiftHours(contract, fallbackPerDay);
+      info.source = "contract";
+    }
+    return info;
+  }
+  if (contract) {
+    const avg = contractOlderThan13Weeks(contract.startDate, refDate)
+      ? await bwavgDailyHours(userId, refDate, dbx)
+      : null;
+    if (avg != null) {
+      info.dailyHours = avg;
+      info.source = "bwavg";
+    } else if (contract.weeklyHours > 0 && contract.workdaysPerWeek > 0) {
+      info.dailyHours = typicalShiftHours(contract, fallbackPerDay);
+      info.source = "contract";
+    }
+  } else {
+    // Ohne Vertrag: bisheriges Verhalten (Schnitt, falls Historie; sonst
+    // Standardwert) — kein Verhaltensbruch für vertragslose Nutzer.
+    const avg = await bwavgDailyHours(userId, refDate, dbx);
+    if (avg != null) {
+      info.dailyHours = avg;
+      info.source = "bwavg";
+    }
   }
   return info;
 }
