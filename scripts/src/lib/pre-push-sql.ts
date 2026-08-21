@@ -156,6 +156,18 @@ export const PRE_PUSH_SQL: string[] = [
      ON time_tracking (team_id, actual_start);`,
   `CREATE INDEX CONCURRENTLY IF NOT EXISTS time_tracking_user_id_actual_start_idx
      ON time_tracking (user_id, actual_start);`,
+  // data_migrations (Einmal-Marker-Tabelle, s. backfill-partial-absence-flag):
+  // eine EINZELNE neue Tabelle auf einer bereits befüllten Bestands-DB lässt
+  // drizzle-kit push interaktiv nachfragen, ob sie neu ist oder eine
+  // bestehende Tabelle umbenennt (TTY-Prompt, "Interactive prompts require a
+  // TTY"). Auf einer frischen DB (alle Tabellen neu zugleich) tritt das nicht
+  // auf — nur wenn genau eine Tabelle gegen einen sonst unveränderten
+  // Bestand hinzukommt. Deshalb vorab idempotent anlegen, exakt wie im
+  // Drizzle-Schema (data_migrations.ts).
+  `CREATE TABLE IF NOT EXISTS data_migrations (
+     name text PRIMARY KEY,
+     applied_at timestamp DEFAULT now() NOT NULL
+   );`,
 ];
 
 /** Alle Vorab-Schritte sequenziell gegen den übergebenen Client ausführen. */
