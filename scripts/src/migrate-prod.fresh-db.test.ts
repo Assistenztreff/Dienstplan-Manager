@@ -41,6 +41,7 @@ let migrateOutput = "";
 let migrateStatus: number | null = null;
 let rerunOutput = "";
 let rerunStatus: number | null = null;
+let freshInheritedShiftId = 0;
 
 function adminClient(): pg.Client {
   return new pg.Client({
@@ -124,6 +125,46 @@ beforeAll(async () => {
   migrateOutput = first.output;
   migrateStatus = first.status;
 
+  // Code-Review-Fund: der Nach-Push-Backfill (backfill-partial-absence-flag)
+  // wurde bislang auf dem FRISCH-DB-Pfad uebersprungen — dadurch blieb der
+  // Einmal-Marker in `data_migrations` bei einer frischen DB ungesetzt. Die
+  // DB war nach diesem allerersten Deploy schon nicht mehr "frisch" (users
+  // existiert), also haette der naechste migrate-prod-Lauf den Backfill zum
+  // ERSTEN Mal ausgefuehrt und jede seither ganz normal angelegte,
+  // ganztaegige Abwesenheit mit geerbten Uhrzeiten faelschlich auf
+  // is_partial_absence=true umklassifiziert. Simuliert hier genau diesen
+  // Fall: eine solche Zeile ENTSTEHT direkt nach dem ersten (frischen)
+  // Deploy, bevor der naechste migrate-prod-Lauf passiert.
+  const freshClient = new pg.Client({ connectionString: targetUrl });
+  await freshClient.connect();
+  try {
+    const user = await freshClient.query<{ id: number }>(
+      `INSERT INTO users (name, email) VALUES ('Frischkonto Halbtag', 'frisch-halbtag@example.test')
+       RETURNING id`,
+    );
+    const team = await freshClient.query<{ id: number }>(
+      `INSERT INTO teams (name, owner_id) VALUES ('Frischteam Halbtag', $1) RETURNING id`,
+      [user.rows[0]!.id],
+    );
+    await freshClient.query(
+      `INSERT INTO team_members (team_id, user_id) VALUES ($1, $2)`,
+      [team.rows[0]!.id, user.rows[0]!.id],
+    );
+    // Von der App-Logik (routes/shifts.ts) korrekt gesetzt: ganztaegig
+    // gemeint (is_partial_absence=false), aber mit den echten, geerbten
+    // Uhrzeiten des ersetzten Dienstes gespeichert (09:00-15:00, kein
+    // 00:00-23:59-Sentinel).
+    const inserted = await freshClient.query<{ id: number }>(
+      `INSERT INTO shifts (team_id, user_id, start_time, end_time, type, planning_status, is_partial_absence)
+       VALUES ($1, $2, '2026-06-01 09:00:00', '2026-06-01 15:00:00', 'vacation', 'FIX', false)
+       RETURNING id`,
+      [team.rows[0]!.id, user.rows[0]!.id],
+    );
+    freshInheritedShiftId = inserted.rows[0]!.id;
+  } finally {
+    await freshClient.end();
+  }
+
   // ZWEITER Lauf gegen dieselbe (jetzt aufgebaute) DB: muss den
   // Nicht-Frisch-Pfad nehmen (Daten-Migrationen + PRE_PUSH_SQL laufen und
   // muessen idempotent sein) und ohne Schema-Aenderungen sauber durchlaufen.
@@ -146,15 +187,39 @@ afterAll(async () => {
 });
 
 describe("migrate-prod gegen leere Ziel-DB (Frisch-DB-Pfad)", () => {
-  it("laeuft erfolgreich durch und nimmt den Frisch-DB-Pfad (Daten-Migrationen/PRE_PUSH_SQL uebersprungen)", () => {
+  it("laeuft erfolgreich durch und nimmt den Frisch-DB-Pfad (Vor-Push-Daten-Migrationen/PRE_PUSH_SQL uebersprungen)", () => {
     expect(migrateStatus, migrateOutput).toBe(0);
     expect(migrateOutput).toContain("Ziel-DB ist leer");
-    // Frisch-Pfad: keine Daten-Migration und keine SQL-Vorab-Schritte gelaufen.
-    expect(migrateOutput).not.toContain("[1/4] Daten-Migration");
-    expect(migrateOutput).not.toContain("[2/4] Idempotente SQL-Vorab-Schritte");
+    // Frisch-Pfad: keine VOR-Push-Daten-Migration und keine SQL-Vorab-Schritte
+    // gelaufen (die setzen Bestandstabellen voraus).
+    expect(migrateOutput).not.toContain("[1/5] Daten-Migration:");
+    expect(migrateOutput).not.toContain("[2/5] Idempotente SQL-Vorab-Schritte");
+    // Der NACH-Push-Backfill (backfill-partial-absence-flag) muss dagegen
+    // IMMER laufen, auch frisch — er ist selbst leer-DB-sicher (Update trifft
+    // 0 Zeilen) und sein einziger Zweck an dieser Stelle ist, den
+    // Einmal-Marker in data_migrations zu setzen (Code-Review-Fund: sonst
+    // gilt die DB nach diesem Deploy nicht mehr als frisch, und der naechste
+    // Lauf wuerde den Backfill zum ERSTEN Mal ausfuehren und frisch angelegte
+    // Abwesenheiten mit geerbten Uhrzeiten faelschlich umklassifizieren).
+    expect(migrateOutput).toContain(
+      "[4/5] Daten-Migration (nach Push): backfill-partial-absence-flag",
+    );
     // Skript-eigene Verifikation und Erfolgsmeldung.
-    expect(migrateOutput).toContain("[4/4] Schema-Verifikation");
+    expect(migrateOutput).toContain("[5/5] Schema-Verifikation");
     expect(migrateOutput).toContain("Fertig: Produktions-DB");
+  });
+
+  it("setzt den Einmal-Marker fuer backfill-partial-absence-flag bereits beim ALLERERSTEN (frischen) Deploy", async () => {
+    const client = new pg.Client({ connectionString: targetUrl });
+    await client.connect();
+    try {
+      const marker = await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM data_migrations WHERE name = 'backfill-partial-absence-flag'`,
+      );
+      expect(marker.rows[0]!.count).toBe("1");
+    } finally {
+      await client.end();
+    }
   });
 
   it("hinterlaesst ein vollstaendiges Schema (findMissingSchemaObjects leer)", async () => {
@@ -167,9 +232,9 @@ describe("migrate-prod gegen leere Ziel-DB (Frisch-DB-Pfad)", () => {
     // Nicht-Frisch-Pfad: users-Tabelle existiert jetzt.
     expect(rerunOutput).not.toContain("Ziel-DB ist leer");
     // Daten-Migrationen und SQL-Vorab-Schritte laufen (und sind idempotent).
-    expect(rerunOutput).toContain("[1/4] Daten-Migration");
-    expect(rerunOutput).toContain("[2/4] Idempotente SQL-Vorab-Schritte");
-    expect(rerunOutput).toContain("[4/4] Schema-Verifikation");
+    expect(rerunOutput).toContain("[1/5] Daten-Migration");
+    expect(rerunOutput).toContain("[2/5] Idempotente SQL-Vorab-Schritte");
+    expect(rerunOutput).toContain("[5/5] Schema-Verifikation");
     expect(rerunOutput).toContain("Fertig: Produktions-DB");
   });
 
@@ -180,6 +245,32 @@ describe("migrate-prod gegen leere Ziel-DB (Frisch-DB-Pfad)", () => {
     expect(rerunOutput).not.toMatch(/DROP\s+COLUMN/i);
     expect(rerunOutput).not.toMatch(/TRUNCATE/i);
     expect(rerunOutput).not.toMatch(/Interactive prompts require a TTY/i);
+  });
+
+  it("Zweitlauf laesst den Marker unveraendert und die frisch angelegte, ganztaegige Abwesenheit mit geerbten Uhrzeiten bleibt is_partial_absence=false", async () => {
+    // Das ist der eigentliche Beweis fuer den Code-Review-Fund: waere der
+    // Marker beim ERSTEN (frischen) Deploy NICHT gesetzt worden, wuerde
+    // dieser zweite Lauf den Backfill zum ersten Mal ausfuehren und die
+    // Zeile aus dem beforeAll (echte, geerbte Uhrzeiten, aber bewusst
+    // ganztaegig gemeint) faelschlich auf true umklassifizieren.
+    expect(rerunStatus, rerunOutput).toBe(0);
+    const client = new pg.Client({ connectionString: targetUrl });
+    await client.connect();
+    try {
+      const marker = await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM data_migrations WHERE name = 'backfill-partial-absence-flag'`,
+      );
+      expect(marker.rows[0]!.count).toBe("1");
+
+      const row = await client.query<{ is_partial_absence: boolean }>(
+        `SELECT is_partial_absence FROM shifts WHERE id = $1`,
+        [freshInheritedShiftId],
+      );
+      expect(row.rows).toHaveLength(1);
+      expect(row.rows[0]!.is_partial_absence).toBe(false);
+    } finally {
+      await client.end();
+    }
   });
 
   it("legt alle Drizzle-Tabellen inklusive Session-Tabelle an", async () => {

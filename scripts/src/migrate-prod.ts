@@ -56,6 +56,12 @@ const DATA_MIGRATIONS = [
   "backfill-team-shift-models",
 ] as const;
 
+// Daten-Migrationen, die die von IHNEN gelesene Spalte selbst voraussetzen —
+// laufen deshalb (wie in post-merge.sh) ERST NACH dem Schema-Push, sonst
+// ueberspringt sich das Skript auf einer Bestands-DB als no-op (Spalte fehlt
+// noch) und der Backfill wird nie mehr nachgeholt.
+const POST_PUSH_DATA_MIGRATIONS = ["backfill-partial-absence-flag"] as const;
+
 // Idempotente SQL-Vorab-Schritte: gemeinsame Quelle mit scripts/post-merge.sh
 // (dort via `pnpm --filter @workspace/scripts run pre-push-sql`).
 // Neue Schritte NUR in scripts/src/lib/pre-push-sql.ts eintragen.
@@ -178,6 +184,8 @@ async function main(): Promise<void> {
         "WICHTIG: Beim echten Lauf laufen zuerst die Daten-Migrationen",
         `(${DATA_MIGRATIONS.join(", ")}) sowie idempotente SQL-Vorab-Schritte —`,
         "der tatsächliche Push-Diff kann dadurch KLEINER ausfallen als oben angezeigt.",
+        `Nach dem Push laufen zusätzlich: ${POST_PUSH_DATA_MIGRATIONS.join(", ")}`,
+        "(setzen Spalten voraus, die erst dieser Push anlegt).",
         "",
         `Anwenden mit: pnpm --filter @workspace/scripts run migrate-prod -- --yes ${targetDbName}`,
       ].join("\n"),
@@ -205,7 +213,7 @@ async function main(): Promise<void> {
 
   // 1) Daten-Migrationen (Post-Merge-Reihenfolge) gegen die Ziel-DB.
   for (const name of isFreshDb ? [] : DATA_MIGRATIONS) {
-    console.log(`\n[1/4] Daten-Migration: ${name}`);
+    console.log(`\n[1/5] Daten-Migration: ${name}`);
     const result = spawnSync(
       "pnpm",
       ["--filter", "@workspace/scripts", "run", name],
@@ -228,7 +236,7 @@ async function main(): Promise<void> {
 
   // 2) Idempotente SQL-Vorab-Schritte (wie post-merge.sh).
   if (!isFreshDb) {
-    console.log("\n[2/4] Idempotente SQL-Vorab-Schritte…");
+    console.log("\n[2/5] Idempotente SQL-Vorab-Schritte…");
     const sqlClient = new pg.Client({ connectionString: targetUrl });
     await sqlClient.connect();
     try {
@@ -240,7 +248,7 @@ async function main(): Promise<void> {
 
   // 3) Geplante Statements inspizieren (Strict-Lauf ohne TTY wendet nichts an),
   //    dann Push. Ein DROP der Session-Tabelle bricht IMMER ab.
-  console.log("\n[3/4] Schema-Push (drizzle-kit)…");
+  console.log("\n[3/5] Schema-Push (drizzle-kit)…");
   const plan = runDrizzlePush(targetUrl, { strict: true });
   if (SESSION_DROP_PATTERN.test(plan.output)) {
     process.stdout.write(plan.output);
@@ -270,8 +278,46 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // 4) Verifizieren: fehlt nach dem Push etwas gegenüber dem Drizzle-Schema?
-  console.log("\n[4/4] Schema-Verifikation…");
+  // 4) Daten-Migrationen, die die von IHNEN gelesene Spalte erst durch DIESEN
+  //    Push bekommen — müssen deshalb NACH dem Push laufen (wie post-merge.sh).
+  //    Vorher würde jede von ihnen die fehlende Spalte als no-op überspringen
+  //    und der Backfill würde nie mehr nachgeholt.
+  //    WICHTIG: hier NICHT wie bei den Vor-Push-Migrationen (Schritt 1) auf
+  //    isFreshDb prüfen (wie post-merge.sh, das ebenfalls unbedingt läuft).
+  //    Diese Skripte sind selbst leer-DB-sicher (sie prüfen Tabelle/Spalte
+  //    und liefern 0 zurück, falls es noch keine Bestandszeilen gibt) — der
+  //    eigentliche Grund, sie hier auszuführen, ist der Einmal-Marker in
+  //    `data_migrations` (s. backfill-partial-absence-flag.ts): bliebe er bei
+  //    einer frischen DB ungesetzt, wäre die DB nach diesem Deploy technisch
+  //    nicht mehr "frisch", und der nächste migrate-prod-Lauf würde den
+  //    Backfill zum ERSTEN Mal ausführen — und dabei jede seither ganz normal
+  //    angelegte, ganztägige Abwesenheit mit geerbten Uhrzeiten faelschlich
+  //    auf is_partial_absence=true umklassifizieren (Kollisionsprüfung würde
+  //    sie danach fälschlich als Teil-Tag behandeln).
+  for (const name of POST_PUSH_DATA_MIGRATIONS) {
+    console.log(`\n[4/5] Daten-Migration (nach Push): ${name}`);
+    const result = spawnSync(
+      "pnpm",
+      ["--filter", "@workspace/scripts", "run", name],
+      {
+        stdio: ["ignore", "inherit", "inherit"],
+        env: {
+          ...process.env,
+          DATABASE_URL: targetUrl,
+          APP_DATABASE_URL: targetUrl,
+        },
+        timeout: 300_000,
+      },
+    );
+    if (result.status !== 0 || result.error) {
+      throw new Error(
+        `Daten-Migration "${name}" fehlgeschlagen — Schema-Push war bereits erfolgreich, aber der Nach-Push-Backfill ist offen.`,
+      );
+    }
+  }
+
+  // 5) Verifizieren: fehlt nach dem Push etwas gegenüber dem Drizzle-Schema?
+  console.log("\n[5/5] Schema-Verifikation…");
   const problems = await findMissingSchemaObjects(targetUrl);
   if (problems.length > 0) {
     console.error(

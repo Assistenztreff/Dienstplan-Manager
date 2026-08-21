@@ -1,5 +1,5 @@
 import { format } from "date-fns";
-import { isPlainFullDayIso, formatAbsenceTimeSpan } from "@/lib/absence-time";
+import { formatAbsenceTimeSpan } from "@/lib/absence-time";
 
 export type AbsenceType = "vacation" | "sick";
 
@@ -9,6 +9,8 @@ export type AbsenceShift = {
   startTime: string;
   endTime: string;
   type: string;
+  /** Halbtägiger Urlaub (#862): true = bewusst gewählter Teil-Tag, false/undefined = ganztägig. */
+  isPartialAbsence?: boolean | null;
 };
 
 export type AbsenceRange = {
@@ -57,7 +59,11 @@ export function buildRanges(shifts: AbsenceShift[]): AbsenceRange[] {
     const date = new Date(shift.startTime);
     const groupKey = `${shift.userId}-${type}`;
     const open = openByGroup.get(groupKey);
-    const fullDay = isPlainFullDayIso(shift.startTime, shift.endTime);
+    // Maßgeblich ist die persistierte Nutzer-Absicht (isPartialAbsence), NICHT
+    // die Uhrzeiten: ein ganztägiger Eintrag kann über das Lohnausfallprinzip
+    // die echten Uhrzeiten eines ersetzten Dienstes geerbt haben und sähe dann
+    // wie ein bewusst gewählter Teil-Tag aus.
+    const fullDay = !shift.isPartialAbsence;
     const isConsecutive =
       open &&
       dayKey(addDays(open.endDate, 1)) === dayKey(date) &&

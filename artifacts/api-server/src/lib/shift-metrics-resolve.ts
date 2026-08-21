@@ -55,14 +55,15 @@ export function isUnpaidAbsenceType(type: string): boolean {
 // 00:00–23:59 (Tagesbeginn bis Tagesende) und trägt KEINE echten Schichtzeiten.
 // Alles andere (vom geplanten Dienst geerbte oder aus einem Schichtmodell
 // abgeleitete Zeiten) gilt als konkrete Schicht und löst die Zuschlagsrechnung
-// aus. Hinweis: getHours/getMinutes folgen der bestehenden Engine-Konvention
-// (UTC-Zeitstempel, Serverlauf in UTC), konsistent zu computeShiftMetrics.
+// aus. Ganztägige Abwesenheiten werden in UTC gespeichert (00:00–23:59 Z, so
+// legt das Frontend sie an). Deshalb UTC lesen — getHours() wäre die lokale
+// Zeit des Node-Prozesses und würde in Europe/Berlin 01:00 statt 00:00 sehen.
 export function isPlainFullDay(start: Date, end: Date): boolean {
   return (
-    start.getHours() === 0 &&
-    start.getMinutes() === 0 &&
-    end.getHours() === 23 &&
-    end.getMinutes() === 59
+    start.getUTCHours() === 0 &&
+    start.getUTCMinutes() === 0 &&
+    end.getUTCHours() === 23 &&
+    end.getUTCMinutes() === 59
   );
 }
 

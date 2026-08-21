@@ -1,5 +1,5 @@
 import { isAdminRole } from "@/lib/roles";
-import { isPlainFullDayIso, formatAbsenceTimeSpan } from "@/lib/absence-time";
+import { formatAbsenceTimeSpan } from "@/lib/absence-time";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams, useLocation } from "wouter";
@@ -116,6 +116,8 @@ type Shift = {
   einsatzTeamName?: string | null;
   homeTeamName?: string | null;
   isVertretung?: boolean | null;
+  /** Halbtägiger Urlaub (#862): true = bewusst gewählter Teil-Tag, false/undefined = ganztägig. */
+  isPartialAbsence?: boolean | null;
 };
 
 const PLANNING_STATUS_LABELS: Record<string, string> = {
@@ -411,8 +413,11 @@ function buildAbsenceRanges(shifts: Shift[], nameById: Map<number, string>): Abs
         // Halbtägiger Urlaub (#862) darf nicht unsichtbar in einen
         // angrenzenden ganztägigen Lauf desselben Typs verschmelzen — sonst
         // würde die Zeitspanne beim Zusammenfassen verlorengehen. Ein Lauf
-        // bricht deshalb zusätzlich am Wechsel ganztägig↔teilweise.
-        fullDay: isPlainFullDayIso(s.startTime, s.endTime),
+        // bricht deshalb zusätzlich am Wechsel ganztägig↔teilweise. Maßgeblich
+        // ist die persistierte Nutzer-Absicht (isPartialAbsence), NICHT die
+        // Uhrzeiten: ein ganztägiger Eintrag kann über das Lohnausfallprinzip
+        // die echten Uhrzeiten eines ersetzten Dienstes geerbt haben.
+        fullDay: !s.isPartialAbsence,
       }))
       .sort((a, b) => a.d.getTime() - b.d.getTime());
 
@@ -961,7 +966,7 @@ function DayDetailRow({
   // Halbtägiger Urlaub (#862): eigene Zeitspanne statt "ganztägig" zeigen,
   // damit die Tagesleiste den echten Zeitraum erkennbar macht.
   const timeLabel = isAbsence
-    ? isPlainFullDayIso(shift.startTime, shift.endTime)
+    ? !shift.isPartialAbsence
       ? "ganztägig"
       : formatAbsenceTimeSpan(shift.startTime, shift.endTime)
     : isTeam

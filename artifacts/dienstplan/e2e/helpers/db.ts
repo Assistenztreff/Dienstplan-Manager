@@ -150,6 +150,26 @@ export async function dbSetContractBillingMethod(
   });
 }
 
+/**
+ * Setzt shifts.is_partial_absence direkt in der (Test-)DB — simuliert eine
+ * BESTANDS-Abwesenheit von vor der Spalte (Task #862 Backfill-Regression):
+ * echte Teil-Tag-Uhrzeiten, aber der Spalten-Default `false`.
+ */
+export async function dbSetShiftPartialAbsence(
+  shiftId: number,
+  value: boolean,
+): Promise<void> {
+  await withDbClient(async (client) => {
+    const res = await client.query(
+      "UPDATE shifts SET is_partial_absence = $1 WHERE id = $2",
+      [value, shiftId],
+    );
+    if (res.rowCount === 0) {
+      throw new Error(`Keine Schicht mit id ${shiftId} gefunden.`);
+    }
+  });
+}
+
 /** Passwort-Hashing exakt wie das setup-admin-Skript (scrypt, salt:hash). */
 function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");

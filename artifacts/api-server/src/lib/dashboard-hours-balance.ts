@@ -240,10 +240,10 @@ function isPlainFullDay(startTime: Date | string, endTime: Date | string): boole
   const s = new Date(startTime);
   const e = new Date(endTime);
   return (
-    s.getHours() === 0 &&
-    s.getMinutes() === 0 &&
-    e.getHours() === 23 &&
-    e.getMinutes() === 59
+    s.getUTCHours() === 0 &&
+    s.getUTCMinutes() === 0 &&
+    e.getUTCHours() === 23 &&
+    e.getUTCMinutes() === 59
   );
 }
 

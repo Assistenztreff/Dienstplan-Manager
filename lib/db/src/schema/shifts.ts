@@ -57,6 +57,17 @@ export const shiftsTable = pgTable("shifts", {
   // Unbezahlte Pausenminuten (reine Info-Kennzahl; reduziert NICHT die
   // gewerteten Stunden — Produktentscheidung v1).
   pauseMinutes: integer("pause_minutes").notNull().default(0),
+  // Halbtägiger Urlaub (#862): hält die tatsächliche NUTZER-ABSICHT fest
+  // (bewusst gewählter Teil-Zeitraum vs. ganztägig), UNABHÄNGIG von den
+  // gespeicherten Uhrzeiten. Grund: Eine ganztägige Abwesenheit, die einen
+  // bereits geplanten Dienst ersetzt, "erbt" dessen echte Start-/Endzeit
+  // (Lohnausfallprinzip, s. routes/shifts.ts) — sie sieht dann in den
+  // Rohdaten genauso aus wie ein bewusst gewählter Teil-Tag. Kollisions-
+  // prüfung und Anzeige dürfen NICHT allein aus den Uhrzeiten ableiten, ob
+  // ein Eintrag ganztägig ist (isPlainFullDay bleibt NUR für die
+  // Stunden-/Zuschlagswertung reserviert, die absichtlich mit den realen
+  // Zeiten rechnet). Nur bei Abwesenheits-Typen gesetzt; sonst bedeutungslos.
+  isPartialAbsence: boolean("is_partial_absence").notNull().default(false),
   // Berechnete Roh-Kennzahlen (beim Speichern ermittelt, Zuschlags-% erst bei Auswertung).
   valuedHours: real("valued_hours").notNull().default(0),
   nightHours: real("night_hours").notNull().default(0),

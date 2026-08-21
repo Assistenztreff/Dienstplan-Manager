@@ -2881,6 +2881,14 @@ components:
           description: >-
             Unbezahlte Pausenminuten (reine Info-Kennzahl; reduziert NICHT
             die gewerteten Stunden).
+        isPartialAbsence:
+          type: boolean
+          description: >-
+            Nur bei Abwesenheits-Typen relevant: true = bewusst gewählter
+            Teil-Tag (Halbtag/Zeitraum), false = ganztägig — auch wenn die
+            gespeicherten Uhrzeiten (Lohnausfallprinzip-Erbschaft eines
+            ersetzten Dienstes) wie ein Teil-Tag aussehen. Maßgeblich für
+            Kollisionsprüfung und Anzeige, NICHT die Uhrzeiten selbst.
         valuedHours:
           type: number
         nightHours:

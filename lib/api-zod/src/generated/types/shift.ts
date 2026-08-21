@@ -40,6 +40,8 @@ export interface Shift {
   isVertretung?: boolean;
   /** Unbezahlte Pausenminuten (reine Info-Kennzahl; reduziert NICHT die gewerteten Stunden). */
   pauseMinutes?: number;
+  /** Nur bei Abwesenheits-Typen relevant: true = bewusst gewählter Teil-Tag (Halbtag/Zeitraum), false = ganztägig — auch wenn die gespeicherten Uhrzeiten (Lohnausfallprinzip-Erbschaft eines ersetzten Dienstes) wie ein Teil-Tag aussehen. Maßgeblich für Kollisionsprüfung und Anzeige, NICHT die Uhrzeiten selbst. */
+  isPartialAbsence?: boolean;
   valuedHours?: number;
   nightHours?: number;
   sundayHours?: number;

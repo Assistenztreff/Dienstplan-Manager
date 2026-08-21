@@ -78,6 +78,7 @@ const SHIFT_SELECT = {
   notes: shiftsTable.notes,
   isVertretung: shiftsTable.isVertretung,
   pauseMinutes: shiftsTable.pauseMinutes,
+  isPartialAbsence: shiftsTable.isPartialAbsence,
   valuedHours: shiftsTable.valuedHours,
   nightHours: shiftsTable.nightHours,
   sundayHours: shiftsTable.sundayHours,
@@ -607,6 +608,7 @@ type ShiftConflict = {
   startTime: Date;
   endTime: Date;
   type: string;
+  isPartialAbsence: boolean;
 };
 
 // Findet zeitlich überlappende Schichten desselben Assistenten. Überlappung gilt,
@@ -644,14 +646,19 @@ async function findOverlappingShifts(
       startTime: shiftsTable.startTime,
       endTime: shiftsTable.endTime,
       type: shiftsTable.type,
+      isPartialAbsence: shiftsTable.isPartialAbsence,
     })
     .from(shiftsTable)
     .where(and(...conditions));
   // Halbtägiger Urlaub (#862) hat echte Uhrzeiten und muss wie ein Dienst
-  // kollidieren können; ganztägiger Urlaub (00:00–23:59) bleibt wie bisher
-  // von der Kollisionsprüfung ausgenommen (das Anlegen wird bereits auf
-  // anderem Weg verhindert/aufgelöst — Lohnausfallprinzip beim Ersetzen).
-  return rows.filter((r) => r.type !== "vacation" || !isPlainFullDay(r.startTime, r.endTime));
+  // kollidieren können; ganztägiger Urlaub bleibt wie bisher von der
+  // Kollisionsprüfung ausgenommen (das Anlegen wird bereits auf anderem Weg
+  // verhindert/aufgelöst — Lohnausfallprinzip beim Ersetzen). Die Ganztags-
+  // Erkennung läuft über das persistierte isPartialAbsence-Flag, NICHT über
+  // isPlainFullDay(startTime, endTime): ein ganztägiger Eintrag, der einen
+  // ersetzten Dienst geerbt hat, trägt echte (nicht-ganztägige) Uhrzeiten und
+  // würde sonst fälschlich wie ein bewusst gewählter Teil-Tag kollidieren.
+  return rows.filter((r) => r.type !== "vacation" || r.isPartialAbsence);
 }
 
 // Strukturierte 409-Antwort mit den kollidierenden Schichten (ISO-Zeitstempel,
@@ -803,20 +810,29 @@ async function forwardPlanningBlocked(
 // weiter, damit beim Upgrade sofort korrekte Salden vorliegen.
 
 // Alle geplanten Arbeitsschichten (keine Abwesenheiten) eines Assistenten, die
-// sich ZEITLICH mit dem angegebenen Abwesenheits-Zeitraum überschneiden — nicht
-// nur am selben Kalendertag liegen (AP 5: eine Von-bis-Abwesenheit darf einen
+// am selben Kalendertag wie der Abwesenheits-Zeitraum BEGINNEN und sich
+// ZEITLICH mit ihm überschneiden (AP 5: eine Von-bis-Abwesenheit darf einen
 // Dienst außerhalb ihres Zeitfensters unberührt lassen, z. B. Urlaub 09–15 Uhr
-// neben einem Dienst 15–21 Uhr). Längste zuerst. Grundlage der Primary-Lookup-
-// Ersetzung: eine neue Abwesenheit "überschreibt" den überlappenden Dienst und
-// erbt dessen Zeiten (damit Stunden + Zuschlagspotenzial). Ein ganztägiger
-// Eintrag (00:00–23:59) überschneidet sich weiterhin mit jedem Dienst des Tages
-// — dafür ändert sich das Verhalten nicht.
+// neben einem Dienst 15–21 Uhr). Die Tages-Grenze bleibt Pflicht (Produkt-
+// entscheidung, s. dienstplan-vortags-nachtdienst-bleibt-bei-urlaub-api.spec.ts):
+// ein Nachtdienst, der am VORTAG beginnt und in den Abwesenheitstag hineinragt,
+// gehört zum Vortag und bleibt unberührt — nur DATE(startTime) = Abwesenheitstag
+// kommt als Kandidat infrage, das Zeitfenster filtert innerhalb dieses Tages
+// zusätzlich auf echte Überschneidung. Längste zuerst. Grundlage der Primary-
+// Lookup-Ersetzung: eine neue Abwesenheit "überschreibt" den überlappenden
+// Dienst und erbt dessen Zeiten (damit Stunden + Zuschlagspotenzial). Ein
+// ganztägiger Eintrag (00:00–23:59) überschneidet sich weiterhin mit jedem
+// Dienst des Tages — dafür ändert sich das Verhalten nicht.
 async function findPlannedWorkShiftsForDay(
   userId: number,
   teamId: number,
   rangeStart: Date,
   rangeEnd: Date
 ): Promise<{ id: number; startTime: Date; endTime: Date }[]> {
+  const dayStart = new Date(
+    `${rangeStart.toISOString().split("T")[0]}T00:00:00.000Z`
+  );
+  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
   const rows = await db
     .select({
       id: shiftsTable.id,
@@ -839,6 +855,8 @@ async function findPlannedWorkShiftsForDay(
           "abgesagt_an",
           "urlaubsabgeltung",
         ]),
+        gte(shiftsTable.startTime, dayStart),
+        lt(shiftsTable.startTime, dayEnd),
         lt(shiftsTable.startTime, rangeEnd),
         gt(shiftsTable.endTime, rangeStart),
       )
@@ -1074,6 +1092,16 @@ router.post("/shifts", requireAuth, async (req, res): Promise<void> => {
   // Dialog). Sonst entstünde eine VORLAEUFIG-Abwesenheit als Sackgasse: Sie
   // zählt nicht in den Auswertungen und lässt sich über die Kalender-
   // Sammelbestätigung (die Abwesenheiten bewusst ausschließt) nie bestätigen.
+  // Halbtägiger Urlaub (#862): die NUTZER-ABSICHT (ganztägig vs. bewusst
+  // gewählter Teil-Zeitraum) muss VOR jeder Zeiten-Auflösung (Lohnausfall-
+  // Erbschaft weiter unten) aus den ROHEN Eingabewerten bestimmt werden — der
+  // Frontend-Vertrag sendet für "ganztägig" immer den 00:00–23:59-Sentinel,
+  // für einen Teil-Tag echte, unterschiedliche Uhrzeiten. Nach der Erbschaft
+  // sähen beide Fälle gleich aus (echte Uhrzeiten), s. isPartialAbsence-Spalte.
+  const isPartialAbsence =
+    isAbsenceType(body.data.type) &&
+    !isPlainFullDay(new Date(body.data.startTime), new Date(body.data.endTime));
+
   const insertValues = {
     ...body.data,
     teamId: write.teamId,
@@ -1083,6 +1111,7 @@ router.post("/shifts", requireAuth, async (req, res): Promise<void> => {
     ...(isAbsenceType(body.data.type) || body.data.type === "team"
       ? { planningStatus: "FIX" as const, isVertretung: false, pauseMinutes: 0 }
       : {}),
+    ...(isAbsenceType(body.data.type) ? { isPartialAbsence } : {}),
   };
 
   // Team-Einträge ganztägig erzwingen (serverseitig autoritativ, s. Helper).
@@ -1102,6 +1131,13 @@ router.post("/shifts", requireAuth, async (req, res): Promise<void> => {
   // Abwesenheits-Zeiten auflösen: vorher geplante Arbeitsdienste lesen (Read
   // außerhalb der Transaktion, rein lesend) — IDs werden innerhalb der
   // Transaktion per Batch-Delete ersetzt.
+  // Halbtägiger Urlaub (#862): ein Eintrag mit echten (nicht-ganztägigen)
+  // Uhrzeiten gilt als bewusst gewählter Zeitraum — die Uhrzeiten kommen vom
+  // Nutzer und werden NICHT durch einen geplanten Dienst oder Modell-
+  // Standardzeiten überschrieben (kein Zeiten-Erben, identisch zum
+  // Bulk-Pfad). Ersetzt (gelöscht) wird trotzdem nur, was sich ECHT zeitlich
+  // mit dem gewählten Fenster überschneidet — findPlannedWorkShiftsForDay
+  // filtert das bereits serverseitig.
   let plannedForDelete: number[] = [];
   if (isAbsenceType(body.data.type)) {
     const planned = await findPlannedWorkShiftsForDay(
@@ -1111,10 +1147,12 @@ router.post("/shifts", requireAuth, async (req, res): Promise<void> => {
       new Date(body.data.endTime)
     );
     if (planned.length > 0) {
-      insertValues.startTime = planned[0]!.startTime;
-      insertValues.endTime = planned[0]!.endTime;
       plannedForDelete = planned.map((p) => p.id);
-    } else if (body.data.shiftModelId != null) {
+      if (!isPartialAbsence) {
+        insertValues.startTime = planned[0]!.startTime;
+        insertValues.endTime = planned[0]!.endTime;
+      }
+    } else if (!isPartialAbsence && body.data.shiftModelId != null) {
       const [model] = await db
         .select({
           defaultStartTime: shiftModelsTable.defaultStartTime,
@@ -1446,13 +1484,19 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
       // Kalendertag beansprucht).
       const resolved = toCreate.map(([key, day]) => {
         const candidates = plannedByDay.get(key) ?? [];
-        if (!isPlainFullDay(day.startTime, day.endTime)) {
+        // Nutzer-Absicht (isPartialAbsence) aus den ROHEN Tages-Uhrzeiten,
+        // bevor eine etwaige Erbschaft sie überschreibt (identisch zum
+        // Einzel-POST) — sonst sähe ein ganztägiger Eintrag, der die
+        // Uhrzeiten eines ersetzten Dienstes erbt, wie ein bewusst gewählter
+        // Teil-Tag aus.
+        const isPartial = !isPlainFullDay(day.startTime, day.endTime);
+        if (isPartial) {
           const overlapping = candidates.filter(
             (s) =>
               s.startTime.getTime() < day.endTime.getTime() &&
               s.endTime.getTime() > day.startTime.getTime(),
           );
-          return { times: day, planned: overlapping };
+          return { times: day, planned: overlapping, isPartialAbsence: true };
         }
         const inherited = candidates[0];
         const times = inherited
@@ -1460,7 +1504,7 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
           : modelDefaults
             ? shiftModelTimesForDay(day.startTime, modelDefaults.start, modelDefaults.end)
             : day;
-        return { times, planned: candidates };
+        return { times, planned: candidates, isPartialAbsence: false };
       });
 
       const replaced = resolved.flatMap(({ planned }) => planned.map((shift) => shift.id));
@@ -1490,7 +1534,7 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
             )
           : new Map<string, number | null>();
 
-      const prepared = resolved.map(({ times }) => {
+      const prepared = resolved.map(({ times, isPartialAbsence }) => {
         const targetHours = dailyTargetHoursFromContracts(contracts, times.startTime);
         const teamContract = contractForDay(contracts, times.startTime, write.teamId);
         const average =
@@ -1516,7 +1560,13 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
           allowance.window,
           allowance.state,
         );
-        return { ...times, plannedHours, vacationHours: absenceHours(ops.vacationHoursPerDay), metrics };
+        return {
+          ...times,
+          plannedHours,
+          vacationHours: absenceHours(ops.vacationHoursPerDay),
+          metrics,
+          isPartialAbsence,
+        };
       });
 
       const created =
@@ -1535,6 +1585,7 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
                   planningStatus: "FIX" as const,
                   isVertretung: false,
                   pauseMinutes: 0,
+                  isPartialAbsence: shift.isPartialAbsence,
                   ...shift.metrics,
                 })),
               )
@@ -2257,6 +2308,22 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
   // Abwesenheiten bleiben verbindlich: Wird eine Schicht zu Urlaub/Krankheit
   // (oder bleibt sie es), setzt der Server den Planungsstatus autoritativ auf
   // FIX — analog zum POST, damit kein Weg eine vorläufige Abwesenheit erzeugt.
+  // Halbtägiger Urlaub (#862): der Bearbeiten-Dialog bietet KEINE eigene
+  // Zeitraum-Auswahl (s. shift-dialog.tsx) — er sendet beim Speichern immer
+  // die bereits gespeicherten Original-Uhrzeiten (ggf. auf ein neues Datum
+  // übertragen). Der Ganztags-/Teil-Modus einer BEREITS bestehenden Abwesenheit
+  // bleibt deshalb beim Bearbeiten unverändert; ein PATCH kann ihn nicht aus
+  // den (evtl. geerbten) Uhrzeiten neu ableiten, ohne den bekannten
+  // Ganztag/Teil-Ambiguitätsfehler zu wiederholen. Nur beim ECHTEN Übergang
+  // zu einer Abwesenheit (vorher kein Abwesenheits-Typ, z. B. Massen-
+  // Typwechsel) gibt es noch keinen Bestandswert — dort aus den effektiven
+  // Uhrzeiten neu bestimmen (kein Erbschafts-Pfad wie bei POST betroffen).
+  const isPartialAbsence = isAbsenceType(effectiveType)
+    ? isAbsenceType(oldShift.type)
+      ? oldShift.isPartialAbsence
+      : !isPlainFullDay(new Date(effectiveStart), new Date(effectiveEnd))
+    : false;
+
   const updateValues = {
     ...body.data,
     // Wird die Schicht zur Abwesenheit oder zum Team-Eintrag, verliert sie
@@ -2272,6 +2339,7 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
           pauseMinutes: 0,
         }
       : {}),
+    ...(isAbsenceType(effectiveType) ? { isPartialAbsence } : {}),
   };
 
   // Team-Einträge ganztägig erzwingen — auch beim Bearbeiten (Typwechsel zu

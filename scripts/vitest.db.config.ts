@@ -10,6 +10,7 @@ export default defineConfig({
       "src/migrate-prod.fresh-db.test.ts",
       "src/pre-push-sql.bestands-db.db.test.ts",
       "src/setup-test-accounts.legacy-cleanup.db.test.ts",
+      "src/backfill-partial-absence-flag.bestands-db.db.test.ts",
     ],
     fileParallelism: false,
     globalSetup: ["./vitest.db.global-setup.ts"],

@@ -177,7 +177,7 @@ describe("migrate-prod gegen befuellte Bestands-DB des vorherigen Releases", () 
   it("laeuft ohne interaktive Rueckfrage durch", () => {
     expect(upgradeStatus, upgradeOutput).toBe(0);
     expect(upgradeOutput).not.toContain("Ziel-DB ist leer");
-    expect(upgradeOutput).toContain("[2/4] Idempotente SQL-Vorab-Schritte");
+    expect(upgradeOutput).toContain("[2/5] Idempotente SQL-Vorab-Schritte");
     expect(upgradeOutput).toContain("Fertig: Produktions-DB");
     expect(upgradeOutput).not.toMatch(/Interactive prompts require a TTY/i);
   });

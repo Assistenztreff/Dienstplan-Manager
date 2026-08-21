@@ -85,6 +85,8 @@ type ShiftForEdit = {
   einsatzTeamId?: number | null;
   isVertretung?: boolean | null;
   pauseMinutes?: number | null;
+  /** Halbtägiger Urlaub (#862): true = bewusst gewählter Teil-Tag, false/undefined = ganztägig. */
+  isPartialAbsence?: boolean | null;
 };
 
 // Planungsstatus: Entwurf (intern) → Vorschlag (angeboten) → Bestätigt (fix).
@@ -573,8 +575,11 @@ export function ShiftDialog({
       // kann noch ein regulärer Dienst außerhalb der Urlaubszeit angelegt
       // werden. Eine echte zeitliche Überschneidung fängt stattdessen die
       // (serverseitige) Kollisionsprüfung ab. Nur ganztägige Abwesenheiten
-      // sperren den Picker weiterhin komplett.
-      if (!isPlainFullDayIso(s.startTime, s.endTime)) continue;
+      // sperren den Picker weiterhin komplett. Maßgeblich ist die
+      // persistierte Nutzer-Absicht (isPartialAbsence), NICHT die
+      // Uhrzeiten — ein ganztägiger Eintrag kann echte, geerbte Uhrzeiten
+      // eines ersetzten Dienstes tragen und sähe sonst wie ein Teil-Tag aus.
+      if (s.isPartialAbsence) continue;
       ids.add(s.userId);
     }
     return ids.size > 0 ? ids : undefined;
@@ -688,6 +693,15 @@ export function ShiftDialog({
       if (form.startTime && form.endTime && TIME_RE.test(form.startTime) && TIME_RE.test(form.endTime)) {
         if (form.endTime <= form.startTime) {
           errs.endTime = "Endzeit muss nach der Startzeit liegen (am selben Tag).";
+        } else if (form.date && buildIso(form.date, form.startTime).slice(0, 10) !== form.date) {
+          // Sehr frühe Startzeiten (00:00 bis knapp vor dem UTC-Offset, z. B.
+          // 00:00–01:00 im Winter) würden nach der lokal→UTC-Umrechnung auf den
+          // Vortag fallen. Der Server bucht Abwesenheiten anhand des UTC-Tages
+          // von startTime (dayKey) — ein Rutscher auf den Vortag würde den
+          // Eintrag am falschen Kalendertag zählen/duplizieren. Statt das
+          // stillschweigend zuzulassen, hier ablehnen.
+          errs.startTime =
+            "Diese Startzeit würde auf den Vortag fallen. Bitte eine spätere Startzeit wählen.";
         } else if (vacationRemainingHours != null) {
           const requestedHours =
             (Number(form.endTime.slice(0, 2)) * 60 +
@@ -831,8 +845,10 @@ export function ShiftDialog({
       // Tage mit bestehender Abwesenheit desselben Typs überspringt der Server.
       // Halbtägiger Urlaub (#862, nur EIN Tag, kein Bis-Datum): die echten
       // Uhrzeiten aus buildTimes() statt des Ganztages-Fallbacks übergeben —
-      // der Server erkennt daran (isPlainFullDay), dass Zeiten/Ersetzung nach
-      // der Zeitüberschneidung statt nach Kalendertag laufen.
+      // der Server erkennt an den ROHEN (noch nicht geerbten) Uhrzeiten die
+      // Nutzer-Absicht und persistiert sie separat als isPartialAbsence, damit
+      // Zeiten/Ersetzung nach der Zeitüberschneidung statt nach Kalendertag
+      // laufen, OHNE die spätere Ganztag/Teil-Unterscheidung zu verlieren.
       if (!isEditing && !isBulk && isAbsence) {
         const rangeDays = eachDayOfInterval({
           start: new Date(`${form.date}T00:00:00`),

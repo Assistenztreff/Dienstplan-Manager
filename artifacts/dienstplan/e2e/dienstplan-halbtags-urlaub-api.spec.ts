@@ -1,9 +1,11 @@
+import { execSync } from "node:child_process";
 import {
   test,
   expect,
   request as playwrightRequest,
   type APIRequestContext,
 } from "@playwright/test";
+import { dbSetShiftPartialAbsence } from "./helpers/db";
 
 /**
  * API-Tests fuer halbtaegigen Urlaub (Task #862): POST /api/shifts/bulk-absence
@@ -30,8 +32,9 @@ const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
 const YEAR = new Date().getFullYear();
 const CONTRACT_START = `${YEAR}-01-01`;
 
+/** UTC-Zeitstempel — dieselbe Konvention, in der Abwesenheiten gespeichert werden. */
 function iso(day: string, hhmm: string): string {
-  return new Date(`${day}T${hhmm}:00`).toISOString();
+  return `${day}T${hhmm}:00.000Z`;
 }
 
 function dayString(monthDay: string): string {
@@ -214,6 +217,41 @@ test("Dienst, der sich ECHT mit dem Urlaubsfenster ueberschneidet, wird ersetzt 
   expect(vacations[0]!.endTime).toBe(iso(day, "17:00"));
 });
 
+test("Regression: Einzel-POST /api/shifts behaelt bei Halbtags-Urlaub die gewaehlten Uhrzeiten (kein Zeiten-Erben vom ersetzten Dienst)", async () => {
+  const day = dayString("05-16");
+  const overlapRes = await adminCtx.post("/api/shifts", {
+    data: {
+      userId: assistantId,
+      type: "active",
+      planningStatus: "FIX",
+      startTime: iso(day, "10:00"),
+      endTime: iso(day, "14:00"),
+    },
+  });
+  expect(overlapRes.status(), "Ueberlappenden Dienst anlegen sollte 201 liefern").toBe(201);
+  const overlapId = ((await overlapRes.json()) as Shift).id;
+
+  const vacationRes = await adminCtx.post("/api/shifts", {
+    data: {
+      userId: assistantId,
+      type: "vacation",
+      startTime: iso(day, "13:00"),
+      endTime: iso(day, "17:00"),
+    },
+  });
+  expect(vacationRes.status(), "Einzel-POST Halbtags-Urlaub sollte 201 liefern").toBe(201);
+  const created = (await vacationRes.json()) as Shift;
+
+  // Der Einzel-Pfad muss sich wie der Bulk-Pfad verhalten: die vom Nutzer
+  // gewaehlten Uhrzeiten (13-17) bleiben erhalten, statt die Zeiten des
+  // ersetzten Dienstes (10-14) zu erben.
+  expect(created.startTime).toBe(iso(day, "13:00"));
+  expect(created.endTime).toBe(iso(day, "17:00"));
+
+  const gone = await adminCtx.get(`/api/shifts/${overlapId}`);
+  expect(gone.status(), "Ueberlappender Dienst muss ersetzt (geloescht) worden sein").toBe(404);
+});
+
 test("ein neuer Dienst, der den bestehenden Halbtags-Urlaub ueberschneidet, wird mit 409 abgelehnt", async () => {
   const day = dayString("05-14");
   const { status: vacStatus } = await bulkAbsenceRange("vacation", [
@@ -298,4 +336,132 @@ test("Regression: ganztaegiger Urlaub verhaelt sich weiterhin wie bisher (erbt D
     },
   });
   expect(laterRes.status(), "Ganztaegiger Urlaub darf weiterhin keine Kollision ausloesen").toBe(201);
+});
+
+test("Regression: geerbte Uhrzeiten eines ganztaegigen Urlaubs loesen KEINE Kollision aus (isPartialAbsence)", async () => {
+  // Reproduziert den zuvor bei der Code-Review gefundenen Fehler: Ein
+  // ganztaegiger Urlaub, der ueber das Lohnausfallprinzip die echten
+  // Uhrzeiten eines ersetzten Dienstes erbt (hier 08:00-14:00), sieht anhand
+  // der reinen Uhrzeiten wie ein bewusst gewaehlter Halbtags-Urlaub aus.
+  // Die Kollisionspruefung darf sich davon NICHT taeuschen lassen: ein neuer
+  // Dienst, der zeitlich MIT dem geerbten Fenster ueberlappt (09:00-12:00,
+  // liegt vollstaendig innerhalb von 08:00-14:00), muss trotzdem erfolgreich
+  // angelegt werden koennen, weil der Urlaub laut isPartialAbsence=false
+  // ganztaegig ist und komplett von der Kollisionspruefung ausgenommen wird.
+  const day = dayString("05-19");
+  const workRes = await adminCtx.post("/api/shifts", {
+    data: {
+      userId: assistantId,
+      type: "active",
+      planningStatus: "FIX",
+      startTime: iso(day, "08:00"),
+      endTime: iso(day, "14:00"),
+    },
+  });
+  expect(workRes.status()).toBe(201);
+  const workId = ((await workRes.json()) as Shift).id;
+
+  const { status, body } = await bulkAbsenceRange("vacation", [
+    { startTime: `${day}T00:00:00.000Z`, endTime: `${day}T23:59:59.000Z` },
+  ]);
+  expect(status).toBe(201);
+  expect(body.replacedShiftIds).toContain(workId);
+
+  const vacations = await listShifts("vacation");
+  expect(vacations[0]!.startTime, "Ganztaegiger Urlaub erbt weiterhin Dienstzeiten").toBe(iso(day, "08:00"));
+  expect(vacations[0]!.endTime).toBe(iso(day, "14:00"));
+
+  // Der neue Dienst ueberlappt zeitlich VOLLSTAENDIG mit den geerbten
+  // Urlaubs-Uhrzeiten (09-12 liegt innerhalb von 08-14) — vor dem Fix haette
+  // das faelschlich 409 ausgeloest, weil isPlainFullDay(08:00,14:00) false
+  // ist und die alte Pruefung den Urlaub deshalb als "teilweise" behandelte.
+  const overlappingRes = await adminCtx.post("/api/shifts", {
+    data: {
+      userId: assistantId,
+      type: "active",
+      planningStatus: "FIX",
+      startTime: iso(day, "09:00"),
+      endTime: iso(day, "12:00"),
+    },
+  });
+  expect(
+    overlappingRes.status(),
+    "Ganztaegiger Urlaub mit geerbten Uhrzeiten darf keine falsche Kollision ausloesen",
+  ).toBe(201);
+});
+
+test("Backfill: Bestands-Halbtags-Urlaub ohne is_partial_absence-Flag wird nachgezogen und kollidiert danach wieder korrekt", async () => {
+  // Reproduziert die zweite bei der Code-Review gefundene Regression: Die
+  // Spalte is_partial_absence hat den Default `false`. Ein VOR der Spalte
+  // angelegter Halbtags-Urlaub (echte Teil-Tag-Uhrzeiten, aber Flag=false,
+  // hier simuliert per direktem DB-Zugriff) wuerde sonst faelschlich wie
+  // ganztaegig behandelt: keine Kollision mehr mit neuen Diensten. Die
+  // Backfill-Migration (scripts/backfill-partial-absence-flag) muss solche
+  // Bestandszeilen anhand ihrer echten (nicht-ganztaegigen) Uhrzeiten auf
+  // is_partial_absence=true nachziehen und damit das alte, uhrzeiten-basierte
+  // Verhalten wiederherstellen.
+  const day = dayString("05-20");
+  const { status: vacStatus, body } = await bulkAbsenceRange("vacation", [
+    { startTime: iso(day, "13:00"), endTime: iso(day, "17:00") },
+  ]);
+  expect(vacStatus).toBe(201);
+  const shiftId = body.shiftIds[0]!;
+
+  // Bestandszustand simulieren: Flag zurueck auf den Spalten-Default `false`,
+  // obwohl die Uhrzeiten (13-17) klar nicht ganztaegig sind.
+  await dbSetShiftPartialAbsence(shiftId, false);
+
+  const beforeBackfillRes = await adminCtx.post("/api/shifts", {
+    data: {
+      userId: assistantId,
+      type: "active",
+      planningStatus: "FIX",
+      startTime: iso(day, "15:00"),
+      endTime: iso(day, "19:00"),
+    },
+  });
+  expect(
+    beforeBackfillRes.status(),
+    "Vor dem Backfill zeigt sich die Regression: Bestandszeile mit Flag=false kollidiert faelschlich nicht",
+  ).toBe(201);
+  if (beforeBackfillRes.ok()) {
+    await deleteShift(((await beforeBackfillRes.json()) as Shift).id);
+  }
+
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  if (process.env.E2E_TEST_DATABASE_URL) {
+    // APP_DATABASE_URL hat in normalize-db-url.ts Vorrang vor DATABASE_URL —
+    // ohne diesen Override wuerde das Skript trotz DATABASE_URL-Override
+    // gegen die Staging-DB laufen (s. Memory staging-prod-db-split).
+    env.DATABASE_URL = process.env.E2E_TEST_DATABASE_URL;
+    env.APP_DATABASE_URL = process.env.E2E_TEST_DATABASE_URL;
+  }
+  execSync("pnpm --filter @workspace/scripts run backfill-partial-absence-flag", {
+    env,
+    stdio: "pipe",
+  });
+
+  const vacations = await listShifts("vacation");
+  const backfilled = vacations.find((s) => s.id === shiftId) as
+    | (Shift & { isPartialAbsence?: boolean })
+    | undefined;
+  expect(backfilled, "Halbtags-Urlaub nach Backfill nicht mehr auffindbar").toBeTruthy();
+  expect(
+    backfilled!.isPartialAbsence,
+    "Backfill muss is_partial_absence anhand der echten Uhrzeiten auf true setzen",
+  ).toBe(true);
+
+  const afterBackfillRes = await adminCtx.post("/api/shifts", {
+    data: {
+      userId: assistantId,
+      type: "active",
+      planningStatus: "FIX",
+      startTime: iso(day, "15:00"),
+      endTime: iso(day, "19:00"),
+    },
+  });
+  expect(
+    afterBackfillRes.status(),
+    "Nach dem Backfill muss die Kollisionspruefung wieder korrekt greifen",
+  ).toBe(409);
 });

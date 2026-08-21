@@ -45,10 +45,13 @@ const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
 const YEAR = new Date().getFullYear();
 const MONTH = 10;
 
+// UTC-Zeitstempel — dieselbe Konvention, in der Schichten/Abwesenheiten
+// gespeichert werden. new Date(`...T12:00:00`) ohne Z waere lokale Zeit des
+// Testlauf-Prozesses und wuerde je nach TZ andere Instanten erzeugen.
 function findWednesday(): string {
   for (let day = 10; day <= 16; day++) {
-    const d = new Date(`${YEAR}-10-${String(day).padStart(2, "0")}T12:00:00`);
-    if (d.getDay() === 3) return `${YEAR}-10-${String(day).padStart(2, "0")}`;
+    const d = new Date(`${YEAR}-10-${String(day).padStart(2, "0")}T12:00:00.000Z`);
+    if (d.getUTCDay() === 3) return `${YEAR}-10-${String(day).padStart(2, "0")}`;
   }
   throw new Error("Kein Mittwoch im Fenster 10.-16.10. gefunden");
 }
@@ -57,16 +60,16 @@ const SHIFT_DAY = findWednesday();
 // Nachtdienst 20:00–06:00 (Folgetag): liegt sicher im Standard-Nachtfenster
 // (23–06 Uhr), traegt also Nachtstunden fuer die Zuschlagsfortzahlung.
 function nightShiftTimes(): { startTime: string; endTime: string } {
-  const start = new Date(`${SHIFT_DAY}T20:00:00`);
+  const start = new Date(`${SHIFT_DAY}T20:00:00.000Z`);
   const end = new Date(start.getTime() + 10 * 3_600_000);
   return { startTime: start.toISOString(), endTime: end.toISOString() };
 }
 
-// Ganztaegige Abwesenheit, exakt wie das Frontend sie sendet (00:00–23:59).
+// Ganztaegige Abwesenheit, exakt wie das Frontend sie sendet (00:00–23:59 UTC).
 function fullDayTimes(day: string): { startTime: string; endTime: string } {
   return {
-    startTime: new Date(`${day}T00:00:00`).toISOString(),
-    endTime: new Date(`${day}T23:59:59`).toISOString(),
+    startTime: `${day}T00:00:00.000Z`,
+    endTime: `${day}T23:59:59.000Z`,
   };
 }
 

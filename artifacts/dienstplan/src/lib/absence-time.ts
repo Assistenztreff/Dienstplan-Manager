@@ -18,11 +18,18 @@ export function isPlainFullDayIso(startIso: string, endIso: string): boolean {
   );
 }
 
-/** "13:00–17:00 Uhr" aus zwei UTC-ISO-Zeitstempeln (gleicher Kalendertag). */
+// Anders als isPlainFullDayIso() ist das hier eine ANZEIGE, keine reine
+// Sentinel-Prüfung: der halbtägige Eintrag transportiert eine echte, vom
+// Nutzer gewählte Uhrzeit (nicht die feste 00:00–23:59-UTC-Konvention).
+// Genau wie normale Dienstzeiten (toTimeString() im Schicht-Dialog, via
+// date-fns format()) muss sie im Browser der Betrachterin gelesen werden —
+// getUTCHours() würde in Europe/Berlin eine falsche, um den UTC-Offset
+// verschobene Uhrzeit anzeigen (z. B. 13:00–17:00 als 12:00–16:00 im Winter).
+/** "13:00–17:00 Uhr" aus zwei ISO-Zeitstempeln (gleicher lokaler Kalendertag), in Browser-Lokalzeit. */
 export function formatAbsenceTimeSpan(startIso: string, endIso: string): string {
   const fmt = (iso: string) => {
     const d = new Date(iso);
-    return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   };
   return `${fmt(startIso)}–${fmt(endIso)} Uhr`;
 }

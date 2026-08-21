@@ -63,3 +63,13 @@ if [ "$push_status" -ne 0 ] \
   echo "ausgefuehrt wurde." >&2
   exit 1
 fi
+# Halbtägiger Urlaub (#862): is_partial_absence hat den Default false; Bestands-
+# Abwesenheiten mit echten Teil-Tag-Uhrzeiten ("Von-bis") müssen auf true
+# nachgezogen werden, sonst zeigt/blockiert die UI sie fälschlich als
+# ganztägig. MUSS NACH db push laufen — vorher existiert die Spalte auf einer
+# Bestands-DB noch gar nicht (Skript würde sie no-op überspringen und den
+# Backfill nie mehr nachholen, da is_partial_absence danach ueberall den
+# Spalten-Default false hat). Reine Daten-Migration (kein Schema-Prompt),
+# idempotent — Reihenfolge nach dem Push ist unkritisch fuer alle uebrigen
+# Skripte oben.
+pnpm --filter @workspace/scripts run backfill-partial-absence-flag

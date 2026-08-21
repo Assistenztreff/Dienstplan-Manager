@@ -27,6 +27,7 @@
     "migrate-absences-fix": "tsx ./src/migrate-absences-fix.ts",
     "migrate-payroll-access": "tsx ./src/migrate-payroll-access.ts",
     "backfill-team-shift-models": "tsx ./src/backfill-team-shift-models.ts",
+    "backfill-partial-absence-flag": "tsx ./src/backfill-partial-absence-flag.ts",
     "check-codegen-drift": "tsx ./src/check-codegen-drift.ts",
     "typecheck-libs-locked": "tsx ./src/typecheck-libs-locked.ts",
     "test-unit-locked": "tsx ./src/test-unit-locked.ts",
