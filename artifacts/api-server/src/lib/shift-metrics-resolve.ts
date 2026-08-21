@@ -11,6 +11,7 @@
 
 import {
   computeShiftMetrics,
+  computeNightHours,
   isGermanHoliday,
   type NightWindow,
   type GermanState,
@@ -84,6 +85,32 @@ export interface ResolveShiftMetricsInput {
   plannedHours: number;
   // Zeitwertung des Schichtmodells in Prozent. Legacy-Schichten ohne Modell: 100.
   valuationPercent: number;
+  // Schätzbasis für Nachtstunden bei ganz freien Ganztags-Abwesenheiten (kein
+  // ersetzter Dienst, kein gewähltes Schichtmodell): Standardzeiten des ersten
+  // aktiven Schichtmodells des Teams (gleiche Konvention wie beim Anlegen einer
+  // neuen Schicht ohne Auswahl, s. shift-dialog "erstes aktives Modell"). Es
+  // gibt kein persönliches Standard-Schichtmodell je Assistenzkraft — dies ist
+  // eine bewusste Team-weite Näherung, keine individuelle Berechnung.
+  fallbackNightBasis?: { defaultStartTime: string; defaultEndTime: string } | null;
+}
+
+// Leitet Start/Ende eines Kalendertags aus HH:MM-Standardzeiten ab (z. B. eines
+// Schichtmodells). Liegt das Ende vor oder gleich der Startzeit, endet die
+// abgeleitete Schicht am Folgetag (Nacht-/24h-Dienst). DB-unabhängig, damit
+// sowohl die Abwesenheits-Routen als auch diese reine Kennzahlen-Berechnung
+// dieselbe Ableitung nutzen (keine doppelte, potenziell divergierende Logik).
+export function deriveDayWindowFromDefaults(
+  day: Date,
+  startHHMM: string,
+  endHHMM: string
+): { startTime: Date; endTime: Date } {
+  const dateStr = day.toISOString().split("T")[0];
+  const startTime = new Date(`${dateStr}T${startHHMM}:00Z`);
+  let endTime = new Date(`${dateStr}T${endHHMM}:00Z`);
+  if (endTime.getTime() <= startTime.getTime()) {
+    endTime = new Date(endTime.getTime() + 24 * 3_600_000);
+  }
+  return { startTime, endTime };
 }
 
 // Ermittelt die Roh-Kennzahlen einer Schicht ohne jede DB-Abhängigkeit.
@@ -91,9 +118,11 @@ export interface ResolveShiftMetricsInput {
 // - Urlaub/Krankheit mit konkreten Zeiten (Lohnausfallprinzip): Nacht-/Sonntags-/
 //   Feiertagsstunden aus dem Zeitfenster werden fortgezahlt (wie der ersetzte Dienst).
 // - Urlaub/Krankheit ganztägig (00:00–23:59): Sonntagsstunden und Feiertagsstunden
-//   werden aus den geplanten Tagesstunden berechnet; Nachtstunden entfallen (kein
-//   konkretes Zeitfenster bekannt). Rechtsgrundlage: §11 BUrlG, §2 EFZG.
-//   Diese Zuschläge sind SV-pflichtig (§3b EStG gilt nur für geleistete Arbeit).
+//   werden aus den geplanten Tagesstunden berechnet (Rechtsgrundlage: §11 BUrlG,
+//   §2 EFZG). Diese Zuschläge sind SV-pflichtig (§3b EStG gilt nur für geleistete
+//   Arbeit). Nachtstunden: ohne jeden konkreten Zeitbezug wird ersatzweise mit den
+//   Standardzeiten des ersten aktiven Team-Schichtmodells geschätzt (fallbackNightBasis,
+//   s. Feldkommentar) — ohne diese Schätzbasis bleiben sie 0.
 // - Arbeitsschicht: delegiert an computeShiftMetrics (Wertung + Nacht-/Sonntags-/
 //   Feiertagsstunden inkl. landesspezifischer Feiertage).
 export function resolveShiftMetrics(
@@ -136,9 +165,23 @@ export function resolveShiftMetrics(
     if (isPlainFullDay(start, end)) {
       const holidayDay = isGermanHoliday(start, state);
       const sundayDay = start.getUTCDay() === 0;
+      let nightHours = 0;
+      if (input.fallbackNightBasis) {
+        const basisWindow = deriveDayWindowFromDefaults(
+          start,
+          input.fallbackNightBasis.defaultStartTime,
+          input.fallbackNightBasis.defaultEndTime
+        );
+        nightHours = computeNightHours(
+          basisWindow.startTime,
+          basisWindow.endTime,
+          window.nightStart,
+          window.nightEnd
+        );
+      }
       return {
         valuedHours: input.plannedHours,
-        nightHours: 0,
+        nightHours,
         sundayHours: sundayDay && !holidayDay ? input.plannedHours : 0,
         holidayHours: holidayDay ? input.plannedHours : 0,
       };

@@ -176,6 +176,96 @@ describe("resolveShiftMetrics — Urlaub/Krank als Sonderfall", () => {
   });
 });
 
+describe("resolveShiftMetrics — Nachtstunden-Schätzung bei ganz freier Ganztags-Abwesenheit", () => {
+  const NIGHT_MODEL = { defaultStartTime: "22:00", defaultEndTime: "06:00" };
+
+  it("schätzt Nachtstunden aus dem ersten aktiven Team-Schichtmodell, wenn kein Zeitfenster bekannt ist", () => {
+    // Montag 05.01.2026 — normaler Werktag, Modell 22:00-06:00 überlappt das
+    // Nachtfenster 23:00-06:00 vollständig mit 7 Stunden.
+    const metrics = resolveShiftMetrics(
+      {
+        type: "vacation",
+        startTime: utc(2026, 0, 5, 0),
+        endTime: utc(2026, 0, 5, 23, 59),
+        plannedHours: 8,
+        valuationPercent: 100,
+        fallbackNightBasis: NIGHT_MODEL,
+      },
+      NIGHT
+    );
+    expect(metrics.nightHours).toBe(7);
+    expect(metrics.valuedHours).toBe(8);
+  });
+
+  it("bleibt bei 0 Nachtstunden ohne Schätzbasis (Rückwärtskompatibilität)", () => {
+    const metrics = resolveShiftMetrics(
+      {
+        type: "vacation",
+        startTime: utc(2026, 0, 5, 0),
+        endTime: utc(2026, 0, 5, 23, 59),
+        plannedHours: 8,
+        valuationPercent: 100,
+      },
+      NIGHT
+    );
+    expect(metrics.nightHours).toBe(0);
+  });
+
+  it("kombiniert Nachtstunden-Schätzung mit Sonntagszuschlag (kein Doppelzuschlag)", () => {
+    // Sonntag 11.01.2026: Sonntagsstunden weiterhin aus plannedHours, Nachtstunden
+    // zusätzlich aus der Schätzbasis — beides gleichzeitig möglich (unterschiedliche
+    // Zuschlagsarten, kein Konflikt).
+    const metrics = resolveShiftMetrics(
+      {
+        type: "sick",
+        startTime: utc(2026, 0, 11, 0),
+        endTime: utc(2026, 0, 11, 23, 59),
+        plannedHours: 8,
+        valuationPercent: 100,
+        fallbackNightBasis: NIGHT_MODEL,
+      },
+      NIGHT
+    );
+    expect(metrics.nightHours).toBe(7);
+    expect(metrics.sundayHours).toBe(8);
+  });
+
+  it("Kind-krank bleibt trotz Schätzbasis komplett zuschlagsfrei (unbezahlte Kategorie)", () => {
+    const metrics = resolveShiftMetrics(
+      {
+        type: "kind_krank",
+        startTime: utc(2026, 0, 5, 0),
+        endTime: utc(2026, 0, 5, 23, 59),
+        plannedHours: 8,
+        valuationPercent: 100,
+        fallbackNightBasis: NIGHT_MODEL,
+      },
+      NIGHT
+    );
+    expect(metrics).toEqual({
+      valuedHours: 8,
+      nightHours: 0,
+      sundayHours: 0,
+      holidayHours: 0,
+    });
+  });
+
+  it("Modellzeiten ohne Mitternachtsüberschreitung (z.B. 08:00-16:00) ergeben 0 Nachtstunden", () => {
+    const metrics = resolveShiftMetrics(
+      {
+        type: "vacation",
+        startTime: utc(2026, 0, 5, 0),
+        endTime: utc(2026, 0, 5, 23, 59),
+        plannedHours: 8,
+        valuationPercent: 100,
+        fallbackNightBasis: { defaultStartTime: "08:00", defaultEndTime: "16:00" },
+      },
+      NIGHT
+    );
+    expect(metrics.nightHours).toBe(0);
+  });
+});
+
 describe("resolveShiftMetrics — Bewertungsprozent je Typ/Schichtmodell", () => {
   it("wertet eine Arbeitsschicht voll bei 100 %", () => {
     const metrics = resolveShiftMetrics(

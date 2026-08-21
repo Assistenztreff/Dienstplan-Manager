@@ -45,6 +45,7 @@ import {
   isAbsenceType,
   isPlainFullDay,
   resolveShiftMetrics,
+  deriveDayWindowFromDefaults as shiftModelTimesForDay,
 } from "../lib/shift-metrics-resolve";
 import {
   absenceHoursFor,
@@ -589,6 +590,12 @@ async function storeShiftMetrics(shift: {
     ? 100
     : await valuationPercentFor(shift.type, shift.shiftModelId);
   const { window, state } = await allowanceContext(shift.teamId, dbx);
+  // Schätzbasis für Nachtzuschlag nur bei ganz freien Ganztags-Abwesenheiten
+  // relevant (s. resolveShiftMetrics); für Arbeitsschichten wird sie ignoriert,
+  // daher hier ohne Sonderfall-Zweig geladen.
+  const fallbackNightBasis = absence
+    ? await firstActiveShiftModelDefaults(shift.teamId, dbx)
+    : null;
   const metrics = resolveShiftMetrics(
     {
       type: shift.type,
@@ -596,6 +603,7 @@ async function storeShiftMetrics(shift: {
       endTime: new Date(shift.endTime),
       plannedHours,
       valuationPercent,
+      fallbackNightBasis,
     },
     window,
     state
@@ -877,21 +885,27 @@ async function deleteReplacedWorkShift(shiftId: number, dbx: Dbx = db): Promise<
   await dbx.delete(shiftsTable).where(eq(shiftsTable.id, shiftId));
 }
 
-// Leitet Start/Ende eines Abwesenheits-Datums aus den Standardzeiten eines
-// Schichtmodells ab (Fallback-Lookup bei leerem Dienstplan). Liegt das Ende vor
-// oder gleich der Startzeit, endet die Schicht am Folgetag (Nacht-/24h-Dienst).
-function shiftModelTimesForDay(
-  day: Date,
-  startHHMM: string,
-  endHHMM: string
-): { startTime: Date; endTime: Date } {
-  const dateStr = day.toISOString().split("T")[0];
-  const startTime = new Date(`${dateStr}T${startHHMM}:00Z`);
-  let endTime = new Date(`${dateStr}T${endHHMM}:00Z`);
-  if (endTime.getTime() <= startTime.getTime()) {
-    endTime = new Date(endTime.getTime() + 24 * 3_600_000);
-  }
-  return { startTime, endTime };
+// Standardzeiten des ersten aktiven Schichtmodells eines Teams (sortOrder ASC,
+// id ASC — dieselbe Konvention wie beim Vorbelegen einer neuen Schicht ohne
+// Auswahl, s. shift-dialog.tsx). Dient als Team-weite Schätzbasis für den
+// Nachtzuschlag ganz freier Ganztags-Abwesenheiten (kein ersetzter Dienst, kein
+// gewähltes Schichtmodell) — es gibt kein persönliches Standard-Schichtmodell.
+async function firstActiveShiftModelDefaults(
+  teamId: number | null,
+  dbx: Dbx = db
+): Promise<{ defaultStartTime: string; defaultEndTime: string } | null> {
+  if (teamId == null) return null;
+  const [model] = await dbx
+    .select({
+      defaultStartTime: shiftModelsTable.defaultStartTime,
+      defaultEndTime: shiftModelsTable.defaultEndTime,
+    })
+    .from(shiftModelsTable)
+    .where(and(eq(shiftModelsTable.teamId, teamId), eq(shiftModelsTable.isActive, true)))
+    .orderBy(shiftModelsTable.sortOrder, shiftModelsTable.id)
+    .limit(1);
+  if (!model?.defaultStartTime || !model?.defaultEndTime) return null;
+  return { defaultStartTime: model.defaultStartTime, defaultEndTime: model.defaultEndTime };
 }
 
 router.post("/shifts", requireAuth, async (req, res): Promise<void> => {
@@ -1350,6 +1364,10 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
       modelDefaults = { start: model.defaultStartTime, end: model.defaultEndTime };
     }
   }
+  // Team-weite Schätzbasis für Nachtzuschlag bei ganz freien Ganztags-Tagen
+  // (kein ersetzter Dienst, kein gewähltes Schichtmodell) — einmal für den
+  // gesamten Zeitraum geladen, s. resolveShiftMetrics/firstActiveShiftModelDefaults.
+  const fallbackNightBasis = await firstActiveShiftModelDefaults(write.teamId);
 
   // Duplikat-Prüfung UND Anlage laufen unter einem Advisory-Lock pro
   // Zielperson race-sicher in EINER Transaktion: Zwei gleichzeitige identische
@@ -1556,7 +1574,14 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
             : average ?? (ops.vacationMethod === "bwavg" ? contractHours ?? fallback : fallback);
         const plannedHours = absenceHours(targetHours);
         const metrics = resolveShiftMetrics(
-          { type, startTime: times.startTime, endTime: times.endTime, plannedHours, valuationPercent: 100 },
+          {
+            type,
+            startTime: times.startTime,
+            endTime: times.endTime,
+            plannedHours,
+            valuationPercent: 100,
+            fallbackNightBasis,
+          },
           allowance.window,
           allowance.state,
         );
