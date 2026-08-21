@@ -58,6 +58,13 @@ export const allowanceSettingsTable = pgTable(
     // Dienstlänge bewertet. Nachfolger: fulltimeWorkdaysPerWeek/
     // fulltimeWeeklyHours/defaultVacationDays unten.
     vacationMethod: vacationMethodEnum("vacation_method").notNull().default("bwavg"),
+    // VERALTET (bewusst behalten, um einen destruktiven Spalten-Drop bei
+    // nicht-interaktivem db push zu vermeiden): nicht mehr über die API
+    // les-/schreibbar (Urlaub kommt immer aus dem Vertrag, nie aus einem
+    // Konto-weiten Rückfallwert). Interne Berechnungen (Schichten-/Verträge-
+    // Route) lesen diese Spalte weiterhin als reinen Sicherheitsnetz-Wert für
+    // den seltenen Fall eines Vertrags ohne gültige Wochenstunden/Arbeitstage
+    // oder ganz ohne Vertrag — dort bleibt der Bestandswert (Default 8) wirksam.
     vacationHoursPerDay: real("vacation_hours_per_day").notNull().default(8),
     // VERALTET (bewusst behalten, siehe vacationMethod oben): der
     // Stunden-Faktor der "factor"-Methode wird NIRGENDS mehr gelesen (AP 3).

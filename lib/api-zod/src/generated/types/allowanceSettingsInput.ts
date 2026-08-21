@@ -40,8 +40,6 @@ export interface AllowanceSettingsInput {
   /** Zeiterfassung aktivieren/deaktivieren (konto-global, kein Team-Override). */
   timeTrackingEnabled?: boolean;
   vacationMethod?: AllowanceSettingsInputVacationMethod;
-  /** @minimum 0.1 */
-  vacationHoursPerDay?: number;
   /** @minimum 0 */
   vacationFactor?: number;
   /**

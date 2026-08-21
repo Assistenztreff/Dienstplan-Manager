@@ -36,8 +36,6 @@ export interface AllowanceSettings {
   timeTrackingEnabled: boolean;
   /** Urlaubs-Berechnung — bwavg = §11 BUrlG 13-Wochen-Schnitt, factor = prozentualer Stunden-Faktor. */
   vacationMethod: AllowanceSettingsVacationMethod;
-  /** Stunden je Urlaubstag (Anzeige Tage = Stunden / diesem Wert). */
-  vacationHoursPerDay: number;
   /** Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor. */
   vacationFactor: number;
   /** Referenz-Arbeitstage/Woche bei Vollzeit (AP 2). "30 Tage Urlaub" im Arbeitsvertrag meint immer eine Vollzeitstelle; zusammen mit fulltimeWeeklyHours Basis der anteiligen Urlaubsberechnung. */

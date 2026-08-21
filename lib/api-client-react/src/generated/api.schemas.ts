@@ -429,7 +429,7 @@ export interface Contract {
      */
   workdaysConfirmedAt?: string | null;
   vacationDays: number;
-  /** Stundengenau verbrauchter Urlaub (Point 7). Pool = vacationDays * vacationHoursPerDay. */
+  /** Stundengenau verbrauchter Urlaub (Point 7). */
   vacationHoursUsed?: number;
   startDate: string;
   /** @nullable */
@@ -1104,8 +1104,6 @@ export interface AllowanceSettings {
   timeTrackingEnabled: boolean;
   /** Urlaubs-Berechnung — bwavg = §11 BUrlG 13-Wochen-Schnitt, factor = prozentualer Stunden-Faktor. */
   vacationMethod: AllowanceSettingsVacationMethod;
-  /** Stunden je Urlaubstag (Anzeige Tage = Stunden / diesem Wert). */
-  vacationHoursPerDay: number;
   /** Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor. */
   vacationFactor: number;
   /** Referenz-Arbeitstage/Woche bei Vollzeit (AP 2). "30 Tage Urlaub" im Arbeitsvertrag meint immer eine Vollzeitstelle; zusammen mit fulltimeWeeklyHours Basis der anteiligen Urlaubsberechnung. */
@@ -1211,8 +1209,6 @@ export interface AllowanceSettingsInput {
   /** Zeiterfassung aktivieren/deaktivieren (konto-global, kein Team-Override). */
   timeTrackingEnabled?: boolean;
   vacationMethod?: AllowanceSettingsInputVacationMethod;
-  /** @minimum 0.1 */
-  vacationHoursPerDay?: number;
   /** @minimum 0 */
   vacationFactor?: number;
   /**

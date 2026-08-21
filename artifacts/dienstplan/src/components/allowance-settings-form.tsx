@@ -46,7 +46,6 @@ type FormState = {
   autoApproveTimesheets: boolean;
   timeTrackingEnabled: boolean;
   vacationMethod: string;
-  vacationHoursPerDay: string;
   vacationFactor: string;
   fulltimeWorkdaysPerWeek: string;
   fulltimeWeeklyHours: string;
@@ -187,7 +186,6 @@ export function AllowanceSettingsForm() {
     autoApproveTimesheets: false,
     timeTrackingEnabled: false,
     vacationMethod: "bwavg",
-    vacationHoursPerDay: "8",
     vacationFactor: "0.0941",
     fulltimeWorkdaysPerWeek: "5",
     fulltimeWeeklyHours: "39",
@@ -226,7 +224,6 @@ export function AllowanceSettingsForm() {
         autoApproveTimesheets: settings.autoApproveTimesheets ?? false,
         timeTrackingEnabled: settings.timeTrackingEnabled ?? false,
         vacationMethod: settings.vacationMethod ?? "bwavg",
-        vacationHoursPerDay: String(settings.vacationHoursPerDay ?? 8),
         vacationFactor: String(settings.vacationFactor ?? 0.0941),
         fulltimeWorkdaysPerWeek: String(settings.fulltimeWorkdaysPerWeek ?? 5),
         fulltimeWeeklyHours: String(settings.fulltimeWeeklyHours ?? 39),
@@ -272,9 +269,6 @@ export function AllowanceSettingsForm() {
     if (!TIME_PATTERN.test(form.nightStart)) errs.nightStart = "Ungültige Uhrzeit";
     if (!TIME_PATTERN.test(form.nightEnd)) errs.nightEnd = "Ungültige Uhrzeit";
     if (scopeTeamId === undefined) {
-      const hpd = Number(form.vacationHoursPerDay);
-      if (form.vacationHoursPerDay === "" || Number.isNaN(hpd) || hpd < 0.1)
-        errs.vacationHoursPerDay = "Mindestens 0,1";
       if (form.vacationMethod === "factor") {
         const vf = Number(form.vacationFactor);
         if (form.vacationFactor === "" || Number.isNaN(vf) || vf < 0)
@@ -346,7 +340,6 @@ export function AllowanceSettingsForm() {
                 autoApproveTimesheets: f.autoApproveTimesheets,
                 timeTrackingEnabled: f.timeTrackingEnabled,
                 vacationMethod: f.vacationMethod as AllowanceSettingsInputVacationMethod,
-                vacationHoursPerDay: Number(f.vacationHoursPerDay),
                 vacationFactor: Number(f.vacationFactor),
                 fulltimeWorkdaysPerWeek: Number(f.fulltimeWorkdaysPerWeek),
                 fulltimeWeeklyHours: Number(f.fulltimeWeeklyHours),
@@ -919,25 +912,6 @@ export function AllowanceSettingsForm() {
                       <p className="text-xs text-muted-foreground">
                         Vorbelegung für neue Verträge, je Person änderbar.
                       </p>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label htmlFor="vacationHoursPerDay">Stunden je Urlaubstag</Label>
-                      <Input
-                        id="vacationHoursPerDay"
-                        type="number"
-                        min="0.1"
-                        step="0.1"
-                        value={form.vacationHoursPerDay}
-                        onChange={(e) => set("vacationHoursPerDay", e.target.value)}
-                        className={errors.vacationHoursPerDay ? "border-destructive" : ""}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Nur als Rückfallwert, wenn kein Vertrag hinterlegt ist.
-                      </p>
-                      {errors.vacationHoursPerDay && (
-                        <p className="text-xs text-destructive">{errors.vacationHoursPerDay}</p>
-                      )}
                     </div>
 
                     <p className="text-xs text-muted-foreground">

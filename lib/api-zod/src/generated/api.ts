@@ -169,7 +169,7 @@ export const ListContractsResponseItem = zod.object({
   "workdaysPerWeek": zod.number().optional().describe('Arbeitstage pro Woche (0,1–7, Dezimalwerte erlaubt); Basis für den Vertrags-Fallback der bwavg-Urlaubsbewertung.'),
   "workdaysConfirmedAt": zod.coerce.date().nullish().describe('Zeitpunkt der letzten bewussten Arbeitstage-Festlegung; null = Migrations-Default, Datenpflege-Hinweis anzeigen.'),
   "vacationDays": zod.number(),
-  "vacationHoursUsed": zod.number().optional().describe('Stundengenau verbrauchter Urlaub (Point 7). Pool = vacationDays \* vacationHoursPerDay.'),
+  "vacationHoursUsed": zod.number().optional().describe('Stundengenau verbrauchter Urlaub (Point 7).'),
   "startDate": zod.coerce.date(),
   "endDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
@@ -235,7 +235,7 @@ export const GetContractResponse = zod.object({
   "workdaysPerWeek": zod.number().optional().describe('Arbeitstage pro Woche (0,1–7, Dezimalwerte erlaubt); Basis für den Vertrags-Fallback der bwavg-Urlaubsbewertung.'),
   "workdaysConfirmedAt": zod.coerce.date().nullish().describe('Zeitpunkt der letzten bewussten Arbeitstage-Festlegung; null = Migrations-Default, Datenpflege-Hinweis anzeigen.'),
   "vacationDays": zod.number(),
-  "vacationHoursUsed": zod.number().optional().describe('Stundengenau verbrauchter Urlaub (Point 7). Pool = vacationDays \* vacationHoursPerDay.'),
+  "vacationHoursUsed": zod.number().optional().describe('Stundengenau verbrauchter Urlaub (Point 7).'),
   "startDate": zod.coerce.date(),
   "endDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
@@ -295,7 +295,7 @@ export const UpdateContractResponse = zod.object({
   "workdaysPerWeek": zod.number().optional().describe('Arbeitstage pro Woche (0,1–7, Dezimalwerte erlaubt); Basis für den Vertrags-Fallback der bwavg-Urlaubsbewertung.'),
   "workdaysConfirmedAt": zod.coerce.date().nullish().describe('Zeitpunkt der letzten bewussten Arbeitstage-Festlegung; null = Migrations-Default, Datenpflege-Hinweis anzeigen.'),
   "vacationDays": zod.number(),
-  "vacationHoursUsed": zod.number().optional().describe('Stundengenau verbrauchter Urlaub (Point 7). Pool = vacationDays \* vacationHoursPerDay.'),
+  "vacationHoursUsed": zod.number().optional().describe('Stundengenau verbrauchter Urlaub (Point 7).'),
   "startDate": zod.coerce.date(),
   "endDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
@@ -1018,7 +1018,6 @@ export const GetAllowanceSettingsResponse = zod.object({
   "autoApproveTimesheets": zod.boolean().describe('Eingereichte Zeiteinträge automatisch genehmigen.'),
   "timeTrackingEnabled": zod.boolean().describe('Zeiterfassung (IST-Zeiten) aktiv? Konto-global (kein Team-Override); Standard AUS. Bei AUS blocken die Zeiterfassungs-Schreibrouten mit 403 (code time_tracking_disabled), Lesen bleibt erlaubt.'),
   "vacationMethod": zod.enum(['bwavg', 'factor']).describe('Urlaubs-Berechnung — bwavg = §11 BUrlG 13-Wochen-Schnitt, factor = prozentualer Stunden-Faktor.'),
-  "vacationHoursPerDay": zod.number().describe('Stunden je Urlaubstag (Anzeige Tage = Stunden \/ diesem Wert).'),
   "vacationFactor": zod.number().describe('Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor.'),
   "fulltimeWorkdaysPerWeek": zod.number().describe('Referenz-Arbeitstage\/Woche bei Vollzeit (AP 2). \"30 Tage Urlaub\" im Arbeitsvertrag meint immer eine Vollzeitstelle; zusammen mit fulltimeWeeklyHours Basis der anteiligen Urlaubsberechnung.'),
   "fulltimeWeeklyHours": zod.number().describe('Referenz-Wochenstunden bei Vollzeit (AP 2).'),
@@ -1054,8 +1053,6 @@ export const updateAllowanceSettingsBodySundayPercentMax = 100;
 export const updateAllowanceSettingsBodyHolidayPercentMin = 0;
 export const updateAllowanceSettingsBodyHolidayPercentMax = 100;
 
-export const updateAllowanceSettingsBodyVacationHoursPerDayMin = 0.1;
-
 export const updateAllowanceSettingsBodyVacationFactorMin = 0;
 
 export const updateAllowanceSettingsBodyFulltimeWorkdaysPerWeekMax = 7;
@@ -1090,7 +1087,6 @@ export const UpdateAllowanceSettingsBody = zod.object({
   "autoApproveTimesheets": zod.boolean().optional(),
   "timeTrackingEnabled": zod.boolean().optional().describe('Zeiterfassung aktivieren\/deaktivieren (konto-global, kein Team-Override).'),
   "vacationMethod": zod.enum(['bwavg', 'factor']).optional(),
-  "vacationHoursPerDay": zod.number().min(updateAllowanceSettingsBodyVacationHoursPerDayMin).optional(),
   "vacationFactor": zod.number().min(updateAllowanceSettingsBodyVacationFactorMin).optional(),
   "fulltimeWorkdaysPerWeek": zod.number().min(1).max(updateAllowanceSettingsBodyFulltimeWorkdaysPerWeekMax).optional(),
   "fulltimeWeeklyHours": zod.number().min(1).max(updateAllowanceSettingsBodyFulltimeWeeklyHoursMax).optional(),
@@ -1120,7 +1116,6 @@ export const UpdateAllowanceSettingsResponse = zod.object({
   "autoApproveTimesheets": zod.boolean().describe('Eingereichte Zeiteinträge automatisch genehmigen.'),
   "timeTrackingEnabled": zod.boolean().describe('Zeiterfassung (IST-Zeiten) aktiv? Konto-global (kein Team-Override); Standard AUS. Bei AUS blocken die Zeiterfassungs-Schreibrouten mit 403 (code time_tracking_disabled), Lesen bleibt erlaubt.'),
   "vacationMethod": zod.enum(['bwavg', 'factor']).describe('Urlaubs-Berechnung — bwavg = §11 BUrlG 13-Wochen-Schnitt, factor = prozentualer Stunden-Faktor.'),
-  "vacationHoursPerDay": zod.number().describe('Stunden je Urlaubstag (Anzeige Tage = Stunden \/ diesem Wert).'),
   "vacationFactor": zod.number().describe('Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor.'),
   "fulltimeWorkdaysPerWeek": zod.number().describe('Referenz-Arbeitstage\/Woche bei Vollzeit (AP 2). \"30 Tage Urlaub\" im Arbeitsvertrag meint immer eine Vollzeitstelle; zusammen mit fulltimeWeeklyHours Basis der anteiligen Urlaubsberechnung.'),
   "fulltimeWeeklyHours": zod.number().describe('Referenz-Wochenstunden bei Vollzeit (AP 2).'),

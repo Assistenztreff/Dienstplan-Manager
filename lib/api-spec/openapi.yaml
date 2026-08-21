@@ -2657,7 +2657,7 @@ components:
           type: integer
         vacationHoursUsed:
           type: number
-          description: Stundengenau verbrauchter Urlaub (Point 7). Pool = vacationDays * vacationHoursPerDay.
+          description: Stundengenau verbrauchter Urlaub (Point 7).
         startDate:
           type: string
           format: date
@@ -3364,7 +3364,6 @@ components:
           autoApproveTimesheets,
           timeTrackingEnabled,
           vacationMethod,
-          vacationHoursPerDay,
           vacationFactor,
           fulltimeWorkdaysPerWeek,
           fulltimeWeeklyHours,
@@ -3419,9 +3418,6 @@ components:
           type: string
           enum: [bwavg, factor]
           description: Urlaubs-Berechnung — bwavg = §11 BUrlG 13-Wochen-Schnitt, factor = prozentualer Stunden-Faktor.
-        vacationHoursPerDay:
-          type: number
-          description: Stunden je Urlaubstag (Anzeige Tage = Stunden / diesem Wert).
         vacationFactor:
           type: number
           description: Urlaubsstunden je Arbeitsstunde bei vacationMethod=factor.
@@ -3521,9 +3517,6 @@ components:
         vacationMethod:
           type: string
           enum: [bwavg, factor]
-        vacationHoursPerDay:
-          type: number
-          minimum: 0.1
         vacationFactor:
           type: number
           minimum: 0
