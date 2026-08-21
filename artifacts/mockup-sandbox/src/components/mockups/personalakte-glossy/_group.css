@@ -1,0 +1,35 @@
+@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+.personalakte-preview {
+  --background: 0 0% 100%;
+  --foreground: 210 90% 19%;
+  --border: 0 0% 90%;
+  --card: 0 0% 98%;
+  --card-foreground: 210 90% 19%;
+  --primary: 66 79% 75%;
+  --primary-foreground: 210 90% 19%;
+  --secondary: 0 0% 96%;
+  --secondary-foreground: 210 90% 19%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 210 15% 40%;
+  --accent: 66 79% 75%;
+  --accent-foreground: 210 90% 19%;
+  --destructive: 0 60% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --input: 0 0% 90%;
+  --ring: 210 90% 19%;
+  --radius: 0.5rem;
+  font-family: "Inter", sans-serif;
+  color: hsl(var(--foreground));
+}
+
+.personalakte-preview h1,
+.personalakte-preview h2,
+.personalakte-preview h3 {
+  font-family: "Rubik", sans-serif;
+}
+
+.personalakte-preview button,
+.personalakte-preview a {
+  -webkit-tap-highlight-color: transparent;
+}
