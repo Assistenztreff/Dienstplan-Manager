@@ -2349,6 +2349,35 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
       : !isPlainFullDay(new Date(effectiveStart), new Date(effectiveEnd))
     : false;
 
+  // Nachträgliche Änderung eines bereits bestätigten Dienstes: Der Dienst
+  // fällt auf ANGEBOTEN zurück und muss von der Assistenzkraft neu bestätigt
+  // werden. Ohne diesen Rückfall wäre eine bestätigte Zeit einseitig änderbar.
+  //
+  // WICHTIG: Der Bearbeiten-Dialog sendet planningStatus IMMER mit, vorbelegt
+  // mit dem alten Wert (shift-dialog.tsx: `planningStatus: isAbsence ? "FIX" :
+  // form.planningStatus`). Ein mitgesendeter, UNVERÄNDERTER Status ist deshalb
+  // keine bewusste Status-Entscheidung und verhindert den Rückfall nicht.
+  // startTime/endTime sind durch zod.coerce.date() bereits Date-Objekte.
+  const zeitGeaendert =
+    (body.data.startTime !== undefined &&
+      body.data.startTime.getTime() !== oldShift.startTime.getTime()) ||
+    (body.data.endTime !== undefined &&
+      body.data.endTime.getTime() !== oldShift.endTime.getTime());
+  const substanzGeaendert =
+    zeitGeaendert ||
+    (body.data.userId !== undefined && body.data.userId !== oldShift.userId) ||
+    (body.data.shiftModelId !== undefined &&
+      body.data.shiftModelId !== oldShift.shiftModelId) ||
+    (body.data.pauseMinutes !== undefined &&
+      body.data.pauseMinutes !== oldShift.pauseMinutes);
+  const faelltZurueck =
+    oldShift.planningStatus === "FIX" &&
+    !isAbsenceType(effectiveType) &&
+    effectiveType !== "team" &&
+    (body.data.planningStatus === undefined ||
+      body.data.planningStatus === oldShift.planningStatus) &&
+    substanzGeaendert;
+
   const updateValues = {
     ...body.data,
     // Wird die Schicht zur Abwesenheit oder zum Team-Eintrag, verliert sie
@@ -2365,6 +2394,7 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
         }
       : {}),
     ...(isAbsenceType(effectiveType) ? { isPartialAbsence } : {}),
+    ...(faelltZurueck ? { planningStatus: "ANGEBOTEN" as const } : {}),
   };
 
   // Team-Einträge ganztägig erzwingen — auch beim Bearbeiten (Typwechsel zu

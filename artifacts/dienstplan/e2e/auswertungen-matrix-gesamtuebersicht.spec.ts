@@ -209,6 +209,21 @@ test("Nachberechnungs-Zeile: nach Abschluss des Vormonats + Aenderung erscheint 
   });
   expect(patchRes.ok(), `Schicht verlängern fehlgeschlagen (${patchRes.status()})`).toBe(true);
 
+  // Die Zeitänderung einer bereits FIX-Schicht lässt den Planungsstatus auf
+  // ANGEBOTEN zurückfallen (Rückbestätigungspflicht) — ungezählte
+  // ANGEBOTEN-Schichten fließen NICHT in die Lohnauswertung ein. Diese
+  // Nachberechnungs-Zeile prüft die Geld-Differenz, nicht den
+  // Rückbestätigungs-Flow, daher hier die erneute (echte) Bestätigung
+  // simulieren — ohne Zeitfelder, damit `substanzGeaendert` false bleibt und
+  // der neue Status direkt übernommen wird.
+  const reconfirmRes = await acc.ctx.patch(`/api/shifts/${wageShiftId}`, {
+    data: { planningStatus: "FIX", force: true },
+  });
+  expect(
+    reconfirmRes.ok(),
+    `Erneute Bestätigung nach Zeitänderung fehlgeschlagen (${reconfirmRes.status()})`,
+  ).toBe(true);
+
   // 3) Matrix des FOLGEMONATS (= aktueller Monat, kein month-prev-Klick):
   //    dort weist die Zeile "Nachberechnung {Vormonat}" die Differenz aus.
   await loginViaUi(page, acc.email, FREE_ACCOUNT_PASSWORD);
