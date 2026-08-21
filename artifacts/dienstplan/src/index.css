@@ -231,6 +231,87 @@
   --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 }
 
+/*
+ * Personalakte: eine zurückhaltende, eigenständige Materialwirkung.
+ * Die Lichtflächen sind rein dekorativ und liegen hinter dem Inhalt; Kontrast
+ * und die semantischen Status-Badges bleiben davon unberührt.
+ */
+.personalakte-glossy {
+  isolation: isolate;
+  position: relative;
+  border: 1px solid rgba(5, 48, 91, 0.14);
+  border-radius: calc(var(--radius) + 8px);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.96) 0%, rgba(249, 252, 253, 0.98) 48%, rgba(235, 241, 139, 0.12) 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.92) inset,
+    0 14px 30px -22px rgba(5, 48, 91, 0.52),
+    0 4px 10px -8px rgba(5, 48, 91, 0.25);
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.personalakte-glossy::before,
+.personalakte-glossy::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  z-index: -1;
+}
+
+.personalakte-glossy::before {
+  inset: 1px 1px auto;
+  height: 36%;
+  border-radius: calc(var(--radius) + 7px) calc(var(--radius) + 7px) 48% 48%;
+  background: linear-gradient(106deg, rgba(255, 255, 255, 0.68) 4%, rgba(212, 240, 240, 0.28) 42%, rgba(255, 255, 255, 0) 76%);
+}
+
+.personalakte-glossy::after {
+  width: 9rem;
+  height: 9rem;
+  right: -4.25rem;
+  top: -4.5rem;
+  border-radius: 999px;
+  background: rgba(63, 184, 204, 0.18);
+  filter: blur(22px);
+}
+
+.personalakte-glossy:hover {
+  transform: translateY(-2px);
+  border-color: rgba(5, 48, 91, 0.24);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 22px 38px -25px rgba(5, 48, 91, 0.62),
+    0 7px 14px -10px rgba(5, 48, 91, 0.3);
+}
+
+.personalakte-glossy__header {
+  position: relative;
+  z-index: 0;
+  border-bottom: 1px solid rgba(5, 48, 91, 0.1);
+  background: linear-gradient(108deg, rgba(255, 255, 255, 0.54), rgba(212, 240, 240, 0.17));
+}
+
+.personalakte-glossy__content,
+.personalakte-glossy__actions {
+  position: relative;
+  z-index: 0;
+}
+
+.personalakte-glossy__actions {
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(5, 48, 91, 0.09);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .personalakte-glossy {
+    transition: none;
+  }
+
+  .personalakte-glossy:hover {
+    transform: none;
+  }
+}
+
 .dark {
   --button-outline: rgba(255,255,255, .10);
   --badge-outline: rgba(255,255,255, .05);

@@ -239,11 +239,11 @@ export function AssistenzkraftListe({ teamId, canManageMembers }: Props) {
                 ref={isHighlighted ? highlightRef : undefined}
                 data-testid={`assistant-card-${user.id}`}
                 data-highlighted={isHighlighted && highlightActive ? "true" : "false"}
-                className={`border-border/50 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow ${
+                className={`personalakte-glossy overflow-hidden flex flex-col ${
                   isHighlighted && highlightActive ? "ring-2 ring-primary ring-offset-2" : ""
                 }`}
               >
-                <div className="px-5 py-4 border-b border-border/40 bg-muted/30 flex items-start justify-between gap-3">
+                <div className="personalakte-glossy__header px-5 py-4 flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h3 className="font-semibold text-base leading-tight">
                       {vorname} {nachname}
@@ -282,7 +282,7 @@ export function AssistenzkraftListe({ teamId, canManageMembers }: Props) {
                   </div>
                 </div>
 
-                <CardContent className="p-5 flex-1 flex flex-col justify-between gap-4">
+                <CardContent className="personalakte-glossy__content p-5 flex-1 flex flex-col justify-between gap-4">
                   {activeContract ? (
                     <div className="space-y-2.5">
                       <div className="flex items-center justify-between text-sm">
@@ -325,7 +325,7 @@ export function AssistenzkraftListe({ teamId, canManageMembers }: Props) {
                     </div>
                   )}
 
-                  <div className="flex justify-end gap-2 flex-wrap">
+                  <div className="personalakte-glossy__actions flex justify-end gap-2 flex-wrap">
                     <Button
                       variant="ghost"
                       size="sm"
