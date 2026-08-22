@@ -29,3 +29,10 @@ Stunden-Bilanz verschwinden, bis sie erneut bestätigt werden.
 Substanzfelder ändert, ohne den Aufrufer zu zwingen `planningStatus`
 mitzusenden — insbesondere Massen-/Bulk-Bearbeitungspfade, die den
 Einzel-PATCH-Endpunkt in einer Schleife wiederverwenden.
+
+**Produktentscheidung (behoben):** `shiftModelId` zählt NICHT mehr als
+Substanzänderung in `faelltZurueck` — nur `startTime`/`endTime`, `userId` und
+`pauseMinutes` lösen noch den Rückfall auf `ANGEBOTEN` aus. Begründung: ein
+reiner Modellwechsel ändert nur Bewertung/Vergütung einer unveränderten Zeit,
+nicht was die Assistenzkraft bestätigt hat. Damit wirft der Massen-
+Modellwechsel bestätigte Dienste nicht mehr aus der Stunden-Bilanz.

@@ -136,4 +136,4 @@
 - [Ad-hoc-Skript-Verbindung zur Prod-DB](scaleway-adhoc-script-connection.md) — einmalige tsx-Skripte gegen Scaleway müssen resolveDatabaseUrl() nutzen, nie DATABASE_URL selbst zusammenbauen (Passwort-Rotation, Override-Kette).
 - [bwavg dropped from single-shift path](vacation-bwavg-single-path-regression.md) — single POST /shifts and bulk-absence duplicate the 13-week-average eligibility check independently; a fix/regression in one doesn't propagate to the other.
 - [Promise-Cache-Race in Promise.all(map)](promise-cache-race-in-map.md) — Lazy Per-Key-Cache muss das Promise sofort synchron cachen, nicht erst nach await, sonst dupliziert paralleles Mapping teure Arbeit.
-- [FIX→ANGEBOTEN-Fallback vs. hours-balance](planning-status-fallback-vs-hours-balance.md) — PATCH auf Substanzfelder eines FIX-Dienstes ohne explizites planningStatus wirft ihn stillschweigend aus der Stunden-Bilanz (nur FIX zählt).
+- [FIX→ANGEBOTEN-Fallback vs. hours-balance](planning-status-fallback-vs-hours-balance.md) — nur Zeit/Nutzer/Pause lösen den Rückfall aus; reiner Modellwechsel (shiftModelId) tut es bewusst nicht mehr (behoben).
