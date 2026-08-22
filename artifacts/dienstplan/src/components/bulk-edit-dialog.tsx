@@ -4,6 +4,7 @@ import { de } from "date-fns/locale";
 import {
   useUpdateShift,
   getListShiftsQueryKey,
+  getGetHoursBalanceQueryKey,
   ApiError,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -272,7 +273,13 @@ export function BulkEditDialog({
       }
 
       setUpdatedIds(updated);
-      await queryClient.invalidateQueries({ queryKey: getListShiftsQueryKey({ month, year }) });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getListShiftsQueryKey({ month, year }) }),
+        // Ohne dies bleibt die Auswertungen-/Stunden-Bilanz-Ansicht auf dem
+        // zwischengespeicherten Stand von vor dem Massen-Modellwechsel stehen
+        // (Modellwechsel ändert die Wertung, aber nicht die Schicht-Liste).
+        queryClient.invalidateQueries({ queryKey: getGetHoursBalanceQueryKey({ month, year }) }),
+      ]);
 
       if (planLimitError) {
         setError(planLimitError);

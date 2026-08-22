@@ -135,7 +135,24 @@ test("Massen-Modellwechsel über die UI hält FIX-Dienste FIX und in der Stunden
   page,
 }) => {
   await loginAsHarnessAdmin(page);
-  await page.goto("/dienstplan");
+
+  // Erst die Auswertungen-Seite laden (echter Dokument-Reload, einmalig zu
+  // Sitzungsbeginn) — das befüllt den React-Query-Cache der hours-balance-
+  // Abfrage mit dem VOR-Modellwechsel-Stand (16 / 16 h). Ohne diesen Schritt
+  // wäre die spätere Rückkehr zur Auswertungen-Seite ein Frisch-Fetch und
+  // könnte eine fehlende Invalidierung nicht aufdecken.
+  await page.goto("/auswertungen");
+  await expect(page.getByRole("heading", { name: "Auswertungen", exact: true })).toBeVisible();
+  const workedCell = page.getByTestId(`matrix-cell-worked-${assistantId}`);
+  await expect(workedCell).toBeVisible({ timeout: 20_000 });
+  await expect(workedCell).toContainText("16 / 16 h");
+
+  // Weiter zum Dienstplan NUR per Client-seitiger Navigation (Header-
+  // Gruppenlink "Planen", führt direkt zu dessen erstem Kind /dienstplan —
+  // kein page.goto). Der React-Query-Cache (inkl. der eben geladenen
+  // hours-balance-Query) bleibt dabei im Speicher erhalten, genau wie bei
+  // einem echten Nutzer, der zwischen den Reitern wechselt.
+  await page.getByTestId("nav-group-planen").click();
   await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible();
   const desktop = page.getByTestId("dienstplan-desktop");
   await expect(desktop).toBeVisible();
@@ -211,4 +228,24 @@ test("Massen-Modellwechsel über die UI hält FIX-Dienste FIX und in der Stunden
   expect(row, "hours-balance-Zeile des Test-Assistenten fehlt").toBeTruthy();
   expect(row!.plannedHours).toBeCloseTo(16, 1);
   expect(row!.valuedHours).toBeGreaterThan(0);
+
+  // Zurück zur Auswertungen-Seite — wieder NUR per Client-seitiger
+  // Navigation (Header-Link "Auswerten", kein page.goto). Das ist die
+  // eigentliche Regressionsprüfung: die hours-balance-Query wurde bereits
+  // oben mit dem VOR-Modellwechsel-Stand (16 / 16 h) in den Cache geladen.
+  // Würde die Massen-Bearbeitung diese Query nicht explizit invalidieren
+  // (wie zuvor der Fall), läge hier weiterhin der veraltete Cache-Wert vor —
+  // unabhängig davon, dass das Backend längst den neuen Wert liefert.
+  await page.getByRole("link", { name: "Auswerten" }).click();
+  await expect(page.getByRole("heading", { name: "Auswertungen", exact: true })).toBeVisible();
+  // Admin sieht immer die Gesamtübersichts-Matrix (der einzige über die UI
+  // erreichbare Ansichts-Modus); die Zeile "worked" ist die Zeile "Geleistete
+  // Stunden (gewertet)" (Format "<valuedHours> / <plannedHours> h"), pro
+  // Assistent eine eigene Spalte — kein Filtern auf den Test-Assistenten nötig.
+  // Geplante (Brutto-)Stunden bleiben 16 h (2 × 8h): die Dienste sind nach
+  // dem reinen Modellwechsel weiterhin FIX und zählen unverändert in die
+  // Bilanz — ohne den #869-Fix wären sie hier verschwunden. Bewertete
+  // Stunden sind jetzt 8 h (16 h × Modell-B-Bewertung 50 %) statt der zuvor
+  // im Cache geladenen 16 h.
+  await expect(workedCell).toContainText("8 / 16 h", { timeout: 20_000 });
 });
