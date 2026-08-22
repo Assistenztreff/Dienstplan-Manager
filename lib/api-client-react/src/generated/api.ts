@@ -29,6 +29,8 @@ import type {
   BulkAbsenceResult,
   BulkConfirmOwnShiftsInput,
   BulkConfirmOwnShiftsResult,
+  BulkConfirmShiftsInput,
+  BulkConfirmShiftsResult,
   BulkDeleteShiftsInput,
   BulkDeleteShiftsResult,
   BulkShiftsInput,
@@ -1765,6 +1767,78 @@ export const useBulkConfirmOwnShifts = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getBulkConfirmOwnShiftsMutationOptions(options));
+    }
+
+export const getBulkConfirmShiftsUrl = () => {
+
+
+
+
+  return `/api/shifts/bulk-confirm`
+}
+
+/**
+ * Setzt alle Dienste mit Planungsstatus ANGEBOTEN im angegebenen Monat innerhalb des Admin-/Teamleiter-Scopes auf FIX (verbindlich bestätigt). Ohne teamId gilt der gesamte zugängliche Team-Scope, mit teamId nur das angegebene (muss im Scope liegen).
+ * @summary Vorgeschlagene Dienste eines Monats en bloc bestätigen (Admin)
+ */
+export const bulkConfirmShifts = async (bulkConfirmShiftsInput: BulkConfirmShiftsInput, options?: RequestInit): Promise<BulkConfirmShiftsResult> => {
+
+  return customFetch<BulkConfirmShiftsResult>(getBulkConfirmShiftsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      bulkConfirmShiftsInput,)
+  }
+);}
+
+
+
+
+export const getBulkConfirmShiftsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkConfirmShifts>>, TError,{data: BodyType<BulkConfirmShiftsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bulkConfirmShifts>>, TError,{data: BodyType<BulkConfirmShiftsInput>}, TContext> => {
+
+const mutationKey = ['bulkConfirmShifts'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkConfirmShifts>>, {data: BodyType<BulkConfirmShiftsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  bulkConfirmShifts(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BulkConfirmShiftsMutationResult = NonNullable<Awaited<ReturnType<typeof bulkConfirmShifts>>>
+    export type BulkConfirmShiftsMutationBody = BodyType<BulkConfirmShiftsInput>
+    export type BulkConfirmShiftsMutationError = ErrorType<void>
+
+    /**
+ * @summary Vorgeschlagene Dienste eines Monats en bloc bestätigen (Admin)
+ */
+export const useBulkConfirmShifts = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkConfirmShifts>>, TError,{data: BodyType<BulkConfirmShiftsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof bulkConfirmShifts>>,
+        TError,
+        {data: BodyType<BulkConfirmShiftsInput>},
+        TContext
+      > => {
+      return useMutation(getBulkConfirmShiftsMutationOptions(options));
     }
 
 export const getGetShiftUrl = (id: number,) => {

@@ -13,7 +13,7 @@
 // Team-gebunden wie alle Domaenendaten (team_id NOT NULL).
 // ---------------------------------------------------------------------------
 
-import { pgTable, serial, integer, real, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, real, timestamp, jsonb, index } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 import { teamsTable } from "./teams";
 
@@ -42,23 +42,27 @@ export type MonthClosingEntry = {
   sickPay?: number | null;
 };
 
-export const monthClosingsTable = pgTable("month_closings", {
-  id: serial("id").primaryKey(),
-  teamId: integer("team_id")
-    .notNull()
-    .references(() => teamsTable.id),
-  // Abgeschlossener Monat (1-12) und Jahr.
-  month: integer("month").notNull(),
-  year: integer("year").notNull(),
-  // Eingefrorene Auswertung: eine Zeile je Assistenzkraft.
-  entries: jsonb("entries").$type<MonthClosingEntry[]>().notNull(),
-  // Beim Abschluss verwendeter Stundenlohn-Parameter (Transparenz/Nachvollzug).
-  hourlyWage: real("hourly_wage"),
-  // Ausfuehrender Admin — SERVERSEITIG aus der Session, nie aus dem Request.
-  closedBy: integer("closed_by")
-    .notNull()
-    .references(() => usersTable.id),
-  closedAt: timestamp("closed_at").notNull().defaultNow(),
-});
+export const monthClosingsTable = pgTable(
+  "month_closings",
+  {
+    id: serial("id").primaryKey(),
+    teamId: integer("team_id")
+      .notNull()
+      .references(() => teamsTable.id),
+    // Abgeschlossener Monat (1-12) und Jahr.
+    month: integer("month").notNull(),
+    year: integer("year").notNull(),
+    // Eingefrorene Auswertung: eine Zeile je Assistenzkraft.
+    entries: jsonb("entries").$type<MonthClosingEntry[]>().notNull(),
+    // Beim Abschluss verwendeter Stundenlohn-Parameter (Transparenz/Nachvollzug).
+    hourlyWage: real("hourly_wage"),
+    // Ausfuehrender Admin — SERVERSEITIG aus der Session, nie aus dem Request.
+    closedBy: integer("closed_by")
+      .notNull()
+      .references(() => usersTable.id),
+    closedAt: timestamp("closed_at").notNull().defaultNow(),
+  },
+  (t) => [index("month_closings_team_year_month_idx").on(t.teamId, t.year, t.month)],
+);
 
 export type MonthClosing = typeof monthClosingsTable.$inferSelect;

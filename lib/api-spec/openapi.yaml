@@ -567,6 +567,34 @@ paths:
         "400":
           description: Ungültiger Request-Body
 
+  /shifts/bulk-confirm:
+    post:
+      operationId: bulkConfirmShifts
+      tags: [shifts]
+      summary: Vorgeschlagene Dienste eines Monats en bloc bestätigen (Admin)
+      description: >-
+        Setzt alle Dienste mit Planungsstatus ANGEBOTEN im angegebenen Monat
+        innerhalb des Admin-/Teamleiter-Scopes auf FIX (verbindlich
+        bestätigt). Ohne teamId gilt der gesamte zugängliche Team-Scope, mit
+        teamId nur das angegebene (muss im Scope liegen).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkConfirmShiftsInput"
+      responses:
+        "200":
+          description: Dienste bestätigt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkConfirmShiftsResult"
+        "400":
+          description: Ungültiger Request-Body
+        "403":
+          description: Kein Zugriff auf das angegebene Team
+
   /shifts/{id}:
     get:
       operationId: getShift
@@ -3126,6 +3154,13 @@ components:
         userId:
           type: integer
           description: Falls gesetzt, werden nur die Dienste dieser Assistenzkraft versendet.
+        userIds:
+          type: array
+          items:
+            type: integer
+          description: >-
+            Falls gesetzt, werden nur die Dienste dieser Assistenzkräfte
+            versendet (mehrere auf einmal). Hat Vorrang vor userId.
 
     SendShiftProposalsResult:
       type: object
@@ -3156,6 +3191,30 @@ components:
           description: Optionaler Team-Scope.
 
     BulkConfirmOwnShiftsResult:
+      type: object
+      required: [confirmed]
+      properties:
+        confirmed:
+          type: integer
+          description: Anzahl auf FIX gesetzter Dienste.
+
+    BulkConfirmShiftsInput:
+      type: object
+      required: [month, year]
+      properties:
+        month:
+          type: integer
+          minimum: 1
+          maximum: 12
+        year:
+          type: integer
+        teamId:
+          type: integer
+          description: >-
+            Optionaler Team-Scope; muss im Admin-/Teamleiter-Scope des
+            Aufrufers liegen. Ohne Angabe gilt der gesamte Scope.
+
+    BulkConfirmShiftsResult:
       type: object
       required: [confirmed]
       properties:

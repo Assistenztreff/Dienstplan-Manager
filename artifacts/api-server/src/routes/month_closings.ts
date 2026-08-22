@@ -22,7 +22,7 @@ import {
   usersTable,
   type MonthClosingEntry,
 } from "@workspace/db";
-import { eq, and, sql, desc, count } from "drizzle-orm";
+import { eq, and, sql, desc, count, gte, lt } from "drizzle-orm";
 import { CreateMonthClosingBody } from "@workspace/api-zod";
 import { requireAdmin } from "../middleware/auth";
 import { requirePlanFeature } from "../lib/plan";
@@ -153,6 +153,9 @@ router.get(
     const closings = await loadClosings(teamId, my.month, my.year);
 
     // Plausibilitätswarnung: offene (unbestätigte) IST-Einträge des Monats im Team.
+    // Sargable Monatsgrenze statt EXTRACT(): ermöglicht Indexnutzung auf actualStart.
+    const pendingMonthStart = new Date(Date.UTC(my.year, my.month - 1, 1));
+    const pendingMonthEnd = new Date(Date.UTC(my.year, my.month, 1));
     const [pending] = await db
       .select({ n: count() })
       .from(timeTrackingTable)
@@ -160,8 +163,8 @@ router.get(
         and(
           eq(timeTrackingTable.teamId, teamId),
           eq(timeTrackingTable.status, "pending"),
-          sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${my.month}`,
-          sql`EXTRACT(YEAR FROM ${timeTrackingTable.actualStart}) = ${my.year}`,
+          gte(timeTrackingTable.actualStart, pendingMonthStart),
+          lt(timeTrackingTable.actualStart, pendingMonthEnd),
         ),
       );
 

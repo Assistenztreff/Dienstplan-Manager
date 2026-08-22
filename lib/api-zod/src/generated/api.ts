@@ -564,7 +564,8 @@ export const SendShiftProposalsBody = zod.object({
   "month": zod.number().min(1).max(sendShiftProposalsBodyMonthMax),
   "year": zod.number(),
   "teamId": zod.number().optional().describe('Team-Scope; fehlt er, werden alle erlaubten Teams einbezogen.'),
-  "userId": zod.number().optional().describe('Falls gesetzt, werden nur die Dienste dieser Assistenzkraft versendet.')
+  "userId": zod.number().optional().describe('Falls gesetzt, werden nur die Dienste dieser Assistenzkraft versendet.'),
+  "userIds": zod.array(zod.number()).optional().describe('Falls gesetzt, werden nur die Dienste dieser Assistenzkräfte versendet (mehrere auf einmal). Hat Vorrang vor userId.')
 })
 
 export const SendShiftProposalsResponse = zod.object({
@@ -589,6 +590,25 @@ export const BulkConfirmOwnShiftsBody = zod.object({
 })
 
 export const BulkConfirmOwnShiftsResponse = zod.object({
+  "confirmed": zod.number().describe('Anzahl auf FIX gesetzter Dienste.')
+})
+
+
+/**
+ * Setzt alle Dienste mit Planungsstatus ANGEBOTEN im angegebenen Monat innerhalb des Admin-/Teamleiter-Scopes auf FIX (verbindlich bestätigt). Ohne teamId gilt der gesamte zugängliche Team-Scope, mit teamId nur das angegebene (muss im Scope liegen).
+ * @summary Vorgeschlagene Dienste eines Monats en bloc bestätigen (Admin)
+ */
+export const bulkConfirmShiftsBodyMonthMax = 12;
+
+
+
+export const BulkConfirmShiftsBody = zod.object({
+  "month": zod.number().min(1).max(bulkConfirmShiftsBodyMonthMax),
+  "year": zod.number(),
+  "teamId": zod.number().optional().describe('Optionaler Team-Scope; muss im Admin-\/Teamleiter-Scope des Aufrufers liegen. Ohne Angabe gilt der gesamte Scope.')
+})
+
+export const BulkConfirmShiftsResponse = zod.object({
   "confirmed": zod.number().describe('Anzahl auf FIX gesetzter Dienste.')
 })
 

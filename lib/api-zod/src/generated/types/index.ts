@@ -27,6 +27,8 @@ export * from './bulkAbsenceInputType';
 export * from './bulkAbsenceResult';
 export * from './bulkConfirmOwnShiftsInput';
 export * from './bulkConfirmOwnShiftsResult';
+export * from './bulkConfirmShiftsInput';
+export * from './bulkConfirmShiftsResult';
 export * from './bulkDeleteShiftsInput';
 export * from './bulkDeleteShiftsResult';
 export * from './bulkShiftsInput';

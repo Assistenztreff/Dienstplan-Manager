@@ -17,4 +17,6 @@ export interface SendShiftProposalsInput {
   teamId?: number;
   /** Falls gesetzt, werden nur die Dienste dieser Assistenzkraft versendet. */
   userId?: number;
+  /** Falls gesetzt, werden nur die Dienste dieser Assistenzkräfte versendet (mehrere auf einmal). Hat Vorrang vor userId. */
+  userIds?: number[];
 }

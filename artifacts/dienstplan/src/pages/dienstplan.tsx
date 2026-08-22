@@ -3141,36 +3141,24 @@ export default function Dienstplan() {
       let totalEmailsSent = 0;
       let anyFailed = false;
       const succeededUserIds = new Set<number>();
-      if (sendScopeUserIds === undefined) {
-        try {
-          const result = await sendProposalsMutation.mutateAsync({
-            data: { month, year, teamId: selectedTeamId ?? undefined, userId: undefined },
-          });
-          totalUpdated += result.updated;
-          totalEmailsSent += result.emailsSent;
-          for (const s of scopedSendableShifts) succeededUserIds.add(s.userId);
-        } catch {
-          anyFailed = true;
-        }
-      } else {
-        // Der Endpunkt kennt nur "eine Person" oder "alle" (kein
-        // Batch-userId-Array). Bei Mehrfachauswahl deshalb EIN Request pro
-        // ausgewählter Person — niemals mit userId=undefined ("alle")
-        // senden, sonst erhielten auch abgewählte Assistenzkräfte einen
-        // Vorschlag. Fehlschläge einzelner Personen brechen die übrigen
-        // Requests nicht ab (Teilerfolg möglich, siehe Toast unten).
-        for (const uid of sendScopeUserIds) {
-          try {
-            const result = await sendProposalsMutation.mutateAsync({
-              data: { month, year, teamId: selectedTeamId ?? undefined, userId: uid },
-            });
-            totalUpdated += result.updated;
-            totalEmailsSent += result.emailsSent;
-            succeededUserIds.add(uid);
-          } catch {
-            anyFailed = true;
-          }
-        }
+      // Bei Mehrfachauswahl EIN Request mit allen ausgewählten Personen
+      // (userIds) statt einem Request pro Person — niemals mit
+      // userId/userIds=undefined ("alle") senden, sonst erhielten auch
+      // abgewählte Assistenzkräfte einen Vorschlag.
+      try {
+        const result = await sendProposalsMutation.mutateAsync({
+          data: {
+            month,
+            year,
+            teamId: selectedTeamId ?? undefined,
+            userIds: sendScopeUserIds === undefined ? undefined : [...sendScopeUserIds],
+          },
+        });
+        totalUpdated += result.updated;
+        totalEmailsSent += result.emailsSent;
+        for (const s of scopedSendableShifts) succeededUserIds.add(s.userId);
+      } catch {
+        anyFailed = true;
       }
       // Sofort reagieren: nur die tatsächlich erfolgreich versendeten
       // Entwürfe im Cache auf "Vorschlag" stellen; der vollständige

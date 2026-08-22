@@ -22,6 +22,7 @@ import {
   BulkDeleteShiftsBody,
   SendShiftProposalsBody,
   BulkConfirmOwnShiftsBody,
+  BulkConfirmShiftsBody,
   GetShiftParams,
   UpdateShiftParams,
   UpdateShiftBody,
@@ -2476,8 +2477,17 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
         await applyVacationDelta(newVacationContract, newVacationHours - oldVacationHours, tx);
       }
 
-      // Kennzahlen nach der Änderung (Zeiten/Typ/Modell) neu berechnen und speichern.
-      await storeShiftMetrics(updated, tx);
+      // Kennzahlen nach der Änderung (Zeiten/Typ/Modell) neu berechnen und
+      // speichern — aber nur, wenn sich ein für die Berechnung relevantes Feld
+      // geändert hat. Reine Status- oder Notiz-Änderungen (Massen-Bestätigung,
+      // Notiz-Edit) ändern weder Stunden noch Zuschläge und sparen sich damit
+      // den teuren Kontext-Reload (Vertrag, Zuschlagssätze, Schichtmodell).
+      const onlyStatusOrNotesChanged = Object.keys(body.data).every(
+        (key) => key === "planningStatus" || key === "notes"
+      );
+      if (!onlyStatusOrNotesChanged) {
+        await storeShiftMetrics(updated, tx);
+      }
 
       const [row] = await tx
         .select(SHIFT_SELECT)
@@ -2684,7 +2694,7 @@ router.post("/shifts/send-proposals", requireAuth, requireAdmin, async (req, res
     res.status(400).json({ error: "Invalid request body" });
     return;
   }
-  const { month, year, teamId, userId } = body.data;
+  const { month, year, teamId, userId, userIds } = body.data;
 
   const allowedTeams = await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!);
 
@@ -2715,7 +2725,9 @@ router.post("/shifts/send-proposals", requireAuth, requireAdmin, async (req, res
     // Keine Abwesenheiten — nur buchbare Arbeitsdienste senden
     // (Abwesenheiten sind serveitig immer FIX und landen nie als Entwurf)
   ] as ReturnType<typeof and>[];
-  if (userId != null) {
+  if (userIds != null && userIds.length > 0) {
+    conditions.push(inArray(shiftsTable.userId, userIds));
+  } else if (userId != null) {
     conditions.push(eq(shiftsTable.userId, userId));
   }
 
@@ -2754,26 +2766,42 @@ router.post("/shifts/send-proposals", requireAuth, requireAdmin, async (req, res
     byUser.set(s.userId, existing);
   }
 
+  // Die Status-Änderung (VORLAEUFIG→ANGEBOTEN) ist bereits gespeichert — das
+  // ist das für die Nutzer sichtbare Ergebnis. Der Mailversand ist reine
+  // Benachrichtigung und muss die Antwort nicht blockieren: die Anfrage
+  // antwortet sofort, die Mails gehen fire-and-forget danach raus (analog zur
+  // Krankmeldungs-Benachrichtigung oben). Da vorab nicht mehr auf den
+  // tatsächlichen Sendeerfolg gewartet wird, meldet die Antwort nur noch die
+  // Anzahl der Empfänger, an die versendet wird — nicht mehr sent/failed.
   const loginUrl = `${getBaseUrl()}/dienstplan`;
-  let emailsSent = 0;
-  let emailsFailed = 0;
+  const recipients = [...byUser.values()];
 
-  for (const { name, email, shifts: userShifts } of byUser.values()) {
-    const sent = await sendProposalEmail(
-      email,
-      name,
-      userShifts.map((s) => ({
-        startTime: new Date(s.startTime),
-        endTime: new Date(s.endTime),
-        type: s.type,
-      })),
-      loginUrl,
+  res.json({ updated: shifts.length, emailsSent: recipients.length, emailsFailed: 0 });
+
+  void (async () => {
+    const results = await Promise.allSettled(
+      recipients.map(({ name, email, shifts: userShifts }) =>
+        sendProposalEmail(
+          email,
+          name,
+          userShifts.map((s) => ({
+            startTime: new Date(s.startTime),
+            endTime: new Date(s.endTime),
+            type: s.type,
+          })),
+          loginUrl,
+        ),
+      ),
     );
-    if (sent) emailsSent++;
-    else emailsFailed++;
-  }
-
-  res.json({ updated: shifts.length, emailsSent, emailsFailed });
+    const failed = results.filter(
+      (r) => r.status === "rejected" || r.value !== true,
+    ).length;
+    if (failed > 0) {
+      console.warn(
+        `Vorschlag-Versand: ${failed}/${recipients.length} E-Mail(s) fehlgeschlagen.`,
+      );
+    }
+  })();
 });
 
 // POST /shifts/bulk-confirm-own — Assistenzkraft bestätigt alle ihre
@@ -2814,5 +2842,57 @@ router.post("/shifts/bulk-confirm-own", requireAuth, async (req, res): Promise<v
 
   res.json({ confirmed: updated.length });
 });
+
+// POST /shifts/bulk-confirm — Admin/Teamleiter bestätigt alle ANGEBOTEN-
+// Dienste eines Monats im eigenen Scope auf einmal (→ FIX). Pendant zu
+// bulk-confirm-own, aber über den Admin-/Teamleiter-Scope statt nur die
+// eigenen Dienste.
+router.post(
+  "/shifts/bulk-confirm",
+  requireAuth,
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const body = BulkConfirmShiftsBody.safeParse(req.body ?? {});
+    if (!body.success) {
+      res.status(400).json({ error: "Invalid request body" });
+      return;
+    }
+    const { month, year, teamId } = body.data;
+
+    const allowedTeams = await getEffectiveAdminTeamIds(req.session.userId!, req.session.role!);
+    let teamScope: number[];
+    if (teamId != null) {
+      if (!allowedTeams.includes(teamId)) {
+        res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
+        return;
+      }
+      teamScope = [teamId];
+    } else {
+      teamScope = allowedTeams;
+    }
+    if (teamScope.length === 0) {
+      res.json({ confirmed: 0 });
+      return;
+    }
+
+    const monthStart = new Date(Date.UTC(year, month - 1, 1));
+    const monthEnd = new Date(Date.UTC(year, month, 1));
+
+    const updated = await db
+      .update(shiftsTable)
+      .set({ planningStatus: "FIX" })
+      .where(
+        and(
+          inArray(shiftsTable.teamId, teamScope),
+          eq(shiftsTable.planningStatus, "ANGEBOTEN"),
+          gte(shiftsTable.startTime, monthStart),
+          lt(shiftsTable.startTime, monthEnd)
+        )
+      )
+      .returning({ id: shiftsTable.id });
+
+    res.json({ confirmed: updated.length });
+  }
+);
 
 export default router;

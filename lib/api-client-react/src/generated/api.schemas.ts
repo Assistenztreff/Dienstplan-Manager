@@ -816,6 +816,8 @@ export interface SendShiftProposalsInput {
   teamId?: number;
   /** Falls gesetzt, werden nur die Dienste dieser Assistenzkraft versendet. */
   userId?: number;
+  /** Falls gesetzt, werden nur die Dienste dieser Assistenzkräfte versendet (mehrere auf einmal). Hat Vorrang vor userId. */
+  userIds?: number[];
 }
 
 export interface SendShiftProposalsResult {
@@ -839,6 +841,22 @@ export interface BulkConfirmOwnShiftsInput {
 }
 
 export interface BulkConfirmOwnShiftsResult {
+  /** Anzahl auf FIX gesetzter Dienste. */
+  confirmed: number;
+}
+
+export interface BulkConfirmShiftsInput {
+  /**
+     * @minimum 1
+     * @maximum 12
+     */
+  month: number;
+  year: number;
+  /** Optionaler Team-Scope; muss im Admin-/Teamleiter-Scope des Aufrufers liegen. Ohne Angabe gilt der gesamte Scope. */
+  teamId?: number;
+}
+
+export interface BulkConfirmShiftsResult {
   /** Anzahl auf FIX gesetzter Dienste. */
   confirmed: number;
 }

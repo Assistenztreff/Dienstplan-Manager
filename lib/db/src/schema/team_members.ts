@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, timestamp, unique, boolean, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, timestamp, unique, boolean, pgEnum, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -56,6 +56,7 @@ export const teamMembersTable = pgTable(
   },
   (t) => ({
     teamUserUnique: unique("team_members_team_id_user_id_unique").on(t.teamId, t.userId),
+    userIdIdx: index("team_members_user_id_idx").on(t.userId),
   }),
 );
 

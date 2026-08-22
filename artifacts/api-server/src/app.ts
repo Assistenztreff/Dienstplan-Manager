@@ -4,15 +4,51 @@ import express, {
   type Response,
   type NextFunction,
 } from "express";
+import compression from "compression";
 import cors from "cors";
-import session from "express-session";
+import session, { type SessionData } from "express-session";
 import ConnectPgSimple from "connect-pg-simple";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { recordPlatformError } from "./lib/platform-errors";
+import { pool as dbPool } from "@workspace/db";
 
 const PgStore = ConnectPgSimple(session);
+
+// touch() aktualisiert bei jedem authentifizierten Request nur die
+// expire-Spalte (Session-Verlaengerung) und ist damit die mit Abstand
+// haeufigste Session-Store-Query. Ein neues Ablaufdatum weicht i.d.R. nur um
+// Sekunden vom bisherigen ab (rollierendes 7-Tage-Cookie) -- ein UPDATE pro
+// Request ist daher unnoetig. Wir drosseln pro sid in-process: ein echtes
+// UPDATE erfolgt nur, wenn seit dem letzten UPDATE mehr als 1h vergangen ist.
+// Bei mehreren API-Instanzen ist das je Instanz unabhaengig (kein Shared
+// State) -- das fuehrt bestenfalls zu etwas haeufigeren, nie zu selteneren
+// UPDATEs, es gibt also kein Korrektheitsrisiko fuer die Session-Lebensdauer.
+const TOUCH_THROTTLE_MS = 60 * 60 * 1000;
+const lastTouchedAt = new Map<string, number>();
+
+class ThrottledPgStore extends PgStore {
+  touch(
+    sid: string,
+    sessionData: SessionData,
+    fn?: (err?: unknown) => void,
+  ): void {
+    const now = Date.now();
+    const last = lastTouchedAt.get(sid);
+    if (last !== undefined && now - last < TOUCH_THROTTLE_MS) {
+      fn?.();
+      return;
+    }
+    lastTouchedAt.set(sid, now);
+    super.touch(sid, sessionData, fn);
+  }
+
+  destroy(sid: string, fn?: (err?: unknown) => void): void {
+    lastTouchedAt.delete(sid);
+    super.destroy(sid, fn);
+  }
+}
 
 // Standalone-Betrieb (First-Party unter dienstplan.assistenztreff.de bzw. der
 // Replit-Deploy-Domain): Das Session-Cookie ist immer SameSite=Lax; in
@@ -57,12 +93,18 @@ app.use(
   }),
 );
 
+// Antworten (v.a. groessere JSON-Listen wie /shifts, /dashboard/summary)
+// gzip-komprimieren; reduziert Uebertragungsgroesse und -zeit spuerbar bei
+// langsamen/mobilen Verbindungen.
+app.use(compression());
+
 app.use(
   session({
-    store: new PgStore({
-      // @workspace/db (frueher importiert) schreibt die via resolveDatabaseUrl
-      // aufgeloeste URL (APP_DATABASE_URL-Override) nach process.env zurueck.
-      conString: process.env.DATABASE_URL,
+    store: new ThrottledPgStore({
+      // Gehaerteter, bereits konfigurierter Pool aus @workspace/db (min:2,
+      // Keepalive, Timeouts, Error-Handler) statt eines eigenen,
+      // unkonfigurierten Zweit-Pools nur fuer den Session-Store.
+      pool: dbPool,
       tableName: "session",
       pruneSessionInterval: 60 * 60,
     }),

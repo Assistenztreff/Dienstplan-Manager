@@ -20,6 +20,7 @@
     "@workspace/entitlements": "workspace:*",
     "@workspace/shift-defaults": "workspace:*",
     "@workspace/test-fixtures": "workspace:*",
+    "compression": "^1.8.1",
     "connect-pg-simple": "^10.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
@@ -31,6 +32,7 @@
     "pino-http": "^10.5.0"
   },
   "devDependencies": {
+    "@types/compression": "^1.8.1",
     "@types/connect-pg-simple": "^7.0.3",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { timeTrackingTable, usersTable, shiftsTable } from "@workspace/db";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, gte, lt } from "drizzle-orm";
 import {
   ListTimeEntriesQueryParams,
   CreateTimeEntryBody,
@@ -112,8 +112,11 @@ router.get("/time-tracking", requireAuth, async (req, res): Promise<void> => {
   if (effectiveUserId) conditions.push(eq(timeTrackingTable.userId, effectiveUserId));
   if (query.data.status) conditions.push(eq(timeTrackingTable.status, query.data.status as "pending" | "confirmed" | "rejected"));
   if (query.data.month && query.data.year) {
-    conditions.push(sql`EXTRACT(MONTH FROM ${timeTrackingTable.actualStart}) = ${query.data.month}`);
-    conditions.push(sql`EXTRACT(YEAR FROM ${timeTrackingTable.actualStart}) = ${query.data.year}`);
+    // Sargable Monatsgrenze statt EXTRACT(): ermöglicht Indexnutzung auf actualStart.
+    const monthStart = new Date(Date.UTC(query.data.year, query.data.month - 1, 1));
+    const monthEnd = new Date(Date.UTC(query.data.year, query.data.month, 1));
+    conditions.push(gte(timeTrackingTable.actualStart, monthStart));
+    conditions.push(lt(timeTrackingTable.actualStart, monthEnd));
   }
 
   const rows = await db

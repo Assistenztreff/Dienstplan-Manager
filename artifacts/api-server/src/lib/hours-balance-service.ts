@@ -50,12 +50,122 @@ export async function computeHoursBalances(
   // Rein team-gescoped: gezählt werden ausschließlich Mitglieder und
   // Schichten/Ist-Zeiten der Teams im aktuellen Scope (Team-Filter bzw. alle
   // erlaubten Teams).
-  const membershipRows = teamScope.length
-    ? await db
-        .select({ userId: teamMembersTable.userId, teamId: teamMembersTable.teamId })
-        .from(teamMembersTable)
-        .where(inArray(teamMembersTable.teamId, teamScope))
-    : [];
+  // Sargable Monatsgrenzen: Date-Objekte für Timestamp-Spalten (start_time,
+  // actual_start), Strings für Date-Spalten (start_date, end_date in contracts).
+  const monthStartDate = new Date(Date.UTC(year, month - 1, 1));
+  const monthEndDate = new Date(Date.UTC(year, month, 1));
+  const monthStart = monthStartDate.toISOString().split("T")[0]!;
+  const monthEnd = new Date(Date.UTC(year, month, 0)).toISOString().split("T")[0]!;
+
+  const overrideSettings = alias(allowanceSettingsTable, "override_settings");
+
+  // Diese fünf Abfragen sind voneinander unabhängig (jede hängt nur von
+  // teamScope/callerUserId/Monatsgrenzen ab, keine von einer anderen
+  // Ergebnismenge) — parallel statt seriell ausführen, statt fünf
+  // Roundtrips nacheinander abzuwarten.
+  const [membershipRows, timeTrackingEnabledTeamIds, teamAllowanceRows, teamMeetingDayRows, ownAllowanceRows] =
+    await Promise.all([
+      // Rein team-gescoped: gezählt werden ausschließlich Mitglieder und
+      // Schichten/Ist-Zeiten der Teams im aktuellen Scope (Team-Filter bzw.
+      // alle erlaubten Teams).
+      teamScope.length
+        ? db
+            .select({ userId: teamMembersTable.userId, teamId: teamMembersTable.teamId })
+            .from(teamMembersTable)
+            .where(inArray(teamMembersTable.teamId, teamScope))
+        : Promise.resolve([]),
+
+      // Konto-Schalter „Zeiterfassung aktivieren" je Team (Eigentümer-Konto,
+      // Standard AUS): Ist die Zeiterfassung des maßgeblichen Teams
+      // deaktiviert, wird die Abrechnungsart effektiv SOLL — die gesamte
+      // Geldrechnung (Grundvergütung + Zuschläge) läuft dann aus den
+      // geplanten FIX-Schichten, da keine IST-Zeiten entstehen können.
+      getTimeTrackingEnabledTeamIds(teamScope),
+
+      // Aktuelle Zuschlags-Prozentsätze: werden erst hier (nicht beim
+      // Speichern der Schicht) angewandt, damit Änderungen rückwirkend
+      // greifen. Fallback-Kette je Team im Scope: TEAM-OVERRIDE (team_id
+      // gesetzt) → Konto-Zeile des Team-EIGENTÜMERS (team_id NULL) →
+      // Defaults. Nie die Prozente eines fremden Kontos.
+      teamScope.length
+        ? db
+            .select({
+              teamId: teamsTable.id,
+              overrideNightPercent: overrideSettings.nightPercent,
+              overrideSundayPercent: overrideSettings.sundayPercent,
+              overrideHolidayPercent: overrideSettings.holidayPercent,
+              overrideNightStart: overrideSettings.nightStart,
+              overrideNightEnd: overrideSettings.nightEnd,
+              overrideState: overrideSettings.state,
+              overrideBillingMethod: overrideSettings.billingMethod,
+              nightPercent: allowanceSettingsTable.nightPercent,
+              sundayPercent: allowanceSettingsTable.sundayPercent,
+              holidayPercent: allowanceSettingsTable.holidayPercent,
+              nightStart: allowanceSettingsTable.nightStart,
+              nightEnd: allowanceSettingsTable.nightEnd,
+              state: allowanceSettingsTable.state,
+              billingMethod: allowanceSettingsTable.billingMethod,
+              // KONTO-GLOBAL (nur Konto-Zeile des Team-Eigentümers, nie
+              // Override): Stundenzahl der Teamsitzungs-Gutschrift je Team-Tag.
+              teamMeetingHours: allowanceSettingsTable.teamMeetingHours,
+              // KONTO-GLOBAL: Pausen von den bezahlten Stunden abziehen.
+              deductPausesEnabled: allowanceSettingsTable.deductPausesEnabled,
+            })
+            .from(teamsTable)
+            // LEFT JOINs: Hat ein Team weder Override noch der Eigentümer
+            // eine Settings-Zeile (lazy angelegt), gelten die Defaults —
+            // NIEMALS die Prozente des anfragenden Admins (sonst
+            // Fremdeinfluss über Konto-Grenzen).
+            .leftJoin(overrideSettings, eq(overrideSettings.teamId, teamsTable.id))
+            .leftJoin(
+              allowanceSettingsTable,
+              and(
+                eq(allowanceSettingsTable.ownerId, teamsTable.ownerId),
+                isNull(allowanceSettingsTable.teamId)
+              )
+            )
+            .where(inArray(teamsTable.id, teamScope))
+        : Promise.resolve([]),
+
+      // Team-Einträge (Teamsitzungen) des Monats je Team: EIN FIX-Eintrag
+      // pro Tag schreibt ALLEN Mitgliedern des Teams die konfigurierten
+      // Stunden gut. Gezählt werden DISTINCT Kalendertage (defensiv gegen
+      // Alt-Duplikate).
+      teamScope.length
+        ? db
+            .select({
+              teamId: shiftsTable.teamId,
+              days: sql<number>`COUNT(DISTINCT DATE(${shiftsTable.startTime}))`.mapWith(Number),
+            })
+            .from(shiftsTable)
+            .where(
+              and(
+                inArray(shiftsTable.teamId, teamScope),
+                eq(shiftsTable.type, "team"),
+                eq(shiftsTable.planningStatus, "FIX"),
+                // Sargable Bereichsprädikat aktiviert den (team_id, start_time)-Index.
+                gte(shiftsTable.startTime, monthStartDate),
+                lt(shiftsTable.startTime, monthEndDate),
+              )
+            )
+            .groupBy(shiftsTable.teamId)
+        : Promise.resolve([]),
+
+      // Fallback/Anzeige-Prozente der Zeile: eigene Einstellungen des
+      // anfragenden Admins (identisch mit dem Team-Eigentümer im Normalfall,
+      // dass ein Admin seine eigenen Teams auswertet); ohne eigene Zeile die
+      // Defaults.
+      db
+        .select()
+        .from(allowanceSettingsTable)
+        .where(
+          and(
+            eq(allowanceSettingsTable.ownerId, callerUserId),
+            isNull(allowanceSettingsTable.teamId)
+          )
+        ),
+    ]);
+
   const teamMemberIds = [...new Set(membershipRows.map((m) => m.userId))];
   // Mitgliedschaften je Nutzer — die Teamsitzungs-Gutschrift gilt für ALLE
   // Mitglieder des Teams eines Team-Eintrags, nicht nur für den zugewiesenen
@@ -66,13 +176,9 @@ export async function computeHoursBalances(
     list.push(m.teamId);
     teamsByUser.set(m.userId, list);
   }
-  // Sargable Monatsgrenzen: Date-Objekte für Timestamp-Spalten (start_time,
-  // actual_start), Strings für Date-Spalten (start_date, end_date in contracts).
-  const monthStartDate = new Date(Date.UTC(year, month - 1, 1));
-  const monthEndDate = new Date(Date.UTC(year, month, 1));
-  const monthStart = monthStartDate.toISOString().split("T")[0]!;
-  const monthEnd = new Date(Date.UTC(year, month, 0)).toISOString().split("T")[0]!;
 
+  // Braucht teamMemberIds (aus membershipRows oben) — kann daher nicht in
+  // dieselbe Promise.all-Gruppe wie die fünf unabhängigen Abfragen.
   const assistants = teamMemberIds.length
     ? await db
         .select()
@@ -86,60 +192,8 @@ export async function computeHoursBalances(
         )
     : [];
 
-  // Konto-Schalter „Zeiterfassung aktivieren" je Team (Eigentümer-Konto,
-  // Standard AUS): Ist die Zeiterfassung des maßgeblichen Teams deaktiviert,
-  // wird die Abrechnungsart effektiv SOLL — die gesamte Geldrechnung
-  // (Grundvergütung + Zuschläge) läuft dann aus den geplanten FIX-Schichten,
-  // da keine IST-Zeiten entstehen können.
-  const timeTrackingEnabledTeams = new Set(
-    await getTimeTrackingEnabledTeamIds(teamScope),
-  );
-
-  // Aktuelle Zuschlags-Prozentsätze: werden erst hier (nicht beim Speichern der
-  // Schicht) angewandt, damit Änderungen rückwirkend greifen. Fallback-Kette
-  // je Team im Scope: TEAM-OVERRIDE (team_id gesetzt) → Konto-Zeile des
-  // Team-EIGENTÜMERS (team_id NULL) → Defaults. Nie die Prozente eines
-  // fremden Kontos.
-  const overrideSettings = alias(allowanceSettingsTable, "override_settings");
-  const teamAllowanceRows = teamScope.length
-    ? await db
-        .select({
-          teamId: teamsTable.id,
-          overrideNightPercent: overrideSettings.nightPercent,
-          overrideSundayPercent: overrideSettings.sundayPercent,
-          overrideHolidayPercent: overrideSettings.holidayPercent,
-          overrideNightStart: overrideSettings.nightStart,
-          overrideNightEnd: overrideSettings.nightEnd,
-          overrideState: overrideSettings.state,
-          overrideBillingMethod: overrideSettings.billingMethod,
-          nightPercent: allowanceSettingsTable.nightPercent,
-          sundayPercent: allowanceSettingsTable.sundayPercent,
-          holidayPercent: allowanceSettingsTable.holidayPercent,
-          nightStart: allowanceSettingsTable.nightStart,
-          nightEnd: allowanceSettingsTable.nightEnd,
-          state: allowanceSettingsTable.state,
-          billingMethod: allowanceSettingsTable.billingMethod,
-          // KONTO-GLOBAL (nur Konto-Zeile des Team-Eigentümers, nie Override):
-          // Stundenzahl der Teamsitzungs-Gutschrift je Team-Tag.
-          teamMeetingHours: allowanceSettingsTable.teamMeetingHours,
-          // KONTO-GLOBAL: Pausen von den bezahlten Stunden abziehen.
-          deductPausesEnabled: allowanceSettingsTable.deductPausesEnabled,
-        })
-        .from(teamsTable)
-        // LEFT JOINs: Hat ein Team weder Override noch der Eigentümer eine
-        // Settings-Zeile (lazy angelegt), gelten die Defaults — NIEMALS die
-        // Prozente des anfragenden Admins (sonst Fremdeinfluss über
-        // Konto-Grenzen).
-        .leftJoin(overrideSettings, eq(overrideSettings.teamId, teamsTable.id))
-        .leftJoin(
-          allowanceSettingsTable,
-          and(
-            eq(allowanceSettingsTable.ownerId, teamsTable.ownerId),
-            isNull(allowanceSettingsTable.teamId)
-          )
-        )
-        .where(inArray(teamsTable.id, teamScope))
-    : [];
+  const timeTrackingEnabledTeams = new Set(timeTrackingEnabledTeamIds);
+  const [ownAllowance] = ownAllowanceRows;
   const allowanceByTeam = new Map(
     teamAllowanceRows.map((r) => [
       r.teamId,
@@ -162,28 +216,7 @@ export async function computeHoursBalances(
     teamAllowanceRows.map((r) => [r.teamId, r.deductPausesEnabled ?? false])
   );
 
-  // Team-Einträge (Teamsitzungen) des Monats je Team: EIN FIX-Eintrag pro Tag
-  // schreibt ALLEN Mitgliedern des Teams die konfigurierten Stunden gut.
-  // Gezählt werden DISTINCT Kalendertage (defensiv gegen Alt-Duplikate).
-  const teamMeetingDayRows = teamScope.length
-    ? await db
-        .select({
-          teamId: shiftsTable.teamId,
-          days: sql<number>`COUNT(DISTINCT DATE(${shiftsTable.startTime}))`.mapWith(Number),
-        })
-        .from(shiftsTable)
-        .where(
-          and(
-            inArray(shiftsTable.teamId, teamScope),
-            eq(shiftsTable.type, "team"),
-            eq(shiftsTable.planningStatus, "FIX"),
-            // Sargable Bereichsprädikat aktiviert den (team_id, start_time)-Index.
-            gte(shiftsTable.startTime, monthStartDate),
-            lt(shiftsTable.startTime, monthEndDate),
-          )
-        )
-        .groupBy(shiftsTable.teamId)
-    : [];
+  // teamMeetingDayRows kommt bereits aus der Promise.all-Gruppe oben.
   const teamMeetingDaysByTeam = new Map(
     teamMeetingDayRows.map((r) => [r.teamId, r.days])
   );
@@ -207,18 +240,8 @@ export async function computeHoursBalances(
       },
     ])
   );
-  // Fallback/Anzeige-Prozente der Zeile: eigene Einstellungen des anfragenden
-  // Admins (identisch mit dem Team-Eigentümer im Normalfall, dass ein Admin
-  // seine eigenen Teams auswertet); ohne eigene Zeile die Defaults.
-  const [ownAllowance] = await db
-    .select()
-    .from(allowanceSettingsTable)
-    .where(
-      and(
-        eq(allowanceSettingsTable.ownerId, callerUserId),
-        isNull(allowanceSettingsTable.teamId)
-      )
-    );
+  // ownAllowance kommt bereits aus der Promise.all-Gruppe oben (Fallback/
+  // Anzeige-Prozente der Zeile: eigene Einstellungen des anfragenden Admins).
   // Ist ein KONKRETES Team angefragt, zeigen die Zeilen-Prozente die für dieses
   // Team tatsächlich angewandte Kette (Override → Eigentümer → Default) — sonst
   // stünde im PDF/der Tabelle z. B. "Sonntag (50%)", obwohl mit dem
@@ -235,14 +258,21 @@ export async function computeHoursBalances(
   // Vertrags-Team — die Urlaubstage-Spalten der Auswertung sind aus der
   // stundengenauen Buchhaltung abgeleitet (vacation_days_used existiert
   // nicht mehr). Cache je Team, um N+1-Lookups zu vermeiden.
-  const vacationOpsByTeam = new Map<number, ResolvedAllowanceOps>();
-  const vacationOpsForTeam = async (teamId: number): Promise<ResolvedAllowanceOps> => {
-    let ops = vacationOpsByTeam.get(teamId);
-    if (!ops) {
-      ops = await resolveAllowanceOps(teamId);
-      vacationOpsByTeam.set(teamId, ops);
+  // Cache speichert das PROMISE selbst (nicht den aufgelösten Wert): die
+  // Assistenzkräfte werden weiter unten parallel verarbeitet
+  // (Promise.all), daher würde ein erst nach dem await gesetzter Cache-Wert
+  // mehrere gleichzeitige Aufrufe für dasselbe Team alle als "Miss" sehen und
+  // dieselbe Abfrage mehrfach auslösen (Race). Das Promise wird SOFORT
+  // (synchron) im Cache abgelegt, sodass spätere Aufrufe für dasselbe Team —
+  // auch während die erste Abfrage noch läuft — dasselbe Promise wiederverwenden.
+  const vacationOpsByTeam = new Map<number, Promise<ResolvedAllowanceOps>>();
+  const vacationOpsForTeam = (teamId: number): Promise<ResolvedAllowanceOps> => {
+    let opsPromise = vacationOpsByTeam.get(teamId);
+    if (!opsPromise) {
+      opsPromise = resolveAllowanceOps(teamId);
+      vacationOpsByTeam.set(teamId, opsPromise);
     }
-    return ops;
+    return opsPromise;
   };
 
   // ── Batch-Reads: ein Query je Datenquelle für alle Assistenzkräfte ─────────

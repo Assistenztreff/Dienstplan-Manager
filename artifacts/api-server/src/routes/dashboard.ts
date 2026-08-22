@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { usersTable, shiftsTable, timeTrackingTable, contractsTable, allowanceSettingsTable, teamMembersTable, teamsTable, shiftModelsTable } from "@workspace/db";
 import { computeShiftMetrics, type GermanState } from "@workspace/db";
-import { eq, and, sql, count, or, isNull, inArray, gte, lt } from "drizzle-orm";
+import { eq, and, sql, count, or, isNull, inArray, gte, lt, asc, desc } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { requireAuth, requireAdmin, requireTeamPlanningOrAdmin, isAdminLikeRole } from "../middleware/auth";
 import { requirePlanFeatureViaTeamOwner, userHasFeatureViaTeamOwner, getLenientTimeTrackingTeamIds } from "../lib/plan";
@@ -204,6 +204,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
         .from(shiftsTable)
         .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
         .where(and(inArray(shiftsTable.teamId, teamScope), sql`${shiftsTable.startTime} >= ${today}`))
+        .orderBy(asc(shiftsTable.startTime))
         .limit(5),
 
       // Horizon-Schichten für Abdeckungs-Warnung
@@ -330,6 +331,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
             .from(timeTrackingTable)
             .leftJoin(usersTable, eq(timeTrackingTable.userId, usersTable.id))
             .where(inArray(timeTrackingTable.teamId, teamScope))
+            .orderBy(desc(timeTrackingTable.createdAt))
             .limit(5)
         : Promise.resolve([] as never[]),
     ]);
@@ -523,6 +525,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     .from(shiftsTable)
     .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
     .where(and(eq(shiftsTable.userId, userId), sql`${shiftsTable.startTime} >= ${today}`))
+    .orderBy(asc(shiftsTable.startTime))
     .limit(5);
 
   const recentTimeEntries = timeTrackingEnabled
@@ -544,6 +547,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
         .from(timeTrackingTable)
         .leftJoin(usersTable, eq(timeTrackingTable.userId, usersTable.id))
         .where(eq(timeTrackingTable.userId, userId))
+        .orderBy(desc(timeTrackingTable.createdAt))
         .limit(5)
     : [];
 
