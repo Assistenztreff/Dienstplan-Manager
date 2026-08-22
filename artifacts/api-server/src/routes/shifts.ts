@@ -2364,11 +2364,17 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
       body.data.startTime.getTime() !== oldShift.startTime.getTime()) ||
     (body.data.endTime !== undefined &&
       body.data.endTime.getTime() !== oldShift.endTime.getTime());
+  // #869: Ein reiner Schichtmodell-Wechsel (z. B. beim Massen-Modellwechsel im
+  // bulk-edit-dialog, der je Schicht nur { type, shiftModelId, force: true }
+  // sendet) ändert weder die tatsächlich gearbeitete Zeit noch die zugewiesene
+  // Person — nur die administrative Einordnung/Bewertung. Das reale Zeit-
+  // Commitment der Assistenzkraft bleibt identisch, eine erneute Bestätigung
+  // ist dafür sachlich nicht nötig. Nur Zeit- oder Nutzer-Änderungen (die das
+  // tatsächliche "wann"/"wer" verschieben) lösen den Rückfall auf ANGEBOTEN
+  // aus; ein alleiniger shiftModelId-Wechsel tut es nicht mehr.
   const substanzGeaendert =
     zeitGeaendert ||
     (body.data.userId !== undefined && body.data.userId !== oldShift.userId) ||
-    (body.data.shiftModelId !== undefined &&
-      body.data.shiftModelId !== oldShift.shiftModelId) ||
     (body.data.pauseMinutes !== undefined &&
       body.data.pauseMinutes !== oldShift.pauseMinutes);
   const faelltZurueck =
