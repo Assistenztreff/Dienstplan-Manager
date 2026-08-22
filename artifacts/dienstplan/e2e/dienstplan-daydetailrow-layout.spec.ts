@@ -7,10 +7,10 @@ import {
 } from "./helpers/teams";
 
 /**
- * DayDetailRow-Aufbau (Task #850/852): Avatar links, Uhrzeit neben dem Namen,
- * Statusfarbbalken rechts — gegen stille Regressionen absichern.
+ * DayDetailRow-Aufbau (Task #850/852/853/854): Avatar links, Uhrzeit neben
+ * dem Namen, Statusfarbbalken rechts — gegen stille Regressionen absichern.
  *
- * Für drei Eintrags-Typen wird geprüft:
+ * Für vier Eintrags-Typen wird geprüft:
  *  1. Avatar-Kreis (erstes span[aria-hidden], Hintergrundfarbe gesetzt,
  *     linke Kante liegt links von Uhrzeit und Statusblock — Bounding-Box-Check)
  *  2. Uhrzeit/Tageslabel im linken Bereich: linke Kante liegt LINKS des
@@ -18,15 +18,26 @@ import {
  *  3. Rechter 4-px-Statusfarbbalken: rechte Kante bündig mit der Zeilen-
  *     rechten Kante (≤4 px Toleranz), Breite ≈ 4 px, erwartete Farbe
  *  4. Statustext sichtbar ("Dienst · bestätigt", "Dienst · Entwurf",
- *     "Abwesenheit · Urlaub")
+ *     "Abwesenheit · Urlaub", "Dienst · Vertretung · bestätigt")
  *
- * Aufbau: Desktop-Viewport (1280×800), Monatsansicht, Tagesdetail-Panel auf
- * Zeitraum "Dieser Monat" gestellt, damit alle drei Schichten ohne
- * Tageszellen-Klick sichtbar sind.
+ * Task #853 ergänzt den vierten Fall — Vertretungsdienst (isVertretung):
+ * teal Statusfarbbalken (#0f6e8c), Statustext enthält "Vertretung", Avatar
+ * bleibt die Personenfarbe (dienstStatusColor/-Label haben Vorrang vor dem
+ * Basis-Status, der Avatar ist davon aber unabhängig — isTeam-Check).
+ *
+ * Task #854 lässt exakt dieselben vier Prüfungen zusätzlich bei 800 px
+ * Breite (schmales Tablet, oberhalb des md-Breakpoints) laufen — die
+ * Desktop-Monatsansicht mit dem "comfortable"-Padding darf dort weder
+ * überlaufen noch die Geometrie-Invarianten verletzen.
+ *
+ * Aufbau: Desktop-Viewport, Monatsansicht, Tagesdetail-Panel auf Zeitraum
+ * "Dieser Monat" gestellt, damit alle Schichten ohne Tageszellen-Klick
+ * sichtbar sind.
  *
  * Farb-Mapping (dienstStatusColor):
  *   FIX        → #1e8f4e → rgb(30, 143, 78)
  *   VORLAEUFIG → #b5790a → rgb(181, 121, 10)
+ *   Vertretung → #0f6e8c → rgb(15, 110, 140)
  */
 
 const now = new Date();
@@ -51,6 +62,8 @@ let fixShiftId: number;
 let draftShiftId: number;
 /** Abwesenheit — Urlaub (vacation, FIX). */
 let absenceShiftId: number;
+/** Vertretungsdienst (Aushilfe im Fremdteam, isVertretung=true, FIX). */
+let vertretungShiftId: number;
 
 test.beforeAll(async () => {
   // Konto-Registrierung + Shift-Aufbau können den Default-Timeout sprengen.
@@ -85,10 +98,33 @@ test.beforeAll(async () => {
     return ((await res.json()) as { id: number }).id;
   }
 
-  // Drei verschiedene Tage: keine Überschneidungen, kein Absenz-löscht-Dienst-Problem.
+  // Vier verschiedene Tage: keine Überschneidungen, kein Absenz-löscht-Dienst-Problem.
   fixShiftId = await createShift(10, "active"); // FIX (server-default)
   draftShiftId = await createShift(11, "active", "VORLAEUFIG");
-  absenceShiftId = await createShift(12, "vacation"); // Abwesenheit, FIX
+
+  // Abwesenheit — Urlaub, FIX. Muss der ganztägigen 00:00–23:59-UTC-Konvention
+  // folgen (isPlainFullDayIso, #862 Halbtägiger Urlaub), sonst zeigt die
+  // Tagesleiste seit #862 korrekt eine echte Zeitspanne statt "ganztägig".
+  const absenceRes = await acc.ctx.post("/api/shifts", {
+    data: {
+      userId: assistantId,
+      startTime: `${YEAR}-${MONTH}-12T00:00:00.000Z`,
+      endTime: `${YEAR}-${MONTH}-12T23:59:00.000Z`,
+      type: "vacation",
+    },
+  });
+  expect(absenceRes.status(), "POST /api/shifts Tag 12 (Abwesenheit)").toBe(201);
+  absenceShiftId = ((await absenceRes.json()) as { id: number }).id;
+
+  // Vertretungsdienst (#853): isVertretung=true, sonst wie ein normaler
+  // FIX-Arbeitsdienst — direkt über den API-Body gesetzt (kein eigener
+  // Aushilfe-/Einsatzteam-Aufbau nötig, dienstStatusColor/-Label reagieren
+  // allein auf das Flag).
+  const vertretungRes = await acc.ctx.post("/api/shifts", {
+    data: { userId: assistantId, ...shiftTimes(13), type: "active", isVertretung: true },
+  });
+  expect(vertretungRes.status(), "POST /api/shifts Tag 13 (Vertretung)").toBe(201);
+  vertretungShiftId = ((await vertretungRes.json()) as { id: number }).id;
 });
 
 test.afterAll(async () => {
@@ -200,12 +236,19 @@ async function assertDayDetailRowLayout(
   await expect(row).toContainText(opts.expectedStatusText);
 }
 
-test(
-  "DayDetailRow: Avatar links, Uhrzeit links, Statusfarbbalken rechts, Statustext",
-  async ({ page }) => {
+/**
+ * Führt alle DayDetailRow-Geometrie-/Farb-/Textprüfungen für die vier
+ * Eintrags-Typen bei der übergebenen Viewport-Größe aus (#854: dieselben
+ * Prüfungen müssen auch bei schmaler Tablet-Breite halten, nicht nur bei
+ * voller Desktop-Breite).
+ */
+async function runDayDetailRowChecks(
+  page: import("@playwright/test").Page,
+  viewport: { width: number; height: number },
+): Promise<void> {
     // Desktop-Viewport: day-detail-panel ist nur in der Desktop-Monatsansicht
     // sichtbar (data-testid="dienstplan-desktop", hidden md:flex).
-    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.setViewportSize(viewport);
     await loginViaUi(page, acc.email, PASSWORD);
     await page.goto("/dienstplan");
     await expect(
@@ -274,5 +317,63 @@ test(
     await expect(
       panel.getByTestId(`day-detail-shift-${absenceShiftId}`),
     ).toHaveAttribute("data-planning-status", "FIX");
+
+    // ── Vertretungsdienst (isVertretung, FIX) ───────────────────────────────
+    // Teal-Statusfarbbalken + "Vertretung" im Statustext (Vorrang vor dem
+    // Basis-Status "bestätigt", der als eingefärbtes Wort danach folgt).
+    await assertDayDetailRowLayout(
+      panel.getByTestId(`day-detail-shift-${vertretungShiftId}`),
+      {
+        // Vertretung → teal (#0f6e8c = rgb(15, 110, 140))
+        expectedBarColor: "rgb(15, 110, 140)",
+        expectedStatusText: /Dienst\s*·\s*Vertretung\s*·\s*bestätigt/i,
+        timeLabel: /\d{2}:\d{2}/,
+      },
+    );
+    await expect(
+      panel.getByTestId(`day-detail-shift-${vertretungShiftId}`),
+    ).toHaveAttribute("data-planning-status", "FIX");
+
+    // Avatar bleibt die Personenfarbe, NICHT die teal Vertretungsfarbe: exakt
+    // dieselbe Hintergrundfarbe wie beim FIX-Dienst desselben Assistenten,
+    // und explizit ungleich dem Statusbalken-Teal.
+    const fixAvatar = panel
+      .getByTestId(`day-detail-shift-${fixShiftId}`)
+      .locator('span[aria-hidden="true"]')
+      .first();
+    const vertretungAvatar = panel
+      .getByTestId(`day-detail-shift-${vertretungShiftId}`)
+      .locator('span[aria-hidden="true"]')
+      .first();
+    const fixAvatarBg = await fixAvatar.evaluate(
+      (el) => window.getComputedStyle(el).backgroundColor,
+    );
+    const vertretungAvatarBg = await vertretungAvatar.evaluate(
+      (el) => window.getComputedStyle(el).backgroundColor,
+    );
+    expect(
+      vertretungAvatarBg,
+      "Avatar des Vertretungsdienstes muss dieselbe Personenfarbe wie der FIX-Dienst behalten",
+    ).toBe(fixAvatarBg);
+    expect(
+      vertretungAvatarBg,
+      "Avatar darf NICHT die teal Vertretungsfarbe des Statusbalkens übernehmen",
+    ).not.toBe("rgb(15, 110, 140)");
+}
+
+test(
+  "DayDetailRow: Avatar links, Uhrzeit links, Statusfarbbalken rechts, Statustext (Desktop 1280px)",
+  async ({ page }) => {
+    await runDayDetailRowChecks(page, { width: 1280, height: 800 });
+  },
+);
+
+test(
+  "DayDetailRow: dieselbe Geometrie/Farben/Texte halten auch bei schmaler Tablet-Breite (800px, #854)",
+  async ({ page }) => {
+    // 800 px liegt oberhalb des md-Breakpoints (Desktop-Zweig bleibt aktiv),
+    // ist aber deutlich schmaler als die volle Desktop-Breite — Kandidat für
+    // Overflow/Umbruch im rechten Statusblock (max-w-[160px] + Icon-Stack).
+    await runDayDetailRowChecks(page, { width: 800, height: 1000 });
   },
 );

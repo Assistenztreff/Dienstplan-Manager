@@ -137,3 +137,5 @@
 - [bwavg dropped from single-shift path](vacation-bwavg-single-path-regression.md) — single POST /shifts and bulk-absence duplicate the 13-week-average eligibility check independently; a fix/regression in one doesn't propagate to the other.
 - [Promise-Cache-Race in Promise.all(map)](promise-cache-race-in-map.md) — Lazy Per-Key-Cache muss das Promise sofort synchron cachen, nicht erst nach await, sonst dupliziert paralleles Mapping teure Arbeit.
 - [FIX→ANGEBOTEN-Fallback vs. hours-balance](planning-status-fallback-vs-hours-balance.md) — nur Zeit/Nutzer/Pause lösen den Rückfall aus; reiner Modellwechsel (shiftModelId) tut es bewusst nicht mehr (behoben).
+- [shift-badge testid 3x im DOM](e2e-shift-badge-triple-dom.md) — Desktop-Pille + persistente Wochenlisten mobil/desktop teilen dieselbe testid; Locator immer auf den Desktop-Container scopen (Strict Mode).
+- [Abwesenheits-Fixtures & Ganztags-Konvention](vacation-fixture-fullday-convention.md) — seit #862 zeigt nur exakt 00:00–23:59 UTC "ganztägig"; ältere Fixtures mit z.B. 08:00–16:00 brechen die "ganztägig"-Assertion.
