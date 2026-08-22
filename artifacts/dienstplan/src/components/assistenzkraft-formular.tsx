@@ -14,7 +14,7 @@ import {
 import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
 import { hasAccess } from "@/lib/entitlements";
-import { readableApiError, planUpgradeMessage, planFeatureMessage } from "@/lib/api-error";
+import { readableApiError, planUpgradeMessage, planFeatureMessage, ownerSessionMessage } from "@/lib/api-error";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -150,6 +150,7 @@ export function InviteDialog({ open, onClose, userId, userName }: InviteDialogPr
     } catch (err) {
       setError(
         planFeatureMessage(err) ??
+          ownerSessionMessage(err) ??
           readableApiError(err, "Einladungslink konnte nicht generiert werden."),
       );
     } finally {
@@ -486,7 +487,9 @@ export function AssistentDialog({ open, onClose, editUser, editContract, teamId 
         setPlanError(planMsg);
       } else {
         setErrors({
-          email: readableApiError(err, "Speichern fehlgeschlagen. Bitte pruefen und erneut versuchen."),
+          email:
+            ownerSessionMessage(err) ??
+            readableApiError(err, "Speichern fehlgeschlagen. Bitte pruefen und erneut versuchen."),
         });
       }
     } finally {
@@ -506,7 +509,8 @@ export function AssistentDialog({ open, onClose, editUser, editContract, teamId 
       onClose();
     } catch (err) {
       setDeleteError(
-        readableApiError(err, "Loeschen fehlgeschlagen. Bitte erneut versuchen."),
+        ownerSessionMessage(err) ??
+          readableApiError(err, "Loeschen fehlgeschlagen. Bitte erneut versuchen."),
       );
     } finally {
       setDeleting(false);

@@ -13,7 +13,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/auth";
 import { isWithinLimit, getLimit, hasAccess } from "@/lib/entitlements";
-import { readableApiError, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
+import { readableApiError, ownerSessionMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -121,7 +121,10 @@ export function AssistenzkraftListe({ teamId, canManageMembers }: Props) {
       toast.success("Assistenzkraft aus dem Team entfernt.");
     } catch (err) {
       if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
-      toast.error(readableApiError(err, "Entfernen fehlgeschlagen. Bitte erneut versuchen."));
+      toast.error(
+        ownerSessionMessage(err) ??
+          readableApiError(err, "Entfernen fehlgeschlagen. Bitte erneut versuchen."),
+      );
     } finally {
       setMemberBusy(false);
     }
