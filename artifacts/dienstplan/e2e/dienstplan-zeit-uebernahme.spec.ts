@@ -174,11 +174,13 @@ test.afterAll(async () => {
     }
   };
   try {
-    const teRes = await adminCtx.get(`/api/time-tracking?userId=${assistant.id}`);
+    // all=true: Aufräumen muss ALLE Monate treffen, nicht nur den
+    // serverseitigen Default-Zeitraum (aktueller Kalendermonat).
+    const teRes = await adminCtx.get(`/api/time-tracking?userId=${assistant.id}&all=true`);
     if (teRes.ok()) {
       for (const e of (await teRes.json()) as Entity[]) await tryDelete(`/api/time-tracking/${e.id}`);
     }
-    const shRes = await adminCtx.get(`/api/shifts?userId=${assistant.id}`);
+    const shRes = await adminCtx.get(`/api/shifts?userId=${assistant.id}&all=true`);
     if (shRes.ok()) {
       for (const s of (await shRes.json()) as Entity[]) await tryDelete(`/api/shifts/${s.id}`);
     }

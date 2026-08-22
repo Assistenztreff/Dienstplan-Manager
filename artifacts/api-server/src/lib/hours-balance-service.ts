@@ -281,10 +281,19 @@ export async function computeHoursBalances(
   // statt quadratisch mit der Teamgröße.
   const assistantIds = assistants.map((a) => a.id);
 
-  // Batch-Schichten: alle FIX-Schichten aller Assistenzkräfte in einem Query.
-  // Sargable Bereichsprädikat aktiviert den (user_id, start_time)-Index.
-  const allShifts = assistantIds.length && teamScope.length
-    ? await db
+  // Die drei Batch-Reads sind voneinander unabhängig (unterschiedliche
+  // Tabellen, keine der drei Abfragen nutzt das Ergebnis einer anderen) —
+  // parallel statt seriell abfragen. Der Helper hält den Element-Typ des
+  // leeren Skip-Falls exakt am Typ der jeweiligen Query fest (ein direktes
+  // `Promise.resolve([])` im Ternary wird sonst zu `never[]` verengt).
+  const orEmpty = async <T,>(cond: boolean, run: () => Promise<T[]>): Promise<T[]> =>
+    cond ? run() : [];
+
+  const [allShifts, allTimeEntries, allContractsRaw] = await Promise.all([
+    // Batch-Schichten: alle FIX-Schichten aller Assistenzkräfte in einem Query.
+    // Sargable Bereichsprädikat aktiviert den (user_id, start_time)-Index.
+    orEmpty(!!(assistantIds.length && teamScope.length), () =>
+      db
         .select({
           userId: shiftsTable.userId,
           type: shiftsTable.type,
@@ -314,18 +323,12 @@ export async function computeHoursBalances(
             lt(shiftsTable.startTime, monthEndDate),
           )
         )
-    : [];
-  const shiftsByUser = new Map<number, typeof allShifts>();
-  for (const s of allShifts) {
-    const list = shiftsByUser.get(s.userId) ?? [];
-    list.push(s);
-    shiftsByUser.set(s.userId, list);
-  }
+    ),
 
-  // Batch-Zeiteinträge: alle bestätigten Einträge aller Assistenzkräfte in einem Query.
-  // Sargable Bereichsprädikat aktiviert den (team_id, actual_start)-Index.
-  const allTimeEntries = assistantIds.length && teamScope.length
-    ? await db
+    // Batch-Zeiteinträge: alle bestätigten Einträge aller Assistenzkräfte in einem Query.
+    // Sargable Bereichsprädikat aktiviert den (team_id, actual_start)-Index.
+    orEmpty(!!(assistantIds.length && teamScope.length), () =>
+      db
         .select({
           userId: timeTrackingTable.userId,
           actualHours: timeTrackingTable.actualHours,
@@ -350,18 +353,12 @@ export async function computeHoursBalances(
             eq(timeTrackingTable.status, "confirmed"),
           )
         )
-    : [];
-  const timeEntriesByUser = new Map<number, typeof allTimeEntries>();
-  for (const e of allTimeEntries) {
-    const list = timeEntriesByUser.get(e.userId) ?? [];
-    list.push(e);
-    timeEntriesByUser.set(e.userId, list);
-  }
+    ),
 
-  // Batch-Verträge: ein Query für alle Assistenzkräfte statt N contractForMonth()-Aufrufe.
-  // Gleiche Prioritäts-Logik: Scope-Verträge bevorzugen, dann neuester Beginn.
-  const allContractsRaw = assistantIds.length
-    ? await db
+    // Batch-Verträge: ein Query für alle Assistenzkräfte statt N contractForMonth()-Aufrufe.
+    // Gleiche Prioritäts-Logik: Scope-Verträge bevorzugen, dann neuester Beginn.
+    orEmpty(!!assistantIds.length, () =>
+      db
         .select()
         .from(contractsTable)
         .where(
@@ -374,7 +371,20 @@ export async function computeHoursBalances(
             )
           )
         )
-    : [];
+    ),
+  ]);
+  const shiftsByUser = new Map<number, typeof allShifts>();
+  for (const s of allShifts) {
+    const list = shiftsByUser.get(s.userId) ?? [];
+    list.push(s);
+    shiftsByUser.set(s.userId, list);
+  }
+  const timeEntriesByUser = new Map<number, typeof allTimeEntries>();
+  for (const e of allTimeEntries) {
+    const list = timeEntriesByUser.get(e.userId) ?? [];
+    list.push(e);
+    timeEntriesByUser.set(e.userId, list);
+  }
   const contractByUser = new Map<number, (typeof allContractsRaw)[number]>();
   {
     const scopeSet = new Set(teamScope);

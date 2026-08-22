@@ -368,6 +368,15 @@ paths:
           description: Optionaler Team-Kontext für die Datentrennung.
           schema:
             type: integer
+        - name: all
+          in: query
+          description: >-
+            Explizit die gesamte Historie ohne Zeitraum-Default anfordern
+            (z. B. Team-Übersichten oder Exporte, die bewusst nicht nach Monat
+            filtern). Ohne month/year UND ohne all=true liefert die Route nur
+            den aktuellen Kalendermonat; bei year ohne month das ganze Jahr.
+          schema:
+            type: boolean
       responses:
         "200":
           description: Liste der Schichten
@@ -1217,6 +1226,14 @@ paths:
           description: Optionaler Team-Kontext für die Datentrennung.
           schema:
             type: integer
+        - name: all
+          in: query
+          description: >-
+            Explizit die gesamte Historie ohne Zeitraum-Default anfordern.
+            Ohne month/year UND ohne all=true liefert die Route nur den
+            aktuellen Kalendermonat; bei year ohne month das ganze Jahr.
+          schema:
+            type: boolean
       responses:
         "200":
           description: Liste der Zeiteinträge
@@ -1613,6 +1630,38 @@ paths:
           description: Premium-Tarif erforderlich (Feature absenceTracking)
         "404":
           description: Nicht gefunden
+
+  /vacation-balances:
+    get:
+      operationId: listVacationBalances
+      tags: [contracts]
+      summary: Urlaubskontigente mehrerer Verträge in einem Request abrufen
+      description: >-
+        Batch-Variante von GET /contracts/{id}/vacation-balance — ersetzt N
+        Einzelaufrufe (z. B. einen pro Assistenzkraft in der
+        Abwesenheiten-Übersicht) durch einen Request. Premium-Feature
+        absenceTracking. Admins sehen alle Verträge im eigenen Team-Scope
+        (optional auf ein Team eingeschränkt via teamId); Assistenten sehen
+        NUR den eigenen Vertrag.
+      parameters:
+        - name: teamId
+          in: query
+          description: Optional auf ein einzelnes Team einschränken.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Urlaubskontigente
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VacationBalance"
+        "403":
+          description: Premium-Tarif erforderlich (Feature absenceTracking)
+        "404":
+          description: Unbekanntes oder nicht erlaubtes Team
 
   /dashboard/summary:
     get:

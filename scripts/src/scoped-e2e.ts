@@ -165,6 +165,10 @@ async function runLane(lane: ValidationLane): Promise<boolean> {
 }
 
 function describePlan(plan: ValidationPlan): string {
+  const head =
+    plan.serialHead.length > 0
+      ? `  Zuerst seriell:\n${plan.serialHead.map((c) => `    - ${c}`).join("\n")}\n`
+      : "";
   const lanes = plan.parallelLanes
     .map(
       (l) =>
@@ -175,7 +179,7 @@ function describePlan(plan: ValidationPlan): string {
     plan.serialTail.length > 0
       ? `\n  Danach seriell:\n${plan.serialTail.map((c) => `    - ${c}`).join("\n")}`
       : "";
-  return `${lanes}${tail}`;
+  return `${head}${lanes}${tail}`;
 }
 
 async function main(): Promise<void> {
@@ -197,6 +201,7 @@ async function main(): Promise<void> {
   const allowParallel = process.env.E2E_PARALLEL !== "0";
   const plan = planForCategory(scope.category, baseSuffix, allowParallel);
   const totalCommands =
+    plan.serialHead.length +
     plan.parallelLanes.reduce((n, l) => n + l.commands.length, 0) +
     plan.serialTail.length;
 
@@ -215,6 +220,10 @@ async function main(): Promise<void> {
 
   const startedAt = Date.now();
   log(`Geplanter Ablauf (${plan.parallelLanes.length} parallele Lane(s)):\n${describePlan(plan)}`);
+  for (const cmd of plan.serialHead) {
+    const ok = await runLane({ name: "head", commands: [cmd] });
+    if (!ok) process.exit(1);
+  }
   const results = await Promise.all(plan.parallelLanes.map((l) => runLane(l)));
   const failedLanes = plan.parallelLanes
     .filter((_, i) => !results[i])

@@ -410,7 +410,8 @@ export const ListShiftsQueryParams = zod.object({
   "month": zod.coerce.number().optional(),
   "year": zod.coerce.number().optional(),
   "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team', 'kind_krank', 'freistellung', 'abgesagt_ag', 'abgesagt_an', 'urlaubsabgeltung']).optional(),
-  "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext für die Datentrennung.')
+  "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext für die Datentrennung.'),
+  "all": zod.coerce.boolean().optional().describe('Explizit die gesamte Historie ohne Zeitraum-Default anfordern (z. B. Team-Übersichten oder Exporte, die bewusst nicht nach Monat filtern). Ohne month\/year UND ohne all=true liefert die Route nur den aktuellen Kalendermonat; bei year ohne month das ganze Jahr.')
 })
 
 export const ListShiftsResponseItem = zod.object({
@@ -1251,7 +1252,8 @@ export const ListTimeEntriesQueryParams = zod.object({
   "month": zod.coerce.number().optional(),
   "year": zod.coerce.number().optional(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']).optional(),
-  "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext für die Datentrennung.')
+  "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext für die Datentrennung.'),
+  "all": zod.coerce.boolean().optional().describe('Explizit die gesamte Historie ohne Zeitraum-Default anfordern. Ohne month\/year UND ohne all=true liefert die Route nur den aktuellen Kalendermonat; bei year ohne month das ganze Jahr.')
 })
 
 export const ListTimeEntriesResponseItem = zod.object({
@@ -1656,6 +1658,41 @@ export const GetVacationBalanceResponse = zod.object({
   "vacationForecastHours": zod.number().optional().describe('Prognostizierter Jahresanspruch auf Basis des 13-Wochen-Schnitts der bestätigten Ist-Stunden (§ 11 BUrlG).'),
   "avgWeeklyHours": zod.number().nullish().describe('Ø Wochenstunden der letzten 13 Wochen aus bestätigten Ist-Zeiten; null ohne ausreichende Historie.')
 })
+
+
+/**
+ * Batch-Variante von GET /contracts/{id}/vacation-balance — ersetzt N Einzelaufrufe (z. B. einen pro Assistenzkraft in der Abwesenheiten-Übersicht) durch einen Request. Premium-Feature absenceTracking. Admins sehen alle Verträge im eigenen Team-Scope (optional auf ein Team eingeschränkt via teamId); Assistenten sehen NUR den eigenen Vertrag.
+ * @summary Urlaubskontigente mehrerer Verträge in einem Request abrufen
+ */
+export const ListVacationBalancesQueryParams = zod.object({
+  "teamId": zod.coerce.number().optional().describe('Optional auf ein einzelnes Team einschränken.')
+})
+
+export const ListVacationBalancesResponseItem = zod.object({
+  "contractId": zod.number(),
+  "userId": zod.number(),
+  "vacationDays": zod.number().describe('Anspruch in Tagen (vacationHoursTotal \/ hoursPerDay, gerundet).'),
+  "vacationDaysUsed": zod.number().describe('Verbrauchte Tage (vacationHoursUsed \/ hoursPerDay, gerundet, Anzeige).'),
+  "vacationDaysRemaining": zod.number(),
+  "vacationHoursTotal": zod.number().describe('Gesamt-Urlaubsanspruch in Stunden (vacationDays \* hoursPerDay).'),
+  "vacationHoursUsed": zod.number().describe('Stundengenau verbrauchter Urlaub.'),
+  "vacationHoursRemaining": zod.number(),
+  "hoursPerDay": zod.number().describe('Umrechnungsfaktor Stunden je Tag (Standard 8).'),
+  "method": zod.enum(['bwavg', 'factor']),
+  "restDaysEarned": zod.number().optional().describe('Ersatzruhetage (§ 11 Abs. 3 ArbZG): Anzahl Feiertage mit bestaetigter Arbeit.'),
+  "restDaysRedeemed": zod.number().optional().describe('Eingeloeste Ersatzruhetage (Anzahl Freizeitausgleich-Tage).'),
+  "restDaysBalance": zod.number().optional().describe('Verbleibendes Ersatzruhetag-Guthaben (verdient − eingeloest).'),
+  "ersatzruhetagEnabled": zod.boolean().optional().describe('Ist das Ersatzruhetag-Konto für dieses Team aktiv? Bei false wird keine Feiertagsarbeit gutgeschrieben (restDaysEarned = 0).'),
+  "dailyHoursSource": zod.enum(['bwavg', 'contract', 'default']).optional().describe('Quelle der Tages-Stunden-Bewertung eines ganztägigen Urlaubstags zum heutigen Stichtag: 13-Wochen-Schnitt (bwavg), Vertragsdaten (Wochenstunden ÷ Arbeitstage\/Woche) oder Standardwert. Bei \"contract\" sollte die UI auf die Datenpflege der Arbeitstage\/Woche hinweisen (Migrations-Default 5).'),
+  "dailyHours": zod.number().optional().describe('Verwendete Stunden je Urlaubstag zum heutigen Stichtag.'),
+  "contractWorkdaysPerWeek": zod.number().nullish().describe('Arbeitstage\/Woche des aktiven Vertrags (null ohne Vertrag).'),
+  "contractWeeklyHours": zod.number().nullish().describe('Wochenstunden des aktiven Vertrags (null ohne Vertrag).'),
+  "vacationSockelHours": zod.number().optional().describe('Sockel des Urlaubstopfs (Urlaubswochen × Vertragsstunden), ohne Mehrarbeits-Aufbau.'),
+  "vacationAufbauHours": zod.number().optional().describe('Zusätzlicher Anspruch aus tatsächlich geleisteter Mehrarbeit über die Vertragsstunden des laufenden Kalenderjahres hinaus.'),
+  "vacationForecastHours": zod.number().optional().describe('Prognostizierter Jahresanspruch auf Basis des 13-Wochen-Schnitts der bestätigten Ist-Stunden (§ 11 BUrlG).'),
+  "avgWeeklyHours": zod.number().nullish().describe('Ø Wochenstunden der letzten 13 Wochen aus bestätigten Ist-Zeiten; null ohne ausreichende Historie.')
+})
+export const ListVacationBalancesResponse = zod.array(ListVacationBalancesResponseItem)
 
 
 /**

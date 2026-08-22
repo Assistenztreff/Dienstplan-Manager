@@ -84,6 +84,7 @@ export * from './listTimeEntriesParams';
 export * from './listTimeEntriesStatus';
 export * from './listUsersParams';
 export * from './listUsersRole';
+export * from './listVacationBalancesParams';
 export * from './loginInput';
 export * from './lowVacationAssistant';
 export * from './monthClosingDiff';

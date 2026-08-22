@@ -217,7 +217,9 @@ test("Assistenzkraft kann samt Daten über den Bearbeiten-Dialog gelöscht werde
     expect(contracts.some((c) => c.userId === assistant.id)).toBe(false);
   }
 
-  const shiftsRes = await adminCtx.get(`/api/shifts?userId=${assistant.id}`);
+  // all=true: Cascade-Check soll ALLE Monate abdecken, nicht nur den
+  // serverseitigen Default-Zeitraum (aktueller Kalendermonat).
+  const shiftsRes = await adminCtx.get(`/api/shifts?userId=${assistant.id}&all=true`);
   if (shiftsRes.ok()) {
     const shifts = (await shiftsRes.json()) as { userId: number }[];
     expect(shifts.some((s) => s.userId === assistant.id)).toBe(false);

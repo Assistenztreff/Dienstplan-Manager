@@ -691,6 +691,9 @@ router.get("/shifts", requireAuth, async (req, res): Promise<void> => {
     month: req.query.month ? Number(req.query.month) : undefined,
     year: req.query.year ? Number(req.query.year) : undefined,
     type: req.query.type,
+    // Bewusst NICHT zod.coerce.boolean() vertrauen (Boolean("false") === true);
+    // nur der literale String "true" schaltet den Zeitraum-Default ab.
+    all: req.query.all === "true" ? true : undefined,
   });
   if (!query.success) {
     res.status(400).json({ error: "Invalid query parameters" });
@@ -748,12 +751,33 @@ router.get("/shifts", requireAuth, async (req, res): Promise<void> => {
   ];
   if (effectiveUserId) conditions.push(eq(shiftsTable.userId, effectiveUserId));
   if (query.data.type) conditions.push(eq(shiftsTable.type, query.data.type as "active" | "standby" | "night" | "full_day" | "vacation" | "sick" | "work" | "freizeitausgleich" | "team" | "kind_krank" | "freistellung" | "abgesagt_ag" | "abgesagt_an" | "urlaubsabgeltung"));
+  // Zeitraum-Default: ohne month/year UND ohne explizites all=true liefert die
+  // Route nicht mehr die gesamte Historie, sondern nur den aktuellen
+  // Kalendermonat (Performance). year allein (ohne month) filtert auf das
+  // ganze Jahr — deckt Jahreskalender wie AbwesenheitsKalender ab. all=true
+  // ist der bewusste Opt-out für Team-Übersichten/Exporte, die tatsächlich
+  // die volle Historie brauchen (z. B. die Abwesenheiten-Seite). Bereits auf
+  // eine einzelne Person eingegrenzte Abfragen (effectiveUserId gesetzt —
+  // explizit oder durch die Assistenz-Selbstsicht erzwungen) sind naturgemäß
+  // klein und bleiben unbegrenzt, damit z. B. die Duplikat-Prüfung über
+  // Jahresgrenzen hinweg weiterhin funktioniert.
+  const now = new Date();
+  let rangeStart: Date | undefined;
+  let rangeEnd: Date | undefined;
   if (query.data.month && query.data.year) {
     // Sargable Monatsgrenze statt EXTRACT(): ermöglicht Indexnutzung auf start_time.
-    const monthStart = new Date(Date.UTC(query.data.year, query.data.month - 1, 1));
-    const monthEnd = new Date(Date.UTC(query.data.year, query.data.month, 1));
-    conditions.push(gte(shiftsTable.startTime, monthStart));
-    conditions.push(lt(shiftsTable.startTime, monthEnd));
+    rangeStart = new Date(Date.UTC(query.data.year, query.data.month - 1, 1));
+    rangeEnd = new Date(Date.UTC(query.data.year, query.data.month, 1));
+  } else if (query.data.year) {
+    rangeStart = new Date(Date.UTC(query.data.year, 0, 1));
+    rangeEnd = new Date(Date.UTC(query.data.year + 1, 0, 1));
+  } else if (!query.data.all && !effectiveUserId) {
+    rangeStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    rangeEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  }
+  if (rangeStart && rangeEnd) {
+    conditions.push(gte(shiftsTable.startTime, rangeStart));
+    conditions.push(lt(shiftsTable.startTime, rangeEnd));
   }
 
   const rows = await db

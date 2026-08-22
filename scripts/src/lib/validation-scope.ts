@@ -190,6 +190,8 @@ export interface ValidationLane {
 }
 
 export interface ValidationPlan {
+  /** Kommandos, die VOR den parallelen Lanes seriell laufen. */
+  serialHead: string[];
   /** Lanes, die gleichzeitig laufen. */
   parallelLanes: ValidationLane[];
   /** Kommandos, die NACH allen Lanes seriell laufen. */
@@ -198,6 +200,10 @@ export interface ValidationPlan {
 
 /** Anzahl paralleler API-Spec-Shards. */
 export const API_SHARD_COUNT = 2;
+
+/** Ein gemeinsamer API-Build verhindert konkurrierende Schreibzugriffe auf dist/. */
+export const API_SHARD_PREBUILD =
+  "pnpm --filter @workspace/api-server run build";
 
 /** Feste Port-Paare der Shard-Lanes (Standard-Lauf nutzt 8099/5199). */
 const SHARD_PORTS: ReadonlyArray<{ api: string; web: string }> = [
@@ -225,6 +231,7 @@ export function planForCategory(
   allowParallel: boolean,
 ): ValidationPlan {
   const serial: ValidationPlan = {
+    serialHead: [],
     parallelLanes:
       blocksForCategory(category).length > 0
         ? [{ name: "seriell", commands: blocksForCategory(category) }]
@@ -249,10 +256,15 @@ export function planForCategory(
         E2E_TEST_DB_SUFFIX: `${base}${i}`,
         E2E_API_PORT: ports.api,
         E2E_WEB_PORT: ports.web,
+        // Beide Shards lesen denselben, oben einmalig erzeugten Build. Ohne
+        // dieses Flag wuerde jeder Playwright-webServer `dev` ausfuehren und
+        // dabei den gemeinsamen dist/-Ordner loeschen/neu schreiben.
+        E2E_API_PREBUILT: "1",
       },
     });
   }
   return {
+    serialHead: [API_SHARD_PREBUILD],
     parallelLanes: [
       { name: "db-tests", commands: [E2E_BLOCKS.apiServerDb, E2E_BLOCKS.scriptsDb] },
       ...shardLanes,

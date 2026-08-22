@@ -403,61 +403,114 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     return;
   }
 
-  const [{ activeShiftsToday }] = await db
-    .select({ activeShiftsToday: count() })
-    .from(shiftsTable)
-    .where(
-      and(
-        eq(shiftsTable.userId, userId),
-        // Nur verbindlich bestätigte (FIX) Schichten zählen (siehe Admin-Branch).
-        eq(shiftsTable.planningStatus, "FIX"),
-        sql`${shiftsTable.startTime} >= ${todayStart}`,
-        sql`${shiftsTable.startTime} < ${todayEnd}`,
-      )
-    );
-
-  // Effektiver Zeiterfassungs-Zustand des Assistenten = Zustand des
-  // Arbeitgebers (Konto-Schalter des Team-Eigentümers, Standard AUS). Bei AUS
-  // liefert das Dashboard keine Zeiterfassungs-Kennzahlen.
-  const timeTrackingEnabled = await isTimeTrackingEnabledForUser(userId);
-
-  const [{ pendingTimeEntries }] = timeTrackingEnabled
-    ? await db
-        .select({ pendingTimeEntries: count() })
-        .from(timeTrackingTable)
+  // ── Gruppe 1: unabhängige Abfragen (weder von timeTrackingEnabled noch von
+  // assistantTeamIds abhängig) — parallel statt seriell, analog zum
+  // Admin-Branch oben.
+  const [activeShiftsTodayRow, timeTrackingEnabled, monthShifts, assistantTeamIds, upcomingShifts] =
+    await Promise.all([
+      db
+        .select({ activeShiftsToday: count() })
+        .from(shiftsTable)
         .where(
           and(
-            eq(timeTrackingTable.userId, userId),
-            eq(timeTrackingTable.status, "pending")
+            eq(shiftsTable.userId, userId),
+            // Nur verbindlich bestätigte (FIX) Schichten zählen (siehe Admin-Branch).
+            eq(shiftsTable.planningStatus, "FIX"),
+            sql`${shiftsTable.startTime} >= ${todayStart}`,
+            sql`${shiftsTable.startTime} < ${todayEnd}`,
           )
-        )
-    : [{ pendingTimeEntries: 0 }];
+        ),
 
-  const monthShifts = await db
-    .select({ startTime: shiftsTable.startTime, endTime: shiftsTable.endTime })
-    .from(shiftsTable)
-    .where(
-      and(
-        eq(shiftsTable.userId, userId),
-        // Geplante Soll-Stunden zählen nur verbindlich bestätigte (FIX)
-        // Schichten; Entwürfe/Vorschläge verfälschen die Zahl nicht.
-        eq(shiftsTable.planningStatus, "FIX"),
-        // Sargable Bereichsprädikat aktiviert den (user_id, start_time)-Index.
-        gte(shiftsTable.startTime, monthStart),
-        lt(shiftsTable.startTime, monthEnd),
-      )
-    );
+      // Effektiver Zeiterfassungs-Zustand des Assistenten = Zustand des
+      // Arbeitgebers (Konto-Schalter des Team-Eigentümers, Standard AUS). Bei
+      // AUS liefert das Dashboard keine Zeiterfassungs-Kennzahlen.
+      isTimeTrackingEnabledForUser(userId),
+
+      db
+        .select({ startTime: shiftsTable.startTime, endTime: shiftsTable.endTime })
+        .from(shiftsTable)
+        .where(
+          and(
+            eq(shiftsTable.userId, userId),
+            // Geplante Soll-Stunden zählen nur verbindlich bestätigte (FIX)
+            // Schichten; Entwürfe/Vorschläge verfälschen die Zahl nicht.
+            eq(shiftsTable.planningStatus, "FIX"),
+            // Sargable Bereichsprädikat aktiviert den (user_id, start_time)-Index.
+            gte(shiftsTable.startTime, monthStart),
+            lt(shiftsTable.startTime, monthEnd),
+          )
+        ),
+
+      // Ist-Stunden des Assistenten: bestätigte Einträge zählen immer. In
+      // Teams von Free-Eigentümern (kein Freigabe-Workflow) zählen auch
+      // "offene" Einträge, damit erfasste Stunden nicht dauerhaft bei 0
+      // stehen. Maßgeblich ist der Plan des jeweiligen Team-Eigentümers,
+      // nicht des Assistenten.
+      getAllowedTeamIds(userId),
+
+      db
+        .select({
+          id: shiftsTable.id,
+          userId: shiftsTable.userId,
+          startTime: shiftsTable.startTime,
+          endTime: shiftsTable.endTime,
+          type: shiftsTable.type,
+          notes: shiftsTable.notes,
+          createdAt: shiftsTable.createdAt,
+          user: SAFE_SHIFT_USER,
+        })
+        .from(shiftsTable)
+        .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
+        .where(and(eq(shiftsTable.userId, userId), sql`${shiftsTable.startTime} >= ${today}`))
+        .orderBy(asc(shiftsTable.startTime))
+        .limit(5),
+    ]);
+  const activeShiftsToday = activeShiftsTodayRow[0]!.activeShiftsToday;
   const monthlyPlannedHours = monthShifts.reduce(
     (acc, s) => acc + (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3_600_000,
     0
   );
 
-  // Ist-Stunden des Assistenten: bestätigte Einträge zählen immer. In Teams
-  // von Free-Eigentümern (kein Freigabe-Workflow) zählen auch "offene"
-  // Einträge, damit erfasste Stunden nicht dauerhaft bei 0 stehen. Maßgeblich
-  // ist der Plan des jeweiligen Team-Eigentümers, nicht des Assistenten.
-  const assistantTeamIds = await getAllowedTeamIds(userId);
-  const lenientTeamIds = await getLenientTimeTrackingTeamIds(assistantTeamIds);
+  // ── Gruppe 2: abhängig von assistantTeamIds bzw. timeTrackingEnabled ─────
+  const [lenientTeamIds, pendingTimeEntriesRow, recentTimeEntries] = await Promise.all([
+    getLenientTimeTrackingTeamIds(assistantTeamIds),
+
+    timeTrackingEnabled
+      ? db
+          .select({ pendingTimeEntries: count() })
+          .from(timeTrackingTable)
+          .where(
+            and(
+              eq(timeTrackingTable.userId, userId),
+              eq(timeTrackingTable.status, "pending")
+            )
+          )
+      : Promise.resolve([{ pendingTimeEntries: 0 }] as { pendingTimeEntries: number | bigint }[]),
+
+    timeTrackingEnabled
+      ? db
+          .select({
+            id: timeTrackingTable.id,
+            userId: timeTrackingTable.userId,
+            shiftId: timeTrackingTable.shiftId,
+            actualStart: timeTrackingTable.actualStart,
+            actualEnd: timeTrackingTable.actualEnd,
+            actualHours: timeTrackingTable.actualHours,
+            status: timeTrackingTable.status,
+            notes: timeTrackingTable.notes,
+            confirmedBy: timeTrackingTable.confirmedBy,
+            confirmedAt: timeTrackingTable.confirmedAt,
+            createdAt: timeTrackingTable.createdAt,
+            user: SAFE_SHIFT_USER,
+          })
+          .from(timeTrackingTable)
+          .leftJoin(usersTable, eq(timeTrackingTable.userId, usersTable.id))
+          .where(eq(timeTrackingTable.userId, userId))
+          .orderBy(desc(timeTrackingTable.createdAt))
+          .limit(5)
+      : Promise.resolve([] as never[]),
+  ]);
+  const { pendingTimeEntries } = pendingTimeEntriesRow[0]!;
   const statusCondition = lenientTeamIds.length
     ? or(
         eq(timeTrackingTable.status, "confirmed"),
@@ -467,89 +520,51 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
         ),
       )
     : eq(timeTrackingTable.status, "confirmed");
-  const monthTimeEntries = timeTrackingEnabled
-    ? await db
-        .select({ actualHours: timeTrackingTable.actualHours })
-        .from(timeTrackingTable)
-        .where(
-          and(
-            eq(timeTrackingTable.userId, userId),
-            // Sargable Bereichsprädikat aktiviert den (user_id, actual_start)-Index.
-            gte(timeTrackingTable.actualStart, monthStart),
-            lt(timeTrackingTable.actualStart, monthEnd),
-            statusCondition,
+  // Analog zum Admin-Branch: offene Einträge des Assistenten in strikten
+  // (Premium-)Teams zählen nicht — die Summe wird ausgewiesen, damit der
+  // Stundenstand nach einem Upgrade nicht kommentarlos schrumpft.
+  const strictTeamIds = assistantTeamIds.filter((id) => !lenientTeamIds.includes(id));
+
+  // ── Gruppe 3: abhängig von lenientTeamIds/strictTeamIds ──────────────────
+  const [monthTimeEntries, uncounted] = await Promise.all([
+    timeTrackingEnabled
+      ? db
+          .select({ actualHours: timeTrackingTable.actualHours })
+          .from(timeTrackingTable)
+          .where(
+            and(
+              eq(timeTrackingTable.userId, userId),
+              // Sargable Bereichsprädikat aktiviert den (user_id, actual_start)-Index.
+              gte(timeTrackingTable.actualStart, monthStart),
+              lt(timeTrackingTable.actualStart, monthEnd),
+              statusCondition,
+            )
           )
-        )
-    : [];
+      : Promise.resolve([] as { actualHours: number | null }[]),
+
+    timeTrackingEnabled && strictTeamIds.length
+      ? db
+          .select({ actualHours: timeTrackingTable.actualHours })
+          .from(timeTrackingTable)
+          .where(
+            and(
+              eq(timeTrackingTable.userId, userId),
+              inArray(timeTrackingTable.teamId, strictTeamIds),
+              eq(timeTrackingTable.status, "pending"),
+              // Sargable Bereichsprädikat aktiviert den (user_id, actual_start)-Index.
+              gte(timeTrackingTable.actualStart, monthStart),
+              lt(timeTrackingTable.actualStart, monthEnd),
+            )
+          )
+      : Promise.resolve([] as { actualHours: number | null }[]),
+  ]);
   // Bei deaktivierter Zeiterfassung: planbasierte Anzeige (FIX-Plan-Stunden)
   // statt leerer Ist-Stunden — analog zum Admin-Branch.
   const monthlyActualHours = timeTrackingEnabled
     ? monthTimeEntries.reduce((acc, e) => acc + (e.actualHours ?? 0), 0)
     : monthlyPlannedHours;
-
-  // Analog zum Admin-Branch: offene Einträge des Assistenten in strikten
-  // (Premium-)Teams zählen nicht — die Summe wird ausgewiesen, damit der
-  // Stundenstand nach einem Upgrade nicht kommentarlos schrumpft.
-  const strictTeamIds = assistantTeamIds.filter((id) => !lenientTeamIds.includes(id));
-  let uncountedPendingHours = 0;
-  let uncountedPendingEntries = 0;
-  if (timeTrackingEnabled && strictTeamIds.length) {
-    const uncounted = await db
-      .select({ actualHours: timeTrackingTable.actualHours })
-      .from(timeTrackingTable)
-      .where(
-        and(
-          eq(timeTrackingTable.userId, userId),
-          inArray(timeTrackingTable.teamId, strictTeamIds),
-          eq(timeTrackingTable.status, "pending"),
-          // Sargable Bereichsprädikat aktiviert den (user_id, actual_start)-Index.
-          gte(timeTrackingTable.actualStart, monthStart),
-          lt(timeTrackingTable.actualStart, monthEnd),
-        )
-      );
-    uncountedPendingEntries = uncounted.length;
-    uncountedPendingHours = uncounted.reduce((acc, e) => acc + (e.actualHours ?? 0), 0);
-  }
-
-  const upcomingShifts = await db
-    .select({
-      id: shiftsTable.id,
-      userId: shiftsTable.userId,
-      startTime: shiftsTable.startTime,
-      endTime: shiftsTable.endTime,
-      type: shiftsTable.type,
-      notes: shiftsTable.notes,
-      createdAt: shiftsTable.createdAt,
-      user: SAFE_SHIFT_USER,
-    })
-    .from(shiftsTable)
-    .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
-    .where(and(eq(shiftsTable.userId, userId), sql`${shiftsTable.startTime} >= ${today}`))
-    .orderBy(asc(shiftsTable.startTime))
-    .limit(5);
-
-  const recentTimeEntries = timeTrackingEnabled
-    ? await db
-        .select({
-          id: timeTrackingTable.id,
-          userId: timeTrackingTable.userId,
-          shiftId: timeTrackingTable.shiftId,
-          actualStart: timeTrackingTable.actualStart,
-          actualEnd: timeTrackingTable.actualEnd,
-          actualHours: timeTrackingTable.actualHours,
-          status: timeTrackingTable.status,
-          notes: timeTrackingTable.notes,
-          confirmedBy: timeTrackingTable.confirmedBy,
-          confirmedAt: timeTrackingTable.confirmedAt,
-          createdAt: timeTrackingTable.createdAt,
-          user: SAFE_SHIFT_USER,
-        })
-        .from(timeTrackingTable)
-        .leftJoin(usersTable, eq(timeTrackingTable.userId, usersTable.id))
-        .where(eq(timeTrackingTable.userId, userId))
-        .orderBy(desc(timeTrackingTable.createdAt))
-        .limit(5)
-    : [];
+  const uncountedPendingEntries = uncounted.length;
+  const uncountedPendingHours = uncounted.reduce((acc, e) => acc + (e.actualHours ?? 0), 0);
 
   res.json({
     totalAssistants: null,

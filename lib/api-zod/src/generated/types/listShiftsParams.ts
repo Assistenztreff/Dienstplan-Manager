@@ -16,4 +16,8 @@ type?: ListShiftsType;
  * Optionaler Team-Kontext für die Datentrennung.
  */
 teamId?: number;
+/**
+ * Explizit die gesamte Historie ohne Zeitraum-Default anfordern (z. B. Team-Übersichten oder Exporte, die bewusst nicht nach Monat filtern). Ohne month/year UND ohne all=true liefert die Route nur den aktuellen Kalendermonat; bei year ohne month das ganze Jahr.
+ */
+all?: boolean;
 };

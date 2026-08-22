@@ -4,9 +4,6 @@ import {
   contractsTable,
   usersTable,
   shiftsTable,
-  timeTrackingTable,
-  isGermanHoliday,
-  type GermanState,
 } from "@workspace/db";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import {
@@ -20,14 +17,10 @@ import {
 import { requireAdmin, requireAuth, requireTeamPlanningOrAdmin, isAdminLikeRole } from "../middleware/auth";
 import {
   recalcVacationHoursUsed,
-  resolveDailyRateInfo,
-  typicalShiftHours,
-  vacationPoolHours,
-  vacationForecastHours,
+  computeVacationBalanceForContract,
 } from "../lib/vacation-hours";
 import { requirePlanFeatureViaTeamOwner } from "../lib/plan";
 import { resolveAllowanceOps } from "../lib/allowance-resolve";
-import { round2 } from "../lib/dashboard-hours-balance";
 import {
   resolveReadTeamScope,
   resolveWriteTeamId,
@@ -400,113 +393,76 @@ router.get(
     // Urlaub wird stundengenau gefuehrt (Point 7): Verbrauch stundenweise in
     // vacationHoursUsed. Ein 24h-Dienst verbraucht 24h = 3,0 Tage. Der
     // Umrechnungsfaktor und die Berechnungsmethode kommen aus den
-    // Einstellungen des Team-Eigentuemers (Fallback-Kette).
+    // Einstellungen des Team-Eigentuemers (Fallback-Kette). Die eigentliche
+    // Rechnung (inkl. Ersatzruhetag-Konto und Jahresprognose) ist mit der
+    // Batch-Route (GET /vacation-balances) geteilt.
     const ops = await resolveAllowanceOps(contract.teamId);
-    const hoursPerDay = typicalShiftHours(contract, ops.vacationHoursPerDay);
-    // Urlaubstopf (AP 2): Urlaubswochen (aus dem Vollzeit-Anspruch, z. B.
-    // 30 Tage / 5 Arbeitstage = 6 Wochen) × vertragliche Wochenstunden —
-    // ersetzt vacationDays * vacationHoursPerDay, das Teilzeit systematisch
-    // benachteiligte (eine Teilzeitkraft mit weniger Wochenstunden bekam
-    // trotzdem den vollen Vollzeit-Stundenwert je Urlaubstag).
-    const vacationHoursTotal = vacationPoolHours(contract, ops);
-    const vacationHoursUsed = round2(contract.vacationHoursUsed);
-    const vacationHoursRemaining = round2(vacationHoursTotal - vacationHoursUsed);
-    const daysUsed = Math.round((vacationHoursUsed / hoursPerDay) * 10) / 10;
+    res.json(await computeVacationBalanceForContract(contract, ops));
+  },
+);
 
-    // Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG): Wer an einem gesetzlichen
-    // Feiertag TATSAECHLICH arbeitet (bestaetigte IST-Zeit auf einer
-    // Arbeitsschicht), hat Anspruch auf einen Ausgleichs-Ruhetag. Das Konto
-    // ist vollstaendig aus den Schichten ableitbar (kein separater Zaehler):
-    //   verdient   = Anzahl DISTINCT Feiertage mit bestaetigter Arbeit
-    //   eingeloest = Anzahl "freizeitausgleich"-Tage
-    const restState = (ops.state as GermanState | null) ?? null;
-    // UTC-Kalendertag als garantierte "YYYY-MM-DD"-Zeichenkette (isGermanHoliday
-    // und die Zuschlagsberechnung interpretieren Zeitstempel in UTC).
-    const workedHolidayDates = await db
-      .selectDistinct({
-        day: sql<string>`TO_CHAR(${timeTrackingTable.actualStart} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
-      })
-      .from(timeTrackingTable)
-      .innerJoin(shiftsTable, eq(timeTrackingTable.shiftId, shiftsTable.id))
+// Batch-Variante der obigen Bilanz: liefert die Resturlaub-Bilanz ALLER (im
+// Aufrufer-Scope sichtbaren) Vertraege eines Teams in EINEM Request — ersetzt
+// die N Einzelaufrufe, die abwesenheiten.tsx frueher pro Assistenzkraft
+// abgesetzt hat. `ops` wird einmal pro Team geladen (nicht pro Vertrag), das
+// ist der eigentliche Performance-Gewinn gegenueber einer bloss
+// serverseitig gebündelten Schleife über die Einzel-Route.
+//
+// Zugriff/Scope identisch zur Einzel-Route: Plan-Gate ueber den Team-
+// Eigentuemer, Admins sehen alle Vertraege ihrer erlaubten Teams, Assistenten
+// NUR den eigenen Vertrag (kein Cross-User-PII-Leak innerhalb des Teams).
+router.get(
+  "/vacation-balances",
+  requireAuth,
+  requirePlanFeatureViaTeamOwner("absenceTracking"),
+  async (req, res): Promise<void> => {
+    const allowedTeams = await getAllowedTeamIds(req.session.userId!);
+    const teamIdParam = parseTeamIdParam(req);
+    let scopeTeams = allowedTeams;
+    if (teamIdParam !== undefined) {
+      if (!allowedTeams.includes(teamIdParam)) {
+        res.status(404).json({ error: "Not found" });
+        return;
+      }
+      scopeTeams = [teamIdParam];
+    }
+    if (scopeTeams.length === 0) {
+      res.json([]);
+      return;
+    }
+
+    const isAssistant = !isAdminLikeRole(req.session.role);
+    const contracts = await db
+      .select()
+      .from(contractsTable)
       .where(
         and(
-          eq(timeTrackingTable.userId, contract.userId),
-          eq(shiftsTable.teamId, contract.teamId),
-          eq(timeTrackingTable.status, "confirmed"),
-          eq(shiftsTable.type, "work"),
+          inArray(contractsTable.teamId, scopeTeams),
+          // Assistenten: strikt nur der eigene Vertrag (Team-Scope allein
+          // wuerde Vertraege von Team-Kollegen sichtbar machen — identisch
+          // zur Einzel-Route).
+          isAssistant ? eq(contractsTable.userId, req.session.userId!) : sql`TRUE`,
         ),
       );
-    // Werktags-Regel (§ 11 Abs. 3 ArbZG): Nur Feiertage auf einem Werktag (Mo–Sa)
-    // verdienen einen Ersatzruhetag. Faellt der Feiertag auf einen Sonntag,
-    // entstehen nur Sonntags-/Feiertagszuschlaege, aber KEIN zusaetzlicher
-    // Ausgleichs-Ruhetag. Ist das Konto deaktiviert, wird nichts gutgeschrieben
-    // (bereits eingeloeste Tage bleiben unberuehrt).
-    const restDaysEarned = ops.ersatzruhetagEnabled
-      ? workedHolidayDates.filter((r) => {
-          const holidayDate = new Date(`${r.day}T12:00:00Z`);
-          return holidayDate.getUTCDay() !== 0 && isGermanHoliday(holidayDate, restState);
-        }).length
-      : 0;
-    const [redeemedRow] = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(shiftsTable)
-      .where(
-        and(
-          eq(shiftsTable.userId, contract.userId),
-          eq(shiftsTable.teamId, contract.teamId),
-          eq(shiftsTable.type, "freizeitausgleich"),
-        ),
-      );
-    const restDaysRedeemed = Number(redeemedRow?.count ?? 0);
-    const restDaysBalance = restDaysEarned - restDaysRedeemed;
 
-    // Bewertungsquelle eines (hypothetischen) ganztägigen Urlaubstags HEUTE:
-    // bwavg-Schnitt, Vertragsdaten (Wochenstunden ÷ Arbeitstage/Woche) oder
-    // Standardwert. Die UI zeigt bei "contract" einen Datenpflege-Hinweis —
-    // Bestandsverträge stehen nach der Migration oft pauschal auf 5 Arbeits-
-    // tage/Woche, was 7-Tage-Modelle in der Assistenz falsch bewertet.
-    const rateInfo = await resolveDailyRateInfo(
-      contract.userId,
-      contract.teamId,
-      new Date(),
-      hoursPerDay,
+    // ops einmal PRO TEAM auflösen statt pro Vertrag (der eigentliche
+    // Batch-Gewinn) — die meisten Aufrufe betreffen ohnehin genau ein Team.
+    // Erst alle beteiligten Teams auflösen (parallel, jedes Team nur einmal),
+    // DANACH die pro-Vertrag-Berechnungen parallel starten (Promise.all statt
+    // einer seriellen for-await-Schleife) — die einzelnen Verträge sind
+    // voneinander unabhängig, serielles Warten würde die Latenzen nur
+    // aneinanderreihen statt sie zu überlappen.
+    const distinctTeamIds = [...new Set(contracts.map((c) => c.teamId))];
+    const opsEntries = await Promise.all(
+      distinctTeamIds.map(async (teamId) => [teamId, await resolveAllowanceOps(teamId)] as const),
     );
-
-    // Jahresprognose (AP 4): Sockel + Mehrarbeits-Aufbau, hochgerechnet aus
-    // dem §11-BUrlG-13-Wochen-Durchschnitt. Der heute verfügbare Reststand
-    // (vacationHoursRemaining oben) bleibt die Hauptzahl der UI.
-    const forecast = await vacationForecastHours(
-      contract.userId,
-      contract.teamId,
-      contract,
-      ops,
-      new Date(),
+    const opsByTeam = new Map(opsEntries);
+    const results = await Promise.all(
+      contracts.map((contract) =>
+        computeVacationBalanceForContract(contract, opsByTeam.get(contract.teamId)!),
+      ),
     );
-
-    res.json({
-      contractId: contract.id,
-      userId: contract.userId,
-      vacationDays: contract.vacationDays,
-      vacationDaysUsed: daysUsed,
-      vacationDaysRemaining: Math.round((contract.vacationDays - daysUsed) * 10) / 10,
-      vacationHoursTotal,
-      vacationHoursUsed,
-      vacationHoursRemaining,
-      hoursPerDay,
-      method: ops.vacationMethod,
-      restDaysEarned,
-      restDaysRedeemed,
-      restDaysBalance,
-      ersatzruhetagEnabled: ops.ersatzruhetagEnabled,
-      dailyHoursSource: rateInfo.source,
-      dailyHours: round2(rateInfo.dailyHours),
-      contractWorkdaysPerWeek: rateInfo.workdaysPerWeek,
-      contractWeeklyHours: rateInfo.weeklyHours,
-      vacationSockelHours: forecast.sockel,
-      vacationAufbauHours: forecast.aufbau,
-      vacationForecastHours: forecast.prognose,
-      avgWeeklyHours: forecast.avgWeeklyHours,
-    });
+    res.json(results);
   },
 );
 

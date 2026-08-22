@@ -1944,6 +1944,10 @@ type?: ListShiftsType;
  * Optionaler Team-Kontext für die Datentrennung.
  */
 teamId?: number;
+/**
+ * Explizit die gesamte Historie ohne Zeitraum-Default anfordern (z. B. Team-Übersichten oder Exporte, die bewusst nicht nach Monat filtern). Ohne month/year UND ohne all=true liefert die Route nur den aktuellen Kalendermonat; bei year ohne month das ganze Jahr.
+ */
+all?: boolean;
 };
 
 export type ListShiftsType = typeof ListShiftsType[keyof typeof ListShiftsType];
@@ -2008,6 +2012,10 @@ status?: ListTimeEntriesStatus;
  * Optionaler Team-Kontext für die Datentrennung.
  */
 teamId?: number;
+/**
+ * Explizit die gesamte Historie ohne Zeitraum-Default anfordern. Ohne month/year UND ohne all=true liefert die Route nur den aktuellen Kalendermonat; bei year ohne month das ganze Jahr.
+ */
+all?: boolean;
 };
 
 export type ListTimeEntriesStatus = typeof ListTimeEntriesStatus[keyof typeof ListTimeEntriesStatus];
@@ -2020,6 +2028,13 @@ export const ListTimeEntriesStatus = {
 } as const;
 
 export type ExportCalendarParams = {
+teamId?: number;
+};
+
+export type ListVacationBalancesParams = {
+/**
+ * Optional auf ein einzelnes Team einschränken.
+ */
 teamId?: number;
 };
 

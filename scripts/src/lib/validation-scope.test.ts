@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  API_SHARD_PREBUILD,
   API_SHARD_COUNT,
   blocksForCategory,
   classifyChangedFiles,
@@ -133,12 +134,14 @@ describe("blocksForCategory", () => {
 describe("planForCategory (Task #640)", () => {
   it("docs => leerer Plan", () => {
     const p = planForCategory("docs", "abc123", true);
+    expect(p.serialHead).toEqual([]);
     expect(p.parallelLanes).toEqual([]);
     expect(p.serialTail).toEqual([]);
   });
 
   it("frontend => eine serielle Lane mit Smoke", () => {
     const p = planForCategory("frontend", "abc123", true);
+    expect(p.serialHead).toEqual([]);
     expect(p.parallelLanes).toEqual([
       { name: "seriell", commands: [E2E_BLOCKS.e2eSmoke] },
     ]);
@@ -147,6 +150,7 @@ describe("planForCategory (Task #640)", () => {
 
   it("full + privater Suffix => DB-Lane + API-Shards parallel, Smoke danach", () => {
     const p = planForCategory("full", "abc123", true);
+    expect(p.serialHead).toEqual([API_SHARD_PREBUILD]);
     expect(p.parallelLanes.map((l) => l.name)).toEqual([
       "db-tests",
       ...Array.from({ length: API_SHARD_COUNT }, (_, i) => `api-shard-${i + 1}`),
@@ -171,6 +175,7 @@ describe("planForCategory (Task #640)", () => {
       // Standard-Ports (8099/5199) bleiben dem Smoke-/Default-Lauf vorbehalten.
       expect(env.E2E_API_PORT).not.toBe("8099");
       expect(env.E2E_WEB_PORT).not.toBe("5199");
+      expect(env.E2E_API_PREBUILT).toBe("1");
     }
     expect(suffixes.size).toBe(API_SHARD_COUNT);
     expect(ports.size).toBe(API_SHARD_COUNT * 2);
@@ -186,6 +191,7 @@ describe("planForCategory (Task #640)", () => {
 
   it("full ohne privaten Suffix (geteilte _test-DB) => serielle Kette", () => {
     const p = planForCategory("full", "", true);
+    expect(p.serialHead).toEqual([]);
     expect(p.parallelLanes).toEqual([
       { name: "seriell", commands: blocksForCategory("full") },
     ]);

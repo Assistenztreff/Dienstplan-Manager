@@ -78,6 +78,9 @@ router.get("/time-tracking", requireAuth, async (req, res): Promise<void> => {
     month: req.query.month ? Number(req.query.month) : undefined,
     year: req.query.year ? Number(req.query.year) : undefined,
     status: req.query.status,
+    // Bewusst NICHT zod.coerce.boolean() vertrauen (Boolean("false") === true);
+    // nur der literale String "true" schaltet den Zeitraum-Default ab.
+    all: req.query.all === "true" ? true : undefined,
   });
   if (!query.success) {
     res.status(400).json({ error: "Invalid query parameters" });
@@ -111,12 +114,26 @@ router.get("/time-tracking", requireAuth, async (req, res): Promise<void> => {
   const conditions = [inArray(timeTrackingTable.teamId, teamScope)];
   if (effectiveUserId) conditions.push(eq(timeTrackingTable.userId, effectiveUserId));
   if (query.data.status) conditions.push(eq(timeTrackingTable.status, query.data.status as "pending" | "confirmed" | "rejected"));
+  // Zeitraum-Default: siehe Begründung in routes/shifts.ts (gleiches Muster —
+  // ohne month/year UND ohne all=true nur der aktuelle Kalendermonat; auf eine
+  // einzelne Person eingegrenzte Abfragen bleiben unbegrenzt).
+  const now = new Date();
+  let rangeStart: Date | undefined;
+  let rangeEnd: Date | undefined;
   if (query.data.month && query.data.year) {
     // Sargable Monatsgrenze statt EXTRACT(): ermöglicht Indexnutzung auf actualStart.
-    const monthStart = new Date(Date.UTC(query.data.year, query.data.month - 1, 1));
-    const monthEnd = new Date(Date.UTC(query.data.year, query.data.month, 1));
-    conditions.push(gte(timeTrackingTable.actualStart, monthStart));
-    conditions.push(lt(timeTrackingTable.actualStart, monthEnd));
+    rangeStart = new Date(Date.UTC(query.data.year, query.data.month - 1, 1));
+    rangeEnd = new Date(Date.UTC(query.data.year, query.data.month, 1));
+  } else if (query.data.year) {
+    rangeStart = new Date(Date.UTC(query.data.year, 0, 1));
+    rangeEnd = new Date(Date.UTC(query.data.year + 1, 0, 1));
+  } else if (!query.data.all && !effectiveUserId) {
+    rangeStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    rangeEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  }
+  if (rangeStart && rangeEnd) {
+    conditions.push(gte(timeTrackingTable.actualStart, rangeStart));
+    conditions.push(lt(timeTrackingTable.actualStart, rangeEnd));
   }
 
   const rows = await db

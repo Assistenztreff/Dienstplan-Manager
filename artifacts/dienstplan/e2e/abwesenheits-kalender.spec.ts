@@ -66,7 +66,9 @@ async function createAssistant(page: Page): Promise<{ id: number; name: string }
 
 /** Löscht alle Schichten des Assistenten (Aufräumen, FK-sicher vor User-Delete). */
 async function deleteShiftsOf(page: Page, userId: number): Promise<void> {
-  const res = await page.request.get(`/api/shifts?userId=${userId}`);
+  // all=true: Aufräumen muss ALLE Jahre/Monate treffen (der Kalender selbst
+  // testet Jahreswechsel), nicht nur den serverseitigen Default-Zeitraum.
+  const res = await page.request.get(`/api/shifts?userId=${userId}&all=true`);
   if (!res.ok()) return;
   const shifts = (await res.json()) as ApiShift[];
   for (const s of shifts) {

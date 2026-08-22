@@ -99,7 +99,9 @@ async function deleteShiftsOf(
   page: import("@playwright/test").Page,
   userId: number,
 ): Promise<void> {
-  const res = await page.request.get(`/api/shifts?userId=${userId}`);
+  // all=true: Aufräumen muss ALLE Monate treffen (DST-Seeds liegen im Okt/März),
+  // nicht nur den serverseitigen Default-Zeitraum (aktueller Kalendermonat).
+  const res = await page.request.get(`/api/shifts?userId=${userId}&all=true`);
   if (!res.ok()) return;
   const shifts = (await res.json()) as { id: number }[];
   await Promise.all(shifts.map((s) => page.request.delete(`/api/shifts/${s.id}`)));

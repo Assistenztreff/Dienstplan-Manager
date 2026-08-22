@@ -137,7 +137,9 @@ test("AUS: confirm-batch wird mit 403 time_tracking_disabled abgelehnt, GET-List
       data: { ids: [99999999], confirmedBy: acc.id },
     }),
   );
-  const listRes = await acc.ctx.get("/api/time-tracking");
+  // all=true: Fixtures liegen auf 2026-07-xx, außerhalb des serverseitigen
+  // Default-Zeitraums (aktueller Kalendermonat).
+  const listRes = await acc.ctx.get("/api/time-tracking?all=true");
   expect(listRes.status(), "GET bleibt bei AUS erlaubt").toBe(200);
 });
 
@@ -189,7 +191,9 @@ test("Wieder AUS: PATCH/DELETE/confirm blocken, Eintrag bleibt lesbar erhalten",
   await expectDisabled(acc.ctx.delete(`/api/time-tracking/${entryId}`));
 
   // Bestehende Daten bleiben unangetastet und lesbar.
-  const listRes = await acc.ctx.get("/api/time-tracking");
+  // all=true: Fixtures liegen auf 2026-07-xx, außerhalb des serverseitigen
+  // Default-Zeitraums (aktueller Kalendermonat).
+  const listRes = await acc.ctx.get("/api/time-tracking?all=true");
   expect(listRes.status()).toBe(200);
   const entries = (await listRes.json()) as { id: number; status: string }[];
   const entry = entries.find((e) => e.id === entryId);

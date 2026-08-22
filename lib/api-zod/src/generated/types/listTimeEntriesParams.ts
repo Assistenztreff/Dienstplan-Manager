@@ -16,4 +16,8 @@ status?: ListTimeEntriesStatus;
  * Optionaler Team-Kontext für die Datentrennung.
  */
 teamId?: number;
+/**
+ * Explizit die gesamte Historie ohne Zeitraum-Default anfordern. Ohne month/year UND ohne all=true liefert die Route nur den aktuellen Kalendermonat; bei year ohne month das ganze Jahr.
+ */
+all?: boolean;
 };

@@ -4,10 +4,10 @@
 // Urlaubszählers nach jedem Vertrags-Speichern).
 
 import { db } from "@workspace/db";
-import { contractsTable, shiftsTable, timeTrackingTable } from "@workspace/db";
+import { contractsTable, shiftsTable, timeTrackingTable, isGermanHoliday, type GermanState } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import { isPlainFullDay, averageDailyHours } from "./shift-metrics-resolve";
-import { resolveAllowanceOps } from "./allowance-resolve";
+import { resolveAllowanceOps, type ResolvedAllowanceOps } from "./allowance-resolve";
 
 // Globale db-Instanz ODER eine offene Drizzle-Transaktion.
 type VacationDbx = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -219,6 +219,135 @@ export async function vacationForecastHours(
   return { sockel, aufbau, prognose, avgWeeklyHours };
 }
 
+// Vollständige Resturlaub-Bilanz EINES Vertrags (inkl. Ersatzruhetag-Konto und
+// Jahresprognose) — geteilt zwischen der Einzel-Route (GET
+// /contracts/:id/vacation-balance) und der Batch-Route (GET
+// /vacation-balances?teamId=), damit beide exakt dieselbe Rechnung liefern.
+// `ops` wird vom Aufrufer übergeben (nicht hier aufgelöst), damit die
+// Batch-Route sie einmal pro Team statt einmal pro Vertrag lädt.
+export interface VacationBalanceResult {
+  contractId: number;
+  userId: number;
+  vacationDays: number;
+  vacationDaysUsed: number;
+  vacationDaysRemaining: number;
+  vacationHoursTotal: number;
+  vacationHoursUsed: number;
+  vacationHoursRemaining: number;
+  hoursPerDay: number;
+  method: ResolvedAllowanceOps["vacationMethod"];
+  restDaysEarned: number;
+  restDaysRedeemed: number;
+  restDaysBalance: number;
+  ersatzruhetagEnabled: boolean;
+  dailyHoursSource: DailyRateSource;
+  dailyHours: number;
+  contractWorkdaysPerWeek: number | null;
+  contractWeeklyHours: number | null;
+  vacationSockelHours: number;
+  vacationAufbauHours: number;
+  vacationForecastHours: number;
+  avgWeeklyHours: number | null;
+}
+
+export async function computeVacationBalanceForContract(
+  contract: {
+    id: number;
+    userId: number;
+    teamId: number;
+    vacationDays: number;
+    vacationHoursUsed: number;
+    weeklyHours: number;
+    workdaysPerWeek: number;
+  },
+  ops: ResolvedAllowanceOps,
+  dbx: VacationDbx = db
+): Promise<VacationBalanceResult> {
+  const hoursPerDay = typicalShiftHours(contract, ops.vacationHoursPerDay);
+  const vacationHoursTotal = vacationPoolHours(contract, ops);
+  const vacationHoursUsed = Math.round(contract.vacationHoursUsed * 100) / 100;
+  const vacationHoursRemaining = Math.round((vacationHoursTotal - vacationHoursUsed) * 100) / 100;
+  const daysUsed = Math.round((vacationHoursUsed / hoursPerDay) * 10) / 10;
+
+  // Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG): siehe Einzel-Route für die
+  // ausführliche Begründung — Logik 1:1 übernommen.
+  const restState = (ops.state as GermanState | null) ?? null;
+  const workedHolidayDates = await dbx
+    .selectDistinct({
+      day: sql<string>`TO_CHAR(${timeTrackingTable.actualStart} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
+    })
+    .from(timeTrackingTable)
+    .innerJoin(shiftsTable, eq(timeTrackingTable.shiftId, shiftsTable.id))
+    .where(
+      and(
+        eq(timeTrackingTable.userId, contract.userId),
+        eq(shiftsTable.teamId, contract.teamId),
+        eq(timeTrackingTable.status, "confirmed"),
+        eq(shiftsTable.type, "work")
+      )
+    );
+  const restDaysEarned = ops.ersatzruhetagEnabled
+    ? workedHolidayDates.filter((r) => {
+        const holidayDate = new Date(`${r.day}T12:00:00Z`);
+        return holidayDate.getUTCDay() !== 0 && isGermanHoliday(holidayDate, restState);
+      }).length
+    : 0;
+  const [redeemedRow] = await dbx
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(shiftsTable)
+    .where(
+      and(
+        eq(shiftsTable.userId, contract.userId),
+        eq(shiftsTable.teamId, contract.teamId),
+        eq(shiftsTable.type, "freizeitausgleich")
+      )
+    );
+  const restDaysRedeemed = Number(redeemedRow?.count ?? 0);
+  const restDaysBalance = restDaysEarned - restDaysRedeemed;
+
+  const rateInfo = await resolveDailyRateInfo(
+    contract.userId,
+    contract.teamId,
+    new Date(),
+    hoursPerDay,
+    dbx,
+    ops
+  );
+  const forecast = await vacationForecastHours(
+    contract.userId,
+    contract.teamId,
+    contract,
+    ops,
+    new Date(),
+    dbx
+  );
+
+  return {
+    contractId: contract.id,
+    userId: contract.userId,
+    vacationDays: contract.vacationDays,
+    vacationDaysUsed: daysUsed,
+    vacationDaysRemaining: Math.round((contract.vacationDays - daysUsed) * 10) / 10,
+    vacationHoursTotal,
+    vacationHoursUsed,
+    vacationHoursRemaining,
+    hoursPerDay,
+    method: ops.vacationMethod,
+    restDaysEarned,
+    restDaysRedeemed,
+    restDaysBalance,
+    ersatzruhetagEnabled: ops.ersatzruhetagEnabled,
+    dailyHoursSource: rateInfo.source,
+    dailyHours: Math.round(rateInfo.dailyHours * 100) / 100,
+    contractWorkdaysPerWeek: rateInfo.workdaysPerWeek,
+    contractWeeklyHours: rateInfo.weeklyHours,
+    vacationSockelHours: forecast.sockel,
+    vacationAufbauHours: forecast.aufbau,
+    vacationForecastHours: forecast.prognose,
+    avgWeeklyHours: forecast.avgWeeklyHours,
+  };
+}
+
 // Aktiver Vertrag des Nutzers IM TEAM der Schicht zum Stichtag (jüngster
 // Beginn gewinnt). Team-gescoped, damit kein Vertrag eines fremden Teams die
 // Urlaubsbewertung hier beeinflusst (Team-Scoping-Invariante).
@@ -309,9 +438,13 @@ export async function resolveDailyRateInfo(
   teamId: number | null,
   refDate: Date,
   fallbackPerDay: number,
-  dbx: VacationDbx = db
+  dbx: VacationDbx = db,
+  // Optionaler, bereits aufgelöster ops-Wert (Batch-Route: einmal pro Team
+  // statt einmal pro Vertrag laden) — ohne Übergabe unverändertes Verhalten
+  // (löst selbst auf, z. B. für die Einzelaufrufe in absenceHoursFor).
+  resolvedOps?: ResolvedAllowanceOps
 ): Promise<DailyRateInfo> {
-  const ops = await resolveAllowanceOps(teamId, dbx);
+  const ops = resolvedOps ?? (await resolveAllowanceOps(teamId, dbx));
   const contract =
     teamId != null ? await activeTeamContractFor(userId, teamId, refDate, dbx) : null;
   const info: DailyRateInfo = {

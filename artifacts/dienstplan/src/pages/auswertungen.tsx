@@ -367,27 +367,33 @@ export default function Auswertungen() {
     },
     { query: { enabled: isAdmin && !analyticsLocked && isTeamScopeReady } } as any,
   ) as { data: MonthClosingDiff | undefined };
-  const recalcByUser = new Map<number, { diffPay: number; diffBasePay: number; diffSurchargePay: number }>();
-  // Abwesenheits-Anteil der Nachberechnung (Urlaubs-/Krankheitsstunden des
-  // Vormonats) — eigenes Kästchen unter den Krankheitsstunden, unabhängig
-  // davon, ob sich der Geldwert geändert hat.
-  const recalcAbsenceByUser = new Map<number, { vacationHours: number; sickHours: number }>();
-  if (prevDiff?.closed) {
-    for (const r of prevDiff.rows) {
-      if (r.diffPay != null && r.diffPay !== 0) {
-        recalcByUser.set(r.userId, {
-          diffPay: r.diffPay,
-          diffBasePay: r.diffBasePay ?? 0,
-          diffSurchargePay: r.diffSurchargePay ?? 0,
-        });
-      }
-      const vacationHours = r.vacationHours ?? 0;
-      const sickHours = r.sickHours ?? 0;
-      if (vacationHours > 0 || sickHours > 0) {
-        recalcAbsenceByUser.set(r.userId, { vacationHours, sickHours });
+  // useMemo: prevDiff.rows kann mehrere Dutzend Zeilen enthalten — ohne Memo
+  // liefe diese Iteration bei jedem Render neu (z. B. bei Tastatureingaben in
+  // anderen Feldern der Seite), obwohl sich prevDiff selten ändert.
+  const { recalcByUser, recalcAbsenceByUser } = useMemo(() => {
+    const byUser = new Map<number, { diffPay: number; diffBasePay: number; diffSurchargePay: number }>();
+    // Abwesenheits-Anteil der Nachberechnung (Urlaubs-/Krankheitsstunden des
+    // Vormonats) — eigenes Kästchen unter den Krankheitsstunden, unabhängig
+    // davon, ob sich der Geldwert geändert hat.
+    const absenceByUser = new Map<number, { vacationHours: number; sickHours: number }>();
+    if (prevDiff?.closed) {
+      for (const r of prevDiff.rows) {
+        if (r.diffPay != null && r.diffPay !== 0) {
+          byUser.set(r.userId, {
+            diffPay: r.diffPay,
+            diffBasePay: r.diffBasePay ?? 0,
+            diffSurchargePay: r.diffSurchargePay ?? 0,
+          });
+        }
+        const vacationHours = r.vacationHours ?? 0;
+        const sickHours = r.sickHours ?? 0;
+        if (vacationHours > 0 || sickHours > 0) {
+          absenceByUser.set(r.userId, { vacationHours, sickHours });
+        }
       }
     }
-  }
+    return { recalcByUser: byUser, recalcAbsenceByUser: absenceByUser };
+  }, [prevDiff]);
 
   // Gemerkter Assistenten-Filter (nur Admin): zeigt nur die gewählte Person.
   const visibleBalances =

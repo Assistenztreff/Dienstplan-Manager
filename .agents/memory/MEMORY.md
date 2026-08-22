@@ -110,7 +110,7 @@
 - [Bulk-Absence-Endpunkt](bulk-absence-endpoint.md) — Sammel-Route spiegelt Einzel-Route; Dbx-Executor für Schreib-Helfer; Paritätstest Bulk vs. Einzel-Deltas; kein Client-Dedup-Prefilter mehr.
 - [Zeitraum-Reads Paritätsfallen](bulk-range-read-parity.md) — beim Bündeln einer Tag-Schleife: Stichtagswerte je Tag, Löschmenge nur aus Zieltagen, DATE()-Konvention, Reads im Lock.
 - [PDF-Stundennachweis-Export zurückgestellt](pdf-statement-export-deferred.md) — export-pdf-button existiert nicht mehr; StatementExportDialog/fix-only-hint unerreichbar; keine Specs darauf aufbauen.
-- [E2E-Lanes Build-Race auf dist/](e2e-lanes-dist-build-race.md) — parallele api-shards bauen in dasselbe api-server/dist; MODULE_NOT_FOUND dist/index.mjs = transienter Race, Kette neu starten.
+- [E2E-Lanes Build-Race auf dist/](e2e-lanes-dist-build-race.md) — parallele API-Shards müssen einen einmaligen Vorab-Build nur lesen; nie je Lane den gemeinsamen dist/-Ordner neu bauen.
 - [aspect-ratio auf Grid-Items](aspect-ratio-grid-blowout.md) — aspect-ratio+stretch überträgt Inhaltshöhe als Mindestbreite auf die Spalte (Grid-Blowout); Fix min-w-0, nie overflow:hidden wenn Zeilen wachsen sollen.
 - [Ad-hoc-Screenshot-Skripte Dev-Stack](dev-screenshot-scripts.md) — view-toggle-grid explizit klicken; API via curl statt node-fetch (dev-login 401); Overlap-tolerantes Seeding mit Cleanup.
 - [UI-Text-Rename bricht E2E-Selektoren](ui-copy-rename-e2e-selectors.md) — nach Copy-Umbenennungen (z. B. neutral „Assistenzkraft") alte Strings per rg in e2e/ suchen und Selektoren mitziehen.
@@ -139,3 +139,5 @@
 - [FIX→ANGEBOTEN-Fallback vs. hours-balance](planning-status-fallback-vs-hours-balance.md) — nur Zeit/Nutzer/Pause lösen den Rückfall aus; reiner Modellwechsel (shiftModelId) tut es bewusst nicht mehr (behoben).
 - [shift-badge testid 3x im DOM](e2e-shift-badge-triple-dom.md) — Desktop-Pille + persistente Wochenlisten mobil/desktop teilen dieselbe testid; Locator immer auf den Desktop-Container scopen (Strict Mode).
 - [Abwesenheits-Fixtures & Ganztags-Konvention](vacation-fixture-fullday-convention.md) — seit #862 zeigt nur exakt 00:00–23:59 UTC "ganztägig"; ältere Fixtures mit z.B. 08:00–16:00 brechen die "ganztägig"-Assertion.
+- [Default month-window filter scope](default-month-filter-scope.md) — a "no param → current month" default on list endpoints must scope to userId-less/team-wide requests only, not blanket-apply; year-only is a valid filter mode.
+- [Batch endpoints resolve shared settings once](batch-endpoint-shared-resolve.md) — collapsing N per-row calls into one batch route: resolve per-scope settings once per scope key, not per row; keep single-item route as a thin wrapper of the same shared function.

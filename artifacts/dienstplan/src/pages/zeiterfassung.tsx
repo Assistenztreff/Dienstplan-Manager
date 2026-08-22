@@ -155,7 +155,7 @@ export default function Zeiterfassung() {
   const canConfirm = hasAccess(currentUser, "strictTimeTracking");
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { selectedTeamId } = useTeam();
+  const { selectedTeamId, isTeamScopeReady } = useTeam();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const statusFilter = searchParams.get("status");
@@ -163,10 +163,14 @@ export default function Zeiterfassung() {
   // placeholderData: keepPreviousData hält beim Monatswechsel die Einträge des
   // vorherigen Monats sichtbar, während der neue geladen wird — kein Aufblitzen
   // auf leere Skelette (analog zum Dienstplan-Kalender und den Auswertungen).
+  // enabled: isTeamScopeReady — analog zu Dienstplan/Auswertungen: verhindert,
+  // dass Dienstleister-Nutzer (Team-Switcher) einen unscoped Request feuern,
+  // bevor die Team-Auto-Auswahl greift (sonst doppelter Request pro Laden).
   const { data: entries, isLoading: entriesLoading, isPlaceholderData: entriesPlaceholder } = useListTimeEntries(
     { month, year, ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}) },
     {
       query: {
+        enabled: isTeamScopeReady,
         placeholderData: keepPreviousData,
         staleTime: SHIFT_LIST_STALE_TIME_MS,
         gcTime: SHIFT_LIST_GC_TIME_MS,
@@ -175,7 +179,7 @@ export default function Zeiterfassung() {
   ) as { data: TimeEntry[] | undefined; isLoading: boolean; isPlaceholderData: boolean };
   const { data: users, isLoading: usersLoading } = useListUsers(
     selectedTeamId != null ? { teamId: selectedTeamId } : undefined,
-    { query: { staleTime: REFERENCE_DATA_STALE_TIME_MS } } as any,
+    { query: { enabled: isTeamScopeReady, staleTime: REFERENCE_DATA_STALE_TIME_MS } } as any,
   );
   // Eigene geplante Schichten des Assistenten im ausgewählten Monat (Server
   // erzwingt die eigene userId). Gleicher month/year-Scope wie die Ist-Zeiten,
@@ -185,7 +189,7 @@ export default function Zeiterfassung() {
     { month, year },
     {
       query: {
-        enabled: isAssistant,
+        enabled: isAssistant && isTeamScopeReady,
         placeholderData: keepPreviousData,
         staleTime: SHIFT_LIST_STALE_TIME_MS,
         gcTime: SHIFT_LIST_GC_TIME_MS,

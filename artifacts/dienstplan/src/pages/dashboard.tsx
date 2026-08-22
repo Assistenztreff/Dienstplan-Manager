@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { isAdminRole } from "@/lib/roles";
 import { planFeatureMessage } from "@/lib/api-error";
 import {
@@ -386,32 +386,39 @@ function AbsenceReminder() {
     { query: { enabled: isTeamScopeReady } } as Parameters<typeof useListShifts>[1],
   ) as { data?: Shift[] };
 
-  if (!vacationShifts || !sickShifts) return null;
+  // useMemo: iteriert über die komplette Abwesenheits-/Krankheitsliste — ohne
+  // Memo liefe das bei jedem Render der Seite neu (z. B. durch Timer-Ticks
+  // anderer Karten), obwohl sich die Listen zwischen Renders meist nicht
+  // ändern.
+  const { ongoing, sickDays } = useMemo(() => {
+    if (!vacationShifts || !sickShifts) return { ongoing: 0, sickDays: 0 };
 
-  // Laufende Abwesenheiten: Einträge, die den heutigen Tag einschließen,
-  // gezählt je betroffener Person.
-  const ongoingUserIds = new Set<number>();
-  for (const s of [...vacationShifts, ...sickShifts]) {
-    if (new Date(s.startTime) <= now && now <= new Date(s.endTime)) {
-      ongoingUserIds.add(s.userId);
-    }
-  }
-
-  // Krankheitstage im laufenden Monat: eindeutige Kalendertage aller
-  // Krank-Einträge, die in diesen Monat hineinragen.
-  const sickDayKeys = new Set<string>();
-  for (const s of sickShifts) {
-    const start = new Date(s.startTime);
-    const end = new Date(s.endTime);
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      if (d.getMonth() === month && d.getFullYear() === year) {
-        sickDayKeys.add(d.toISOString().split("T")[0]);
+    // Laufende Abwesenheiten: Einträge, die den heutigen Tag einschließen,
+    // gezählt je betroffener Person.
+    const ongoingUserIds = new Set<number>();
+    for (const s of [...vacationShifts, ...sickShifts]) {
+      if (new Date(s.startTime) <= now && now <= new Date(s.endTime)) {
+        ongoingUserIds.add(s.userId);
       }
     }
-  }
 
-  const ongoing = ongoingUserIds.size;
-  const sickDays = sickDayKeys.size;
+    // Krankheitstage im laufenden Monat: eindeutige Kalendertage aller
+    // Krank-Einträge, die in diesen Monat hineinragen.
+    const sickDayKeys = new Set<string>();
+    for (const s of sickShifts) {
+      const start = new Date(s.startTime);
+      const end = new Date(s.endTime);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        if (d.getMonth() === month && d.getFullYear() === year) {
+          sickDayKeys.add(d.toISOString().split("T")[0]);
+        }
+      }
+    }
+    return { ongoing: ongoingUserIds.size, sickDays: sickDayKeys.size };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vacationShifts, sickShifts, month, year]);
+
+  if (!vacationShifts || !sickShifts) return null;
   if (ongoing === 0 && sickDays === 0) return null;
 
   const monthLabel = format(now, "MMMM", { locale: de });

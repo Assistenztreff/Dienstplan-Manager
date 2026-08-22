@@ -7,7 +7,7 @@ import {
   useBulkCreateAbsence,
   useBulkDeleteShifts,
   useUpdateContract,
-  useGetVacationBalance,
+  useListVacationBalances,
   useGetAllowanceSettings,
   ApiError,
   type BulkAbsenceInput,
@@ -80,9 +80,11 @@ const TYPE_LABEL: Record<AbsenceType, string> = {
 // wiedererreichbar).
 function WorkdaysHint({
   contract,
+  balance,
   onOpenRechner,
 }: {
   contract: Contract;
+  balance?: VacationBalance;
   onOpenRechner: () => void;
 }) {
   const { toast } = useToast();
@@ -90,26 +92,22 @@ function WorkdaysHint({
   const updateContract = useUpdateContract();
   const [closing, setClosing] = useState(false);
 
-  const { data: balance } = useGetVacationBalance(contract.id, {
-    query: { retry: false },
-  } as Parameters<typeof useGetVacationBalance>[1]) as {
-    data?: VacationBalance;
-  };
-
   if (!balance || balance.dailyHoursSource !== "contract") return null;
   if (contract.workdaysConfirmedAt != null) return null;
 
   const workdays = balance.contractWorkdaysPerWeek ?? 5;
   const weekly = balance.contractWeeklyHours;
 
+  // Paket C (Task #871): die Bilanz kommt jetzt aus dem gebündelten
+  // GET /vacation-balances (einmal für ALLE Verträge, statt einer
+  // Einzelabfrage je Zeile) — nach Speichern reicht daher die Invalidierung
+  // der Batch-Query, die Einzel-Route bleibt nur noch für Direktaufrufe (z. B.
+  // den mobilen Kalender) bestehen.
   async function invalidateContractQueries() {
     await queryClient.invalidateQueries({
       predicate: (q) => {
         const k = q.queryKey[0];
-        return (
-          k === "/api/contracts" ||
-          k === `/api/contracts/${contract.id}/vacation-balance`
-        );
+        return k === "/api/contracts" || k === "/api/vacation-balances";
       },
     });
   }
@@ -187,20 +185,14 @@ function WorkdaysHint({
 // verfügbare Reststand (AP 1, oben). Blendet sich aus, solange die Felder
 // (noch) nicht vorliegen (z. B. Free-Plan ohne absenceTracking-Zugriff).
 function VacationForecastLines({
-  contractId,
+  balance,
   dailyHours,
   userId,
 }: {
-  contractId: number;
+  balance?: VacationBalance;
   dailyHours: number;
   userId: number;
 }) {
-  const { data: balance } = useGetVacationBalance(contractId, {
-    query: { retry: false },
-  } as Parameters<typeof useGetVacationBalance>[1]) as {
-    data?: VacationBalance;
-  };
-
   if (!balance) return null;
   const { vacationAufbauHours, vacationForecastHours } = balance;
 
@@ -263,14 +255,18 @@ export default function Abwesenheiten() {
   const { data: shiftModels } = useListShiftModels(undefined, {
     query: { staleTime: REFERENCE_DATA_STALE_TIME_MS },
   } as unknown as Parameters<typeof useListShiftModels>[1]) as { data?: ShiftModel[] };
+  // all: true (Task #871) — diese Seite zeigt bewusst die GESAMTE
+  // Abwesenheits-Historie (Liste "Eingetragene Abwesenheiten", Resturlaub-
+  // Vorjahresbezug etc.), nicht nur den serverseitigen Default-Zeitraum
+  // (aktueller Kalendermonat).
   const { data: vacationShifts, isLoading: vacationLoading } = useListShifts(
-    { type: "vacation" },
+    { type: "vacation", all: true },
     {
       query: { staleTime: SHIFT_LIST_STALE_TIME_MS, gcTime: SHIFT_LIST_GC_TIME_MS },
     } as unknown as Parameters<typeof useListShifts>[1],
   ) as { data?: Shift[]; isLoading: boolean };
   const { data: sickShifts, isLoading: sickLoading } = useListShifts(
-    { type: "sick" },
+    { type: "sick", all: true },
     {
       query: { staleTime: SHIFT_LIST_STALE_TIME_MS, gcTime: SHIFT_LIST_GC_TIME_MS },
     } as unknown as Parameters<typeof useListShifts>[1],
@@ -282,6 +278,21 @@ export default function Abwesenheiten() {
     query: { enabled: canManage, staleTime: REFERENCE_DATA_STALE_TIME_MS },
   } as unknown as Parameters<typeof useGetAllowanceSettings>[1]) as { data?: AllowanceSettings };
   const fulltimeWorkdaysPerWeek = allowanceSettings?.fulltimeWorkdaysPerWeek ?? 5;
+
+  // Paket C (Task #871): EIN Request für die Resturlaub-Bilanzen ALLER
+  // sichtbaren Verträge, statt vorher zwei Einzelabfragen (WorkdaysHint +
+  // VacationForecastLines) PRO Assistenzkraft. Nur laden, wenn die Karte
+  // überhaupt sichtbar ist (Premium-Feature absenceTracking).
+  const { data: vacationBalances } = useListVacationBalances(undefined, {
+    query: { enabled: !trackingLocked, staleTime: REFERENCE_DATA_STALE_TIME_MS },
+  } as unknown as Parameters<typeof useListVacationBalances>[1]) as {
+    data?: VacationBalance[];
+  };
+  const balanceByContractId = useMemo(() => {
+    const map = new Map<number, VacationBalance>();
+    for (const b of vacationBalances ?? []) map.set(b.contractId, b);
+    return map;
+  }, [vacationBalances]);
 
   const bulkCreateAbsence = useBulkCreateAbsence();
   const bulkDeleteShifts = useBulkDeleteShifts();
@@ -819,7 +830,7 @@ export default function Abwesenheiten() {
                             </span>
                             {contract && (
                               <VacationForecastLines
-                                contractId={contract.id}
+                                balance={balanceByContractId.get(contract.id)}
                                 dailyHours={dailyHours}
                                 userId={u.id}
                               />
@@ -847,6 +858,7 @@ export default function Abwesenheiten() {
                       {canManage && contract && (
                         <WorkdaysHint
                           contract={contract}
+                          balance={balanceByContractId.get(contract.id)}
                           onOpenRechner={() => setRechnerContract(contract)}
                         />
                       )}

@@ -144,7 +144,9 @@ test("Bestandsschutz: alle über den Free-Caps angelegten Zeilen bleiben nach de
   }
 
   // Schicht 2 Monate voraus (über historyMonths = 1) bleibt sichtbar.
-  const shiftsRes = await acc.ctx.get("/api/shifts");
+  // all=true: liegt außerhalb des serverseitigen Default-Zeitraums (aktueller
+  // Kalendermonat).
+  const shiftsRes = await acc.ctx.get("/api/shifts?all=true");
   expect(shiftsRes.ok(), "GET /api/shifts fehlgeschlagen").toBe(true);
   const shifts = (await shiftsRes.json()) as Entity[];
   expect(

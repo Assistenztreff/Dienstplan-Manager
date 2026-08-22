@@ -56,6 +56,10 @@ const chromiumExecutable = process.env.REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE;
 // Externe Override-URL? Dann gegen diese testen, ohne eigenen Stack.
 const externalBaseUrl = process.env.E2E_BASE_URL;
 const useManagedStack = !externalBaseUrl;
+const apiServerCommand =
+  process.env.E2E_API_PREBUILT === "1"
+    ? "pnpm --filter @workspace/api-server run start"
+    : "pnpm --filter @workspace/api-server run dev";
 
 // Test-DB-Ableitung: zentral in @workspace/test-fixtures/test-db-name.
 // Standardmaessig bekommt jede Umgebung eine PRIVATE `<dbname>_test_<suffix>`-
@@ -620,7 +624,11 @@ export default defineConfig({
         webServer: [
           {
             // Isolierter API-Server auf der Test-Datenbank.
-            command: "pnpm --filter @workspace/api-server run dev",
+            // Parallele Validierungs-Shards bekommen einen einmalig vorab
+            // erzeugten Build. Sie duerfen hier nicht beide `dev` starten:
+            // dessen Build loescht den gemeinsamen dist/-Ordner und erzeugt
+            // sonst ein Rennen um Worker-Dateien.
+            command: apiServerCommand,
             url: `http://localhost:${API_PORT}/api/healthz`,
             timeout: 120000,
             reuseExistingServer: false,

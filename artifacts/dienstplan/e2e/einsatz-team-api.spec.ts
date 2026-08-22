@@ -59,11 +59,11 @@ test("POST /shifts mit einsatzTeamId legt Schicht im Stammteam an, Spiegel im Zi
   expect(shift.einsatzTeamName).toBe("E2E Einsatz Zielteam");
 
   // Stammteam-Liste enthaelt die Schicht regulaer.
-  const listA = (await (await h.ctx.get(`/api/shifts?teamId=${teamA}`)).json()) as ShiftDto[];
+  const listA = (await (await h.ctx.get(`/api/shifts?teamId=${teamA}&all=true`)).json()) as ShiftDto[];
   expect(listA.some((s) => s.id === shift.id)).toBe(true);
 
   // Ziel-Team-Liste enthaelt den Spiegel inkl. Stammteam-Name.
-  const listB = (await (await h.ctx.get(`/api/shifts?teamId=${teamB}`)).json()) as ShiftDto[];
+  const listB = (await (await h.ctx.get(`/api/shifts?teamId=${teamB}&all=true`)).json()) as ShiftDto[];
   const mirror = listB.find((s) => s.id === shift.id);
   expect(mirror, "Spiegel muss in der Ziel-Team-Liste erscheinen").toBeTruthy();
   expect(mirror!.einsatzTeamId).toBe(teamB);
@@ -74,7 +74,7 @@ test("POST /shifts mit einsatzTeamId legt Schicht im Stammteam an, Spiegel im Zi
     data: { einsatzTeamId: null },
   });
   expect(patch.ok(), `Einsatz entfernen fehlgeschlagen (${patch.status()})`).toBe(true);
-  const listB2 = (await (await h.ctx.get(`/api/shifts?teamId=${teamB}`)).json()) as ShiftDto[];
+  const listB2 = (await (await h.ctx.get(`/api/shifts?teamId=${teamB}&all=true`)).json()) as ShiftDto[];
   expect(listB2.some((s) => s.id === shift.id)).toBe(false);
 
   await h.ctx.delete(`/api/shifts/${shift.id}`);
@@ -186,7 +186,7 @@ test("GET /shifts liefert die Stammteam-Krankmeldung einer Aushilfe auch im Ziel
   // Ziel-Team-Liste muss BEIDE Zeilen enthalten: die Vertretungs-Pille selbst
   // und — obwohl sie im Stammteam liegt — die Krankmeldung, aus der das
   // Frontend `ausfallUserIds` (dienstplan.tsx) für den Tag ableitet.
-  const listB = (await (await h.ctx.get(`/api/shifts?teamId=${teamB}`)).json()) as ShiftDto[];
+  const listB = (await (await h.ctx.get(`/api/shifts?teamId=${teamB}&all=true`)).json()) as ShiftDto[];
   expect(listB.some((s) => s.id === mirror.id), "Vertretungs-Pille muss im Ziel-Team erscheinen").toBe(true);
   const sickInB = listB.find((s) => s.id === sickShift.id);
   expect(sickInB, "Krank-Zeile des Stammteams muss im Ziel-Team sichtbar sein").toBeTruthy();

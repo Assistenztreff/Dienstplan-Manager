@@ -126,8 +126,11 @@ test("DELETE auf fremde Abwesenheit antwortet 404 (kein ID-Orakel)", async () =>
   const del = await assistantCtx.delete(`/api/shifts/${foreignId}`);
   expect(del.status(), "Fremde Abwesenheit muss 404 liefern").toBe(404);
 
-  // Nachkontrolle: Eintrag existiert weiter (Admin-Sicht).
-  const list = await acc.ctx.get("/api/shifts?type=vacation");
+  // Nachkontrolle: Eintrag existiert weiter (Admin-Sicht). all=true, da
+  // dayTimes() bewusst in den FOLGEMONAT plant (Free-Planungsfenster) und
+  // die Admin-Abfrage ohne userId sonst dem serverseitigen Default
+  // (aktueller Kalendermonat) unterläge.
+  const list = await acc.ctx.get("/api/shifts?type=vacation&all=true");
   const rows = (await list.json()) as Array<{ id: number }>;
   expect(rows.some((r) => r.id === foreignId), "Eintrag darf nicht gelöscht sein").toBe(true);
 });
@@ -177,10 +180,11 @@ test("Mehr-Team-Assistenzkraft: Schichtmodell lenkt die Abwesenheit ins richtige
     const shiftId = ((await res.json()) as { id: number }).id;
 
     // Kontrolle über beide Admin-Sichten: B sieht den Eintrag, A nicht.
-    const listB = await accB.ctx.get("/api/shifts?type=vacation");
+    // all=true, da dayTimes() bewusst in den Folgemonat plant.
+    const listB = await accB.ctx.get("/api/shifts?type=vacation&all=true");
     const rowsB = (await listB.json()) as Array<{ id: number }>;
     expect(rowsB.some((r) => r.id === shiftId), "Eintrag muss in Team B liegen").toBe(true);
-    const listA = await acc.ctx.get("/api/shifts?type=vacation");
+    const listA = await acc.ctx.get("/api/shifts?type=vacation&all=true");
     const rowsA = (await listA.json()) as Array<{ id: number }>;
     expect(rowsA.some((r) => r.id === shiftId), "Eintrag darf NICHT in Team A liegen").toBe(false);
 

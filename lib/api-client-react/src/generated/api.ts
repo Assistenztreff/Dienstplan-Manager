@@ -74,6 +74,7 @@ import type {
   ListShiftsParams,
   ListTimeEntriesParams,
   ListUsersParams,
+  ListVacationBalancesParams,
   LoginInput,
   MonthClosingDiff,
   MonthClosingMeta,
@@ -5120,6 +5121,91 @@ export function useGetVacationBalance<TData = Awaited<ReturnType<typeof getVacat
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetVacationBalanceQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListVacationBalancesUrl = (params?: ListVacationBalancesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/vacation-balances?${stringifiedParams}` : `/api/vacation-balances`
+}
+
+/**
+ * Batch-Variante von GET /contracts/{id}/vacation-balance — ersetzt N Einzelaufrufe (z. B. einen pro Assistenzkraft in der Abwesenheiten-Übersicht) durch einen Request. Premium-Feature absenceTracking. Admins sehen alle Verträge im eigenen Team-Scope (optional auf ein Team eingeschränkt via teamId); Assistenten sehen NUR den eigenen Vertrag.
+ * @summary Urlaubskontigente mehrerer Verträge in einem Request abrufen
+ */
+export const listVacationBalances = async (params?: ListVacationBalancesParams, options?: RequestInit): Promise<VacationBalance[]> => {
+
+  return customFetch<VacationBalance[]>(getListVacationBalancesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListVacationBalancesQueryKey = (params?: ListVacationBalancesParams,) => {
+    return [
+    `/api/vacation-balances`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListVacationBalancesQueryOptions = <TData = Awaited<ReturnType<typeof listVacationBalances>>, TError = ErrorType<void>>(params?: ListVacationBalancesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVacationBalances>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListVacationBalancesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listVacationBalances>>> = ({ signal }) => listVacationBalances(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listVacationBalances>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListVacationBalancesQueryResult = NonNullable<Awaited<ReturnType<typeof listVacationBalances>>>
+export type ListVacationBalancesQueryError = ErrorType<void>
+
+
+/**
+ * @summary Urlaubskontigente mehrerer Verträge in einem Request abrufen
+ */
+
+export function useListVacationBalances<TData = Awaited<ReturnType<typeof listVacationBalances>>, TError = ErrorType<void>>(
+ params?: ListVacationBalancesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVacationBalances>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListVacationBalancesQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

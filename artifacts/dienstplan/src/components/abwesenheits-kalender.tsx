@@ -146,7 +146,13 @@ export function AbwesenheitsKalender() {
   const { data: users } = useListUsers(undefined, {
     query: { enabled: canManage },
   } as Parameters<typeof useListUsers>[1]) as { data?: User[] };
-  const { data: allShifts } = useListShifts();
+  const [year, setYear] = useState(() => new Date().getFullYear());
+  // Serverseitiger Zeitraum-Default (Task #871): ohne Parameter liefert
+  // GET /shifts nur den aktuellen Kalendermonat. Der Jahreskalender braucht
+  // das GANZE gewählte Jahr — { year } schaltet auf Jahresfilterung statt
+  // Monats-Default; die bestehende clientseitige Jahres-Filterung unten
+  // bleibt als Sicherheitsnetz erhalten.
+  const { data: allShifts } = useListShifts({ year });
   const bulkCreateAbsence = useBulkCreateAbsence();
   const deleteShift = useDeleteShift();
   const bulkDeleteShifts = useBulkDeleteShifts();
@@ -156,7 +162,6 @@ export function AbwesenheitsKalender() {
     [users],
   );
 
-  const [year, setYear] = useState(() => new Date().getFullYear());
   // Personenfilter: „alle" (nur Verwaltung) oder konkrete userId als String.
   const [personFilter, setPersonFilter] = useState<string>(
     canManage ? "alle" : String(currentUser?.id ?? ""),
