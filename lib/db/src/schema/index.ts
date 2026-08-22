@@ -14,4 +14,5 @@ export * from "./month_closings";
 export * from "./session";
 export * from "./register_attempts";
 export * from "./email_rate_limit_attempts";
+export * from "./register_rate_limit_attempts";
 export * from "./data_migrations";
