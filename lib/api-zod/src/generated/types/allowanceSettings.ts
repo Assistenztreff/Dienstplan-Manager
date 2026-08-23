@@ -44,6 +44,8 @@ export interface AllowanceSettings {
   fulltimeWeeklyHours: number;
   /** Vorbelegung des Feldes "Urlaubsanspruch bei Vollzeit" bei neuen Verträgen. */
   defaultVacationDays: number;
+  /** Optionale Hochrechnung des Urlaubsguthabens aus den bestätigten Arbeitszeiten der letzten 13 Wochen anzeigen? Konto-global, Standard AN. Die Prognose verändert den echten Kontostand nie. */
+  vacationForecastEnabled: boolean;
   /** Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktiv? Bei false verdient Feiertagsarbeit keinen Ausgleichs-Ruhetag. */
   ersatzruhetagEnabled: boolean;
   /** Team-Dienst (Teamsitzung) aktiv? Konto-global (kein Team-Override); Standard AUS. Bei AUS lehnen POST/PATCH /shifts den Typ team mit 400 ab; bestehende Team-Einträge bleiben sichtbar (Bestandsschutz). */

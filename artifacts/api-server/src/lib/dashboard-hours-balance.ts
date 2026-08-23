@@ -298,6 +298,12 @@ export function computeHoursBalanceRow(params: {
    */
   fulltimeWorkdaysPerWeek?: number | null;
   /**
+   * Bereits im laufenden Kalenderjahr tatsächlich erworbener Zusatzurlaub aus
+   * monatlicher Mehrarbeit. Der Aufrufer aggregiert bestätigte work-Istzeiten
+   * über das Jahr; eine Prognose darf hier ausdrücklich nicht einfließen.
+   */
+  vacationAufbauHours?: number;
+  /**
    * Teamsitzungs-Gutschrift (Anzahl Team-Tage der Teams der Assistenzkraft ×
    * konfigurierte teamMeetingHours des jeweiligen Konto-Eigentümers). Wird vom
    * Aufrufer team-weise ermittelt (ein Team-Eintrag gilt für ALLE Mitglieder,
@@ -537,13 +543,16 @@ export function computeHoursBalanceRow(params: {
   // Wochenstunden — ersetzt vacationDays × hoursPerDay, das Teilzeit über die
   // typische Dienstlänge indirekt schon berücksichtigte, aber nicht konsistent
   // mit der direkten Wochen-Umrechnung war.
-  const vacationHoursTotal =
+  const vacationSockelHours =
     contract && (contract.weeklyHours ?? 0) > 0
       ? vacationPoolHours(
           { vacationDays, weeklyHours: contract.weeklyHours as number },
           { fulltimeWorkdaysPerWeek: params.fulltimeWorkdaysPerWeek ?? 5 },
         )
       : round2(vacationDays * hoursPerDay);
+  const vacationHoursTotal = round2(
+    vacationSockelHours + Math.max(0, params.vacationAufbauHours ?? 0),
+  );
   const vacationHoursUsedTotal = round2(contract?.vacationHoursUsed ?? 0);
 
   // Premium-Lohnauswertung: Geldwerte folgen der Abrechnungsart (billingMethod)
@@ -621,7 +630,8 @@ export function computeHoursBalanceRow(params: {
     sickHours: round2(sickHours),
     vacationDaysTaken,
     vacationDaysUsed,
-    vacationDaysRemaining: Math.round((vacationDays - vacationDaysUsed) * 10) / 10,
+    vacationDaysRemaining:
+      Math.round(((vacationHoursTotal - vacationHoursUsedTotal) / hoursPerDay) * 10) / 10,
     vacationHoursUsed: vacationHoursUsedTotal,
     vacationHoursRemaining: round2(vacationHoursTotal - vacationHoursUsedTotal),
     vacationDailyHours: hoursPerDay,

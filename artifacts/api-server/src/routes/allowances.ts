@@ -71,6 +71,7 @@ router.get("/allowance-settings", requireAdmin, async (req, res): Promise<void> 
       res.json({
         ...override,
         timeTrackingEnabled: account.timeTrackingEnabled,
+        vacationForecastEnabled: account.vacationForecastEnabled,
         teamMeetingEnabled: account.teamMeetingEnabled,
         teamMeetingHours: account.teamMeetingHours,
         pauseAutoEnabled: account.pauseAutoEnabled,
@@ -129,6 +130,7 @@ router.put("/allowance-settings", requireAdmin, async (req, res): Promise<void> 
     res.json({
       ...saved,
       timeTrackingEnabled: account.timeTrackingEnabled,
+      vacationForecastEnabled: account.vacationForecastEnabled,
       teamMeetingEnabled: account.teamMeetingEnabled,
       teamMeetingHours: account.teamMeetingHours,
       pauseAutoEnabled: account.pauseAutoEnabled,

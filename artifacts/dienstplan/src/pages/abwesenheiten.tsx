@@ -179,11 +179,9 @@ function WorkdaysHint({
   );
 }
 
-// Jahresprognose (AP 4): der Anspruch wächst über die Vertragsstunden hinaus
-// mit tatsächlich geleisteter Arbeit — zwei rein informative Zusatzzeilen,
-// hochgerechnet aus dem 13-Wochen-Schnitt. Die Hauptzahl bleibt der heute
-// verfügbare Reststand (AP 1, oben). Blendet sich aus, solange die Felder
-// (noch) nicht vorliegen (z. B. Free-Plan ohne absenceTracking-Zugriff).
+// Garantierter Sockel, tatsächlich erworbene Mehrarbeit und optionale Prognose
+// bleiben sichtbar getrennt. Nur Sockel + erworbene Mehrarbeit gehören zum
+// heute verfügbaren Reststand; die Prognose ist reine Information.
 function VacationForecastLines({
   balance,
   dailyHours,
@@ -194,20 +192,29 @@ function VacationForecastLines({
   userId: number;
 }) {
   if (!balance) return null;
-  const { vacationAufbauHours, vacationForecastHours } = balance;
+  const {
+    vacationSockelHours,
+    vacationAufbauHours,
+    vacationForecastHours,
+    vacationForecastEnabled,
+  } = balance;
 
   return (
     <>
+      <span className="text-xs" data-testid={`vacation-sockel-${userId}`}>
+        Garantierter Sockel {formatDays(vacationSockelHours)} h
+      </span>
       {vacationAufbauHours != null && vacationAufbauHours > 0 && (
         <span className="text-xs" data-testid={`vacation-aufbau-${userId}`}>
-          Zusätzlich durch Mehrarbeit + {formatDays(vacationAufbauHours)} h
+          Durch bestätigte Mehrarbeit erworben + {formatDays(vacationAufbauHours)} h
         </span>
       )}
-      {vacationForecastHours != null && (
+      {vacationForecastEnabled && vacationForecastHours != null && (
         <span className="text-xs" data-testid={`vacation-forecast-${userId}`}>
-          Prognose Jahresende {formatDays(vacationForecastHours)} h
+          13-Wochen-Prognose zum Jahresende {formatDays(vacationForecastHours)} h
           <br />
-          <span className="text-[11px]">
+          <span className="text-[11px] text-muted-foreground">
+            Noch nicht verfügbares Guthaben ·{" "}
             entspricht{" "}
             {formatDays(Math.round((vacationForecastHours / dailyHours) * 10) / 10)} Diensten
           </span>
@@ -283,16 +290,26 @@ export default function Abwesenheiten() {
   // sichtbaren Verträge, statt vorher zwei Einzelabfragen (WorkdaysHint +
   // VacationForecastLines) PRO Assistenzkraft. Nur laden, wenn die Karte
   // überhaupt sichtbar ist (Premium-Feature absenceTracking).
-  const { data: vacationBalances } = useListVacationBalances(undefined, {
-    query: { enabled: !trackingLocked, staleTime: REFERENCE_DATA_STALE_TIME_MS },
+  const {
+    data: vacationBalances,
+    isFetching: vacationBalancesFetching,
+  } = useListVacationBalances(undefined, {
+    query: {
+      enabled: !trackingLocked,
+      staleTime: 0,
+      refetchOnMount: "always",
+    },
   } as unknown as Parameters<typeof useListVacationBalances>[1]) as {
     data?: VacationBalance[];
+    isFetching: boolean;
   };
   const balanceByContractId = useMemo(() => {
     const map = new Map<number, VacationBalance>();
-    for (const b of vacationBalances ?? []) map.set(b.contractId, b);
+    if (!vacationBalancesFetching) {
+      for (const b of vacationBalances ?? []) map.set(b.contractId, b);
+    }
     return map;
-  }, [vacationBalances]);
+  }, [vacationBalances, vacationBalancesFetching]);
 
   const bulkCreateAbsence = useBulkCreateAbsence();
   const bulkDeleteShifts = useBulkDeleteShifts();
@@ -751,6 +768,9 @@ export default function Abwesenheiten() {
                 <div className="space-y-2.5">
                   {displayUsers.map((u) => {
                     const contract = activeContractFor(u.id);
+                    const balance = contract
+                      ? balanceByContractId.get(contract.id)
+                      : undefined;
                     const entitlement = contract?.vacationDays ?? null;
                     // Urlaub wird stundengenau geführt (Point 7): die typische
                     // Dienstlänge (Wochenstunden ÷ Arbeitstage/Woche des
@@ -766,19 +786,23 @@ export default function Abwesenheiten() {
                     // Urlaubstage × Stundenzahl/Tag — Teilzeit bekommt so einen
                     // fairen Topf. Ohne nutzbaren Vertrag (weeklyHours) bleibt
                     // der alte tagesbasierte Fallback bestehen.
-                    const hoursTotal =
+                    const fallbackHoursTotal =
                       entitlement === null
                         ? null
                         : contract != null && contract.weeklyHours > 0 && fulltimeWorkdaysPerWeek > 0
                           ? Math.round((entitlement / fulltimeWorkdaysPerWeek) * contract.weeklyHours * 100) / 100
                           : entitlement * dailyHours;
-                    const hoursUsed = contract?.vacationHoursUsed ?? 0;
-                    const hoursLeft = hoursTotal !== null ? hoursTotal - hoursUsed : null;
+                    const hoursTotal = balance?.vacationHoursTotal ?? fallbackHoursTotal;
+                    const hoursUsed = balance?.vacationHoursUsed ?? contract?.vacationHoursUsed ?? 0;
+                    const hoursLeft =
+                      balance?.vacationHoursRemaining ??
+                      (hoursTotal !== null ? hoursTotal - hoursUsed : null);
                     // Ohne Vertrag fehlt der Stundenzähler → Fallback: geplante
                     // Tage (Anzahl Urlaubs-Schichten dieses Jahres).
                     const taken =
                       contract != null
-                        ? Math.round((hoursUsed / dailyHours) * 10) / 10
+                        ? balance?.vacationDaysUsed ??
+                          Math.round((hoursUsed / dailyHours) * 10) / 10
                         : vacationByUser.get(u.id) ?? 0;
                     const remaining =
                       entitlement !== null ? Math.round((entitlement - taken) * 10) / 10 : null;
@@ -817,20 +841,26 @@ export default function Abwesenheiten() {
                               h
                             </span>
                             <span className="text-xs">
-                              entspricht{" "}
+                              Verbleibend:{" "}
                               {hoursLeft !== null
                                 ? formatDays(Math.round((hoursLeft / dailyHours) * 10) / 10)
                                 : "–"}{" "}
-                              Diensten à {formatDays(dailyHours)} h · Anspruch{" "}
+                              Dienste à {formatDays(dailyHours)} h · Gesamt{" "}
+                              {hoursTotal !== null ? formatDays(hoursTotal) : "–"} h · Verbraucht{" "}
+                              {formatDays(hoursUsed)} h · Vertragsurlaub{" "}
                               <span data-testid={`vacation-entitlement-${u.id}`}>
                                 {formatDays(entitlement)}
                               </span>{" "}
-                              Tage (<span data-testid={`vacation-taken-${u.id}`}>{formatDays(taken)}</span>{" "}
-                              genommen)
+                              Tage
+                              <span className="sr-only">
+                                {" "}
+                                (<span data-testid={`vacation-taken-${u.id}`}>{formatDays(taken)}</span>{" "}
+                                genommen)
+                              </span>
                             </span>
                             {contract && (
                               <VacationForecastLines
-                                balance={balanceByContractId.get(contract.id)}
+                                balance={balance}
                                 dailyHours={dailyHours}
                                 userId={u.id}
                               />

@@ -33,8 +33,7 @@ const DAY_WITH_SHIFT = `${YEAR}-06-01`; // Dienst wird von der Abwesenheit erset
 const DAY_EMPTY = `${YEAR}-06-02`; // ganztägig -> Durchschnitt entscheidet
 const ABSENCE_DAYS = [DAY_WITH_SHIFT, DAY_EMPTY];
 
-const BASELINE_AVG = 6; // (6+6+6)/3
-const AVG_IF_REPLACED_COUNTED = 7.5; // (6+6+6+12)/4
+const CONTRACT_DAILY_HOURS = 8; // 40 Wochenstunden / 5 Arbeitstage
 
 type Shift = { id: number; userId: number; startTime: string; valuedHours?: number | null };
 type TimeEntry = { shiftId: number | null; actualHours: number | null };
@@ -117,8 +116,8 @@ test.beforeAll(async () => {
     vacationDays: 30,
   });
 
-  // Zeiterfassung an, Ist-Zeiten automatisch bestätigen (nur BESTÄTIGTE zählen
-  // im Durchschnitt) und bwavg als Urlaubsmethode fixieren.
+  // Zeiterfassung an und bwavg als Legacy-Einstellung fixieren. Die bestätigte
+  // IST-Historie darf die Bewertung eines Urlaubstags trotzdem nicht verändern.
   const getRes = await h.ctx.get("/api/allowance-settings");
   expect(getRes.ok(), `Einstellungen lesen fehlgeschlagen (${getRes.status()})`).toBe(true);
   const s = (await getRes.json()) as {
@@ -149,7 +148,7 @@ test.afterAll(async () => {
   await h.cleanup();
 });
 
-test("Sammelauftrag rechnet den Durchschnitt nach dem Ersetzen wie die Einzel-Anlage", async () => {
+test("Sammelauftrag nutzt wie die Einzel-Anlage die typische Vertrags-Dienstlänge", async () => {
   test.setTimeout(240_000);
 
   // A) Sammelauftrag: Tag 1 ersetzt einen 12-h-Dienst, Tag 2 ist leer.
@@ -190,16 +189,11 @@ test("Sammelauftrag rechnet den Durchschnitt nach dem Ersetzen wie die Einzel-An
   expect(bulk.tracked, "Zeiterfassung je Tag muss identisch sein").toEqual(single.tracked);
   expect(bulk.used, "Urlaubskonto-Abzug muss identisch sein").toBeCloseTo(single.used, 2);
 
-  // Und zwar auf dem RICHTIGEN Wert: Tag 2 (leerer Tag) nutzt den Durchschnitt
-  // OHNE den ersetzten Dienst von Tag 1. Ohne diese Zusatzpruefung wuerde der
-  // Test auch dann gruen, wenn beide Pfade gemeinsam falsch rechnen.
+  // Die IST-Historie und der ersetzte Dienst dürfen den vollen Urlaubstag
+  // nicht beeinflussen: ohne konkreten Dienst gilt die Vertrags-Dienstlänge.
   const day2Bulk = bulk.valued[1] ?? 0;
-  expect(day2Bulk, `Tag 2 sollte den Durchschnitt ${BASELINE_AVG} h nutzen`).toBeCloseTo(
-    BASELINE_AVG,
+  expect(day2Bulk, `Tag 2 sollte ${CONTRACT_DAILY_HOURS} h nutzen`).toBeCloseTo(
+    CONTRACT_DAILY_HOURS,
     2,
   );
-  expect(
-    Math.abs(day2Bulk - AVG_IF_REPLACED_COUNTED),
-    `Tag 2 darf den ersetzten Dienst von Tag 1 NICHT mitzaehlen (waere ${AVG_IF_REPLACED_COUNTED} h)`,
-  ).toBeGreaterThan(0.01);
 });

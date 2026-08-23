@@ -76,6 +76,11 @@ export const allowanceSettingsTable = pgTable(
     fulltimeWeeklyHours: real("fulltime_weekly_hours").notNull().default(39),
     // Vorbelegung des Feldes "Urlaubsanspruch bei Vollzeit" bei neuen Verträgen.
     defaultVacationDays: integer("default_vacation_days").notNull().default(30),
+    // 13-Wochen-Hochrechnung des Urlaubsguthabens anzeigen? KONTO-GLOBAL:
+    // Die Prognose ist reine Information und verändert weder Sockel noch
+    // tatsächlich erworbenes Mehrarbeitsguthaben. Default AN bewahrt die
+    // bisherige sichtbare Jahresprognose.
+    vacationForecastEnabled: boolean("vacation_forecast_enabled").notNull().default(true),
     // Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG): steuert, ob Feiertagsarbeit einen
     // Ausgleichs-Ruhetag verdient. Aus Förder-/Kostenträger-Gründen abschaltbar;
     // Default true = Bestandsschutz (bisheriges Verhalten bleibt gleich).

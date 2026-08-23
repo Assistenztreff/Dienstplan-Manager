@@ -341,9 +341,7 @@ function AssistantVacationCard() {
               data-testid="assistant-vacation-daily-hours"
             >
               1 Urlaubstag = {formatHours(balance.dailyHours)} h
-              {balance.dailyHoursSource === "bwavg"
-                ? " (13-Wochen-Schnitt)"
-                : balance.dailyHoursSource === "contract"
+              {balance.dailyHoursSource === "contract"
                 ? " (Vertragsdaten)"
                 : ""}
             </p>

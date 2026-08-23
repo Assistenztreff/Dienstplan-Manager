@@ -3476,6 +3476,7 @@ components:
           fulltimeWorkdaysPerWeek,
           fulltimeWeeklyHours,
           defaultVacationDays,
+          vacationForecastEnabled,
           ersatzruhetagEnabled,
           teamMeetingEnabled,
           teamMeetingHours,
@@ -3541,6 +3542,12 @@ components:
         defaultVacationDays:
           type: integer
           description: Vorbelegung des Feldes "Urlaubsanspruch bei Vollzeit" bei neuen Verträgen.
+        vacationForecastEnabled:
+          type: boolean
+          description: >-
+            Optionale Hochrechnung des Urlaubsguthabens aus den bestätigten
+            Arbeitszeiten der letzten 13 Wochen anzeigen? Konto-global,
+            Standard AN. Die Prognose verändert den echten Kontostand nie.
         ersatzruhetagEnabled:
           type: boolean
           description: >-
@@ -3640,6 +3647,9 @@ components:
           type: integer
           minimum: 0
           maximum: 365
+        vacationForecastEnabled:
+          type: boolean
+          description: Optionale 13-Wochen-Prognose anzeigen (konto-global).
         ersatzruhetagEnabled:
           type: boolean
           description: Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktivieren/deaktivieren.
@@ -4315,6 +4325,10 @@ components:
           vacationHoursRemaining,
           hoursPerDay,
           method,
+          vacationSockelHours,
+          vacationAufbauHours,
+          vacationForecastHours,
+          vacationForecastEnabled,
         ]
       properties:
         contractId:
@@ -4322,8 +4336,8 @@ components:
         userId:
           type: integer
         vacationDays:
-          type: integer
-          description: Anspruch in Tagen (vacationHoursTotal / hoursPerDay, gerundet).
+          type: number
+          description: Aktueller Gesamtanspruch in Tagen inklusive erworbener Mehrarbeit.
         vacationDaysUsed:
           type: integer
           description: Verbrauchte Tage (vacationHoursUsed / hoursPerDay, gerundet, Anzeige).
@@ -4331,7 +4345,7 @@ components:
           type: integer
         vacationHoursTotal:
           type: number
-          description: Gesamt-Urlaubsanspruch in Stunden (vacationDays * hoursPerDay).
+          description: Garantierter Sockel plus bereits erworbenes Mehrarbeitsguthaben.
         vacationHoursUsed:
           type: number
           description: Stundengenau verbrauchter Urlaub.
@@ -4361,11 +4375,11 @@ components:
             keine Feiertagsarbeit gutgeschrieben (restDaysEarned = 0).
         dailyHoursSource:
           type: string
-          enum: [bwavg, contract, default]
+          enum: [contract, default]
           description: >-
             Quelle der Tages-Stunden-Bewertung eines ganztägigen Urlaubstags
-            zum heutigen Stichtag: 13-Wochen-Schnitt (bwavg), Vertragsdaten
-            (Wochenstunden ÷ Arbeitstage/Woche) oder Standardwert. Bei
+            zum heutigen Stichtag: Vertragsdaten (Wochenstunden ÷
+            Arbeitstage/Woche) oder Standardwert. Bei
             "contract" sollte die UI auf die Datenpflege der Arbeitstage/Woche
             hinweisen (Migrations-Default 5).
         dailyHours:
@@ -4388,10 +4402,14 @@ components:
             Zusätzlicher Anspruch aus tatsächlich geleisteter Mehrarbeit über
             die Vertragsstunden des laufenden Kalenderjahres hinaus.
         vacationForecastHours:
-          type: number
+          type: ["number", "null"]
           description: >-
-            Prognostizierter Jahresanspruch auf Basis des 13-Wochen-Schnitts
-            der bestätigten Ist-Stunden (§ 11 BUrlG).
+            Optional prognostizierter Jahresendstand auf Basis der letzten
+            13 Wochen; null bei ausgeschalteter oder noch nicht verfügbarer
+            Prognose. Dieser Wert ist kein verfügbares Guthaben.
+        vacationForecastEnabled:
+          type: boolean
+          description: Ist die optionale 13-Wochen-Prognose eingeschaltet?
         avgWeeklyHours:
           type: ["number", "null"]
           description: >-

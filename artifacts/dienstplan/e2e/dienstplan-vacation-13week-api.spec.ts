@@ -7,38 +7,41 @@ import {
 import { dbDeleteAccountByEmail } from "./helpers/db";
 
 /**
- * #552 – Bestätigen, dass die Urlaubstag-Bewertung nach IST-Historie auf
- *        den 13-Wochen-Schnitt umspringt.
+ * Bestätigen, dass eine 13-Wochen-IST-Historie die vertragliche Bewertung
+ * eines Urlaubstags nicht mehr verändert.
  *
- * §11 BUrlG / §2 EFZG: Urlaubstage werden nach dem Durchschnitt der
- * tatsächlich geleisteten Stunden der letzten 13 Wochen bewertet (IST-Modus),
- * sobald ausreichend bestätigte Zeiterfassungsdaten vorliegen. Bis dahin
- * greift der Fallback auf die Vertragsdaten (SOLL-Modus).
+ * Der Zeitfaktor folgt der ausfallenden Arbeitszeit: ohne konkreten Dienst
+ * gilt Wochenstunden / Arbeitstage pro Woche. Die letzten 13 Wochen dürfen
+ * ausschließlich eine optionale Jahresend-Prognose speisen.
  *
  * Dieser Spec bestätigt:
  *   a) GET /api/contracts/{id}/vacation-balance liefert das Feld
  *      `dailyHoursSource` mit Wert "contract" wenn noch keine IST-Daten
- *      vorhanden sind, aber der Vertrag alt genug für 13-Wochen-Schnitt wäre.
+ *      vorhanden sind, auch wenn der Vertrag älter als 13 Wochen ist.
  *   b) Die Antwort enthält alle für die UI relevanten Felder
  *      (dailyHours, contractWeeklyHours, contractWorkdaysPerWeek).
- *   c) Der Endpunkt schlägt nicht fehl (kein 5xx) — der Wechsel auf "bwavg"
- *      geschieht intern sobald bestätigte Zeiterfassungsdaten vorliegen.
+ *   c) Der Endpunkt schlägt nicht fehl und bleibt unabhängig von IST-Historie
+ *      bei der Vertragsquelle.
  */
 
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "admin@dienstplan.local";
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "admin1234";
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
 
-// Vertragsbeginn > 91 Tage (13 Wochen) zurück: contractOlderThan13Weeks() = true.
+// Vertragsbeginn > 91 Tage zurück: Prognose wäre grundsätzlich verfügbar.
 const CONTRACT_START = new Date(Date.now() - 100 * 24 * 60 * 60 * 1000)
   .toISOString()
   .slice(0, 10);
 
 type VacationBalance = {
-  dailyHoursSource?: "contract" | "bwavg";
+  contractId?: number;
+  dailyHoursSource?: "contract" | "default";
   dailyHours?: number | null;
   contractWeeklyHours?: number | null;
   contractWorkdaysPerWeek?: number | null;
+  vacationForecastEnabled?: boolean;
+  avgWeeklyHours?: number | null;
+  vacationForecastHours?: number | null;
 };
 
 let adminCtx: APIRequestContext;
@@ -122,11 +125,8 @@ test("Urlaubsbilanz-Felder sind vorhanden und gültig (#552)", async () => {
     "contractWeeklyHours fehlt",
   ).toBe(40);
 
-  // dailyHoursSource ist eine der beiden erwarteten Werte.
-  expect(
-    ["contract", "bwavg"].includes(balance.dailyHoursSource ?? ""),
-    `dailyHoursSource unbekannt: ${String(balance.dailyHoursSource)}`,
-  ).toBe(true);
+  // Die 13-Wochen-Prognose ist strikt von der Tagesbewertung getrennt.
+  expect(balance.dailyHoursSource).toBe("contract");
 });
 
 test("Endpunkt bleibt stabil wenn Vertrag älter als 13 Wochen ist (#552)", async () => {
@@ -139,5 +139,46 @@ test("Endpunkt bleibt stabil wenn Vertrag älter als 13 Wochen ist (#552)", asyn
       res.ok(),
       `vacation-balance Aufruf #${i + 1} fehlgeschlagen (${res.status()})`,
     ).toBe(true);
+  }
+});
+
+test("Ausgeschaltete 13-Wochen-Prognose liefert keine Prognosewerte", async () => {
+  const settingsRes = await adminCtx.get("/api/allowance-settings");
+  expect(settingsRes.ok()).toBe(true);
+  const settings = (await settingsRes.json()) as Record<string, unknown>;
+
+  try {
+    const disableRes = await adminCtx.put("/api/allowance-settings", {
+      data: { ...settings, vacationForecastEnabled: false },
+    });
+    expect(
+      disableRes.ok(),
+      `Prognose ausschalten fehlgeschlagen (${disableRes.status()}): ${await disableRes.text()}`,
+    ).toBe(true);
+
+    const balanceRes = await adminCtx.get(
+      `/api/contracts/${contractId}/vacation-balance`,
+    );
+    expect(balanceRes.ok()).toBe(true);
+    const balance = (await balanceRes.json()) as VacationBalance;
+    expect(balance.vacationForecastEnabled).toBe(false);
+    expect(balance.avgWeeklyHours).toBeNull();
+    expect(balance.vacationForecastHours).toBeNull();
+
+    const batchRes = await adminCtx.get("/api/vacation-balances");
+    expect(batchRes.ok()).toBe(true);
+    const batch = (await batchRes.json()) as VacationBalance[];
+    const batchBalance = batch.find((item) => item.contractId === contractId);
+    expect(batchBalance, "Eigener Vertrag fehlt in der Sammelbilanz").toBeDefined();
+    expect(batchBalance?.vacationForecastEnabled).toBe(false);
+    expect(batchBalance?.avgWeeklyHours).toBeNull();
+    expect(batchBalance?.vacationForecastHours).toBeNull();
+  } finally {
+    const restoreRes = await adminCtx.put("/api/allowance-settings", {
+      data: { ...settings, vacationForecastEnabled: true },
+    });
+    expect(restoreRes.ok(), "Prognose-Schalter konnte nicht wiederhergestellt werden").toBe(
+      true,
+    );
   }
 });

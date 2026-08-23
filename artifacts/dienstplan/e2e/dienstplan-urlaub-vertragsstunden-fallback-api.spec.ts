@@ -165,7 +165,7 @@ test("Alter Vertrag (>= 13 Wochen) OHNE Historie: weiterhin Vertragswert", async
   expect(await fetchVacationHoursUsed(contract.id)).toBe(5);
 });
 
-test("Grenzfall exakt 13 Wochen + Historie: 13-Wochen-Schnitt gilt", async () => {
+test("Grenzfall exakt 13 Wochen + Historie: Vertragswert bleibt verbindlich", async () => {
   const userId = await h.createUser({ teamId });
   const contractRes = await h.ctx.post("/api/contracts", {
     data: {
@@ -185,8 +185,8 @@ test("Grenzfall exakt 13 Wochen + Historie: 13-Wochen-Schnitt gilt", async () =>
   await seedConfirmedWorkDay(userId, dayStr(-7), 10);
 
   await createVacation(userId);
-  // Schnitt (10h) schlaegt Vertragswert (5h) und Pauschale (8h).
-  expect(await fetchVacationHoursUsed(contract.id)).toBe(10);
+  // Die IST-Historie ist nur für die optionale Prognose relevant.
+  expect(await fetchVacationHoursUsed(contract.id)).toBe(5);
 });
 
 test("Ohne Vertrag: Pauschale 'Stunden pro Urlaubstag' (8h)", async () => {

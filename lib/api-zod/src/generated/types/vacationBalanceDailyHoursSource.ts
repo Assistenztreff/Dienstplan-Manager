@@ -7,13 +7,12 @@
  */
 
 /**
- * Quelle der Tages-Stunden-Bewertung eines ganztägigen Urlaubstags zum heutigen Stichtag: 13-Wochen-Schnitt (bwavg), Vertragsdaten (Wochenstunden ÷ Arbeitstage/Woche) oder Standardwert. Bei "contract" sollte die UI auf die Datenpflege der Arbeitstage/Woche hinweisen (Migrations-Default 5).
+ * Quelle der Tages-Stunden-Bewertung eines ganztägigen Urlaubstags zum heutigen Stichtag: Vertragsdaten (Wochenstunden ÷ Arbeitstage/Woche) oder Standardwert. Bei "contract" sollte die UI auf die Datenpflege der Arbeitstage/Woche hinweisen (Migrations-Default 5).
  */
 export type VacationBalanceDailyHoursSource = typeof VacationBalanceDailyHoursSource[keyof typeof VacationBalanceDailyHoursSource];
 
 
 export const VacationBalanceDailyHoursSource = {
-  bwavg: 'bwavg',
   contract: 'contract',
   default: 'default',
 } as const;

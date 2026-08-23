@@ -70,6 +70,166 @@ export function vacationPoolHours(
   return Math.round((sockel + aufbau) * 100) / 100;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1_000;
+
+function utcDayStart(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function nextUtcDay(date: Date): Date {
+  return new Date(utcDayStart(date).getTime() + DAY_MS);
+}
+
+function contractStartInstant(startDate: string): Date {
+  return new Date(`${startDate}T00:00:00.000Z`);
+}
+
+function contractEndExclusive(endDate: string | null | undefined): Date | null {
+  return endDate ? new Date(new Date(`${endDate}T00:00:00.000Z`).getTime() + DAY_MS) : null;
+}
+
+function monthKey(date: Date): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+export function monthlyActualHoursWithinContract(
+  entries: ReadonlyArray<{ day: string; actualHours: number }>,
+  contract: { startDate: string; endDate?: string | null },
+): Map<string, number> {
+  const monthly = new Map<string, number>();
+  for (const entry of entries) {
+    if (
+      entry.day < contract.startDate ||
+      (contract.endDate != null && entry.day > contract.endDate)
+    ) {
+      continue;
+    }
+    const key = entry.day.slice(0, 7);
+    monthly.set(key, (monthly.get(key) ?? 0) + entry.actualHours);
+  }
+  return monthly;
+}
+
+/**
+ * Tatsächliche Mehrarbeit eines Zeitraums, monatlich abgerechnet.
+ *
+ * Jeder Kalendermonat wird separat gegen das zeitanteilige Vertragssoll
+ * gestellt. Dadurch erzeugen nur bestätigte Stunden oberhalb des Solls
+ * zusätzliches Urlaubsguthaben; Minderstunden senken den garantierten Sockel
+ * nie. Der Aufrufer begrenzt den Zeitraum bereits auf Vertrag und Kalenderjahr.
+ */
+export function monthlyOvertimeHours(
+  weeklyHours: number,
+  activeStart: Date,
+  activeEndExclusive: Date,
+  actualHoursByMonth: ReadonlyMap<string, number>,
+): number {
+  if (weeklyHours <= 0 || activeEndExclusive <= activeStart) return 0;
+
+  let overtime = 0;
+  let cursor = new Date(Date.UTC(activeStart.getUTCFullYear(), activeStart.getUTCMonth(), 1));
+  while (cursor < activeEndExclusive) {
+    const nextMonth = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 1));
+    const overlapStart = new Date(Math.max(cursor.getTime(), activeStart.getTime()));
+    const overlapEnd = new Date(Math.min(nextMonth.getTime(), activeEndExclusive.getTime()));
+    if (overlapEnd > overlapStart) {
+      const daysInMonth = (nextMonth.getTime() - cursor.getTime()) / DAY_MS;
+      const activeDays = (overlapEnd.getTime() - overlapStart.getTime()) / DAY_MS;
+      const monthlyTarget = weeklyHours * (WEEKS_PER_YEAR / 12) * (activeDays / daysInMonth);
+      const actual = actualHoursByMonth.get(monthKey(cursor)) ?? 0;
+      overtime += Math.max(0, actual - monthlyTarget);
+    }
+    cursor = nextMonth;
+  }
+  return Math.round(overtime * 100) / 100;
+}
+
+function currentYearContractWindow(
+  contract: { startDate: string; endDate?: string | null },
+  refDate: Date,
+): { start: Date; endExclusive: Date } | null {
+  const yearStart = new Date(Date.UTC(refDate.getUTCFullYear(), 0, 1));
+  const yearEnd = new Date(Date.UTC(refDate.getUTCFullYear() + 1, 0, 1));
+  const start = new Date(Math.max(yearStart.getTime(), contractStartInstant(contract.startDate).getTime()));
+  const endByContract = contractEndExclusive(contract.endDate);
+  const endExclusive = new Date(
+    Math.min(
+      yearEnd.getTime(),
+      nextUtcDay(refDate).getTime(),
+      endByContract?.getTime() ?? Number.POSITIVE_INFINITY,
+    ),
+  );
+  return endExclusive > start ? { start, endExclusive } : null;
+}
+
+async function earnedVacationFromMonthlyOvertime(
+  userId: number,
+  teamId: number,
+  contract: {
+    vacationDays: number;
+    weeklyHours: number;
+    startDate: string;
+    endDate?: string | null;
+  },
+  ops: { fulltimeWorkdaysPerWeek: number },
+  refDate: Date,
+  dbx: VacationDbx,
+): Promise<{ overtimeHours: number; vacationHours: number }> {
+  const window = currentYearContractWindow(contract, refDate);
+  if (!window) return { overtimeHours: 0, vacationHours: 0 };
+
+  const monthExpr = sql<string>`TO_CHAR(DATE_TRUNC('month', ${timeTrackingTable.actualStart} AT TIME ZONE 'UTC'), 'YYYY-MM')`;
+  const rows = await dbx
+    .select({
+      month: monthExpr,
+      actualHours: sql<number>`COALESCE(SUM(${timeTrackingTable.actualHours}), 0)`,
+    })
+    .from(timeTrackingTable)
+    .innerJoin(shiftsTable, eq(timeTrackingTable.shiftId, shiftsTable.id))
+    .where(
+      and(
+        eq(timeTrackingTable.userId, userId),
+        eq(timeTrackingTable.teamId, teamId),
+        eq(timeTrackingTable.status, "confirmed"),
+        eq(shiftsTable.type, "work"),
+        sql`${timeTrackingTable.actualStart} >= ${window.start.toISOString()}`,
+        sql`${timeTrackingTable.actualStart} < ${window.endExclusive.toISOString()}`,
+      ),
+    )
+    .groupBy(monthExpr);
+
+  const actualByMonth = new Map(
+    rows.map((row) => [row.month, Number(row.actualHours ?? 0)] as const),
+  );
+  return earnedVacationHoursFromMonthlyTotals(contract, ops, refDate, actualByMonth);
+}
+
+export function earnedVacationHoursFromMonthlyTotals(
+  contract: {
+    vacationDays: number;
+    weeklyHours: number;
+    startDate: string;
+    endDate?: string | null;
+  },
+  ops: { fulltimeWorkdaysPerWeek: number },
+  refDate: Date,
+  actualByMonth: ReadonlyMap<string, number>,
+): { overtimeHours: number; vacationHours: number } {
+  const window = currentYearContractWindow(contract, refDate);
+  if (!window) return { overtimeHours: 0, vacationHours: 0 };
+  const overtimeHours = monthlyOvertimeHours(
+    contract.weeklyHours,
+    window.start,
+    window.endExclusive,
+    actualByMonth,
+  );
+  const factor = vacationFactorFor(contract.vacationDays, ops.fulltimeWorkdaysPerWeek);
+  return {
+    overtimeHours,
+    vacationHours: Math.round(overtimeHours * factor * 100) / 100,
+  };
+}
+
 // Ein ganztägiger Urlaubstag (00:00–23:59, kein zugrundeliegender Dienst)
 // verbraucht hoursPerDay (Standard 8h). Ersetzt der Urlaub einen konkret
 // geplanten Dienst (echte Schichtzeiten — vom Primary-Lookup geerbt oder aus
@@ -185,13 +345,28 @@ export async function bwavgDailyHoursForDates(
 export async function vacationForecastHours(
   userId: number,
   teamId: number,
-  contract: { vacationDays: number; weeklyHours: number },
+  contract: {
+    vacationDays: number;
+    weeklyHours: number;
+    startDate: string;
+    endDate?: string | null;
+  },
   ops: { fulltimeWorkdaysPerWeek: number },
+  earnedVacationHours: number,
   refDate: Date,
   dbx: VacationDbx = db
-): Promise<{ sockel: number; aufbau: number; prognose: number; avgWeeklyHours: number | null }> {
+): Promise<{
+  sockel: number;
+  aufbau: number;
+  prognose: number | null;
+  avgWeeklyHours: number | null;
+}> {
   const end = new Date(refDate);
   const start = new Date(end.getTime() - 91 * 24 * 3_600_000); // 13 Wochen
+  const sockel = vacationPoolHours(contract, ops);
+  if (end.getTime() - contractStartInstant(contract.startDate).getTime() < 91 * DAY_MS) {
+    return { sockel, aufbau: earnedVacationHours, prognose: null, avgWeeklyHours: null };
+  }
   const [row] = await dbx
     .select({
       total: sql<number>`COALESCE(SUM(${timeTrackingTable.actualHours}), 0)`,
@@ -212,11 +387,25 @@ export async function vacationForecastHours(
   const workedDays = Number(row?.days ?? 0);
   const avgWeeklyHours =
     workedDays > 0 ? Math.round((Number(row?.total ?? 0) / 13) * 100) / 100 : null;
-  const paidHoursYear = (avgWeeklyHours ?? contract.weeklyHours) * WEEKS_PER_YEAR;
-  const sockel = vacationPoolHours(contract, ops);
-  const prognose = vacationPoolHours(contract, ops, paidHoursYear);
-  const aufbau = Math.round((prognose - sockel) * 100) / 100;
-  return { sockel, aufbau, prognose, avgWeeklyHours };
+  if (avgWeeklyHours == null) {
+    return { sockel, aufbau: earnedVacationHours, prognose: null, avgWeeklyHours: null };
+  }
+
+  const yearEnd = new Date(Date.UTC(refDate.getUTCFullYear() + 1, 0, 1));
+  const endByContract = contractEndExclusive(contract.endDate);
+  const projectionEnd = new Date(
+    Math.min(yearEnd.getTime(), endByContract?.getTime() ?? Number.POSITIVE_INFINITY),
+  );
+  const projectionStart = nextUtcDay(refDate);
+  const remainingWeeks = Math.max(
+    0,
+    (projectionEnd.getTime() - projectionStart.getTime()) / (7 * DAY_MS),
+  );
+  const projectedOvertime = Math.max(0, avgWeeklyHours - contract.weeklyHours) * remainingWeeks;
+  const factor = vacationFactorFor(contract.vacationDays, ops.fulltimeWorkdaysPerWeek);
+  const projectedVacationHours = Math.round(projectedOvertime * factor * 100) / 100;
+  const prognose = Math.round((sockel + earnedVacationHours + projectedVacationHours) * 100) / 100;
+  return { sockel, aufbau: earnedVacationHours, prognose, avgWeeklyHours };
 }
 
 // Vollständige Resturlaub-Bilanz EINES Vertrags (inkl. Ersatzruhetag-Konto und
@@ -246,7 +435,8 @@ export interface VacationBalanceResult {
   contractWeeklyHours: number | null;
   vacationSockelHours: number;
   vacationAufbauHours: number;
-  vacationForecastHours: number;
+  vacationForecastHours: number | null;
+  vacationForecastEnabled: boolean;
   avgWeeklyHours: number | null;
 }
 
@@ -259,12 +449,23 @@ export async function computeVacationBalanceForContract(
     vacationHoursUsed: number;
     weeklyHours: number;
     workdaysPerWeek: number;
+    startDate: string;
+    endDate?: string | null;
   },
   ops: ResolvedAllowanceOps,
   dbx: VacationDbx = db
 ): Promise<VacationBalanceResult> {
   const hoursPerDay = typicalShiftHours(contract, ops.vacationHoursPerDay);
-  const vacationHoursTotal = vacationPoolHours(contract, ops);
+  const sockel = vacationPoolHours(contract, ops);
+  const earned = await earnedVacationFromMonthlyOvertime(
+    contract.userId,
+    contract.teamId,
+    contract,
+    ops,
+    new Date(),
+    dbx,
+  );
+  const vacationHoursTotal = Math.round((sockel + earned.vacationHours) * 100) / 100;
   const vacationHoursUsed = Math.round(contract.vacationHoursUsed * 100) / 100;
   const vacationHoursRemaining = Math.round((vacationHoursTotal - vacationHoursUsed) * 100) / 100;
   const daysUsed = Math.round((vacationHoursUsed / hoursPerDay) * 10) / 10;
@@ -313,21 +514,29 @@ export async function computeVacationBalanceForContract(
     dbx,
     ops
   );
-  const forecast = await vacationForecastHours(
-    contract.userId,
-    contract.teamId,
-    contract,
-    ops,
-    new Date(),
-    dbx
-  );
+  const forecast = ops.vacationForecastEnabled
+    ? await vacationForecastHours(
+        contract.userId,
+        contract.teamId,
+        contract,
+        ops,
+        earned.vacationHours,
+        new Date(),
+        dbx,
+      )
+    : {
+        sockel,
+        aufbau: earned.vacationHours,
+        prognose: null,
+        avgWeeklyHours: null,
+      };
 
   return {
     contractId: contract.id,
     userId: contract.userId,
-    vacationDays: contract.vacationDays,
+    vacationDays: Math.round((vacationHoursTotal / hoursPerDay) * 10) / 10,
     vacationDaysUsed: daysUsed,
-    vacationDaysRemaining: Math.round((contract.vacationDays - daysUsed) * 10) / 10,
+    vacationDaysRemaining: Math.round((vacationHoursRemaining / hoursPerDay) * 10) / 10,
     vacationHoursTotal,
     vacationHoursUsed,
     vacationHoursRemaining,
@@ -344,6 +553,7 @@ export async function computeVacationBalanceForContract(
     vacationSockelHours: forecast.sockel,
     vacationAufbauHours: forecast.aufbau,
     vacationForecastHours: forecast.prognose,
+    vacationForecastEnabled: ops.vacationForecastEnabled,
     avgWeeklyHours: forecast.avgWeeklyHours,
   };
 }
@@ -422,7 +632,7 @@ export async function absenceHoursFor(
 // kann, WENN ein Urlaubstag aus Vertragsdaten (statt 13-Wochen-Schnitt)
 // bewertet wurde, inkl. der verwendeten Arbeitstage/Woche (Datenpflege-Hinweis:
 // Bestandsverträge stehen nach der Migration oft pauschal auf 5).
-export type DailyRateSource = "bwavg" | "contract" | "default";
+export type DailyRateSource = "contract" | "default";
 export interface DailyRateInfo {
   dailyHours: number;
   source: DailyRateSource;
@@ -442,9 +652,8 @@ export async function resolveDailyRateInfo(
   // Optionaler, bereits aufgelöster ops-Wert (Batch-Route: einmal pro Team
   // statt einmal pro Vertrag laden) — ohne Übergabe unverändertes Verhalten
   // (löst selbst auf, z. B. für die Einzelaufrufe in absenceHoursFor).
-  resolvedOps?: ResolvedAllowanceOps
+  _resolvedOps?: ResolvedAllowanceOps
 ): Promise<DailyRateInfo> {
-  const ops = resolvedOps ?? (await resolveAllowanceOps(teamId, dbx));
   const contract =
     teamId != null ? await activeTeamContractFor(userId, teamId, refDate, dbx) : null;
   const info: DailyRateInfo = {
@@ -453,32 +662,9 @@ export async function resolveDailyRateInfo(
     workdaysPerWeek: contract?.workdaysPerWeek ?? null,
     weeklyHours: contract?.weeklyHours ?? null,
   };
-  if (ops.vacationMethod !== "bwavg") {
-    if (contract && contract.weeklyHours > 0 && contract.workdaysPerWeek > 0) {
-      info.dailyHours = typicalShiftHours(contract, fallbackPerDay);
-      info.source = "contract";
-    }
-    return info;
-  }
-  if (contract) {
-    const avg = contractOlderThan13Weeks(contract.startDate, refDate)
-      ? await bwavgDailyHours(userId, refDate, dbx)
-      : null;
-    if (avg != null) {
-      info.dailyHours = avg;
-      info.source = "bwavg";
-    } else if (contract.weeklyHours > 0 && contract.workdaysPerWeek > 0) {
-      info.dailyHours = typicalShiftHours(contract, fallbackPerDay);
-      info.source = "contract";
-    }
-  } else {
-    // Ohne Vertrag: bisheriges Verhalten (Schnitt, falls Historie; sonst
-    // Standardwert) — kein Verhaltensbruch für vertragslose Nutzer.
-    const avg = await bwavgDailyHours(userId, refDate, dbx);
-    if (avg != null) {
-      info.dailyHours = avg;
-      info.source = "bwavg";
-    }
+  if (contract && contract.weeklyHours > 0 && contract.workdaysPerWeek > 0) {
+    info.dailyHours = typicalShiftHours(contract, fallbackPerDay);
+    info.source = "contract";
   }
   return info;
 }

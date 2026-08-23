@@ -50,7 +50,6 @@ import {
 } from "../lib/shift-metrics-resolve";
 import {
   absenceHoursFor,
-  bwavgDailyHoursForDates,
   resolveVacationHours,
 } from "../lib/vacation-hours";
 import { userHasFeature, getUserLimit } from "../lib/plan";
@@ -1566,25 +1565,9 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
         await tx.delete(shiftsTable).where(inArray(shiftsTable.id, replaced));
       }
 
-      // 13-Wochen-Durchschnitt je Stichtag (rollierendes Fenster wie im
-      // Einzelpfad), aber gesammelt in EINER Abfrage statt einer pro Tag.
-      const averages =
-        ops.vacationMethod === "bwavg"
-          ? await bwavgDailyHoursForDates(
-              userId,
-              resolved.map(({ times }) => times.startTime),
-              tx,
-            )
-          : new Map<string, number | null>();
-
       const prepared = resolved.map(({ times, isPartialAbsence }) => {
         const targetHours = dailyTargetHoursFromContracts(contracts, times.startTime);
         const teamContract = contractForDay(contracts, times.startTime, write.teamId);
-        const average =
-          ops.vacationMethod === "bwavg" &&
-          (!teamContract || isContractOlderThan13Weeks(teamContract, times.startTime))
-            ? averages.get(times.startTime.toISOString()) ?? null
-            : null;
         const contractHours =
           teamContract && teamContract.weeklyHours > 0 && teamContract.workdaysPerWeek > 0
             ? Math.round((teamContract.weeklyHours / teamContract.workdaysPerWeek) * 100) / 100
@@ -1596,7 +1579,7 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
         const absenceHours = (fallback: number) =>
           !isFullDay
             ? durationHours
-            : average ?? (ops.vacationMethod === "bwavg" ? contractHours ?? fallback : fallback);
+            : contractHours ?? fallback;
         const plannedHours = absenceHours(targetHours);
         const metrics = resolveShiftMetrics(
           {

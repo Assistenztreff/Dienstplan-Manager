@@ -25,6 +25,7 @@
     "pre-push-sql": "tsx ./src/pre-push-sql.ts",
     "migrate-allowance-settings": "tsx ./src/migrate-allowance-settings.ts",
     "migrate-absences-fix": "tsx ./src/migrate-absences-fix.ts",
+    "dry-run-vacation-revaluation": "tsx ./src/dry-run-vacation-revaluation.ts",
     "migrate-payroll-access": "tsx ./src/migrate-payroll-access.ts",
     "backfill-team-shift-models": "tsx ./src/backfill-team-shift-models.ts",
     "backfill-partial-absence-flag": "tsx ./src/backfill-partial-absence-flag.ts",

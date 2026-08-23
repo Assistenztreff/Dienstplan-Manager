@@ -57,6 +57,8 @@ export interface AllowanceSettingsInput {
      * @maximum 365
      */
   defaultVacationDays?: number;
+  /** Optionale 13-Wochen-Prognose anzeigen (konto-global). */
+  vacationForecastEnabled?: boolean;
   /** Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktivieren/deaktivieren. */
   ersatzruhetagEnabled?: boolean;
   /** Team-Dienst (Teamsitzung) aktivieren/deaktivieren (konto-global, kein Team-Override). */

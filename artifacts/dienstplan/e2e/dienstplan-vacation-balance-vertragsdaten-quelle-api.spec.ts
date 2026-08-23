@@ -15,7 +15,7 @@ import {
  * haeufig sind. Solange kein 13-Wochen-Schnitt (bwavg) vorliegt, bewertet der
  * Fallback Urlaubstage aus den Vertragsdaten (Wochenstunden / Arbeitstage).
  * Damit die UI darauf hinweisen kann, liefert die Bilanz jetzt:
- * - dailyHoursSource: bwavg | contract | default
+ * - dailyHoursSource: contract | default
  * - dailyHours: verwendete Stunden je Urlaubstag (Stichtag heute)
  * - contractWorkdaysPerWeek / contractWeeklyHours des aktiven Vertrags
  *

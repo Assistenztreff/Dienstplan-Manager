@@ -33,6 +33,10 @@ import {
 } from "./dashboard-hours-balance";
 import { HoursBalanceCache } from "./hours-balance-cache";
 import { logger } from "./logger";
+import {
+  earnedVacationHoursFromMonthlyTotals,
+  monthlyActualHoursWithinContract,
+} from "./vacation-hours";
 
 const hoursBalanceCache = new HoursBalanceCache();
 
@@ -157,6 +161,16 @@ async function computeHoursBalancesUncached(
   const monthEndDate = new Date(Date.UTC(year, month, 1));
   const monthStart = monthStartDate.toISOString().split("T")[0]!;
   const monthEnd = new Date(Date.UTC(year, month, 0)).toISOString().split("T")[0]!;
+  const vacationRefDate = new Date();
+  const vacationYearStartDate = new Date(Date.UTC(vacationRefDate.getUTCFullYear(), 0, 1));
+  const vacationEndDate = new Date(
+    Date.UTC(
+      vacationRefDate.getUTCFullYear(),
+      vacationRefDate.getUTCMonth(),
+      vacationRefDate.getUTCDate() + 1,
+    ),
+  );
+  const vacationDayExpr = sql<string>`TO_CHAR(${timeTrackingTable.actualStart} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`;
 
   const overrideSettings = alias(allowanceSettingsTable, "override_settings");
   const contractOverrideSettings = alias(
@@ -180,6 +194,7 @@ async function computeHoursBalancesUncached(
     allShifts,
     allTimeEntries,
     allContractsRaw,
+    vacationOvertimeRows,
   ] = await Promise.all([
     timedQuery(
       timings,
@@ -434,6 +449,38 @@ async function computeHoursBalancesUncached(
             )
         : Promise.resolve([]),
     ),
+    timedQuery(
+      timings,
+      "vacation-overtime",
+      teamScope.length
+        ? db
+            .select({
+              userId: timeTrackingTable.userId,
+              teamId: timeTrackingTable.teamId,
+              day: vacationDayExpr,
+              actualHours: sql<number>`COALESCE(SUM(${timeTrackingTable.actualHours}), 0)`,
+            })
+            .from(timeTrackingTable)
+            .innerJoin(shiftsTable, eq(timeTrackingTable.shiftId, shiftsTable.id))
+            .innerJoin(usersTable, eq(timeTrackingTable.userId, usersTable.id))
+            .where(
+              and(
+                inArray(timeTrackingTable.teamId, teamScope),
+                eq(usersTable.role, "assistant"),
+                eq(usersTable.isActive, true),
+                eq(timeTrackingTable.status, "confirmed"),
+                eq(shiftsTable.type, "work"),
+                gte(timeTrackingTable.actualStart, vacationYearStartDate),
+                lt(timeTrackingTable.actualStart, vacationEndDate),
+              ),
+            )
+            .groupBy(
+              timeTrackingTable.userId,
+              timeTrackingTable.teamId,
+              vacationDayExpr,
+            )
+        : Promise.resolve([]),
+    ),
   ]);
 
   const assistants = [
@@ -464,6 +511,16 @@ async function computeHoursBalancesUncached(
       .filter((row) => row.timeTrackingEnabled === true)
       .map((row) => row.teamId),
   );
+  const vacationActualByUserTeam = new Map<
+    string,
+    Array<{ day: string; actualHours: number }>
+  >();
+  for (const row of vacationOvertimeRows) {
+    const key = `${row.userId}:${row.teamId}`;
+    const daily = vacationActualByUserTeam.get(key) ?? [];
+    daily.push({ day: row.day, actualHours: Number(row.actualHours ?? 0) });
+    vacationActualByUserTeam.set(key, daily);
+  }
   const [ownAllowance] = ownAllowanceRows;
   const allowanceByTeam = new Map(
     teamAllowanceRows.map((r) => [
@@ -663,6 +720,21 @@ async function computeHoursBalancesUncached(
                 DEFAULT_ALLOWANCE_OPS.fulltimeWorkdaysPerWeek,
             }
         : null;
+      const vacationActualByMonth = contract
+        ? monthlyActualHoursWithinContract(
+            vacationActualByUserTeam.get(`${contract.userId}:${contract.teamId}`) ?? [],
+            contract,
+          )
+        : new Map<string, number>();
+      const vacationAufbauHours =
+        contract && vacationOps
+          ? earnedVacationHoursFromMonthlyTotals(
+              contract,
+              vacationOps,
+              vacationRefDate,
+              vacationActualByMonth,
+            ).vacationHours
+          : 0;
 
       // Teamsitzungs-Gutschrift: Summe über alle Teams, in denen die
       // Assistenzkraft Mitglied ist — Team-Tage × teamMeetingHours des
@@ -685,6 +757,7 @@ async function computeHoursBalancesUncached(
         hourlyWage: assistant.hourlyWage,
         vacationHoursPerDay: vacationOps?.vacationHoursPerDay,
         fulltimeWorkdaysPerWeek: vacationOps?.fulltimeWorkdaysPerWeek,
+        vacationAufbauHours,
         teamsitzungStunden,
         deductPausesByTeam,
       });

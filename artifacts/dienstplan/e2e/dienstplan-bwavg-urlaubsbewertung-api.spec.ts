@@ -7,7 +7,7 @@
  * 2. vacationMethod = "bwavg" in den Konto-Einstellungen setzen.
  * 3. Zeiterfassung aktivieren, einen Arbeitsdienst anlegen, IST-Eintrag
  *    buchen und bestätigen (confirm-batch, braucht strictTimeTracking).
- * 4. GET /contracts/:id/vacation-balance → dailyHoursSource = "bwavg".
+ * 4. GET /contracts/:id/vacation-balance bleibt trotz Historie bei "contract".
  *
  * Solange keine IST-Historie vorhanden ist (Negativprüfung), muss
  * dailyHoursSource auf "contract" oder "default" stehen.
@@ -160,7 +160,7 @@ test(
 );
 
 test(
-  "Mit bestätigter IST-Historie springt dailyHoursSource auf bwavg (#552)",
+  "Bestätigte IST-Historie verändert die vertragliche Tagesbewertung nicht",
   async () => {
     const balRes = await acc.ctx.get(`/api/contracts/${contractId}/vacation-balance`);
     expect(balRes.status(), `vacation-balance (${balRes.status()})`).toBe(200);
@@ -171,10 +171,7 @@ test(
       dailyHours: number;
     };
     expect(bal.method, "Methode aus den Einstellungen muss bwavg sein").toBe("bwavg");
-    expect(
-      bal.dailyHoursSource,
-      "Nach bestätigter Arbeitsstunden-Historie auf bwavg-Quelle umspringen",
-    ).toBe("bwavg");
-    expect(bal.dailyHours, "bwavg-Tagesstunden müssen > 0 sein").toBeGreaterThan(0);
+    expect(bal.dailyHoursSource).toBe("contract");
+    expect(bal.dailyHours, "40 Wochenstunden / 5 Arbeitstage").toBe(8);
   },
 );

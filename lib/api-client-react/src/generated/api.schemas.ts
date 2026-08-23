@@ -1130,6 +1130,8 @@ export interface AllowanceSettings {
   fulltimeWeeklyHours: number;
   /** Vorbelegung des Feldes "Urlaubsanspruch bei Vollzeit" bei neuen Verträgen. */
   defaultVacationDays: number;
+  /** Optionale Hochrechnung des Urlaubsguthabens aus den bestätigten Arbeitszeiten der letzten 13 Wochen anzeigen? Konto-global, Standard AN. Die Prognose verändert den echten Kontostand nie. */
+  vacationForecastEnabled: boolean;
   /** Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktiv? Bei false verdient Feiertagsarbeit keinen Ausgleichs-Ruhetag. */
   ersatzruhetagEnabled: boolean;
   /** Team-Dienst (Teamsitzung) aktiv? Konto-global (kein Team-Override); Standard AUS. Bei AUS lehnen POST/PATCH /shifts den Typ team mit 400 ab; bestehende Team-Einträge bleiben sichtbar (Bestandsschutz). */
@@ -1244,6 +1246,8 @@ export interface AllowanceSettingsInput {
      * @maximum 365
      */
   defaultVacationDays?: number;
+  /** Optionale 13-Wochen-Prognose anzeigen (konto-global). */
+  vacationForecastEnabled?: boolean;
   /** Ersatzruhetag-Konto (§ 11 Abs. 3 ArbZG) aktivieren/deaktivieren. */
   ersatzruhetagEnabled?: boolean;
   /** Team-Dienst (Teamsitzung) aktivieren/deaktivieren (konto-global, kein Team-Override). */
@@ -1750,13 +1754,12 @@ export const VacationBalanceMethod = {
 } as const;
 
 /**
- * Quelle der Tages-Stunden-Bewertung eines ganztägigen Urlaubstags zum heutigen Stichtag: 13-Wochen-Schnitt (bwavg), Vertragsdaten (Wochenstunden ÷ Arbeitstage/Woche) oder Standardwert. Bei "contract" sollte die UI auf die Datenpflege der Arbeitstage/Woche hinweisen (Migrations-Default 5).
+ * Quelle der Tages-Stunden-Bewertung eines ganztägigen Urlaubstags zum heutigen Stichtag: Vertragsdaten (Wochenstunden ÷ Arbeitstage/Woche) oder Standardwert. Bei "contract" sollte die UI auf die Datenpflege der Arbeitstage/Woche hinweisen (Migrations-Default 5).
  */
 export type VacationBalanceDailyHoursSource = typeof VacationBalanceDailyHoursSource[keyof typeof VacationBalanceDailyHoursSource];
 
 
 export const VacationBalanceDailyHoursSource = {
-  bwavg: 'bwavg',
   contract: 'contract',
   default: 'default',
 } as const;
@@ -1764,12 +1767,12 @@ export const VacationBalanceDailyHoursSource = {
 export interface VacationBalance {
   contractId: number;
   userId: number;
-  /** Anspruch in Tagen (vacationHoursTotal / hoursPerDay, gerundet). */
+  /** Aktueller Gesamtanspruch in Tagen inklusive erworbener Mehrarbeit. */
   vacationDays: number;
   /** Verbrauchte Tage (vacationHoursUsed / hoursPerDay, gerundet, Anzeige). */
   vacationDaysUsed: number;
   vacationDaysRemaining: number;
-  /** Gesamt-Urlaubsanspruch in Stunden (vacationDays * hoursPerDay). */
+  /** Garantierter Sockel plus bereits erworbenes Mehrarbeitsguthaben. */
   vacationHoursTotal: number;
   /** Stundengenau verbrauchter Urlaub. */
   vacationHoursUsed: number;
@@ -1785,7 +1788,7 @@ export interface VacationBalance {
   restDaysBalance?: number;
   /** Ist das Ersatzruhetag-Konto für dieses Team aktiv? Bei false wird keine Feiertagsarbeit gutgeschrieben (restDaysEarned = 0). */
   ersatzruhetagEnabled?: boolean;
-  /** Quelle der Tages-Stunden-Bewertung eines ganztägigen Urlaubstags zum heutigen Stichtag: 13-Wochen-Schnitt (bwavg), Vertragsdaten (Wochenstunden ÷ Arbeitstage/Woche) oder Standardwert. Bei "contract" sollte die UI auf die Datenpflege der Arbeitstage/Woche hinweisen (Migrations-Default 5). */
+  /** Quelle der Tages-Stunden-Bewertung eines ganztägigen Urlaubstags zum heutigen Stichtag: Vertragsdaten (Wochenstunden ÷ Arbeitstage/Woche) oder Standardwert. Bei "contract" sollte die UI auf die Datenpflege der Arbeitstage/Woche hinweisen (Migrations-Default 5). */
   dailyHoursSource?: VacationBalanceDailyHoursSource;
   /** Verwendete Stunden je Urlaubstag zum heutigen Stichtag. */
   dailyHours?: number;
@@ -1800,11 +1803,16 @@ export interface VacationBalance {
      */
   contractWeeklyHours?: number | null;
   /** Sockel des Urlaubstopfs (Urlaubswochen × Vertragsstunden), ohne Mehrarbeits-Aufbau. */
-  vacationSockelHours?: number;
+  vacationSockelHours: number;
   /** Zusätzlicher Anspruch aus tatsächlich geleisteter Mehrarbeit über die Vertragsstunden des laufenden Kalenderjahres hinaus. */
-  vacationAufbauHours?: number;
-  /** Prognostizierter Jahresanspruch auf Basis des 13-Wochen-Schnitts der bestätigten Ist-Stunden (§ 11 BUrlG). */
-  vacationForecastHours?: number;
+  vacationAufbauHours: number;
+  /**
+     * Optional prognostizierter Jahresendstand auf Basis der letzten 13 Wochen; null bei ausgeschalteter oder noch nicht verfügbarer Prognose. Dieser Wert ist kein verfügbares Guthaben.
+     * @nullable
+     */
+  vacationForecastHours: number | null;
+  /** Ist die optionale 13-Wochen-Prognose eingeschaltet? */
+  vacationForecastEnabled: boolean;
   /**
      * Ø Wochenstunden der letzten 13 Wochen aus bestätigten Ist-Zeiten; null ohne ausreichende Historie.
      * @nullable

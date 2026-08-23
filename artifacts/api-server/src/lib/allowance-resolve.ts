@@ -21,6 +21,9 @@ export interface ResolvedAllowanceOps {
   fulltimeWeeklyHours: number;
   // Vorbelegung des Feldes "Urlaubsanspruch bei Vollzeit" bei neuen Verträgen.
   defaultVacationDays: number;
+  // Reine Anzeige-Hochrechnung, konto-global. Nie als verfügbares Guthaben
+  // verwenden und nie aus einer Team-Override-Zeile übernehmen.
+  vacationForecastEnabled: boolean;
   // Bundesland für die Feiertagserkennung (z. B. Ersatzruhetag-Konto). null =
   // nur bundesweite Feiertage.
   state: string | null;
@@ -37,6 +40,7 @@ export const DEFAULT_ALLOWANCE_OPS: ResolvedAllowanceOps = {
   fulltimeWorkdaysPerWeek: 5,
   fulltimeWeeklyHours: 39,
   defaultVacationDays: 30,
+  vacationForecastEnabled: true,
   state: null,
   ersatzruhetagEnabled: true,
 };
@@ -49,6 +53,7 @@ const opsColumns = {
   fulltimeWorkdaysPerWeek: allowanceSettingsTable.fulltimeWorkdaysPerWeek,
   fulltimeWeeklyHours: allowanceSettingsTable.fulltimeWeeklyHours,
   defaultVacationDays: allowanceSettingsTable.defaultVacationDays,
+  vacationForecastEnabled: allowanceSettingsTable.vacationForecastEnabled,
   state: allowanceSettingsTable.state,
   ersatzruhetagEnabled: allowanceSettingsTable.ersatzruhetagEnabled,
 };
@@ -70,7 +75,28 @@ export async function resolveAllowanceOps(
     .from(allowanceSettingsTable)
     .where(eq(allowanceSettingsTable.teamId, teamId))
     .limit(1);
-  if (override) return override;
+  if (override) {
+    // Die Prognose ist konto-global. Override-Zeilen tragen für die physische
+    // Spalte nur den DB-Default; maßgeblich ist immer die Konto-Zeile des
+    // Team-Eigentümers.
+    const [accountForecast] = await dbx
+      .select({ vacationForecastEnabled: allowanceSettingsTable.vacationForecastEnabled })
+      .from(teamsTable)
+      .innerJoin(
+        allowanceSettingsTable,
+        and(
+          eq(allowanceSettingsTable.ownerId, teamsTable.ownerId),
+          isNull(allowanceSettingsTable.teamId)
+        )
+      )
+      .where(eq(teamsTable.id, teamId))
+      .limit(1);
+    return {
+      ...override,
+      vacationForecastEnabled:
+        accountForecast?.vacationForecastEnabled ?? DEFAULT_ALLOWANCE_OPS.vacationForecastEnabled,
+    };
+  }
 
   const [ownerRow] = await dbx
     .select(opsColumns)

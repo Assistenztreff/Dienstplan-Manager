@@ -50,6 +50,7 @@ type FormState = {
   fulltimeWorkdaysPerWeek: string;
   fulltimeWeeklyHours: string;
   defaultVacationDays: string;
+  vacationForecastEnabled: boolean;
   ersatzruhetagEnabled: boolean;
   teamMeetingEnabled: boolean;
   teamMeetingHours: string;
@@ -165,11 +166,20 @@ export function AllowanceSettingsForm() {
   // diesem Fenster schriebe in einen Bereich, den der Nutzer so nie gesehen
   // hat (gleiches Muster wie die Logo-Karte, Task #618).
   // Dual-Cast (Optionen + Ergebnis), sonst inferiert `data` zu `{}` (Orval).
-  const { data: settings, isLoading: settingsLoading } = useGetAllowanceSettings(queryParams, {
-    query: { enabled: isTeamScopeReady },
+  const {
+    data: settings,
+    isLoading: settingsLoading,
+    isFetching: settingsFetching,
+  } = useGetAllowanceSettings(queryParams, {
+    query: {
+      enabled: isTeamScopeReady,
+      staleTime: 0,
+      refetchOnMount: "always",
+    },
   } as Parameters<typeof useGetAllowanceSettings>[1]) as {
     data?: AllowanceSettings;
     isLoading: boolean;
+    isFetching: boolean;
   };
   const isLoading = !isTeamScopeReady || settingsLoading;
   const updateSettings = useUpdateAllowanceSettings();
@@ -190,6 +200,7 @@ export function AllowanceSettingsForm() {
     fulltimeWorkdaysPerWeek: "5",
     fulltimeWeeklyHours: "39",
     defaultVacationDays: "30",
+    vacationForecastEnabled: true,
     ersatzruhetagEnabled: true,
     teamMeetingEnabled: false,
     teamMeetingHours: "1",
@@ -209,9 +220,14 @@ export function AllowanceSettingsForm() {
   // (z.B. bei Fensterfokus) keine ungespeicherten Eingaben überschreibt. Ein
   // Bereichswechsel lädt bewusst neu.
   const hydratedScopeRef = useRef<string | null>(null);
+  const isDirtyRef = useRef(false);
 
   useEffect(() => {
-    if (settings && hydratedScopeRef.current !== scope) {
+    if (
+      settings &&
+      !settingsFetching &&
+      (hydratedScopeRef.current !== scope || !isDirtyRef.current)
+    ) {
       hydratedScopeRef.current = scope;
       setForm({
         nightPercent: String(settings.nightPercent),
@@ -228,6 +244,7 @@ export function AllowanceSettingsForm() {
         fulltimeWorkdaysPerWeek: String(settings.fulltimeWorkdaysPerWeek ?? 5),
         fulltimeWeeklyHours: String(settings.fulltimeWeeklyHours ?? 39),
         defaultVacationDays: String(settings.defaultVacationDays ?? 30),
+        vacationForecastEnabled: settings.vacationForecastEnabled ?? true,
         ersatzruhetagEnabled: settings.ersatzruhetagEnabled ?? true,
         teamMeetingEnabled: settings.teamMeetingEnabled ?? false,
         teamMeetingHours: String(settings.teamMeetingHours ?? 1),
@@ -241,14 +258,16 @@ export function AllowanceSettingsForm() {
       setErrors({});
       setSaved(false);
     }
-  }, [settings, scope]);
+  }, [settings, settingsFetching, scope]);
 
   function changeScope(next: string) {
     setScope(next);
     hydratedScopeRef.current = null;
+    isDirtyRef.current = false;
   }
 
   function set<K extends keyof FormState>(field: K, value: FormState[K]) {
+    isDirtyRef.current = true;
     setForm((f) => ({ ...f, [field]: value }));
     setErrors((e) => ({ ...e, [field]: undefined }));
     setSaved(false);
@@ -311,6 +330,13 @@ export function AllowanceSettingsForm() {
   async function invalidateAll() {
     // Prefix-Match: trifft die Konto-Abfrage UND alle Team-Abfragen.
     await queryClient.invalidateQueries({ queryKey: getGetAllowanceSettingsQueryKey() });
+    // Urlaubsbilanz und Sammelbilanz hängen u. a. am Prognose-Schalter und an
+    // den Vollzeit-/Urlaubswerten. Beide generierten Query-Keys enthalten
+    // "vacation-balance" (Singular oder Plural).
+    await queryClient.invalidateQueries({
+      predicate: ({ queryKey }) =>
+        typeof queryKey[0] === "string" && queryKey[0].includes("vacation-balance"),
+    });
     // Zeiterfassungs-Schalter wirkt sofort auf Menüpunkt/Seite/Dashboard
     // (ohne Neuladen): effektiven Status neu laden.
     await queryClient.invalidateQueries({ queryKey: getGetTimeTrackingStatusQueryKey() });
@@ -344,6 +370,7 @@ export function AllowanceSettingsForm() {
                 fulltimeWorkdaysPerWeek: Number(f.fulltimeWorkdaysPerWeek),
                 fulltimeWeeklyHours: Number(f.fulltimeWeeklyHours),
                 defaultVacationDays: Number(f.defaultVacationDays),
+                vacationForecastEnabled: f.vacationForecastEnabled,
                 ersatzruhetagEnabled: f.ersatzruhetagEnabled,
                 teamMeetingEnabled: f.teamMeetingEnabled,
                 teamMeetingHours: Number(f.teamMeetingHours),
@@ -358,6 +385,7 @@ export function AllowanceSettingsForm() {
         },
         params: queryParams,
       });
+      isDirtyRef.current = false;
       await invalidateAll();
       setSaved(true);
     } catch (err) {
@@ -914,13 +942,34 @@ export function AllowanceSettingsForm() {
                       </p>
                     </div>
 
+                    <div className="flex items-start justify-between gap-4 rounded-lg border border-border/60 p-3">
+                      <div className="space-y-1">
+                        <Label
+                          htmlFor="vacationForecastEnabled"
+                          className="text-sm font-semibold"
+                        >
+                          13-Wochen-Prognose anzeigen
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Schätzt den Stand zum Jahresende aus den bestätigten Arbeitszeiten der
+                          letzten 13 Wochen. Die Prognose verändert den verfügbaren Urlaub nicht.
+                        </p>
+                      </div>
+                      <Switch
+                        id="vacationForecastEnabled"
+                        data-testid="allowance-vacation-forecast-switch"
+                        checked={form.vacationForecastEnabled}
+                        onCheckedChange={(value) => set("vacationForecastEnabled", value)}
+                      />
+                    </div>
+
                     <p className="text-xs text-muted-foreground">
                       Ein Urlaubstag zieht die Stunden des Dienstes an diesem Tag ab — ohne
                       geplanten Dienst die typische Dienstlänge, etwa 8,0 h.
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Der Anspruch wächst mit jeder bezahlten Stunde, die Vertragsstunden sind die
-                      Untergrenze. Jahresprognose aus dem 13-Wochen-Schnitt (§ 11 BUrlG).
+                      Bestätigte Arbeitsstunden oberhalb des zeitanteiligen Monatssolls erhöhen
+                      das Urlaubsguthaben. Der vertragliche Sockel bleibt garantiert.
                     </p>
                   </div>
                 </>
