@@ -124,6 +124,12 @@ export interface AssistantContractInfo {
   weeklyHours?: number | null;
   /** Vertragliche Arbeitstage/Woche — Basis der typischen Dienstlänge (Urlaubsstunden). */
   workdaysPerWeek?: number | null;
+  /**
+   * Vertragsbeginn — Basis der Wartezeit nach § 4 BUrlG (anteiliger Sockel in
+   * den ersten 6 Beschäftigungsmonaten, siehe vacationPoolHours). Ohne Angabe
+   * bleibt es beim vollen Sockel (Bestandsschutz für ältere Aufrufer).
+   */
+  startDate?: string | null;
 }
 
 // Typische Dienstlänge (Wochenstunden ÷ Arbeitstage/Woche) — identisch zu
@@ -325,6 +331,13 @@ export function computeHoursBalanceRow(params: {
    */
   deductPausesByTeam?: Map<number, boolean>;
   deductPausesFallback?: boolean;
+  /**
+   * Stichtag für die Wartezeit-Proration des Urlaubssockels (§ 4 BUrlG,
+   * siehe vacationPoolHours). Ohne Angabe der aktuelle Zeitpunkt — pure
+   * Funktion, daher vom Aufrufer explizit übergeben statt intern `new Date()`
+   * zu bilden (Determinismus für Tests).
+   */
+  vacationRefDate?: Date;
 }): HoursBalanceRow {
   const { userId, userName, timeEntries, allowance, allowanceByTeam, contract } = params;
   // Team-Einträge (Teamsitzungen) selbst tragen keine Stunden — die Gutschrift
@@ -546,8 +559,14 @@ export function computeHoursBalanceRow(params: {
   const vacationSockelHours =
     contract && (contract.weeklyHours ?? 0) > 0
       ? vacationPoolHours(
-          { vacationDays, weeklyHours: contract.weeklyHours as number },
+          {
+            vacationDays,
+            weeklyHours: contract.weeklyHours as number,
+            startDate: contract.startDate ?? undefined,
+          },
           { fulltimeWorkdaysPerWeek: params.fulltimeWorkdaysPerWeek ?? 5 },
+          undefined,
+          params.vacationRefDate ?? new Date(),
         )
       : round2(vacationDays * hoursPerDay);
   const vacationHoursTotal = round2(

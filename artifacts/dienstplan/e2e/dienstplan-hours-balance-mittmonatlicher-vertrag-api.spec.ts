@@ -19,8 +19,11 @@ import { TeamTestHarness } from "./helpers/teams";
  *   Team-Scope den Vertrag SEINES Teams heran (kein teamfremder Vertrag).
  * - Ungueltiger month-Parameter (z. B. "2026-07") -> 400 statt 500.
  *
- * Alle Daten liegen im Vormonat (relativ zum Testlauf), damit weder
- * Vorausplanungs-Limits noch der Urlaubs-Vertragszeitraum-Guard stoeren.
+ * Alle Daten liegen 8 Monate zurueck (relativ zum Testlauf), damit weder
+ * Vorausplanungs-Limits noch der Urlaubs-Vertragszeitraum-Guard stoeren UND
+ * die Wartezeit-Regelung fuer den Urlaubssockel (§ 4 BUrlG, > 6 volle
+ * Beschaeftigungsmonate) den vollen Jahresanspruch bereits freigegeben hat —
+ * dieses Spec prueft den Vertrags-Lookup, nicht die Wartezeit-Proration.
  */
 
 function monthShift(deltaMonths: number, day: number): string {
@@ -31,9 +34,9 @@ function monthShift(deltaMonths: number, day: number): string {
   return `${t.getFullYear()}-${mm}-${dd}`;
 }
 
-// Ausgewerteter Monat = Vormonat; Vertrag beginnt am 15., Urlaub am 20.
-const CONTRACT_START = monthShift(-1, 15);
-const VACATION_DAY = monthShift(-1, 20);
+// Ausgewerteter Monat = vor 8 Monaten; Vertrag beginnt am 15., Urlaub am 20.
+const CONTRACT_START = monthShift(-8, 15);
+const VACATION_DAY = monthShift(-8, 20);
 const EVAL_YEAR = Number(CONTRACT_START.split("-")[0]);
 const EVAL_MONTH = Number(CONTRACT_START.split("-")[1]);
 

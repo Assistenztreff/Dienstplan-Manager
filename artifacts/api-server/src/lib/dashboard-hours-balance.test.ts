@@ -28,8 +28,15 @@ function row(overrides: {
   shifts?: BalanceShift[];
   timeEntries?: BalanceTimeEntry[];
   allowance?: AllowancePercents;
-  contract?: { vacationDays?: number | null; vacationHoursUsed?: number | null } | null;
+  contract?: {
+    vacationDays?: number | null;
+    vacationHoursUsed?: number | null;
+    weeklyHours?: number | null;
+    workdaysPerWeek?: number | null;
+    startDate?: string | null;
+  } | null;
   vacationHoursPerDay?: number | null;
+  vacationRefDate?: Date;
 }) {
   return computeHoursBalanceRow({
     userId: 1,
@@ -39,6 +46,7 @@ function row(overrides: {
     allowance: overrides.allowance ?? STD_ALLOWANCE,
     contract: overrides.contract ?? null,
     vacationHoursPerDay: overrides.vacationHoursPerDay,
+    vacationRefDate: overrides.vacationRefDate,
   });
 }
 
@@ -421,6 +429,54 @@ describe("computeHoursBalanceRow — Zählung der Urlaubstage pro Monat", () => 
     });
     expect(custom.vacationDaysUsed).toBe(1.6);
     expect(custom.vacationDaysRemaining).toBe(28.4);
+  });
+});
+
+describe("computeHoursBalanceRow — Wartezeit-Sockel im Dashboard (§ 4 BUrlG)", () => {
+  it("prorationiert den Sockel für einen frisch eingetretenen Vertrag (2 volle Monate)", () => {
+    // Referenzdatum 15.08., Vertragsbeginn 15.06. -> exakt 2 volle Monate.
+    const refDate = local(2026, 8, 15);
+    const result = row({
+      contract: {
+        vacationDays: 30,
+        vacationHoursUsed: 0,
+        weeklyHours: 40,
+        workdaysPerWeek: 5,
+        startDate: "2026-06-15",
+      },
+      vacationRefDate: refDate,
+    });
+    // Sockel = 30 Tage * 8h/Tag Vollzeit-Äquivalent * 2/12 = 40h -> 5,0 Tage.
+    expect(result.vacationDaysRemaining).toBe(5);
+  });
+
+  it("zeigt den vollen Sockel sobald 6 volle Monate erreicht sind", () => {
+    const refDate = local(2026, 8, 15);
+    const result = row({
+      contract: {
+        vacationDays: 30,
+        vacationHoursUsed: 0,
+        weeklyHours: 40,
+        workdaysPerWeek: 5,
+        startDate: "2026-02-15", // exakt 6 volle Monate vor dem Stichtag.
+      },
+      vacationRefDate: refDate,
+    });
+    expect(result.vacationDaysRemaining).toBe(30);
+  });
+
+  it("bleibt beim vollen Sockel wenn kein startDate übergeben wird (Bestandsschutz)", () => {
+    const refDate = local(2026, 8, 15);
+    const result = row({
+      contract: {
+        vacationDays: 30,
+        vacationHoursUsed: 0,
+        weeklyHours: 40,
+        workdaysPerWeek: 5,
+      },
+      vacationRefDate: refDate,
+    });
+    expect(result.vacationDaysRemaining).toBe(30);
   });
 });
 

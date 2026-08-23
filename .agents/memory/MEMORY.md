@@ -146,3 +146,4 @@
 - [PG-Pool bei parallelen Kaltpfaden](pg-pool-parallel-cold-paths.md) — Remote-TLS-Aufbau kann Query-Parallelisierung neutralisieren; Warm-Baseline an die größte Query-Welle koppeln.
 - [Privatkonto-Personalverwaltung](private-account-personnel-ui.md) — Standard-Team bleibt intern, aber Privat-Inhaber sehen nur Assistenzkräfte und Rechte; Mehrteam-Funktionen bleiben Dienstleistern vorbehalten.
 - [Persistierter Query-Cache bei Einstellungen](persisted-settings-query-cache.md) — Server-Refetch darf alten Cache nach Reload ersetzen; nur echte ungespeicherte Eingaben schützen.
+- [§ 4 BUrlG Wartezeit-Sockel-Proration](vacation-waiting-period-burlg.md) — Sockel prorationiert 1. 6 Monate ab startDate; 3 Call-Sites (Einzel/Batch/Dashboard) synchron halten; e2e-Fixtures mit jungem startDate + hartkodierter Resturlaub-Zahl prüfen.

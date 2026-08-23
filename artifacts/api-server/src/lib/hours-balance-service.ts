@@ -758,6 +758,7 @@ async function computeHoursBalancesUncached(
         vacationHoursPerDay: vacationOps?.vacationHoursPerDay,
         fulltimeWorkdaysPerWeek: vacationOps?.fulltimeWorkdaysPerWeek,
         vacationAufbauHours,
+        vacationRefDate,
         teamsitzungStunden,
         deductPausesByTeam,
       });

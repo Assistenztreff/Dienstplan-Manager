@@ -57,13 +57,19 @@ export function vacationFactorFor(vacationDays: number, fulltimeWorkdaysPerWeek:
 // liegt paidHoursYear unter den Vertragsstunden, bleibt es beim Sockel. Ohne
 // Übergabe verhält sich die Funktion exakt wie in AP 2.
 export function vacationPoolHours(
-  contract: { vacationDays: number; weeklyHours: number },
+  contract: { vacationDays: number; weeklyHours: number; startDate?: string | null },
   ops: { fulltimeWorkdaysPerWeek: number },
   paidHoursYear?: number,
+  refDate: Date = new Date(),
 ): number {
   if (ops.fulltimeWorkdaysPerWeek <= 0 || contract.weeklyHours <= 0) return 0;
   const weeks = vacationWeeks(contract.vacationDays, ops.fulltimeWorkdaysPerWeek);
-  const sockel = weeks * contract.weeklyHours;
+  // Wartezeit (§ 4 BUrlG): ohne bekannten Vertragsbeginn (ältere Aufrufer,
+  // die keine startDate führen) bleibt es beim vollen Sockel (Faktor 1).
+  const proration = contract.startDate
+    ? waitingPeriodProrationFactor(contract.startDate, refDate)
+    : 1;
+  const sockel = weeks * contract.weeklyHours * proration;
   if (paidHoursYear == null) return Math.round(sockel * 100) / 100;
   const factor = vacationFactorFor(contract.vacationDays, ops.fulltimeWorkdaysPerWeek);
   const aufbau = Math.max(0, (paidHoursYear - contract.weeklyHours * WEEKS_PER_YEAR) * factor);
@@ -86,6 +92,28 @@ function contractStartInstant(startDate: string): Date {
 
 function contractEndExclusive(endDate: string | null | undefined): Date | null {
   return endDate ? new Date(new Date(`${endDate}T00:00:00.000Z`).getTime() + DAY_MS) : null;
+}
+
+// Wartezeit nach § 4 BUrlG: in den ersten 6 vollen Beschäftigungsmonaten
+// entsteht der Urlaubssockel nur anteilig (1/12 je vollem Monat seit
+// Eintritt, Anniversary-Zählung ab startDate — NICHT nach Kalendermonaten).
+// Sobald der 6. volle Monat erreicht ist, gilt sofort der volle
+// Jahresanspruch (Faktor 1) für den Rest des Kalenderjahres, ohne weitere
+// Proration. Rein aus Vertragsbeginn + Stichtag abgeleitet — nichts wird
+// gespeichert, ältere Verträge (Eintritt > 6 Monate zurück) liefern
+// automatisch weiterhin Faktor 1 (Bestandsschutz).
+export function waitingPeriodProrationFactor(startDate: string, refDate: Date): number {
+  const start = contractStartInstant(startDate);
+  if (refDate.getTime() < start.getTime()) return 0;
+  let fullMonths =
+    (refDate.getUTCFullYear() - start.getUTCFullYear()) * 12 +
+    (refDate.getUTCMonth() - start.getUTCMonth());
+  if (refDate.getUTCDate() < start.getUTCDate()) {
+    fullMonths -= 1;
+  }
+  fullMonths = Math.max(0, fullMonths);
+  if (fullMonths >= 6) return 1;
+  return fullMonths / 12;
 }
 
 function monthKey(date: Date): string {
@@ -363,7 +391,7 @@ export async function vacationForecastHours(
 }> {
   const end = new Date(refDate);
   const start = new Date(end.getTime() - 91 * 24 * 3_600_000); // 13 Wochen
-  const sockel = vacationPoolHours(contract, ops);
+  const sockel = vacationPoolHours(contract, ops, undefined, refDate);
   if (end.getTime() - contractStartInstant(contract.startDate).getTime() < 91 * DAY_MS) {
     return { sockel, aufbau: earnedVacationHours, prognose: null, avgWeeklyHours: null };
   }
@@ -455,14 +483,15 @@ export async function computeVacationBalanceForContract(
   ops: ResolvedAllowanceOps,
   dbx: VacationDbx = db
 ): Promise<VacationBalanceResult> {
+  const refDate = new Date();
   const hoursPerDay = typicalShiftHours(contract, ops.vacationHoursPerDay);
-  const sockel = vacationPoolHours(contract, ops);
+  const sockel = vacationPoolHours(contract, ops, undefined, refDate);
   const earned = await earnedVacationFromMonthlyOvertime(
     contract.userId,
     contract.teamId,
     contract,
     ops,
-    new Date(),
+    refDate,
     dbx,
   );
   const vacationHoursTotal = Math.round((sockel + earned.vacationHours) * 100) / 100;
@@ -509,7 +538,7 @@ export async function computeVacationBalanceForContract(
   const rateInfo = await resolveDailyRateInfo(
     contract.userId,
     contract.teamId,
-    new Date(),
+    refDate,
     hoursPerDay,
     dbx,
     ops
@@ -521,7 +550,7 @@ export async function computeVacationBalanceForContract(
         contract,
         ops,
         earned.vacationHours,
-        new Date(),
+        refDate,
         dbx,
       )
     : {
