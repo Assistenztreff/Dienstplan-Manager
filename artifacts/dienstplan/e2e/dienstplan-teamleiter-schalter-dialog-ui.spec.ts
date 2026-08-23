@@ -148,6 +148,14 @@ test("Privat-Inhaber: Teamleiter-Schalter ohne Lohndaten-Freigabe, Badge auf der
   await loginAs(page, privat);
   await page.goto("/team-verwaltung");
 
+  await expect(
+    page.getByText("Assistenzkräfte und Berechtigungen verwalten", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByTestId(`toggle-team-${privatTeamId}`)).toHaveCount(0);
+  await expect(page.getByTestId("team-anlegen")).toHaveCount(0);
+  await expect(page.getByTestId(`transfer-team-${privatTeamId}`)).toHaveCount(0);
+  await expect(page.getByTestId("koordinatoren-bereich")).toHaveCount(0);
+  await expect(page.getByTestId("koordinator-anlegen")).toHaveCount(0);
   await expect(page.getByText("Als Teamleiter einsetzen")).toHaveCount(0);
 
   await page.getByTestId(`rights-team-${privatTeamId}`).click();

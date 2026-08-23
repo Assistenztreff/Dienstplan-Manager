@@ -1043,6 +1043,7 @@ function TeamBlock({
   confirmDelete,
   onCancelDelete,
   collapsible,
+  showTeamHeader,
 }: {
   team: Team;
   teams: Team[];
@@ -1056,77 +1057,80 @@ function TeamBlock({
   confirmDelete: boolean;
   onCancelDelete: () => void;
   collapsible: boolean;
+  showTeamHeader: boolean;
 }) {
   return (
     <Card className="border-border/50 shadow-sm" data-testid={`team-block-${team.id}`}>
-      <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-border/40 bg-muted/20">
-        {collapsible ? (
-          <button
-            type="button"
-            onClick={onToggle}
-            aria-expanded={expanded}
-            data-testid={`toggle-team-${team.id}`}
-            className="flex min-h-11 min-w-11 flex-1 items-center gap-2 rounded-md px-1 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {expanded ? (
-              <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
-            ) : (
-              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
-            )}
-            <Building2 className="h-4 w-4 text-muted-foreground/60 shrink-0" aria-hidden="true" />
-            <span className="font-medium truncate">{team.name}</span>
-          </button>
-        ) : (
-          <div className="flex flex-1 items-center gap-2 px-1">
-            <Building2 className="h-4 w-4 text-muted-foreground/60 shrink-0" aria-hidden="true" />
-            <span className="font-medium truncate">{team.name}</span>
-          </div>
-        )}
+      {showTeamHeader && (
+        <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-border/40 bg-muted/20">
+          {collapsible ? (
+            <button
+              type="button"
+              onClick={onToggle}
+              aria-expanded={expanded}
+              data-testid={`toggle-team-${team.id}`}
+              className="flex min-h-11 min-w-11 flex-1 items-center gap-2 rounded-md px-1 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {expanded ? (
+                <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
+              )}
+              <Building2 className="h-4 w-4 text-muted-foreground/60 shrink-0" aria-hidden="true" />
+              <span className="font-medium truncate">{team.name}</span>
+            </button>
+          ) : (
+            <div className="flex flex-1 items-center gap-2 px-1">
+              <Building2 className="h-4 w-4 text-muted-foreground/60 shrink-0" aria-hidden="true" />
+              <span className="font-medium truncate">{team.name}</span>
+            </div>
+          )}
 
-        {isFullAdmin && (
-          <div className="flex flex-wrap items-center gap-2">
-            {teams.length > 1 && (
+          {isFullAdmin && (
+            <div className="flex flex-wrap items-center gap-2">
+              {teams.length > 1 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={onTransfer}
+                  data-testid={`transfer-team-${team.id}`}
+                  title="Assistenzkraft in ein anderes Team überführen"
+                >
+                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Überführen</span>
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
                 className="gap-1.5"
-                onClick={onTransfer}
-                data-testid={`transfer-team-${team.id}`}
-                title="Assistenzkraft in ein anderes Team überführen"
+                onClick={onRechte}
+                data-testid={`rights-team-${team.id}`}
+                title="Zugriffsrechte der Mitglieder verwalten"
               >
-                <ArrowRightLeft className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Überführen</span>
+                <UserCog className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Zugriffsrechte</span>
               </Button>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={onRechte}
-              data-testid={`rights-team-${team.id}`}
-              title="Zugriffsrechte der Mitglieder verwalten"
-            >
-              <UserCog className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Zugriffsrechte</span>
-            </Button>
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={onEdit}>
-              <Pencil className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Bearbeiten</span>
-            </Button>
-            <Button
-              variant={confirmDelete ? "destructive" : "ghost"}
-              size="sm"
-              className="gap-1.5"
-              onClick={onDelete}
-              onBlur={onCancelDelete}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{confirmDelete ? "Wirklich?" : "Löschen"}</span>
-            </Button>
-          </div>
-        )}
-        {!isFullAdmin && <TeamleiterRechteButton teamId={team.id} onRechte={onRechte} />}
-      </div>
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={onEdit}>
+                <Pencil className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Bearbeiten</span>
+              </Button>
+              <Button
+                variant={confirmDelete ? "destructive" : "ghost"}
+                size="sm"
+                className="gap-1.5"
+                onClick={onDelete}
+                onBlur={onCancelDelete}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{confirmDelete ? "Wirklich?" : "Löschen"}</span>
+              </Button>
+            </div>
+          )}
+          {!isFullAdmin && <TeamleiterRechteButton teamId={team.id} onRechte={onRechte} />}
+        </div>
+      )}
 
       {expanded && (
         <CardContent className="p-4">
@@ -1158,6 +1162,7 @@ export default function TeamVerwaltung() {
     !isFullAdmin &&
     (currentUser?.isTeamleiter === true || hasTeamAccessLevel(currentUser, "stufe1"));
   const isDienstleisterKonto = currentUser?.accountType === "dienstleister";
+  const isPrivatKontoInhaber = isFullAdmin && !isDienstleisterKonto;
 
   const teams: Team[] = (data ?? []) as Team[];
   // Privatkonten führen genau ein Team: Der Mitgliederbereich wird direkt
@@ -1221,8 +1226,23 @@ export default function TeamVerwaltung() {
           <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">
             Team-Verwaltung
           </h2>
-          <p className="text-muted-foreground mt-1 text-sm">Teams und Assistenzkräfte verwalten</p>
+          <p className="text-muted-foreground mt-1 text-sm">
+            {isPrivatKontoInhaber
+              ? "Assistenzkräfte und Berechtigungen verwalten"
+              : "Teams und Assistenzkräfte verwalten"}
+          </p>
         </div>
+        {isPrivatKontoInhaber && teams.length === 1 && (
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => setRechteTeam(teams[0])}
+            data-testid={`rights-team-${teams[0].id}`}
+          >
+            <UserCog className="h-4 w-4" />
+            Zugriffsrechte
+          </Button>
+        )}
         {/* Neues Team nur für Konto-Admins mit Dienstleister-Konto — Privatkonten
             und freigeschaltete Nicht-Admins legen keine Teams an. */}
         {isFullAdmin &&
@@ -1265,11 +1285,13 @@ export default function TeamVerwaltung() {
         <Card className="border-border/50 shadow-sm">
           <CardContent className="p-12 text-center">
             <p className="text-muted-foreground mb-4">
-              {isDelegiert
+              {isPrivatKontoInhaber
+                ? "Deine Assistenzkräfte konnten nicht geladen werden. Lade die Seite neu oder versuche es später noch einmal."
+                : isDelegiert
                 ? "Dir ist derzeit kein Team zugewiesen."
                 : "Noch keine Teams angelegt."}
             </p>
-            {isFullAdmin && (
+            {isFullAdmin && isDienstleisterKonto && (
               <Button onClick={openCreate} variant="outline" className="gap-2">
                 <Plus className="h-4 w-4" /> Erstes Team anlegen
               </Button>
@@ -1296,6 +1318,7 @@ export default function TeamVerwaltung() {
               confirmDelete={confirmDelete === team.id}
               onCancelDelete={() => setConfirmDelete(null)}
               collapsible={!singleTeamView}
+               showTeamHeader={!isPrivatKontoInhaber}
             />
           ))}
         </div>

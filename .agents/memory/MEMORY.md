@@ -144,3 +144,4 @@
 - [Stunden-Bilanz Query-Invalidierung](hours-balance-query-invalidation.md) — Schicht-Mutationen, die valuedHours ändern, müssen auch getGetHoursBalanceQueryKey invalidieren (nicht nur die Schicht-Liste), sonst zeigt Auswertungen/Dashboard den alten Stand.
 - [Server-Cache-Versionierung für Stundenbilanzen](hours-balance-server-cache-versioning.md) — Nie globale PG-Transaktionsstände nutzen; fachliche Generation nach erfolgreichen relevanten Writes hochzählen.
 - [PG-Pool bei parallelen Kaltpfaden](pg-pool-parallel-cold-paths.md) — Remote-TLS-Aufbau kann Query-Parallelisierung neutralisieren; Warm-Baseline an die größte Query-Welle koppeln.
+- [Privatkonto-Personalverwaltung](private-account-personnel-ui.md) — Standard-Team bleibt intern, aber Privat-Inhaber sehen nur Assistenzkräfte und Rechte; Mehrteam-Funktionen bleiben Dienstleistern vorbehalten.
