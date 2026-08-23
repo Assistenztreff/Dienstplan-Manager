@@ -23,7 +23,7 @@ const apiServerDir = path.resolve(specDir, "..", "..", "api-server");
 
 let h: TeamTestHarness;
 let teamId: number;
-let assistantId: number;
+let assistantIds: number[];
 let secondaryApiProcess: ChildProcess | null = null;
 let secondaryApiContext: APIRequestContext | null = null;
 let secondaryShiftId: number | null = null;
@@ -81,9 +81,13 @@ test.beforeAll(async () => {
   h = await TeamTestHarness.login();
   await h.becomeDienstleister();
   teamId = await h.createTeam(`E2E Stundenbilanz Cache ${h.run}`);
-  assistantId = await h.createUser({ teamId, role: "assistant" });
-  await h.createContract(teamId, assistantId);
-  await h.createShift(teamId, assistantId, DAY_A);
+  assistantIds = [];
+  for (let index = 0; index < 3; index += 1) {
+    const assistantId = await h.createUser({ teamId, role: "assistant" });
+    assistantIds.push(assistantId);
+    await h.createContract(teamId, assistantId);
+    await h.createShift(teamId, assistantId, DAY_A);
+  }
 
   secondaryApiProcess = spawn(
     "node",
@@ -151,6 +155,7 @@ test("Instanz A verwirft ihren warmen Stundenbilanz-Cache nach einem Write über
       `warm-median=${percentile(warmDurations, 0.5).toFixed(1)}ms ` +
       `warm-p95=${percentile(warmDurations, 0.95).toFixed(1)}ms`,
   );
+  expect(durations[0], "Der kalte Drei-Personen-Read muss unter 1 Sekunde bleiben").toBeLessThan(1_000);
 
   const beforeResponse = await h.ctx.get(url);
   expect(beforeResponse.status(), await beforeResponse.text()).toBe(200);
@@ -158,11 +163,14 @@ test("Instanz A verwirft ihren warmen Stundenbilanz-Cache nach einem Write über
     userId: number;
     plannedHours: number;
   }>;
-  expect(beforeRows.find((row) => row.userId === assistantId)?.plannedHours).toBe(8);
+
+  for (const assistantId of assistantIds) {
+    expect(beforeRows.find((row) => row.userId === assistantId)?.plannedHours).toBe(8);
+  }
 
   const writeResponse = await secondaryApiContext!.post("/api/shifts", {
     data: {
-      userId: assistantId,
+      userId: assistantIds[0]!,
       teamId,
       startTime: `${DAY_B}T08:00:00.000Z`,
       endTime: `${DAY_B}T16:00:00.000Z`,
@@ -175,11 +183,23 @@ test("Instanz A verwirft ihren warmen Stundenbilanz-Cache nach einem Write über
   ).toBe(201);
   secondaryShiftId = ((await writeResponse.json()) as { id: number }).id;
 
+  const invalidatedStartedAt = performance.now();
   const afterResponse = await h.ctx.get(url);
+  const invalidatedDuration = performance.now() - invalidatedStartedAt;
   expect(afterResponse.status(), await afterResponse.text()).toBe(200);
   const afterRows = (await afterResponse.json()) as Array<{
     userId: number;
     plannedHours: number;
   }>;
-  expect(afterRows.find((row) => row.userId === assistantId)?.plannedHours).toBe(16);
+  expect(afterRows.find((row) => row.userId === assistantIds[0])?.plannedHours).toBe(16);
+  for (const assistantId of assistantIds.slice(1)) {
+    expect(afterRows.find((row) => row.userId === assistantId)?.plannedHours).toBe(8);
+  }
+  expect(
+    invalidatedDuration,
+    "Auch der erste Read direkt nach Invalidierung muss unter 1 Sekunde bleiben",
+  ).toBeLessThan(1_000);
+  console.info(
+    `[stundenbilanz-cache] invalidated-cold=${invalidatedDuration.toFixed(1)}ms`,
+  );
 });

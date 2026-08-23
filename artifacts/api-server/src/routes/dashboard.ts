@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type NextFunction, type RequestHandler } from "express";
 import { db } from "@workspace/db";
 import { usersTable, shiftsTable, timeTrackingTable, contractsTable, allowanceSettingsTable, teamMembersTable, teamsTable, shiftModelsTable } from "@workspace/db";
 import { computeShiftMetrics, type GermanState } from "@workspace/db";
@@ -21,14 +21,104 @@ import {
   DEFAULT_SUNDAY_PERCENT,
   DEFAULT_HOLIDAY_PERCENT,
 } from "../lib/dashboard-hours-balance";
-import { computeHoursBalances } from "../lib/hours-balance-service";
+import {
+  computeHoursBalances,
+  readHoursBalanceDatabaseVersion,
+} from "../lib/hours-balance-service";
 import {
   getTimeTrackingEnabledTeamIds,
   isTimeTrackingEnabledForOwner,
   isTimeTrackingEnabledForUser,
 } from "../lib/time-tracking-enabled";
+import { logger } from "../lib/logger";
 
 const router = Router();
+
+function instrumentHoursBalanceGuard(
+  name: string,
+  guard: RequestHandler,
+  loadDatabaseVersion = false,
+): RequestHandler {
+  return async (req, res, next): Promise<void> => {
+    const startedAt = performance.now();
+    const guardResultPromise = new Promise<{
+      continued: boolean;
+      error?: unknown;
+    }>((resolve, reject) => {
+      let settled = false;
+      const measuredNext: NextFunction = (error?: unknown): void => {
+        if (settled) return;
+        settled = true;
+        resolve({ continued: true, error });
+      };
+      Promise.resolve(guard(req, res, measuredNext))
+        .then(() => {
+          if (settled) return;
+          settled = true;
+          resolve({ continued: false });
+        })
+        .catch(reject);
+    });
+    const databaseVersionStartedAt = performance.now();
+    const databaseVersionPromise = loadDatabaseVersion
+      ? readHoursBalanceDatabaseVersion()
+      : Promise.resolve(undefined);
+    const teamScopePromise =
+      loadDatabaseVersion &&
+      req.session.userId != null &&
+      isAdminLikeRole(req.session.role)
+        ? resolveReadTeamScope(
+            req.session.userId,
+            parseTeamIdParam(req),
+          )
+        : Promise.resolve(undefined);
+
+    const [guardResult, databaseVersion, teamScope] = await Promise.all([
+      guardResultPromise,
+      databaseVersionPromise,
+      teamScopePromise,
+    ]);
+    if (databaseVersion != null) {
+      res.locals["hoursBalanceDatabaseVersion"] = databaseVersion;
+    }
+    if (loadDatabaseVersion && isAdminLikeRole(req.session.role)) {
+      res.locals["hoursBalanceTeamScopeResolved"] = true;
+      res.locals["hoursBalanceTeamScope"] = teamScope;
+    }
+
+    logger.debug(
+      {
+        guard: name,
+        outcome: guardResult.continued
+          ? guardResult.error == null
+            ? "passed"
+            : "error"
+          : "rejected",
+        statusCode: res.statusCode,
+        durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
+        ...(loadDatabaseVersion
+          ? {
+              databaseVersionMs:
+                Math.round((performance.now() - databaseVersionStartedAt) * 10) / 10,
+            }
+          : {}),
+      },
+      "hours-balance authorization timing",
+    );
+
+    if (guardResult.continued) next(guardResult.error);
+  };
+}
+
+const requireHoursBalancePlanning = instrumentHoursBalanceGuard(
+  "team-planning",
+  requireTeamPlanningOrAdmin,
+  true,
+);
+const requireHoursBalanceFeature = instrumentHoursBalanceGuard(
+  "advanced-analytics",
+  requirePlanFeatureViaTeamOwner("advancedAnalytics"),
+);
 
 // Validierte month/year-Query-Parameter (Default: aktueller Monat/aktuelles
 // Jahr). Ungültige Werte (NaN, z. B. "month=2026-07", oder außerhalb des
@@ -634,7 +724,7 @@ router.get("/dashboard/my-hours-balance", requireAuth, async (req, res): Promise
 // bleibt gewahrt: die ROHDATEN (Schichten, Zeiterfassung, Verträge) bleiben über
 // ihre regulären Listen-Endpunkte sichtbar — gesperrt wird nur diese abgeleitete
 // Premium-Auswertung.
-router.get("/dashboard/hours-balance", requireTeamPlanningOrAdmin, requirePlanFeatureViaTeamOwner("advancedAnalytics"), async (req, res): Promise<void> => {
+router.get("/dashboard/hours-balance", requireHoursBalancePlanning, requireHoursBalanceFeature, async (req, res): Promise<void> => {
   const monthYear = parseMonthYearParams(req);
   if (!monthYear) {
     res.status(400).json({ error: "Ungültiger month-/year-Parameter" });
@@ -647,6 +737,18 @@ router.get("/dashboard/hours-balance", requireTeamPlanningOrAdmin, requirePlanFe
   const userId = req.session.userId!;
   const role = req.session.role!;
   let requestedTeamId = parseTeamIdParam(req);
+  let authorizedTeamScope = res.locals["hoursBalanceTeamScope"] as
+    | number[]
+    | null
+    | undefined;
+  if (
+    isAdminLikeRole(role) &&
+    res.locals["hoursBalanceTeamScopeResolved"] === true &&
+    authorizedTeamScope === null
+  ) {
+    res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
+    return;
+  }
   if (!isAdminLikeRole(role)) {
     const tlTeamIds = await getTeamIdsWithCapability(userId, "plan");
     if (tlTeamIds.length === 0) {
@@ -660,6 +762,7 @@ router.get("/dashboard/hours-balance", requireTeamPlanningOrAdmin, requirePlanFe
       res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
       return;
     }
+    authorizedTeamScope = [requestedTeamId];
   }
 
   // Berechnung lebt in lib/hours-balance-service.ts, damit der Monatsabschluss
@@ -669,6 +772,12 @@ router.get("/dashboard/hours-balance", requireTeamPlanningOrAdmin, requirePlanFe
     month,
     year,
     requestedTeamId,
+    {
+      databaseVersion: res.locals["hoursBalanceDatabaseVersion"] as
+        | string
+        | undefined,
+      teamScope: authorizedTeamScope ?? undefined,
+    },
   );
   if (result === null) {
     res.status(403).json({ error: "Kein Zugriff auf dieses Team" });

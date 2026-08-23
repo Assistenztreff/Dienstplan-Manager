@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
 import { teamsTable, teamMembersTable, shiftModelsTable, usersTable } from "@workspace/db";
-import { eq, asc, and, inArray } from "drizzle-orm";
+import { eq, asc, and, inArray, or } from "drizzle-orm";
 import type { Request } from "express";
 
 /** Intern – vermeidet zirkulären Import zu middleware/auth.ts. */
@@ -37,14 +37,16 @@ export async function resolveTeamId(userId: number): Promise<number | null> {
  * (Assistenten, ggf. mehrfach zugewiesen). Basis jeder Datentrennung.
  */
 export async function getAllowedTeamIds(userId: number): Promise<number[]> {
-  const owned = await db
-    .select({ id: teamsTable.id })
-    .from(teamsTable)
-    .where(eq(teamsTable.ownerId, userId));
-  const memberships = await db
-    .select({ id: teamMembersTable.teamId })
-    .from(teamMembersTable)
-    .where(eq(teamMembersTable.userId, userId));
+  const [owned, memberships] = await Promise.all([
+    db
+      .select({ id: teamsTable.id })
+      .from(teamsTable)
+      .where(eq(teamsTable.ownerId, userId)),
+    db
+      .select({ id: teamMembersTable.teamId })
+      .from(teamMembersTable)
+      .where(eq(teamMembersTable.userId, userId)),
+  ]);
   const ids = new Set<number>();
   for (const o of owned) ids.add(o.id);
   for (const m of memberships) ids.add(m.id);
@@ -66,6 +68,30 @@ export async function resolveReadTeamScope(
   requestedTeamId?: number,
   overrideAllowedIds?: number[],
 ): Promise<number[] | null> {
+  if (overrideAllowedIds == null && requestedTeamId != null) {
+    const [allowedTeam] = await db
+      .select({ id: teamsTable.id })
+      .from(teamsTable)
+      .leftJoin(
+        teamMembersTable,
+        and(
+          eq(teamMembersTable.teamId, teamsTable.id),
+          eq(teamMembersTable.userId, userId),
+        ),
+      )
+      .where(
+        and(
+          eq(teamsTable.id, requestedTeamId),
+          or(
+            eq(teamsTable.ownerId, userId),
+            eq(teamMembersTable.userId, userId),
+          ),
+        ),
+      )
+      .limit(1);
+    return allowedTeam ? [requestedTeamId] : null;
+  }
+
   const allowed = overrideAllowedIds ?? await getAllowedTeamIds(userId);
   if (requestedTeamId != null) {
     return allowed.includes(requestedTeamId) ? [requestedTeamId] : null;

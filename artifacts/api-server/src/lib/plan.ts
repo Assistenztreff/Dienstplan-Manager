@@ -11,6 +11,16 @@ import {
   type PlanLimit,
 } from "@workspace/entitlements";
 
+type AuthUserSnapshot = {
+  role: "admin" | "assistant" | "superadmin" | "koordinator";
+  plan: "free" | "premium";
+};
+
+function getAuthUserSnapshot(res: Response): AuthUserSnapshot | undefined {
+  const value = res.locals["authUserSnapshot"] as AuthUserSnapshot | undefined;
+  return value?.role != null && value.plan != null ? value : undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Serverseitige (autoritative) Durchsetzung der Free/Premium-Entitlements.
 // ---------------------------------------------------------------------------
@@ -106,13 +116,19 @@ export async function getLenientTimeTrackingTeamIds(
 export async function userHasFeatureViaTeamOwner(
   userId: number,
   feature: PlanFeature,
+  authUserSnapshot?: AuthUserSnapshot,
 ): Promise<boolean> {
-  if (await userHasFeature(userId, feature)) return true;
+  const user =
+    authUserSnapshot ??
+    (
+      await db
+        .select({ role: usersTable.role, plan: usersTable.plan })
+        .from(usersTable)
+        .where(eq(usersTable.id, userId))
+    )[0];
+  const plan: Plan = user?.plan === "premium" ? "premium" : "free";
+  if (hasAccess({ plan }, feature)) return true;
 
-  const [user] = await db
-    .select({ role: usersTable.role })
-    .from(usersTable)
-    .where(eq(usersTable.id, userId));
   // Assistenzkräfte UND Teamkoordinatoren haben nie einen eigenen bezahlten
   // Plan — Premium-Features leiten sich vom Arbeitgeber (Team-Eigentümer) ab.
   if (user?.role !== "assistant" && user?.role !== "koordinator") return false;
@@ -140,7 +156,14 @@ export function requirePlanFeature(feature: PlanFeature) {
       res.status(401).json({ error: "Nicht angemeldet" });
       return;
     }
-    if (!(await userHasFeature(req.session.userId, feature))) {
+    const authUserSnapshot = getAuthUserSnapshot(res);
+    const allowed = authUserSnapshot
+      ? hasAccess(
+          { plan: authUserSnapshot.plan === "premium" ? "premium" : "free" },
+          feature,
+        )
+      : await userHasFeature(req.session.userId, feature);
+    if (!allowed) {
       res.status(403).json({
         error: "Diese Funktion ist im Premium-Tarif enthalten.",
         code: "plan_feature_required",
@@ -163,7 +186,13 @@ export function requirePlanFeatureViaTeamOwner(feature: PlanFeature) {
       res.status(401).json({ error: "Nicht angemeldet" });
       return;
     }
-    if (!(await userHasFeatureViaTeamOwner(req.session.userId, feature))) {
+    if (
+      !(await userHasFeatureViaTeamOwner(
+        req.session.userId,
+        feature,
+        getAuthUserSnapshot(res),
+      ))
+    ) {
       res.status(403).json({
         error: "Diese Funktion ist im Premium-Tarif enthalten.",
         code: "plan_feature_required",

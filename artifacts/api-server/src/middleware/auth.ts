@@ -23,7 +23,11 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return;
   }
   const [user] = await db
-    .select({ isActive: usersTable.isActive })
+    .select({
+      isActive: usersTable.isActive,
+      role: usersTable.role,
+      plan: usersTable.plan,
+    })
     .from(usersTable)
     .where(eq(usersTable.id, req.session.userId));
   if (!user || !user.isActive) {
@@ -31,6 +35,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     res.status(401).json({ error: "Konto deaktiviert oder nicht gefunden" });
     return;
   }
+  res.locals["authUserSnapshot"] = user;
   next();
 }
 
@@ -55,7 +60,11 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
     return;
   }
   const [user] = await db
-    .select({ isActive: usersTable.isActive })
+    .select({
+      isActive: usersTable.isActive,
+      role: usersTable.role,
+      plan: usersTable.plan,
+    })
     .from(usersTable)
     .where(eq(usersTable.id, req.session.userId));
   if (!user || !user.isActive) {
@@ -63,6 +72,7 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
     res.status(401).json({ error: "Konto deaktiviert oder nicht gefunden" });
     return;
   }
+  res.locals["authUserSnapshot"] = user;
   next();
 }
 
@@ -114,7 +124,11 @@ function requireTeamCapabilityOrAdmin(capability: TeamCapability) {
       return;
     }
     const [user] = await db
-      .select({ isActive: usersTable.isActive })
+      .select({
+        isActive: usersTable.isActive,
+        role: usersTable.role,
+        plan: usersTable.plan,
+      })
       .from(usersTable)
       .where(eq(usersTable.id, req.session.userId));
     if (!user || !user.isActive) {
@@ -122,6 +136,7 @@ function requireTeamCapabilityOrAdmin(capability: TeamCapability) {
       res.status(401).json({ error: "Konto deaktiviert oder nicht gefunden" });
       return;
     }
+    res.locals["authUserSnapshot"] = user;
     if (isAdminLikeRole(req.session.role)) {
       next();
       return;

@@ -21,7 +21,7 @@ import {
 import { computeShiftMetrics, type GermanState } from "@workspace/db";
 import { eq, and, sql, or, isNull, inArray, gte, lt } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { resolveAllowanceOps, type ResolvedAllowanceOps } from "./allowance-resolve";
+import { DEFAULT_ALLOWANCE_OPS } from "./allowance-resolve";
 import { resolveReadTeamScope } from "./teams";
 import {
   computeHoursBalanceRow,
@@ -31,12 +31,30 @@ import {
   DEFAULT_HOLIDAY_PERCENT,
   type HoursBalanceRow,
 } from "./dashboard-hours-balance";
-import { getTimeTrackingEnabledTeamIds } from "./time-tracking-enabled";
 import { HoursBalanceCache } from "./hours-balance-cache";
+import { logger } from "./logger";
 
 const hoursBalanceCache = new HoursBalanceCache();
 
-async function readDatabaseVersion(): Promise<string> {
+type HoursBalanceTimings = Record<string, number>;
+
+const elapsedMs = (startedAt: number): number =>
+  Math.round((performance.now() - startedAt) * 10) / 10;
+
+async function timedQuery<T>(
+  timings: HoursBalanceTimings,
+  name: string,
+  query: Promise<T>,
+): Promise<T> {
+  const startedAt = performance.now();
+  try {
+    return await query;
+  } finally {
+    timings[name] = elapsedMs(startedAt);
+  }
+}
+
+export async function readHoursBalanceDatabaseVersion(): Promise<string> {
   const result = await db.execute(
     sql`SELECT COALESCE(
       (SELECT version FROM hours_balance_cache_versions WHERE id = 1),
@@ -70,13 +88,44 @@ export async function computeHoursBalances(
   month: number,
   year: number,
   requestedTeamId?: number,
+  options: {
+    databaseVersion?: string;
+    teamScope?: number[];
+  } = {},
 ): Promise<HoursBalanceRow[] | null> {
-  const databaseVersion = await readDatabaseVersion();
-  return hoursBalanceCache.get(
-    { callerUserId, month, year, requestedTeamId },
-    databaseVersion,
-    () => computeHoursBalancesUncached(callerUserId, month, year, requestedTeamId),
-  );
+  const startedAt = performance.now();
+  const versionStartedAt = performance.now();
+  const databaseVersion =
+    options.databaseVersion ?? await readHoursBalanceDatabaseVersion();
+  const databaseVersionMs = elapsedMs(versionStartedAt);
+  try {
+    return await hoursBalanceCache.get(
+      { callerUserId, month, year, requestedTeamId },
+      databaseVersion,
+      () =>
+        computeHoursBalancesUncached(
+          callerUserId,
+          month,
+          year,
+          requestedTeamId,
+          options.teamScope,
+        ),
+    );
+  } finally {
+    logger.debug(
+      {
+        callerUserId,
+        month,
+        year,
+        requestedTeamId,
+        databaseVersionSource:
+          options.databaseVersion == null ? "service" : "request-guard",
+        databaseVersionMs,
+        totalMs: elapsedMs(startedAt),
+      },
+      "hours-balance cache/version timing",
+    );
+  }
 }
 
 async function computeHoursBalancesUncached(
@@ -84,9 +133,20 @@ async function computeHoursBalancesUncached(
   month: number,
   year: number,
   requestedTeamId?: number,
+  knownTeamScope?: number[],
 ): Promise<HoursBalanceRow[] | null> {
-  const teamScope = await resolveReadTeamScope(callerUserId, requestedTeamId);
+  const startedAt = performance.now();
+  const timings: HoursBalanceTimings = {};
+
+  const teamScope =
+    knownTeamScope ??
+    await timedQuery(
+      timings,
+      "scope",
+      resolveReadTeamScope(callerUserId, requestedTeamId),
+    );
   if (teamScope === null) return null;
+  if (knownTeamScope != null) timings["scope"] = 0;
 
   // Rein team-gescoped: gezählt werden ausschließlich Mitglieder und
   // Schichten/Ist-Zeiten der Teams im aktuellen Scope (Team-Filter bzw. alle
@@ -99,39 +159,64 @@ async function computeHoursBalancesUncached(
   const monthEnd = new Date(Date.UTC(year, month, 0)).toISOString().split("T")[0]!;
 
   const overrideSettings = alias(allowanceSettingsTable, "override_settings");
+  const contractOverrideSettings = alias(
+    allowanceSettingsTable,
+    "contract_override_settings",
+  );
+  const contractOwnerSettings = alias(
+    allowanceSettingsTable,
+    "contract_owner_settings",
+  );
 
-  // Diese fünf Abfragen sind voneinander unabhängig (jede hängt nur von
-  // teamScope/callerUserId/Monatsgrenzen ab, keine von einer anderen
-  // Ergebnismenge) — parallel statt seriell ausführen, statt fünf
-  // Roundtrips nacheinander abzuwarten.
-  const [membershipRows, timeTrackingEnabledTeamIds, teamAllowanceRows, teamMeetingDayRows, ownAllowanceRows] =
-    await Promise.all([
-      // Rein team-gescoped: gezählt werden ausschließlich Mitglieder und
-      // Schichten/Ist-Zeiten der Teams im aktuellen Scope (Team-Filter bzw.
-      // alle erlaubten Teams).
+  // Sämtliche Reads hängen nur noch vom Team-/Monatsscope ab. Mitgliedschaften
+  // werden direkt mit aktiven Assistenzkräften verknüpft; Schichten,
+  // Zeiteinträge und Verträge filtern selbst auf aktive Teammitglieder. Dadurch
+  // entfällt die frühere Kette Metadaten → Assistenzkräfte → Monatsdaten.
+  const [
+    membershipRows,
+    teamAllowanceRows,
+    teamMeetingDayRows,
+    ownAllowanceRows,
+    allShifts,
+    allTimeEntries,
+    allContractsRaw,
+  ] = await Promise.all([
+    timedQuery(
+      timings,
+      "members",
       teamScope.length
         ? db
-            .select({ userId: teamMembersTable.userId, teamId: teamMembersTable.teamId })
+            .select({
+              userId: usersTable.id,
+              teamId: teamMembersTable.teamId,
+              name: usersTable.name,
+              hourlyWage: usersTable.hourlyWage,
+            })
             .from(teamMembersTable)
-            .where(inArray(teamMembersTable.teamId, teamScope))
+            .innerJoin(usersTable, eq(teamMembersTable.userId, usersTable.id))
+            .where(
+              and(
+                inArray(teamMembersTable.teamId, teamScope),
+                eq(usersTable.role, "assistant"),
+                eq(usersTable.isActive, true),
+              ),
+            )
         : Promise.resolve([]),
-
-      // Konto-Schalter „Zeiterfassung aktivieren" je Team (Eigentümer-Konto,
-      // Standard AUS): Ist die Zeiterfassung des maßgeblichen Teams
-      // deaktiviert, wird die Abrechnungsart effektiv SOLL — die gesamte
-      // Geldrechnung (Grundvergütung + Zuschläge) läuft dann aus den
-      // geplanten FIX-Schichten, da keine IST-Zeiten entstehen können.
-      getTimeTrackingEnabledTeamIds(teamScope),
+    ),
 
       // Aktuelle Zuschlags-Prozentsätze: werden erst hier (nicht beim
       // Speichern der Schicht) angewandt, damit Änderungen rückwirkend
       // greifen. Fallback-Kette je Team im Scope: TEAM-OVERRIDE (team_id
       // gesetzt) → Konto-Zeile des Team-EIGENTÜMERS (team_id NULL) →
       // Defaults. Nie die Prozente eines fremden Kontos.
+    timedQuery(
+      timings,
+      "team-settings",
       teamScope.length
         ? db
             .select({
               teamId: teamsTable.id,
+              overrideId: overrideSettings.id,
               overrideNightPercent: overrideSettings.nightPercent,
               overrideSundayPercent: overrideSettings.sundayPercent,
               overrideHolidayPercent: overrideSettings.holidayPercent,
@@ -151,6 +236,11 @@ async function computeHoursBalancesUncached(
               teamMeetingHours: allowanceSettingsTable.teamMeetingHours,
               // KONTO-GLOBAL: Pausen von den bezahlten Stunden abziehen.
               deductPausesEnabled: allowanceSettingsTable.deductPausesEnabled,
+              timeTrackingEnabled: allowanceSettingsTable.timeTrackingEnabled,
+              overrideVacationHoursPerDay: overrideSettings.vacationHoursPerDay,
+              overrideFulltimeWorkdaysPerWeek: overrideSettings.fulltimeWorkdaysPerWeek,
+              vacationHoursPerDay: allowanceSettingsTable.vacationHoursPerDay,
+              fulltimeWorkdaysPerWeek: allowanceSettingsTable.fulltimeWorkdaysPerWeek,
             })
             .from(teamsTable)
             // LEFT JOINs: Hat ein Team weder Override noch der Eigentümer
@@ -167,11 +257,15 @@ async function computeHoursBalancesUncached(
             )
             .where(inArray(teamsTable.id, teamScope))
         : Promise.resolve([]),
+    ),
 
       // Team-Einträge (Teamsitzungen) des Monats je Team: EIN FIX-Eintrag
       // pro Tag schreibt ALLEN Mitgliedern des Teams die konfigurierten
       // Stunden gut. Gezählt werden DISTINCT Kalendertage (defensiv gegen
       // Alt-Duplikate).
+    timedQuery(
+      timings,
+      "team-meetings",
       teamScope.length
         ? db
             .select({
@@ -191,23 +285,170 @@ async function computeHoursBalancesUncached(
             )
             .groupBy(shiftsTable.teamId)
         : Promise.resolve([]),
+    ),
 
       // Fallback/Anzeige-Prozente der Zeile: eigene Einstellungen des
       // anfragenden Admins (identisch mit dem Team-Eigentümer im Normalfall,
       // dass ein Admin seine eigenen Teams auswertet); ohne eigene Zeile die
       // Defaults.
-      db
-        .select()
-        .from(allowanceSettingsTable)
-        .where(
-          and(
-            eq(allowanceSettingsTable.ownerId, callerUserId),
-            isNull(allowanceSettingsTable.teamId)
-          )
-        ),
-    ]);
+    timedQuery(
+      timings,
+      "caller-settings",
+      requestedTeamId == null
+        ? db
+            .select()
+            .from(allowanceSettingsTable)
+            .where(
+              and(
+                eq(allowanceSettingsTable.ownerId, callerUserId),
+                isNull(allowanceSettingsTable.teamId),
+              ),
+            )
+        : Promise.resolve([]),
+    ),
 
-  const teamMemberIds = [...new Set(membershipRows.map((m) => m.userId))];
+    timedQuery(
+      timings,
+      "shifts",
+      teamScope.length
+        ? db
+            .select({
+              userId: shiftsTable.userId,
+              type: shiftsTable.type,
+              startTime: shiftsTable.startTime,
+              endTime: shiftsTable.endTime,
+              valuedHours: shiftsTable.valuedHours,
+              nightHours: shiftsTable.nightHours,
+              sundayHours: shiftsTable.sundayHours,
+              holidayHours: shiftsTable.holidayHours,
+              teamId: shiftsTable.teamId,
+              isVertretung: shiftsTable.isVertretung,
+              pauseMinutes: shiftsTable.pauseMinutes,
+              compensationType: shiftModelsTable.compensationType,
+              compensationPercent: shiftModelsTable.compensationPercent,
+              compensationFlatCents: shiftModelsTable.compensationFlatCents,
+              modelName: shiftModelsTable.name,
+            })
+            .from(shiftsTable)
+            .innerJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
+            .leftJoin(shiftModelsTable, eq(shiftsTable.shiftModelId, shiftModelsTable.id))
+            .where(
+              and(
+                inArray(shiftsTable.teamId, teamScope),
+                eq(usersTable.role, "assistant"),
+                eq(usersTable.isActive, true),
+                eq(shiftsTable.planningStatus, "FIX"),
+                gte(shiftsTable.startTime, monthStartDate),
+                lt(shiftsTable.startTime, monthEndDate),
+              ),
+            )
+        : Promise.resolve([]),
+    ),
+
+    timedQuery(
+      timings,
+      "time-entries",
+      teamScope.length
+        ? db
+            .select({
+              userId: timeTrackingTable.userId,
+              actualHours: timeTrackingTable.actualHours,
+              actualStart: timeTrackingTable.actualStart,
+              actualEnd: timeTrackingTable.actualEnd,
+              pauseMinutes: timeTrackingTable.pauseMinutes,
+              teamId: timeTrackingTable.teamId,
+              shiftType: shiftsTable.type,
+              compensationType: shiftModelsTable.compensationType,
+              compensationPercent: shiftModelsTable.compensationPercent,
+              compensationFlatCents: shiftModelsTable.compensationFlatCents,
+            })
+            .from(timeTrackingTable)
+            .innerJoin(usersTable, eq(timeTrackingTable.userId, usersTable.id))
+            .leftJoin(shiftsTable, eq(timeTrackingTable.shiftId, shiftsTable.id))
+            .leftJoin(shiftModelsTable, eq(shiftsTable.shiftModelId, shiftModelsTable.id))
+            .where(
+              and(
+                inArray(timeTrackingTable.teamId, teamScope),
+                eq(usersTable.role, "assistant"),
+                eq(usersTable.isActive, true),
+                gte(timeTrackingTable.actualStart, monthStartDate),
+                lt(timeTrackingTable.actualStart, monthEndDate),
+                eq(timeTrackingTable.status, "confirmed"),
+              ),
+            )
+        : Promise.resolve([]),
+    ),
+
+    timedQuery(
+      timings,
+      "contracts",
+      teamScope.length
+        ? db
+            .selectDistinct({
+              id: contractsTable.id,
+              userId: contractsTable.userId,
+              teamId: contractsTable.teamId,
+              weeklyHours: contractsTable.weeklyHours,
+              vacationDays: contractsTable.vacationDays,
+              workdaysPerWeek: contractsTable.workdaysPerWeek,
+              workdaysConfirmedAt: contractsTable.workdaysConfirmedAt,
+              vacationHoursUsed: contractsTable.vacationHoursUsed,
+              startDate: contractsTable.startDate,
+              endDate: contractsTable.endDate,
+              notes: contractsTable.notes,
+              billingMethod: contractsTable.billingMethod,
+              createdAt: contractsTable.createdAt,
+              allowanceOverrideId: contractOverrideSettings.id,
+              overrideVacationHoursPerDay: contractOverrideSettings.vacationHoursPerDay,
+              overrideFulltimeWorkdaysPerWeek:
+                contractOverrideSettings.fulltimeWorkdaysPerWeek,
+              vacationHoursPerDay: contractOwnerSettings.vacationHoursPerDay,
+              fulltimeWorkdaysPerWeek: contractOwnerSettings.fulltimeWorkdaysPerWeek,
+            })
+            .from(contractsTable)
+            .innerJoin(teamMembersTable, eq(contractsTable.userId, teamMembersTable.userId))
+            .innerJoin(usersTable, eq(contractsTable.userId, usersTable.id))
+            .innerJoin(teamsTable, eq(contractsTable.teamId, teamsTable.id))
+            .leftJoin(
+              contractOverrideSettings,
+              eq(contractOverrideSettings.teamId, contractsTable.teamId),
+            )
+            .leftJoin(
+              contractOwnerSettings,
+              and(
+                eq(contractOwnerSettings.ownerId, teamsTable.ownerId),
+                isNull(contractOwnerSettings.teamId),
+              ),
+            )
+            .where(
+              and(
+                inArray(teamMembersTable.teamId, teamScope),
+                eq(usersTable.role, "assistant"),
+                eq(usersTable.isActive, true),
+                sql`${contractsTable.startDate} <= ${monthEnd}`,
+                or(
+                  isNull(contractsTable.endDate),
+                  sql`${contractsTable.endDate} >= ${monthStart}`,
+                ),
+              ),
+            )
+        : Promise.resolve([]),
+    ),
+  ]);
+
+  const assistants = [
+    ...new Map(
+      membershipRows.map((membership) => [
+        membership.userId,
+        {
+          id: membership.userId,
+          name: membership.name,
+          hourlyWage: membership.hourlyWage,
+        },
+      ]),
+    ).values(),
+  ];
+
   // Mitgliedschaften je Nutzer — die Teamsitzungs-Gutschrift gilt für ALLE
   // Mitglieder des Teams eines Team-Eintrags, nicht nur für den zugewiesenen
   // Nutzer.
@@ -218,22 +459,11 @@ async function computeHoursBalancesUncached(
     teamsByUser.set(m.userId, list);
   }
 
-  // Braucht teamMemberIds (aus membershipRows oben) — kann daher nicht in
-  // dieselbe Promise.all-Gruppe wie die fünf unabhängigen Abfragen.
-  const assistants = teamMemberIds.length
-    ? await db
-        .select()
-        .from(usersTable)
-        .where(
-          and(
-            eq(usersTable.role, "assistant"),
-            eq(usersTable.isActive, true),
-            inArray(usersTable.id, teamMemberIds),
-          )
-        )
-    : [];
-
-  const timeTrackingEnabledTeams = new Set(timeTrackingEnabledTeamIds);
+  const timeTrackingEnabledTeams = new Set(
+    teamAllowanceRows
+      .filter((row) => row.timeTrackingEnabled === true)
+      .map((row) => row.teamId),
+  );
   const [ownAllowance] = ownAllowanceRows;
   const allowanceByTeam = new Map(
     teamAllowanceRows.map((r) => [
@@ -295,125 +525,7 @@ async function computeHoursBalancesUncached(
     holidayPercent: ownAllowance?.holidayPercent ?? DEFAULT_HOLIDAY_PERCENT,
   };
 
-  // Umrechnungsfaktor Stunden je Urlaubstag (vacationHoursPerDay) je
-  // Vertrags-Team — die Urlaubstage-Spalten der Auswertung sind aus der
-  // stundengenauen Buchhaltung abgeleitet (vacation_days_used existiert
-  // nicht mehr). Cache je Team, um N+1-Lookups zu vermeiden.
-  // Cache speichert das PROMISE selbst (nicht den aufgelösten Wert): die
-  // Assistenzkräfte werden weiter unten parallel verarbeitet
-  // (Promise.all), daher würde ein erst nach dem await gesetzter Cache-Wert
-  // mehrere gleichzeitige Aufrufe für dasselbe Team alle als "Miss" sehen und
-  // dieselbe Abfrage mehrfach auslösen (Race). Das Promise wird SOFORT
-  // (synchron) im Cache abgelegt, sodass spätere Aufrufe für dasselbe Team —
-  // auch während die erste Abfrage noch läuft — dasselbe Promise wiederverwenden.
-  const vacationOpsByTeam = new Map<number, Promise<ResolvedAllowanceOps>>();
-  const vacationOpsForTeam = (teamId: number): Promise<ResolvedAllowanceOps> => {
-    let opsPromise = vacationOpsByTeam.get(teamId);
-    if (!opsPromise) {
-      opsPromise = resolveAllowanceOps(teamId);
-      vacationOpsByTeam.set(teamId, opsPromise);
-    }
-    return opsPromise;
-  };
-
-  // ── Batch-Reads: ein Query je Datenquelle für alle Assistenzkräfte ─────────
-  // Ersetzt N×3 Einzel-Queries (shifts + timeEntries + contractForMonth je
-  // Assistenzkraft) durch 3 gebündelte IN(userIds)-Abfragen. Skaliert linear
-  // statt quadratisch mit der Teamgröße.
   const assistantIds = assistants.map((a) => a.id);
-
-  // Die drei Batch-Reads sind voneinander unabhängig (unterschiedliche
-  // Tabellen, keine der drei Abfragen nutzt das Ergebnis einer anderen) —
-  // parallel statt seriell abfragen. Der Helper hält den Element-Typ des
-  // leeren Skip-Falls exakt am Typ der jeweiligen Query fest (ein direktes
-  // `Promise.resolve([])` im Ternary wird sonst zu `never[]` verengt).
-  const orEmpty = async <T,>(cond: boolean, run: () => Promise<T[]>): Promise<T[]> =>
-    cond ? run() : [];
-
-  const [allShifts, allTimeEntries, allContractsRaw] = await Promise.all([
-    // Batch-Schichten: alle FIX-Schichten aller Assistenzkräfte in einem Query.
-    // Sargable Bereichsprädikat aktiviert den (user_id, start_time)-Index.
-    orEmpty(!!(assistantIds.length && teamScope.length), () =>
-      db
-        .select({
-          userId: shiftsTable.userId,
-          type: shiftsTable.type,
-          startTime: shiftsTable.startTime,
-          endTime: shiftsTable.endTime,
-          valuedHours: shiftsTable.valuedHours,
-          nightHours: shiftsTable.nightHours,
-          sundayHours: shiftsTable.sundayHours,
-          holidayHours: shiftsTable.holidayHours,
-          teamId: shiftsTable.teamId,
-          isVertretung: shiftsTable.isVertretung,
-          pauseMinutes: shiftsTable.pauseMinutes,
-          compensationType: shiftModelsTable.compensationType,
-          compensationPercent: shiftModelsTable.compensationPercent,
-          compensationFlatCents: shiftModelsTable.compensationFlatCents,
-          // Modellname zur Erkennung von Bereitschafts-Diensten.
-          modelName: shiftModelsTable.name,
-        })
-        .from(shiftsTable)
-        .leftJoin(shiftModelsTable, eq(shiftsTable.shiftModelId, shiftModelsTable.id))
-        .where(
-          and(
-            inArray(shiftsTable.userId, assistantIds),
-            inArray(shiftsTable.teamId, teamScope),
-            eq(shiftsTable.planningStatus, "FIX"),
-            gte(shiftsTable.startTime, monthStartDate),
-            lt(shiftsTable.startTime, monthEndDate),
-          )
-        )
-    ),
-
-    // Batch-Zeiteinträge: alle bestätigten Einträge aller Assistenzkräfte in einem Query.
-    // Sargable Bereichsprädikat aktiviert den (team_id, actual_start)-Index.
-    orEmpty(!!(assistantIds.length && teamScope.length), () =>
-      db
-        .select({
-          userId: timeTrackingTable.userId,
-          actualHours: timeTrackingTable.actualHours,
-          actualStart: timeTrackingTable.actualStart,
-          actualEnd: timeTrackingTable.actualEnd,
-          pauseMinutes: timeTrackingTable.pauseMinutes,
-          teamId: timeTrackingTable.teamId,
-          shiftType: shiftsTable.type,
-          compensationType: shiftModelsTable.compensationType,
-          compensationPercent: shiftModelsTable.compensationPercent,
-          compensationFlatCents: shiftModelsTable.compensationFlatCents,
-        })
-        .from(timeTrackingTable)
-        .leftJoin(shiftsTable, eq(timeTrackingTable.shiftId, shiftsTable.id))
-        .leftJoin(shiftModelsTable, eq(shiftsTable.shiftModelId, shiftModelsTable.id))
-        .where(
-          and(
-            inArray(timeTrackingTable.userId, assistantIds),
-            inArray(timeTrackingTable.teamId, teamScope),
-            gte(timeTrackingTable.actualStart, monthStartDate),
-            lt(timeTrackingTable.actualStart, monthEndDate),
-            eq(timeTrackingTable.status, "confirmed"),
-          )
-        )
-    ),
-
-    // Batch-Verträge: ein Query für alle Assistenzkräfte statt N contractForMonth()-Aufrufe.
-    // Gleiche Prioritäts-Logik: Scope-Verträge bevorzugen, dann neuester Beginn.
-    orEmpty(!!assistantIds.length, () =>
-      db
-        .select()
-        .from(contractsTable)
-        .where(
-          and(
-            inArray(contractsTable.userId, assistantIds),
-            sql`${contractsTable.startDate} <= ${monthEnd}`,
-            or(
-              isNull(contractsTable.endDate),
-              sql`${contractsTable.endDate} >= ${monthStart}`
-            )
-          )
-        )
-    ),
-  ]);
   const shiftsByUser = new Map<number, typeof allShifts>();
   for (const s of allShifts) {
     const list = shiftsByUser.get(s.userId) ?? [];
@@ -532,7 +644,25 @@ async function computeHoursBalancesUncached(
         };
       });
 
-      const vacationOps = contract ? await vacationOpsForTeam(contract.teamId) : null;
+      const vacationOps = contract
+        ? contract.allowanceOverrideId != null
+          ? {
+              vacationHoursPerDay:
+                contract.overrideVacationHoursPerDay ??
+                DEFAULT_ALLOWANCE_OPS.vacationHoursPerDay,
+              fulltimeWorkdaysPerWeek:
+                contract.overrideFulltimeWorkdaysPerWeek ??
+                DEFAULT_ALLOWANCE_OPS.fulltimeWorkdaysPerWeek,
+            }
+          : {
+              vacationHoursPerDay:
+                contract.vacationHoursPerDay ??
+                DEFAULT_ALLOWANCE_OPS.vacationHoursPerDay,
+              fulltimeWorkdaysPerWeek:
+                contract.fulltimeWorkdaysPerWeek ??
+                DEFAULT_ALLOWANCE_OPS.fulltimeWorkdaysPerWeek,
+            }
+        : null;
 
       // Teamsitzungs-Gutschrift: Summe über alle Teams, in denen die
       // Assistenzkraft Mitglied ist — Team-Tage × teamMeetingHours des
@@ -561,5 +691,17 @@ async function computeHoursBalancesUncached(
     })
   );
 
+  timings["total"] = elapsedMs(startedAt);
+  logger.debug(
+    {
+      callerUserId,
+      month,
+      year,
+      requestedTeamId,
+      assistantCount: assistants.length,
+      timings,
+    },
+    "hours-balance cold query timings",
+  );
   return result;
 }

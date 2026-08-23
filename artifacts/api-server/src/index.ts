@@ -45,16 +45,26 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 /**
- * Pool-Warmup: 2 Verbindungen explizit aufbauen, damit beim ersten Request
- * kein Kaltstart-Overhead (2–3 s) entsteht. Fehler beim Warmup sind nicht
- * fatal — der Server startet trotzdem.
+ * Pool-Warmup: Die größte kalte Stundenbilanz-Welle nutzt sechs unabhängige
+ * Reads. Genau so viele Verbindungen werden vor dem Listen aufgebaut, damit
+ * der erste Auswertungsaufruf nicht auf TLS-/DB-Verbindungsaufbau wartet.
+ * Fehler beim Warmup sind nicht fatal — der Server startet trotzdem.
  */
-async function warmUpPool(): Promise<void> {
-  const clients = await Promise.all([pool.connect(), pool.connect()]);
+const DB_POOL_WARM_CONNECTIONS = 6;
+
+async function warmUpPool(logSuccess = true): Promise<void> {
+  const clients = await Promise.all(
+    Array.from({ length: DB_POOL_WARM_CONNECTIONS }, () => pool.connect()),
+  );
   for (const client of clients) {
     client.release();
   }
-  logger.info("DB pool warmed up (2 connections)");
+  if (logSuccess) {
+    logger.info(
+      { connections: DB_POOL_WARM_CONNECTIONS },
+      "DB pool warmed up",
+    );
+  }
 }
 
 // Task #819: Startup-Migration und Pool-Warmup parallel ausführen, damit
