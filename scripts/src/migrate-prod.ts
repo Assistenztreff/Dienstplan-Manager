@@ -27,7 +27,7 @@ import { runPrePushSql } from "./lib/pre-push-sql.js";
  *     (oder URL als erstes Argument nach `--`)
  *
  *   Anwenden (ausdrückliche Bestätigung = Name der Ziel-DB):
- *     PROD_DATABASE_URL='…' pnpm --filter @workspace/scripts run migrate-prod -- --yes <dbname>
+ *     PROD_DATABASE_URL='…' pnpm --filter @workspace/scripts run migrate-prod --yes <dbname>
  *
  * Sicherheitsnetze:
  * - Die Ziel-URL MUSS explizit übergeben werden (PROD_DATABASE_URL oder
@@ -103,7 +103,7 @@ async function main(): Promise<void> {
         "",
         "Verwendung:",
         "  Dry-Run:   PROD_DATABASE_URL='postgres://…' pnpm --filter @workspace/scripts run migrate-prod",
-        "  Anwenden:  PROD_DATABASE_URL='postgres://…' pnpm --filter @workspace/scripts run migrate-prod -- --yes <dbname>",
+        "  Anwenden:  PROD_DATABASE_URL='postgres://…' pnpm --filter @workspace/scripts run migrate-prod --yes <dbname>",
         "",
         "Die URL kann alternativ als erstes Argument (nach `--`) übergeben werden.",
         "Die Umgebungs-URL (DATABASE_URL/APP_DATABASE_URL) wird bewusst NIE",
@@ -187,7 +187,7 @@ async function main(): Promise<void> {
         `Nach dem Push laufen zusätzlich: ${POST_PUSH_DATA_MIGRATIONS.join(", ")}`,
         "(setzen Spalten voraus, die erst dieser Push anlegt).",
         "",
-        `Anwenden mit: pnpm --filter @workspace/scripts run migrate-prod -- --yes ${targetDbName}`,
+        `Anwenden mit: pnpm --filter @workspace/scripts run migrate-prod --yes ${targetDbName}`,
       ].join("\n"),
     );
     return;

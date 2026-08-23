@@ -87,7 +87,7 @@ async function main(): Promise<void> {
           "",
           "So beheben (Schema zuerst, Code danach):",
           "  1) Dry-Run ansehen:  pnpm --filter @workspace/scripts run check-prod-schema",
-          "  2) Anwenden:         pnpm --filter @workspace/scripts run migrate-prod -- --yes <dbname>",
+          "  2) Anwenden:         pnpm --filter @workspace/scripts run migrate-prod --yes <dbname>",
           "  3) Danach erneut veröffentlichen.",
           "",
           "Es wurde NICHTS an der Produktions-DB geändert (Check ist rein lesend).",
