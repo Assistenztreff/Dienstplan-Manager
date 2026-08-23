@@ -13,6 +13,7 @@ import router from "./routes";
 import { logger } from "./lib/logger";
 import { recordPlatformError } from "./lib/platform-errors";
 import { pool as dbPool } from "@workspace/db";
+import { invalidateHoursBalanceAfterSuccessfulWrite } from "./middleware/hours-balance-cache-invalidation";
 
 const PgStore = ConnectPgSimple(session);
 
@@ -171,7 +172,7 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
-app.use("/api", router);
+app.use("/api", invalidateHoursBalanceAfterSuccessfulWrite, router);
 
 // ---------------------------------------------------------------------------
 // Zentraler Error-Handler: JEDER unbehandelte Fehler (Express 5 leitet auch

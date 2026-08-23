@@ -16,3 +16,4 @@ export * from "./register_attempts";
 export * from "./email_rate_limit_attempts";
 export * from "./register_rate_limit_attempts";
 export * from "./data_migrations";
+export * from "./hours_balance_cache_versions";

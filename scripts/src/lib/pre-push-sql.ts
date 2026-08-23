@@ -168,6 +168,16 @@ export const PRE_PUSH_SQL: string[] = [
      name text PRIMARY KEY,
      applied_at timestamp DEFAULT now() NOT NULL
    );`,
+  // Gemeinsame Generation für den serverseitigen Stundenbilanz-Cache.
+  // Die einzelne neue Tabelle vorab anzulegen verhindert auf Bestands-DBs
+  // den interaktiven Rename-Prompt von drizzle-kit.
+  `CREATE TABLE IF NOT EXISTS hours_balance_cache_versions (
+     id integer PRIMARY KEY DEFAULT 1,
+     version bigint DEFAULT 0 NOT NULL
+   );`,
+  `INSERT INTO hours_balance_cache_versions (id, version)
+     VALUES (1, 0)
+     ON CONFLICT (id) DO NOTHING;`,
 ];
 
 /** Alle Vorab-Schritte sequenziell gegen den übergebenen Client ausführen. */

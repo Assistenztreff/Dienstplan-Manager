@@ -32,6 +32,33 @@ import {
   type HoursBalanceRow,
 } from "./dashboard-hours-balance";
 import { getTimeTrackingEnabledTeamIds } from "./time-tracking-enabled";
+import { HoursBalanceCache } from "./hours-balance-cache";
+
+const hoursBalanceCache = new HoursBalanceCache();
+
+async function readDatabaseVersion(): Promise<string> {
+  const result = await db.execute(
+    sql`SELECT COALESCE(
+      (SELECT version FROM hours_balance_cache_versions WHERE id = 1),
+      0
+    )::text AS version`,
+  );
+  const version = (result.rows[0] as { version?: unknown } | undefined)?.version;
+  if (typeof version !== "string" || version.length === 0) {
+    throw new Error("PostgreSQL lieferte keine gültige Cache-Version.");
+  }
+  return version;
+}
+
+export async function invalidateHoursBalanceCache(): Promise<void> {
+  await db.execute(sql`
+    INSERT INTO hours_balance_cache_versions (id, version)
+    VALUES (1, 1)
+    ON CONFLICT (id) DO UPDATE
+      SET version = hours_balance_cache_versions.version + 1
+  `);
+  hoursBalanceCache.clear();
+}
 
 /**
  * Berechnet die Stundenbilanz-Zeilen (inkl. Geldwerten) fuer den Team-Scope
@@ -39,6 +66,20 @@ import { getTimeTrackingEnabledTeamIds } from "./time-tracking-enabled";
  * erlaubten Scope liegt (Aufrufer antwortet mit 403).
  */
 export async function computeHoursBalances(
+  callerUserId: number,
+  month: number,
+  year: number,
+  requestedTeamId?: number,
+): Promise<HoursBalanceRow[] | null> {
+  const databaseVersion = await readDatabaseVersion();
+  return hoursBalanceCache.get(
+    { callerUserId, month, year, requestedTeamId },
+    databaseVersion,
+    () => computeHoursBalancesUncached(callerUserId, month, year, requestedTeamId),
+  );
+}
+
+async function computeHoursBalancesUncached(
   callerUserId: number,
   month: number,
   year: number,
