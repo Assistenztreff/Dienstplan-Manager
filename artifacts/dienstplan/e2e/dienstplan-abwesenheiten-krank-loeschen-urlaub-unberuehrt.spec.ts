@@ -42,6 +42,10 @@ test.use({ viewport: { width: 1280, height: 800 } });
 // aktuellen Jahres (currentYear in der Seite).
 const YEAR = new Date().getFullYear();
 const VACATION_DAYS = 30;
+const WEEKLY_HOURS = 40;
+const FULLTIME_WORKDAYS_PER_WEEK = 5;
+const VACATION_HOURS = (VACATION_DAYS / FULLTIME_WORKDAYS_PER_WEEK) * WEEKLY_HOURS;
+const VACATION_HOURS_PER_DAY = WEEKLY_HOURS / FULLTIME_WORKDAYS_PER_WEEK;
 const CONTRACT_START = `${YEAR}-01-01`;
 
 // Urlaubs-Zeitraum (bleibt erhalten): 2 Tage.
@@ -81,7 +85,7 @@ async function createContract(ctx: APIRequestContext, userId: number): Promise<n
     data: {
       userId,
       startDate: CONTRACT_START,
-      weeklyHours: 40,
+      weeklyHours: WEEKLY_HOURS,
       vacationDays: VACATION_DAYS,
     },
   });
@@ -149,7 +153,7 @@ test("Löschen eines Krank-Zeitraums lässt den genommenen Urlaub unberührt", a
   // Ausgangszustand: voller Anspruch, nichts genommen.
   await expect(entitlement).toHaveText(String(VACATION_DAYS));
   await expect(taken).toHaveText("0");
-  await expect(remaining).toHaveText(String(VACATION_DAYS));
+  await expect(remaining).toHaveText(String(VACATION_HOURS));
 
   // 1) Beide Zeiträume buchen: Urlaub (2 Tage) und Krank (3 Tage).
   await bookAbsence(page, assistant.name, "Urlaub", VACATION_FROM, VACATION_TO);
@@ -171,7 +175,9 @@ test("Löschen eines Krank-Zeitraums lässt den genommenen Urlaub unberührt", a
   // Zwischenstand: NUR der Urlaub zählt (2 genommen); die Krank-Tage ändern den
   // Resturlaub nicht (sonst stünden hier 5 genommen bzw. 25 Resturlaub).
   await expect(taken).toHaveText(String(VACATION_TAKEN));
-  await expect(remaining).toHaveText(String(VACATION_DAYS - VACATION_TAKEN));
+  await expect(remaining).toHaveText(
+    String(VACATION_HOURS - VACATION_TAKEN * VACATION_HOURS_PER_DAY),
+  );
 
   // Backend-Zwischenprobe: vacationDaysUsed zählt ausschließlich die Urlaubstage.
   const midRes = await adminCtx.get(`/api/contracts?userId=${assistant.id}`);
@@ -198,7 +204,9 @@ test("Löschen eines Krank-Zeitraums lässt den genommenen Urlaub unberührt", a
   // Kernaussage: der genommene Urlaub bleibt UNVERÄNDERT — das Löschen des
   // Krank-Zeitraums hat NICHTS gutgeschrieben.
   await expect(taken).toHaveText(String(VACATION_TAKEN));
-  await expect(remaining).toHaveText(String(VACATION_DAYS - VACATION_TAKEN));
+  await expect(remaining).toHaveText(
+    String(VACATION_HOURS - VACATION_TAKEN * VACATION_HOURS_PER_DAY),
+  );
 
   // Backend-Gegenprobe: vacationDaysUsed unverändert (kein versehentliches
   // Gutschreiben für type=sick).

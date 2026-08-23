@@ -32,6 +32,10 @@ const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
 test.use({ viewport: { width: 1280, height: 800 } });
 
 const VACATION_DAYS = 30;
+const WEEKLY_HOURS = 40;
+const FULLTIME_WORKDAYS_PER_WEEK = 5;
+const VACATION_HOURS = (VACATION_DAYS / FULLTIME_WORKDAYS_PER_WEEK) * WEEKLY_HOURS;
+const VACATION_HOURS_PER_DAY = WEEKLY_HOURS / FULLTIME_WORKDAYS_PER_WEEK;
 // Laufendes Jahr — die Resturlaub-Anzeige zählt ausschließlich Urlaubstage des
 // aktuellen Jahres (currentYear in der Seite).
 const YEAR = new Date().getFullYear();
@@ -63,7 +67,7 @@ async function createContract(ctx: APIRequestContext, userId: number): Promise<n
     data: {
       userId,
       startDate: CONTRACT_START,
-      weeklyHours: 40,
+      weeklyHours: WEEKLY_HOURS,
       vacationDays: VACATION_DAYS,
     },
   });
@@ -123,7 +127,7 @@ test("Urlaubsbuchung am 1. Januar / Vertragsbeginn zieht korrekt vom Resturlaub 
   const taken = page.getByTestId(`vacation-taken-${assistant.id}`);
   await expect(entitlement).toHaveText(String(VACATION_DAYS));
   await expect(taken).toHaveText("0");
-  await expect(remaining).toHaveText(String(VACATION_DAYS));
+  await expect(remaining).toHaveText(String(VACATION_HOURS));
 
   // Assistent im Erfassungsformular auswählen.
   await page.getByTestId("absence-user").click();
@@ -141,7 +145,7 @@ test("Urlaubsbuchung am 1. Januar / Vertragsbeginn zieht korrekt vom Resturlaub 
 
   // Resturlaub-Anzeige aktualisiert: 29 von 30 (1 genommen).
   await expect(taken).toHaveText("1");
-  await expect(remaining).toHaveText(String(VACATION_DAYS - 1));
+  await expect(remaining).toHaveText(String(VACATION_HOURS - VACATION_HOURS_PER_DAY));
 
   // Backend: vacationDaysUsed des für den 1.1. gültigen Vertrags ist auf 1 gebucht.
   const contractsRes = await adminCtx.get(`/api/contracts?userId=${assistant.id}`);

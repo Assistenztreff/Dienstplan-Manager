@@ -39,6 +39,10 @@ test.use({ viewport: { width: 1280, height: 800 } });
 
 const YEAR = new Date().getFullYear();
 const VACATION_DAYS = 30;
+const WEEKLY_HOURS = 40;
+const FULLTIME_WORKDAYS_PER_WEEK = 5;
+const VACATION_HOURS = (VACATION_DAYS / FULLTIME_WORKDAYS_PER_WEEK) * WEEKLY_HOURS;
+const VACATION_HOURS_PER_DAY = WEEKLY_HOURS / FULLTIME_WORKDAYS_PER_WEEK;
 
 /** Tag im aktuellen Monat als YYYY-MM-DD (Vergangenheit ist nie geblockt,
  *  aktueller Monat liegt immer innerhalb des Free-historyMonths-Fensters). */
@@ -96,7 +100,7 @@ test.describe("Abwesenheiten: Eintragen frei, Resturlaub-Tracking Premium", () =
       data: {
         userId: assistantId,
         startDate: `${YEAR}-01-01`,
-        weeklyHours: 40,
+        weeklyHours: WEEKLY_HOURS,
         vacationDays: VACATION_DAYS,
       },
     });
@@ -199,13 +203,13 @@ test.describe("Abwesenheiten: Eintragen frei, Resturlaub-Tracking Premium", () =
     ).toBeVisible();
 
     // Kein Datenverlust durch das Free-Intermezzo: die 2 als Free
-    // eingetragenen Urlaubstage sind korrekt mitgezählt (30 - 2 = 28).
+    // eingetragenen Urlaubstage sind korrekt mitgezählt (240 h - 2 × 8 h = 224 h).
     await expect(page.getByTestId(`vacation-entitlement-${assistantId}`)).toHaveText(
       String(VACATION_DAYS),
     );
     await expect(page.getByTestId(`vacation-taken-${assistantId}`)).toHaveText("2");
     await expect(page.getByTestId(`vacation-remaining-${assistantId}`)).toHaveText(
-      String(VACATION_DAYS - 2),
+      String(VACATION_HOURS - 2 * VACATION_HOURS_PER_DAY),
     );
   });
 });

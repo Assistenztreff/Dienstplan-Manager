@@ -41,6 +41,10 @@ test.use({ viewport: { width: 1280, height: 800 } });
 // aktuellen Jahres (currentYear in der Seite).
 const YEAR = new Date().getFullYear();
 const VACATION_DAYS = 30;
+const WEEKLY_HOURS = 40;
+const FULLTIME_WORKDAYS_PER_WEEK = 5;
+const VACATION_HOURS = (VACATION_DAYS / FULLTIME_WORKDAYS_PER_WEEK) * WEEKLY_HOURS;
+const VACATION_HOURS_PER_DAY = WEEKLY_HOURS / FULLTIME_WORKDAYS_PER_WEEK;
 const CONTRACT_START = `${YEAR}-01-01`;
 
 // Zwei getrennte Urlaubs-Zeiträume im laufenden Jahr mit ausreichend Lücke,
@@ -83,7 +87,7 @@ async function createContract(ctx: APIRequestContext, userId: number): Promise<n
     data: {
       userId,
       startDate: CONTRACT_START,
-      weeklyHours: 40,
+      weeklyHours: WEEKLY_HOURS,
       vacationDays: VACATION_DAYS,
     },
   });
@@ -149,7 +153,7 @@ test("Löschen nur eines von zwei Urlaubs-Zeiträumen bucht exakt diesen gut", a
   // Ausgangszustand: voller Anspruch, nichts genommen.
   await expect(entitlement).toHaveText(String(VACATION_DAYS));
   await expect(taken).toHaveText("0");
-  await expect(remaining).toHaveText(String(VACATION_DAYS));
+  await expect(remaining).toHaveText(String(VACATION_HOURS));
 
   // 1) Beide getrennten Urlaubs-Zeiträume buchen.
   await bookAbsence(page, assistant.name, "Urlaub", KEEP_FROM, KEEP_TO);
@@ -168,7 +172,9 @@ test("Löschen nur eines von zwei Urlaubs-Zeiträumen bucht exakt diesen gut", a
 
   // Zwischenstand: beide Zeiträume zusammen abgezogen.
   await expect(taken).toHaveText(String(TOTAL_DAYS));
-  await expect(remaining).toHaveText(String(VACATION_DAYS - TOTAL_DAYS));
+  await expect(remaining).toHaveText(
+    String(VACATION_HOURS - TOTAL_DAYS * VACATION_HOURS_PER_DAY),
+  );
 
   // Backend-Zwischenprobe: vacationDaysUsed entspricht der Summe beider Zeiträume.
   const midRes = await adminCtx.get(`/api/contracts?userId=${assistant.id}`);
@@ -195,7 +201,9 @@ test("Löschen nur eines von zwei Urlaubs-Zeiträumen bucht exakt diesen gut", a
   // Teilweise Gutschrift: NUR der gelöschte Zeitraum (3 Tage) zurückgebucht,
   // der verbleibende 2-Tage-Zeitraum bleibt abgezogen.
   await expect(taken).toHaveText(String(KEEP_DAYS));
-  await expect(remaining).toHaveText(String(VACATION_DAYS - KEEP_DAYS));
+  await expect(remaining).toHaveText(
+    String(VACATION_HOURS - KEEP_DAYS * VACATION_HOURS_PER_DAY),
+  );
 
   // Backend-Gegenprobe: vacationDaysUsed == verbleibende Tage (kein Über-/Unterbuchen).
   const afterRes = await adminCtx.get(`/api/contracts?userId=${assistant.id}`);

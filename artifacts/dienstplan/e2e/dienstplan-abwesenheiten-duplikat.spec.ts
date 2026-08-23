@@ -31,6 +31,10 @@ const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
 test.use({ viewport: { width: 1280, height: 800 } });
 
 const VACATION_DAYS = 30;
+const WEEKLY_HOURS = 40;
+const FULLTIME_WORKDAYS_PER_WEEK = 5;
+const VACATION_HOURS = (VACATION_DAYS / FULLTIME_WORKDAYS_PER_WEEK) * WEEKLY_HOURS;
+const VACATION_HOURS_PER_DAY = WEEKLY_HOURS / FULLTIME_WORKDAYS_PER_WEEK;
 // Laufendes Jahr — die Resturlaub-Anzeige zählt ausschließlich Urlaubstage des
 // aktuellen Jahres (currentYear in der Seite).
 const YEAR = new Date().getFullYear();
@@ -67,7 +71,7 @@ async function createContract(ctx: APIRequestContext, userId: number): Promise<n
     data: {
       userId,
       startDate: CONTRACT_START,
-      weeklyHours: 40,
+      weeklyHours: WEEKLY_HOURS,
       vacationDays: VACATION_DAYS,
     },
   });
@@ -151,7 +155,7 @@ test("Überlappende Urlaubsbuchung überspringt bereits vorhandene Tage und zieh
   // Großzügiges Zeitfenster: 2 sequentielle Urlaubs-POSTs à ~4-5s (Vertrags-
   // Read-Modify-Write) sprengen unter Last die Default-5s.
   await expect(taken).toHaveText("2", { timeout: 20000 });
-  await expect(remaining).toHaveText("28");
+  await expect(remaining).toHaveText(String(VACATION_HOURS - 2 * VACATION_HOURS_PER_DAY));
   expect(await vacationDaysUsed(adminCtx, assistant.id, contractId)).toBe(2);
 
   // --- Zweite, überlappende Buchung: 11.-13. ---
@@ -167,7 +171,9 @@ test("Überlappende Urlaubsbuchung überspringt bereits vorhandene Tage und zieh
 
   // Resturlaub sinkt nur um die 2 wirklich neuen Tage (auf 26), NICHT um 3.
   await expect(taken).toHaveText("4", { timeout: 15000 });
-  await expect(remaining).toHaveText("26", { timeout: 5000 });
+  await expect(remaining).toHaveText(String(VACATION_HOURS - 4 * VACATION_HOURS_PER_DAY), {
+    timeout: 5000,
+  });
 
   // Backend: insgesamt 4 eindeutige Urlaubstage (10.-13.), kein Doppelabzug.
   expect(await vacationDaysUsed(adminCtx, assistant.id, contractId)).toBe(4);
