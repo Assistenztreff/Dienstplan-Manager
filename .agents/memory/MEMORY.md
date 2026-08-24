@@ -147,3 +147,4 @@
 - [Privatkonto-Personalverwaltung](private-account-personnel-ui.md) — Standard-Team bleibt intern, aber Privat-Inhaber sehen nur Assistenzkräfte und Rechte; Mehrteam-Funktionen bleiben Dienstleistern vorbehalten.
 - [Persistierter Query-Cache bei Einstellungen](persisted-settings-query-cache.md) — Server-Refetch darf alten Cache nach Reload ersetzen; nur echte ungespeicherte Eingaben schützen.
 - [§ 4 BUrlG Wartezeit-Sockel-Proration](vacation-waiting-period-burlg.md) — Sockel prorationiert 1. 6 Monate ab startDate; 3 Call-Sites (Einzel/Batch/Dashboard) synchron halten; e2e-Fixtures mit jungem startDate + hartkodierter Resturlaub-Zahl prüfen.
+- [One-shot migration e2e marker reset](one-shot-migration-e2e-marker-reset.md) — a spec simulating legacy data for a once-ever `data_migrations`-gated backfill must delete that marker first, or it passes once then fails forever on the persisting test DB.

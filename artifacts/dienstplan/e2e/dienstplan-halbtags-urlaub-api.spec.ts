@@ -5,7 +5,10 @@ import {
   request as playwrightRequest,
   type APIRequestContext,
 } from "@playwright/test";
-import { dbSetShiftPartialAbsence } from "./helpers/db";
+import {
+  dbSetShiftPartialAbsence,
+  dbResetDataMigrationMarker,
+} from "./helpers/db";
 
 /**
  * API-Tests fuer halbtaegigen Urlaub (Task #862): POST /api/shifts/bulk-absence
@@ -400,6 +403,19 @@ test("Backfill: Bestands-Halbtags-Urlaub ohne is_partial_absence-Flag wird nachg
   // Bestandszeilen anhand ihrer echten (nicht-ganztaegigen) Uhrzeiten auf
   // is_partial_absence=true nachziehen und damit das alte, uhrzeiten-basierte
   // Verhalten wiederherstellen.
+  //
+  // Der Backfill ist bewusst ein GENAU-EINMAL-Lauf pro Datenbank (Einmal-
+  // Marker in `data_migrations`, s. Docstring in
+  // backfill-partial-absence-flag.ts) — eine reine WHERE-Bedingung wuerde bei
+  // jedem erneuten Aufruf frisch angelegte, bewusst ganztaegige Abwesenheiten
+  // mit geerbten Uhrzeiten faelschlich als Teil-Tag umklassifizieren. Die
+  // private Test-DB bleibt aber ueber viele Testlaeufe hinweg bestehen (s.
+  // Memory private-test-dbs) — ohne Reset waere der Marker ab dem zweiten
+  // Lauf dieses Specs bereits vergeben und jeder weitere Skriptaufruf ein
+  // garantiertes No-op. Genau wie der echte Bestands-DB-Test
+  // (backfill-partial-absence-flag.bestands-db.db.test.ts) muss dieses Spec
+  // den Marker deshalb VOR dem Aufruf entfernen, um eine echte Bestands-DB
+  // "von vor #862" nachzubilden.
   const day = dayString("05-20");
   const { status: vacStatus, body } = await bulkAbsenceRange("vacation", [
     { startTime: iso(day, "13:00"), endTime: iso(day, "17:00") },
@@ -427,6 +443,12 @@ test("Backfill: Bestands-Halbtags-Urlaub ohne is_partial_absence-Flag wird nachg
   if (beforeBackfillRes.ok()) {
     await deleteShift(((await beforeBackfillRes.json()) as Shift).id);
   }
+
+  // Marker zuruecksetzen, BEVOR der Backfill laeuft: die private Test-DB
+  // ueberlebt viele Testlaeufe, und der Einmal-Marker aus einem frueheren
+  // Lauf dieses Specs (oder eines anderen Aufrufs des Skripts) wuerde den
+  // Backfill sonst zu einem garantierten No-op machen (s. Kommentar oben).
+  await dbResetDataMigrationMarker("backfill-partial-absence-flag");
 
   const env: NodeJS.ProcessEnv = { ...process.env };
   if (process.env.E2E_TEST_DATABASE_URL) {

@@ -170,6 +170,30 @@ export async function dbSetShiftPartialAbsence(
   });
 }
 
+/**
+ * Loescht den Einmal-Marker einer `data_migrations`-Zeile direkt in der
+ * (Test-)DB (Task #882). Der Backfill fuer `is_partial_absence`
+ * (backfill-partial-absence-flag.ts) ist bewusst ein GENAU-EINMAL-Lauf pro
+ * Datenbank (s. Docstring dort): eine reine WHERE-Bedingung wuerde sonst bei
+ * jedem erneuten Aufruf frisch angelegte, bewusst ganztaegige Abwesenheiten
+ * mit geerbten (nicht-ganztaegigen) Uhrzeiten faelschlich als Teil-Tag
+ * umklassifizieren.
+ *
+ * Die private E2E-Test-DB bleibt ueber viele Testlaeufe hinweg bestehen
+ * (s. Memory private-test-dbs) — der Marker aus einem FRUEHEREN Lauf dieses
+ * Backfill-Skripts bleibt also dauerhaft gesetzt. Ein Spec, das eine
+ * Bestands-Zeile "von vor der Spalte" simulieren will (echte Teil-Tag-Zeiten,
+ * Flag manuell auf `false` zurueckgesetzt), muss deshalb GENAUSO wie der
+ * echte Bestands-DB-Test (backfill-partial-absence-flag.bestands-db.db.test.ts)
+ * den Marker vorher entfernen — sonst ist der naechste Skriptaufruf ein
+ * garantiertes No-op, unabhaengig davon, wie die Zeile aussieht.
+ */
+export async function dbResetDataMigrationMarker(name: string): Promise<void> {
+  await withDbClient(async (client) => {
+    await client.query("DELETE FROM data_migrations WHERE name = $1", [name]);
+  });
+}
+
 /** Passwort-Hashing exakt wie das setup-admin-Skript (scrypt, salt:hash). */
 function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");
