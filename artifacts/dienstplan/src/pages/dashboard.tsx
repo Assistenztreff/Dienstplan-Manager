@@ -12,6 +12,7 @@ import type { MonthClosingStatus } from "@workspace/api-client-react";
 import { hasAccess } from "@/lib/entitlements";
 import type { DashboardSummary, DashboardWarnings, Shift, VacationBalance } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
@@ -554,6 +555,74 @@ function KrankmeldungSection({ userId }: { userId: number }) {
   );
 }
 
+// Dashboard-Warnung für offene Dienstvorschläge (Assistenzkraft-Sicht): der
+// Arbeitgeber hat einen bereits fixen Dienst geändert (Zeit/Person/Pause),
+// wodurch er auf ANGEBOTEN zurückfällt und erneut bestätigt werden muss. Der
+// gleichwertige Hinweis existiert bereits im Dienstplan-Kalender
+// (dienstplan.tsx, myAngebotenShifts) — hier zusätzlich ganz oben auf dem
+// Dashboard, damit er nicht übersehen wird, unabhängig vom dort gerade
+// angezeigten Monat. all:true umgeht den Monats-Default der Liste; der
+// Server erzwingt für Assistenzkräfte ohnehin effectiveUserId=self.
+function PendingShiftProposalsBanner() {
+  const [, navigate] = useLocation();
+  const { isTeamScopeReady, selectedTeamId } = useTeam();
+  const { currentUser } = useAuth();
+  // Wie im Kalender (dienstplan.tsx) auf das gerade gewählte Team beschränkt:
+  // ohne teamId würde ein Mehrteam-Konto auch Vorschläge aus NICHT
+  // ausgewählten Teams zählen/verlinken, die "Vorschlag prüfen" aber im
+  // aktuell gewählten Team-Kalender landet und dort nicht auftaucht.
+  const teamParam = selectedTeamId != null ? { teamId: selectedTeamId } : {};
+  const { data: shifts } = useListShifts(
+    { all: true, userId: currentUser?.id, ...teamParam },
+    { query: { enabled: isTeamScopeReady && currentUser?.id != null } } as Parameters<typeof useListShifts>[1],
+  ) as { data?: Shift[] };
+
+  // GET /shifts erzwingt effectiveUserId=self nur für reine Assistenzkräfte
+  // ohne Planungsrechte; Teamleiter-Assistenzkräfte erhalten sonst die
+  // Dienste ihres ganzen Teams. Ohne die userId-Prüfung würde ihnen hier
+  // fälschlich ein fremder Vorschlag als eigener Handlungsbedarf angezeigt
+  // (wie beim Kalender-Pendant myAngebotenShifts in dienstplan.tsx: gleiche
+  // Filter, inkl. Ausschluss von Aushilfe-Spiegelschichten).
+  const offeredShifts = (shifts ?? []).filter(
+    (s) =>
+      s.planningStatus === "ANGEBOTEN" &&
+      s.userId === currentUser?.id &&
+      !(s.einsatzTeamId != null && s.einsatzTeamId === selectedTeamId),
+  );
+  if (offeredShifts.length === 0) return null;
+
+  const earliestDate = offeredShifts
+    .map((s) => s.startTime)
+    .sort()[0];
+
+  return (
+    <div
+      className="flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+      data-testid="dashboard-shift-proposal-banner"
+    >
+      <div className="flex items-start gap-2 text-amber-900">
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+        <span className="text-sm font-medium">
+          Achtung:{" "}
+          {offeredShifts.length === 1
+            ? "Ein Dienst wurde vom Arbeitgeber geändert."
+            : `${offeredShifts.length} Dienste wurden vom Arbeitgeber geändert.`}{" "}
+          Bitte {offeredShifts.length === 1 ? "Vorschlag" : "Vorschläge"} bestätigen.
+        </span>
+      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        className="shrink-0 self-start border-amber-400 bg-white text-amber-900 hover:bg-amber-100 sm:self-auto"
+        data-testid="dashboard-shift-proposal-review"
+        onClick={() => navigate(`/dienstplan?date=${format(new Date(earliestDate), "yyyy-MM-dd")}`)}
+      >
+        Vorschlag prüfen
+      </Button>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const now = new Date();
   const month = now.getMonth() + 1;
@@ -579,6 +648,8 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {!isAdmin && <PendingShiftProposalsBanner />}
+
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-3xl font-serif font-bold text-foreground">Dashboard</h2>
