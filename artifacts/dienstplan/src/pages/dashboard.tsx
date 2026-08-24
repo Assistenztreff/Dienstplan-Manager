@@ -20,7 +20,7 @@ import { AlertTriangle, AlertCircle, CalendarX, Clock, CheckCircle2, Plane, Chev
 import { useLocation } from "wouter";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
-import { useAuth } from "@/context/auth";
+import { useAuth, hasTeamAccessLevel } from "@/context/auth";
 import { DienstStatus, type SchichtVorlage } from "@/types/dienstplan";
 import { formatDays, formatDaysWithUnit, formatHours } from "@/lib/utils";
 import { useTimeTrackingEnabled } from "@/hooks/use-time-tracking-enabled";
@@ -631,6 +631,11 @@ export default function Dashboard() {
   const { selectedTeamId, isTeamScopeReady } = useTeam();
   const { currentUser } = useAuth();
   const isAdmin = isAdminRole(currentUser?.role);
+  // Muss mit der Zugriffsbedingung fuer die Route /team-verwaltung in App.tsx
+  // uebereinstimmen, sonst fuehrt die Kachel Nutzer ohne Zugriff auf eine
+  // 404-Seite.
+  const canAccessTeamVerwaltung =
+    isAdmin || !!currentUser?.isTeamleiter || hasTeamAccessLevel(currentUser, "stufe1");
 
   // enabled: isTeamScopeReady — verhindert den Doppel-Request beim ersten
   // Öffnen (erst ohne, gleich darauf mit teamId), sobald der TeamProvider das
@@ -665,13 +670,15 @@ export default function Dashboard() {
       ) : summary ? (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <KpiCard
-              title="Aktive Assistenzkräfte"
-              to="/team-verwaltung"
-              testId="kpi-active-assistants"
-            >
-              <div className="text-3xl font-bold">{summary.totalAssistants}</div>
-            </KpiCard>
+            {canAccessTeamVerwaltung && (
+              <KpiCard
+                title="Aktive Assistenzkräfte"
+                to="/team-verwaltung"
+                testId="kpi-active-assistants"
+              >
+                <div className="text-3xl font-bold">{summary.totalAssistants}</div>
+              </KpiCard>
+            )}
             <KpiCard
               title="Schichten Heute"
               to={`/dienstplan?date=${format(now, "yyyy-MM-dd")}`}
