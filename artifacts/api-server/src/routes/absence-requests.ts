@@ -295,12 +295,19 @@ router.post("/absence-requests/:id/approve", requireAuth, async (req, res): Prom
         return { kind: "responded" };
       }
 
-      const result = await runBulkAbsenceCreation({
-        userId: request.userId,
-        teamId: request.teamId,
-        type: request.type,
-        days,
-      });
+      // outerTx=tx (Code-Review #887): läuft in DERSELBEN Transaktion wie der
+      // Advisory-Lock und das anschließende Status-Update, statt auf einer
+      // eigenen Pool-Verbindung zu committen. Sonst könnten Schichten fest
+      // angelegt bleiben, obwohl das Status-Update danach scheitert/zurückrollt.
+      const result = await runBulkAbsenceCreation(
+        {
+          userId: request.userId,
+          teamId: request.teamId,
+          type: request.type,
+          days,
+        },
+        tx,
+      );
 
       const [updated] = await tx
         .update(absenceRequestsTable)

@@ -12,6 +12,7 @@ export default defineConfig({
       "src/lib/email-rate-limit.db.test.ts",
       "src/routes/auth.register-rate-limit.route.db.test.ts",
       "src/routes/auth.email-rate-limit.route.db.test.ts",
+      "src/routes/absence-requests.bulk-absence-atomicity.db.test.ts",
     ],
     fileParallelism: false,
     globalSetup: ["./vitest.db.global-setup.ts"],

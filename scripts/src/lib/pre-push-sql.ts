@@ -178,6 +178,60 @@ export const PRE_PUSH_SQL: string[] = [
   `INSERT INTO hours_balance_cache_versions (id, version)
      VALUES (1, 0)
      ON CONFLICT (id) DO NOTHING;`,
+  // absence_requests (#887, Urlaubs-/Krankheitsanträge mit Bestätigungspflicht):
+  // ZWEI neue Enum-Typen PLUS eine neue Tabelle mit mehreren FKs auf einer
+  // bestehenden, befüllten Bestands-DB — genau die Kombination, bei der
+  // drizzle-kit push ohne TTY interaktiv nachfragen kann (Rename/Create-
+  // Prompt). Daher vorab idempotent anlegen, exakt wie im Drizzle-Schema
+  // (absence_requests.ts).
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'absence_request_type') THEN
+       CREATE TYPE absence_request_type AS ENUM ('vacation', 'sick');
+     END IF;
+   END $$;`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'absence_request_status') THEN
+       CREATE TYPE absence_request_status AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
+     END IF;
+   END $$;`,
+  `CREATE TABLE IF NOT EXISTS absence_requests (
+     id serial PRIMARY KEY,
+     team_id integer NOT NULL,
+     user_id integer NOT NULL,
+     type absence_request_type NOT NULL,
+     status absence_request_status NOT NULL DEFAULT 'PENDING',
+     days jsonb NOT NULL,
+     notes jsonb,
+     created_at timestamp NOT NULL DEFAULT now(),
+     resolved_at timestamp,
+     resolved_by_user_id integer,
+     result_shift_ids jsonb
+   );`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'absence_requests_team_id_teams_id_fk') THEN
+       ALTER TABLE absence_requests
+         ADD CONSTRAINT absence_requests_team_id_teams_id_fk
+         FOREIGN KEY (team_id) REFERENCES teams(id);
+     END IF;
+   END $$;`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'absence_requests_user_id_users_id_fk') THEN
+       ALTER TABLE absence_requests
+         ADD CONSTRAINT absence_requests_user_id_users_id_fk
+         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+     END IF;
+   END $$;`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'absence_requests_resolved_by_user_id_users_id_fk') THEN
+       ALTER TABLE absence_requests
+         ADD CONSTRAINT absence_requests_resolved_by_user_id_users_id_fk
+         FOREIGN KEY (resolved_by_user_id) REFERENCES users(id) ON DELETE SET NULL;
+     END IF;
+   END $$;`,
+  `CREATE INDEX IF NOT EXISTS absence_requests_team_status_idx
+     ON absence_requests (team_id, status);`,
+  `CREATE INDEX IF NOT EXISTS absence_requests_user_status_idx
+     ON absence_requests (user_id, status);`,
 ];
 
 /** Alle Vorab-Schritte sequenziell gegen den übergebenen Client ausführen. */

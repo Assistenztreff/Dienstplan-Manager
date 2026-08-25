@@ -1004,8 +1004,18 @@ export type BulkAbsenceCreationResult = {
 // VacationOutsideContractError (Urlaub außerhalb jedes Vertragszeitraums) —
 // beide werden vom jeweiligen Aufrufer (Route/Antrags-Bestätigung) auf die
 // passende HTTP-Antwort abgebildet.
+//
+// `outerTx` (Code-Review #887): wenn der Aufrufer bereits eine offene
+// Transaktion hält (z. B. die Antrags-Bestätigung unter ihrem eigenen
+// Advisory-Lock), MUSS die gesamte Anlage darin laufen — sonst könnte diese
+// Funktion auf einer eigenen Pool-Verbindung committen, während die äußere
+// Transaktion (Status-Update) anschließend scheitert/zurückrollt. Ergebnis
+// wären verwaiste Schichten zu einem PENDING/REJECTED-Antrag. Ohne `outerTx`
+// (Einzel-Route POST /shifts/bulk-absence) öffnet die Funktion wie bisher
+// ihre eigene Transaktion inkl. Advisory-Lock.
 export async function runBulkAbsenceCreation(
   input: BulkAbsenceCreationInput,
+  outerTx?: Dbx,
 ): Promise<BulkAbsenceCreationResult> {
   const { userId, teamId, type, days, notes } = input;
   const shiftModelId = input.shiftModelId ?? null;
@@ -1043,7 +1053,12 @@ export async function runBulkAbsenceCreation(
   // frei" sehen und die Abwesenheit doppelt buchen — inkl. doppeltem
   // Urlaubsabzug. Der zweite Auftrag wartet am Lock und überspringt die Tage
   // dann als Duplikate (Frontend-Verhalten der bisherigen Schleife).
-  return db.transaction(async (tx) => {
+  //
+  // Läuft eine äußere Transaktion mit (outerTx), wird KEINE neue Transaktion
+  // geöffnet — Lock, Prüfung und Anlage laufen direkt darin, damit sie mit
+  // dem äußeren Status-Update atomar committen/zurückrollen (s. Kommentar
+  // oben an der Funktionssignatur).
+  const body = async (tx: Dbx): Promise<BulkAbsenceCreationResult> => {
     await tx.execute(
       sql`SELECT pg_advisory_xact_lock(hashtext(${"shifts-bulk:user:" + userId}))`,
     );
@@ -1297,7 +1312,9 @@ export async function runBulkAbsenceCreation(
       }
     }
     return { created, replaced, skippedDates: skipped };
-  });
+  };
+
+  return outerTx ? body(outerTx) : db.transaction(body);
 }
 
 router.post("/shifts", requireAuth, async (req, res): Promise<void> => {
