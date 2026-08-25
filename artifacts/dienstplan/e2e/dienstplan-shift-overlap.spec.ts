@@ -48,6 +48,27 @@ type ApiShift = {
   notes?: string | null;
 };
 
+// Anchor 2 Monate in der Zukunft (Tag 1) statt eines fest hinterlegten
+// Kalenderjahres: bleibt dauerhaft sicher innerhalb des Premium-
+// Vorausplanungslimits (12 Monate) UND der Vergangenheits-Loeschschutz
+// (absence_delete_past_blocked) beim Aufraeumen in afterAll greift nie, egal
+// wann die Suite laeuft. Die sechs Testtage unten sind Tagesoffsets vom Anker,
+// damit ihre relative Reihenfolge (fuer Kollisionsvermeidung) erhalten bleibt.
+const OVERLAP_ANCHOR = new Date(
+  Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 2, 1),
+);
+function overlapTestDay(offsetDays: number): string {
+  return new Date(OVERLAP_ANCHOR.getTime() + offsetDays * 86_400_000)
+    .toISOString()
+    .split("T")[0]!;
+}
+const DAY_OVERLAP = overlapTestDay(0);
+const DAY_EDGE = overlapTestDay(1);
+const DAY_NIGHT = overlapTestDay(2);
+const DAY_NIGHT_NEXT = overlapTestDay(3);
+const DAY_VACATION = overlapTestDay(4);
+const DAY_FORCE = overlapTestDay(5);
+
 type OverlapBody = {
   code?: string;
   conflicts?: { id: number; startTime: string; endTime: string; type: string }[];
@@ -117,14 +138,14 @@ test.describe("Kollisionswarnung: Backend-Logik (POST /api/shifts)", () => {
 
   test("echte Überschneidung liefert 409 mit code shift_overlap", async () => {
     const base = await createOk({
-      startTime: "2027-03-10T08:00:00.000Z",
-      endTime: "2027-03-10T16:00:00.000Z",
+      startTime: `${DAY_OVERLAP}T08:00:00.000Z`,
+      endTime: `${DAY_OVERLAP}T16:00:00.000Z`,
       type: "active",
     });
 
     const res = await postShift({
-      startTime: "2027-03-10T12:00:00.000Z",
-      endTime: "2027-03-10T18:00:00.000Z",
+      startTime: `${DAY_OVERLAP}T12:00:00.000Z`,
+      endTime: `${DAY_OVERLAP}T18:00:00.000Z`,
       type: "active",
     });
     expect(res.status()).toBe(409);
@@ -135,14 +156,14 @@ test.describe("Kollisionswarnung: Backend-Logik (POST /api/shifts)", () => {
 
   test("exakte Randberührung (08–16 neben 16–20) löst keinen Fehlalarm aus", async () => {
     await createOk({
-      startTime: "2027-03-11T08:00:00.000Z",
-      endTime: "2027-03-11T16:00:00.000Z",
+      startTime: `${DAY_EDGE}T08:00:00.000Z`,
+      endTime: `${DAY_EDGE}T16:00:00.000Z`,
       type: "active",
     });
     // Start == Ende der Vorschicht: keine Überlappung erwartet.
     await createOk({
-      startTime: "2027-03-11T16:00:00.000Z",
-      endTime: "2027-03-11T20:00:00.000Z",
+      startTime: `${DAY_EDGE}T16:00:00.000Z`,
+      endTime: `${DAY_EDGE}T20:00:00.000Z`,
       type: "active",
     });
   });
@@ -150,15 +171,15 @@ test.describe("Kollisionswarnung: Backend-Logik (POST /api/shifts)", () => {
   test("Schicht über Mitternacht überschneidet Folgetag-Morgen (409)", async () => {
     // Nachtdienst 22:00 -> 06:00 des Folgetags.
     const night = await createOk({
-      startTime: "2027-03-12T22:00:00.000Z",
-      endTime: "2027-03-13T06:00:00.000Z",
+      startTime: `${DAY_NIGHT}T22:00:00.000Z`,
+      endTime: `${DAY_NIGHT_NEXT}T06:00:00.000Z`,
       type: "night",
     });
 
     // Frühdienst am Folgetag 05:00–09:00 überlappt das Nacht-Ende.
     const res = await postShift({
-      startTime: "2027-03-13T05:00:00.000Z",
-      endTime: "2027-03-13T09:00:00.000Z",
+      startTime: `${DAY_NIGHT_NEXT}T05:00:00.000Z`,
+      endTime: `${DAY_NIGHT_NEXT}T09:00:00.000Z`,
       type: "active",
     });
     expect(res.status()).toBe(409);
@@ -169,38 +190,38 @@ test.describe("Kollisionswarnung: Backend-Logik (POST /api/shifts)", () => {
 
   test("bestehende Abwesenheit (Urlaub) löst keine Warnung aus", async () => {
     await createOk({
-      startTime: "2027-03-14T00:00:00.000Z",
-      endTime: "2027-03-14T23:59:59.000Z",
+      startTime: `${DAY_VACATION}T00:00:00.000Z`,
+      endTime: `${DAY_VACATION}T23:59:59.000Z`,
       type: "vacation",
     });
     // Reguläre Schicht am selben Tag: Abwesenheiten sind von der Prüfung
     // ausgenommen, daher kein 409.
     await createOk({
-      startTime: "2027-03-14T12:00:00.000Z",
-      endTime: "2027-03-14T14:00:00.000Z",
+      startTime: `${DAY_VACATION}T12:00:00.000Z`,
+      endTime: `${DAY_VACATION}T14:00:00.000Z`,
       type: "active",
     });
   });
 
   test("Admin-Override (force) speichert trotz Überschneidung", async () => {
     await createOk({
-      startTime: "2027-03-15T08:00:00.000Z",
-      endTime: "2027-03-15T16:00:00.000Z",
+      startTime: `${DAY_FORCE}T08:00:00.000Z`,
+      endTime: `${DAY_FORCE}T16:00:00.000Z`,
       type: "active",
     });
 
     // Ohne force: 409.
     const blocked = await postShift({
-      startTime: "2027-03-15T12:00:00.000Z",
-      endTime: "2027-03-15T18:00:00.000Z",
+      startTime: `${DAY_FORCE}T12:00:00.000Z`,
+      endTime: `${DAY_FORCE}T18:00:00.000Z`,
       type: "active",
     });
     expect(blocked.status()).toBe(409);
 
     // Mit force: trotz Überschneidung gespeichert.
     await createOk({
-      startTime: "2027-03-15T12:00:00.000Z",
-      endTime: "2027-03-15T18:00:00.000Z",
+      startTime: `${DAY_FORCE}T12:00:00.000Z`,
+      endTime: `${DAY_FORCE}T18:00:00.000Z`,
       type: "active",
       force: true,
     });

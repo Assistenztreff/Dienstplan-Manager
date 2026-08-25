@@ -9,7 +9,7 @@
     "codegen:check": "pnpm --filter @workspace/scripts run check-codegen-drift",
     "typecheck:libs": "pnpm --filter @workspace/scripts run typecheck-libs-locked",
     "typecheck:libs:raw": "tsc --build",
-    "typecheck": "pnpm run codegen:check && pnpm --filter @workspace/scripts run check-test-db-derivation && pnpm run typecheck:libs && pnpm --filter @workspace/db run lint && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+    "typecheck": "pnpm run codegen:check && pnpm --filter @workspace/scripts run check-test-db-derivation && pnpm --filter @workspace/scripts run check-e2e-date-fixtures && pnpm run typecheck:libs && pnpm --filter @workspace/db run lint && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
   },
   "private": true,
   "devDependencies": {

@@ -30,6 +30,7 @@
     "backfill-team-shift-models": "tsx ./src/backfill-team-shift-models.ts",
     "backfill-partial-absence-flag": "tsx ./src/backfill-partial-absence-flag.ts",
     "check-codegen-drift": "tsx ./src/check-codegen-drift.ts",
+    "check-e2e-date-fixtures": "tsx ./src/check-e2e-date-fixtures.ts",
     "typecheck-libs-locked": "tsx ./src/typecheck-libs-locked.ts",
     "test-unit-locked": "tsx ./src/test-unit-locked.ts",
     "check-test-db-derivation": "tsx ./src/check-test-db-derivation.ts",

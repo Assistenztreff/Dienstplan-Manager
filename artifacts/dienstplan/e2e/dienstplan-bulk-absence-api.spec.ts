@@ -429,14 +429,17 @@ test("lehnt Abwesenheit mit Start und Ende auf verschiedenen UTC-Tagen ab (25h B
   // liegen (T00:00:00Z–T23:59:59Z). Ein Interval, das zwei UTC-Tage ueberspannt
   // (Berliner Lokalzeit-Mitternacht am Winterzeit-Umstellungstag = 22:00–23:00 UTC
   // zwei aufeinanderfolgende Tage, 25h), wird daher mit 400 abgelehnt.
+  const winterDst = new Date(`${lastSundayOnOrBefore(dayString("10-31"))}T00:00:00Z`);
+  const dayBeforeDst = new Date(winterDst.getTime() - 86_400_000).toISOString().split("T")[0]!;
+  const dstDay = winterDst.toISOString().split("T")[0]!;
   const res = await adminCtx.post("/api/shifts/bulk-absence", {
     data: {
       userId: assistantId,
       type: "freistellung",
       days: [
         {
-          startTime: "2026-10-24T22:00:00.000Z", // 00:00 CEST (UTC+2)
-          endTime: "2026-10-25T23:00:00.000Z",   // 00:00 CET (UTC+1, naechster Tag)
+          startTime: `${dayBeforeDst}T22:00:00.000Z`, // 00:00 CEST (UTC+2)
+          endTime: `${dstDay}T23:00:00.000Z`,   // 00:00 CET (UTC+1, naechster Tag)
         },
       ],
     },
