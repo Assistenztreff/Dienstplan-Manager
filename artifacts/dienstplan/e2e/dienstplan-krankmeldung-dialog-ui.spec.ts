@@ -102,15 +102,18 @@ test("Assistent kann sich über das Dashboard krank melden; Button verschwindet 
   await expect(page.getByText("1 Krankheitstag wird eingetragen.")).toBeVisible();
   await page.getByTestId("krankmeldung-absenden").click();
 
-  // Erfolg: Dialog schließt, Toast erscheint.
+  // Erfolg: Dialog schließt, Toast erscheint (Antrag, #887 — noch keine Schicht).
   await expect(page.getByRole("dialog", { name: "Krank melden" })).toBeHidden({
     timeout: 10_000,
   });
-  await expect(page.getByText("Krankmeldung für heute eingetragen.")).toBeVisible({
+  await expect(
+    page.getByText("Krankmeldung für heute beantragt. Ein Planer muss sie noch bestätigen."),
+  ).toBeVisible({
     timeout: 10_000,
   });
 
-  // Kern-Kriterium: bereits heute krank -> Button verschwindet vom Dashboard.
+  // Kern-Kriterium: bereits ein offener Antrag für heute -> Button
+  // verschwindet vom Dashboard (auch ohne Bestätigung durch einen Planer).
   await page.reload();
   await expect(page.getByTestId("krank-melden-btn")).toHaveCount(0, { timeout: 20_000 });
 });
@@ -171,7 +174,9 @@ test("Morgen-Modus: Bestätigung zeigt einen Krankheitstag, Absenden klappt", as
     timeout: 10_000,
   });
   // Morgen-Modus liefert einen eigenen Toast (nicht "für heute").
-  await expect(page.getByText("Krankmeldung für morgen eingetragen.")).toBeVisible({
+  await expect(
+    page.getByText("Krankmeldung für morgen beantragt. Ein Planer muss sie noch bestätigen."),
+  ).toBeVisible({
     timeout: 10_000,
   });
 });
@@ -221,16 +226,15 @@ test("Mehrere-Tage-Modus: Stepper (2–14) ändert Anzahl; Bestätigung und Abse
   // Bestätigung: 5 Krankheitstage (Plural-Variante).
   await expect(page.getByText("5 Krankheitstage werden eingetragen.")).toBeVisible();
 
-  // Absenden (heute ggf. schon krank → 409 wird intern als Erfolg behandelt).
+  // Absenden — #887: erzeugt einen Antrag (immer 201, keine 409-Duplikatprüfung
+  // bei der Antragstellung selbst; die Übersprung-Toleranz greift erst bei
+  // der späteren Bestätigung).
   await page.getByTestId("krankmeldung-absenden").click();
 
   await expect(page.getByRole("dialog", { name: "Krank melden" })).toBeHidden({
     timeout: 10_000,
   });
-  // Toast: entweder "5 Tage" (sauberer POST) oder "übersprungen" (409-Pfad).
-  await expect(
-    page.getByText(/Krankmeldung.*eingetragen/, { }),
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/Krankmeldung.*beantragt/)).toBeVisible({ timeout: 10_000 });
 });
 
 test("Bis-Datum-Modus: Datum-Picker ändert Enddatum; Bestätigung und Absenden klappt", async ({
@@ -267,13 +271,13 @@ test("Bis-Datum-Modus: Datum-Picker ändert Enddatum; Bestätigung und Absenden 
 
   await expect(page.getByText("9 Krankheitstage werden eingetragen.")).toBeVisible();
 
-  // Absenden (heute ggf. bereits krank → 409 wird als Teilerfolg behandelt).
+  // Absenden — erzeugt einen Antrag (#887).
   await page.getByTestId("krankmeldung-absenden").click();
 
   await expect(page.getByRole("dialog", { name: "Krank melden" })).toBeHidden({
     timeout: 10_000,
   });
-  await expect(page.getByText(/Krankmeldung.*eingetragen/)).toBeVisible({
+  await expect(page.getByText(/Krankmeldung.*beantragt/)).toBeVisible({
     timeout: 10_000,
   });
 });

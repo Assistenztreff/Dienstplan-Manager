@@ -7,10 +7,11 @@ import {
   useGetVacationBalance,
   useGetMonthClosings,
   useListShifts,
+  useListAbsenceRequests,
 } from "@workspace/api-client-react";
 import type { MonthClosingStatus } from "@workspace/api-client-react";
 import { hasAccess } from "@/lib/entitlements";
-import type { DashboardSummary, DashboardWarnings, Shift, VacationBalance } from "@workspace/api-client-react";
+import type { DashboardSummary, DashboardWarnings, Shift, VacationBalance, AbsenceRequest } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -460,6 +461,45 @@ function AbsenceReminder() {
   );
 }
 
+// #887: Hinweis auf offene Urlaubs-/Krankheitsanträge — nur für Planer
+// (Inhaber + Koordinatoren mit Planungsrecht, dieselbe Berechtigung wie die
+// Bestätigen/Ablehnen-Aktionen auf der Abwesenheiten-Seite). Erscheint nur,
+// wenn tatsächlich offene Anträge vorliegen.
+function PendingAbsenceRequestsReminder() {
+  const [, navigate] = useLocation();
+  const { isTeamScopeReady } = useTeam();
+  const { data: pending } = useListAbsenceRequests(
+    { status: "PENDING" },
+    { query: { enabled: isTeamScopeReady } } as Parameters<typeof useListAbsenceRequests>[1],
+  ) as { data?: AbsenceRequest[] };
+
+  if (!pending || pending.length === 0) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={() => navigate("/abwesenheiten")}
+      className="w-full text-left"
+      data-testid="pending-absence-requests-reminder"
+    >
+      <Card className="border-amber-200 bg-amber-50/40 shadow-sm transition-colors hover:border-amber-300">
+        <CardContent className="flex items-center gap-3 py-4">
+          <AlertCircle className="h-5 w-5 shrink-0 text-amber-600" aria-hidden />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-amber-900">
+              {pending.length} {pending.length === 1 ? "offener Antrag" : "offene Anträge"} auf Urlaub/Krank
+            </p>
+            <p className="text-xs text-amber-800/80 mt-0.5">
+              Jetzt im Abwesenheitskalender bestätigen oder ablehnen.
+            </p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-amber-700 shrink-0" />
+        </CardContent>
+      </Card>
+    </button>
+  );
+}
+
 // Erinnerung an den Monatsabschluss: erscheint für Admins mit Premium
 // (advancedAnalytics), solange der Vormonat noch nicht abgeschlossen ist.
 // Fehler (z. B. 403 nach Downgrade) blenden die Karte einfach aus.
@@ -509,7 +549,7 @@ function MonthClosingReminder({ teamId }: { teamId: number | null }) {
  * Schnell-Krankmeldung für Assistenzkräfte: zeigt eine klickbare Karte,
  * solange kein Krank-Eintrag für heute existiert. Öffnet den KrankmeldungDialog.
  */
-function KrankmeldungSection({ userId }: { userId: number }) {
+function KrankmeldungSection() {
   const [dialogOpen, setDialogOpen] = useState(false);
   // Für Assistenzkräfte ist isTeamScopeReady sofort true — das Gate wirkt nur
   // bei Konten mit Team-Switcher (verhindert den unscoped Doppel-Request).
@@ -518,12 +558,26 @@ function KrankmeldungSection({ userId }: { userId: number }) {
     { type: "sick" },
     { query: { enabled: isTeamScopeReady } } as Parameters<typeof useListShifts>[1],
   ) as { data?: Shift[] };
+  // #887: eine Krankmeldung legt nicht mehr sofort eine Schicht an, sondern
+  // einen PENDING-Antrag — ohne diesen Zweig bliebe der Button nach dem
+  // Absenden sichtbar, bis ein Planer bestätigt (Dauer-Duplikate wären
+  // möglich). Eigene Anträge sind hier bereits userId-gescopt (GET
+  // /absence-requests liefert Assistenzkräften ausschließlich eigene Zeilen).
+  const { data: myAbsenceRequests } = useListAbsenceRequests(
+    { status: "PENDING" },
+    { query: { enabled: isTeamScopeReady } } as Parameters<typeof useListAbsenceRequests>[1],
+  ) as { data?: AbsenceRequest[] };
   const now = new Date();
   const isSickToday = (sickShifts ?? []).some(
     (s) => new Date(s.startTime) <= now && now <= new Date(s.endTime),
   );
+  const hasPendingSickRequestToday = (myAbsenceRequests ?? []).some(
+    (r) =>
+      r.type === "sick" &&
+      r.days.some((d) => new Date(d.startTime) <= now && now <= new Date(d.endTime)),
+  );
 
-  if (isSickToday) return null;
+  if (isSickToday || hasPendingSickRequestToday) return null;
 
   return (
     <>
@@ -549,7 +603,6 @@ function KrankmeldungSection({ userId }: { userId: number }) {
       <KrankmeldungDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
-        userId={userId}
       />
     </>
   );
@@ -721,6 +774,8 @@ export default function Dashboard() {
             )}
           </div>
 
+          {canAccessTeamVerwaltung && <PendingAbsenceRequestsReminder />}
+
           {isAdmin && hasAccess(currentUser, "advancedAnalytics") && (
             <MonthClosingReminder teamId={selectedTeamId} />
           )}
@@ -738,7 +793,7 @@ export default function Dashboard() {
 
           {!isAdmin && (
             <>
-              {currentUser && <KrankmeldungSection userId={currentUser.id} />}
+              {currentUser && <KrankmeldungSection />}
               <MeineStundenKarte />
               <AssistantVacationCard />
             </>

@@ -32,16 +32,36 @@ const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "admin@dienstplan.local";
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "admin1234";
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
 
-const YEAR = new Date().getFullYear();
-const CONTRACT_START = `${YEAR}-01-01`;
+// Anker statt Fixjahr: der Vertragsbeginn liegt auf "heute + 1 Monat, Tag 1"
+// und alle Testtage werden als Monats-Offset ab diesem Anker ausgedrueckt
+// (nicht als fixer Kalendermonat). Das haelt die relative Abfolge (Vertrag
+// vor den Testtagen) UND den Gesamtzeitraum dauerhaft innerhalb des
+// 12-Monats-Vorausplanungs-Limits — unabhaengig davon, in welchem realen
+// Monat der Lauf stattfindet (s. .agents/memory/e2e-absence-date-anchor-pattern.md).
+const ANCHOR = new Date();
+ANCHOR.setUTCMonth(ANCHOR.getUTCMonth() + 1, 1);
+ANCHOR.setUTCHours(0, 0, 0, 0);
+
+function monthOffset(monthsAfterAnchor: number, day: number): string {
+  const d = new Date(ANCHOR);
+  d.setUTCMonth(d.getUTCMonth() + monthsAfterAnchor, day);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+const CONTRACT_START = monthOffset(0, 1);
 
 /** UTC-Zeitstempel — dieselbe Konvention, in der Abwesenheiten gespeichert werden. */
 function iso(day: string, hhmm: string): string {
   return `${day}T${hhmm}:00.000Z`;
 }
 
-function dayString(monthDay: string): string {
-  return `${YEAR}-${monthDay}`;
+// Testtage lagen urspruenglich im Mai bei Vertragsbeginn Januar (4 Monate
+// nach Vertragsbeginn) — dieser Offset bleibt erhalten, nur relativ zum Anker.
+function dayString(day: number): string {
+  return monthOffset(4, day);
 }
 
 type CreatedUser = { id: number };
@@ -150,7 +170,7 @@ test.afterEach(async () => {
 });
 
 test("legt Halbtags-Urlaub mit den exakt gewaehlten Uhrzeiten an (kein Ganztages-Fallback)", async () => {
-  const day = dayString("05-11");
+  const day = dayString(11);
   const { status, body } = await bulkAbsenceRange("vacation", [
     { startTime: iso(day, "13:00"), endTime: iso(day, "17:00") },
   ]);
@@ -164,7 +184,7 @@ test("legt Halbtags-Urlaub mit den exakt gewaehlten Uhrzeiten an (kein Ganztages
 });
 
 test("Dienst ausserhalb des Urlaubsfensters bleibt am selben Tag bestehen (Koexistenz)", async () => {
-  const day = dayString("05-12");
+  const day = dayString(12);
   const morningRes = await adminCtx.post("/api/shifts", {
     data: {
       userId: assistantId,
@@ -189,7 +209,7 @@ test("Dienst ausserhalb des Urlaubsfensters bleibt am selben Tag bestehen (Koexi
 });
 
 test("Dienst, der sich ECHT mit dem Urlaubsfenster ueberschneidet, wird ersetzt (Lohnausfallprinzip)", async () => {
-  const day = dayString("05-13");
+  const day = dayString(13);
   const overlapRes = await adminCtx.post("/api/shifts", {
     data: {
       userId: assistantId,
@@ -221,7 +241,7 @@ test("Dienst, der sich ECHT mit dem Urlaubsfenster ueberschneidet, wird ersetzt 
 });
 
 test("Regression: Einzel-POST /api/shifts behaelt bei Halbtags-Urlaub die gewaehlten Uhrzeiten (kein Zeiten-Erben vom ersetzten Dienst)", async () => {
-  const day = dayString("05-16");
+  const day = dayString(16);
   const overlapRes = await adminCtx.post("/api/shifts", {
     data: {
       userId: assistantId,
@@ -256,7 +276,7 @@ test("Regression: Einzel-POST /api/shifts behaelt bei Halbtags-Urlaub die gewaeh
 });
 
 test("ein neuer Dienst, der den bestehenden Halbtags-Urlaub ueberschneidet, wird mit 409 abgelehnt", async () => {
-  const day = dayString("05-14");
+  const day = dayString(14);
   const { status: vacStatus } = await bulkAbsenceRange("vacation", [
     { startTime: iso(day, "13:00"), endTime: iso(day, "17:00") },
   ]);
@@ -287,7 +307,7 @@ test("ein neuer Dienst, der den bestehenden Halbtags-Urlaub ueberschneidet, wird
 });
 
 test("DELETE eines Halbtags-Urlaubs erstattet nur die anteiligen Stunden (kein voller Vertragstag)", async () => {
-  const day = dayString("05-15");
+  const day = dayString(15);
   const baseline = await vacationHoursUsed();
 
   const { status, body } = await bulkAbsenceRange("vacation", [
@@ -304,7 +324,7 @@ test("DELETE eines Halbtags-Urlaubs erstattet nur die anteiligen Stunden (kein v
 });
 
 test("Regression: ganztaegiger Urlaub verhaelt sich weiterhin wie bisher (erbt Dienstzeiten, kollidiert nie)", async () => {
-  const day = dayString("05-18");
+  const day = dayString(18);
   const workRes = await adminCtx.post("/api/shifts", {
     data: {
       userId: assistantId,
@@ -351,7 +371,7 @@ test("Regression: geerbte Uhrzeiten eines ganztaegigen Urlaubs loesen KEINE Koll
   // liegt vollstaendig innerhalb von 08:00-14:00), muss trotzdem erfolgreich
   // angelegt werden koennen, weil der Urlaub laut isPartialAbsence=false
   // ganztaegig ist und komplett von der Kollisionspruefung ausgenommen wird.
-  const day = dayString("05-19");
+  const day = dayString(19);
   const workRes = await adminCtx.post("/api/shifts", {
     data: {
       userId: assistantId,
@@ -416,7 +436,7 @@ test("Backfill: Bestands-Halbtags-Urlaub ohne is_partial_absence-Flag wird nachg
   // (backfill-partial-absence-flag.bestands-db.db.test.ts) muss dieses Spec
   // den Marker deshalb VOR dem Aufruf entfernen, um eine echte Bestands-DB
   // "von vor #862" nachzubilden.
-  const day = dayString("05-20");
+  const day = dayString(20);
   const { status: vacStatus, body } = await bulkAbsenceRange("vacation", [
     { startTime: iso(day, "13:00"), endTime: iso(day, "17:00") },
   ]);

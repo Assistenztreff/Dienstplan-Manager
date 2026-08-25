@@ -27,6 +27,21 @@ const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
 
 const YEAR = new Date().getFullYear();
 
+// Basis-Monat mit 2-Monats-Puffer ab HEUTE (nicht Jahresanfang): so bleiben
+// alle 8 disjunkten Testmonate unabhaengig vom Kalenderdatum sicher in der
+// Zukunft (sonst greift der Vergangenheits-Loeschschutz beim Aufraeumen).
+const BASE_MONTH = (() => {
+  const d = new Date();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() + 2);
+  return d;
+})();
+
+function monthFor(index: number): { year: number; month: string } {
+  const d = new Date(Date.UTC(BASE_MONTH.getUTCFullYear(), BASE_MONTH.getUTCMonth() + index, 1));
+  return { year: d.getUTCFullYear(), month: String(d.getUTCMonth() + 1).padStart(2, "0") };
+}
+
 // Alle Arten, die BulkCreateAbsenceBody zulaesst.
 const ABSENCE_TYPES = [
   "vacation",
@@ -138,8 +153,8 @@ for (const [index, type] of ABSENCE_TYPES.entries()) {
     test.setTimeout(120_000);
 
     // Je Art ein eigener, kollisionsfreier Zeitraum aus 3 Tagen.
-    const month = String(index + 2).padStart(2, "0");
-    const range = [`${YEAR}-${month}-04`, `${YEAR}-${month}-05`, `${YEAR}-${month}-06`];
+    const { year, month } = monthFor(index);
+    const range = [`${year}-${month}-04`, `${year}-${month}-05`, `${year}-${month}-06`];
 
     // A) Sammelauftrag
     const bulkRes = await adminCtx.post("/api/shifts/bulk-absence", {

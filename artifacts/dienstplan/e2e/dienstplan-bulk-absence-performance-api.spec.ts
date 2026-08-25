@@ -29,8 +29,43 @@ const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "admin@dienstplan.local";
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "admin1234";
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
 
-const YEAR = new Date().getFullYear();
-const CONTRACT_START = `${YEAR}-01-01`;
+// Vertragsbeginn ankert an "heute + 1 Monat" statt an einem festen "01-01":
+// Alle Testfaelle unten sind URSPRUENGLICH Monatsversaetze relativ zum
+// Vertragsbeginn (Feb=+1, Mar=+2, Apr=+3, Jun=+5, Sep=+8). Ein fester
+// Jahresanfang wuerde bei einem "spaeten" Versatz (z. B. September) auf ueber
+// 12 Monate Vorausplanung hinauslaufen, sobald heute selbst schon in der
+// zweiten Jahreshaelfte liegt (Premium-Vorausplanungslimit historyMonths=12).
+// Mit dem beweglichen Anker bleibt der gesamte Testzeitraum unabhaengig vom
+// aktuellen Kalendermonat innerhalb des Limits UND chronologisch nach dem
+// Vertragsbeginn (wichtig fuer den vacation_outside_contract-Check).
+function monthStart(monthsFromToday: number): Date {
+  const d = new Date();
+  d.setUTCDate(1); // Ueberlauf am Monatsende vermeiden, bevor Monate addiert werden
+  d.setUTCMonth(d.getUTCMonth() + monthsFromToday);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+
+const CONTRACT_START = monthStart(1).toISOString().split("T")[0]!;
+
+// Datum `monthsAfterContract` Monate nach Vertragsbeginn, am gewuenschten Tag.
+function monthOffset(monthsAfterContract: number, day: number): string {
+  const d = monthStart(1 + monthsAfterContract);
+  d.setUTCDate(day);
+  return d.toISOString().split("T")[0]!;
+}
+
+// Fuer den DST-Regressionstest wird bewusst der TATSAECHLICHE naechste
+// zukuenftige Maerz verwendet (die Umstellung ist an den realen Kalender
+// gebunden) — auf sein naechstes Vorkommen abgebildet (mind. 1 Monat Puffer),
+// niemals weiter in der Zukunft als noetig.
+function futureYearFor(month: number): number {
+  const now = new Date();
+  const nowIdx = now.getUTCFullYear() * 12 + now.getUTCMonth();
+  let idx = now.getUTCFullYear() * 12 + (month - 1);
+  while (idx < nowIdx + 1) idx += 12;
+  return Math.floor(idx / 12);
+}
 
 type CreatedUser = { id: number };
 type Contract = { id: number; vacationHoursUsed: number };
@@ -138,10 +173,10 @@ test("Sammelauftrag skaliert nicht mehr linear mit der Zahl der Tage", async () 
   // Disjunkte Monate je Messung, damit sich die Laeufe nicht gegenseitig als
   // Duplikate ueberspringen.
   const cases: { days: number; start: string }[] = [
-    { days: 1, start: `${YEAR}-02-03` },
-    { days: 7, start: `${YEAR}-03-03` },
-    { days: 14, start: `${YEAR}-04-07` },
-    { days: 30, start: `${YEAR}-06-02` },
+    { days: 1, start: monthOffset(1, 3) },
+    { days: 7, start: monthOffset(2, 3) },
+    { days: 14, start: monthOffset(3, 7) },
+    { days: 30, start: monthOffset(5, 2) },
   ];
 
   const measurements: { days: number; totalMs: number; perDayMs: number }[] = [];
@@ -196,7 +231,7 @@ test("Zeitumstellungs-Wochenende: Sammelauftrag ergibt dasselbe wie Einzel-Anlag
   // entscheidet die separate Zeitumstellungs-Aufgabe — hier wird nur
   // festgehalten, dass der Sammelweg exakt dasselbe Ergebnis liefert wie
   // die bisherige Einzel-Anlage.
-  const march = new Date(`${YEAR}-03-31T00:00:00Z`);
+  const march = new Date(`${futureYearFor(3)}-03-31T00:00:00Z`);
   while (march.getUTCDay() !== 0) march.setUTCDate(march.getUTCDate() - 1);
   const sunday = march.toISOString().split("T")[0]!;
   const range = daysFrom(
@@ -243,7 +278,7 @@ test("Zeitumstellungs-Wochenende: Sammelauftrag ergibt dasselbe wie Einzel-Anlag
 
 test("Sammelauftrag bleibt fachlich identisch zur Einzel-Anlage (14 Tage)", async () => {
   test.setTimeout(300_000);
-  const range = daysFrom(`${YEAR}-09-01`, 14);
+  const range = daysFrom(monthOffset(8, 1), 14);
 
   // A) Sammelauftrag
   const baselineBulk = await vacationHoursUsed();

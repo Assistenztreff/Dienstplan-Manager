@@ -9,6 +9,10 @@ import {
   useUpdateContract,
   useListVacationBalances,
   useGetAllowanceSettings,
+  useCreateAbsenceRequest,
+  useListAbsenceRequests,
+  useApproveAbsenceRequest,
+  useRejectAbsenceRequest,
   ApiError,
   type BulkAbsenceInput,
   type VacationBalance,
@@ -17,6 +21,7 @@ import {
   type Shift,
   type ShiftModel,
   type AllowanceSettings,
+  type AbsenceRequest,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -69,6 +74,22 @@ const TYPE_LABEL: Record<AbsenceType, string> = {
   vacation: "Urlaub",
   sick: "Krank",
 };
+
+const REQUEST_STATUS_LABEL: Record<AbsenceRequest["status"], string> = {
+  PENDING: "Offen",
+  APPROVED: "Bestätigt",
+  REJECTED: "Abgelehnt",
+};
+
+function formatRequestRange(item: AbsenceRequest): string {
+  const days = item.days;
+  if (days.length === 0) return "";
+  const first = new Date(days[0]!.startTime);
+  const last = new Date(days[days.length - 1]!.startTime);
+  return dayKey(first) === dayKey(last)
+    ? format(first, "dd.MM.yyyy", { locale: de })
+    : `${format(first, "dd.MM.yyyy", { locale: de })} – ${format(last, "dd.MM.yyyy", { locale: de })}`;
+}
 
 // Datenpflege-Hinweis: Zeigt an, wenn ein Urlaubstag aktuell aus VERTRAGSDATEN
 // (Wochenstunden ÷ Arbeitstage/Woche) bewertet wird, weil (noch) kein
@@ -313,10 +334,89 @@ export default function Abwesenheiten() {
 
   const bulkCreateAbsence = useBulkCreateAbsence();
   const bulkDeleteShifts = useBulkDeleteShifts();
+  const createAbsenceRequest = useCreateAbsenceRequest();
+  const approveAbsenceRequest = useApproveAbsenceRequest();
+  const rejectAbsenceRequest = useRejectAbsenceRequest();
+
+  // #887: eigene Anträge (Assistenzkraft) bzw. offene Anträge zur Bestätigung
+  // (Planer). Zwei getrennte Abfragen statt einer gemeinsamen mit Rollen-
+  // Verzweigung im Query-Key — die Serverseite scoped ohnehin automatisch
+  // (eigene Person vs. erlaubte Teams).
+  const { data: myAbsenceRequests } = useListAbsenceRequests(undefined, {
+    query: { enabled: !canManage, staleTime: 0, refetchOnMount: "always" },
+  } as unknown as Parameters<typeof useListAbsenceRequests>[1]) as {
+    data?: AbsenceRequest[];
+  };
+  const { data: pendingAbsenceRequests, isLoading: pendingRequestsLoading } =
+    useListAbsenceRequests(
+      { status: "PENDING" },
+      {
+        query: { enabled: canManage, staleTime: 0, refetchOnMount: "always" },
+      } as unknown as Parameters<typeof useListAbsenceRequests>[1],
+    ) as { data?: AbsenceRequest[]; isLoading: boolean };
+  const [resolvingRequestId, setResolvingRequestId] = useState<number | null>(null);
+
+  async function invalidateAbsenceRequests() {
+    await queryClient.invalidateQueries({
+      predicate: (q) => q.queryKey[0] === "/api/absence-requests",
+    });
+  }
+
+  async function handleApproveRequest(item: AbsenceRequest) {
+    setResolvingRequestId(item.id);
+    try {
+      await approveAbsenceRequest.mutateAsync({ id: item.id });
+      await invalidateAbsenceRequests();
+      void invalidate();
+      toast({
+        title: `${TYPE_LABEL[item.type]}santrag bestätigt`,
+        description: `${item.userName ?? "Assistenzkraft"} · ${item.days.length} ${
+          item.days.length === 1 ? "Tag" : "Tage"
+        }`,
+      });
+    } catch (err) {
+      const planMsg = planUpgradeMessage(err);
+      if (planMsg) {
+        toast({ title: "Bestätigen fehlgeschlagen", description: planMsg, variant: "destructive" });
+      } else if (err instanceof ApiError && (err.status === 400 || err.status === 409)) {
+        toast({
+          title: "Bestätigen fehlgeschlagen",
+          description: readableApiError(err, "Bitte erneut versuchen."),
+          variant: "destructive",
+        });
+      } else {
+        if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
+        toast({ title: "Bestätigen fehlgeschlagen", variant: "destructive" });
+      }
+      await invalidateAbsenceRequests();
+    } finally {
+      setResolvingRequestId(null);
+    }
+  }
+
+  async function handleRejectRequest(item: AbsenceRequest) {
+    setResolvingRequestId(item.id);
+    try {
+      await rejectAbsenceRequest.mutateAsync({ id: item.id });
+      await invalidateAbsenceRequests();
+      toast({ title: "Antrag abgelehnt" });
+    } catch {
+      if (!navigator.onLine) return; // Banner erklärt den Grund bereits.
+      toast({ title: "Ablehnen fehlgeschlagen", variant: "destructive" });
+    } finally {
+      setResolvingRequestId(null);
+    }
+  }
 
   const [userId, setUserId] = useState<string>("");
   const [type, setType] = useState<AbsenceType>("vacation");
   const [shiftModelId, setShiftModelId] = useState<string>("");
+  // #887: ersetzt bei Assistenzkräften das Dienst-Dropdown — gilt pro Tag im
+  // gewählten Zeitraum (Ganztägig = 00:00–23:59 je Tag, Von-Bis = dieselbe
+  // Uhrzeitspanne an jedem Tag des Zeitraums).
+  const [dayMode, setDayMode] = useState<"ganztaegig" | "vonbis">("ganztaegig");
+  const [vonZeit, setVonZeit] = useState("08:00");
+  const [bisZeit, setBisZeit] = useState("16:00");
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -398,6 +498,9 @@ export default function Abwesenheiten() {
   // Resturlaub im laufenden Jahr: Anspruch laut aktivem Vertrag minus der bereits
   // als Urlaub geplanten Tage dieses Jahres.
   const currentYear = new Date().getFullYear();
+  // #887: Referenz für den Lösch-Guard vergangener Abwesenheiten (clientseitig,
+  // Server ist die eigentliche Durchsetzung).
+  const todayKey = dayKey(new Date());
   const vacationByUser = useMemo(() => {
     const map = new Map<number, number>();
     for (const s of vacationShifts ?? []) {
@@ -435,9 +538,56 @@ export default function Abwesenheiten() {
       setError("Das Bis-Datum darf nicht vor dem Von-Datum liegen.");
       return;
     }
+    if (!canManage && dayMode === "vonbis" && (!vonZeit || !bisZeit || bisZeit <= vonZeit)) {
+      setError("Bitte eine gültige Von-Bis-Zeitspanne angeben (Bis nach Von, am selben Tag).");
+      return;
+    }
 
     const uid = Number(effectiveUserId);
     const days = eachDayOfInterval({ start, end });
+
+    // #887: Assistenzkräfte legen keine Schichten mehr direkt an — der
+    // Zeitraum wird als PENDING-Antrag gestellt (kein Kalender-/Urlaubskonto-
+    // Effekt, bis ein Planer bestätigt).
+    if (!canManage) {
+      setSaving(true);
+      try {
+        await createAbsenceRequest.mutateAsync({
+          data: {
+            type: type as "vacation" | "sick",
+            days: days.map((day) => {
+              const key = dayKey(day);
+              if (dayMode === "ganztaegig") {
+                return { startTime: `${key}T00:00:00.000Z`, endTime: `${key}T23:59:59.000Z` };
+              }
+              return {
+                startTime: new Date(`${key}T${vonZeit}:00`).toISOString(),
+                endTime: new Date(`${key}T${bisZeit}:00`).toISOString(),
+              };
+            }),
+          },
+        });
+        await invalidateAbsenceRequests();
+        toast({
+          title: `${TYPE_LABEL[type]}santrag eingereicht`,
+          description: "Ein Planer muss den Zeitraum noch bestätigen.",
+        });
+        setFrom("");
+        setTo("");
+        setDayMode("ganztaegig");
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) {
+          setError("Sitzung abgelaufen. Bitte Seite neu laden und erneut anmelden.");
+        } else if (err instanceof ApiError && err.status === 400) {
+          setError(readableApiError(err, "Antrag konnte nicht gestellt werden. Bitte erneut versuchen."));
+        } else {
+          setError("Antrag konnte nicht gestellt werden. Bitte erneut versuchen.");
+        }
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
 
     setSaving(true);
     try {
@@ -634,9 +784,107 @@ export default function Abwesenheiten() {
           <KrankmeldungDialog
             open={krankmeldungOpen}
             onClose={() => setKrankmeldungOpen(false)}
-            userId={currentUser.id}
           />
         </>
+      )}
+
+      {/* #887: eigene Urlaubs-/Krankheitsanträge samt Status — nur für
+          Assistenzkräfte, da Planer sofort wirksame Einträge anlegen. */}
+      {!canManage && (myAbsenceRequests?.length ?? 0) > 0 && (
+        <Card className="border-border/50 shadow-sm">
+          <CardContent className="p-5">
+            <h3 className="font-semibold mb-4">Meine Anträge</h3>
+            <div className="space-y-2" data-testid="my-absence-requests">
+              {myAbsenceRequests!.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between gap-3 py-2.5 px-3 rounded-lg border border-border/40"
+                  data-testid={`absence-request-row-${item.id}`}
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">
+                      {TYPE_LABEL[item.type]} · {formatRequestRange(item)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {item.days.length} {item.days.length === 1 ? "Tag" : "Tage"}
+                    </div>
+                  </div>
+                  <Badge
+                    variant={
+                      item.status === "APPROVED"
+                        ? "default"
+                        : item.status === "REJECTED"
+                          ? "destructive"
+                          : "secondary"
+                    }
+                    className="text-xs shrink-0"
+                    data-testid={`absence-request-status-${item.id}`}
+                  >
+                    {REQUEST_STATUS_LABEL[item.status]}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* #887: Planer-Freigabe offener Urlaubs-/Krankheitsanträge. */}
+      {canManage && (
+        <Card
+          className="border-border/50 shadow-sm"
+          data-testid="pending-absence-requests-section"
+        >
+          <CardContent className="p-5">
+            <h3 className="font-semibold mb-4">Offene Anträge</h3>
+            {pendingRequestsLoading ? (
+              <Skeleton className="h-12 w-full" />
+            ) : (pendingAbsenceRequests?.length ?? 0) === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Keine offenen Anträge.
+              </p>
+            ) : (
+              <div className="space-y-2" data-testid="pending-absence-requests">
+                {pendingAbsenceRequests!.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between gap-3 py-2.5 px-3 rounded-lg border border-border/40"
+                    data-testid={`pending-absence-request-${item.id}`}
+                  >
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">
+                        {item.userName ?? "Unbekannt"} · {TYPE_LABEL[item.type]}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {formatRequestRange(item)} · {item.days.length}{" "}
+                        {item.days.length === 1 ? "Tag" : "Tage"}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={resolvingRequestId === item.id}
+                        onClick={() => void handleRejectRequest(item)}
+                        data-testid={`absence-request-reject-${item.id}`}
+                      >
+                        Ablehnen
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={resolvingRequestId === item.id}
+                        onClick={() => void handleApproveRequest(item)}
+                        data-testid={`absence-request-approve-${item.id}`}
+                      >
+                        Bestätigen
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -684,32 +932,81 @@ export default function Abwesenheiten() {
               </Select>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="absence-shift-model">Dienst (optional)</Label>
-              <Select
-                value={shiftModelId || "none"}
-                onValueChange={(v) => setShiftModelId(v === "none" ? "" : v)}
-              >
-                  <SelectTrigger id="absence-shift-model" data-testid="absence-shift-model">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Ganztägig (Standard)</SelectItem>
-                  {(shiftModels ?? [])
-                    .filter((m) => m.isActive)
-                    .map((m) => (
-                      <SelectItem key={m.id} value={String(m.id)}>
-                        {m.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Ersetzt die Abwesenheit einen geplanten Dienst, werden dessen Zeiten
-                automatisch übernommen. Ohne geplanten Dienst legt ein gewähltes
-                Modell die Stunden fest (sonst ganztägig).
-              </p>
-            </div>
+            {canManage ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="absence-shift-model">Dienst (optional)</Label>
+                <Select
+                  value={shiftModelId || "none"}
+                  onValueChange={(v) => setShiftModelId(v === "none" ? "" : v)}
+                >
+                    <SelectTrigger id="absence-shift-model" data-testid="absence-shift-model">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Ganztägig (Standard)</SelectItem>
+                    {(shiftModels ?? [])
+                      .filter((m) => m.isActive)
+                      .map((m) => (
+                        <SelectItem key={m.id} value={String(m.id)}>
+                          {m.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Ersetzt die Abwesenheit einen geplanten Dienst, werden dessen Zeiten
+                  automatisch übernommen. Ohne geplanten Dienst legt ein gewähltes
+                  Modell die Stunden fest (sonst ganztägig).
+                </p>
+              </div>
+            ) : (
+              // #887: Assistenzkräfte wählen kein Schichtmodell mehr, sondern
+              // legen pro Zeitraum fest, ob der Antrag ganztägig gilt oder eine
+              // Uhrzeitspanne hat (an jedem Tag des Zeitraums gleich).
+              <div className="space-y-1.5">
+                <Label htmlFor="absence-day-mode">Zeitraum</Label>
+                <Select
+                  value={dayMode}
+                  onValueChange={(v) => setDayMode(v as "ganztaegig" | "vonbis")}
+                >
+                  <SelectTrigger id="absence-day-mode" data-testid="absence-day-mode">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ganztaegig">Ganztägig (Standard)</SelectItem>
+                    <SelectItem value="vonbis">Von–Bis</SelectItem>
+                  </SelectContent>
+                </Select>
+                {dayMode === "vonbis" && (
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="absence-von-zeit">Von (Uhrzeit)</Label>
+                      <Input
+                        id="absence-von-zeit"
+                        type="time"
+                        value={vonZeit}
+                        onChange={(e) => setVonZeit(e.target.value)}
+                        data-testid="absence-von-zeit"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="absence-bis-zeit">Bis (Uhrzeit)</Label>
+                      <Input
+                        id="absence-bis-zeit"
+                        type="time"
+                        value={bisZeit}
+                        onChange={(e) => setBisZeit(e.target.value)}
+                        data-testid="absence-bis-zeit"
+                      />
+                    </div>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Der Antrag muss von einem Planer bestätigt werden, bevor er im
+                  Kalender erscheint.
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -914,6 +1211,10 @@ export default function Abwesenheiten() {
               ) : (
                 <div className="space-y-2" data-testid="absence-list">
                   {ranges.map((range) => {
+                    // #887: vergangene Abwesenheiten sind unveränderlich (der
+                    // Server lehnt das Löschen ohnehin ab) — der Button wird
+                    // hier nur deaktiviert, damit Nutzer den Grund sofort sehen.
+                    const isPast = dayKey(range.endDate) < todayKey;
                     const sameDay = dayKey(range.startDate) === dayKey(range.endDate);
                     // Halbtägiger Urlaub (#862): Zeitspanne ergänzen, damit ein
                     // Teil-Tag von einem ganztägigen Eintrag unterscheidbar bleibt.
@@ -955,16 +1256,18 @@ export default function Abwesenheiten() {
                             {TYPE_LABEL[range.type]} · {range.days}{" "}
                             {range.days === 1 ? "Tag" : "Tage"}
                           </Badge>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                            disabled={deletingKey === range.key}
-                            onClick={() => handleDelete(range)}
-                            data-testid="absence-delete"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {!isPast && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              disabled={deletingKey === range.key}
+                              onClick={() => handleDelete(range)}
+                              data-testid="absence-delete"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     );

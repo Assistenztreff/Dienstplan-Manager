@@ -29,10 +29,37 @@ const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "admin@dienstplan.local";
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "admin1234";
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
 
-const YEAR = new Date().getFullYear();
+// Die Testdaten sind ueber viele Monate verteilt (kollisionsfrei je Test).
+// Ein starres "+1 Jahr" wuerde Monate NACH dem aktuellen Kalendermonat (z. B.
+// Okt/Nov, wenn heute August ist) auf ueber 12 Monate Vorausplanung schieben
+// und am Premium-Vorausplanungslimit (historyMonths=12) scheitern. Deshalb
+// wird jeder verwendete Monat einzeln auf sein NAECHSTES zukuenftiges
+// Vorkommen abgebildet (mind. 1 Monat Puffer ab heute) — bleibt dauerhaft in
+// der Zukunft (Vergangenheits-Loeschschutz) UND innerhalb des Limits,
+// unabhaengig davon, in welchem Kalendermonat die Suite laeuft.
+function futureYearFor(month: number): number {
+  const now = new Date();
+  const nowIdx = now.getUTCFullYear() * 12 + now.getUTCMonth();
+  let idx = now.getUTCFullYear() * 12 + (month - 1);
+  while (idx < nowIdx + 1) idx += 12;
+  return Math.floor(idx / 12);
+}
+
+function dayString(monthDay: string): string {
+  return `${futureYearFor(Number(monthDay.slice(0, 2)))}-${monthDay}`;
+}
+
 // Vertrag beginnt bewusst NICHT am Jahresanfang, damit der Rollback-Fall
-// (Urlaubstage vor Vertragsbeginn) innerhalb desselben Jahres testbar ist.
-const CONTRACT_START = `${YEAR}-03-01`;
+// (Urlaubstage vor Vertragsbeginn) testbar ist.
+const CONTRACT_START = dayString("03-01");
+
+// Letzter Sonntag eines Monats (dynamisch je Zieljahr berechnet, damit die
+// DST-Regressionstests unten immer den tatsaechlichen Umstellungstag treffen).
+function lastSundayOnOrBefore(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  while (d.getUTCDay() !== 0) d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().split("T")[0]!;
+}
 
 // Ganztaegige Zeiten, exakt wie das Frontend sie sendet (00:00–23:59 UTC).
 // Explizites "Z" damit die Dauer immer ~23:59:59 betraegt — unabhaengig
@@ -42,10 +69,6 @@ function fullDay(day: string): { startTime: string; endTime: string } {
     startTime: `${day}T00:00:00.000Z`,
     endTime: `${day}T23:59:59.000Z`,
   };
-}
-
-function dayString(monthDay: string): string {
-  return `${YEAR}-${monthDay}`;
 }
 
 type CreatedUser = { id: number };
@@ -366,33 +389,36 @@ test("geplante Dienste an uebersprungenen Tagen bleiben erhalten", async () => {
 // Sonntag im Oktober) 25 UTC-Stunden. Mit UTC-Konvention (T00:00:00.000Z bis
 // T23:59:59.000Z) betraegt die Dauer immer ~23:59:59 — DST-neutral.
 
-test("akzeptiert ganztaegige Abwesenheit am Winterzeit-Umstellungstag (25. Oktober)", async () => {
-  // 25.10.2026: Deutschland stellt auf Winterzeit um (CEST → CET).
+test("akzeptiert ganztaegige Abwesenheit am Winterzeit-Umstellungstag (letzter Sonntag im Oktober)", async () => {
+  // Deutschland stellt am letzten Sonntag im Oktober auf Winterzeit um (CEST → CET).
   // Berliner Mitternacht-zu-Mitternacht = 25 UTC-Stunden, aber UTC-Konvention
   // liefert immer ~23:59:59 — keine falsche 24h-Ueberschreitung.
-  const dst = dayString("10-25");
+  const dst = lastSundayOnOrBefore(dayString("10-31"));
   const { status, body } = await bulkAbsence("freizeitausgleich", [dst]);
-  expect(status, "25. Oktober sollte 201 liefern").toBe(201);
+  expect(status, "Winterzeit-Umstellungstag sollte 201 liefern").toBe(201);
   expect(body.createdCount).toBe(1);
   // Aufraeumen: Der Zeitraum-Test unten deckt denselben Tag ab und wuerde ihn
   // sonst als bereits vorhanden ueberspringen (Reihenfolge-Abhaengigkeit).
   for (const id of body.shiftIds) await deleteShift(id);
 });
 
-test("akzeptiert ganztaegige Abwesenheit am Sommerzeit-Umstellungstag (29. Maerz)", async () => {
-  // 29.03.2026: Deutschland stellt auf Sommerzeit um (CET → CEST).
+test("akzeptiert ganztaegige Abwesenheit am Sommerzeit-Umstellungstag (letzter Sonntag im Maerz)", async () => {
+  // Deutschland stellt am letzten Sonntag im Maerz auf Sommerzeit um (CET → CEST).
   // Berliner Mitternacht-zu-Mitternacht = 23 UTC-Stunden, UTC-Konvention
   // liefert weiterhin ~23:59:59 — kein falscher Kurztagfehler.
-  const dst = dayString("03-29");
+  const dst = lastSundayOnOrBefore(dayString("03-31"));
   const { status, body } = await bulkAbsence("freizeitausgleich", [dst]);
-  expect(status, "29. Maerz sollte 201 liefern").toBe(201);
+  expect(status, "Sommerzeit-Umstellungstag sollte 201 liefern").toBe(201);
   expect(body.createdCount).toBe(1);
   for (const id of body.shiftIds) await deleteShift(id);
 });
 
 test("akzeptiert Zeitraum ueber die Winterzeit-Umstellung hinweg", async () => {
-  // Drei Tage rund um den 25.10.2026; alle drei muessen angelegt werden.
-  const days = [dayString("10-23"), dayString("10-25"), dayString("10-27")];
+  // Drei Tage rund um den Winterzeit-Umstellungstag; alle drei muessen angelegt werden.
+  const dst = new Date(`${lastSundayOnOrBefore(dayString("10-31"))}T00:00:00Z`);
+  const days = [-2, 0, 2].map(
+    (offset) => new Date(dst.getTime() + offset * 86_400_000).toISOString().split("T")[0]!,
+  );
   const { status, body } = await bulkAbsence("freizeitausgleich", days);
   expect(status, "Zeitraum ueber Winterzeitumstellung sollte 201 liefern").toBe(201);
   expect(body.createdCount).toBe(3);

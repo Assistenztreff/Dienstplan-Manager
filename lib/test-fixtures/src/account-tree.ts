@@ -59,6 +59,7 @@ export const TEAM_BOUND_TABLES = [
   "shifts",
   "contracts",
   "shift_models",
+  "absence_requests",
 ] as const;
 
 export interface DeleteAccountTreesResult {

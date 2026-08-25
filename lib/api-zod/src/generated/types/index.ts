@@ -6,6 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './absenceRequest';
+export * from './absenceRequestDay';
+export * from './absenceRequestInput';
+export * from './absenceRequestInputType';
+export * from './absenceRequestStatus';
+export * from './absenceRequestType';
 export * from './allowanceSettings';
 export * from './allowanceSettingsBillingMethod';
 export * from './allowanceSettingsInput';
@@ -73,6 +79,8 @@ export * from './lexwareBookingList';
 export * from './lexwareBookingListSource';
 export * from './lexwareBookingStatus';
 export * from './lexwareBookingType';
+export * from './listAbsenceRequestsParams';
+export * from './listAbsenceRequestsStatus';
 export * from './listContractsParams';
 export * from './listHourBudgetsParams';
 export * from './listOperatorErrorsParams';

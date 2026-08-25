@@ -17,6 +17,7 @@ import teamsRouter from "./teams";
 import operatorRouter from "./operator";
 import authRouter from "./auth";
 import hourBudgetsRouter from "./hour_budgets";
+import absenceRequestsRouter from "./absence-requests";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use(calendarRouter);
 router.use(teamsRouter);
 router.use(operatorRouter);
 router.use(hourBudgetsRouter);
+router.use(absenceRequestsRouter);
 
 export default router;

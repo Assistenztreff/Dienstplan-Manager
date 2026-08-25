@@ -26,11 +26,30 @@ import { TeamTestHarness } from "./helpers/teams";
  * Tag 2 muss also 6,0 h bekommen, nicht 7,5 h.
  */
 
-const YEAR = new Date().getFullYear();
-const CONTRACT_START = `${YEAR - 1}-01-01`; // > 13 Wochen alt -> bwavg greift
-const HISTORY_DAYS = [`${YEAR}-05-04`, `${YEAR}-05-05`, `${YEAR}-05-06`];
-const DAY_WITH_SHIFT = `${YEAR}-06-01`; // Dienst wird von der Abwesenheit ersetzt
-const DAY_EMPTY = `${YEAR}-06-02`; // ganztägig -> Durchschnitt entscheidet
+// Anker statt Fixjahr: "heute + 1 Monat, Tag 1" ist der Bezugspunkt, alle
+// Daten sind Monats-Offsets relativ dazu (nicht ein fixer Kalendermonat).
+// Der Vertragsbeginn liegt deutlich (9+ Monate) vor den historischen
+// Arbeitstagen -> weit ueber den fuer bwavg geforderten 13 Wochen; die
+// Abwesenheitstage bleiben nur wenige Monate nach dem Anker, also sicher
+// innerhalb des 12-Monats-Vorausplanungs-Limits, egal in welchem realen
+// Monat der Lauf stattfindet (s. .agents/memory/e2e-absence-date-anchor-pattern.md).
+const ANCHOR = new Date();
+ANCHOR.setUTCMonth(ANCHOR.getUTCMonth() + 1, 1);
+ANCHOR.setUTCHours(0, 0, 0, 0);
+
+function monthOffset(monthsAfterAnchor: number, day: number): string {
+  const d = new Date(ANCHOR);
+  d.setUTCMonth(d.getUTCMonth() + monthsAfterAnchor, day);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+const CONTRACT_START = monthOffset(-6, 1); // > 13 Wochen alt -> bwavg greift
+const HISTORY_DAYS = [monthOffset(3, 4), monthOffset(3, 5), monthOffset(3, 6)];
+const DAY_WITH_SHIFT = monthOffset(4, 1); // Dienst wird von der Abwesenheit ersetzt
+const DAY_EMPTY = monthOffset(4, 2); // ganztägig -> Durchschnitt entscheidet
 const ABSENCE_DAYS = [DAY_WITH_SHIFT, DAY_EMPTY];
 
 const CONTRACT_DAILY_HOURS = 8; // 40 Wochenstunden / 5 Arbeitstage

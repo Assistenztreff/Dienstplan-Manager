@@ -20,6 +20,8 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AbsenceRequest,
+  AbsenceRequestInput,
   AllowanceSettings,
   AllowanceSettingsInput,
   AuthUser,
@@ -66,6 +68,7 @@ import type {
   KoordinatorTeamsInput,
   KoordinatorUpdateInput,
   LexwareBookingList,
+  ListAbsenceRequestsParams,
   ListContractsParams,
   ListHourBudgetsParams,
   ListOperatorErrorsParams,
@@ -1480,6 +1483,305 @@ export const useBulkCreateAbsence = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getBulkCreateAbsenceMutationOptions(options));
+    }
+
+export const getCreateAbsenceRequestUrl = () => {
+
+
+
+
+  return `/api/absence-requests`
+}
+
+/**
+ * Reine Assistenzkräfte tragen Urlaub/Krankheit seit #887 nur noch als Antrag ein — die Schicht(en) werden erst bei Bestätigung eines Planers angelegt (kein Kalender-/Urlaubskonto-Effekt vorher). Planer/Admins, die eine Abwesenheit für JEMAND ANDEREN eintragen, nutzen weiterhin POST /shifts bzw. /shifts/bulk-absence direkt (sofortige Wirkung, unverändert) — dieser Endpunkt ist ausschließlich für die Selbsteintragung.
+ * @summary Urlaubs-/Krankheitsantrag stellen (Selbstservice)
+ */
+export const createAbsenceRequest = async (absenceRequestInput: AbsenceRequestInput, options?: RequestInit): Promise<AbsenceRequest> => {
+
+  return customFetch<AbsenceRequest>(getCreateAbsenceRequestUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      absenceRequestInput,)
+  }
+);}
+
+
+
+
+export const getCreateAbsenceRequestMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAbsenceRequest>>, TError,{data: BodyType<AbsenceRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAbsenceRequest>>, TError,{data: BodyType<AbsenceRequestInput>}, TContext> => {
+
+const mutationKey = ['createAbsenceRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAbsenceRequest>>, {data: BodyType<AbsenceRequestInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAbsenceRequest(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAbsenceRequestMutationResult = NonNullable<Awaited<ReturnType<typeof createAbsenceRequest>>>
+    export type CreateAbsenceRequestMutationBody = BodyType<AbsenceRequestInput>
+    export type CreateAbsenceRequestMutationError = ErrorType<void>
+
+    /**
+ * @summary Urlaubs-/Krankheitsantrag stellen (Selbstservice)
+ */
+export const useCreateAbsenceRequest = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAbsenceRequest>>, TError,{data: BodyType<AbsenceRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAbsenceRequest>>,
+        TError,
+        {data: BodyType<AbsenceRequestInput>},
+        TContext
+      > => {
+      return useMutation(getCreateAbsenceRequestMutationOptions(options));
+    }
+
+export const getListAbsenceRequestsUrl = (params?: ListAbsenceRequestsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/absence-requests?${stringifiedParams}` : `/api/absence-requests`
+}
+
+/**
+ * Assistenzkräfte sehen ausschließlich ihre eigenen Anträge. Admins, Teamleiter und Koordinatoren mit Planungsrecht sehen alle Anträge ihrer erlaubten Teams (optional gefiltert über status/teamId).
+ * @summary Anträge auflisten
+ */
+export const listAbsenceRequests = async (params?: ListAbsenceRequestsParams, options?: RequestInit): Promise<AbsenceRequest[]> => {
+
+  return customFetch<AbsenceRequest[]>(getListAbsenceRequestsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAbsenceRequestsQueryKey = (params?: ListAbsenceRequestsParams,) => {
+    return [
+    `/api/absence-requests`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAbsenceRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listAbsenceRequests>>, TError = ErrorType<unknown>>(params?: ListAbsenceRequestsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAbsenceRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAbsenceRequestsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAbsenceRequests>>> = ({ signal }) => listAbsenceRequests(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAbsenceRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAbsenceRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof listAbsenceRequests>>>
+export type ListAbsenceRequestsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Anträge auflisten
+ */
+
+export function useListAbsenceRequests<TData = Awaited<ReturnType<typeof listAbsenceRequests>>, TError = ErrorType<unknown>>(
+ params?: ListAbsenceRequestsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAbsenceRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAbsenceRequestsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getApproveAbsenceRequestUrl = (id: number,) => {
+
+
+
+
+  return `/api/absence-requests/${id}/approve`
+}
+
+/**
+ * Legt die beantragten Tage über dieselbe Logik wie POST /shifts/bulk-absence an — Überschneidungs-, Duplikat- und Vertragszeitraum-Prüfung laufen erneut gegen die AKTUELLEN Daten (nicht den Stand zum Zeitpunkt der Antragstellung).
+ * @summary Antrag bestätigen
+ */
+export const approveAbsenceRequest = async (id: number, options?: RequestInit): Promise<AbsenceRequest> => {
+
+  return customFetch<AbsenceRequest>(getApproveAbsenceRequestUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getApproveAbsenceRequestMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveAbsenceRequest>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof approveAbsenceRequest>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['approveAbsenceRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof approveAbsenceRequest>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  approveAbsenceRequest(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApproveAbsenceRequestMutationResult = NonNullable<Awaited<ReturnType<typeof approveAbsenceRequest>>>
+
+    export type ApproveAbsenceRequestMutationError = ErrorType<void>
+
+    /**
+ * @summary Antrag bestätigen
+ */
+export const useApproveAbsenceRequest = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveAbsenceRequest>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof approveAbsenceRequest>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getApproveAbsenceRequestMutationOptions(options));
+    }
+
+export const getRejectAbsenceRequestUrl = (id: number,) => {
+
+
+
+
+  return `/api/absence-requests/${id}/reject`
+}
+
+/**
+ * Beendet den Antrag ohne Seiteneffekte (keine Schicht wird angelegt).
+ * @summary Antrag ablehnen
+ */
+export const rejectAbsenceRequest = async (id: number, options?: RequestInit): Promise<AbsenceRequest> => {
+
+  return customFetch<AbsenceRequest>(getRejectAbsenceRequestUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getRejectAbsenceRequestMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectAbsenceRequest>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rejectAbsenceRequest>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['rejectAbsenceRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rejectAbsenceRequest>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  rejectAbsenceRequest(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RejectAbsenceRequestMutationResult = NonNullable<Awaited<ReturnType<typeof rejectAbsenceRequest>>>
+
+    export type RejectAbsenceRequestMutationError = ErrorType<void>
+
+    /**
+ * @summary Antrag ablehnen
+ */
+export const useRejectAbsenceRequest = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectAbsenceRequest>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof rejectAbsenceRequest>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRejectAbsenceRequestMutationOptions(options));
     }
 
 export const getBulkCreateShiftsUrl = () => {

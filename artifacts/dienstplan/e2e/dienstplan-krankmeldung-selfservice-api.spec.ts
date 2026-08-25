@@ -13,22 +13,18 @@ import {
 } from "./helpers/teams";
 
 /**
- * API-Absicherung der Schnell-Krankmeldung aus der App (Aufgabe #828):
+ * API-Absicherung der Schnell-Krankmeldung aus der App (Aufgabe #828, seit
+ * #887 mit Bestätigungspflicht):
  *
  * Die KrankmeldungDialog-Komponente ruft für Assistenzkräfte
- * POST /api/shifts/bulk-absence (type: "sick") auf, statt N sequenzieller
- * Einzel-POSTs — anders als das Selbstservice-Formular unter /abwesenheiten
- * (dienstplan-abwesenheiten-selbstservice-api.spec.ts), das den Einzel-POST
- * nutzt. Dieser Sammel-Pfad war bisher nur für ADMIN-Aufrufe abgedeckt
- * (dienstplan-bulk-absence-typen-api.spec.ts), nicht für den
- * Assistenten-Selbstservice-Zweig (Authz-Gleichlauf zum Einzel-POST).
- *
- * Zusätzlich: bei einer erfolgreichen Selbst-Krankmeldung (type sick,
- * nicht-privilegiert, mind. ein Tag angelegt) löst die Route
- * fire-and-forget eine E-Mail an den Team-Eigentümer aus
- * (sendSickLeaveNotification in shifts.ts). Das darf die Antwort weder
- * verzögern noch scheitern lassen — insbesondere im Testbetrieb ganz ohne
- * RESEND_API_KEY (isEmailEnabled()=false, mailer.ts überspringt still).
+ * POST /api/absence-requests (type: "sick") auf, statt direkt Schichten
+ * anzulegen — der direkte Sammelauftrag POST /api/shifts/bulk-absence bleibt
+ * für die Selbsteintragung von Urlaub/Krank gesperrt (403
+ * absence_requires_request, s. dienstplan-abwesenheiten-selbstservice-api).
+ * Erst die Bestätigung eines Planers (POST /absence-requests/:id/approve)
+ * legt über dieselbe Sammel-Logik (runBulkAbsenceCreation) die Schichten an —
+ * inkl. der bestehenden Übersprung-Toleranz für bereits vorhandene Tage
+ * (kein 409, kein Duplikat).
  */
 
 test.describe.configure({ mode: "serial" });
@@ -97,60 +93,85 @@ test.afterAll(async () => {
   }
 });
 
-test("Assistenzkraft kann eigene Mehrtages-Krankmeldung per Sammelauftrag anlegen (201)", async () => {
+test("Direkter POST /api/shifts/bulk-absence für eigene Krankmeldung bleibt 403 (absence_requires_request, #887)", async () => {
   const range = days(futureDay(20), 5);
   const res = await assistantCtx.post("/api/shifts/bulk-absence", {
     data: { userId: assistantId, type: "sick", days: range },
   });
-  const bodyText = await res.text();
-  expect(res.status(), `Sammel-Krankmeldung sollte 201 liefern (${bodyText})`).toBe(201);
-  const body = JSON.parse(bodyText) as {
-    createdCount: number;
-    shifts: Array<{ id: number; userId: number; type: string }>;
-  };
-  expect(body.createdCount, "Alle 5 Tage sollten neu angelegt werden").toBe(5);
-  expect(body.shifts).toHaveLength(5);
-  for (const shift of body.shifts) {
-    expect(shift.userId, "Alle Einträge müssen der Assistenzkraft gehören").toBe(assistantId);
-    expect(shift.type, "Alle Einträge müssen Typ sick tragen").toBe("sick");
+  expect(res.status(), "direkter Sammelauftrag muss für Selbsteintragung 403 bleiben").toBe(403);
+  const json = (await res.json()) as { code?: string };
+  expect(json.code).toBe("absence_requires_request");
+});
+
+test("Assistenzkraft kann Mehrtages-Krankmeldung als Antrag stellen; Bestätigung legt alle Schichten an", async () => {
+  const range = days(futureDay(20), 5);
+  const reqRes = await assistantCtx.post("/api/absence-requests", {
+    data: { type: "sick", days: range },
+  });
+  const reqText = await reqRes.text();
+  expect(reqRes.status(), `Antrag sollte 201 liefern (${reqText})`).toBe(201);
+  const created = JSON.parse(reqText) as { id: number; status: string };
+  expect(created.status).toBe("PENDING");
+
+  const approveRes = await acc.ctx.post(`/api/absence-requests/${created.id}/approve`);
+  const approveText = await approveRes.text();
+  expect(approveRes.status(), `Bestätigung sollte 200 liefern (${approveText})`).toBe(200);
+  const approved = JSON.parse(approveText) as { status: string; resultShiftIds: number[] };
+  expect(approved.status).toBe("APPROVED");
+  expect(approved.resultShiftIds, "Alle 5 Tage sollten angelegt werden").toHaveLength(5);
+
+  const list = await acc.ctx.get(`/api/shifts?type=sick&userId=${assistantId}&all=true`);
+  const rows = (await list.json()) as Array<{ id: number; userId: number; type: string }>;
+  for (const id of approved.resultShiftIds) {
+    const row = rows.find((r) => r.id === id);
+    expect(row, `Schicht ${id} sollte existieren`).toBeTruthy();
+    expect(row!.userId).toBe(assistantId);
+    expect(row!.type).toBe("sick");
   }
 
   // Aufräumen.
-  for (const shift of body.shifts) {
-    await acc.ctx.delete(`/api/shifts/${shift.id}`).catch(() => {});
+  for (const id of approved.resultShiftIds) {
+    await acc.ctx.delete(`/api/shifts/${id}`).catch(() => {});
   }
 });
 
-test("Bereits eingetragene Krankheitstage werden beim erneuten Absenden übersprungen, nicht dupliziert", async () => {
+test("Ein zweiter, überlappender Antrag überspringt beim Bestätigen bereits vorhandene Tage (kein Duplikat)", async () => {
   const range = days(futureDay(40), 3);
 
-  const first = await assistantCtx.post("/api/shifts/bulk-absence", {
-    data: { userId: assistantId, type: "sick", days: range },
+  const first = await assistantCtx.post("/api/absence-requests", {
+    data: { type: "sick", days: range },
   });
-  expect(first.status(), `Erste Anlage sollte 201 liefern (${await first.text()})`).toBe(201);
-  const firstBody = (await first.json()) as { createdCount: number };
-  expect(firstBody.createdCount).toBe(3);
-
-  // Erneutes Absenden für denselben Zeitraum (z. B. Doppel-Klick oder erneuter
-  // Dialog-Aufruf für überlappende Tage) darf NICHT scheitern und NICHT
-  // duplizieren — die Route überspringt bereits vorhandene Tage tolerant.
-  const second = await assistantCtx.post("/api/shifts/bulk-absence", {
-    data: { userId: assistantId, type: "sick", days: range },
-  });
-  expect(second.status(), `Wiederholte Anlage sollte weiterhin 201 liefern (${await second.text()})`).toBe(
-    201,
+  expect(first.status()).toBe(201);
+  const firstCreated = (await first.json()) as { id: number };
+  const firstApprove = await acc.ctx.post(`/api/absence-requests/${firstCreated.id}/approve`);
+  expect(firstApprove.status(), `Erste Bestätigung sollte 200 liefern (${await firstApprove.text()})`).toBe(
+    200,
   );
-  const secondBody = (await second.json()) as { createdCount: number; skippedCount: number };
-  expect(secondBody.createdCount, "Keine Duplikate: 0 neu angelegt").toBe(0);
-  expect(secondBody.skippedCount, "Alle 3 Tage waren bereits krank gemeldet").toBe(3);
+  const firstApproved = (await firstApprove.json()) as { resultShiftIds: number[] };
+  expect(firstApproved.resultShiftIds).toHaveLength(3);
+
+  // Zweiter Antrag für DIESELBEN Tage (z. B. erneuter Dialog-Aufruf) — die
+  // Bestätigung darf nicht scheitern und keine Duplikate erzeugen; die
+  // Sammel-Logik überspringt bereits vorhandene Krankheitstage still.
+  const second = await assistantCtx.post("/api/absence-requests", {
+    data: { type: "sick", days: range },
+  });
+  expect(second.status()).toBe(201);
+  const secondCreated = (await second.json()) as { id: number };
+  const secondApprove = await acc.ctx.post(`/api/absence-requests/${secondCreated.id}/approve`);
+  expect(
+    secondApprove.status(),
+    `Zweite Bestätigung sollte weiterhin 200 liefern (${await secondApprove.text()})`,
+  ).toBe(200);
+  const secondApproved = (await secondApprove.json()) as { resultShiftIds: number[] };
+  expect(secondApproved.resultShiftIds, "Keine Duplikate: 0 neu angelegt").toHaveLength(0);
 
   // Insgesamt dürfen weiterhin nur 3 Krankheitstage existieren (keine Dubletten).
-  const all = await acc.ctx.get(`/api/shifts?type=sick&userId=${assistantId}`);
-  expect(all.ok()).toBe(true);
+  const all = await acc.ctx.get(`/api/shifts?type=sick&userId=${assistantId}&all=true`);
   const rows = (await all.json()) as Array<{ id: number; userId: number }>;
   expect(rows.filter((r) => r.userId === assistantId)).toHaveLength(3);
 
-  // Aufräumen: alle in diesem Test angelegten sick-Einträge löschen.
+  // Aufräumen.
   for (const row of rows) {
     await acc.ctx.delete(`/api/shifts/${row.id}`).catch(() => {});
   }

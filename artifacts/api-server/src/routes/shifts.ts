@@ -350,7 +350,7 @@ async function vacationOutsideContractError(
 // Prüfung braucht die Vertragsdaten, die erst im Advisory-Lock gelesen werden,
 // muss aber weiterhin mit 400 (statt 500) antworten und dabei alles
 // zurückrollen.
-class VacationOutsideContractError extends Error {}
+export class VacationOutsideContractError extends Error {}
 
 // Varianten des Vertrags-Guards für Sammelanlagen: Die identische Fachlogik
 // arbeitet mit dem bereits einmal geladenen Vertragsbestand statt N Reads.
@@ -808,7 +808,7 @@ function monthsAhead(target: Date, now: Date): number {
 // ein Member-Admin das Limit eines fremden Free-Teams nicht ueber seinen eigenen
 // Plan umgehen kann (analog zu maxAssistants). Liefert true, wenn die Aktion
 // geblockt und bereits mit 403 beantwortet wurde.
-async function forwardPlanningBlocked(
+export async function forwardPlanningBlocked(
   teamId: number,
   requesterId: number,
   startTime: Date,
@@ -932,6 +932,374 @@ async function firstActiveShiftModelDefaults(
   return { defaultStartTime: model.defaultStartTime, defaultEndTime: model.defaultEndTime };
 }
 
+// ---------------------------------------------------------------------------
+// Geteilte Sammel-Anlage-Logik (#887): POST /shifts/bulk-absence UND die
+// Bestätigung eines Urlaubs-/Krankheitsantrags (routes/absence-requests.ts)
+// rufen EXAKT dieselbe Funktion. Parität ist Pflicht — s. Gedächtnis "bwavg
+// dropped from single-shift path": Einzel- und Sammelpfad sind bereits einmal
+// auseinandergelaufen, weil dieselbe Prüfung zweimal implementiert war.
+// ---------------------------------------------------------------------------
+
+export class InvalidAbsenceDayError extends Error {}
+export class InvalidShiftModelError extends Error {}
+
+// Validiert/dedupliziert rohe Tageseinträge (ein UTC-Kalendertag pro Eintrag,
+// Ende nach Beginn) und liefert sie nach Kalendertag sortiert zurück. Wird
+// sowohl bei der Sammel-Anlage als auch bei der Antragstellung
+// (POST /absence-requests) verwendet, damit ein Antrag beim Anlegen bereits
+// dieselben Regeln erfüllt wie die spätere Genehmigung.
+export function normalizeAbsenceDays(
+  rawDays: { startTime: Date; endTime: Date }[],
+): [string, { startTime: Date; endTime: Date }][] {
+  const dayMap = new Map<string, { startTime: Date; endTime: Date }>();
+  for (const d of rawDays) {
+    const durationMs = d.endTime.getTime() - d.startTime.getTime();
+    if (durationMs <= 0) {
+      throw new InvalidAbsenceDayError(
+        "Ungültiger Tageseintrag: Ende muss nach dem Beginn liegen.",
+      );
+    }
+    const startDay = d.startTime.toISOString().split("T")[0]!;
+    const endDay = d.endTime.toISOString().split("T")[0]!;
+    if (startDay !== endDay) {
+      throw new InvalidAbsenceDayError(
+        "Ungültiger Tageseintrag: Start und Ende müssen auf demselben UTC-Kalendertag liegen.",
+      );
+    }
+    const key = startDay;
+    if (!dayMap.has(key)) dayMap.set(key, { startTime: d.startTime, endTime: d.endTime });
+  }
+  if (dayMap.size === 0) {
+    throw new InvalidAbsenceDayError("Mindestens ein Tag ist erforderlich.");
+  }
+  return [...dayMap.entries()].sort(([a], [b]) => a.localeCompare(b));
+}
+
+export type BulkAbsenceType =
+  | "vacation"
+  | "sick"
+  | "freizeitausgleich"
+  | "kind_krank"
+  | "freistellung"
+  | "abgesagt_ag"
+  | "abgesagt_an"
+  | "urlaubsabgeltung";
+
+export type BulkAbsenceCreationInput = {
+  userId: number;
+  teamId: number;
+  type: BulkAbsenceType;
+  days: [string, { startTime: Date; endTime: Date }][];
+  shiftModelId?: number | null;
+  notes?: string | null;
+};
+
+export type BulkAbsenceCreationResult = {
+  created: (typeof shiftsTable.$inferSelect)[];
+  replaced: number[];
+  skippedDates: string[];
+};
+
+// Wirft InvalidShiftModelError (Schichtmodell gehört nicht zum Team) oder
+// VacationOutsideContractError (Urlaub außerhalb jedes Vertragszeitraums) —
+// beide werden vom jeweiligen Aufrufer (Route/Antrags-Bestätigung) auf die
+// passende HTTP-Antwort abgebildet.
+export async function runBulkAbsenceCreation(
+  input: BulkAbsenceCreationInput,
+): Promise<BulkAbsenceCreationResult> {
+  const { userId, teamId, type, days, notes } = input;
+  const shiftModelId = input.shiftModelId ?? null;
+  const firstDay = days[0]![0];
+  const lastDay = days[days.length - 1]![0];
+  const firstDayStart = new Date(`${firstDay}T00:00:00.000Z`);
+  const dayAfterLast = new Date(`${lastDay}T00:00:00.000Z`);
+  dayAfterLast.setUTCDate(dayAfterLast.getUTCDate() + 1);
+
+  // Schichtmodell muss zum Ziel-Team gehören; Standardzeiten einmal laden.
+  let modelDefaults: { start: string; end: string } | null = null;
+  if (shiftModelId != null) {
+    if (!(await isShiftModelInTeam(shiftModelId, teamId))) {
+      throw new InvalidShiftModelError("Schichtmodell gehört nicht zu diesem Team");
+    }
+    const [model] = await db
+      .select({
+        defaultStartTime: shiftModelsTable.defaultStartTime,
+        defaultEndTime: shiftModelsTable.defaultEndTime,
+      })
+      .from(shiftModelsTable)
+      .where(eq(shiftModelsTable.id, shiftModelId));
+    if (model?.defaultStartTime && model?.defaultEndTime) {
+      modelDefaults = { start: model.defaultStartTime, end: model.defaultEndTime };
+    }
+  }
+  // Team-weite Schätzbasis für Nachtzuschlag bei ganz freien Ganztags-Tagen
+  // (kein ersetzter Dienst, kein gewähltes Schichtmodell) — einmal für den
+  // gesamten Zeitraum geladen, s. resolveShiftMetrics/firstActiveShiftModelDefaults.
+  const fallbackNightBasis = await firstActiveShiftModelDefaults(teamId);
+
+  // Duplikat-Prüfung UND Anlage laufen unter einem Advisory-Lock pro
+  // Zielperson race-sicher in EINER Transaktion: Zwei gleichzeitige identische
+  // Aufträge (z. B. Doppelklick in zwei Fenstern) würden sonst beide "Tag ist
+  // frei" sehen und die Abwesenheit doppelt buchen — inkl. doppeltem
+  // Urlaubsabzug. Der zweite Auftrag wartet am Lock und überspringt die Tage
+  // dann als Duplikate (Frontend-Verhalten der bisherigen Schleife).
+  return db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${"shifts-bulk:user:" + userId}))`,
+    );
+
+    // Zeitraumdaten NACH dem Lock laden: parallele identische Aufträge sehen
+    // damit zuverlässig die Einträge des zuerst abgeschlossenen Auftrags.
+    // Ein Request mit vielen Tagen bleibt bei wenigen Reads statt einer
+    // sequenziellen Abfragekette pro Kalendertag.
+    //
+    // Die Verträge gehören ausdrücklich dazu: sie speisen den Vertrags-Guard,
+    // die Tages-Soll-Stunden UND die Urlaubskonto-Buchung. Vor dem Lock
+    // gelesen, könnte eine parallele Vertragsänderung dazwischenliegen und der
+    // Auftrag mit veralteten Vertragsgrenzen anlegen bzw. auf einen nicht mehr
+    // passenden Vertrag buchen (Lohn-/Urlaubsdaten).
+    const [existingAbsences, plannedWork, ops, allowance, contracts] = await Promise.all([
+      tx
+        .select({ startTime: shiftsTable.startTime })
+        .from(shiftsTable)
+        .where(
+          and(
+            eq(shiftsTable.userId, userId),
+            eq(shiftsTable.type, type as "vacation" | "sick"),
+            // Sargable Bereichsprädikat aktiviert den (user_id, start_time)-Index.
+            gte(shiftsTable.startTime, firstDayStart),
+            lt(shiftsTable.startTime, dayAfterLast),
+          ),
+        ),
+      tx
+        .select({
+          id: shiftsTable.id,
+          startTime: shiftsTable.startTime,
+          endTime: shiftsTable.endTime,
+        })
+        .from(shiftsTable)
+        .where(
+          and(
+            eq(shiftsTable.userId, userId),
+            eq(shiftsTable.teamId, teamId),
+            notInArray(shiftsTable.type, [
+              "vacation",
+              "sick",
+              "freizeitausgleich",
+              "team",
+              "kind_krank",
+              "freistellung",
+              "abgesagt_ag",
+              "abgesagt_an",
+              "urlaubsabgeltung",
+            ]),
+            // Sargable Bereichsprädikat aktiviert den (user_id, start_time)-Index.
+            gte(shiftsTable.startTime, firstDayStart),
+            lt(shiftsTable.startTime, dayAfterLast),
+          ),
+        ),
+      resolveAllowanceOps(teamId, tx),
+      allowanceContext(teamId, tx),
+      tx
+        .select({
+          id: contractsTable.id,
+          teamId: contractsTable.teamId,
+          startDate: contractsTable.startDate,
+          endDate: contractsTable.endDate,
+          weeklyHours: contractsTable.weeklyHours,
+          workdaysPerWeek: contractsTable.workdaysPerWeek,
+          vacationHoursUsed: contractsTable.vacationHoursUsed,
+        })
+        .from(contractsTable)
+        .where(eq(contractsTable.userId, userId)),
+    ]);
+
+    // URLAUB außerhalb des Vertragszeitraums: pro Tag prüfen (gleiche Semantik
+    // wie N Einzel-POSTs, deckt auch Zeiträume über einen Vertragswechsel ab).
+    // Läuft im Lock gegen genau die Vertragsdaten, die anschließend gebucht
+    // werden; ein Verstoß rollt die Transaktion zurück (ganz oder gar nicht).
+    if (type === "vacation") {
+      for (const [, t] of days) {
+        const msg = vacationOutsideContractErrorFromContracts(
+          contracts,
+          teamId,
+          t.startTime,
+          t.endTime,
+        );
+        if (msg) throw new VacationOutsideContractError(msg);
+      }
+    }
+
+    const existingDates = new Set(existingAbsences.map((shift) => dayKey(shift.startTime)));
+    const plannedByDay = new Map<string, typeof plannedWork>();
+    for (const shift of plannedWork) {
+      const key = dayKey(shift.startTime);
+      const planned = plannedByDay.get(key) ?? [];
+      planned.push(shift);
+      plannedByDay.set(key, planned);
+    }
+    for (const planned of plannedByDay.values()) {
+      planned.sort(
+        (a, b) =>
+          b.endTime.getTime() -
+          b.startTime.getTime() -
+          (a.endTime.getTime() - a.startTime.getTime()),
+      );
+    }
+
+    const skipped = days.filter(([key]) => existingDates.has(key)).map(([key]) => key);
+    const toCreate = days.filter(([key]) => !existingDates.has(key));
+
+    // Zeiten je Tag auflösen wie beim Einzel-POST (Lohnausfallprinzip):
+    // geplanter Dienst am Tag → Zeiten erben; sonst optionale Modell-
+    // Standardzeiten; sonst ganztägig. Ersetzt werden NUR Dienste an Tagen,
+    // die auch wirklich angelegt werden (übersprungene Tage bleiben unberührt).
+    //
+    // Halbtägiger Urlaub (#862): ein Tageseintrag mit echten (nicht-
+    // ganztägigen) Uhrzeiten gilt als bewusst gewählter Zeitraum — die
+    // Uhrzeiten kommen vom Nutzer und werden NICHT durch einen geplanten
+    // Dienst überschrieben (kein Zeiten-Erben). Ersetzt wird nur, was sich
+    // ECHT zeitlich überschneidet; ein Dienst außerhalb des Zeitfensters
+    // bleibt unangetastet (anders als beim ganztägigen Fall, der den ganzen
+    // Kalendertag beansprucht).
+    const resolved = toCreate.map(([key, day]) => {
+      const candidates = plannedByDay.get(key) ?? [];
+      // Nutzer-Absicht (isPartialAbsence) aus den ROHEN Tages-Uhrzeiten,
+      // bevor eine etwaige Erbschaft sie überschreibt (identisch zum
+      // Einzel-POST) — sonst sähe ein ganztägiger Eintrag, der die
+      // Uhrzeiten eines ersetzten Dienstes erbt, wie ein bewusst gewählter
+      // Teil-Tag aus.
+      const isPartial = !isPlainFullDay(day.startTime, day.endTime);
+      if (isPartial) {
+        const overlapping = candidates.filter(
+          (s) =>
+            s.startTime.getTime() < day.endTime.getTime() &&
+            s.endTime.getTime() > day.startTime.getTime(),
+        );
+        return { times: day, planned: overlapping, isPartialAbsence: true };
+      }
+      const inherited = candidates[0];
+      const times = inherited
+        ? { startTime: inherited.startTime, endTime: inherited.endTime }
+        : modelDefaults
+          ? shiftModelTimesForDay(day.startTime, modelDefaults.start, modelDefaults.end)
+          : day;
+      return { times, planned: candidates, isPartialAbsence: false };
+    });
+
+    const replaced = resolved.flatMap(({ planned }) => planned.map((shift) => shift.id));
+
+    // REIHENFOLGE: Löschen der ersetzten Dienste läuft VOR der Berechnung —
+    // exakt wie der Einzelpfad, der deleteReplacedWorkShift ebenfalls vor
+    // storeShiftMetrics aufruft. Relevant wird das im Sammelauftrag, weil der
+    // ersetzte Dienst eines FRÜHEREN Tages im 13-Wochen-Fenster eines
+    // SPÄTEREN Tages liegt: Bei N Einzel-Requests ist er dann bereits
+    // gelöscht. Würde hier zuerst gerechnet, zählte er noch mit und der
+    // Sammelweg käme auf einen anderen Durchschnitt. (Der ersetzte Dienst des
+    // eigenen Tages liegt ohnehin außerhalb — das Fenster endet am Stichtag.)
+    // Abgesichert durch dienstplan-bulk-absence-bwavg-ersetzung-api.spec.ts.
+    if (replaced.length > 0) {
+      await tx.delete(timeTrackingTable).where(inArray(timeTrackingTable.shiftId, replaced));
+      await tx.delete(shiftsTable).where(inArray(shiftsTable.id, replaced));
+    }
+
+    const prepared = resolved.map(({ times, isPartialAbsence }) => {
+      const targetHours = dailyTargetHoursFromContracts(contracts, times.startTime);
+      const teamContract = contractForDay(contracts, times.startTime, teamId);
+      const contractHours =
+        teamContract && teamContract.weeklyHours > 0 && teamContract.workdaysPerWeek > 0
+          ? Math.round((teamContract.weeklyHours / teamContract.workdaysPerWeek) * 100) / 100
+          : null;
+      const isFullDay = isPlainFullDay(times.startTime, times.endTime);
+      const durationHours =
+        Math.round(((times.endTime.getTime() - times.startTime.getTime()) / 3_600_000) * 100) /
+        100;
+      const absenceHours = (fallback: number) =>
+        !isFullDay
+          ? durationHours
+          : contractHours ?? fallback;
+      const plannedHours = absenceHours(targetHours);
+      const metrics = resolveShiftMetrics(
+        {
+          type,
+          startTime: times.startTime,
+          endTime: times.endTime,
+          plannedHours,
+          valuationPercent: 100,
+          fallbackNightBasis,
+        },
+        allowance.window,
+        allowance.state,
+      );
+      return {
+        ...times,
+        plannedHours,
+        vacationHours: absenceHours(ops.vacationHoursPerDay),
+        metrics,
+        isPartialAbsence,
+      };
+    });
+
+    const created =
+      prepared.length > 0
+        ? await tx
+            .insert(shiftsTable)
+            .values(
+              prepared.map((shift) => ({
+                userId,
+                teamId,
+                startTime: shift.startTime,
+                endTime: shift.endTime,
+                type,
+                shiftModelId: shiftModelId ?? null,
+                notes: notes ?? null,
+                planningStatus: "FIX" as const,
+                isVertretung: false,
+                pauseMinutes: 0,
+                isPartialAbsence: shift.isPartialAbsence,
+                ...shift.metrics,
+              })),
+            )
+            .returning()
+        : [];
+    if (created.length > 0) {
+      await tx.insert(timeTrackingTable).values(
+        created.map((shift, index) => ({
+          userId: shift.userId,
+          teamId: shift.teamId!,
+          shiftId: shift.id,
+          actualStart: shift.startTime,
+          actualEnd: shift.endTime,
+          actualHours: prepared[index]!.plannedHours,
+          status: "confirmed" as const,
+        })),
+      );
+    }
+
+    // Urlaubszähler EINMAL fortschreiben: Stunden je Tag auflösen, aber je
+    // aktivem Vertrag bündeln (ein Zeitraum kann einen Vertragswechsel
+    // überspannen — jeder Tag bucht auf SEINEN Vertrag, wie N Einzel-POSTs).
+    if (type === "vacation" && created.length > 0) {
+      const byContract = new Map<
+        number,
+        { contract: { id: number; vacationHoursUsed: number }; delta: number }
+      >();
+      for (const [index, shift] of created.entries()) {
+        const hours = prepared[index]!.vacationHours;
+        const contract = contractForDay(contracts, new Date(shift.startTime));
+        if (!contract) continue;
+        const entry = byContract.get(contract.id) ?? { contract, delta: 0 };
+        entry.delta += hours;
+        byContract.set(contract.id, entry);
+      }
+      for (const { contract, delta } of byContract.values()) {
+        await applyVacationDelta(contract, delta, tx);
+      }
+    }
+    return { created, replaced, skippedDates: skipped };
+  });
+}
+
 router.post("/shifts", requireAuth, async (req, res): Promise<void> => {
   const body = CreateShiftBody.safeParse(req.body);
   if (!body.success) {
@@ -952,6 +1320,17 @@ router.post("/shifts", requireAuth, async (req, res): Promise<void> => {
   if (!isPrivileged) {
     if (!isAbsenceType(body.data.type) || body.data.userId !== req.session.userId) {
       res.status(403).json({ error: "Keine Berechtigung" });
+      return;
+    }
+    // #887: reine Assistenzkräfte legen Urlaub/Krank NICHT mehr direkt an —
+    // die Selbsteintragung läuft ausschließlich über POST /absence-requests
+    // (Bestätigungspflicht durch einen Planer). Andere Abwesenheitsarten
+    // (freizeitausgleich, kind_krank, ...) bleiben von #887 unberührt.
+    if (body.data.type === "vacation" || body.data.type === "sick") {
+      res.status(403).json({
+        error: "Bitte über den Urlaubs-/Krankheitsantrag einreichen.",
+        code: "absence_requires_request",
+      });
       return;
     }
   }
@@ -1283,6 +1662,19 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
     res.status(403).json({ error: "Keine Berechtigung" });
     return;
   }
+  // #887: reine Assistenzkräfte legen Urlaub/Krank NICHT mehr direkt an —
+  // die Selbsteintragung läuft ausschließlich über POST /absence-requests
+  // (Bestätigungspflicht durch einen Planer). Dieser Endpunkt bleibt für
+  // Planer/Admins (fremde Person) UND für die interne Antrags-Bestätigung
+  // (die runBulkAbsenceCreation direkt aufruft, ohne über HTTP zu gehen)
+  // unverändert nutzbar.
+  if (!isPrivileged && (type === "vacation" || type === "sick")) {
+    res.status(403).json({
+      error: "Bitte über den Urlaubs-/Krankheitsantrag einreichen.",
+      code: "absence_requires_request",
+    });
+    return;
+  }
   const effectiveTeams = isAdmin ? undefined : teamleiterTeams;
 
   // teamId-Ableitung aus dem Schichtmodell (Mehr-Team-Assistenzkräfte, §3) —
@@ -1327,41 +1719,19 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
 
   // Kalendertage normalisieren und deduplizieren (ein Eintrag pro Tag,
   // aufsteigend). Ohne Dedupe würden doppelte Tage im selben Request den
-  // Duplikatschutz umgehen (die Vorprüfung sieht nur Bestandsdaten).
-  const dayMap = new Map<string, { startTime: Date; endTime: Date }>();
-  for (const d of body.data.days) {
-    // Jeder Eintrag muss genau einen UTC-Kalendertag umfassen.  Damit ist die
-    // Prüfung DST-neutral: ein Berliner „25-Stunden-Tag" (Winterzeit-Umstellung)
-    // wird mit T00:00:00Z–T23:59:59Z übermittelt und besteht den Test; ein
-    // Interval, das zwei UTC-Tage überspannt (z. B. Berliner Mitternacht →
-    // T22:00Z–T23:00Z nächster UTC-Tag, ebenfalls 25 h), wird abgelehnt.
-    const durationMs = d.endTime.getTime() - d.startTime.getTime();
-    if (durationMs <= 0) {
-      res.status(400).json({
-        error: "Ungültiger Tageseintrag: Ende muss nach dem Beginn liegen.",
-      });
+  // Duplikatschutz umgehen (die Vorprüfung sieht nur Bestandsdaten). Jeder
+  // Eintrag muss genau einen UTC-Kalendertag umfassen — DST-neutral (s.
+  // normalizeAbsenceDays).
+  let days: [string, { startTime: Date; endTime: Date }][];
+  try {
+    days = normalizeAbsenceDays(body.data.days);
+  } catch (err) {
+    if (err instanceof InvalidAbsenceDayError) {
+      res.status(400).json({ error: err.message });
       return;
     }
-    const startDay = d.startTime.toISOString().split("T")[0]!;
-    const endDay = d.endTime.toISOString().split("T")[0]!;
-    if (startDay !== endDay) {
-      res.status(400).json({
-        error:
-          "Ungültiger Tageseintrag: Start und Ende müssen auf demselben UTC-Kalendertag liegen.",
-      });
-      return;
-    }
-    const key = startDay;
-    if (!dayMap.has(key)) dayMap.set(key, { startTime: d.startTime, endTime: d.endTime });
+    throw err;
   }
-  const days = [...dayMap.entries()].sort(([a], [b]) => a.localeCompare(b));
-  const firstDay = days[0]![0];
-  const lastDay = days[days.length - 1]![0];
-  // Sargable Tagesgrenzen: halboffene Bereichsabfragen aktivieren den
-  // (user_id, start_time)-Index — DATE()-Aufrufe im Prädikat verhindern Indexnutzung.
-  const firstDayStart = new Date(`${firstDay}T00:00:00.000Z`);
-  const dayAfterLast = new Date(`${lastDay}T00:00:00.000Z`);
-  dayAfterLast.setUTCDate(dayAfterLast.getUTCDate() + 1);
 
   // Free-Limit (historyMonths) gegen den SPÄTESTEN Tag — ein Verstoß blockt
   // den gesamten Zeitraum (kein Teil-Zeitraum).
@@ -1370,300 +1740,24 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
     return;
   }
 
-  // Schichtmodell muss zum Ziel-Team gehören; Standardzeiten einmal laden.
-  let modelDefaults: { start: string; end: string } | null = null;
-  if (shiftModelId != null) {
-    if (!(await isShiftModelInTeam(shiftModelId, write.teamId))) {
-      res.status(403).json({ error: "Schichtmodell gehört nicht zu diesem Team" });
-      return;
-    }
-    const [model] = await db
-      .select({
-        defaultStartTime: shiftModelsTable.defaultStartTime,
-        defaultEndTime: shiftModelsTable.defaultEndTime,
-      })
-      .from(shiftModelsTable)
-      .where(eq(shiftModelsTable.id, shiftModelId));
-    if (model?.defaultStartTime && model?.defaultEndTime) {
-      modelDefaults = { start: model.defaultStartTime, end: model.defaultEndTime };
-    }
-  }
-  // Team-weite Schätzbasis für Nachtzuschlag bei ganz freien Ganztags-Tagen
-  // (kein ersetzter Dienst, kein gewähltes Schichtmodell) — einmal für den
-  // gesamten Zeitraum geladen, s. resolveShiftMetrics/firstActiveShiftModelDefaults.
-  const fallbackNightBasis = await firstActiveShiftModelDefaults(write.teamId);
-
-  // Duplikat-Prüfung UND Anlage laufen unter einem Advisory-Lock pro
-  // Zielperson race-sicher in EINER Transaktion: Zwei gleichzeitige identische
-  // Aufträge (z. B. Doppelklick in zwei Fenstern) würden sonst beide "Tag ist
-  // frei" sehen und die Abwesenheit doppelt buchen — inkl. doppeltem
-  // Urlaubsabzug. Der zweite Auftrag wartet am Lock und überspringt die Tage
-  // dann als Duplikate (Frontend-Verhalten der bisherigen Schleife).
-  let txResult: {
-    created: { id: number; startTime: Date }[];
-    replaced: number[];
-    skippedDates: string[];
-  };
+  let txResult: BulkAbsenceCreationResult;
   try {
-    txResult = await db.transaction(async (tx) => {
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${"shifts-bulk:user:" + userId}))`,
-      );
-
-      // Zeitraumdaten NACH dem Lock laden: parallele identische Aufträge sehen
-      // damit zuverlässig die Einträge des zuerst abgeschlossenen Auftrags.
-      // Ein Request mit vielen Tagen bleibt bei wenigen Reads statt einer
-      // sequenziellen Abfragekette pro Kalendertag.
-      //
-      // Die Verträge gehören ausdrücklich dazu: sie speisen den Vertrags-Guard,
-      // die Tages-Soll-Stunden UND die Urlaubskonto-Buchung. Vor dem Lock
-      // gelesen, könnte eine parallele Vertragsänderung dazwischenliegen und der
-      // Auftrag mit veralteten Vertragsgrenzen anlegen bzw. auf einen nicht mehr
-      // passenden Vertrag buchen (Lohn-/Urlaubsdaten).
-      const [existingAbsences, plannedWork, ops, allowance, contracts] = await Promise.all([
-        tx
-          .select({ startTime: shiftsTable.startTime })
-          .from(shiftsTable)
-          .where(
-            and(
-              eq(shiftsTable.userId, userId),
-              eq(shiftsTable.type, type as "vacation" | "sick"),
-              // Sargable Bereichsprädikat aktiviert den (user_id, start_time)-Index.
-              gte(shiftsTable.startTime, firstDayStart),
-              lt(shiftsTable.startTime, dayAfterLast),
-            ),
-          ),
-        tx
-          .select({
-            id: shiftsTable.id,
-            startTime: shiftsTable.startTime,
-            endTime: shiftsTable.endTime,
-          })
-          .from(shiftsTable)
-          .where(
-            and(
-              eq(shiftsTable.userId, userId),
-              eq(shiftsTable.teamId, write.teamId),
-              notInArray(shiftsTable.type, [
-                "vacation",
-                "sick",
-                "freizeitausgleich",
-                "team",
-                "kind_krank",
-                "freistellung",
-                "abgesagt_ag",
-                "abgesagt_an",
-                "urlaubsabgeltung",
-              ]),
-              // Sargable Bereichsprädikat aktiviert den (user_id, start_time)-Index.
-              gte(shiftsTable.startTime, firstDayStart),
-              lt(shiftsTable.startTime, dayAfterLast),
-            ),
-          ),
-        resolveAllowanceOps(write.teamId, tx),
-        allowanceContext(write.teamId, tx),
-        tx
-          .select({
-            id: contractsTable.id,
-            teamId: contractsTable.teamId,
-            startDate: contractsTable.startDate,
-            endDate: contractsTable.endDate,
-            weeklyHours: contractsTable.weeklyHours,
-            workdaysPerWeek: contractsTable.workdaysPerWeek,
-            vacationHoursUsed: contractsTable.vacationHoursUsed,
-          })
-          .from(contractsTable)
-          .where(eq(contractsTable.userId, userId)),
-      ]);
-
-      // URLAUB außerhalb des Vertragszeitraums: pro Tag prüfen (gleiche Semantik
-      // wie N Einzel-POSTs, deckt auch Zeiträume über einen Vertragswechsel ab).
-      // Läuft im Lock gegen genau die Vertragsdaten, die anschließend gebucht
-      // werden; ein Verstoß rollt die Transaktion zurück (ganz oder gar nicht).
-      if (type === "vacation") {
-        for (const [, t] of days) {
-          const msg = vacationOutsideContractErrorFromContracts(
-            contracts,
-            write.teamId,
-            t.startTime,
-            t.endTime,
-          );
-          if (msg) throw new VacationOutsideContractError(msg);
-        }
-      }
-
-      const existingDates = new Set(existingAbsences.map((shift) => dayKey(shift.startTime)));
-      const plannedByDay = new Map<string, typeof plannedWork>();
-      for (const shift of plannedWork) {
-        const key = dayKey(shift.startTime);
-        const planned = plannedByDay.get(key) ?? [];
-        planned.push(shift);
-        plannedByDay.set(key, planned);
-      }
-      for (const planned of plannedByDay.values()) {
-        planned.sort(
-          (a, b) =>
-            b.endTime.getTime() -
-            b.startTime.getTime() -
-            (a.endTime.getTime() - a.startTime.getTime()),
-        );
-      }
-
-      const skipped = days.filter(([key]) => existingDates.has(key)).map(([key]) => key);
-      const toCreate = days.filter(([key]) => !existingDates.has(key));
-
-      // Zeiten je Tag auflösen wie beim Einzel-POST (Lohnausfallprinzip):
-      // geplanter Dienst am Tag → Zeiten erben; sonst optionale Modell-
-      // Standardzeiten; sonst ganztägig. Ersetzt werden NUR Dienste an Tagen,
-      // die auch wirklich angelegt werden (übersprungene Tage bleiben unberührt).
-      //
-      // Halbtägiger Urlaub (#862): ein Tageseintrag mit echten (nicht-
-      // ganztägigen) Uhrzeiten gilt als bewusst gewählter Zeitraum — die
-      // Uhrzeiten kommen vom Nutzer und werden NICHT durch einen geplanten
-      // Dienst überschrieben (kein Zeiten-Erben). Ersetzt wird nur, was sich
-      // ECHT zeitlich überschneidet; ein Dienst außerhalb des Zeitfensters
-      // bleibt unangetastet (anders als beim ganztägigen Fall, der den ganzen
-      // Kalendertag beansprucht).
-      const resolved = toCreate.map(([key, day]) => {
-        const candidates = plannedByDay.get(key) ?? [];
-        // Nutzer-Absicht (isPartialAbsence) aus den ROHEN Tages-Uhrzeiten,
-        // bevor eine etwaige Erbschaft sie überschreibt (identisch zum
-        // Einzel-POST) — sonst sähe ein ganztägiger Eintrag, der die
-        // Uhrzeiten eines ersetzten Dienstes erbt, wie ein bewusst gewählter
-        // Teil-Tag aus.
-        const isPartial = !isPlainFullDay(day.startTime, day.endTime);
-        if (isPartial) {
-          const overlapping = candidates.filter(
-            (s) =>
-              s.startTime.getTime() < day.endTime.getTime() &&
-              s.endTime.getTime() > day.startTime.getTime(),
-          );
-          return { times: day, planned: overlapping, isPartialAbsence: true };
-        }
-        const inherited = candidates[0];
-        const times = inherited
-          ? { startTime: inherited.startTime, endTime: inherited.endTime }
-          : modelDefaults
-            ? shiftModelTimesForDay(day.startTime, modelDefaults.start, modelDefaults.end)
-            : day;
-        return { times, planned: candidates, isPartialAbsence: false };
-      });
-
-      const replaced = resolved.flatMap(({ planned }) => planned.map((shift) => shift.id));
-
-      // REIHENFOLGE: Löschen der ersetzten Dienste läuft VOR der Berechnung —
-      // exakt wie der Einzelpfad, der deleteReplacedWorkShift ebenfalls vor
-      // storeShiftMetrics aufruft. Relevant wird das im Sammelauftrag, weil der
-      // ersetzte Dienst eines FRÜHEREN Tages im 13-Wochen-Fenster eines
-      // SPÄTEREN Tages liegt: Bei N Einzel-Requests ist er dann bereits
-      // gelöscht. Würde hier zuerst gerechnet, zählte er noch mit und der
-      // Sammelweg käme auf einen anderen Durchschnitt. (Der ersetzte Dienst des
-      // eigenen Tages liegt ohnehin außerhalb — das Fenster endet am Stichtag.)
-      // Abgesichert durch dienstplan-bulk-absence-bwavg-ersetzung-api.spec.ts.
-      if (replaced.length > 0) {
-        await tx.delete(timeTrackingTable).where(inArray(timeTrackingTable.shiftId, replaced));
-        await tx.delete(shiftsTable).where(inArray(shiftsTable.id, replaced));
-      }
-
-      const prepared = resolved.map(({ times, isPartialAbsence }) => {
-        const targetHours = dailyTargetHoursFromContracts(contracts, times.startTime);
-        const teamContract = contractForDay(contracts, times.startTime, write.teamId);
-        const contractHours =
-          teamContract && teamContract.weeklyHours > 0 && teamContract.workdaysPerWeek > 0
-            ? Math.round((teamContract.weeklyHours / teamContract.workdaysPerWeek) * 100) / 100
-            : null;
-        const isFullDay = isPlainFullDay(times.startTime, times.endTime);
-        const durationHours =
-          Math.round(((times.endTime.getTime() - times.startTime.getTime()) / 3_600_000) * 100) /
-          100;
-        const absenceHours = (fallback: number) =>
-          !isFullDay
-            ? durationHours
-            : contractHours ?? fallback;
-        const plannedHours = absenceHours(targetHours);
-        const metrics = resolveShiftMetrics(
-          {
-            type,
-            startTime: times.startTime,
-            endTime: times.endTime,
-            plannedHours,
-            valuationPercent: 100,
-            fallbackNightBasis,
-          },
-          allowance.window,
-          allowance.state,
-        );
-        return {
-          ...times,
-          plannedHours,
-          vacationHours: absenceHours(ops.vacationHoursPerDay),
-          metrics,
-          isPartialAbsence,
-        };
-      });
-
-      const created =
-        prepared.length > 0
-          ? await tx
-              .insert(shiftsTable)
-              .values(
-                prepared.map((shift) => ({
-                  userId,
-                  teamId: write.teamId,
-                  startTime: shift.startTime,
-                  endTime: shift.endTime,
-                  type,
-                  shiftModelId: shiftModelId ?? null,
-                  notes: body.data.notes ?? null,
-                  planningStatus: "FIX" as const,
-                  isVertretung: false,
-                  pauseMinutes: 0,
-                  isPartialAbsence: shift.isPartialAbsence,
-                  ...shift.metrics,
-                })),
-              )
-              .returning()
-          : [];
-      if (created.length > 0) {
-        await tx.insert(timeTrackingTable).values(
-          created.map((shift, index) => ({
-            userId: shift.userId,
-            teamId: shift.teamId!,
-            shiftId: shift.id,
-            actualStart: shift.startTime,
-            actualEnd: shift.endTime,
-            actualHours: prepared[index]!.plannedHours,
-            status: "confirmed" as const,
-          })),
-        );
-      }
-
-      // Urlaubszähler EINMAL fortschreiben: Stunden je Tag auflösen, aber je
-      // aktivem Vertrag bündeln (ein Zeitraum kann einen Vertragswechsel
-      // überspannen — jeder Tag bucht auf SEINEN Vertrag, wie N Einzel-POSTs).
-      if (type === "vacation" && created.length > 0) {
-        const byContract = new Map<
-          number,
-          { contract: { id: number; vacationHoursUsed: number }; delta: number }
-        >();
-        for (const [index, shift] of created.entries()) {
-          const hours = prepared[index]!.vacationHours;
-          const contract = contractForDay(contracts, new Date(shift.startTime));
-          if (!contract) continue;
-          const entry = byContract.get(contract.id) ?? { contract, delta: 0 };
-          entry.delta += hours;
-          byContract.set(contract.id, entry);
-        }
-        for (const { contract, delta } of byContract.values()) {
-          await applyVacationDelta(contract, delta, tx);
-        }
-      }
-      return { created, replaced, skippedDates: skipped };
+    txResult = await runBulkAbsenceCreation({
+      userId,
+      teamId: write.teamId,
+      type,
+      days,
+      shiftModelId,
+      notes: body.data.notes,
     });
   } catch (err) {
     // Vertrags-Guard aus der gesperrten Transaktion: nichts wurde geschrieben.
     if (err instanceof VacationOutsideContractError) {
       res.status(400).json({ error: err.message, code: "vacation_outside_contract" });
+      return;
+    }
+    if (err instanceof InvalidShiftModelError) {
+      res.status(403).json({ error: err.message });
       return;
     }
     throw err;
@@ -2558,6 +2652,19 @@ router.delete("/shifts/:id", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
+  // #887: vergangene Abwesenheiten sind unveränderlich — unabhängig davon, wer
+  // den Löschversuch unternimmt (auch Admin/Planer). Motivation: bereits
+  // vergangene Urlaubs-/Krankheitstage sind abgerechnet (Zeiterfassung,
+  // Urlaubskonto); ein nachträgliches Löschen würde diese Werte rückwirkend
+  // verfälschen.
+  if (isAbsenceType(shift.type) && dayKey(shift.startTime) < dayKey(new Date())) {
+    res.status(400).json({
+      error: "Vergangene Abwesenheiten können nicht mehr gelöscht werden.",
+      code: "absence_delete_past_blocked",
+    });
+    return;
+  }
+
   // Alle Schreiboperationen transaktional: Zeiterfassung-Entfernung,
   // Urlaubs-Rückbuchung und Schicht-Löschung atomar. Das DELETE mit
   // .returning() erkennt einen Race (parallele Löschung zwischen
@@ -2637,6 +2744,20 @@ router.post("/shifts/bulk-delete", requireAuth, async (req, res): Promise<void> 
       res.status(404).json({ error: "Not found" });
       return;
     }
+  }
+
+  // #887: vergangene Abwesenheiten sind unveränderlich (s. Einzel-DELETE) —
+  // ganz oder gar nicht: ein einziger vergangener Eintrag blockt den gesamten
+  // Sammel-Löschauftrag.
+  const pastAbsence = shifts.find(
+    (s) => isAbsenceType(s.type) && dayKey(s.startTime) < dayKey(new Date()),
+  );
+  if (pastAbsence) {
+    res.status(400).json({
+      error: "Vergangene Abwesenheiten können nicht mehr gelöscht werden.",
+      code: "absence_delete_past_blocked",
+    });
+    return;
   }
 
   // Urlaubs-Rückbuchung vorbereiten: Contracts und Stunden für alle

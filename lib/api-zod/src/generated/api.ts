@@ -506,6 +506,104 @@ export const BulkCreateAbsenceBody = zod.object({
 
 
 /**
+ * Reine Assistenzkräfte tragen Urlaub/Krankheit seit #887 nur noch als Antrag ein — die Schicht(en) werden erst bei Bestätigung eines Planers angelegt (kein Kalender-/Urlaubskonto-Effekt vorher). Planer/Admins, die eine Abwesenheit für JEMAND ANDEREN eintragen, nutzen weiterhin POST /shifts bzw. /shifts/bulk-absence direkt (sofortige Wirkung, unverändert) — dieser Endpunkt ist ausschließlich für die Selbsteintragung.
+ * @summary Urlaubs-/Krankheitsantrag stellen (Selbstservice)
+ */
+export const createAbsenceRequestBodyDaysMax = 92;
+
+
+
+export const CreateAbsenceRequestBody = zod.object({
+  "type": zod.enum(['vacation', 'sick']).describe('Antragsarten sind bewusst auf Urlaub\/Krank beschränkt (§887).'),
+  "teamId": zod.number().optional().describe('Optionaler Team-Kontext für Mehrteam-Assistenzkräfte; muss ein Mitglieds-Team der Assistenzkraft sein.'),
+  "days": zod.array(zod.object({
+  "startTime": zod.coerce.date(),
+  "endTime": zod.coerce.date()
+})).min(1).max(createAbsenceRequestBodyDaysMax).describe('Ein Eintrag pro Kalendertag (Start\/Ende desselben Tages) — identisches Format zu BulkAbsenceInput.days.')
+})
+
+
+/**
+ * Assistenzkräfte sehen ausschließlich ihre eigenen Anträge. Admins, Teamleiter und Koordinatoren mit Planungsrecht sehen alle Anträge ihrer erlaubten Teams (optional gefiltert über status/teamId).
+ * @summary Anträge auflisten
+ */
+export const ListAbsenceRequestsQueryParams = zod.object({
+  "status": zod.enum(['PENDING', 'APPROVED', 'REJECTED']).optional(),
+  "teamId": zod.coerce.number().optional()
+})
+
+export const ListAbsenceRequestsResponseItem = zod.object({
+  "id": zod.number(),
+  "teamId": zod.number(),
+  "userId": zod.number(),
+  "userName": zod.string().nullable(),
+  "type": zod.enum(['vacation', 'sick']),
+  "status": zod.enum(['PENDING', 'APPROVED', 'REJECTED']),
+  "days": zod.array(zod.object({
+  "startTime": zod.coerce.date(),
+  "endTime": zod.coerce.date()
+})),
+  "createdAt": zod.coerce.date(),
+  "resolvedAt": zod.coerce.date().nullable(),
+  "resolvedByUserId": zod.number().nullable(),
+  "resultShiftIds": zod.array(zod.number()).nullable()
+})
+export const ListAbsenceRequestsResponse = zod.array(ListAbsenceRequestsResponseItem)
+
+
+/**
+ * Legt die beantragten Tage über dieselbe Logik wie POST /shifts/bulk-absence an — Überschneidungs-, Duplikat- und Vertragszeitraum-Prüfung laufen erneut gegen die AKTUELLEN Daten (nicht den Stand zum Zeitpunkt der Antragstellung).
+ * @summary Antrag bestätigen
+ */
+export const ApproveAbsenceRequestParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ApproveAbsenceRequestResponse = zod.object({
+  "id": zod.number(),
+  "teamId": zod.number(),
+  "userId": zod.number(),
+  "userName": zod.string().nullable(),
+  "type": zod.enum(['vacation', 'sick']),
+  "status": zod.enum(['PENDING', 'APPROVED', 'REJECTED']),
+  "days": zod.array(zod.object({
+  "startTime": zod.coerce.date(),
+  "endTime": zod.coerce.date()
+})),
+  "createdAt": zod.coerce.date(),
+  "resolvedAt": zod.coerce.date().nullable(),
+  "resolvedByUserId": zod.number().nullable(),
+  "resultShiftIds": zod.array(zod.number()).nullable()
+})
+
+
+/**
+ * Beendet den Antrag ohne Seiteneffekte (keine Schicht wird angelegt).
+ * @summary Antrag ablehnen
+ */
+export const RejectAbsenceRequestParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RejectAbsenceRequestResponse = zod.object({
+  "id": zod.number(),
+  "teamId": zod.number(),
+  "userId": zod.number(),
+  "userName": zod.string().nullable(),
+  "type": zod.enum(['vacation', 'sick']),
+  "status": zod.enum(['PENDING', 'APPROVED', 'REJECTED']),
+  "days": zod.array(zod.object({
+  "startTime": zod.coerce.date(),
+  "endTime": zod.coerce.date()
+})),
+  "createdAt": zod.coerce.date(),
+  "resolvedAt": zod.coerce.date().nullable(),
+  "resolvedByUserId": zod.number().nullable(),
+  "resultShiftIds": zod.array(zod.number()).nullable()
+})
+
+
+/**
  * Legt dieselbe Schicht für mehrere Kalendertage transaktional in EINEM Request an (ganz oder gar nicht). Nur für Arbeitsdienste und Team-Einträge — Abwesenheiten laufen über /shifts/bulk-absence. Es gelten dieselben Regeln wie beim Einzel-Anlegen (Team-Scope, Vorausplanungs-Limit, Schichtmodell-Team-Bindung, Aushilfe-Einsatz). Überschneidungen mit bestehenden Diensten werden VOR dem Anlegen für alle Tage geprüft: Gibt es welche und ist force nicht gesetzt, wird NICHTS angelegt und die betroffenen Tage werden gemeldet (409, code "shift_overlap", Feld conflictDates). Team-Einträge: pro Tag und Team nur einer; Duplikat-Tage melden 409 mit code "team_meeting_duplicate" (force umgeht das nicht).
  * @summary Mehrere Dienste als Sammelauftrag anlegen
  */

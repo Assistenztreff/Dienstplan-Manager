@@ -21,12 +21,29 @@ import { TeamTestHarness } from "./helpers/teams";
  * in Team B beginnt SPÄTER und gewinnt damit die (ungescopte) Auswahl.
  */
 
-const YEAR = new Date().getFullYear();
+// Anker statt Fixjahr: Vertrag A beginnt auf "heute + 1 Monat, Tag 1"; alle
+// weiteren Daten sind Monats-Offsets ab diesem Anker (nicht ein fixer
+// Kalendermonat). Das haelt Reihenfolge (A vor B vor den Abwesenheitstagen)
+// UND Gesamtzeitraum dauerhaft innerhalb des 12-Monats-Limits, unabhaengig
+// vom realen Laufmonat (s. .agents/memory/e2e-absence-date-anchor-pattern.md).
+const ANCHOR = new Date();
+ANCHOR.setUTCMonth(ANCHOR.getUTCMonth() + 1, 1);
+ANCHOR.setUTCHours(0, 0, 0, 0);
+
+function monthOffset(monthsAfterAnchor: number, day: number): string {
+  const d = new Date(ANCHOR);
+  d.setUTCMonth(d.getUTCMonth() + monthsAfterAnchor, day);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
 // Der frühere Vertrag liegt in Team A, der jüngere in Team B — die Tage der
 // Abwesenheit liegen im Überschneidungszeitraum, beide sind also aktiv.
-const CONTRACT_A_START = `${YEAR}-01-01`;
-const CONTRACT_B_START = `${YEAR}-03-01`;
-const DAYS = [`${YEAR}-06-02`, `${YEAR}-06-03`, `${YEAR}-06-04`];
+const CONTRACT_A_START = monthOffset(0, 1);
+const CONTRACT_B_START = monthOffset(2, 1);
+const DAYS = [monthOffset(5, 2), monthOffset(5, 3), monthOffset(5, 4)];
 
 type Shift = {
   id: number;

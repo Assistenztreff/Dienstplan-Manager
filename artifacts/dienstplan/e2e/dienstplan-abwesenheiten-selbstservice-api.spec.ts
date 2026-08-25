@@ -15,12 +15,14 @@ import {
 
 /**
  * API-Absicherung des Abwesenheiten-Selbstservice für Assistenzkräfte
- * (Menü-Neustrukturierung §3):
+ * (Menü-Neustrukturierung §3, seit #887 mit Bestätigungspflicht):
  *
- * Reine Assistenzkräfte (ohne Teamleiter-Rechte) dürfen über POST /api/shifts
- * AUSSCHLIESSLICH eigene Abwesenheiten (vacation/sick) anlegen und über
- * DELETE /api/shifts/:id AUSSCHLIESSLICH eigene Abwesenheiten entfernen.
- * Alles andere bleibt 403 (POST) bzw. 404 (DELETE, kein ID-Orakel).
+ * Reine Assistenzkräfte (ohne Teamleiter-Rechte) dürfen Urlaub/Krank NICHT
+ * mehr direkt über POST /api/shifts anlegen (403 absence_requires_request) —
+ * die Selbsteintragung läuft ausschließlich über POST /api/absence-requests
+ * (PENDING, erst nach Planer-Bestätigung wirksam). Für alle anderen Personen
+ * bzw. Schichtarten bleibt POST /api/shifts unverändert 403. DELETE bleibt
+ * AUSSCHLIESSLICH für eigene Abwesenheiten erlaubt, 404 statt Orakel sonst.
  */
 
 test.describe.configure({ mode: "serial" });
@@ -34,6 +36,24 @@ let otherAssistantId: number;
 function dayTimes(day: number): { startTime: string; endTime: string } {
   const base = new Date();
   const target = new Date(base.getFullYear(), base.getMonth() + 1, day);
+  const key = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, "0")}-${String(
+    target.getDate(),
+  ).padStart(2, "0")}`;
+  return {
+    startTime: new Date(`${key}T00:00:00`).toISOString(),
+    endTime: new Date(`${key}T23:59:59`).toISOString(),
+  };
+}
+
+/** Antrags-Tag im selben Format wie AbsenceRequestInput.days. */
+function requestDay(day: number): { startTime: string; endTime: string } {
+  return dayTimes(day);
+}
+
+/** Ganztägiger Tag `monthsAhead` Monate in der Zukunft (für das historyMonths-Limit). */
+function farFutureDay(monthsAhead: number, day: number): { startTime: string; endTime: string } {
+  const base = new Date();
+  const target = new Date(base.getFullYear(), base.getMonth() + monthsAhead, day);
   const key = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, "0")}-${String(
     target.getDate(),
   ).padStart(2, "0")}`;
@@ -83,22 +103,52 @@ test.afterAll(async () => {
   }
 });
 
-test("Assistenzkraft kann eigenen Urlaub anlegen (201) und wieder löschen (204)", async () => {
-  const res = await assistantCtx.post("/api/shifts", {
-    data: { userId: assistantId, type: "vacation", ...dayTimes(5) },
-  });
-  expect(res.status(), `Eigener Urlaub sollte 201 liefern (${await res.text()})`).toBe(201);
-  const shiftId = ((await res.json()) as { id: number }).id;
-
-  const del = await assistantCtx.delete(`/api/shifts/${shiftId}`);
-  expect(del.status(), "Eigene Abwesenheit muss löschbar sein").toBe(204);
+test("Direkter POST /api/shifts für eigenen Urlaub/Krank bleibt 403 (absence_requires_request, #887)", async () => {
+  for (const type of ["vacation", "sick"] as const) {
+    const res = await assistantCtx.post("/api/shifts", {
+      data: { userId: assistantId, type, ...dayTimes(5) },
+    });
+    expect(res.status(), `${type}: direkte Selbsteintragung muss 403 bleiben`).toBe(403);
+    const json = (await res.json()) as { code?: string };
+    expect(json.code, `${type}: erwarteter Fehlercode`).toBe("absence_requires_request");
+  }
 });
 
-test("Assistenzkraft kann eigene Krankmeldung anlegen (201)", async () => {
-  const res = await assistantCtx.post("/api/shifts", {
-    data: { userId: assistantId, type: "sick", ...dayTimes(6) },
+test("Assistenzkraft kann Urlaub als Antrag stellen; nach Bestätigung entsteht die Schicht (löschbar)", async () => {
+  const reqRes = await assistantCtx.post("/api/absence-requests", {
+    data: { type: "vacation", days: [requestDay(5)] },
   });
-  expect(res.status(), `Eigene Krankmeldung sollte 201 liefern (${await res.text()})`).toBe(201);
+  expect(reqRes.status(), `Antrag sollte 201 liefern (${await reqRes.text()})`).toBe(201);
+  const created = (await reqRes.json()) as { id: number; status: string };
+  expect(created.status).toBe("PENDING");
+
+  // Vor Bestätigung existiert keine Schicht.
+  const beforeList = await acc.ctx.get("/api/shifts?type=vacation&all=true");
+  const beforeRows = (await beforeList.json()) as Array<{ userId: number }>;
+  expect(
+    beforeRows.some((r) => r.userId === assistantId),
+    "Vor Bestätigung darf keine Schicht existieren",
+  ).toBe(false);
+
+  const approveRes = await acc.ctx.post(`/api/absence-requests/${created.id}/approve`);
+  expect(approveRes.status(), `Bestätigung sollte 200 liefern (${await approveRes.text()})`).toBe(200);
+  const approved = (await approveRes.json()) as { status: string; resultShiftIds: number[] };
+  expect(approved.status).toBe("APPROVED");
+  expect(approved.resultShiftIds.length).toBeGreaterThan(0);
+
+  const shiftId = approved.resultShiftIds[0]!;
+  const del = await assistantCtx.delete(`/api/shifts/${shiftId}`);
+  expect(del.status(), "Eigene (bestätigte) Abwesenheit muss löschbar sein").toBe(204);
+});
+
+test("Assistenzkraft kann eigene Krankmeldung als Antrag stellen (201, PENDING)", async () => {
+  const res = await assistantCtx.post("/api/absence-requests", {
+    data: { type: "sick", days: [requestDay(6)] },
+  });
+  expect(res.status(), `Eigener Antrag sollte 201 liefern (${await res.text()})`).toBe(201);
+  const json = (await res.json()) as { status: string; userId: number };
+  expect(json.status).toBe("PENDING");
+  expect(json.userId).toBe(assistantId);
 });
 
 test("Abwesenheit für eine ANDERE Person bleibt 403", async () => {
@@ -147,7 +197,7 @@ test("DELETE auf eigenen REGULÄREN Dienst bleibt 404", async () => {
   expect(del.status(), "Eigener Dienst darf NICHT löschbar sein (404)").toBe(404);
 });
 
-test("Mehr-Team-Assistenzkraft: Schichtmodell lenkt die Abwesenheit ins richtige Team", async () => {
+test("Mehr-Team-Assistenzkraft: Antrag mit expliziter teamId landet nach Bestätigung im richtigen Team", async () => {
   // Zweites Konto als Dienstleister registrieren (nur so ist die Standard-
   // Team-ID per API auslesbar, Memory e2e-team-id-discovery) und die
   // Assistenzkraft dort als ZWEITE Mitgliedschaft eintragen (DB-seitig, da
@@ -160,27 +210,25 @@ test("Mehr-Team-Assistenzkraft: Schichtmodell lenkt die Abwesenheit ins richtige
     expect(teamB, "Konto B braucht ein Standard-Team").toBeTruthy();
     await addTeamMemberViaDb(teamB.id, assistantId);
 
-    // Schichtmodell aus Team B holen (die 5 geseedeten Standard-Dienste).
-    const modelsRes = await accB.ctx.get("/api/shift-models");
-    expect(modelsRes.ok()).toBe(true);
-    const modelB = ((await modelsRes.json()) as Array<{ id: number }>)[0];
-    expect(modelB, "Team B braucht ein Schichtmodell").toBeTruthy();
-
-    // Abwesenheit OHNE teamId, aber mit Team-B-Modell → muss in Team B landen
-    // (nicht im ersten Mitglieds-Team A).
-    const res = await assistantCtx.post("/api/shifts", {
-      data: {
-        userId: assistantId,
-        type: "vacation",
-        shiftModelId: modelB.id,
-        ...dayTimes(15),
-      },
+    // Antrag MIT expliziter teamId (Team B) statt shiftModelId (die Antrags-
+    // API kennt kein Schichtmodell mehr, s. CreateAbsenceRequestBody #887).
+    const reqRes = await assistantCtx.post("/api/absence-requests", {
+      data: { type: "vacation", teamId: teamB.id, days: [requestDay(15)] },
     });
-    expect(res.status(), `Anlage sollte 201 liefern (${await res.text()})`).toBe(201);
-    const shiftId = ((await res.json()) as { id: number }).id;
+    expect(reqRes.status(), `Antrag sollte 201 liefern (${await reqRes.text()})`).toBe(201);
+    const created = (await reqRes.json()) as { id: number; teamId: number };
+    expect(created.teamId).toBe(teamB.id);
+
+    // Team-B-Admin bestätigt (Planer ihres eigenen Teams).
+    const approveRes = await accB.ctx.post(`/api/absence-requests/${created.id}/approve`);
+    expect(approveRes.status(), `Bestätigung sollte 200 liefern (${await approveRes.text()})`).toBe(
+      200,
+    );
+    const approved = (await approveRes.json()) as { resultShiftIds: number[] };
+    const shiftId = approved.resultShiftIds[0]!;
 
     // Kontrolle über beide Admin-Sichten: B sieht den Eintrag, A nicht.
-    // all=true, da dayTimes() bewusst in den Folgemonat plant.
+    // all=true, da requestDay() bewusst in den Folgemonat plant.
     const listB = await accB.ctx.get("/api/shifts?type=vacation&all=true");
     const rowsB = (await listB.json()) as Array<{ id: number }>;
     expect(rowsB.some((r) => r.id === shiftId), "Eintrag muss in Team B liegen").toBe(true);
@@ -197,17 +245,103 @@ test("Mehr-Team-Assistenzkraft: Schichtmodell lenkt die Abwesenheit ins richtige
 });
 
 test("GET /api/shifts bleibt für Assistenzkräfte auf die eigene Person gescopt", async () => {
-  // Eigenes Fixture: Der Urlaub aus Test 1 wurde dort wieder gelöscht.
-  const created = await assistantCtx.post("/api/shifts", {
+  // Fixture über den Admin anlegen (Selbsteintragung ist seit #887 kein
+  // direkter POST /api/shifts mehr, s. o.) — für den GET-Scoping-Test ist nur
+  // relevant, dass eine eigene Zeile existiert.
+  const created = await acc.ctx.post("/api/shifts", {
     data: { userId: assistantId, type: "vacation", ...dayTimes(11) },
   });
-  expect(created.status(), `Eigener Urlaub sollte 201 liefern (${await created.text()})`).toBe(201);
+  expect(created.status(), `Admin-Anlage sollte 201 liefern (${await created.text()})`).toBe(201);
 
-  const list = await assistantCtx.get("/api/shifts?type=vacation");
+  const list = await assistantCtx.get("/api/shifts?type=vacation&all=true");
   expect(list.ok()).toBe(true);
   const rows = (await list.json()) as Array<{ userId: number }>;
   expect(rows.length, "Eigene Urlaube müssen sichtbar sein").toBeGreaterThan(0);
   for (const row of rows) {
     expect(row.userId, "Nur eigene Einträge dürfen sichtbar sein").toBe(assistantId);
+  }
+});
+
+test("Bestätigung eines Antrags respektiert weiterhin das historyMonths-Vorausplanungslimit (kein Umweg über Anträge)", async () => {
+  // Ohne diesen Guard könnte eine Assistenzkraft beliebig weit in der
+  // Zukunft liegende Tage beantragen und ein Planer sie per Bestätigung
+  // anlegen lassen — obwohl POST /shifts/bulk-absence denselben Zeitraum
+  // direkt mit 403 plan_limit_reached ablehnen würde. Das Konto ist zu
+  // diesem Zeitpunkt (letzter Test vor afterAll) auf Free zurückgestuft,
+  // damit historyMonths=1 (statt Premium=12) greift.
+  await setAccountPlan(acc.email, "free");
+
+  const reqRes = await assistantCtx.post("/api/absence-requests", {
+    data: { type: "vacation", days: [farFutureDay(3, 10)] },
+  });
+  expect(reqRes.status(), `Antrag sollte 201 liefern (${await reqRes.text()})`).toBe(201);
+  const created = (await reqRes.json()) as { id: number };
+
+  const approveRes = await acc.ctx.post(`/api/absence-requests/${created.id}/approve`);
+  expect(approveRes.status(), "Bestätigung muss am Free-Limit scheitern (403)").toBe(403);
+  const body = (await approveRes.json()) as { code?: string; limit?: string };
+  expect(body.code).toBe("plan_limit_reached");
+  expect(body.limit).toBe("historyMonths");
+
+  // Der Antrag bleibt PENDING (kein Teilerfolg) und ist über GET weiterhin
+  // als solcher sichtbar — die Ablehnung darf ihn nicht stillschweigend
+  // verändern.
+  const listRes = await acc.ctx.get(`/api/absence-requests?status=PENDING`);
+  const rows = (await listRes.json()) as Array<{ id: number; status: string }>;
+  expect(rows.some((r) => r.id === created.id && r.status === "PENDING")).toBe(true);
+});
+
+test("Gleichzeitiges Bestätigen und Ablehnen desselben Antrags ergibt GENAU eine Entscheidung (Race, Code-Review #887)", async () => {
+  // Zurück auf Premium, damit das historyMonths-Limit aus dem vorigen Test
+  // hier nicht dazwischenfunkt.
+  await setAccountPlan(acc.email, "premium");
+
+  const reqRes = await assistantCtx.post("/api/absence-requests", {
+    data: { type: "vacation", days: [requestDay(20)] },
+  });
+  expect(reqRes.status(), `Antrag sollte 201 liefern (${await reqRes.text()})`).toBe(201);
+  const created = (await reqRes.json()) as { id: number };
+
+  // Zwei sich widersprechende Entscheidungen gleichzeitig auslösen: ohne den
+  // Advisory-Lock aus der Race-Fix könnten beide den Antrag als PENDING lesen
+  // und sich gegenseitig überschreiben (Reject gewinnt den Datensatz, Approve
+  // legt aber trotzdem Schichten an — oder umgekehrt).
+  const [approveRes, rejectRes] = await Promise.all([
+    acc.ctx.post(`/api/absence-requests/${created.id}/approve`),
+    acc.ctx.post(`/api/absence-requests/${created.id}/reject`),
+  ]);
+  const statuses = [approveRes.status(), rejectRes.status()].sort();
+  expect(statuses, "genau einer der beiden Aufrufe darf durchgehen (200), der andere 409").toEqual([
+    200, 409,
+  ]);
+
+  const finalRes = await acc.ctx.get(`/api/absence-requests?status=PENDING`);
+  const pending = (await finalRes.json()) as Array<{ id: number }>;
+  expect(pending.some((r) => r.id === created.id), "Antrag darf nicht PENDING bleiben").toBe(false);
+
+  if (approveRes.status() === 200) {
+    // Approve hat gewonnen: es müssen tatsächlich Schichten entstanden sein,
+    // und der Antrag muss final APPROVED sein (nicht durch reject überschrieben).
+    const approved = (await approveRes.json()) as { status: string; resultShiftIds: number[] };
+    expect(approved.status).toBe("APPROVED");
+    expect(approved.resultShiftIds.length).toBeGreaterThan(0);
+    const shiftId = approved.resultShiftIds[0]!;
+    const list = await acc.ctx.get("/api/shifts?type=vacation&all=true");
+    const rows = (await list.json()) as Array<{ id: number }>;
+    expect(rows.some((r) => r.id === shiftId), "genehmigte Schicht muss existieren").toBe(true);
+    await assistantCtx.delete(`/api/shifts/${shiftId}`);
+  } else {
+    // Reject hat gewonnen: approve muss leer ausgegangen sein — insbesondere
+    // dürfen KEINE Schichten für diesen Zeitraum entstanden sein (das wäre
+    // genau der im Review beschriebene "verwaiste Schicht trotz Ablehnung"-Bug).
+    const approveBody = (await approveRes.json()) as { error?: string };
+    expect(approveBody.error).toBe("Antrag wurde bereits bearbeitet");
+    const list = await acc.ctx.get("/api/shifts?type=vacation&all=true");
+    const rows = (await list.json()) as Array<{ userId: number; startTime: string }>;
+    const day = requestDay(20).startTime.slice(0, 10);
+    expect(
+      rows.some((r) => r.userId === assistantId && r.startTime.startsWith(day)),
+      "abgelehnter Antrag darf keine Schicht erzeugt haben",
+    ).toBe(false);
   }
 });

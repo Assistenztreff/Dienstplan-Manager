@@ -732,6 +732,70 @@ export interface BulkAbsenceResult {
   replacedShiftIds: number[];
 }
 
+export interface AbsenceRequestDay {
+  startTime: string;
+  endTime: string;
+}
+
+/**
+ * Antragsarten sind bewusst auf Urlaub/Krank beschränkt (§887).
+ */
+export type AbsenceRequestInputType = typeof AbsenceRequestInputType[keyof typeof AbsenceRequestInputType];
+
+
+export const AbsenceRequestInputType = {
+  vacation: 'vacation',
+  sick: 'sick',
+} as const;
+
+export interface AbsenceRequestInput {
+  /** Antragsarten sind bewusst auf Urlaub/Krank beschränkt (§887). */
+  type: AbsenceRequestInputType;
+  /** Optionaler Team-Kontext für Mehrteam-Assistenzkräfte; muss ein Mitglieds-Team der Assistenzkraft sein. */
+  teamId?: number;
+  /**
+     * Ein Eintrag pro Kalendertag (Start/Ende desselben Tages) — identisches Format zu BulkAbsenceInput.days.
+     * @minItems 1
+     * @maxItems 92
+     */
+  days: AbsenceRequestDay[];
+}
+
+export type AbsenceRequestType = typeof AbsenceRequestType[keyof typeof AbsenceRequestType];
+
+
+export const AbsenceRequestType = {
+  vacation: 'vacation',
+  sick: 'sick',
+} as const;
+
+export type AbsenceRequestStatus = typeof AbsenceRequestStatus[keyof typeof AbsenceRequestStatus];
+
+
+export const AbsenceRequestStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+} as const;
+
+export interface AbsenceRequest {
+  id: number;
+  teamId: number;
+  userId: number;
+  /** @nullable */
+  userName: string | null;
+  type: AbsenceRequestType;
+  status: AbsenceRequestStatus;
+  days: AbsenceRequestDay[];
+  createdAt: string;
+  /** @nullable */
+  resolvedAt: string | null;
+  /** @nullable */
+  resolvedByUserId: number | null;
+  /** @nullable */
+  resultShiftIds: number[] | null;
+}
+
 /**
  * Dienstart — nur Arbeitsdienste und Team-Einträge sind hier erlaubt; Abwesenheiten laufen über /shifts/bulk-absence.
  */
@@ -1976,6 +2040,20 @@ export const ListShiftsType = {
   abgesagt_ag: 'abgesagt_ag',
   abgesagt_an: 'abgesagt_an',
   urlaubsabgeltung: 'urlaubsabgeltung',
+} as const;
+
+export type ListAbsenceRequestsParams = {
+status?: ListAbsenceRequestsStatus;
+teamId?: number;
+};
+
+export type ListAbsenceRequestsStatus = typeof ListAbsenceRequestsStatus[keyof typeof ListAbsenceRequestsStatus];
+
+
+export const ListAbsenceRequestsStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
 } as const;
 
 export type ListShiftModelsParams = {

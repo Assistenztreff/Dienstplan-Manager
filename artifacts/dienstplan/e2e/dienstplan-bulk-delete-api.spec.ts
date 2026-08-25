@@ -32,10 +32,30 @@ const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "admin@dienstplan.local";
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "admin1234";
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
 
-const YEAR = new Date().getFullYear();
+// Die Testdaten liegen in festen, disjunkten Monaten (Kollisionsvermeidung
+// je Test). Ein starres "+1 Jahr" wuerde Monate NACH dem aktuellen
+// Kalendermonat (z. B. Okt/Nov, wenn heute August ist) auf ueber 12 Monate
+// Vorausplanung schieben und am Premium-Vorausplanungslimit
+// (historyMonths=12) scheitern. Deshalb wird jeder verwendete Monat einzeln
+// auf sein NAECHSTES zukuenftiges Vorkommen abgebildet (mind. 1 Monat Puffer
+// ab heute) — bleibt dauerhaft in der Zukunft (Vergangenheits-Loeschschutz)
+// UND innerhalb des Limits, unabhaengig davon, in welchem Kalendermonat die
+// Suite laeuft.
+function futureYearFor(month: number): number {
+  const now = new Date();
+  const nowIdx = now.getUTCFullYear() * 12 + now.getUTCMonth();
+  let idx = now.getUTCFullYear() * 12 + (month - 1);
+  while (idx < nowIdx + 1) idx += 12;
+  return Math.floor(idx / 12);
+}
+
+function dayString(monthDay: string): string {
+  return `${futureYearFor(Number(monthDay.slice(0, 2)))}-${monthDay}`;
+}
+
 // Vertrag beginnt bewusst NICHT am Jahresanfang (gleiches Muster wie der
-// Bulk-Absence-Spec, haelt die Urlaubslogik innerhalb desselben Jahres).
-const CONTRACT_START = `${YEAR}-03-01`;
+// Bulk-Absence-Spec, haelt die Urlaubslogik im selben Zieljahr).
+const CONTRACT_START = dayString("03-01");
 
 // Ganztaegige Zeiten, exakt wie das Frontend sie sendet (00:00–23:59).
 function fullDay(day: string): { startTime: string; endTime: string } {
@@ -43,10 +63,6 @@ function fullDay(day: string): { startTime: string; endTime: string } {
     startTime: new Date(`${day}T00:00:00`).toISOString(),
     endTime: new Date(`${day}T23:59:59`).toISOString(),
   };
-}
-
-function dayString(monthDay: string): string {
-  return `${YEAR}-${monthDay}`;
 }
 
 type CreatedUser = { id: number };

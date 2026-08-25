@@ -201,13 +201,21 @@ export async function sendPasswordResetEmail(to: string, resetUrl: string): Prom
 
 /**
  * Benachrichtigt den Team-Eigentümer, wenn sich eine Assistenzkraft selbst
- * krankmeldelt. Gibt true zurück, wenn die Mail gesendet wurde.
+ * krankmeldet. Gibt true zurück, wenn die Mail gesendet wurde.
+ *
+ * `status` unterscheidet zwei Aufrufkontexte (#887):
+ * - "created": die Krankheitstage wurden bereits als Schichten angelegt
+ *   (Legacy-Direktpfad POST /shifts für privilegierte Personen).
+ * - "pending": es wurde nur ein Antrag eingereicht, der noch auf Bestätigung
+ *   durch einen Planer wartet (POST /absence-requests) — die Fürsorgepflicht
+ *   verlangt sofortige Benachrichtigung, unabhängig davon, wann bestätigt wird.
  */
 export async function sendSickLeaveNotification(
   to: string,
   assistantName: string,
   dates: Date[],
   appUrl: string,
+  status: "created" | "pending" = "created",
 ): Promise<boolean> {
   if (dates.length === 0) return false;
   const sorted = [...dates].sort((a, b) => a.getTime() - b.getTime());
@@ -226,6 +234,11 @@ export async function sendSickLeaveNotification(
   const rangeLabel =
     sorted.length === 1 ? fmt(first) : `${fmt(first)} – ${fmt(last)}`;
 
+  const closingText =
+    status === "pending"
+      ? "Die Krankmeldung wartet auf Bestätigung. Bitte prüfen und bestätigen Sie den Antrag im Dienstplan und planen Sie ggf. eine Vertretung."
+      : "Die Krankmeldung wurde automatisch eingetragen. Bitte planen Sie ggf. eine Vertretung.";
+
   const html = emailLayout(`
     <h2 style="margin:0 0 16px;color:#0d3050;font-size:22px;">Neue Krankmeldung</h2>
     <p style="margin:0 0 20px;color:#333;line-height:1.6;">
@@ -241,7 +254,7 @@ export async function sendSickLeaveNotification(
     </table>
     ${linkButton(`${appUrl}/dienstplan`, "Zum Dienstplan")}
     <p style="margin:24px 0 0;color:#555;font-size:13px;line-height:1.6;">
-      Die Krankmeldung wurde automatisch eingetragen. Bitte planen Sie ggf. eine Vertretung.
+      ${closingText}
     </p>
   `);
 

@@ -1,4 +1,5 @@
 - [Scaleway Prod-DB & Publish-Workflow](scaleway-prod-publish-workflow.md) — Scaleway = Staging-DB für Dev-Server; check-prod-schema vor Publish; bei neuen Spalten immer explizit warnen.
+- [E2E absence-fixture date anchoring](e2e-absence-date-anchor-pattern.md) — hardcoded absence dates can trip past-guard AND forward-planning-limit; anchor start date at today+buffer, express others as offsets, not independent per-month year resolution.
 - [Task MERGED aber Code nie angewendet](task-merged-but-code-unapplied.md) — MERGED-State ist kein Beweis für den Code; markTaskComplete/InProgress hart abgelehnt = permanent, nicht erneut versuchen, stattdessen App/Code direkt prüfen.
 - [Express 5 Wildcard Route](express5-wildcard-route.md) — app.get("*",...) wirft PathError in Express 5; Regex /.*/ oder benannte Wildcard verwenden.
 - [Artifact paths Konflikt](artifact-paths-conflict.md) — zwei Artifacts mit paths=["/"] hängen den Publish-Vorgang; nur der aktiv-serving Service setzt paths.
@@ -148,3 +149,4 @@
 - [Persistierter Query-Cache bei Einstellungen](persisted-settings-query-cache.md) — Server-Refetch darf alten Cache nach Reload ersetzen; nur echte ungespeicherte Eingaben schützen.
 - [§ 4 BUrlG Wartezeit-Sockel-Proration](vacation-waiting-period-burlg.md) — Sockel prorationiert 1. 6 Monate ab startDate; 3 Call-Sites (Einzel/Batch/Dashboard) synchron halten; e2e-Fixtures mit jungem startDate + hartkodierter Resturlaub-Zahl prüfen.
 - [One-shot migration e2e marker reset](one-shot-migration-e2e-marker-reset.md) — a spec simulating legacy data for a once-ever `data_migrations`-gated backfill must delete that marker first, or it passes once then fails forever on the persisting test DB.
+- [Approval-mediated write guards](approval-mediated-write-guards.md) — a request/approve wrapper around a shared write function must re-apply every guard (plan limits, notifications) of the direct route it replaces; nothing is inherited automatically.

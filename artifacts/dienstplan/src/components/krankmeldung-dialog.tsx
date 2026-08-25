@@ -10,10 +10,9 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, CalendarDays, Minus, Plus } from "lucide-react";
-import { useBulkCreateAbsence } from "@workspace/api-client-react";
+import { useCreateAbsenceRequest } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { invalidateShiftDerivedQueries } from "@/lib/shift-cache";
 import { DatePickerField } from "@/components/date-picker-field";
 
 /** Erzeugt ein Array von { startTime, endTime } für jeden UTC-Kalendertag
@@ -42,15 +41,15 @@ type DurationMode = "today" | "tomorrow" | "days" | "until";
 interface Props {
   open: boolean;
   onClose: () => void;
-  userId: number;
 }
 
 /**
  * Schnell-Dialog für die Selbst-Krankmeldung einer Assistenzkraft.
  * Schritt 1: Dauer wählen (Heute / Morgen / X Tage / Bis Datum).
- * Schritt 2: Zusammenfassung bestätigen → POST /shifts/bulk-absence.
+ * Schritt 2: Zusammenfassung bestätigen → POST /absence-requests (Antrag,
+ * #887) statt einer sofort wirksamen Schicht.
  */
-export function KrankmeldungDialog({ open, onClose, userId }: Props) {
+export function KrankmeldungDialog({ open, onClose }: Props) {
   const [mode, setMode] = useState<DurationMode>("today");
   const [dayCount, setDayCount] = useState(3);
   const [step, setStep] = useState<"select" | "confirm">("select");
@@ -67,7 +66,7 @@ export function KrankmeldungDialog({ open, onClose, userId }: Props) {
   });
 
   const queryClient = useQueryClient();
-  const { mutateAsync, isPending } = useBulkCreateAbsence();
+  const { mutateAsync, isPending } = useCreateAbsenceRequest();
 
   // Berechne Start/End-Tag aus der gewählten Dauer.
   function getRange(): { startDay: string; endDay: string } {
@@ -100,29 +99,25 @@ export function KrankmeldungDialog({ open, onClose, userId }: Props) {
 
   async function handleSubmit() {
     try {
+      // #887: die Krankmeldung legt keine Schicht mehr direkt an, sondern
+      // stellt einen PENDING Antrag — erst die Bestätigung eines Planers
+      // erzeugt den Kalendereintrag.
       await mutateAsync({
-        data: { userId, type: "sick" as const, days },
+        data: { type: "sick" as const, days },
       });
-      await invalidateShiftDerivedQueries(queryClient);
+      await queryClient.invalidateQueries({
+        predicate: (q) => q.queryKey[0] === "/api/absence-requests",
+      });
       const successMsg =
         mode === "today"
-          ? "Krankmeldung für heute eingetragen."
+          ? "Krankmeldung für heute beantragt."
           : mode === "tomorrow"
-            ? "Krankmeldung für morgen eingetragen."
-            : `Krankmeldung für ${count} Tage eingetragen.`;
-      toast.success(successMsg);
+            ? "Krankmeldung für morgen beantragt."
+            : `Krankmeldung für ${count} Tage beantragt.`;
+      toast.success(`${successMsg} Ein Planer muss sie noch bestätigen.`);
       handleClose();
-    } catch (err) {
-      // 409 = bereits krank an diesen Tagen — Server überspringt sie, Client
-      // kann das als Teilerfolg behandeln.
-      const status = (err as { status?: number }).status;
-      if (status === 409) {
-        await invalidateShiftDerivedQueries(queryClient);
-        toast.success("Krankmeldung eingetragen (bereits vorhandene Tage übersprungen).");
-        handleClose();
-      } else {
-        toast.error("Krankmeldung konnte nicht eingetragen werden — bitte erneut versuchen.");
-      }
+    } catch {
+      toast.error("Krankmeldung konnte nicht gestellt werden — bitte erneut versuchen.");
     }
   }
 
