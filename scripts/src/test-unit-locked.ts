@@ -24,6 +24,7 @@ import { acquireCodegenLock, findRepoRoot } from "./lib/codegen-lock";
 const SUITES = [
   "pnpm --filter @workspace/dienstplan run test",
   "pnpm --filter @workspace/db run test",
+  "pnpm --filter @workspace/test-fixtures run test",
   "pnpm --filter @workspace/api-server run test:unit",
   "pnpm --filter @workspace/scripts run test",
 ];

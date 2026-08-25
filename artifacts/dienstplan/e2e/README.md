@@ -46,9 +46,13 @@ const DAY_ONE = testDay(0);
 const DAY_TWO = testDay(1);
 ```
 
-Für Monatsraster (statt Tagesoffsets) siehe die `futureYearFor`/`dayString`-
-Helfer in `dienstplan-bulk-absence-api.spec.ts` — dasselbe Prinzip, nur je
-Monat statt je Tag aufgelöst.
+Für Monatsraster (statt Tagesoffsets) siehe die `offsetDay`-Helfer in
+`dienstplan-bulk-absence-api.spec.ts` — dasselbe Prinzip, nur je Monat statt
+je Tag ausgedrückt: EIN Anker-Monat, alle anderen Monate als Offset davon
+(`Date.UTC` normalisiert überlaufende Tage automatisch). Jeden benutzten
+Monat unabhängig auf sein "nächstes Vorkommen" aufzulösen (der frühere,
+fehlerhafte Ansatz dieser Datei) ist genau das Anti-Muster aus dem Absatz
+oben und wurde deshalb entfernt.
 
 Ein echtes Kalenderdatum (z. B. ein konkreter DST-Umstellungstag) bleibt
 weiterhin nötig, wenn der Test genau dieses reale Ereignis prüft — dafür den

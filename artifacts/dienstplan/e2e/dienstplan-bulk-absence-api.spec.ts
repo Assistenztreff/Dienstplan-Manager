@@ -4,6 +4,7 @@ import {
   request as playwrightRequest,
   type APIRequestContext,
 } from "@playwright/test";
+import { computeAnchorOffsetDay } from "@workspace/test-fixtures/anchor-dates";
 
 /**
  * API-Tests fuer den Sammel-Endpunkt POST /api/shifts/bulk-absence (Task #715):
@@ -29,29 +30,63 @@ const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "admin@dienstplan.local";
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "admin1234";
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
 
-// Die Testdaten sind ueber viele Monate verteilt (kollisionsfrei je Test).
-// Ein starres "+1 Jahr" wuerde Monate NACH dem aktuellen Kalendermonat (z. B.
-// Okt/Nov, wenn heute August ist) auf ueber 12 Monate Vorausplanung schieben
-// und am Premium-Vorausplanungslimit (historyMonths=12) scheitern. Deshalb
-// wird jeder verwendete Monat einzeln auf sein NAECHSTES zukuenftiges
-// Vorkommen abgebildet (mind. 1 Monat Puffer ab heute) — bleibt dauerhaft in
-// der Zukunft (Vergangenheits-Loeschschutz) UND innerhalb des Limits,
-// unabhaengig davon, in welchem Kalendermonat die Suite laeuft.
-function futureYearFor(month: number): number {
+// Die Testdaten sind ueber viele (simulierte) Monate verteilt (kollisionsfrei
+// je Test). Ein fruehrer Ansatz bildete jeden benutzten Kalendermonat (Feb,
+// Maerz, Juni, ...) EINZELN auf sein naechstes zukuenftiges Vorkommen ab -
+// das kann aber die chronologische Reihenfolge zwischen einem fruehen
+// Monat (z. B. Vertragsbeginn im Maerz) und einem spaeteren abhaengigen
+// Datum (z. B. Urlaub im Juni) INVERTIEREN, sobald "heute" zwischen den
+// beiden realen Kalendermonaten liegt (z. B. im April: naechster Maerz faellt
+// dann ins naechste Jahr, naechster Juni bleibt im aktuellen -> Maerz > Juni!).
+// Das loest faelschlich vacation_outside_contract aus. Siehe
+// .agents/memory/e2e-absence-date-anchor-pattern.md.
+//
+// Stattdessen: EIN Anker (heute + kleiner Puffer, 1. Tag des Monats), alle
+// Testdaten als Monats-/Tages-OFFSET vom Anker (nie unabhaengig je Monat neu
+// aufgeloest). Das haelt die relative Reihenfolge alle Testdaten IMMER
+// stabil, unabhaengig davon, in welchem realen Kalendermonat die Suite
+// laeuft.
+//
+// ACHTUNG (siehe .agents/memory/e2e-absence-date-anchor-pattern.md):
+// `Date.UTC` wirft NIE bei einem ueberlaufenden Tag, sondern rollt ihn still
+// in den Folgemonat (Tag 30 in einem 28-Tage-Monat -> 2. Tag des
+// Folgemonats). Das verhindert zwar ungueltige Datumsobjekte, aber NICHT,
+// dass zwei fuer unterschiedliche Monats-Offsets gedachte Tage auf denselben
+// realen Kalendertag kollabieren (z. B. wenn der fruehere Offset zufaellig
+// auf einen kurzen Februar faellt). Wer mehrere UNTERSCHEIDBARE Tage im
+// selben Monats-Offset braucht, muss Tageszahlen <= 28 verwenden (jeder
+// Kalendermonat hat mindestens 28 Tage) statt sich auf 29/30/31 zu
+// verlassen. Die geteilte Formel + eine Kollisions-Regressionspruefung
+// liegen in lib/test-fixtures/src/anchor-dates.(ts|test.ts).
+const ANCHOR_BUFFER_MONTHS = 2;
+const ANCHOR_YEAR = new Date().getUTCFullYear();
+const ANCHOR_MONTH0 = new Date().getUTCMonth() + ANCHOR_BUFFER_MONTHS; // 0-basiert, darf > 11 sein
+
+/** Datumsstring `YYYY-MM-DD` fuer `monthOffset` Kalendermonate ab dem Anker, am `day`. */
+function offsetDay(monthOffset: number, day: number): string {
+  return computeAnchorOffsetDay(ANCHOR_YEAR, ANCHOR_MONTH0, monthOffset, day);
+}
+
+// Vertrag beginnt bewusst NICHT am Anker-Monatsanfang selbst, sondern am
+// Anker (Offset 0) - der Rollback-Test unten nutzt Offset -1 (VOR
+// Vertragsbeginn), um den Ablehnungsfall testbar zu halten.
+const CONTRACT_START = offsetDay(0, 1);
+
+// Fuer die DST-Regressionstests wird bewusst ein ECHTER Kalendermonat (Maerz/
+// Oktober) benoetigt, da die deutsche Zeitumstellung an einen realen Monat
+// gebunden ist. Diese beiden Aufrufe haben KEINE Ordnungs-Abhaengigkeit zu
+// CONTRACT_START/den anderen Testdaten (andere Abwesenheits-Typen, keine
+// vacation_outside_contract-Pruefung) - unabhaengige Aufloesung ist hier
+// unproblematisch; jeder Aufruf bleibt wegen des mind. 1-Monat-Puffers
+// zwischen 1 und 12 Monate in der Zukunft (siehe forwardPlanningBlocked).
+function nextRealCalendarMonthDay(month1based: number, day: number): string {
   const now = new Date();
   const nowIdx = now.getUTCFullYear() * 12 + now.getUTCMonth();
-  let idx = now.getUTCFullYear() * 12 + (month - 1);
+  let idx = now.getUTCFullYear() * 12 + (month1based - 1);
   while (idx < nowIdx + 1) idx += 12;
-  return Math.floor(idx / 12);
+  const year = Math.floor(idx / 12);
+  return new Date(Date.UTC(year, month1based - 1, day)).toISOString().split("T")[0]!;
 }
-
-function dayString(monthDay: string): string {
-  return `${futureYearFor(Number(monthDay.slice(0, 2)))}-${monthDay}`;
-}
-
-// Vertrag beginnt bewusst NICHT am Jahresanfang, damit der Rollback-Fall
-// (Urlaubstage vor Vertragsbeginn) testbar ist.
-const CONTRACT_START = dayString("03-01");
 
 // Letzter Sonntag eines Monats (dynamisch je Zieljahr berechnet, damit die
 // DST-Regressionstests unten immer den tatsaechlichen Umstellungstag treffen).
@@ -174,7 +209,7 @@ test.afterAll(async () => {
 test("bucht einen mehrtaegigen Urlaubszeitraum in einem Request und das Urlaubskonto wie Einzel-Anlagen", async () => {
   // Einzel-POSTs mit Urlaubskonto-Fortschreibung dauern ~5s pro Tag.
   test.setTimeout(120_000);
-  const days = [dayString("06-15"), dayString("06-16"), dayString("06-17")];
+  const days = [offsetDay(3, 15), offsetDay(3, 16), offsetDay(3, 17)];
 
   const baselineBulk = await vacationHoursUsed();
   const { status, body } = await bulkAbsence("vacation", days);
@@ -203,12 +238,20 @@ test("bucht einen mehrtaegigen Urlaubszeitraum in einem Request und das Urlaubsk
 });
 
 test("ueberspringt vorhandene Tage statt 409 und traegt ueber Monatsgrenzen ein", async () => {
-  // Zeitraum ueber die Monatsgrenze September -> Oktober.
+  // Zeitraum ueber eine Kalendermonatsgrenze (Anker-Monat +6 -> +7).
+  // Tage bewusst <= 28 im FRUEHEREN Monat (jeder Kalendermonat hat
+  // mindestens 28 Tage, auch Februar in einem Gemeinjahr) und <= 2 im
+  // SPAETEREN Monat: so bleibt jedes Datum garantiert im beabsichtigten
+  // Monat, ohne `Date.UTC`-Ueberlauf. Ein Tag wie 29/30/31 wuerde bei einem
+  // kurzen Monat (z. B. Anker-Monat +6 = Februar) in den Folgemonat
+  // ueberlaufen und mit den "naechster Monat"-Tagen kollidieren — vier
+  // vermeintlich verschiedene Tage wuerden auf nur zwei reale Kalendertage
+  // zusammenfallen (siehe .agents/memory/e2e-absence-date-anchor-pattern.md).
   const firstRange = [
-    dayString("09-29"),
-    dayString("09-30"),
-    dayString("10-01"),
-    dayString("10-02"),
+    offsetDay(6, 27),
+    offsetDay(6, 28),
+    offsetDay(7, 1),
+    offsetDay(7, 2),
   ];
   const first = await bulkAbsence("sick", firstRange);
   expect(first.status).toBe(201);
@@ -216,7 +259,7 @@ test("ueberspringt vorhandene Tage statt 409 und traegt ueber Monatsgrenzen ein"
   expect(first.body.skippedCount).toBe(0);
 
   // Erweiterter Zeitraum: nur der neue Tag wird angelegt, der Rest gemeldet.
-  const second = await bulkAbsence("sick", [dayString("09-28"), ...firstRange]);
+  const second = await bulkAbsence("sick", [offsetDay(6, 26), ...firstRange]);
   expect(second.status).toBe(201);
   expect(second.body.createdCount).toBe(1);
   expect(second.body.skippedCount).toBe(4);
@@ -224,7 +267,7 @@ test("ueberspringt vorhandene Tage statt 409 und traegt ueber Monatsgrenzen ein"
   expect((await listAbsences("sick")).length).toBe(5);
 
   // Komplett vorhandener Zeitraum: nichts angelegt, alles gemeldet.
-  const third = await bulkAbsence("sick", [dayString("09-28"), ...firstRange]);
+  const third = await bulkAbsence("sick", [offsetDay(6, 26), ...firstRange]);
   expect(third.status).toBe(201);
   expect(third.body.createdCount).toBe(0);
   expect(third.body.skippedCount).toBe(5);
@@ -235,13 +278,14 @@ test("legt bei Urlaub ausserhalb des Vertragszeitraums KEINEN einzigen Tag an", 
   const baseline = await vacationHoursUsed();
   const existingVacations = (await listAbsences("vacation")).length;
 
-  // Die ersten Tage liegen VOR dem Vertragsbeginn (01.03.), die letzten
-  // dahinter — ohne Transaktion entstuende ein Teil-Zeitraum ab dem 01.03.
+  // Die ersten Tage liegen VOR dem Vertragsbeginn (CONTRACT_START, Anker-
+  // Monat +0), die letzten dahinter — ohne Transaktion entstuende ein
+  // Teil-Zeitraum ab dem Vertragsbeginn.
   const { status, body } = await bulkAbsence("vacation", [
-    dayString("02-26"),
-    dayString("02-27"),
-    dayString("03-02"),
-    dayString("03-03"),
+    offsetDay(-1, 26),
+    offsetDay(-1, 27),
+    offsetDay(0, 2),
+    offsetDay(0, 3),
   ]);
   expect(status, "Urlaub vor Vertragsbeginn sollte 400 liefern").toBe(400);
   expect(body.code).toBe("vacation_outside_contract");
@@ -254,7 +298,7 @@ test("zwei GLEICHZEITIGE identische Zeitraeume buchen jeden Tag nur einmal", asy
   // Doppelklick-Schutz: Ohne Advisory-Lock saehen beide Requests "Tag ist
   // frei" und buchten die Abwesenheit doppelt (inkl. doppeltem Urlaubsabzug).
   test.setTimeout(120_000);
-  const days = [dayString("11-16"), dayString("11-17")];
+  const days = [offsetDay(8, 16), offsetDay(8, 17)];
   const [a, b] = await Promise.all([
     bulkAbsence("sick", days),
     bulkAbsence("sick", days),
@@ -264,15 +308,15 @@ test("zwei GLEICHZEITIGE identische Zeitraeume buchen jeden Tag nur einmal", asy
   expect(a.body.createdCount + b.body.createdCount, "jeder Tag nur EINMAL angelegt").toBe(2);
   expect(a.body.skippedCount + b.body.skippedCount, "der langsamere ueberspringt beide Tage").toBe(2);
 
-  const november = (await listAbsences("sick")).filter((s) =>
+  const created = (await listAbsences("sick")).filter((s) =>
     days.some((d) => s.startTime.startsWith(d)),
   );
-  expect(november.length).toBe(2);
+  expect(created.length).toBe(2);
 });
 
 test("ersetzt geplante Dienste am Abwesenheitstag und erbt deren Zeiten", async () => {
-  const dayWithShift = dayString("10-14");
-  const dayWithout = dayString("10-15");
+  const dayWithShift = offsetDay(7, 14);
+  const dayWithout = offsetDay(7, 15);
   const shiftStart = new Date(`${dayWithShift}T08:00:00`).toISOString();
   const shiftEnd = new Date(`${dayWithShift}T14:00:00`).toISOString();
   const workRes = await adminCtx.post("/api/shifts", {
@@ -318,9 +362,9 @@ test("geplante Dienste an uebersprungenen Tagen bleiben erhalten", async () => {
   // Tag A: bereits eine Abwesenheit, zusaetzlich ein geplanter Dienst
   // Tag B: keine Abwesenheit, hat einen geplanten Dienst (soll ersetzt werden)
   // Tag C: keine Abwesenheit, kein Dienst (soll ganztaegig angelegt werden)
-  const dayA = dayString("07-10");
-  const dayB = dayString("07-11");
-  const dayC = dayString("07-12");
+  const dayA = offsetDay(4, 10);
+  const dayB = offsetDay(4, 11);
+  const dayC = offsetDay(4, 12);
 
   // Bestehende Abwesenheit an Tag A anlegen
   const existingAbsRes = await adminCtx.post("/api/shifts", {
@@ -393,7 +437,7 @@ test("akzeptiert ganztaegige Abwesenheit am Winterzeit-Umstellungstag (letzter S
   // Deutschland stellt am letzten Sonntag im Oktober auf Winterzeit um (CEST → CET).
   // Berliner Mitternacht-zu-Mitternacht = 25 UTC-Stunden, aber UTC-Konvention
   // liefert immer ~23:59:59 — keine falsche 24h-Ueberschreitung.
-  const dst = lastSundayOnOrBefore(dayString("10-31"));
+  const dst = lastSundayOnOrBefore(nextRealCalendarMonthDay(10, 31));
   const { status, body } = await bulkAbsence("freizeitausgleich", [dst]);
   expect(status, "Winterzeit-Umstellungstag sollte 201 liefern").toBe(201);
   expect(body.createdCount).toBe(1);
@@ -406,7 +450,7 @@ test("akzeptiert ganztaegige Abwesenheit am Sommerzeit-Umstellungstag (letzter S
   // Deutschland stellt am letzten Sonntag im Maerz auf Sommerzeit um (CET → CEST).
   // Berliner Mitternacht-zu-Mitternacht = 23 UTC-Stunden, UTC-Konvention
   // liefert weiterhin ~23:59:59 — kein falscher Kurztagfehler.
-  const dst = lastSundayOnOrBefore(dayString("03-31"));
+  const dst = lastSundayOnOrBefore(nextRealCalendarMonthDay(3, 31));
   const { status, body } = await bulkAbsence("freizeitausgleich", [dst]);
   expect(status, "Sommerzeit-Umstellungstag sollte 201 liefern").toBe(201);
   expect(body.createdCount).toBe(1);
@@ -415,7 +459,7 @@ test("akzeptiert ganztaegige Abwesenheit am Sommerzeit-Umstellungstag (letzter S
 
 test("akzeptiert Zeitraum ueber die Winterzeit-Umstellung hinweg", async () => {
   // Drei Tage rund um den Winterzeit-Umstellungstag; alle drei muessen angelegt werden.
-  const dst = new Date(`${lastSundayOnOrBefore(dayString("10-31"))}T00:00:00Z`);
+  const dst = new Date(`${lastSundayOnOrBefore(nextRealCalendarMonthDay(10, 31))}T00:00:00Z`);
   const days = [-2, 0, 2].map(
     (offset) => new Date(dst.getTime() + offset * 86_400_000).toISOString().split("T")[0]!,
   );
@@ -429,7 +473,7 @@ test("lehnt Abwesenheit mit Start und Ende auf verschiedenen UTC-Tagen ab (25h B
   // liegen (T00:00:00Z–T23:59:59Z). Ein Interval, das zwei UTC-Tage ueberspannt
   // (Berliner Lokalzeit-Mitternacht am Winterzeit-Umstellungstag = 22:00–23:00 UTC
   // zwei aufeinanderfolgende Tage, 25h), wird daher mit 400 abgelehnt.
-  const winterDst = new Date(`${lastSundayOnOrBefore(dayString("10-31"))}T00:00:00Z`);
+  const winterDst = new Date(`${lastSundayOnOrBefore(nextRealCalendarMonthDay(10, 31))}T00:00:00Z`);
   const dayBeforeDst = new Date(winterDst.getTime() - 86_400_000).toISOString().split("T")[0]!;
   const dstDay = winterDst.toISOString().split("T")[0]!;
   const res = await adminCtx.post("/api/shifts/bulk-absence", {
