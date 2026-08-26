@@ -112,6 +112,9 @@ async function openCalendar(page: Page): Promise<Locator> {
 }
 
 test("Urlaub/Krank zeigen nur den Typ, reguläre Schicht zeigt Uhrzeiten", async ({ page }) => {
+  // Kaltstart-Budget (e2e-cold-start-timeout.md): alphabetisch frühe Spec,
+  // trifft oft den frisch gestarteten Vite-Dev-Server (2 Seitenladungen).
+  test.setTimeout(120_000);
   await loginAsAdmin(page);
   const assistant = await createAssistant(page);
   const createdShiftIds: number[] = [];
@@ -157,12 +160,18 @@ test("Urlaub/Krank zeigen nur den Typ, reguläre Schicht zeigt Uhrzeiten", async
     createdShiftIds.push(work.id);
 
     // Neu laden, damit die frisch angelegten Schichten im Kalender erscheinen.
+    // Persistierten React-Query-Cache räumen (App.tsx, Key
+    // "dienstplan.query-cache"): Die Seeds oben liefen per API an der App
+    // vorbei — der vor den Seeds persistierte (leere) /api/shifts-Stand wäre
+    // nach dem Reload sonst noch "fresh" und die Liste bliebe leer
+    // (vorbestehend seit Einführung der Query-Persistenz).
+    await page.evaluate(() => localStorage.removeItem("dienstplan.query-cache"));
     await page.reload();
     await expect(mobile).toBeVisible();
 
     // --- Urlaub: nur "Urlaub", keine Uhrzeit -------------------------------
     await selectDayCell(page, mobile.getByTestId(dayCellId(year, month, vacationDay)));
-    const vacationBadge = mobile.getByTestId(`shift-badge-${vacation.id}`);
+    const vacationBadge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${vacation.id}`);
     await expect(vacationBadge).toBeVisible();
     await expect(vacationBadge).toContainText("Urlaub");
     await expect(vacationBadge).not.toContainText("00:00");
@@ -171,7 +180,7 @@ test("Urlaub/Krank zeigen nur den Typ, reguläre Schicht zeigt Uhrzeiten", async
 
     // --- Krank: nur "Krank", keine Uhrzeit ---------------------------------
     await selectDayCell(page, mobile.getByTestId(dayCellId(year, month, sickDay)));
-    const sickBadge = mobile.getByTestId(`shift-badge-${sick.id}`);
+    const sickBadge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${sick.id}`);
     await expect(sickBadge).toBeVisible();
     await expect(sickBadge).toContainText("Krank");
     await expect(sickBadge).not.toContainText("00:00");
@@ -179,7 +188,7 @@ test("Urlaub/Krank zeigen nur den Typ, reguläre Schicht zeigt Uhrzeiten", async
 
     // --- Gegenprobe: reguläre Schicht zeigt ihre Uhrzeiten -----------------
     await selectDayCell(page, mobile.getByTestId(dayCellId(year, month, workDay)));
-    const workBadge = mobile.getByTestId(`shift-badge-${work.id}`);
+    const workBadge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${work.id}`);
     await expect(workBadge).toBeVisible();
     await expect(workBadge).toContainText("09:00–17:00");
     expect(await workBadge.innerText()).toMatch(/\d{1,2}:\d{2}/);

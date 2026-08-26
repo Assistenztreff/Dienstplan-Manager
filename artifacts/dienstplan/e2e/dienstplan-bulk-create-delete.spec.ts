@@ -265,16 +265,16 @@ test.describe("Aktionsleiste auf schmalem Handy-Viewport", () => {
     );
 
     // In die Listenansicht wechseln (Mobil-Default ist das Monatsgitter) —
-    // dort sind die agenda-day-Zellen im Auswahl-Modus anklickbar.
+    // dort blendet der Umschalter das Raster aus, die Wochen-Liste bleibt.
     await page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list").click();
 
     // Auswahl-Modus an, drei Tage in der Listenansicht waehlen (nur Auswahl,
     // keine Schreiboperation — daher kollisionsfrei zu anderen Specs).
     await startSelectionMode(page);
-    // agenda-day-Zellen existieren dreifach (Mobil-Listenansicht + persistente
-    // Wochen-Listen mobil/desktop) — auf den Mobil-Container scopen, sonst
-    // bricht der Strict Mode mit "resolved to 3 elements" ab.
-    const mobileList = page.getByTestId("dienstplan-mobile");
+    // Seit der UI-Vereinheitlichung (26.08.2026) gibt es die Wochen-Liste nur
+    // noch EINMAL im DOM (schedule-list, ausserhalb von dienstplan-mobile/
+    // -desktop) — kein Strict-Mode-Konflikt mehr, aber auch kein Mobil-Scope.
+    const mobileList = page.getByTestId("schedule-list");
     for (const d of [6, 7, 8]) {
       const cell = mobileList.getByTestId(`agenda-day-${dateKey(year, month, d)}`);
       await cell.scrollIntoViewIfNeeded();

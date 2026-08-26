@@ -320,7 +320,7 @@ test.describe("Kollisionswarnung: ShiftDialog (Admin, mobile)", () => {
       await expect(cell).toHaveAttribute("data-selected", "true");
 
       // Überschneidende Schicht 12–18 über den Dialog anlegen.
-      await mobile.getByTestId("add-shift").click();
+      await page.getByTestId("add-shift").click();
       const dialog = page.getByTestId("shift-dialog");
       await expect(dialog).toBeVisible();
 

@@ -146,7 +146,7 @@ test.describe("ShiftDialog: Assistent im Bearbeiten-Modus gesperrt (Admin, mobil
     const createStart = "08:00";
     const createEnd = "12:00";
 
-    await mobile.getByTestId("add-shift").click();
+    await page.getByTestId("add-shift").click();
     const dialog = page.getByTestId("shift-dialog");
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText("Neue Schicht anlegen")).toBeVisible();
@@ -174,7 +174,7 @@ test.describe("ShiftDialog: Assistent im Bearbeiten-Modus gesperrt (Admin, mobil
     expect(originalUserId).toBe(assistant.id);
 
     // --- Schicht im Bearbeiten-Modus öffnen --------------------------------
-    const badge = mobile.getByTestId(`shift-badge-${shiftId}`);
+    const badge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${shiftId}`);
     await expect(badge).toBeVisible();
     await badge.click();
 

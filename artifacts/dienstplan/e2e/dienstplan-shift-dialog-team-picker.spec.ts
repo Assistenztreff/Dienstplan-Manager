@@ -76,7 +76,7 @@ async function openShiftDialog(page: Page) {
   const cell = mobile.getByTestId(`day-cell-${now.getFullYear()}-${mm}-15`);
   await selectDayCell(page, cell);
 
-  await mobile.getByTestId("add-shift").click();
+  await page.getByTestId("add-shift").click();
   const dialog = page.getByTestId("shift-dialog");
   await expect(dialog).toBeVisible();
   return dialog;

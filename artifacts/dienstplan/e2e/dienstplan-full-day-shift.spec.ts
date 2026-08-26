@@ -205,7 +205,14 @@ test.describe("24h-Dienst über den Folgetag (Admin, mobile)", () => {
     await selectDayCell(page, cell);
     await expect(cell).toHaveAttribute("data-selected", "true");
 
-    await mobile.getByTestId("add-shift").click();
+    // Neuer Standard-Zeitraum der Wochen-Liste ist „Dieser Monat" — für die
+    // "nur am Starttag"-Pruefung unten braucht es den Tageskontext „Heute"
+    // (Anker = ausgewaehlter Tag), sonst bleibt das Badge in der Monatsliste
+    // auch nach dem Folgetag-Klick sichtbar.
+    await page.getByTestId("schedule-list-range-menu").click();
+    await page.getByRole("option", { name: "Heute" }).click();
+
+    await page.getByTestId("add-shift").click();
 
     const dialog = page.getByTestId("shift-dialog");
     await expect(dialog).toBeVisible();
@@ -248,7 +255,7 @@ test.describe("24h-Dienst über den Folgetag (Admin, mobile)", () => {
     expect(end.getDate(), "endTime muss am Folgetag liegen").toBe(day + 1);
 
     // --- Schicht erscheint nur am Starttag -----------------------------------
-    const badge = mobile.getByTestId(`shift-badge-${shiftId}`);
+    const badge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${shiftId}`);
     await expect(badge).toBeVisible();
     // 24h-Schicht: Start- und Endzeit identisch (08:00–08:00), ohne "(+1)"-Zusatz.
     await expect(badge).toContainText(`${startTime}–${startTime}`);
@@ -258,7 +265,7 @@ test.describe("24h-Dienst über den Folgetag (Admin, mobile)", () => {
     const nextCell = mobile.getByTestId(dayCellId(year, month, day + 1));
     await selectDayCell(page, nextCell);
     await expect(nextCell).toHaveAttribute("data-selected", "true");
-    await expect(mobile.getByTestId(`shift-badge-${shiftId}`)).toHaveCount(0);
+    await expect(page.getByTestId("schedule-list").getByTestId(`shift-badge-${shiftId}`)).toHaveCount(0);
 
     // --- Aufräumen ---------------------------------------------------------
     const del = await page.request.delete(`/api/shifts/${shiftId}`);

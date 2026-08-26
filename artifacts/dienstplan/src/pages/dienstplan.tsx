@@ -357,6 +357,26 @@ function dayKey(date: Date): string {
   return format(date, "yyyy-MM-dd");
 }
 
+/** Grilling 26.08.2026, Punkt 3: Tap auf eine Zelle im eingeklappten
+ *  Smartphone-Monatsraster scrollt zur passenden Zeile in der Wochen-Liste
+ *  darunter — ersetzt den früheren Scroll auf das (entfernte) Tagesdetail-
+ *  Panel. DOM-Query statt Ref-Weiterreichung, da MonthGrid und ScheduleList
+ *  Geschwister-Komponenten sind (gleiches Muster wie die headerH-Messung
+ *  über `[data-dienstplan-header]`). Der Aufruf erfolgt im selben Klick-
+ *  Handler wie `onSelectDay` — React hat den neuen `selectedDay` zu diesem
+ *  Zeitpunkt noch nicht gerendert (relevant bei Zeitraum „Heute"/„Diese
+ *  Woche", deren Liste dann noch die ALTE Zeile zeigt); ein rAF wartet auf
+ *  den nächsten Render. Bei aktivem Typ-Filter (z. B. „Nur Abwesenheiten")
+ *  kann die Zielzeile ausgeblendet sein — dann bleibt es ein No-op. */
+function scrollToAgendaDay(day: Date): void {
+  requestAnimationFrame(() => {
+    const el = document.querySelector(
+      `[data-testid="agenda-day-${dayKey(day)}"]`,
+    );
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
 /** Nachname für die Kalender-Pille (Spec §2.1: Zeile 1 zeigt nur den Nachnamen). */
 function lastName(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -737,7 +757,8 @@ function AgendaView({
   onToggleDate,
   onPrevMonth,
   onNextMonth,
-  variant = "compact",
+  selectedDay,
+  hideEmptyDays = false,
 }: {
   days: Date[];
   shifts: Shift[];
@@ -753,26 +774,50 @@ function AgendaView({
   onPrevMonth?: () => void;
   /** Monatswechsel per Tastatur: → / PageDown → nächster Monat */
   onNextMonth?: () => void;
-  /** "compact" (Standard, Smartphone) oder "comfortable" (Desktop, mehr Luft). */
-  variant?: "compact" | "comfortable";
+  /** Im Kalender gewählter Tag — seine Zeile wird in der Liste markiert
+   *  (Ersatz für das frühere, an selectedDay gekoppelte Tagesdetail-Panel). */
+  selectedDay?: Date;
+  /** Bei aktivem Typ-Filter (Dienste/Abwesenheiten) Tage ohne passenden
+   *  Eintrag ausblenden — sonst dominieren leere Zeilen die Trefferliste.
+   *  Bei „Alle" bleiben alle Tage stehen (inkl. „Schicht hinzufügen"). */
+  hideEmptyDays?: boolean;
 }) {
-  const comfortable = variant === "comfortable";
   const selectedDateSet = new Set(selectedDates ?? []);
   const getPersonSlot = usePersonSlotLookup();
 
   // ── Wochen-Kapitel (Task #746, Variante A): Tage nach ISO-Woche (Mo–So)
   //    gruppieren; jede Woche wird ein eigener Kartenblock mit Überschrift. ──
-  const weeks: { key: string; days: Date[] }[] = [];
+  //    `label` haelt die KW-Spanne der VOLLEN Woche fest, bevor hideEmptyDays
+  //    Tage entfernt — sonst wuerde die Ueberschrift bei gefilterter Ansicht
+  //    eine zu kurze Spanne behaupten. Wochen ohne verbleibenden Tag fallen
+  //    ganz weg, statt als leere Karte mit blosser KW-Ueberschrift zu stehen.
+  const allWeeks: { key: string; days: Date[] }[] = [];
   for (const day of days) {
     const key = format(startOfWeek(day, { weekStartsOn: 1 }), "yyyy-MM-dd");
-    const last = weeks[weeks.length - 1];
+    const last = allWeeks[allWeeks.length - 1];
     if (last && last.key === key) last.days.push(day);
-    else weeks.push({ key, days: [day] });
+    else allWeeks.push({ key, days: [day] });
   }
+  const weeks = allWeeks
+    .map((week) => {
+      const first = week.days[0]!;
+      const weekLast = week.days[week.days.length - 1]!;
+      return {
+        key: week.key,
+        isoWeek: getISOWeek(first),
+        label: isSameDay(first, weekLast)
+          ? format(first, "d. MMMM", { locale: de })
+          : `${format(first, "d.")}–${format(weekLast, "d. MMMM", { locale: de })}`,
+        days: hideEmptyDays
+          ? week.days.filter((day) => shifts.some((s) => isSameDay(new Date(s.startTime), day)))
+          : week.days,
+      };
+    })
+    .filter((week) => week.days.length > 0);
 
   return (
     <div
-      className={comfortable ? "space-y-4" : "space-y-3"}
+      className="space-y-3"
       tabIndex={onPrevMonth || onNextMonth ? 0 : undefined}
       aria-label="Monatsansicht — ArrowLeft/ArrowRight für Monatswechsel"
       onKeyDown={
@@ -791,21 +836,17 @@ function AgendaView({
       data-testid="agenda-view"
     >
       {weeks.map((week) => {
-        const first = week.days[0]!;
-        const weekLast = week.days[week.days.length - 1]!;
-        const rangeLabel = isSameDay(first, weekLast)
-          ? format(first, "d. MMMM", { locale: de })
-          : `${format(first, "d.")}–${format(weekLast, "d. MMMM", { locale: de })}`;
         return (
           <section
             key={week.key}
             data-testid={`agenda-week-${week.key}`}
             className="overflow-hidden rounded-lg border border-border/40 bg-card"
           >
-            <h3 className={`border-b border-border/40 bg-muted/40 font-bold uppercase tracking-wide text-muted-foreground ${comfortable ? "px-5 py-2 text-xs" : "px-4 py-1.5 text-[11px]"}`}>
-              KW {getISOWeek(first)} · {rangeLabel}
+            <h3 className="border-b border-border/40 bg-muted/40 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+              KW {week.isoWeek} · {week.label}
             </h3>
-            {week.days.map((day) => {
+            {week.days
+              .map((day) => {
               const dayShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), day));
               // Task #792: Ausfall-UserIds für diesen Tag — damit DayDetailRow
               // das Warn-Icon auf Dienst-Zeilen zeigen kann (analog MonthGrid).
@@ -819,12 +860,17 @@ function AgendaView({
               // über Farbe (Barrierefreiheit, DESIGN-GUIDELINES).
               const weekend = getDay(day) === 0 || getDay(day) === 6;
               const bulkSelected = selectionMode && selectedDateSet.has(format(day, "yyyy-MM-dd"));
+              // Ersetzt das frühere day-detail-Panel: die Zeile des im Kalender
+              // gewählten Tages wird hier hervorgehoben (Desktop) bzw. ist das
+              // Scroll-Ziel (eingeklapptes Smartphone, siehe MonthGrid).
+              const isAnchorDay = selectedDay != null && isSameDay(day, selectedDay);
 
               return (
                 <div
                   key={day.toISOString()}
                   data-testid={`agenda-day-${format(day, "yyyy-MM-dd")}`}
                   data-selected={bulkSelected ? "true" : "false"}
+                  data-anchor={isAnchorDay ? "true" : "false"}
                   // Task #846: wie im Monatsraster deckt die Detailzeilen-Liste
                   // (bg-card, s. u.) einen ring-inset ab — echter Rand statt
                   // Ring, damit die Auswahl auch bei Tagen MIT Einträgen um die
@@ -832,15 +878,19 @@ function AgendaView({
                   // (sonst transparent) statt nur bei Auswahl, sonst würde die
                   // Karte beim Aus-/Abwählen um die Randbreite wachsen/
                   // schrumpfen (Layout-Sprung) — nur die Farbe wechselt.
+                  // Anker (im Kalender gewählter Tag) bekommt einen eigenen,
+                  // dezenteren Rand — nachrangig zur Mehrfachauswahl.
                   className={
                     bulkSelected
                       ? "border-[2px] border-assistenz-brand bg-assistenz-mint"
-                      : "border-[2px] border-transparent border-b-border/30 last:border-b-transparent"
+                      : isAnchorDay
+                        ? "border-[2px] border-primary/50 border-b-border/30 last:border-b-transparent"
+                        : "border-[2px] border-transparent border-b-border/30 last:border-b-transparent"
                   }
                 >
                   <button
                     type="button"
-                    className={`flex w-full items-center text-left transition-colors ${comfortable ? "min-h-[52px] gap-4 px-5 py-3" : "min-h-[44px] gap-3 px-4 py-2"} ${
+                    className={`flex min-h-[44px] w-full items-center gap-3 px-4 py-2 text-left transition-colors ${
                       isCurrentDay
                         ? "bg-primary text-primary-foreground hover:bg-primary/90"
                         : weekend
@@ -851,8 +901,8 @@ function AgendaView({
                       canEdit && (selectionMode ? onToggleDate?.(day) : onDayClick(day))
                     }
                   >
-                    <span className={`min-w-[24px] font-semibold tabular-nums ${comfortable ? "text-base" : "text-sm"}`}>{format(day, "d")}</span>
-                    <span className={`${comfortable ? "text-base" : "text-sm"} ${weekend ? "font-bold" : ""}`}>
+                    <span className="min-w-[24px] text-sm font-semibold tabular-nums">{format(day, "d")}</span>
+                    <span className={`text-sm ${weekend ? "font-bold" : ""}`}>
                       {format(day, "EEEEEE", { locale: de })}
                     </span>
                     {isCurrentDay && (
@@ -862,7 +912,7 @@ function AgendaView({
                     )}
                     {canEdit && (
                       <span
-                        className={`ml-auto flex items-center gap-1.5 ${comfortable ? "text-sm" : "text-xs"} ${
+                        className={`ml-auto flex items-center gap-1.5 text-xs ${
                           isCurrentDay ? "opacity-80" : "text-muted-foreground"
                         }`}
                       >
@@ -873,7 +923,7 @@ function AgendaView({
                         <span className="min-w-[1rem] text-right font-medium tabular-nums">
                           {dayShifts.length > 0 ? dayShifts.length : ""}
                         </span>
-                        <Plus className={`shrink-0 ${comfortable ? "h-4 w-4" : "h-3.5 w-3.5"}`} />
+                        <Plus className="h-3.5 w-3.5 shrink-0" />
                       </span>
                     )}
                   </button>
@@ -888,9 +938,10 @@ function AgendaView({
                           <DayDetailRow
                             shift={shift}
                             testId={`shift-badge-${shift.id}`}
-                            showName={canEdit}
+                            // Name IMMER zeigen — auch ohne Bearbeitungsrecht
+                            // (Assistenzkraft sieht serverseitig nur eigene
+                            // Schichten; festgepinnt in zweiklick-desktop).
                             modelMap={modelMap}
-                            comfortable={comfortable}
                             hasAusfall={!isAbsenceShift(shift) && dayAusfallUserIds.has(shift.userId)}
                             onClick={canEdit && !selectionMode ? () => onShiftClick(shift) : undefined}
                             onConfirm={canEdit && !selectionMode ? onConfirmShift : undefined}
@@ -931,21 +982,15 @@ function DayDetailRow({
   onClick,
   onConfirm,
   testId,
-  showName = true,
-  comfortable = false,
   hasAusfall = false,
 }: {
   shift: Shift;
   modelMap: Map<number, ShiftModelInfo>;
   onClick?: () => void;
   onConfirm?: (shift: Shift) => void;
-  /** Überschreibt die data-testid (mobile Listenansicht nutzt `shift-badge-<id>`,
-   *  damit bestehende E2E-Selektoren weiter greifen). */
-  testId?: string;
-  /** Namensspalte ausblenden (Lesemodus der mobilen Listenansicht). */
-  showName?: boolean;
-  /** Großzügigeres Padding/Schrift für die Desktop-Persistenzliste. */
-  comfortable?: boolean;
+  /** data-testid der Zeile — die Wochen-Liste vergibt `shift-badge-<id>`,
+   *  damit die bestehenden E2E-Selektoren greifen. */
+  testId: string;
   /** Task #792: Person ist am selben Tag krank/kind-krank — rotes Warn-Icon anzeigen. */
   hasAusfall?: boolean;
 }) {
@@ -991,7 +1036,7 @@ function DayDetailRow({
 
   return (
     <div
-      data-testid={testId ?? `day-detail-shift-${shift.id}`}
+      data-testid={testId}
       data-planning-status={status}
       title={
         mirror && einsatzLabel
@@ -1014,7 +1059,7 @@ function DayDetailRow({
             }
           : undefined
       }
-      className={`relative flex items-center overflow-hidden border-b border-[#f1f1ee] last:border-b-0 ${comfortable ? "gap-2.5 py-3 pl-4 pr-[8px] text-sm" : "min-h-[44px] gap-2 py-1.5 pl-3 pr-[8px] text-[12.5px]"} ${planningStatusBadgeOutline(shift)} ${
+      className={`relative flex min-h-[44px] items-center gap-2 overflow-hidden border-b border-[#f1f1ee] py-1.5 pl-3 pr-[8px] text-[12.5px] last:border-b-0 ${planningStatusBadgeOutline(shift)} ${
         clickable
           ? "cursor-pointer transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
           : ""
@@ -1024,16 +1069,19 @@ function DayDetailRow({
           Kalender-Pille); 2 px größer als die Schriftgröße des Namens. */}
       <span
         aria-hidden="true"
-        className={`flex shrink-0 items-center justify-center rounded-full font-bold leading-none text-white ${comfortable ? "h-[17px] w-[17px] text-[8px]" : "h-[15px] w-[15px] text-[7.5px]"}`}
+        className="flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full text-[7.5px] font-bold leading-none text-white"
         style={{ backgroundColor: avatarColor }}
       >
         {avatarLabel}
       </span>
 
       {/* Linke Gruppe: Name + Uhrzeit — nimmt den verfügbaren Platz auf;
-          der Rest der Zeile bleibt rechts-ausgerichtet (shrink-0). */}
+          der Rest der Zeile bleibt rechts-ausgerichtet (shrink-0). Name
+          IMMER zeigen, auch ohne Bearbeitungsrecht (Assistenzkraft sieht
+          serverseitig nur eigene Schichten — kein Leck; festgepinnt in
+          dienstplan-zweiklick-desktop.spec.ts). */}
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
-        {showName && shift.user && (
+        {shift.user && (
           <span className="shrink truncate font-semibold text-[#151515]">
             {shift.user.name}
           </span>
@@ -1056,7 +1104,7 @@ function DayDetailRow({
             e.stopPropagation();
             onConfirm(shift);
           }}
-          className={`relative inline-flex shrink-0 items-center gap-1 rounded-md border border-[#d8d8d4] bg-white px-2 py-0.5 font-semibold text-[#092948] transition-colors hover:border-[#092948] ${comfortable ? "text-xs" : "text-[11px] after:absolute after:inset-x-0 after:top-1/2 after:h-[44px] after:-translate-y-1/2 after:content-['']"}`}
+          className="relative inline-flex shrink-0 items-center gap-1 rounded-md border border-[#d8d8d4] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#092948] transition-colors after:absolute after:inset-x-0 after:top-1/2 after:h-[44px] after:-translate-y-1/2 after:content-[''] hover:border-[#092948]"
         >
           <Check className="h-3 w-3" />
           Bestätigen
@@ -1086,7 +1134,7 @@ function DayDetailRow({
       {/* Rechte Statusgruppe: Statustext (Zustandswort eingefärbt) +
           Icon-Stack + 4-px-Farbbalken (absolute).
           4-px-Abstand zum Balken durch pr-[8px] auf dem Elternelement. */}
-      <span className={`flex shrink-0 items-center gap-1 text-[11.5px] text-[#555555] ${comfortable ? "" : "max-w-[160px]"}`}>
+      <span className="flex max-w-[160px] shrink-0 items-center gap-1 text-[11.5px] text-[#555555]">
         {/* Statustext */}
         <span className="truncate">
           {isAbsence ? (
@@ -1148,6 +1196,7 @@ function MonthGrid({
   onFocusDateHandled,
   variant = "full",
   pillMinimiert = false,
+  onCollapsedDayActivate,
 }: {
   days: Date[];
   monthStart: Date;
@@ -1173,56 +1222,15 @@ function MonthGrid({
    *  Desktop/Tablet (nur bei variant="full" relevant) — kollabiert die
    *  zweizeilige Pille auf eine Zeile. */
   pillMinimiert?: boolean;
+  /** Nur bei variant="collapsed": Tap/Enter auf eine Zelle wählt den Tag UND
+   *  soll zur entsprechenden Zeile in der Wochen-Liste darunter scrollen
+   *  (ersetzt das frühere, in MonthGrid eingebettete Tagesdetail-Panel). */
+  onCollapsedDayActivate?: (day: Date) => void;
 }) {
   const personColors = usePersonColors();
   const selectedDateSet = new Set(selectedDates ?? []);
   const offset = (getDay(monthStart) + 6) % 7;
   const blanks = Array.from({ length: offset });
-  const selectedShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), selectedDay));
-
-  // ── Tagesleisten-Filter (HANDOFF 05.08.2026) ─────────────────────────────
-  // Zwei Dropdowns: Anzeigetyp (Alle/Dienste/Abwesenheiten, Standard „Alle")
-  // und Zeitraum (Heute/Diese Woche/Dieser Monat/Nächste 2 Monate, Standard
-  // „Heute" = der aktuell ausgewählte Tag).
-  const [detailType, setDetailType] = useState<"alle" | "dienste" | "abwesenheiten">("alle");
-  const [detailRange, setDetailRange] = useState<"tag" | "woche" | "monat" | "zweiMonate">("tag");
-
-  const detailShifts = useMemo(() => {
-    let from = startOfDay(selectedDay);
-    let to = endOfDay(selectedDay);
-    if (detailRange === "woche") {
-      from = startOfWeek(selectedDay, { weekStartsOn: 1 });
-      to = endOfWeek(selectedDay, { weekStartsOn: 1 });
-    } else if (detailRange === "monat") {
-      from = startOfMonth(selectedDay);
-      to = endOfMonth(selectedDay);
-    } else if (detailRange === "zweiMonate") {
-      to = endOfMonth(addMonths(selectedDay, 2));
-    }
-    return shifts
-      .filter((s) => {
-        const d = new Date(s.startTime);
-        if (d < from || d > to) return false;
-        if (detailType === "dienste") return !isAbsenceShift(s);
-        if (detailType === "abwesenheiten") return isAbsenceShift(s);
-        return true;
-      })
-      .sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime));
-  }, [shifts, selectedDay, detailRange, detailType]);
-
-  // Gruppierung nach Tag für Zeiträume > 1 Tag (Tagesüberschriften).
-  // detailShifts ist bereits nach startTime sortiert → Gruppen sind fortlaufend.
-  const detailGroups = useMemo(() => {
-    const groups: { key: string; day: Date; shifts: Shift[] }[] = [];
-    for (const s of detailShifts) {
-      const d = new Date(s.startTime);
-      const key = dayKey(d);
-      const last = groups[groups.length - 1];
-      if (last && last.key === key) last.shifts.push(s);
-      else groups.push({ key, day: d, shifts: [s] });
-    }
-    return groups;
-  }, [detailShifts]);
   const numWeeks = Math.ceil((blanks.length + days.length) / 7);
 
   // ── Kategoriale Personen-Slot-Farben (gemeinsamer Hook mit der mobilen
@@ -1250,8 +1258,6 @@ function MonthGrid({
   // darunter und braucht dessen Höhe als eigenen `top`-Versatz.
   const [headerH, setHeaderH] = useState(0);
   const weekdayRowRef = useRef<HTMLDivElement>(null);
-  // 3.3: Im eingeklappten Smartphone-Modus scrollt der Tages-Tap zur Tagesleiste.
-  const detailPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = document.querySelector("[data-dienstplan-header]") as HTMLElement | null;
@@ -1307,7 +1313,7 @@ function MonthGrid({
         if (selectionMode) { onToggleDate?.(d); return; }
         onSelectDay(d);
         if (variant === "collapsed") {
-          detailPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+          onCollapsedDayActivate?.(d);
         }
         return;
       }
@@ -1438,9 +1444,10 @@ function MonthGrid({
                 // 3.4: Klick auf Zelle/Datum wählt den Tag nur aus — das Anlegen
                 // erfolgt ausschließlich über das Plus in der Zellen-Kopfzeile.
                 onSelectDay(day);
-                // 3.3: Eingeklappt scrollt der Tap zur Tagesansicht (Tagesleiste).
+                // 3.3: Eingeklappt scrollt der Tap zur entsprechenden Zeile in
+                // der Wochen-Liste darunter (ersetzt das frühere Panel).
                 if (variant === "collapsed") {
-                  detailPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  onCollapsedDayActivate?.(day);
                 }
               }}
               // Punkt 4 (Smartphone): quadratische Zellen (1:1) als Mindestmaß —
@@ -1900,127 +1907,268 @@ function MonthGrid({
             <div key={`tail-blank-${i}`} className="bg-muted/10" data-testid="month-grid-tail-blank" />
           ))}
       </div>
+    </div>
+  );
+}
 
-      {/* ── Tagesdetail-Panel ──────────────────────────────────────────────── */}
-      {/* Kein overflow-hidden hier: die Menüleiste ist sticky und klebt beim
-          Seiten-Scroll unter dem Dienstplan-Header — ein overflow-Ancestor
-          würde position:sticky unwirksam machen. Eckenrundung tragen deshalb
-          Menüleiste (oben) und Listencontainer (unten) selbst. */}
+type ScheduleListType = "alle" | "dienste" | "abwesenheiten";
+type ScheduleListRange = "tag" | "woche" | "monat" | "zweiMonate";
+
+/** Vereinheitlichte, KW-gruppierte Wochen-Liste unter Kalender UND Tabelle
+ *  (Grilling 26.08.2026): ersetzt sowohl das frühere, ausschließlich im
+ *  Kalender eingebettete Tagesdetail-Panel als auch die zwei separaten,
+ *  ungefilterten „persistenten" Wochenlisten. Eine einzige Filterleiste
+ *  (Anzeigetyp + Zeitraum), eine Liste — für Monats- und Tabellenansicht,
+ *  Desktop wie Mobil, in derselben (kompakten) Dichte.
+ *
+ *  „Diese Woche" kann in einen Nachbarmonat hineinreichen, „Nächste 2
+ *  Monate" braucht zwei Folgemonate — /shifts kennt kein from/to (nur
+ *  month/year, siehe openapi.yaml), daher werden die fehlenden Monate hier
+ *  bei Bedarf separat nachgeladen. Vor-/Folgemonat sind über das ohnehin
+ *  laufende Prefetching (Task #758, prefetchAdjacentMonthShifts) meist schon
+ *  im Query-Cache — kein zusätzlicher Request. */
+function ScheduleList({
+  month,
+  year,
+  currentMonthShifts,
+  effectiveSelectedUserIds,
+  modelMap,
+  selectedDay,
+  teamParam,
+  isTeamScopeReady,
+  onDayClick,
+  onShiftClick,
+  onConfirmShift,
+  canEdit,
+  selectionMode,
+  selectedDates,
+  onToggleDate,
+  onPrevMonth,
+  onNextMonth,
+}: {
+  month: number;
+  year: number;
+  /** Bereits auf effectiveSelectedUserIds gefilterte Schichten des geladenen
+   *  Monats (= visibleShifts der Seite). */
+  currentMonthShifts: Shift[];
+  effectiveSelectedUserIds: number[] | "all";
+  modelMap: Map<number, ShiftModelInfo>;
+  selectedDay: Date;
+  teamParam: { teamId?: number };
+  isTeamScopeReady: boolean;
+  onDayClick: (day: Date) => void;
+  onShiftClick: (shift: Shift) => void;
+  onConfirmShift?: (shift: Shift) => void;
+  canEdit: boolean;
+  selectionMode?: boolean;
+  selectedDates?: string[];
+  onToggleDate?: (day: Date) => void;
+  onPrevMonth?: () => void;
+  onNextMonth?: () => void;
+}) {
+  const [detailType, setDetailType] = usePersistentState<ScheduleListType>(
+    "dienstplan.scheduleListType",
+    "alle",
+    ["alle", "dienste", "abwesenheiten"],
+  );
+  const [detailRange, setDetailRange] = usePersistentState<ScheduleListRange>(
+    "dienstplan.scheduleListRange",
+    "monat",
+    ["tag", "woche", "monat", "zweiMonate"],
+  );
+
+  const needsPrevMonth = detailRange === "woche";
+  const needsNextMonth = detailRange === "woche" || detailRange === "zweiMonate";
+  const needsAfterNextMonth = detailRange === "zweiMonate";
+  const prevMonthDate = new Date(year, month - 2, 1);
+  const nextMonthDate = new Date(year, month, 1);
+  const afterNextMonthDate = new Date(year, month + 1, 1);
+
+  const { data: prevMonthShiftsRaw } = useListShifts(
+    { month: prevMonthDate.getMonth() + 1, year: prevMonthDate.getFullYear(), ...teamParam },
+    {
+      query: {
+        enabled: isTeamScopeReady && needsPrevMonth,
+        staleTime: SHIFT_LIST_STALE_TIME_MS,
+        gcTime: SHIFT_LIST_GC_TIME_MS,
+      },
+    } as unknown as Parameters<typeof useListShifts>[1],
+  ) as { data?: Shift[] };
+  const { data: nextMonthShiftsRaw } = useListShifts(
+    { month: nextMonthDate.getMonth() + 1, year: nextMonthDate.getFullYear(), ...teamParam },
+    {
+      query: {
+        enabled: isTeamScopeReady && needsNextMonth,
+        staleTime: SHIFT_LIST_STALE_TIME_MS,
+        gcTime: SHIFT_LIST_GC_TIME_MS,
+      },
+    } as unknown as Parameters<typeof useListShifts>[1],
+  ) as { data?: Shift[] };
+  const { data: afterNextMonthShiftsRaw } = useListShifts(
+    { month: afterNextMonthDate.getMonth() + 1, year: afterNextMonthDate.getFullYear(), ...teamParam },
+    {
+      query: {
+        enabled: isTeamScopeReady && needsAfterNextMonth,
+        staleTime: SHIFT_LIST_STALE_TIME_MS,
+        gcTime: SHIFT_LIST_GC_TIME_MS,
+      },
+    } as unknown as Parameters<typeof useListShifts>[1],
+  ) as { data?: Shift[] };
+
+  const filterByAssistant = (list: Shift[] | undefined): Shift[] => {
+    if (!list) return [];
+    return effectiveSelectedUserIds === "all"
+      ? list
+      : list.filter((s) => effectiveSelectedUserIds.includes(s.userId));
+  };
+
+  const { rangeShifts, rangeStart, rangeEnd } = useMemo(() => {
+    let from = startOfDay(selectedDay);
+    let to = endOfDay(selectedDay);
+    let pool = currentMonthShifts;
+    if (detailRange === "woche") {
+      from = startOfWeek(selectedDay, { weekStartsOn: 1 });
+      to = endOfWeek(selectedDay, { weekStartsOn: 1 });
+      pool = [
+        ...filterByAssistant(prevMonthShiftsRaw),
+        ...currentMonthShifts,
+        ...filterByAssistant(nextMonthShiftsRaw),
+      ];
+    } else if (detailRange === "monat") {
+      from = startOfMonth(selectedDay);
+      to = endOfMonth(selectedDay);
+    } else if (detailRange === "zweiMonate") {
+      to = endOfMonth(afterNextMonthDate);
+      pool = [
+        ...currentMonthShifts,
+        ...filterByAssistant(nextMonthShiftsRaw),
+        ...filterByAssistant(afterNextMonthShiftsRaw),
+      ];
+    }
+    const filtered = pool
+      .filter((s) => {
+        const d = new Date(s.startTime);
+        if (d < from || d > to) return false;
+        if (detailType === "dienste") return !isAbsenceShift(s);
+        if (detailType === "abwesenheiten") return isAbsenceShift(s);
+        return true;
+      })
+      .sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime));
+    return { rangeShifts: filtered, rangeStart: from, rangeEnd: to };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentMonthShifts, prevMonthShiftsRaw, nextMonthShiftsRaw, afterNextMonthShiftsRaw, selectedDay, detailRange, detailType]);
+
+  const rangeDays = useMemo(
+    () => eachDayOfInterval({ start: rangeStart, end: rangeEnd }),
+    [rangeStart, rangeEnd],
+  );
+
+  const rangeLabel =
+    detailRange === "tag"
+      ? format(selectedDay, "EEEE, d. MMMM yyyy", { locale: de })
+      : detailRange === "woche"
+        ? `KW ${getISOWeek(rangeStart)} · ${format(rangeStart, "d.")}–${format(rangeEnd, "d. MMMM yyyy", { locale: de })}`
+        : detailRange === "monat"
+          ? format(selectedDay, "MMMM yyyy", { locale: de })
+          : `${format(rangeStart, "d. MMMM")} – ${format(rangeEnd, "d. MMMM yyyy", { locale: de })}`;
+
+  // ── Sticky-Filterleiste unterhalb der Dienstplan-Kopfzeile — eigene
+  //    Messung (dasselbe Muster wie die Wochentag-Zeile in MonthGrid), weil
+  //    diese Komponente ein Geschwister von MonthGrid/DienstplanTableView
+  //    ist und keinen gemeinsamen State mit deren headerH teilt. ──
+  const [headerH, setHeaderH] = useState(0);
+  useEffect(() => {
+    const el = document.querySelector("[data-dienstplan-header]") as HTMLElement | null;
+    if (!el) return;
+    const update = () => setHeaderH(el.getBoundingClientRect().height);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div className="mt-2 space-y-3" data-testid="schedule-list">
       <div
-        ref={detailPanelRef}
-        className="rounded-lg border border-border/40 mt-2 bg-card"
-        role="region"
-        aria-live="polite"
-        aria-label={`Tagesdetails ${format(selectedDay, "EEEE, d. MMMM", { locale: de })}`}
-        data-testid="day-detail-panel"
+        className="sticky z-30 flex flex-wrap items-center gap-2.5 rounded-lg border border-border/40 bg-card px-4 py-3"
+        style={{ top: headerH || 0 }}
+        data-testid="schedule-list-menu"
       >
-        {/* ── Menüleiste (Arbeitsanweisung 06.08.2026, Punkt 4; Vorlage
-            tagesleiste-jahreskalender-v3_2, Punkt 1): Dropdown Anzeigetyp,
-            Dropdown Zeitraum, Datum fett, rechts „Dienst anlegen".
-            Sticky unterhalb der Dienstplan-Kopfleiste (zweite Sticky-Ebene,
-            Höhe wie die Wochentag-Zeile über headerH versetzt); bg-card als
-            undurchsichtige Fläche, damit Einträge darunter weiterscrollen. ── */}
-        <div
-          className="sticky z-30 flex flex-wrap items-center gap-2.5 rounded-t-lg border-b border-[#eeeeee] bg-card px-4 py-3"
-          style={{ top: headerH || 0 }}
-          data-testid="day-detail-menu"
-        >
-          <Select value={detailType} onValueChange={(v) => setDetailType(v as typeof detailType)}>
-            <SelectTrigger
-              className="h-auto w-auto gap-1.5 rounded-lg border-[#d8d8d4] bg-card px-2.5 py-1.5 text-[12.5px] font-semibold text-[#092948] shadow-none"
-              data-testid="day-detail-type-menu"
-              aria-label="Anzeigetyp"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="alle">Alle</SelectItem>
-              <SelectItem value="dienste">Dienste</SelectItem>
-              <SelectItem value="abwesenheiten">Abwesenheiten</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={detailRange} onValueChange={(v) => setDetailRange(v as typeof detailRange)}>
-            <SelectTrigger
-              className="h-auto w-auto gap-1.5 rounded-lg border-[#d8d8d4] bg-card px-2.5 py-1.5 text-[12.5px] font-semibold text-[#092948] shadow-none"
-              data-testid="day-detail-range-menu"
-              aria-label="Zeitraum"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="tag">Heute</SelectItem>
-              <SelectItem value="woche">Diese Woche</SelectItem>
-              <SelectItem value="monat">Dieser Monat</SelectItem>
-              <SelectItem value="zweiMonate">Nächste 2 Monate</SelectItem>
-            </SelectContent>
-          </Select>
-          <div className="min-w-0">
-            <p className="text-[13px] font-extrabold text-[#092948]" data-testid="day-detail-header">
-              {format(selectedDay, "EEEE, d. MMMM yyyy", { locale: de })}
-            </p>
-            <p className="text-[11px] text-muted-foreground">
-              {detailShifts.length === 0
-                ? detailType === "abwesenheiten"
-                  ? "Keine Abwesenheiten"
-                  : "Keine Dienste geplant"
-                : `${detailShifts.length} ${
-                    detailType === "abwesenheiten"
-                      ? detailShifts.length === 1 ? "Abwesenheit" : "Abwesenheiten"
-                      : detailShifts.length === 1 ? "Dienst" : "Dienste"
-                  }`}
-            </p>
-          </div>
-          {canEdit && !selectionMode && (
-            <Button size="sm" variant="outline" className="gap-1 shrink-0 ml-auto" data-testid="add-shift" onClick={() => onAddShift(selectedDay)}>
-              <Plus className="h-3.5 w-3.5" />
-              Dienst anlegen
-            </Button>
-          )}
+        <Select value={detailType} onValueChange={(v) => setDetailType(v as ScheduleListType)}>
+          <SelectTrigger
+            className="h-auto w-auto gap-1.5 rounded-lg border-[#d8d8d4] bg-card px-2.5 py-1.5 text-[12.5px] font-semibold text-[#092948] shadow-none"
+            data-testid="schedule-list-type-menu"
+            aria-label="Anzeigetyp"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="alle">Alle</SelectItem>
+            <SelectItem value="dienste">Dienste</SelectItem>
+            <SelectItem value="abwesenheiten">Abwesenheiten</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={detailRange} onValueChange={(v) => setDetailRange(v as ScheduleListRange)}>
+          <SelectTrigger
+            className="h-auto w-auto gap-1.5 rounded-lg border-[#d8d8d4] bg-card px-2.5 py-1.5 text-[12.5px] font-semibold text-[#092948] shadow-none"
+            data-testid="schedule-list-range-menu"
+            aria-label="Zeitraum"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="tag">Heute</SelectItem>
+            <SelectItem value="woche">Diese Woche</SelectItem>
+            <SelectItem value="monat">Dieser Monat</SelectItem>
+            <SelectItem value="zweiMonate">Nächste 2 Monate</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="min-w-0">
+          <p className="text-[13px] font-extrabold text-[#092948]" data-testid="schedule-list-header">
+            {rangeLabel}
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            {rangeShifts.length === 0
+              ? detailType === "abwesenheiten"
+                ? "Keine Abwesenheiten"
+                : "Keine Dienste geplant"
+              : `${rangeShifts.length} ${
+                  detailType === "abwesenheiten"
+                    ? rangeShifts.length === 1 ? "Abwesenheit" : "Abwesenheiten"
+                    : rangeShifts.length === 1 ? "Dienst" : "Dienste"
+                }`}
+          </p>
         </div>
-        {/* ── Eintragsliste: einzeilige Zeilen mit 3-px-Farbbalken
-            (Arbeitspaket 07.08.2026, Punkt 5); bei Zeitraum > 1 Tag mit
-            Tagesüberschriften gruppiert. Kein inneres Scroll-Fenster:
-            die Liste läuft in voller Länge im normalen Seiten-Scroll. ── */}
-        <div className="rounded-b-lg bg-card">
-          {detailGroups.length > 0 ? (
-            detailGroups.map((group) => {
-              // Task #792: Ausfall-Icon in der Tagesleisten-Detailansicht —
-              // pro Gruppe (= Tag) die Ausfall-UserIds vorberechnen.
-              const groupAusfallIds = new Set(
-                group.shifts
-                  .filter((s) => isAbsenceShift(s) && ABSENCE_CATEGORY[s.type] === "ausfall")
-                  .map((s) => s.userId),
-              );
-              return (
-                <div key={group.key} data-testid={`day-detail-group-${group.key}`}>
-                  {detailRange !== "tag" && (
-                    // Tagesüberschriften: mindestens so groß/fett wie das Datum
-                    // in der Kopfzeile — beim Scrollen durch lange Zeiträume
-                    // sind sie der einzige Orientierungsanker.
-                    <div className="border-b border-[#f1f1ee] bg-muted/40 px-4 py-2 text-[13px] font-extrabold text-[#092948]">
-                      {format(group.day, "EEEE, d. MMMM", { locale: de })}
-                    </div>
-                  )}
-                  {group.shifts.map((shift) => (
-                    <DayDetailRow
-                      key={shift.id}
-                      shift={shift}
-                      hasAusfall={!isAbsenceShift(shift) && groupAusfallIds.has(shift.userId)}
-                      modelMap={modelMap}
-                      onClick={canEdit && !selectionMode ? () => onShiftClick(shift) : undefined}
-                      onConfirm={canEdit && !selectionMode ? onConfirmShift : undefined}
-                    />
-                  ))}
-                </div>
-              );
-            })
-          ) : (
-            <p className="px-4 py-3 text-xs text-muted-foreground">
-              {detailType === "abwesenheiten" ? "Keine Abwesenheiten" : "Keine Dienste geplant"}
-            </p>
-          )}
-        </div>
+        {canEdit && !selectionMode && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1 shrink-0 ml-auto"
+            data-testid="add-shift"
+            onClick={() => onDayClick(selectedDay)}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Dienst anlegen
+          </Button>
+        )}
       </div>
+
+      <AgendaView
+        days={rangeDays}
+        shifts={rangeShifts}
+        modelMap={modelMap}
+        onDayClick={onDayClick}
+        onShiftClick={onShiftClick}
+        onConfirmShift={onConfirmShift}
+        canEdit={canEdit}
+        selectionMode={selectionMode}
+        selectedDates={selectedDates}
+        onToggleDate={onToggleDate}
+        onPrevMonth={onPrevMonth}
+        onNextMonth={onNextMonth}
+        selectedDay={selectedDay}
+        hideEmptyDays={detailType !== "alle"}
+      />
     </div>
   );
 }
@@ -3388,22 +3536,11 @@ export default function Dienstplan() {
           </div>
         )}
         <div className={`w-full transition-opacity duration-150 ${isTransitioning ? "opacity-60" : ""}`}>
-        {mobileView === "list" ? (
-          <AgendaView
-            days={days}
-            shifts={visibleShifts}
-            modelMap={modelMap}
-            onDayClick={(day) => openCreate(day)}
-            onShiftClick={openEdit}
-            onConfirmShift={confirmShift}
-            canEdit={canPlan}
-            selectionMode={isSelectionMode}
-            selectedDates={selectedDates}
-            onToggleDate={toggleDate}
-            onPrevMonth={prevMonth}
-            onNextMonth={nextMonth}
-          />
-        ) : (
+        {/* Grilling 26.08.2026, Punkt 6: „Liste" blendet das Monatsraster
+            komplett aus — übrig bleibt die vereinheitlichte Wochen-Liste
+            (siehe unten), die dadurch die einzige Ansicht ist. Kein
+            separates AgendaView mehr an dieser Stelle (Dopplung entfernt). */}
+        {mobileView === "grid" && (
           <MonthGrid
             days={days}
             monthStart={start}
@@ -3422,6 +3559,7 @@ export default function Dienstplan() {
             focusDate={monthGridFocusDate}
             onFocusDateHandled={() => setMonthGridFocusDate(null)}
             variant="collapsed"
+            onCollapsedDayActivate={scrollToAgendaDay}
           />
         )}
         </div>
@@ -3535,40 +3673,33 @@ export default function Dienstplan() {
         </div>
       </div>
 
-      {/* ── Persistente Wochen-Kapitel-Liste ───────────────────────────────
-           Erscheint dauerhaft unterhalb der Hauptansicht, unabhängig vom
-           gewählten Ansicht-Umschalter. Smartphone: kompaktes Design.
-           Desktop: großzügiger skaliert (comfortable-Variante). ── */}
-      <div className="md:hidden" data-testid="persistent-week-list-mobile">
-        <AgendaView
-          days={days}
-          shifts={visibleShifts}
-          modelMap={modelMap}
-          onDayClick={(day) => openCreate(day)}
-          onShiftClick={openEdit}
-          onConfirmShift={confirmShift}
-          canEdit={canPlan}
-          selectionMode={isSelectionMode}
-          selectedDates={selectedDates}
-          onToggleDate={toggleDate}
-          variant="compact"
-        />
-      </div>
-      <div className="hidden md:block" data-testid="persistent-week-list-desktop">
-        <AgendaView
-          days={days}
-          shifts={visibleShifts}
-          modelMap={modelMap}
-          onDayClick={(day) => openCreate(day)}
-          onShiftClick={openEdit}
-          onConfirmShift={confirmShift}
-          canEdit={canPlan}
-          selectionMode={isSelectionMode}
-          selectedDates={selectedDates}
-          onToggleDate={toggleDate}
-          variant="comfortable"
-        />
-      </div>
+      {/* ── Vereinheitlichte Wochen-Liste (Grilling 26.08.2026) ─────────────
+           EINE Instanz für Monats-, Tabellen- UND Listenansicht, Desktop wie
+           Mobil — ersetzt sowohl das frühere, nur im Kalender eingebettete
+           Tagesdetail-Panel als auch die zwei separaten, ungefilterten
+           „persistenten" Wochenlisten. Sitzt bewusst außerhalb von
+           dienstplan-mobile/-desktop (volle Breite, wie zuvor die
+           persistenten Listen) — dadurch existiert `agenda-day-<Datum>` nur
+           noch EIN einziges Mal im DOM statt bisher dreifach. ── */}
+      <ScheduleList
+        month={month}
+        year={year}
+        currentMonthShifts={visibleShifts}
+        effectiveSelectedUserIds={effectiveSelectedUserIds}
+        modelMap={modelMap}
+        selectedDay={selectedDay}
+        teamParam={teamParam}
+        isTeamScopeReady={isTeamScopeReady}
+        onDayClick={(day) => openCreate(day)}
+        onShiftClick={openEdit}
+        onConfirmShift={confirmShift}
+        canEdit={canPlan}
+        selectionMode={isSelectionMode}
+        selectedDates={selectedDates}
+        onToggleDate={toggleDate}
+        onPrevMonth={prevMonth}
+        onNextMonth={nextMonth}
+      />
 
       {canPlan && assistants.length > 0 && (
         <TeamAbsenceOverview

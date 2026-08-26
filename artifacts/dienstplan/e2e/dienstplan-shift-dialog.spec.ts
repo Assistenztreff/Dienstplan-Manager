@@ -144,7 +144,7 @@ test.describe("ShiftDialog: Schicht anlegen und bearbeiten (Admin, mobile)", () 
     const createStart = "09:17";
     const createEnd = "14:42";
 
-    await mobile.getByTestId("add-shift").click();
+    await page.getByTestId("add-shift").click();
     const dialog = page.getByTestId("shift-dialog");
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText("Neue Schicht anlegen")).toBeVisible();
@@ -177,7 +177,9 @@ test.describe("ShiftDialog: Schicht anlegen und bearbeiten (Admin, mobile)", () 
     // Die Schicht erscheint im Tagesdetail des ausgewählten Tags.
     // Der Eintrag ist zugleich als Kalender-Pille und in der Tagesleiste
     // sichtbar. Für den Bearbeitungsfluss gezielt die Tagesleiste wählen.
-    const badge = mobile.getByTestId(`day-detail-shift-${shiftId}`);
+    // Wochen-Liste (schedule-list) ist seit der UI-Vereinheitlichung
+    // (26.08.2026) ein globaler Singleton außerhalb von dienstplan-mobile.
+    const badge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${shiftId}`);
     await expect(badge).toBeVisible();
     await expect(badge).toContainText(`${createStart}–${createEnd}`);
 
@@ -205,7 +207,7 @@ test.describe("ShiftDialog: Schicht anlegen und bearbeiten (Admin, mobile)", () 
     await expect(editDialog).toHaveCount(0);
 
     // Die aktualisierte Zeit erscheint im Kalender.
-    const updatedBadge = mobile.getByTestId(`day-detail-shift-${shiftId}`);
+    const updatedBadge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${shiftId}`);
     await expect(updatedBadge).toBeVisible();
     await expect(updatedBadge).toContainText(`${editStart}–${editEnd}`);
 

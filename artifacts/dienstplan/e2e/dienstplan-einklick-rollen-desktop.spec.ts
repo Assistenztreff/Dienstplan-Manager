@@ -161,11 +161,11 @@ test("UI: Assistent sieht seinen Entwurf OHNE Bestätigen-Button (mobil + Deskto
     // Ansicht-Umschalter lebt im sticky Header AUSSERHALB des Containers.
     await mobilePage.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list").click();
 
-    const draftBadge = mobile.getByTestId(`shift-badge-${assistantDraftShiftId}`);
+    const draftBadge = mobilePage.getByTestId("schedule-list").getByTestId(`shift-badge-${assistantDraftShiftId}`);
     await expect(draftBadge, "Der eigene Entwurf muss für den Assistenten sichtbar sein").toBeVisible();
     await expect(draftBadge).toHaveAttribute("data-planning-status", "VORLAEUFIG");
     await expect(
-      mobile.getByTestId(`shift-confirm-${assistantDraftShiftId}`),
+      mobilePage.getByTestId("schedule-list").getByTestId(`shift-confirm-${assistantDraftShiftId}`),
       "Assistenten dürfen KEINEN Ein-Klick-Bestätigen-Button sehen (mobil)",
     ).toHaveCount(0);
 

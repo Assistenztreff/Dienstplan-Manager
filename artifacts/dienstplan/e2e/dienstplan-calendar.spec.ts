@@ -44,6 +44,13 @@ function dayCellId(year: number, monthIndex: number, dayOfMonth: number): string
   return `day-cell-${year}-${mm}-${dd}`;
 }
 
+/** data-testid der zugehörigen Zeile in der Wochen-Liste (schedule-list). */
+function agendaDayId(year: number, monthIndex: number, dayOfMonth: number): string {
+  const mm = String(monthIndex + 1).padStart(2, "0");
+  const dd = String(dayOfMonth).padStart(2, "0");
+  return `agenda-day-${year}-${mm}-${dd}`;
+}
+
 async function loginAsAdmin(page: Page): Promise<void> {
   // Delegiert an den gemeinsamen Helper, der den Vite-Dev-Auto-Login
   // toleriert (kein Login-Formular) und im Prod-Build das Formular ausfüllt.
@@ -113,11 +120,13 @@ test.describe("Dienstplan-Kalender (Admin, mobile)", () => {
     await expect(page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list")).toHaveAttribute("data-active", "true");
     await expect(mobile.getByTestId("month-grid")).toHaveCount(0);
 
-    // Zurück zur Monatsansicht: Gitter und Tagesdetail sichtbar.
+    // Zurück zur Monatsansicht: Gitter wieder sichtbar. Die Wochen-Liste
+    // (schedule-list) steht seit der UI-Vereinheitlichung (26.08.2026)
+    // UNABHÄNGIG vom Liste/Monat-Umschalter immer unterhalb — sie ist daher
+    // kein Signal mehr für DIESEN Umschalter, nur das Gitter selbst ist es.
     await page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-grid").click();
     await expect(page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-grid")).toHaveAttribute("data-active", "true");
     await expect(mobile.getByTestId("month-grid")).toBeVisible();
-    await expect(mobile.getByTestId("day-detail-header")).toBeVisible();
   });
 
   test("Assistenten-Filter wählt aus und setzt zurück", async ({ page }) => {
@@ -143,7 +152,11 @@ test.describe("Dienstplan-Kalender (Admin, mobile)", () => {
     await expect(trigger).toContainText("Alle Assistenzkräfte");
   });
 
-  test("Tagesauswahl im Monatsgitter aktualisiert das Tagesdetail", async ({ page }) => {
+  test("Tagesauswahl im Monatsgitter markiert die Zeile in der Wochen-Liste", async ({ page }) => {
+    // Seit der UI-Vereinheitlichung (26.08.2026) engt die Tagesauswahl die
+    // Wochen-Liste NICHT mehr ein (Standard-Zeitraum bleibt „Dieser Monat") —
+    // stattdessen bekommt die Zeile des gewählten Tages einen Anker-Rahmen
+    // (data-anchor), analog zur Desktop-Tabellenansicht.
     const mobile = await openCalendar(page);
     const { year, monthIndex } = parseMonthLabel(
       await page.getByTestId("month-label").innerText(),
@@ -152,13 +165,16 @@ test.describe("Dienstplan-Kalender (Admin, mobile)", () => {
     const cell15 = mobile.getByTestId(dayCellId(year, monthIndex, 15));
     await selectDayCell(page, cell15);
     await expect(cell15).toHaveAttribute("data-selected", "true");
-    await expect(mobile.getByTestId("day-detail-header")).toContainText("15.");
+    const agendaDay15 = page.getByTestId(agendaDayId(year, monthIndex, 15));
+    await expect(agendaDay15).toHaveAttribute("data-anchor", "true");
 
     const cell20 = mobile.getByTestId(dayCellId(year, monthIndex, 20));
     await selectDayCell(page, cell20);
     await expect(cell20).toHaveAttribute("data-selected", "true");
     await expect(cell15).toHaveAttribute("data-selected", "false");
-    await expect(mobile.getByTestId("day-detail-header")).toContainText("20.");
+    await expect(agendaDay15).toHaveAttribute("data-anchor", "false");
+    const agendaDay20 = page.getByTestId(agendaDayId(year, monthIndex, 20));
+    await expect(agendaDay20).toHaveAttribute("data-anchor", "true");
   });
 
   test("Monatsnavigation: Wochentags-Offset stimmt über mehrere Monate", async ({ page }) => {

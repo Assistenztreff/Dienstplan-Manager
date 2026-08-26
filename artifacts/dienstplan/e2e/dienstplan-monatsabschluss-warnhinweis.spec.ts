@@ -110,7 +110,7 @@ test("Warn-Toast erscheint beim Anlegen im abgeschlossenen Monat — aber nur ei
   const cell = mobile.getByTestId(`day-cell-${YEAR}-${mm}-${dd}`);
   await selectDayCell(page, cell);
 
-  await mobile.getByTestId("add-shift").click();
+  await page.getByTestId("add-shift").click();
   const dialog = page.getByTestId("shift-dialog");
   await expect(dialog).toBeVisible();
 

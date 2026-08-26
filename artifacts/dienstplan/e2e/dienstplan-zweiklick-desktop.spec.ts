@@ -150,7 +150,10 @@ test("Desktop-Monatsgitter (Admin): Zellenklick markiert nur, Plus öffnet den S
     const cellA = desktop.getByTestId(dayCellId(year, month1, dayA));
     await cellA.click();
     await expect(cellA).toHaveAttribute("data-selected", "true");
-    await expect(desktop.getByTestId("day-detail-header")).toContainText(`${dayA}.`);
+    // Seit der UI-Vereinheitlichung (26.08.2026) engt die Zellenauswahl die
+    // Wochen-Liste NICHT mehr ein (Standard-Zeitraum bleibt „Dieser Monat") —
+    // die Zeile des gewählten Tages bekommt stattdessen den Anker-Rahmen.
+    await expect(page.getByTestId(dayCellId(year, month1, dayA).replace("day-cell-", "agenda-day-"))).toHaveAttribute("data-anchor", "true");
     await expect(dialog, "Der Zellenklick darf keinen Dialog öffnen (3.4)").toHaveCount(0);
 
     // --- Auch der 2. Klick auf den markierten Tag bleibt reine Auswahl. ---
@@ -191,7 +194,10 @@ test("Desktop-Monatsgitter (Assistent): 1. Klick markiert, 2. Klick öffnet NICH
     const cell = desktop.getByTestId(dayCellId(year, month1, dayA));
     await cell.click();
     await expect(cell).toHaveAttribute("data-selected", "true");
-    await expect(desktop.getByTestId("day-detail-header")).toContainText(`${dayA}.`);
+    // Seit der UI-Vereinheitlichung (26.08.2026) engt die Zellenauswahl die
+    // Wochen-Liste NICHT mehr ein (Standard-Zeitraum bleibt „Dieser Monat") —
+    // die Zeile des gewählten Tages bekommt stattdessen den Anker-Rahmen.
+    await expect(page.getByTestId(dayCellId(year, month1, dayA).replace("day-cell-", "agenda-day-"))).toHaveAttribute("data-anchor", "true");
     await expect(dialog).toHaveCount(0);
 
     // --- 2. Klick: darf für Assistenten KEINEN Dialog öffnen. ---
@@ -239,7 +245,9 @@ test("Desktop-Tagesleiste (Admin): Zeile ist per Tastatur erreichbar und öffnet
     await desktop.getByTestId(dayCellId(target.year, target.month1, target.dayA)).click({
       position: { x: 8, y: 8 },
     });
-    const row = desktop.getByTestId(`day-detail-shift-${shiftId}`);
+    // Wochen-Liste ist seit der UI-Vereinheitlichung (26.08.2026) ein
+    // globaler Singleton (nicht mehr desktop-gescopt).
+    const row = page.getByTestId(`shift-badge-${shiftId}`);
     await expect(row).toBeVisible();
     await expect(row).toHaveAttribute("role", "button");
     await row.focus();
@@ -270,7 +278,9 @@ test("Desktop-Tagesleiste (Assistent): Name sichtbar, Zeile ohne Bearbeitungsrec
     await desktop.getByTestId(dayCellId(target.year, target.month1, target.dayA)).click({
       position: { x: 8, y: 8 },
     });
-    const row = desktop.getByTestId(`day-detail-shift-${shiftId}`);
+    // Wochen-Liste ist seit der UI-Vereinheitlichung (26.08.2026) ein
+    // globaler Singleton (nicht mehr desktop-gescopt).
+    const row = page.getByTestId(`shift-badge-${shiftId}`);
     await expect(row).toBeVisible();
     // Der Name gehört zum Zeilen-Layout — auch ohne Bearbeitungsrecht.
     await expect(row).toContainText("Zweiklick Desktop Assistent");

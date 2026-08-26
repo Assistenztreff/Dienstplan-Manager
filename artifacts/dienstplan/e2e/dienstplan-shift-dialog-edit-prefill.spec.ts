@@ -142,7 +142,7 @@ test.describe("ShiftDialog: Bearbeiten belegt Datum/Zeit korrekt vor (Admin, mob
     const createStart = "09:30";
     const createEnd = "14:45";
 
-    await mobile.getByTestId("add-shift").click();
+    await page.getByTestId("add-shift").click();
     const dialog = page.getByTestId("shift-dialog");
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText("Neue Schicht anlegen")).toBeVisible();
@@ -170,7 +170,7 @@ test.describe("ShiftDialog: Bearbeiten belegt Datum/Zeit korrekt vor (Admin, mob
     const originalEnd = created!.endTime;
 
     // --- Schicht im Bearbeiten-Modus öffnen --------------------------------
-    const badge = mobile.getByTestId(`shift-badge-${shiftId}`);
+    const badge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${shiftId}`);
     await expect(badge).toBeVisible();
     await badge.click();
 

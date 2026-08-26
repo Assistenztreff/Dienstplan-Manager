@@ -289,10 +289,15 @@ test("Zellen-Kopfzeile: Zellenklick wählt nur und scrollt, nur das Plus öffnet
   // y=8 trifft sicher das Datums-Badge und nicht die erste Pille darunter.
   await cellA.click({ position: { x: 12, y: 8 } });
   await expect(cellA).toHaveAttribute("data-selected", "true");
-  await expect(mobile.getByTestId("day-detail-header")).toContainText("12.");
+  // Seit der UI-Vereinheitlichung (26.08.2026) engt die Zellen-Auswahl die
+  // Wochen-Liste NICHT mehr ein (Standard-Zeitraum bleibt „Dieser Monat") —
+  // stattdessen bekommt die Zeile des Tages den Anker-Rahmen UND der Tap
+  // scrollt zu genau dieser Zeile (statt zum früheren, entfernten Panel).
+  const agendaRow = page.getByTestId(`agenda-day-${DAY_A}`);
+  await expect(agendaRow).toHaveAttribute("data-anchor", "true");
   await expect(
-    mobile.getByTestId("day-detail-panel"),
-    "Der Tap auf eine Zelle muss zur Tagesleiste scrollen (3.3)",
+    agendaRow,
+    "Der Tap auf eine Zelle muss zur passenden Zeile in der Wochen-Liste scrollen (3.3)",
   ).toBeInViewport();
   await expect(
     page.getByTestId("shift-dialog"),
