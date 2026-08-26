@@ -73,3 +73,24 @@ fi
 # idempotent — Reihenfolge nach dem Push ist unkritisch fuer alle uebrigen
 # Skripte oben.
 pnpm --filter @workspace/scripts run backfill-partial-absence-flag
+
+# Prod-Schema-Drift-Check (#893): rein informativ, blockiert den Merge NIE.
+# db push oben synct nur die Dev-DB — die externe Produktions-DB (Scaleway)
+# bekommt Schema-Aenderungen ausschliesslich ueber migrate-prod, und bisher
+# fiel eine hinterherhinkende Prod-DB erst beim naechsten Publish-Versuch auf
+# (publish-preflight.sh, dort bewusst fail-closed). Dieser Schritt macht
+# denselben, rein lesenden Check (check-prod-schema-drift.ts) direkt nach
+# jedem Merge sichtbar, der eine Schema-Aenderung enthalten haben koennte —
+# als lauter Hinweis statt einer spaeten Publish-Ueberraschung.
+echo ""
+echo "── Prod-Schema-Check (informativ, blockiert diesen Merge nicht) ──"
+if [ -n "${PROD_DATABASE_URL:-}" ]; then
+  if ! pnpm --filter @workspace/scripts run check-prod-schema-drift < /dev/null; then
+    echo "" >&2
+    echo "⚠️  HINWEIS: Die Produktions-Datenbank liegt jetzt hinter diesem Merge zurueck (Details oben)." >&2
+    echo "   Ein Publish-Versuch schlaegt deshalb fehl, bis das Schema nachgezogen wird:" >&2
+    echo "   pnpm --filter @workspace/scripts run migrate-prod --yes <dbname>" >&2
+  fi
+else
+  echo "PROD_DATABASE_URL nicht gesetzt — Prod-Schema-Check uebersprungen (kein Produktions-Ziel konfiguriert)."
+fi

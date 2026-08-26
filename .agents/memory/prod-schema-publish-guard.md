@@ -8,3 +8,5 @@ description: Deployment-postBuild bricht Veröffentlichungen bei Schema-Drift zu
 **Why:** Die Prod-DB ist eine externe Scaleway-Postgres — Replits Publish-Zeit-Schema-Abgleich greift nicht; eine nie migrierte Spalte hat den Prod-Login komplett gebrochen, weil der manuelle `check-prod-schema`-Schritt vergessen wurde.
 
 **How to apply:** Drift gemeldet → erst `migrate-prod -- --yes <dbname>`, dann erneut veröffentlichen (Schema zuerst, Code danach). Notausstieg nur für Publishes OHNE Schemaänderungen: Deployment-Env `SKIP_PROD_SCHEMA_CHECK=1`.
+
+**Update:** Derselbe Check läuft jetzt auch am Ende von `scripts/post-merge.sh` (nach jedem Merge, nicht erst beim Publish) — dort aber rein informativ (`if ! pnpm ... check-prod-schema-drift`), er blockiert den Merge nie, da `db push` im selben Skript ohnehin nur die Dev-DB synct. Ziel: die Drift sofort sichtbar machen statt erst beim nächsten fehlschlagenden Publish-Versuch.
