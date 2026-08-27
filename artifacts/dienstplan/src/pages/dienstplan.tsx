@@ -2211,6 +2211,35 @@ function ScheduleList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayRangeKey]);
 
+  // Auto-Scroll zur aktuellen Woche (Nutzer-Entscheidung 27.08.2026, dritte
+  // Runde): schaltet der Nutzer auf „Diese Woche" oder „Dieser Monat" um,
+  // liegt die relevante Woche oft weit unten in der (u. U. langen) Liste —
+  // die Seite scrollt dann automatisch dorthin. Nur bei einem ECHTEN Wechsel
+  // IN einen dieser beiden Zeiträume (Ref-Vergleich), nicht bei jedem
+  // Tages-/Monatswechsel INNERHALB desselben Zeitraums.
+  const prevDetailRangeRef = useRef(detailRange);
+  useEffect(() => {
+    const enteringWeekOrMonth =
+      prevDetailRangeRef.current !== detailRange &&
+      (detailRange === "woche" || detailRange === "monat");
+    prevDetailRangeRef.current = detailRange;
+    if (!enteringWeekOrMonth) return;
+    const weekKey =
+      detailRange === "woche"
+        ? format(startOfWeek(selectedDay, { weekStartsOn: 1 }), "yyyy-MM-dd")
+        : todayWeekKey;
+    // Doppeltes rAF: der Einklapp-Effekt oben löst bei „Dieser Monat" noch
+    // einen State-Update-Zyklus aus (Wochen klappen zu) — erst NACH dessen
+    // Layout-Commit ist die Zielposition der Woche stabil.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document
+          .querySelector(`[data-testid="agenda-week-${weekKey}"]`)
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+  }, [detailRange, selectedDay, todayWeekKey]);
+
   const rangeLabel =
     detailRange === "tag"
       ? format(selectedDay, "EEEE, d. MMMM yyyy", { locale: de })
