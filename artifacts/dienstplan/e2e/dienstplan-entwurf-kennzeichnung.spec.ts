@@ -131,6 +131,9 @@ test("Dienstplan: Entwurf/Vorschlag sichtbar gekennzeichnet (Label, Status-Attri
   // Test prueft Eintraege an festen Monatstagen und braucht den Monatsblick.
   await page.getByTestId("schedule-list-range-menu").click();
   await page.getByRole("option", { name: "Dieser Monat" }).click();
+  // Monatsblick startet seit 27.08. teilweise eingeklappt (nur aktuelle
+  // KW offen) — fuer die Tages-Zeilen unten erst alles ausklappen.
+  await page.getByTestId("schedule-list-collapse-all").click();
 
   // Seit #746 nutzt die Listenansicht die einzeiligen Tagesleisten-Zeilen
   // (DayDetailRow): Unverbindliche Dienste sind dort per Status-Icon (Stift-

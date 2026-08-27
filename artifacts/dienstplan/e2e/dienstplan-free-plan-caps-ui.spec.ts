@@ -151,6 +151,9 @@ test.describe("Free-Limit Vorausplanung (UI)", () => {
     // im ganzen Monat an, daher auf den Monatsblick stellen.
     await page.getByTestId("schedule-list-range-menu").click();
     await page.getByRole("option", { name: "Dieser Monat" }).click();
+    // Monatsblick startet seit 27.08. teilweise eingeklappt (nur aktuelle
+    // KW offen) — fuer die Tages-Zeilen unten erst alles ausklappen.
+    await page.getByTestId("schedule-list-collapse-all").click();
   }
 
   test("Kalender sperrt zu weite Monate mit Banner + Toast statt stillem Nichts", async ({
@@ -166,6 +169,9 @@ test.describe("Free-Limit Vorausplanung (UI)", () => {
     await expect(page.getByTestId("month-label")).toContainText(
       format(farDate, "yyyy"),
     );
+    // Der Monatswechsel setzt den Einklapp-Standard neu (Zielmonat ohne
+    // „heute" startet komplett zu) — fuer die Tages-Zeile wieder ausklappen.
+    await page.getByTestId("schedule-list-collapse-all").click();
 
     // Banner: der Monat ist fuer Free nicht planbar.
     await expect(

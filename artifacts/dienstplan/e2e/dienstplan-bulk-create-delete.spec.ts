@@ -274,6 +274,9 @@ test.describe("Aktionsleiste auf schmalem Handy-Viewport", () => {
     // liegen im Monat, daher auf den Monatsblick stellen.
     await page.getByTestId("schedule-list-range-menu").click();
     await page.getByRole("option", { name: "Dieser Monat" }).click();
+    // Monatsblick startet seit 27.08. teilweise eingeklappt (nur aktuelle
+    // KW offen) — fuer die Tages-Zeilen unten erst alles ausklappen.
+    await page.getByTestId("schedule-list-collapse-all").click();
 
     // Auswahl-Modus an, drei Tage in der Listenansicht waehlen (nur Auswahl,
     // keine Schreiboperation — daher kollisionsfrei zu anderen Specs).

@@ -236,6 +236,9 @@ test("Abwesenheiten erscheinen nicht mehr in Kalenderzellen, aber in der Tagesle
     await page.getByRole("option", { name: "Alle" }).click();
     await scheduleList.getByTestId("schedule-list-range-menu").click();
     await page.getByRole("option", { name: "Dieser Monat" }).click();
+    // Monatsblick startet seit 27.08. teilweise eingeklappt (nur aktuelle
+    // KW offen) — fuer die Tages-Zeilen unten erst alles ausklappen.
+    await page.getByTestId("schedule-list-collapse-all").click();
     for (const s of [...vacation, ...sick]) {
       await expect(scheduleList.getByTestId(`shift-badge-${s.id}`)).toBeVisible();
     }

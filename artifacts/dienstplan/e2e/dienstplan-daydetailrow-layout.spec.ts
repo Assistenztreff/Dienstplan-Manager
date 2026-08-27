@@ -273,6 +273,9 @@ async function runDayDetailRowChecks(
     // alle drei Schichten werden ohne Tageszellen-Klick gerendert.
     await scheduleList.getByTestId("schedule-list-range-menu").click();
     await page.getByRole("option", { name: "Dieser Monat" }).click();
+    // Monatsblick startet seit 27.08. teilweise eingeklappt (nur aktuelle
+    // KW offen) — fuer die Tages-Zeilen unten erst alles ausklappen.
+    await page.getByTestId("schedule-list-collapse-all").click();
 
     // ── Bestätigter Dienst (FIX) ────────────────────────────────────────────
     await assertDayDetailRowLayout(

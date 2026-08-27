@@ -166,6 +166,9 @@ test.describe("Dienstplan-Kalender (Admin, mobile)", () => {
     // an zwei verschiedenen Tagen braucht die Liste den Monatsblick.
     await page.getByTestId("schedule-list-range-menu").click();
     await page.getByRole("option", { name: "Dieser Monat" }).click();
+    // Monatsblick startet seit 27.08. teilweise eingeklappt (nur aktuelle
+    // KW offen) — fuer die Tages-Zeilen unten erst alles ausklappen.
+    await page.getByTestId("schedule-list-collapse-all").click();
 
     const cell15 = mobile.getByTestId(dayCellId(year, monthIndex, 15));
     await selectDayCell(page, cell15);

@@ -259,11 +259,17 @@ test.describe("Downgrade auf Free: Bestandsdaten bleiben im UI sichtbar", () => 
     // an einem festen Monatstag, daher auf den Monatsblick stellen.
     await page.getByTestId("schedule-list-range-menu").click();
     await page.getByRole("option", { name: "Dieser Monat" }).click();
+    // Monatsblick startet seit 27.08. teilweise eingeklappt (nur aktuelle
+    // KW offen) — fuer die Tages-Zeilen unten erst alles ausklappen.
+    await page.getByTestId("schedule-list-collapse-all").click();
 
     // Zwei Monate vorblaettern — ausserhalb des Free-Planungsfensters.
     await page.getByTestId("next-month").click();
     await page.getByTestId("next-month").click();
     await expect(page.getByTestId("month-label")).toContainText(format(farDate, "yyyy"));
+    // Der Monatswechsel setzt den Einklapp-Standard neu (Zielmonat ohne
+    // „heute" startet komplett zu) — fuer die Tages-Zeile wieder ausklappen.
+    await page.getByTestId("schedule-list-collapse-all").click();
 
     // Das Free-Gate sperrt hier nur das NEU-Anlegen (Banner sichtbar) …
     await expect(

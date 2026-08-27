@@ -193,6 +193,9 @@ test("Kalender zeigt Entwurf-/Vorschlag-Badge (data-planning-status)", async ({ 
   // Test prueft Eintraege an festen Monatstagen und braucht den Monatsblick.
   await page.getByTestId("schedule-list-range-menu").click();
   await page.getByRole("option", { name: "Dieser Monat" }).click();
+  // Monatsblick startet seit 27.08. teilweise eingeklappt (nur aktuelle
+  // KW offen) — fuer die Tages-Zeilen unten erst alles ausklappen.
+  await page.getByTestId("schedule-list-collapse-all").click();
 
   // Die Listenansicht rendert ShiftBadge mit data-planning-status je Schicht.
   // WICHTIG: auf den Mobile-Container scopen — dieselben Badges existieren

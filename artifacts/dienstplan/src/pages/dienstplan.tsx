@@ -2043,13 +2043,11 @@ function ScheduleList({
     "alle",
     ["alle", "dienste", "abwesenheiten"],
   );
-  // Standard „Heute" (Nutzer-Entscheidung 27.08.2026, ersetzt „Dieser Monat");
-  // die zuletzt gewählte Einstellung bleibt via localStorage ohnehin erhalten.
-  const [detailRange, setDetailRange] = usePersistentState<ScheduleListRange>(
-    "dienstplan.scheduleListRange",
-    "tag",
-    ["tag", "woche", "monat", "zweiMonate"],
-  );
+  // Zeitraum startet bei JEDEM Seitenaufruf auf „Heute" (Nutzer-Entscheidung
+  // 27.08.2026, zweite Runde) — bewusst NICHT persistiert, anders als der
+  // Anzeigetyp: Der Tagesblick ist der gewollte Einstieg, Monats-/Wochenblick
+  // ist eine bewusste Sitzungs-Entscheidung.
+  const [detailRange, setDetailRange] = useState<ScheduleListRange>("tag");
 
   // Eingeklappte Wochenkarten (Abnahme 27.08.2026). Bewusst NICHT
   // persistiert: beim nächsten Seitenaufruf sind alle Wochen wieder offen.
@@ -2185,10 +2183,33 @@ function ScheduleList({
     }
     return keys;
   }, [rangeDays]);
-  const allCollapsed = weekKeys.length > 0 && weekKeys.every((k) => collapsedWeeks.has(k));
+  // „Alle"-Knopf: Sobald IRGENDEINE Woche zu ist, klappt der Klick alles auf
+  // (deterministisch — wichtig, weil der Monatsblick teilweise eingeklappt
+  // startet); erst wenn alles offen ist, klappt er alles zu.
+  const anyCollapsed = weekKeys.some((k) => collapsedWeeks.has(k));
   const toggleAllWeeks = () => {
-    setCollapsedWeeks(allCollapsed ? new Set() : new Set(weekKeys));
+    setCollapsedWeeks(anyCollapsed ? new Set() : new Set(weekKeys));
   };
+
+  // Schnellübersicht (Nutzer-Entscheidung 27.08.2026): „Dieser Monat" und
+  // „Nächste 2 Monate" starten mit eingeklappten Wochen — nur die AKTUELLE
+  // Kalenderwoche ist offen (in Monaten ohne „heute" also alle zu). Läuft
+  // auch beim Monatswechsel neu, damit der Einstieg vorhersehbar bleibt;
+  // „Heute"/„Diese Woche" öffnen immer alles.
+  const todayWeekKey = format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd");
+  const displayRangeKey = `${detailRange}|${format(displayStart, "yyyy-MM-dd")}|${format(displayEnd, "yyyy-MM-dd")}`;
+  useEffect(() => {
+    if (detailRange === "monat" || detailRange === "zweiMonate") {
+      setCollapsedWeeks(new Set(weekKeys.filter((k) => k !== todayWeekKey)));
+    } else {
+      setCollapsedWeeks(new Set());
+    }
+    // Bewusst NUR der stabile Zeitraum-Schluessel als Abhaengigkeit:
+    // weekKeys wechselt seine Array-Identitaet mit jedem Query-Refetch —
+    // haenge der Effekt daran, wuerde jedes Speichern/Nachladen die
+    // manuellen Auf-/Zuklapp-Entscheidungen des Nutzers zuruecksetzen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayRangeKey]);
 
   const rangeLabel =
     detailRange === "tag"
@@ -2276,10 +2297,10 @@ function ScheduleList({
               className="gap-1 shrink-0"
               data-testid="schedule-list-collapse-all"
               onClick={toggleAllWeeks}
-              title={allCollapsed ? "Alle Wochen ausklappen" : "Alle Wochen einklappen"}
+              title={anyCollapsed ? "Alle Wochen ausklappen" : "Alle Wochen einklappen"}
             >
               <ChevronsDownUp className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{allCollapsed ? "Alle ausklappen" : "Alle einklappen"}</span>
+              <span className="hidden sm:inline">{anyCollapsed ? "Alle ausklappen" : "Alle einklappen"}</span>
             </Button>
           )}
           {canEdit && !selectionMode && (

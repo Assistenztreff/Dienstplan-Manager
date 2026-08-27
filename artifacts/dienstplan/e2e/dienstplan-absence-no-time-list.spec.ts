@@ -180,6 +180,9 @@ test("Listenansicht: Urlaub/Krank zeigen nur den Typ, reguläre Schicht zeigt Uh
     // Seeds liegen an festen Monatstagen, daher auf den Monatsblick stellen.
     await page.getByTestId("schedule-list-range-menu").click();
     await page.getByRole("option", { name: "Dieser Monat" }).click();
+    // Monatsblick startet seit 27.08. teilweise eingeklappt (nur aktuelle
+    // KW offen) — fuer die Tages-Zeilen unten erst alles ausklappen.
+    await page.getByTestId("schedule-list-collapse-all").click();
 
     // --- Urlaub: nur "Urlaub", keine Uhrzeit -------------------------------
     const vacationBadge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${vacation.id}`);
