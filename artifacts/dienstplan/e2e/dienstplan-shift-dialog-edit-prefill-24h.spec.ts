@@ -166,7 +166,7 @@ test.describe("ShiftDialog: Bearbeiten belegt 24h-Dienst korrekt vor (Admin, mob
     await expect(cell).toHaveAttribute("data-selected", "true");
 
     // --- Schicht im Bearbeiten-Modus öffnen --------------------------------
-    const badge = mobile.getByTestId(`shift-badge-${shiftId}`);
+    const badge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${shiftId}`);
     await expect(badge).toBeVisible();
     await badge.click();
 

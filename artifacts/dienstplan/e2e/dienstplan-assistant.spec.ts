@@ -56,6 +56,9 @@ const FOREIGN_DAY = 20;
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const dayCellId = (day: number) => `day-cell-${year}-${pad2(month)}-${pad2(day)}`;
+/** ISO-Datum (yyyy-MM-dd) des n-ten Tages im Testmonat — Suffix der
+ *  agenda-day-Testids in der vereinheitlichten Wochen-Liste. */
+const isoDay = (day: number) => `${year}-${pad2(month)}-${pad2(day)}`;
 
 /** Erstellt einen Assistenten und gibt die angelegten Stammdaten zurück. */
 async function createAssistant(ctx: APIRequestContext, suffix: string): Promise<CreatedUser> {
@@ -183,15 +186,25 @@ test.describe("Dienstplan-Sicht als Assistent (eingeschränkte Rechte)", () => {
     await page.getByTestId("view-toggles-desktop").getByTestId("view-toggle-grid").click();
     await expect(desktop.getByTestId("month-grid")).toBeVisible();
 
+    // Seit der UI-Vereinheitlichung (26.08.2026) zeigt die Wochen-Liste
+    // (schedule-list, globaler Singleton) standardmäßig den ganzen Monat.
+    // Der Tagesklick engt sie nicht mehr ein, sondern markiert die Zeile —
+    // die Datenisolation wird deshalb direkt an den Zeilen geprüft: der
+    // eigene Tag trägt den Dienst, der fremde Tag bleibt eintragslos.
+    const scheduleList = page.getByTestId("schedule-list");
+
     await desktop.getByTestId(dayCellId(OWN_DAY)).click();
-    await expect(desktop.getByTestId("day-detail-header")).toContainText(`${OWN_DAY}.`);
-    await expect(desktop.getByTestId("day-detail-header").locator("..")).toContainText("1 Dienst");
-    await expect(desktop.getByText("08:00–16:00").first()).toBeVisible();
+    const ownRow = scheduleList.getByTestId(`agenda-day-${isoDay(OWN_DAY)}`);
+    await expect(ownRow).toHaveAttribute("data-anchor", "true");
+    await expect(ownRow).toContainText("08:00–16:00");
 
     await desktop.getByTestId(dayCellId(FOREIGN_DAY)).click();
-    await expect(desktop.getByTestId("day-detail-header")).toContainText(`${FOREIGN_DAY}.`);
-    await expect(desktop.getByText("12:00–20:00")).toHaveCount(0);
-    await expect(desktop.getByText("Keine Dienste geplant").first()).toBeVisible();
+    const foreignRow = scheduleList.getByTestId(`agenda-day-${isoDay(FOREIGN_DAY)}`);
+    await expect(foreignRow).toHaveAttribute("data-anchor", "true");
+    // Kein Datenleck: die fremde Schicht taucht weder in dieser Zeile noch
+    // sonst irgendwo in der Liste auf.
+    await expect(foreignRow).not.toContainText("12:00–20:00");
+    await expect(scheduleList.getByText("12:00–20:00")).toHaveCount(0);
   });
 
   test("zeigt keinen Assistenten-Filter", async ({ page }) => {

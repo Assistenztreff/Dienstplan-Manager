@@ -151,7 +151,10 @@ test("Mobil (Admin): Zellenklick markiert nur, Plus öffnet den Schicht-Dialog",
     const cellA = mobile.getByTestId(dayCellId(year, month1, dayA));
     await cellA.click();
     await expect(cellA).toHaveAttribute("data-selected", "true");
-    await expect(mobile.getByTestId("day-detail-header")).toContainText(`${dayA}.`);
+    // Seit der UI-Vereinheitlichung (26.08.2026) engt die Zellenauswahl die
+    // Wochen-Liste NICHT mehr ein (Standard-Zeitraum bleibt „Dieser Monat") —
+    // die Zeile des gewählten Tages bekommt stattdessen den Anker-Rahmen.
+    await expect(page.getByTestId(dayCellId(year, month1, dayA).replace("day-cell-", "agenda-day-"))).toHaveAttribute("data-anchor", "true");
     await expect(dialog, "Der Zellenklick darf keinen Dialog öffnen (3.4)").toHaveCount(0);
 
     // --- Auch der 2. Klick auf den markierten Tag bleibt reine Auswahl. ---
@@ -192,7 +195,10 @@ test("Mobil (Assistent): 1. Klick markiert, 2. Klick öffnet NICHTS", async ({
     const cell = mobile.getByTestId(dayCellId(year, month1, dayA));
     await cell.click();
     await expect(cell).toHaveAttribute("data-selected", "true");
-    await expect(mobile.getByTestId("day-detail-header")).toContainText(`${dayA}.`);
+    // Seit der UI-Vereinheitlichung (26.08.2026) engt die Zellenauswahl die
+    // Wochen-Liste NICHT mehr ein (Standard-Zeitraum bleibt „Dieser Monat") —
+    // die Zeile des gewählten Tages bekommt stattdessen den Anker-Rahmen.
+    await expect(page.getByTestId(dayCellId(year, month1, dayA).replace("day-cell-", "agenda-day-"))).toHaveAttribute("data-anchor", "true");
     await expect(dialog).toHaveCount(0);
 
     // --- 2. Klick: darf für Assistenten KEINEN Dialog öffnen. ---

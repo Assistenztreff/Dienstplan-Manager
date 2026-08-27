@@ -189,21 +189,28 @@ test("Kalender zeigt Entwurf-/Vorschlag-Badge (data-planning-status)", async ({ 
   // Der Ansicht-Umschalter lebt seit der adaptiven Kopfzeile AUSSERHALB des
   // Mobile-Containers (sticky Header) — über die Header-Testids ansteuern.
   await page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list").click();
+  // Standard-Zeitraum der Wochen-Liste ist seit 27.08.2026 „Heute" — dieser
+  // Test prueft Eintraege an festen Monatstagen und braucht den Monatsblick.
+  await page.getByTestId("schedule-list-range-menu").click();
+  await page.getByRole("option", { name: "Dieser Monat" }).click();
+  // Monatsblick startet seit 27.08. teilweise eingeklappt (nur aktuelle
+  // KW offen) — fuer die Tages-Zeilen unten erst alles ausklappen.
+  await page.getByTestId("schedule-list-collapse-all").click();
 
   // Die Listenansicht rendert ShiftBadge mit data-planning-status je Schicht.
   // WICHTIG: auf den Mobile-Container scopen — dieselben Badges existieren
   // auch im (per CSS versteckten) Desktop-Zweig -> Strict-Mode-Verletzung.
-  const draftBadge = mobile.getByTestId(`shift-badge-${draftShiftId}`);
+  const draftBadge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${draftShiftId}`);
   await expect(draftBadge, "Entwurf-Schicht muss im Kalender sichtbar sein").toBeVisible();
   await expect(draftBadge).toHaveAttribute("data-planning-status", "VORLAEUFIG");
   // Das Entwurf-Label ist für Nutzer sichtbar (Badge-Text im ShiftBadge).
   await expect(draftBadge).toContainText(/Entwurf/i);
 
-  const offeredBadge = mobile.getByTestId(`shift-badge-${offeredShiftId}`);
+  const offeredBadge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${offeredShiftId}`);
   await expect(offeredBadge).toBeVisible();
   await expect(offeredBadge).toHaveAttribute("data-planning-status", "ANGEBOTEN");
 
-  const fixBadge = mobile.getByTestId(`shift-badge-${defaultShiftId}`);
+  const fixBadge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${defaultShiftId}`);
   await expect(fixBadge).toBeVisible();
   await expect(fixBadge).toHaveAttribute("data-planning-status", "FIX");
 });

@@ -127,6 +127,13 @@ test("Dienstplan: Entwurf/Vorschlag sichtbar gekennzeichnet (Label, Status-Attri
   // Der Ansicht-Umschalter lebt seit der adaptiven Kopfzeile AUSSERHALB des
   // Mobile-Containers (sticky Header) — über die Header-Testids ansteuern.
   await page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list").click();
+  // Standard-Zeitraum der Wochen-Liste ist seit 27.08.2026 „Heute" — dieser
+  // Test prueft Eintraege an festen Monatstagen und braucht den Monatsblick.
+  await page.getByTestId("schedule-list-range-menu").click();
+  await page.getByRole("option", { name: "Dieser Monat" }).click();
+  // Monatsblick startet seit 27.08. teilweise eingeklappt (nur aktuelle
+  // KW offen) — fuer die Tages-Zeilen unten erst alles ausklappen.
+  await page.getByTestId("schedule-list-collapse-all").click();
 
   // Seit #746 nutzt die Listenansicht die einzeiligen Tagesleisten-Zeilen
   // (DayDetailRow): Unverbindliche Dienste sind dort per Status-Icon (Stift-
@@ -134,7 +141,7 @@ test("Dienstplan: Entwurf/Vorschlag sichtbar gekennzeichnet (Label, Status-Attri
   // gekennzeichnet — der gestrichelte Rand existiert nur noch im Monatsgitter.
 
   // Entwurf (VORLAEUFIG): Status-Attribut + sichtbares Label + Status-Icon.
-  const draftBadge = mobile.getByTestId(`shift-badge-${draftShiftId}`);
+  const draftBadge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${draftShiftId}`);
   await expect(draftBadge, "Entwurf-Schicht muss im Kalender sichtbar sein").toBeVisible();
   await expect(draftBadge).toHaveAttribute("data-planning-status", "VORLAEUFIG");
   await expect(draftBadge, "Entwurf-Label muss für Nutzer sichtbar sein").toContainText(
@@ -145,12 +152,12 @@ test("Dienstplan: Entwurf/Vorschlag sichtbar gekennzeichnet (Label, Status-Attri
     "Entwurf-Zeile muss das Status-Icon tragen (nicht nur Text/Farbe)"
   ).toBeVisible();
   await expect(
-    mobile.getByTestId(`shift-confirm-${draftShiftId}`),
+    page.getByTestId("schedule-list").getByTestId(`shift-confirm-${draftShiftId}`),
     "Entwurf-Zeile muss den Bestätigen-Button anbieten"
   ).toBeVisible();
 
   // Vorschlag (ANGEBOTEN): ebenfalls unverbindlich gekennzeichnet.
-  const offeredBadge = mobile.getByTestId(`shift-badge-${offeredShiftId}`);
+  const offeredBadge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${offeredShiftId}`);
   await expect(offeredBadge).toBeVisible();
   await expect(offeredBadge).toHaveAttribute("data-planning-status", "ANGEBOTEN");
   await expect(offeredBadge, "Vorschlag-Label muss für Nutzer sichtbar sein").toContainText(
@@ -160,7 +167,7 @@ test("Dienstplan: Entwurf/Vorschlag sichtbar gekennzeichnet (Label, Status-Attri
 
   // Gegenprobe FIX: verbindliche Dienste tragen KEIN Planungs-Label, sondern
   // "bestätigt" — sonst wäre die Kennzeichnung bedeutungslos.
-  const fixBadge = mobile.getByTestId(`shift-badge-${fixShiftId}`);
+  const fixBadge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${fixShiftId}`);
   await expect(fixBadge).toBeVisible();
   await expect(fixBadge).toHaveAttribute("data-planning-status", "FIX");
   await expect(fixBadge).not.toContainText(/Entwurf|Vorschlag/i);

@@ -108,6 +108,13 @@ async function openListView(page: import("@playwright/test").Page) {
   // Der Ansicht-Umschalter lebt seit der adaptiven Kopfzeile AUSSERHALB des
   // Mobile-Containers (sticky Header) — über die Header-Testids ansteuern.
   await page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list").click();
+  // Standard-Zeitraum der Wochen-Liste ist seit 27.08.2026 „Heute" — dieser
+  // Test prueft Eintraege an festen Monatstagen und braucht den Monatsblick.
+  await page.getByTestId("schedule-list-range-menu").click();
+  await page.getByRole("option", { name: "Dieser Monat" }).click();
+  // Monatsblick startet seit 27.08. teilweise eingeklappt (nur aktuelle
+  // KW offen) — fuer die Tages-Zeilen unten erst alles ausklappen.
+  await page.getByTestId("schedule-list-collapse-all").click();
   return mobile;
 }
 
@@ -117,11 +124,11 @@ test("Badge-Button: Entwurf mit einem Klick bestätigen → Status FIX, Button v
   await loginViaUi(page, acc.email, PASSWORD);
   const mobile = await openListView(page);
 
-  const draftBadge = mobile.getByTestId(`shift-badge-${draftShiftId}`);
+  const draftBadge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${draftShiftId}`);
   await expect(draftBadge, "Entwurf-Schicht muss im Kalender sichtbar sein").toBeVisible();
   await expect(draftBadge).toHaveAttribute("data-planning-status", "VORLAEUFIG");
 
-  const confirmButton = mobile.getByTestId(`shift-confirm-${draftShiftId}`);
+  const confirmButton = page.getByTestId("schedule-list").getByTestId(`shift-confirm-${draftShiftId}`);
   await expect(
     confirmButton,
     "Entwurf-Badge muss den Ein-Klick-Bestätigen-Button tragen",
@@ -131,7 +138,7 @@ test("Badge-Button: Entwurf mit einem Klick bestätigen → Status FIX, Button v
   // Nach der Bestätigung: Status FIX, Button weg, Entwurf-Kennzeichnung weg.
   await expect(draftBadge).toHaveAttribute("data-planning-status", "FIX");
   await expect(
-    mobile.getByTestId(`shift-confirm-${draftShiftId}`),
+    page.getByTestId("schedule-list").getByTestId(`shift-confirm-${draftShiftId}`),
     "Bestätigen-Button muss nach der Bestätigung verschwinden",
   ).toHaveCount(0);
   await expect(draftBadge).not.toContainText(/Entwurf/i);
@@ -150,7 +157,7 @@ test("Dialog-Banner: Vorschlag über Quick-Confirm bestätigen → Dialog schlie
   await loginViaUi(page, acc.email, PASSWORD);
   const mobile = await openListView(page);
 
-  const offeredBadge = mobile.getByTestId(`shift-badge-${offeredShiftId}`);
+  const offeredBadge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${offeredShiftId}`);
   await expect(offeredBadge, "Vorschlag-Schicht muss im Kalender sichtbar sein").toBeVisible();
   await expect(offeredBadge).toHaveAttribute("data-planning-status", "ANGEBOTEN");
 
@@ -169,7 +176,7 @@ test("Dialog-Banner: Vorschlag über Quick-Confirm bestätigen → Dialog schlie
   // Dialog schließt; Badge zeigt FIX ohne Bestätigen-Button.
   await expect(dialog).not.toBeVisible();
   await expect(offeredBadge).toHaveAttribute("data-planning-status", "FIX");
-  await expect(mobile.getByTestId(`shift-confirm-${offeredShiftId}`)).toHaveCount(0);
+  await expect(page.getByTestId("schedule-list").getByTestId(`shift-confirm-${offeredShiftId}`)).toHaveCount(0);
 
   const res = await acc.ctx.get(`/api/shifts/${offeredShiftId}`);
   expect(res.ok(), "GET /api/shifts/:id nach Bestätigung fehlgeschlagen").toBe(true);
@@ -183,19 +190,19 @@ test("Negativfälle: kein Bestätigen-Button auf FIX-Schichten und Abwesenheiten
   const mobile = await openListView(page);
 
   // FIX-Schicht: sichtbar, aber ohne Bestätigen-Button.
-  const fixBadge = mobile.getByTestId(`shift-badge-${fixShiftId}`);
+  const fixBadge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${fixShiftId}`);
   await expect(fixBadge).toBeVisible();
   await expect(fixBadge).toHaveAttribute("data-planning-status", "FIX");
   await expect(
-    mobile.getByTestId(`shift-confirm-${fixShiftId}`),
+    page.getByTestId("schedule-list").getByTestId(`shift-confirm-${fixShiftId}`),
     "FIX-Schichten dürfen KEINEN Bestätigen-Button tragen",
   ).toHaveCount(0);
 
   // Abwesenheit (Urlaub): sofort verbindlich, nie ein Bestätigen-Button.
-  const vacationBadge = mobile.getByTestId(`shift-badge-${vacationShiftId}`);
+  const vacationBadge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${vacationShiftId}`);
   await expect(vacationBadge).toBeVisible();
   await expect(
-    mobile.getByTestId(`shift-confirm-${vacationShiftId}`),
+    page.getByTestId("schedule-list").getByTestId(`shift-confirm-${vacationShiftId}`),
     "Abwesenheiten dürfen KEINEN Bestätigen-Button tragen",
   ).toHaveCount(0);
 

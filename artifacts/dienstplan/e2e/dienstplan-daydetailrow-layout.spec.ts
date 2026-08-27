@@ -26,13 +26,14 @@ import {
  * Basis-Status, der Avatar ist davon aber unabhängig — isTeam-Check).
  *
  * Task #854 lässt exakt dieselben vier Prüfungen zusätzlich bei 800 px
- * Breite (schmales Tablet, oberhalb des md-Breakpoints) laufen — die
- * Desktop-Monatsansicht mit dem "comfortable"-Padding darf dort weder
- * überlaufen noch die Geometrie-Invarianten verletzen.
+ * Breite (schmales Tablet, oberhalb des md-Breakpoints) laufen — reine
+ * Breiten-Robustheit der (seit der UI-Vereinheitlichung 26.08.2026 überall
+ * einheitlich kompakten) Zeile, kein separates "comfortable"-Padding mehr
+ * zu unterscheiden.
  *
- * Aufbau: Desktop-Viewport, Monatsansicht, Tagesdetail-Panel auf Zeitraum
- * "Dieser Monat" gestellt, damit alle Schichten ohne Tageszellen-Klick
- * sichtbar sind.
+ * Aufbau: Desktop-Viewport, Monatsansicht, die vereinheitlichte Wochen-Liste
+ * (schedule-list) auf Zeitraum "Dieser Monat" gestellt, damit alle Schichten
+ * ohne Tageszellen-Klick sichtbar sind.
  *
  * Farb-Mapping (dienstStatusColor):
  *   FIX        → #1e8f4e → rgb(30, 143, 78)
@@ -246,8 +247,9 @@ async function runDayDetailRowChecks(
   page: import("@playwright/test").Page,
   viewport: { width: number; height: number },
 ): Promise<void> {
-    // Desktop-Viewport: day-detail-panel ist nur in der Desktop-Monatsansicht
-    // sichtbar (data-testid="dienstplan-desktop", hidden md:flex).
+    // Desktop-Viewport: die Wochen-Liste (schedule-list) steht seit der
+    // UI-Vereinheitlichung (26.08.2026) außerhalb von dienstplan-mobile/
+    // -desktop und existiert daher nur EIN einziges Mal im DOM.
     await page.setViewportSize(viewport);
     await loginViaUi(page, acc.email, PASSWORD);
     await page.goto("/dienstplan");
@@ -261,23 +263,23 @@ async function runDayDetailRowChecks(
       .getByTestId("view-toggle-grid")
       .click();
 
-    // Alle weiteren Lokalisierungen auf den Desktop-Container scopen:
-    // das day-detail-panel existiert auch im CSS-hidden Mobile-Zweig,
-    // was sonst eine Strict-Mode-Verletzung auslöst.
-    const desktop = page.getByTestId("dienstplan-desktop");
+    // Die vereinheitlichte Wochen-Liste (schedule-list) existiert seit der
+    // UI-Vereinheitlichung (26.08.2026) nur noch EIN einziges Mal im DOM
+    // (kein separater Mobile-/Desktop-Zweig mehr) — kein Scoping mehr nötig.
+    const scheduleList = page.getByTestId("schedule-list");
+    await expect(scheduleList).toBeVisible();
 
-    // Tagesdetail-Panel öffnen.
-    const panel = desktop.getByTestId("day-detail-panel");
-    await expect(panel).toBeVisible();
-
-    // Zeitraum auf "Dieser Monat" umstellen — alle drei Schichten werden ohne
-    // Tageszellen-Klick gerendert.
-    await desktop.getByTestId("day-detail-range-menu").click();
+    // Zeitraum auf "Dieser Monat" umstellen (Standard, hier explizit gesetzt) —
+    // alle drei Schichten werden ohne Tageszellen-Klick gerendert.
+    await scheduleList.getByTestId("schedule-list-range-menu").click();
     await page.getByRole("option", { name: "Dieser Monat" }).click();
+    // Monatsblick startet seit 27.08. teilweise eingeklappt (nur aktuelle
+    // KW offen) — fuer die Tages-Zeilen unten erst alles ausklappen.
+    await page.getByTestId("schedule-list-collapse-all").click();
 
     // ── Bestätigter Dienst (FIX) ────────────────────────────────────────────
     await assertDayDetailRowLayout(
-      panel.getByTestId(`day-detail-shift-${fixShiftId}`),
+      scheduleList.getByTestId(`shift-badge-${fixShiftId}`),
       {
         // FIX → grün (#1e8f4e = rgb(30, 143, 78))
         expectedBarColor: "rgb(30, 143, 78)",
@@ -286,12 +288,12 @@ async function runDayDetailRowChecks(
       },
     );
     await expect(
-      panel.getByTestId(`day-detail-shift-${fixShiftId}`),
+      scheduleList.getByTestId(`shift-badge-${fixShiftId}`),
     ).toHaveAttribute("data-planning-status", "FIX");
 
     // ── Entwurf (VORLAEUFIG) ────────────────────────────────────────────────
     await assertDayDetailRowLayout(
-      panel.getByTestId(`day-detail-shift-${draftShiftId}`),
+      scheduleList.getByTestId(`shift-badge-${draftShiftId}`),
       {
         // VORLAEUFIG → amber/gold (#b5790a = rgb(181, 121, 10))
         expectedBarColor: "rgb(181, 121, 10)",
@@ -300,13 +302,13 @@ async function runDayDetailRowChecks(
       },
     );
     await expect(
-      panel.getByTestId(`day-detail-shift-${draftShiftId}`),
+      scheduleList.getByTestId(`shift-badge-${draftShiftId}`),
     ).toHaveAttribute("data-planning-status", "VORLAEUFIG");
 
     // ── Abwesenheit — Urlaub (vacation, FIX) ────────────────────────────────
     // Abwesenheits-Einträge zeigen "ganztägig" statt einer Uhrzeit.
     await assertDayDetailRowLayout(
-      panel.getByTestId(`day-detail-shift-${absenceShiftId}`),
+      scheduleList.getByTestId(`shift-badge-${absenceShiftId}`),
       {
         // Vacation FIX, kein Ausfall, keine Vertretung → grün (#1e8f4e)
         expectedBarColor: "rgb(30, 143, 78)",
@@ -315,14 +317,14 @@ async function runDayDetailRowChecks(
       },
     );
     await expect(
-      panel.getByTestId(`day-detail-shift-${absenceShiftId}`),
+      scheduleList.getByTestId(`shift-badge-${absenceShiftId}`),
     ).toHaveAttribute("data-planning-status", "FIX");
 
     // ── Vertretungsdienst (isVertretung, FIX) ───────────────────────────────
     // Teal-Statusfarbbalken + "Vertretung" im Statustext (Vorrang vor dem
     // Basis-Status "bestätigt", der als eingefärbtes Wort danach folgt).
     await assertDayDetailRowLayout(
-      panel.getByTestId(`day-detail-shift-${vertretungShiftId}`),
+      scheduleList.getByTestId(`shift-badge-${vertretungShiftId}`),
       {
         // Vertretung → teal (#0f6e8c = rgb(15, 110, 140))
         expectedBarColor: "rgb(15, 110, 140)",
@@ -331,18 +333,18 @@ async function runDayDetailRowChecks(
       },
     );
     await expect(
-      panel.getByTestId(`day-detail-shift-${vertretungShiftId}`),
+      scheduleList.getByTestId(`shift-badge-${vertretungShiftId}`),
     ).toHaveAttribute("data-planning-status", "FIX");
 
     // Avatar bleibt die Personenfarbe, NICHT die teal Vertretungsfarbe: exakt
     // dieselbe Hintergrundfarbe wie beim FIX-Dienst desselben Assistenten,
     // und explizit ungleich dem Statusbalken-Teal.
-    const fixAvatar = panel
-      .getByTestId(`day-detail-shift-${fixShiftId}`)
+    const fixAvatar = scheduleList
+      .getByTestId(`shift-badge-${fixShiftId}`)
       .locator('span[aria-hidden="true"]')
       .first();
-    const vertretungAvatar = panel
-      .getByTestId(`day-detail-shift-${vertretungShiftId}`)
+    const vertretungAvatar = scheduleList
+      .getByTestId(`shift-badge-${vertretungShiftId}`)
       .locator('span[aria-hidden="true"]')
       .first();
     const fixAvatarBg = await fixAvatar.evaluate(

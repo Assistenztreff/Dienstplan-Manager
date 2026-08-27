@@ -117,7 +117,7 @@ test("Halbtägiger Urlaub in Europe/Berlin: Anzeige bleibt in Lokalzeit, sehr fr
     await selectDayCell(page, cell);
 
     // --- 1) Halbtägiger Urlaub 13:00–17:00 anlegen -------------------------
-    await mobile.getByTestId("add-shift").click();
+    await page.getByTestId("add-shift").click();
     const dialog = page.getByTestId("shift-dialog");
     await expect(dialog).toBeVisible();
 
@@ -155,7 +155,7 @@ test("Halbtägiger Urlaub in Europe/Berlin: Anzeige bleibt in Lokalzeit, sehr fr
 
     // --- 2) Sehr frühe Startzeit (00:30) wird abgelehnt --------------------
     await selectDayCell(page, mobile.getByTestId(dayCellId(year, month, day)));
-    await mobile.getByTestId("add-shift").click();
+    await page.getByTestId("add-shift").click();
     const dialog2 = page.getByTestId("shift-dialog");
     await expect(dialog2).toBeVisible();
 
