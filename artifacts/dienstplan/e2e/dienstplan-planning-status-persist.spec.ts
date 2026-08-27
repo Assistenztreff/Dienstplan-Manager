@@ -189,6 +189,10 @@ test("Kalender zeigt Entwurf-/Vorschlag-Badge (data-planning-status)", async ({ 
   // Der Ansicht-Umschalter lebt seit der adaptiven Kopfzeile AUSSERHALB des
   // Mobile-Containers (sticky Header) — über die Header-Testids ansteuern.
   await page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list").click();
+  // Standard-Zeitraum der Wochen-Liste ist seit 27.08.2026 „Heute" — dieser
+  // Test prueft Eintraege an festen Monatstagen und braucht den Monatsblick.
+  await page.getByTestId("schedule-list-range-menu").click();
+  await page.getByRole("option", { name: "Dieser Monat" }).click();
 
   // Die Listenansicht rendert ShiftBadge mit data-planning-status je Schicht.
   // WICHTIG: auf den Mobile-Container scopen — dieselben Badges existieren

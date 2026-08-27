@@ -759,6 +759,9 @@ function AgendaView({
   onNextMonth,
   selectedDay,
   hideEmptyDays = false,
+  anchorInterval,
+  collapsedWeeks,
+  onToggleWeek,
 }: {
   days: Date[];
   shifts: Shift[];
@@ -781,9 +784,22 @@ function AgendaView({
    *  Eintrag ausblenden — sonst dominieren leere Zeilen die Trefferliste.
    *  Bei „Alle" bleiben alle Tage stehen (inkl. „Schicht hinzufügen"). */
   hideEmptyDays?: boolean;
+  /** Mockup-Abnahme 27.08.2026: Bei Zeitraum „Dieser Monat" laufen die
+   *  Randwochen voll Mo–So durch — Tage AUSSERHALB dieses Intervalls sind
+   *  Nachbarmonats-Tage: ruhig grau, Dienste ausgegraut sichtbar (Planungs-
+   *  hilfe „wer hatte die letzten Dienste im Vormonat?"), nicht anklickbar,
+   *  kein Anlegen, zählen in keiner Zusammenfassung mit. */
+  anchorInterval?: { from: Date; to: Date };
+  /** Eingeklappte Wochen (Karten-Keys). State lebt im Eltern-Element, damit
+   *  der „Alle ein-/ausklappen"-Knopf der Filterleiste ihn mitsteuern kann.
+   *  Bewusst NICHT persistiert — beim nächsten Öffnen sind alle Wochen offen. */
+  collapsedWeeks?: ReadonlySet<string>;
+  onToggleWeek?: (weekKey: string) => void;
 }) {
   const selectedDateSet = new Set(selectedDates ?? []);
   const getPersonSlot = usePersonSlotLookup();
+  const isOtherDay = (day: Date): boolean =>
+    anchorInterval != null && (day < anchorInterval.from || day > anchorInterval.to);
 
   // ── Wochen-Kapitel (Task #746, Variante A): Tage nach ISO-Woche (Mo–So)
   //    gruppieren; jede Woche wird ein eigener Kartenblock mit Überschrift. ──
@@ -802,12 +818,21 @@ function AgendaView({
     .map((week) => {
       const first = week.days[0]!;
       const weekLast = week.days[week.days.length - 1]!;
+      // Zusammenfassung für den (einklappbaren) Wochenkopf — zählt NUR Tage
+      // des angezeigten Zeitraums, ausgegraute Nachbarmonats-Dienste nicht.
+      const ownShifts = shifts.filter((s) => {
+        const d = new Date(s.startTime);
+        return week.days.some((day) => isSameDay(d, day) && !isOtherDay(day));
+      });
+      const dienstCount = ownShifts.filter((s) => !isAbsenceShift(s)).length;
+      const abwCount = ownShifts.length - dienstCount;
       return {
         key: week.key,
         isoWeek: getISOWeek(first),
         label: isSameDay(first, weekLast)
           ? format(first, "d. MMMM", { locale: de })
           : `${format(first, "d.")}–${format(weekLast, "d. MMMM", { locale: de })}`,
+        summary: `${dienstCount} ${dienstCount === 1 ? "Dienst" : "Dienste"}${abwCount > 0 ? ` · ${abwCount} Abw.` : ""}`,
         days: hideEmptyDays
           ? week.days.filter((day) => shifts.some((s) => isSameDay(new Date(s.startTime), day)))
           : week.days,
@@ -836,17 +861,36 @@ function AgendaView({
       data-testid="agenda-view"
     >
       {weeks.map((week) => {
+        const collapsed = collapsedWeeks?.has(week.key) ?? false;
         return (
           <section
             key={week.key}
             data-testid={`agenda-week-${week.key}`}
+            data-collapsed={collapsed ? "true" : "false"}
             className="overflow-hidden rounded-lg border border-border/40 bg-card"
           >
-            <h3 className="border-b border-border/40 bg-muted/40 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-              KW {week.isoWeek} · {week.label}
-            </h3>
-            {week.days
-              .map((day) => {
+            {/* Ebenen-Stufe 1 (Mockup-Abnahme 27.08.2026): kühle Brand-Tönung
+                statt neutralem Grau; der ganze Kopf klappt die Woche ein/aus,
+                die Zusammenfassung rechts bleibt auch eingeklappt sichtbar. */}
+            <button
+              type="button"
+              aria-expanded={!collapsed}
+              onClick={() => onToggleWeek?.(week.key)}
+              className={`flex w-full items-center gap-2 bg-[#e9ecf1] px-4 py-1.5 text-left text-[11px] font-bold uppercase tracking-wide text-assistenz-brand ${collapsed ? "" : "border-b border-border/40"} ${onToggleWeek ? "" : "pointer-events-none"}`}
+            >
+              {onToggleWeek && (
+                <ChevronDown
+                  aria-hidden="true"
+                  className={`h-3.5 w-3.5 shrink-0 transition-transform motion-reduce:transition-none ${collapsed ? "-rotate-90" : ""}`}
+                />
+              )}
+              <span>KW {week.isoWeek} · {week.label}</span>
+              <span className="ml-auto font-semibold normal-case tracking-normal text-muted-foreground tabular-nums">
+                {week.summary}
+              </span>
+            </button>
+            {!collapsed && week.days
+              .map((day, dayIdx, renderedDays) => {
               const dayShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), day));
               // Task #792: Ausfall-UserIds für diesen Tag — damit DayDetailRow
               // das Warn-Icon auf Dienst-Zeilen zeigen kann (analog MonthGrid).
@@ -856,14 +900,26 @@ function AgendaView({
                   .map((s) => s.userId),
               );
               const isCurrentDay = isToday(day);
-              // Wochenende: Tönung UND fetter Wochentag — Information nie nur
-              // über Farbe (Barrierefreiheit, DESIGN-GUIDELINES).
+              // Wochenende: helle Brand-Tönung + Streifen + dunkelblaue,
+              // dickere Beschriftung — Information nie nur über Farbe
+              // (Barrierefreiheit, DESIGN-GUIDELINES; Abnahme 27.08.2026).
               const weekend = getDay(day) === 0 || getDay(day) === 6;
-              const bulkSelected = selectionMode && selectedDateSet.has(format(day, "yyyy-MM-dd"));
+              // Nachbarmonats-Tag (nur Zeitraum „Dieser Monat"): ruhig grau,
+              // nichts anklickbar, Dienste unten ausgegraut sichtbar.
+              const other = isOtherDay(day);
+              const bulkSelected = !other && selectionMode && selectedDateSet.has(format(day, "yyyy-MM-dd"));
+              // Verschmolzene Auswahl (Abnahme 27.08.2026): direkt benachbarte
+              // ausgewählte Zeilen teilen sich EINEN Rahmen — der Folge-Tag
+              // kappt seine Oberkante, nur der letzte behält die Unterkante.
+              const prevSelected = bulkSelected && dayIdx > 0 &&
+                selectedDateSet.has(format(renderedDays[dayIdx - 1]!, "yyyy-MM-dd"));
+              const nextSelected = bulkSelected && dayIdx < renderedDays.length - 1 &&
+                selectedDateSet.has(format(renderedDays[dayIdx + 1]!, "yyyy-MM-dd"));
               // Ersetzt das frühere day-detail-Panel: die Zeile des im Kalender
               // gewählten Tages wird hier hervorgehoben (Desktop) bzw. ist das
               // Scroll-Ziel (eingeklapptes Smartphone, siehe MonthGrid).
-              const isAnchorDay = selectedDay != null && isSameDay(day, selectedDay);
+              const isAnchorDay = !other && selectedDay != null && isSameDay(day, selectedDay);
+              const dayClickable = canEdit && !other;
 
               return (
                 <div
@@ -871,18 +927,15 @@ function AgendaView({
                   data-testid={`agenda-day-${format(day, "yyyy-MM-dd")}`}
                   data-selected={bulkSelected ? "true" : "false"}
                   data-anchor={isAnchorDay ? "true" : "false"}
-                  // Task #846: wie im Monatsraster deckt die Detailzeilen-Liste
-                  // (bg-card, s. u.) einen ring-inset ab — echter Rand statt
-                  // Ring, damit die Auswahl auch bei Tagen MIT Einträgen um die
-                  // ganze Karte sichtbar bleibt. border-[2px] ist IMMER gesetzt
-                  // (sonst transparent) statt nur bei Auswahl, sonst würde die
-                  // Karte beim Aus-/Abwählen um die Randbreite wachsen/
-                  // schrumpfen (Layout-Sprung) — nur die Farbe wechselt.
-                  // Anker (im Kalender gewählter Tag) bekommt einen eigenen,
-                  // dezenteren Rand — nachrangig zur Mehrfachauswahl.
+                  data-other-month={other ? "true" : "false"}
+                  // Task #846: echter Rand statt Ring (Detailzeilen decken
+                  // ring-inset ab). Unselektiert bleibt der 2-px-Rahmen als
+                  // Transparent-Platzhalter stehen (kein Layout-Sprung beim
+                  // An-/Abwählen einzelner Tage); innerhalb eines Auswahl-
+                  // Blocks entfallen die Zwischenkanten komplett.
                   className={
                     bulkSelected
-                      ? "border-[2px] border-assistenz-brand bg-assistenz-mint"
+                      ? `border-x-[2px] border-assistenz-brand bg-assistenz-mint ${prevSelected ? "border-t-0" : "border-t-[2px]"} ${nextSelected ? "border-b-0" : "border-b-[2px]"}`
                       : isAnchorDay
                         ? "border-[2px] border-primary/50 border-b-border/30 last:border-b-transparent"
                         : "border-[2px] border-transparent border-b-border/30 last:border-b-transparent"
@@ -890,27 +943,35 @@ function AgendaView({
                 >
                   <button
                     type="button"
-                    className={`flex min-h-[44px] w-full items-center gap-3 px-4 py-2 text-left transition-colors ${
-                      isCurrentDay
-                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                        : weekend
-                          ? "bg-muted/60 text-foreground hover:bg-muted"
-                          : "bg-card text-foreground hover:bg-muted/40"
-                    } ${!canEdit ? "cursor-default pointer-events-none" : ""}`}
+                    tabIndex={other ? -1 : undefined}
+                    className={`relative flex min-h-[40px] w-full items-center gap-3 px-4 py-1 text-left transition-colors ${
+                      other
+                        ? "bg-[#f6f6f3] text-muted-foreground"
+                        : isCurrentDay
+                          ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                          : weekend
+                            ? "bg-[#eef3f9] text-assistenz-brand shadow-[inset_3px_0_0_#05305B] hover:bg-[#e3ecf5]"
+                            : "bg-card text-foreground hover:bg-muted/40"
+                    } ${!dayClickable ? "cursor-default pointer-events-none" : "after:absolute after:inset-x-0 after:top-1/2 after:h-[44px] after:-translate-y-1/2 after:content-['']"}`}
                     onClick={() =>
-                      canEdit && (selectionMode ? onToggleDate?.(day) : onDayClick(day))
+                      dayClickable && (selectionMode ? onToggleDate?.(day) : onDayClick(day))
                     }
                   >
-                    <span className="min-w-[24px] text-sm font-semibold tabular-nums">{format(day, "d")}</span>
-                    <span className={`text-sm ${weekend ? "font-bold" : ""}`}>
+                    <span className={`min-w-[24px] text-sm tabular-nums ${other ? "font-medium" : weekend ? "font-extrabold" : "font-bold"}`}>{format(day, "d")}</span>
+                    <span className={`text-sm ${other ? "font-medium" : weekend ? "font-bold" : "font-semibold"}`}>
                       {format(day, "EEEEEE", { locale: de })}
                     </span>
-                    {isCurrentDay && (
+                    {other && (
+                      <span className="rounded-[5px] border border-border/60 px-1.5 py-px text-[10.5px] tracking-wide text-muted-foreground">
+                        {format(day, "MMM", { locale: de })}
+                      </span>
+                    )}
+                    {isCurrentDay && !other && (
                       <span className="rounded bg-primary-foreground px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
                         Heute
                       </span>
                     )}
-                    {canEdit && (
+                    {canEdit && !other && (
                       <span
                         className={`ml-auto flex items-center gap-1.5 text-xs ${
                           isCurrentDay ? "opacity-80" : "text-muted-foreground"
@@ -926,13 +987,19 @@ function AgendaView({
                         <Plus className="h-3.5 w-3.5 shrink-0" />
                       </span>
                     )}
+                    {other && dayShifts.length > 0 && (
+                      <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+                        {dayShifts.length}
+                      </span>
+                    )}
                   </button>
 
                   {/* Nur Tage MIT Einträgen bekommen Detailzeilen — leere Tage
                       bleiben einzeilig. Zeilen im selben Format
-                      wie die Tagesleiste unter dem Kalender (DayDetailRow). */}
+                      wie die Tagesleiste unter dem Kalender (DayDetailRow).
+                      Nachbarmonats-Dienste: ausgegraut sichtbar, nicht klickbar. */}
                   {dayShifts.length > 0 && (
-                    <div className="border-t border-border/20 bg-card">
+                    <div className={`border-t border-border/20 bg-card ${other ? "opacity-60 grayscale" : ""}`}>
                       {dayShifts.map((shift) => (
                         <div key={shift.id}>
                           <DayDetailRow
@@ -943,8 +1010,8 @@ function AgendaView({
                             // Schichten; festgepinnt in zweiklick-desktop).
                             modelMap={modelMap}
                             hasAusfall={!isAbsenceShift(shift) && dayAusfallUserIds.has(shift.userId)}
-                            onClick={canEdit && !selectionMode ? () => onShiftClick(shift) : undefined}
-                            onConfirm={canEdit && !selectionMode ? onConfirmShift : undefined}
+                            onClick={dayClickable && !selectionMode ? () => onShiftClick(shift) : undefined}
+                            onConfirm={dayClickable && !selectionMode ? onConfirmShift : undefined}
                           />
                           {shift.notes && (
                             <p
@@ -1059,9 +1126,14 @@ function DayDetailRow({
             }
           : undefined
       }
-      className={`relative flex min-h-[44px] items-center gap-2 overflow-hidden border-b border-[#f1f1ee] py-1.5 pl-3 pr-[8px] text-[12.5px] last:border-b-0 ${planningStatusBadgeOutline(shift)} ${
+      // Kompakte Zeile (Abnahme 27.08.2026): optisch 36 px statt 44 px —
+      // die Tippfläche bleibt über das unsichtbare ::after volle 44 px
+      // (DESIGN-GUIDELINES: Touch-Ziele mind. 44×44). overflow-x-clip statt
+      // overflow-hidden, damit die vertikal überstehende Tippzone nicht
+      // weggeschnitten wird; horizontal bleibt alles geclippt (truncate).
+      className={`relative flex min-h-[36px] items-center gap-2 overflow-x-clip border-b border-[#f1f1ee] py-1 pl-3 pr-[8px] text-[12.5px] last:border-b-0 ${planningStatusBadgeOutline(shift)} ${
         clickable
-          ? "cursor-pointer transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+          ? "cursor-pointer transition-colors after:absolute after:inset-x-0 after:top-1/2 after:h-[44px] after:-translate-y-1/2 after:content-[''] hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
           : ""
       }`}
     >
@@ -1104,7 +1176,7 @@ function DayDetailRow({
             e.stopPropagation();
             onConfirm(shift);
           }}
-          className="relative inline-flex shrink-0 items-center gap-1 rounded-md border border-[#d8d8d4] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#092948] transition-colors after:absolute after:inset-x-0 after:top-1/2 after:h-[44px] after:-translate-y-1/2 after:content-[''] hover:border-[#092948]"
+          className="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-md border border-[#d8d8d4] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#092948] transition-colors after:absolute after:inset-x-0 after:top-1/2 after:h-[44px] after:-translate-y-1/2 after:content-[''] hover:border-[#092948]"
         >
           <Check className="h-3 w-3" />
           Bestätigen
@@ -1118,7 +1190,7 @@ function DayDetailRow({
             <TooltipTrigger asChild>
               <span
                 data-testid={`shift-note-icon-${shift.id}`}
-                className="inline-flex shrink-0 cursor-default items-center text-[#555555]/70"
+                className="relative z-10 inline-flex shrink-0 cursor-default items-center text-[#555555]/70"
                 onClick={(e) => e.stopPropagation()}
               >
                 <MessageSquare className="h-3 w-3 shrink-0" />
@@ -1971,14 +2043,37 @@ function ScheduleList({
     "alle",
     ["alle", "dienste", "abwesenheiten"],
   );
+  // Standard „Heute" (Nutzer-Entscheidung 27.08.2026, ersetzt „Dieser Monat");
+  // die zuletzt gewählte Einstellung bleibt via localStorage ohnehin erhalten.
   const [detailRange, setDetailRange] = usePersistentState<ScheduleListRange>(
     "dienstplan.scheduleListRange",
-    "monat",
+    "tag",
     ["tag", "woche", "monat", "zweiMonate"],
   );
 
-  const needsPrevMonth = detailRange === "woche";
-  const needsNextMonth = detailRange === "woche" || detailRange === "zweiMonate";
+  // Eingeklappte Wochenkarten (Abnahme 27.08.2026). Bewusst NICHT
+  // persistiert: beim nächsten Seitenaufruf sind alle Wochen wieder offen.
+  const [collapsedWeeks, setCollapsedWeeks] = useState<ReadonlySet<string>>(new Set());
+  const toggleWeek = (weekKey: string) => {
+    setCollapsedWeeks((prev) => {
+      const next = new Set(prev);
+      if (next.has(weekKey)) next.delete(weekKey);
+      else next.add(weekKey);
+      return next;
+    });
+  };
+
+  // „Dieser Monat" füllt die Randwochen auf volle Mo–So-Blöcke auf —
+  // dafür braucht es die Nachbarmonate, sobald die Randwoche überlappt.
+  const monthStartForFill = startOfMonth(selectedDay);
+  const monthEndForFill = endOfMonth(selectedDay);
+  const monatNeedsPrev =
+    detailRange === "monat" && !isSameDay(startOfWeek(monthStartForFill, { weekStartsOn: 1 }), monthStartForFill);
+  const monatNeedsNext =
+    detailRange === "monat" && !isSameDay(endOfWeek(monthEndForFill, { weekStartsOn: 1 }), monthEndForFill);
+
+  const needsPrevMonth = detailRange === "woche" || monatNeedsPrev;
+  const needsNextMonth = detailRange === "woche" || detailRange === "zweiMonate" || monatNeedsNext;
   const needsAfterNextMonth = detailRange === "zweiMonate";
   const prevMonthDate = new Date(year, month - 2, 1);
   const nextMonthDate = new Date(year, month, 1);
@@ -2022,7 +2117,7 @@ function ScheduleList({
       : list.filter((s) => effectiveSelectedUserIds.includes(s.userId));
   };
 
-  const { rangeShifts, rangeStart, rangeEnd } = useMemo(() => {
+  const { rangeShifts, countShifts, rangeStart, rangeEnd, displayStart, displayEnd } = useMemo(() => {
     let from = startOfDay(selectedDay);
     let to = endOfDay(selectedDay);
     let pool = currentMonthShifts;
@@ -2037,6 +2132,14 @@ function ScheduleList({
     } else if (detailRange === "monat") {
       from = startOfMonth(selectedDay);
       to = endOfMonth(selectedDay);
+      // Mo–So-Auffüllung (Abnahme 27.08.2026): der Pool umfasst auch die
+      // Nachbarmonate, damit deren Dienste auf den grauen Randtagen als
+      // Planungshilfe erscheinen können.
+      pool = [
+        ...filterByAssistant(prevMonthShiftsRaw),
+        ...currentMonthShifts,
+        ...filterByAssistant(nextMonthShiftsRaw),
+      ];
     } else if (detailRange === "zweiMonate") {
       to = endOfMonth(afterNextMonthDate);
       pool = [
@@ -2045,23 +2148,47 @@ function ScheduleList({
         ...filterByAssistant(afterNextMonthShiftsRaw),
       ];
     }
+    // Anzeige-Intervall: nur bei „Dieser Monat" auf volle Mo–So-Wochen
+    // erweitert; Kopfzeilen-Zählung und Beschriftung bleiben beim
+    // Anker-Intervall (der graue Rand zählt nirgends mit).
+    const dFrom = detailRange === "monat" ? startOfWeek(from, { weekStartsOn: 1 }) : from;
+    const dTo = detailRange === "monat" ? endOfWeek(to, { weekStartsOn: 1 }) : to;
     const filtered = pool
       .filter((s) => {
         const d = new Date(s.startTime);
-        if (d < from || d > to) return false;
+        if (d < dFrom || d > dTo) return false;
         if (detailType === "dienste") return !isAbsenceShift(s);
         if (detailType === "abwesenheiten") return isAbsenceShift(s);
         return true;
       })
       .sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime));
-    return { rangeShifts: filtered, rangeStart: from, rangeEnd: to };
+    const counted = filtered.filter((s) => {
+      const d = new Date(s.startTime);
+      return d >= from && d <= to;
+    });
+    return { rangeShifts: filtered, countShifts: counted, rangeStart: from, rangeEnd: to, displayStart: dFrom, displayEnd: dTo };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentMonthShifts, prevMonthShiftsRaw, nextMonthShiftsRaw, afterNextMonthShiftsRaw, selectedDay, detailRange, detailType]);
 
   const rangeDays = useMemo(
-    () => eachDayOfInterval({ start: rangeStart, end: rangeEnd }),
-    [rangeStart, rangeEnd],
+    () => eachDayOfInterval({ start: displayStart, end: displayEnd }),
+    [displayStart, displayEnd],
   );
+
+  // Wochen-Keys des angezeigten Bereichs — für den „Alle ein-/ausklappen"-
+  // Knopf (identische Key-Bildung wie die Karten-Gruppierung in AgendaView).
+  const weekKeys = useMemo(() => {
+    const keys: string[] = [];
+    for (const day of rangeDays) {
+      const key = format(startOfWeek(day, { weekStartsOn: 1 }), "yyyy-MM-dd");
+      if (keys[keys.length - 1] !== key) keys.push(key);
+    }
+    return keys;
+  }, [rangeDays]);
+  const allCollapsed = weekKeys.length > 0 && weekKeys.every((k) => collapsedWeeks.has(k));
+  const toggleAllWeeks = () => {
+    setCollapsedWeeks(allCollapsed ? new Set() : new Set(weekKeys));
+  };
 
   const rangeLabel =
     detailRange === "tag"
@@ -2128,29 +2255,46 @@ function ScheduleList({
             {rangeLabel}
           </p>
           <p className="text-[11px] text-muted-foreground">
-            {rangeShifts.length === 0
+            {/* Zählt NUR den Anker-Zeitraum — die grauen Mo–So-Randtage
+                aus dem Nachbarmonat verfälschen die Zahl nicht. */}
+            {countShifts.length === 0
               ? detailType === "abwesenheiten"
                 ? "Keine Abwesenheiten"
                 : "Keine Dienste geplant"
-              : `${rangeShifts.length} ${
+              : `${countShifts.length} ${
                   detailType === "abwesenheiten"
-                    ? rangeShifts.length === 1 ? "Abwesenheit" : "Abwesenheiten"
-                    : rangeShifts.length === 1 ? "Dienst" : "Dienste"
+                    ? countShifts.length === 1 ? "Abwesenheit" : "Abwesenheiten"
+                    : countShifts.length === 1 ? "Dienst" : "Dienste"
                 }`}
           </p>
         </div>
-        {canEdit && !selectionMode && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1 shrink-0 ml-auto"
-            data-testid="add-shift"
-            onClick={() => onDayClick(selectedDay)}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Dienst anlegen
-          </Button>
-        )}
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {weekKeys.length > 1 && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1 shrink-0"
+              data-testid="schedule-list-collapse-all"
+              onClick={toggleAllWeeks}
+              title={allCollapsed ? "Alle Wochen ausklappen" : "Alle Wochen einklappen"}
+            >
+              <ChevronsDownUp className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">{allCollapsed ? "Alle ausklappen" : "Alle einklappen"}</span>
+            </Button>
+          )}
+          {canEdit && !selectionMode && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1 shrink-0"
+              data-testid="add-shift"
+              onClick={() => onDayClick(selectedDay)}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Dienst anlegen
+            </Button>
+          )}
+        </div>
       </div>
 
       <AgendaView
@@ -2168,6 +2312,9 @@ function ScheduleList({
         onNextMonth={onNextMonth}
         selectedDay={selectedDay}
         hideEmptyDays={detailType !== "alle"}
+        anchorInterval={detailRange === "monat" ? { from: rangeStart, to: rangeEnd } : undefined}
+        collapsedWeeks={collapsedWeeks}
+        onToggleWeek={toggleWeek}
       />
     </div>
   );

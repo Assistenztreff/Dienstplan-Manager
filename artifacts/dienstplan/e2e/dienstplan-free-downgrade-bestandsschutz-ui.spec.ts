@@ -255,6 +255,11 @@ test.describe("Downgrade auf Free: Bestandsdaten bleiben im UI sichtbar", () => 
     // Mobile Listenansicht (agenda-day-Testids) aktivieren.
     await page.getByTestId("view-toggle-list").click();
 
+    // Standard-Zeitraum ist seit 27.08.2026 „Heute" — die Fern-Schicht liegt
+    // an einem festen Monatstag, daher auf den Monatsblick stellen.
+    await page.getByTestId("schedule-list-range-menu").click();
+    await page.getByRole("option", { name: "Dieser Monat" }).click();
+
     // Zwei Monate vorblaettern — ausserhalb des Free-Planungsfensters.
     await page.getByTestId("next-month").click();
     await page.getByTestId("next-month").click();

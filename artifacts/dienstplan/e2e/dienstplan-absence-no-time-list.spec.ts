@@ -176,6 +176,11 @@ test("Listenansicht: Urlaub/Krank zeigen nur den Typ, reguläre Schicht zeigt Uh
     await listToggle.click();
     await expect(listToggle).toHaveAttribute("data-active", "true");
 
+    // Standard-Zeitraum der Wochen-Liste ist seit 27.08.2026 „Heute" — die
+    // Seeds liegen an festen Monatstagen, daher auf den Monatsblick stellen.
+    await page.getByTestId("schedule-list-range-menu").click();
+    await page.getByRole("option", { name: "Dieser Monat" }).click();
+
     // --- Urlaub: nur "Urlaub", keine Uhrzeit -------------------------------
     const vacationBadge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${vacation.id}`);
     await expect(vacationBadge).toBeVisible();

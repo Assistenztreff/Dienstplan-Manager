@@ -162,6 +162,11 @@ test.describe("Dienstplan-Kalender (Admin, mobile)", () => {
       await page.getByTestId("month-label").innerText(),
     );
 
+    // Standard-Zeitraum ist seit 27.08.2026 „Heute" — fuer die Anker-Pruefung
+    // an zwei verschiedenen Tagen braucht die Liste den Monatsblick.
+    await page.getByTestId("schedule-list-range-menu").click();
+    await page.getByRole("option", { name: "Dieser Monat" }).click();
+
     const cell15 = mobile.getByTestId(dayCellId(year, monthIndex, 15));
     await selectDayCell(page, cell15);
     await expect(cell15).toHaveAttribute("data-selected", "true");

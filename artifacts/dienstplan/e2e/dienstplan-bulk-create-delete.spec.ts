@@ -115,8 +115,10 @@ async function openDesktopCalendar(page: Page): Promise<Locator> {
 
 test("Massen-Eintragen und Massen-Löschen über mehrere Tage funktioniert", async ({ page }) => {
   // Mehrstufiger UI-Flow (Massen-Anlegen + Massen-Loeschen) — unter Volllast
-  // der Gesamtsuite reichen die 30s-Defaults nicht zuverlaessig.
-  test.setTimeout(60000);
+  // der Gesamtsuite reichen die 30s-Defaults nicht zuverlaessig; die
+  // Urlaubskonto-Neuberechnung (~5s+/Tag, 3x anlegen + 3x loeschen) sprengt
+  // auf langsamen Umgebungen auch 60s (e2e-cold-start-timeout.md).
+  test.setTimeout(120_000);
   await loginAsAdmin(page);
   const assistant = await createAssistant(page);
   const createdShiftIds: number[] = [];
@@ -267,6 +269,11 @@ test.describe("Aktionsleiste auf schmalem Handy-Viewport", () => {
     // In die Listenansicht wechseln (Mobil-Default ist das Monatsgitter) —
     // dort blendet der Umschalter das Raster aus, die Wochen-Liste bleibt.
     await page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list").click();
+
+    // Standard-Zeitraum ist seit 27.08.2026 „Heute" — die Auswahl-Tage 6-8
+    // liegen im Monat, daher auf den Monatsblick stellen.
+    await page.getByTestId("schedule-list-range-menu").click();
+    await page.getByRole("option", { name: "Dieser Monat" }).click();
 
     // Auswahl-Modus an, drei Tage in der Listenansicht waehlen (nur Auswahl,
     // keine Schreiboperation — daher kollisionsfrei zu anderen Specs).

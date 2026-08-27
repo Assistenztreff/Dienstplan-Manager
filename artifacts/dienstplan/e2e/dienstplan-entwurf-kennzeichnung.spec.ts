@@ -127,6 +127,10 @@ test("Dienstplan: Entwurf/Vorschlag sichtbar gekennzeichnet (Label, Status-Attri
   // Der Ansicht-Umschalter lebt seit der adaptiven Kopfzeile AUSSERHALB des
   // Mobile-Containers (sticky Header) — über die Header-Testids ansteuern.
   await page.getByTestId("view-toggles-mobile").getByTestId("view-toggle-list").click();
+  // Standard-Zeitraum der Wochen-Liste ist seit 27.08.2026 „Heute" — dieser
+  // Test prueft Eintraege an festen Monatstagen und braucht den Monatsblick.
+  await page.getByTestId("schedule-list-range-menu").click();
+  await page.getByRole("option", { name: "Dieser Monat" }).click();
 
   // Seit #746 nutzt die Listenansicht die einzeiligen Tagesleisten-Zeilen
   // (DayDetailRow): Unverbindliche Dienste sind dort per Status-Icon (Stift-
