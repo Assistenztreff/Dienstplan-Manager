@@ -5,6 +5,8 @@ Dienstplan- und Zeiterfassungs-App für Persönliche Assistenz im Arbeitgebermod
 ## User preferences
 - **Sprache (verbindlich)**: Alle Tasks, Beschreibungen, Kommentare und sämtliche nutzersichtbaren Texte immer auf **Deutsch** verfassen — keine englischen Task-Titel oder Erklärungen. Gilt auch für die Chat-Antworten des Agents an den Auftraggeber selbst — immer auf Deutsch antworten.
 
+- **Auftraggeber ist kein Softwareentwickler (verbindlich)**: Der Auftraggeber hat nur bedingt Erfahrung in der Softwareentwicklung. Alle Erklärungen, Anleitungen und Rückfragen entsprechend formulieren: Fachbegriffe kurz erklären statt voraussetzen, Arbeitsschritte klick-für-klick beschreiben (z. B. „Shell-Tab in Replit öffnen, folgende Zeile einfügen, Enter"), Befehle einzeln und kopierfertig angeben, erwartete Ausgabe/Erfolgskontrolle nennen und bei Fehlermeldungen um die genaue Meldung bitten statt Eigenanalyse zu erwarten.
+
 - **Geschlechtsneutrales Wording (verbindlich)**: Nie „Assistent"/„Assistenten" in nutzersichtbaren Texten. Singular = „Assistenzkraft" (feminin: die/eine/keine Assistenzkraft), Plural = „Assistenzkräfte". Gilt für UI, Toasts, Fehlermeldungen, PDFs, Handbuch und E-Mails; Code-Bezeichner, Routen (`/assistenten`), Rollenwerte (`assistant`) und data-testids bleiben unverändert.
 
 - **Keine automatischen Screenshots / Handbuch-Updates**: UI-Screenshots (vorher/nachher) und `screenshots:handbuch` nur noch auf ausdrücklichen Befehl des Auftraggebers am Ende einer Aufgabe — nie automatisch nach einer Änderung.
