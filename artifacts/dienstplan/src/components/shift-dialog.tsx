@@ -1644,9 +1644,16 @@ export function ShiftDialog({
 
           {/* Vertretung + unbezahlte Pause: reine Info-Kennzahlen der
               Lohnauswertung, nur für Arbeitsdienste (Server setzt sie bei
-              Abwesenheiten/Team-Einträgen zurück). */}
+              Abwesenheiten/Team-Einträgen zurück).
+              Kay-Feedback 28.08.2026 (Punkt 2+3): "Vertretung" (isVertretung —
+              DIESER Dienst IST eine Vertretung für jemand anderen) und
+              "Vertretung vormerken" (standbyUserId — an DIESEM Dienst eine
+              Person für den EIGENEN Ausfall hinterlegen) wurden verwechselt,
+              weil beide Felder direkt untereinander standen und ähnlich
+              hießen. Label + Hinweistext jetzt eindeutig, statt nur im
+              Code-Kommentar zu erklären. */}
           {!isAbsence && !isTeam && (
-            <div className="grid grid-cols-2 items-end gap-3">
+            <div className="space-y-1.5">
               <label
                 className="flex h-9 cursor-pointer items-center gap-2 text-sm"
                 data-testid="shift-dialog-vertretung"
@@ -1657,24 +1664,33 @@ export function ShiftDialog({
                   checked={form.isVertretung}
                   onChange={(e) => set("isVertretung", e.target.checked)}
                 />
-                Vertretung
+                Dieser Dienst ist selbst eine Vertretung
               </label>
-              <div className="space-y-1.5">
-                <Label>Unbezahlte Pause (Min.)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={1440}
-                  step={5}
-                  placeholder="0"
-                  data-testid="shift-dialog-pause"
-                  value={form.pauseMinutes}
-                  onChange={(e) => {
-                    setPauseTouched(true);
-                    set("pauseMinutes", e.target.value);
-                  }}
-                />
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Nur ankreuzen, wenn {selectedAssistant?.name ?? "diese Person"} hier
+                kurzfristig für einen ausgefallenen Kollegen einspringt. Für die
+                Vormerkung "wer springt ein, falls DIESER Dienst ausfällt" das
+                Feld weiter unten nutzen.
+              </p>
+            </div>
+          )}
+
+          {!isAbsence && !isTeam && (
+            <div className="space-y-1.5">
+              <Label>Unbezahlte Pause (Min.)</Label>
+              <Input
+                type="number"
+                min={0}
+                max={1440}
+                step={5}
+                placeholder="0"
+                data-testid="shift-dialog-pause"
+                value={form.pauseMinutes}
+                onChange={(e) => {
+                  setPauseTouched(true);
+                  set("pauseMinutes", e.target.value);
+                }}
+              />
             </div>
           )}
 
@@ -1685,7 +1701,7 @@ export function ShiftDialog({
               einzelne Vormerkung pro Tag. */}
           {!isAbsence && !isTeam && !isBulk && (
             <div className="space-y-1.5">
-              <Label>Vertretung vormerken (optional)</Label>
+              <Label>Vertretung vormerken – falls dieser Dienst ausfällt (optional)</Label>
               <Select
                 value={form.standbyUserId || "none"}
                 onValueChange={(v) => set("standbyUserId", v === "none" ? "" : v)}
