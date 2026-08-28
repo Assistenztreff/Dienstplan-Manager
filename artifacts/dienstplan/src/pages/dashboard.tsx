@@ -7,6 +7,7 @@ import {
   useGetVacationBalance,
   useGetMonthClosings,
   useListShifts,
+  useListShiftDeviations,
   useListAbsenceRequests,
 } from "@workspace/api-client-react";
 import type { MonthClosingStatus } from "@workspace/api-client-react";
@@ -717,6 +718,53 @@ function PendingShiftProposalsBanner() {
   );
 }
 
+// Planer-Hinweis: gemeldete Abweichungen warten auf Annehmen/Widersprechen.
+// Ohne ihn musste der Planer zufaellig in den richtigen Tag klicken, um eine
+// Meldung ueberhaupt zu bemerken (Kay-Feedback 28.08.2026). Gegenstueck zum
+// Korrektur-Banner der Assistenzkraft — hier laeuft die Zustimmung in die
+// andere Richtung.
+function PendingDeviationsBanner() {
+  const [, navigate] = useLocation();
+  const { isTeamScopeReady, selectedTeamId } = useTeam();
+  const teamParam = selectedTeamId != null ? { teamId: selectedTeamId } : {};
+  const { data: reports } = useListShiftDeviations(teamParam, {
+    query: { enabled: isTeamScopeReady },
+  } as Parameters<typeof useListShiftDeviations>[1]) as {
+    data?: { id: number; shiftId: number; status: string; reportedStartTime: string }[];
+  };
+
+  const offen = (reports ?? []).filter((r) => r.status === "PENDING");
+  if (offen.length === 0) return null;
+
+  const earliest = offen.map((r) => r.reportedStartTime).sort()[0]!;
+
+  return (
+    <div
+      className="flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+      data-testid="dashboard-deviation-banner"
+    >
+      <div className="flex items-start gap-2 text-amber-900">
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+        <span className="text-sm font-medium">
+          Achtung:{" "}
+          {offen.length === 1
+            ? "Eine Assistenzkraft hat eine abweichende Arbeitszeit gemeldet. Bitte annehmen oder widersprechen."
+            : `${offen.length} Assistenzkräfte haben abweichende Arbeitszeiten gemeldet. Bitte annehmen oder widersprechen.`}
+        </span>
+      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        className="shrink-0 self-start border-amber-400 bg-white text-amber-900 hover:bg-amber-100 sm:self-auto"
+        data-testid="dashboard-deviation-review"
+        onClick={() => navigate(`/dienstplan?date=${format(new Date(earliest), "yyyy-MM-dd")}`)}
+      >
+        {offen.length === 1 ? "Meldung prüfen" : "Meldungen prüfen"}
+      </Button>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const now = new Date();
   const month = now.getMonth() + 1;
@@ -748,6 +796,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {!isAdmin && <PendingShiftProposalsBanner />}
+      {isAdmin && <PendingDeviationsBanner />}
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>

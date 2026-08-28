@@ -135,7 +135,15 @@ export function DayDetailRow({
           ? "sent"
           : "draft";
 
-  const confirmable = onConfirm && !mirror && isConfirmableShift(shift);
+  // Vier-Augen-Prinzip bei Korrekturen (Kay-Feedback 28.08.2026): Eine offene
+  // Korrektur an einem bereits gearbeiteten Dienst darf NUR die betroffene
+  // Assistenzkraft bestätigen — sonst könnte der Planer seine eigene Änderung
+  // selbst abnicken und der Rückfall auf ANGEBOTEN wäre eine Formalie. Der
+  // Server weist das ohnehin ab (403 correction_needs_assistant); hier wird
+  // der Knopf gar nicht erst angeboten. Ist die Assistenzkraft selbst die
+  // planende Person (Einzelkonto), bleibt er sichtbar.
+  const korrekturFremd = pastCorrection && currentUser?.id !== shift.userId;
+  const confirmable = onConfirm && !mirror && !korrekturFremd && isConfirmableShift(shift);
   // Eigenbestätigung: nur der eigene, vorgeschlagene Dienst und nur, wenn
   // nicht ohnehin schon der Planer-Knopf steht (sonst zwei Knöpfe).
   const selfConfirmable =
