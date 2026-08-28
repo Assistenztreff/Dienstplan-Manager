@@ -7,8 +7,9 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { shiftsTable, shiftChangesTable, shiftDeviationReportsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import {
+  ListShiftDeviationsQueryParams,
   ReportShiftDeviationParams,
   ReportShiftDeviationBody,
   AcceptShiftDeviationParams,
@@ -16,11 +17,44 @@ import {
   DisputeShiftDeviationBody,
 } from "@workspace/api-zod";
 import { requireAuth, requireTeamPlanningOrAdmin } from "../middleware/auth";
-import { getAllowedTeamIds, getEffectiveAdminTeamIds } from "../lib/teams";
+import {
+  getAllowedTeamIds,
+  getEffectiveAdminTeamIds,
+  resolveReadTeamScope,
+  parseTeamIdParam,
+} from "../lib/teams";
 import { isAbsenceType } from "../lib/shift-metrics-resolve";
 import { storeShiftMetrics } from "./shifts";
 
 const router = Router();
+
+// Muss VOR /shifts/:id/deviation stehen — sonst würde Express "deviations"
+// als :id-Parameter matchen.
+router.get("/shifts/deviations", requireAuth, async (req, res): Promise<void> => {
+  const query = ListShiftDeviationsQueryParams.safeParse({
+    teamId: req.query.teamId ? Number(req.query.teamId) : undefined,
+  });
+  if (!query.success) {
+    res.status(400).json({ error: "Invalid query parameters" });
+    return;
+  }
+
+  const teamScope = await resolveReadTeamScope(req.session.userId!, parseTeamIdParam(req));
+  if (teamScope === null) {
+    res.status(403).json({ error: "Kein Zugriff auf dieses Team" });
+    return;
+  }
+  if (teamScope.length === 0) {
+    res.json([]);
+    return;
+  }
+
+  const rows = await db
+    .select()
+    .from(shiftDeviationReportsTable)
+    .where(inArray(shiftDeviationReportsTable.teamId, teamScope));
+  res.json(rows);
+});
 
 router.post("/shifts/:id/deviation", requireAuth, async (req, res): Promise<void> => {
   const params = ReportShiftDeviationParams.safeParse({ id: Number(req.params["id"]) });

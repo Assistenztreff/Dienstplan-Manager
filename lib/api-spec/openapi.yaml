@@ -782,6 +782,32 @@ paths:
         "204":
           description: Gelöscht
 
+  /shifts/deviations:
+    get:
+      operationId: listShiftDeviations
+      tags: [shifts]
+      summary: Gemeldete Abweichungen auflisten (team-gescoped)
+      description: >-
+        Alle Abweichungsmeldungen (PENDING/ACCEPTED/DISPUTED) im
+        Team-Scope des Aufrufers — Basis für den Melde-Zustand einzelner
+        Dienste in der Oberfläche und den Planer-Hinweis "N gemeldete
+        Abweichungen".
+      parameters:
+        - name: teamId
+          in: query
+          description: Optionaler Team-Kontext; muss ein erlaubtes Team sein.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Liste der Abweichungsmeldungen
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ShiftDeviationReport"
+
   /shifts/{id}/deviation:
     post:
       operationId: reportShiftDeviation

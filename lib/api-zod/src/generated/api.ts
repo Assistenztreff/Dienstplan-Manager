@@ -839,6 +839,31 @@ export const DeleteShiftParams = zod.object({
 
 
 /**
+ * Alle Abweichungsmeldungen (PENDING/ACCEPTED/DISPUTED) im Team-Scope des Aufrufers — Basis für den Melde-Zustand einzelner Dienste in der Oberfläche und den Planer-Hinweis "N gemeldete Abweichungen".
+ * @summary Gemeldete Abweichungen auflisten (team-gescoped)
+ */
+export const ListShiftDeviationsQueryParams = zod.object({
+  "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext; muss ein erlaubtes Team sein.')
+})
+
+export const ListShiftDeviationsResponseItem = zod.object({
+  "id": zod.number(),
+  "shiftId": zod.number(),
+  "userId": zod.number(),
+  "status": zod.enum(['PENDING', 'ACCEPTED', 'DISPUTED']),
+  "reportedStartTime": zod.coerce.date(),
+  "reportedEndTime": zod.coerce.date(),
+  "reportedPauseMinutes": zod.number(),
+  "reportedAusgefallen": zod.boolean(),
+  "reportedAt": zod.coerce.date(),
+  "resolvedBy": zod.number().nullish(),
+  "resolvedAt": zod.coerce.date().nullish(),
+  "disputeReason": zod.string().nullish()
+})
+export const ListShiftDeviationsResponse = zod.array(ListShiftDeviationsResponseItem)
+
+
+/**
  * Nur für die eigene, bereits vergangene FIX-Schicht. Genau eine Meldung pro Dienst ist möglich (Abbruchregel gegen Ping-Pong) — ein zweiter Versuch liefert 409.
  * @summary Abweichung von der geplanten Arbeitszeit melden (Assistenzkraft)
  */

@@ -85,6 +85,7 @@ export * from './listContractsParams';
 export * from './listHourBudgetsParams';
 export * from './listOperatorErrorsParams';
 export * from './listOperatorPlanChangesParams';
+export * from './listShiftDeviationsParams';
 export * from './listShiftModelsParams';
 export * from './listShiftsParams';
 export * from './listShiftsType';

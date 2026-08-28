@@ -2105,6 +2105,13 @@ export const ListAbsenceRequestsStatus = {
   REJECTED: 'REJECTED',
 } as const;
 
+export type ListShiftDeviationsParams = {
+/**
+ * Optionaler Team-Kontext; muss ein erlaubtes Team sein.
+ */
+teamId?: number;
+};
+
 export type ListShiftModelsParams = {
 activeOnly?: boolean;
 /**

@@ -73,6 +73,7 @@ import type {
   ListHourBudgetsParams,
   ListOperatorErrorsParams,
   ListOperatorPlanChangesParams,
+  ListShiftDeviationsParams,
   ListShiftModelsParams,
   ListShiftsParams,
   ListTimeEntriesParams,
@@ -2365,6 +2366,91 @@ export const useDeleteShift = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getDeleteShiftMutationOptions(options));
     }
+
+export const getListShiftDeviationsUrl = (params?: ListShiftDeviationsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/shifts/deviations?${stringifiedParams}` : `/api/shifts/deviations`
+}
+
+/**
+ * Alle Abweichungsmeldungen (PENDING/ACCEPTED/DISPUTED) im Team-Scope des Aufrufers — Basis für den Melde-Zustand einzelner Dienste in der Oberfläche und den Planer-Hinweis "N gemeldete Abweichungen".
+ * @summary Gemeldete Abweichungen auflisten (team-gescoped)
+ */
+export const listShiftDeviations = async (params?: ListShiftDeviationsParams, options?: RequestInit): Promise<ShiftDeviationReport[]> => {
+
+  return customFetch<ShiftDeviationReport[]>(getListShiftDeviationsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListShiftDeviationsQueryKey = (params?: ListShiftDeviationsParams,) => {
+    return [
+    `/api/shifts/deviations`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListShiftDeviationsQueryOptions = <TData = Awaited<ReturnType<typeof listShiftDeviations>>, TError = ErrorType<unknown>>(params?: ListShiftDeviationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShiftDeviations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListShiftDeviationsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listShiftDeviations>>> = ({ signal }) => listShiftDeviations(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listShiftDeviations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListShiftDeviationsQueryResult = NonNullable<Awaited<ReturnType<typeof listShiftDeviations>>>
+export type ListShiftDeviationsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Gemeldete Abweichungen auflisten (team-gescoped)
+ */
+
+export function useListShiftDeviations<TData = Awaited<ReturnType<typeof listShiftDeviations>>, TError = ErrorType<unknown>>(
+ params?: ListShiftDeviationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShiftDeviations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListShiftDeviationsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getReportShiftDeviationUrl = (id: number,) => {
 
