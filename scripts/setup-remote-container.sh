@@ -125,23 +125,25 @@ else
   [ -z "$WANT_SHELL$WANT_FULL" ] && warn "Playwright-Version nicht ermittelbar — Browser-Schritt uebersprungen"
 fi
 
-# ── 4. Platzhalter fuer das gitignorete Logo ──────────────────────────────────
+# ── 4. Logo-Asset ─────────────────────────────────────────────────────────────
 # artifacts/dienstplan importiert attached_assets/assistenzplaner-logo-getrimmt.png
-# an drei Stellen. Der Ordner ist gitignored, die Datei liegt nur im Replit-
-# Workspace — ohne sie bricht JEDER Vite-Build und damit jeder UI-Test.
-# Hier reicht ein 1x1-Platzhalter: die Tests pruefen Verhalten, nicht das Logo.
-say "4/4  Fehlendes Logo-Asset"
+# an drei Stellen; ohne die Datei bricht JEDER Vite-Build und damit jeder UI-Test.
+# Der Ordner attached_assets/ ist gitignored, die echte Logo-Datei ist aber
+# bewusst per "git add -f" getrackt — im Normalfall ist hier also nichts zu tun.
+# Der Platzhalter unten ist nur ein Notnagel, falls die Datei doch mal fehlt.
+say "4/4  Logo-Asset"
 LOGO="$REPO_ROOT/attached_assets/assistenzplaner-logo-getrimmt.png"
 if [ -f "$LOGO" ]; then
-  ok "Logo vorhanden — nichts zu tun"
+  ok "Logo vorhanden (aus dem Repo) — nichts zu tun"
 else
   mkdir -p "$(dirname "$LOGO")"
   # 1x1 transparentes PNG, base64
   printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==' \
     | base64 -d > "$LOGO"
   warn "PLATZHALTER angelegt (1x1 transparent) — nicht das echte Logo!"
-  echo "      Reicht fuer Build und Tests. Fuer optische Abnahme das echte"
-  echo "      Logo aus dem Replit-Workspace an dieselbe Stelle kopieren."
+  echo "      Die echte Datei ist eigentlich im Repo getrackt; wenn dieser Zweig"
+  echo "      greift, wurde sie geloescht. Wiederherstellen mit:"
+  echo "      git checkout -- attached_assets/assistenzplaner-logo-getrimmt.png"
 fi
 
 # ── Env-Datei schreiben ───────────────────────────────────────────────────────
@@ -154,6 +156,9 @@ export SESSION_SECRET=local-container-test-secret
 export PROD_DATABASE_URL=postgresql://unused:unused@prod.invalid:5432/never-used
 export PLAYWRIGHT_BROWSERS_PATH=${PLAYWRIGHT_BROWSERS_PATH:-/opt/pw-browsers}
 export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+# vite.config.ts bricht ohne diese beiden hart ab (kein Default hinterlegt).
+export PORT=5000
+export BASE_PATH=/
 EOF
 
 say "Fertig"
