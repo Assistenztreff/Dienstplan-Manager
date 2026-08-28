@@ -36,6 +36,13 @@ export type Shift = {
   isVertretung?: boolean | null;
   /** Halbtägiger Urlaub (#862): true = bewusst gewählter Teil-Tag, false/undefined = ganztägig. */
   isPartialAbsence?: boolean | null;
+  /**
+   * Serverseitig gewertete Stunden des Eintrags. Bei Abwesenheiten steckt hier
+   * das vertragliche Tages-Soll (bzw. die geerbten Zeiten eines ersetzten
+   * Dienstes) — ein ganztägiger Urlaubstag zählt damit als 8 h statt als 24 h.
+   * Quelle der Abwesenheits-Stunden im Stundenkonto (stundenkonto-leiste.tsx).
+   */
+  valuedHours?: number | null;
 };
 
 export const PLANNING_STATUS_LABELS: Record<string, string> = {

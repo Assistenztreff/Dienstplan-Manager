@@ -10,9 +10,11 @@ import {
   useSendShiftProposals,
   useBulkConfirmOwnShifts,
   useGetHoursBalance,
+  useGetHourBudgetBalance,
   type User,
   type ShiftModel,
   type HoursBalance,
+  type HourBudgetBalance,
 } from "@workspace/api-client-react";
 import { useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isValid } from "date-fns";
@@ -35,6 +37,7 @@ import {
   StundenkontoReihe,
   useSelectedUserIds,
   useIsWideStundenkontoLayout,
+  useStundenkontoSort,
 } from "@/components/stundenkonto-leiste";
 import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { exportSimpleMonthPdf } from "@/lib/pdf-export";
@@ -289,6 +292,27 @@ export default function Dienstplan() {
       },
     } as unknown as Parameters<typeof useGetHoursBalance>[1],
   ) as { data?: HoursBalance[]; isLoading: boolean };
+
+  const { sortMode: stundenkontoSort, toggleSort: toggleStundenkontoSort } =
+    useStundenkontoSort();
+
+  // Kostenträger-Budget (Zielvereinbarung) des angezeigten Monats als
+  // Kopfzeile des Stundenkontos: zeigt beim Planen, wie viele der mit dem
+  // Kostenträger vereinbarten Stunden noch übrig sind. retry:false, weil der
+  // Endpunkt im Free-Tarif mit 403 antwortet — die Kopfzeile blendet sich
+  // dann einfach aus (gleiche Logik wie die Dashboard-Kachel).
+  const { data: hourBudget } = useGetHourBudgetBalance(
+    { month, year, ...teamParam },
+    {
+      query: {
+        enabled: canSeeStundenkonto && isTeamScopeReady,
+        retry: false,
+        placeholderData: keepPreviousData,
+        staleTime: SHIFT_LIST_STALE_TIME_MS,
+        gcTime: SHIFT_LIST_GC_TIME_MS,
+      },
+    } as unknown as Parameters<typeof useGetHourBudgetBalance>[1],
+  ) as { data?: HourBudgetBalance };
 
   // Kollisionsarme Farbzuordnung fürs ganze Team: die ersten 8 Personen
   // bekommen garantiert 8 verschiedene Farben (statt reinem ID-Hash).
@@ -690,6 +714,9 @@ export default function Dienstplan() {
               onToggleUser={toggleStundenkontoUser}
               onSelectAll={selectAllStundenkonto}
               isLoading={hoursBalancesLoading}
+              budget={hourBudget}
+              sortMode={stundenkontoSort}
+              onToggleSort={toggleStundenkontoSort}
               minimal
             />
           </div>
@@ -739,6 +766,9 @@ export default function Dienstplan() {
               onToggleUser={toggleStundenkontoUser}
               onSelectAll={selectAllStundenkonto}
               isLoading={hoursBalancesLoading}
+              budget={hourBudget}
+              sortMode={stundenkontoSort}
+              onToggleSort={toggleStundenkontoSort}
             />
           </div>
         )}
@@ -803,6 +833,9 @@ export default function Dienstplan() {
                 onToggleUser={toggleStundenkontoUser}
                 onSelectAll={selectAllStundenkonto}
                 isLoading={hoursBalancesLoading}
+                budget={hourBudget}
+                sortMode={stundenkontoSort}
+                onToggleSort={toggleStundenkontoSort}
               />
             </div>
           ) : (
