@@ -206,7 +206,7 @@ export default function Dienstplan() {
   async function reportDeviation(shift: Shift, values: DeviationReportValues) {
     try {
       await reportDeviationMutation.mutateAsync({ id: shift.id, data: values });
-      void invalidateShiftDerivedQueries(queryClient);
+      void invalidateShiftDerivedQueries(queryClient, { refetchType: "all" });
       toast.success("Abweichung gemeldet — der Planer wird benachrichtigt.");
     } catch (err) {
       if (!navigator.onLine) return;
@@ -219,7 +219,7 @@ export default function Dienstplan() {
       const updated = await acceptDeviationMutation.mutateAsync({ id: shift.id });
       // Die Schicht selbst hat sich geändert (Zeiten/Stunden) — Monatsliste
       // und abgeleitete Auswertungen mit aktualisieren, wie bei confirmShift.
-      void invalidateShiftDerivedQueries(queryClient);
+      void invalidateShiftDerivedQueries(queryClient, { refetchType: "all" });
       toast.success(
         `Abweichung angenommen — Dienst übernimmt die gemeldete Zeit${
           updated?.reportedAusgefallen ? " (ausgefallen)" : ""
@@ -234,7 +234,7 @@ export default function Dienstplan() {
   async function disputeDeviation(shift: Shift, reason: string) {
     try {
       await disputeDeviationMutation.mutateAsync({ id: shift.id, data: { reason } });
-      void invalidateShiftDerivedQueries(queryClient);
+      void invalidateShiftDerivedQueries(queryClient, { refetchType: "all" });
       toast.success("Widerspruch gesendet — der Planwert bleibt maßgeblich.");
     } catch (err) {
       if (!navigator.onLine) return;
