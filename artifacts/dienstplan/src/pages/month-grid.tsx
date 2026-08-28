@@ -356,7 +356,10 @@ export function MonthGrid({
                   className={[
                     "leading-none font-semibold rounded-md",
                     // Punkt 2: Datum 1–2 px größer; Smartphone = Desktop-Größe.
-                    "text-[12px] px-1.5 py-0.5",
+                    // Touch-Geräte (Tablet, siehe Kay-Feedback 28.08.2026): Ziel
+                    // war auf dem Tablet kaum lesbar/treffbar — pointer-coarse
+                    // greift nur bei Touch, Desktop-Maus bleibt unverändert.
+                    "text-[12px] px-1.5 py-0.5 pointer-coarse:text-[15px] pointer-coarse:px-2 pointer-coarse:py-1",
                     today
                       ? "bg-[#092948] text-white"
                       : isWeekend
@@ -381,7 +384,10 @@ export function MonthGrid({
                       if (e.key === "Enter" || e.key === " ") e.stopPropagation();
                     }}
                     // Punkt 2: Plus 1–2 px größer; Smartphone = Desktop-Größe.
-                    className="flex h-3.5 w-3.5 shrink-0 cursor-pointer select-none items-center justify-center rounded-[3px] border border-[#d8d8d4] bg-white p-0 text-[10px] font-bold leading-none text-[#092948] hover:border-[#092948]"
+                    // Touch-Geräte (Tablet, siehe Kay-Feedback 28.08.2026): 14px
+                    // Kantenlänge war auf dem Tablet zu klein zum Treffen —
+                    // pointer-coarse verdoppelt die Fläche nur bei Touch.
+                    className="flex h-3.5 w-3.5 shrink-0 cursor-pointer select-none items-center justify-center rounded-[3px] border border-[#d8d8d4] bg-white p-0 text-[10px] font-bold leading-none text-[#092948] hover:border-[#092948] pointer-coarse:h-6 pointer-coarse:w-6 pointer-coarse:rounded-[5px] pointer-coarse:text-sm"
                   >
                     +
                   </button>
@@ -433,7 +439,7 @@ export function MonthGrid({
                             data-testid={`day-chip-${s.id}`}
                             role={chipClickable ? "button" : undefined}
                             tabIndex={chipClickable ? -1 : undefined}
-                            title={`${s.user?.name ?? ""} · ${timeRange}${s.isVertretung ? " · Vertretung" : ""}`.trim()}
+                            title={`${s.user?.name ?? ""} · ${timeRange}${s.isVertretung ? " · Vertretung" : ""}${s.standbyUserId != null ? ` · Vertretung vorgemerkt: ${s.standbyUserName ?? ""}` : ""}`.trim()}
                             onClick={chipClickable ? (e) => { e.stopPropagation(); onShiftClick(s); } : undefined}
                             onKeyDown={chipClickable ? (e) => {
                               if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onShiftClick(s); }
@@ -549,7 +555,7 @@ export function MonthGrid({
                     const commonHandlers = {
                       role: chipClickable ? ("button" as const) : undefined,
                       tabIndex: chipClickable ? -1 : undefined,
-                      title: `${s.user?.name ?? ""} · ${timeRange}${s.isVertretung ? " · Vertretung" : ""}`.trim(),
+                      title: `${s.user?.name ?? ""} · ${timeRange}${s.isVertretung ? " · Vertretung" : ""}${s.standbyUserId != null ? ` · Vertretung vorgemerkt: ${s.standbyUserName ?? ""}` : ""}`.trim(),
                       onClick: chipClickable ? (e: React.MouseEvent) => { e.stopPropagation(); onShiftClick(s); } : undefined,
                       onKeyDown: chipClickable ? (e: React.KeyboardEvent) => {
                         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onShiftClick(s); }
@@ -568,6 +574,13 @@ export function MonthGrid({
                         )}
                         {pillMinimiert && s.isVertretung && (
                           <StatusBadge kind="vertretung" label="Vertretung" calendarCompact />
+                        )}
+                        {s.standbyUserId != null && (
+                          <StatusBadge
+                            kind="standby"
+                            label={`Vertretung vorgemerkt: ${s.standbyUserName ?? ""}`.trim()}
+                            calendarCompact={pillMinimiert}
+                          />
                         )}
                         {hasAusfall && (
                           <StatusBadge

@@ -34,6 +34,24 @@ export type Shift = {
   einsatzTeamName?: string | null;
   homeTeamName?: string | null;
   isVertretung?: boolean | null;
+  /** Vertretung vormerken: Person, die bei Ausfall dieses Dienstes einspringen könnte (reine Planungshilfe). */
+  standbyUserId?: number | null;
+  standbyUserName?: string | null;
+  /**
+   * Nur in der Antwort von Erstellen/Bearbeiten gesetzt, wenn dieser Aufruf
+   * den Dienst zu einer Abwesenheit gemacht hat UND eine Vertretung
+   * vorgemerkt war — Grundlage für den Aktivierungs-Vorschlag (Toast mit
+   * einem Klick, s. useVertretungsVorschlag).
+   */
+  vertretungsVorschlag?: {
+    userId: number;
+    userName: string;
+    teamId: number;
+    startTime: string;
+    endTime: string;
+    type: string;
+    shiftModelId?: number | null;
+  } | null;
   /** Halbtägiger Urlaub (#862): true = bewusst gewählter Teil-Tag, false/undefined = ganztägig. */
   isPartialAbsence?: boolean | null;
   /**

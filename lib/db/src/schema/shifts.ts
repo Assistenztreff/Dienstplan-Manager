@@ -54,6 +54,14 @@ export const shiftsTable = pgTable("shifts", {
   // eine ausgefallene Kollegin/einen Kollegen (Info-Kennzahl der Auswertung;
   // Stunden zaehlen normal).
   isVertretung: boolean("is_vertretung").notNull().default(false),
+  // Vertretung vormerken (Planungshilfe): optionale Person, die bei Ausfall
+  // dieses Arbeitsdienstes kurzfristig einspringen könnte. Nur auf
+  // Arbeitsdiensten setzbar (Server-Validierung); bleibt beim Übergang
+  // ZU einer Abwesenheit (z.B. Typwechsel auf "sick") bewusst UNVERÄNDERT
+  // stehen — sie ist die Grundlage für den Aktivierungs-Vorschlag
+  // (vertretungsVorschlag in der POST/PATCH-Antwort), der die Original-
+  // Zeiten/den Dienst-Typ noch kennt, bevor der Server sie überschreibt.
+  standbyUserId: integer("standby_user_id").references(() => usersTable.id, { onDelete: "set null" }),
   // Unbezahlte Pausenminuten (reine Info-Kennzahl; reduziert NICHT die
   // gewerteten Stunden — Produktentscheidung v1).
   pauseMinutes: integer("pause_minutes").notNull().default(0),

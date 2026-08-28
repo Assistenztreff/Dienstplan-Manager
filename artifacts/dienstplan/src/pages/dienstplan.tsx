@@ -7,10 +7,12 @@ import {
   useListUsers,
   useListShiftModels,
   useUpdateShift,
+  useCreateShift,
   useSendShiftProposals,
   useBulkConfirmOwnShifts,
   useGetHoursBalance,
   useGetHourBudgetBalance,
+  type ShiftInputType,
   type User,
   type ShiftModel,
   type HoursBalance,
@@ -22,7 +24,7 @@ import { de } from "date-fns/locale";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Check, X, CalendarPlus, Trash2, Pencil, ChevronsLeft } from "lucide-react";
-import { ShiftDialog } from "@/components/shift-dialog";
+import { ShiftDialog, type VertretungsVorschlag } from "@/components/shift-dialog";
 import { BulkDeleteDialog } from "@/components/bulk-delete-dialog";
 import { BulkEditDialog } from "@/components/bulk-edit-dialog";
 import { useTeam } from "@/context/team";
@@ -187,6 +189,7 @@ export default function Dienstplan() {
   }, [queryClient, month, year, selectedTeamId, isTeamScopeReady]);
 
   const updateShift = useUpdateShift();
+  const createShift = useCreateShift();
   const sendProposalsMutation = useSendShiftProposals();
   const bulkConfirmOwnMutation = useBulkConfirmOwnShifts();
   const [confirmingShiftId, setConfirmingShiftId] = useState<number | null>(null);
@@ -431,6 +434,42 @@ export default function Dienstplan() {
     } finally {
       setConfirmingShiftId(null);
     }
+  }
+
+  // Vertretung aktivieren: legt mit den Original-Zeiten/-Dienstart des gerade
+  // ersetzten Arbeitsdienstes einen neuen Dienst für die vorgemerkte
+  // Vertretung an (ein Klick aus dem Toast in handleVertretungsVorschlag).
+  async function activateVertretung(vorschlag: VertretungsVorschlag) {
+    try {
+      const created = await createShift.mutateAsync({
+        data: {
+          userId: vorschlag.userId,
+          teamId: vorschlag.teamId,
+          startTime: vorschlag.startTime,
+          endTime: vorschlag.endTime,
+          type: vorschlag.type as ShiftInputType,
+          shiftModelId: vorschlag.shiftModelId ?? undefined,
+          isVertretung: true,
+          planningStatus: "FIX",
+        },
+      });
+      upsertShiftsInCache(queryClient, [created], selectedTeamId);
+      void invalidateShiftDerivedQueries(queryClient);
+      toast.success(`Vertretung für ${vorschlag.userName} eingetragen.`);
+    } catch {
+      toast.error("Vertretung konnte nicht eingetragen werden. Bitte im Dienstplan manuell anlegen.");
+    }
+  }
+
+  // Vorschlag anzeigen: ein Klick im Toast übernimmt Zeiten + Dienstart 1:1.
+  function handleVertretungsVorschlag(vorschlag: VertretungsVorschlag) {
+    toast(`Vertretung: ${vorschlag.userName} für diesen Dienst eintragen?`, {
+      action: {
+        label: "Eintragen",
+        onClick: () => void activateVertretung(vorschlag),
+      },
+      duration: 15000,
+    });
   }
 
   // Sendbare Entwürfe (VORLAEUFIG) — Basis für "Vorschlag senden".
@@ -968,6 +1007,7 @@ export default function Dienstplan() {
             clearSelection();
             closeDialog();
           }}
+          onVertretungsVorschlag={handleVertretungsVorschlag}
           assistants={assistants}
           month={month}
           year={year}
