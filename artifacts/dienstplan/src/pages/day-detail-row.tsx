@@ -221,7 +221,11 @@ export function DayDetailRow({
             e.stopPropagation();
             setReportDialogOpen(true);
           }}
-          className="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-md border border-[#d8d8d4] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#092948] transition-colors after:absolute after:inset-x-0 after:top-1/2 after:h-[44px] after:-translate-y-1/2 after:content-[''] hover:border-[#092948]"
+          // Eigene, größere Auszeichnung (Kay-Feedback 28.08.): Abweichungs-
+          // Farbe (#b5790a, dieselbe wie VORLAEUFIG/Abweichung im Mockup)
+          // statt der neutralen Bestätigen-Optik — der Melde-Button soll
+          // auffallen, nicht wie eine Routine-Aktion wirken.
+          className="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-md border border-[#b5790a] bg-white px-2.5 py-1 text-[14px] font-semibold text-[#b5790a] transition-colors after:absolute after:inset-x-0 after:top-1/2 after:h-[44px] after:-translate-y-1/2 after:content-[''] hover:bg-[#b5790a]/10"
         >
           War anders
         </button>

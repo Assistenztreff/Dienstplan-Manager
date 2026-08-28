@@ -67,7 +67,14 @@ export function ReportDeviationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="deviation-report-dialog" onClick={(e) => e.stopPropagation()}>
+      <DialogContent
+        data-testid="deviation-report-dialog"
+        onClick={(e) => e.stopPropagation()}
+        // Ohne das öffnet der Dialog automatisch das native Zeit-Popup des
+        // ersten Felds (Von) beim Aufklappen — soll nur bei bewusstem Klick
+        // ins Feld aufgehen (gleiches Muster wie im Schicht-Dialog).
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Abweichung melden</DialogTitle>
         </DialogHeader>
@@ -169,7 +176,11 @@ export function DisputeDeviationDialog({
   const [reason, setReason] = useState("");
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="deviation-dispute-dialog" onClick={(e) => e.stopPropagation()}>
+      <DialogContent
+        data-testid="deviation-dispute-dialog"
+        onClick={(e) => e.stopPropagation()}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Abweichung ablehnen</DialogTitle>
         </DialogHeader>
