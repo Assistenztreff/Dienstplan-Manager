@@ -899,6 +899,20 @@ export const ListShiftDeviationsResponse = zod.array(ListShiftDeviationsResponse
 
 
 /**
+ * Setzt genau einen eigenen Dienst von ANGEBOTEN auf FIX. Gegenstück zu bulk-confirm-own, das nur den ganzen Monat auf einmal bestätigen kann: Vorschläge und nachträgliche Korrekturen des Planers sollen einzeln annehmbar sein. Fremde Dienst-IDs liefern 404 (nicht 403), damit sie nicht ausspähbar sind.
+ * @summary Einen eigenen vorgeschlagenen Dienst bestätigen (Assistenzkraft)
+ */
+export const ConfirmOwnShiftParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ConfirmOwnShiftResponse = zod.object({
+  "id": zod.number(),
+  "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX'])
+})
+
+
+/**
  * Nur für die eigene, bereits vergangene FIX-Schicht. Genau eine Meldung pro Dienst ist möglich (Abbruchregel gegen Ping-Pong) — ein zweiter Versuch liefert 409.
  * @summary Abweichung von der geplanten Arbeitszeit melden (Assistenzkraft)
  */

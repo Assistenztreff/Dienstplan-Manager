@@ -12,6 +12,7 @@ import {
   useBulkConfirmOwnShifts,
   useGetHoursBalance,
   useListShiftDeviations,
+  useConfirmOwnShift,
   useReportShiftDeviation,
   useAcceptShiftDeviation,
   useDisputeShiftDeviation,
@@ -70,6 +71,7 @@ import {
   type DialogState,
   isAbsenceShift,
   isMirrorShift,
+  isPastCorrection,
   PersonColorsContext,
   scrollToAgendaDay,
   type Shift,
@@ -77,6 +79,8 @@ import {
   TeamAbsenceOverview,
   usePersistentState,
 } from "./dienstplan-helpers";
+import { StatusBadge } from "@/components/status-badge";
+import { CorrectedShiftsProvider } from "./corrected-shifts";
 import { MonthGrid } from "./month-grid";
 import type { DeviationReportValues } from "./deviation-dialog";
 import { readableApiError } from "@/lib/api-error";
@@ -195,7 +199,19 @@ export default function Dienstplan() {
     for (const report of deviationReportsData ?? []) map.set(report.shiftId, report);
     return map;
   }, [deviationReportsData]);
+  // Dienste mit ANGENOMMENER Abweichungsmeldung. Sie bleiben FIX (beide Seiten
+  // sind sich einig, eine erneute Bestaetigung waere sinnlos), sollen aber in
+  // allen Ansichten als nachtraeglich korrigiert erkennbar sein — per Context
+  // statt Prop-Kette, s. corrected-shifts.tsx.
+  const correctedShiftIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const report of deviationReportsData ?? []) {
+      if (report.status === "ACCEPTED") ids.add(report.shiftId);
+    }
+    return ids;
+  }, [deviationReportsData]);
 
+  const confirmOwnShiftMutation = useConfirmOwnShift();
   const reportDeviationMutation = useReportShiftDeviation();
   const acceptDeviationMutation = useAcceptShiftDeviation();
   const disputeDeviationMutation = useDisputeShiftDeviation();
@@ -571,6 +587,17 @@ export default function Dienstplan() {
       )
     : [];
 
+  // Kay-Feedback 28.08.2026: Vorschlag und Korrektur sind zwei verschiedene
+  // Vorgänge und gehören getrennt. Ein VORSCHLAG betrifft einen noch nicht
+  // gearbeiteten Dienst — Zustimmung zur Planung. Eine KORREKTUR betrifft
+  // einen bereits vergangenen Dienst, den der Planer nachträglich geändert
+  // hat (er fällt dabei auf ANGEBOTEN zurück, s. faelltZurueck in
+  // shifts-crud.ts) — Zustimmung zu einer geänderten Arbeitszeit, also eine
+  // arbeitszeitrechtlich ganz andere Aussage. Deshalb zwei Banner statt einem
+  // Sammel-Hinweis, und beide mit Einzelbestätigung.
+  const myKorrekturShifts = myAngebotenShifts.filter((s) => isPastCorrection(s));
+  const myVorschlagShifts = myAngebotenShifts.filter((s) => !isPastCorrection(s));
+
   async function sendProposals() {
     if (!isAdmin || isBulkConfirming) return;
     if (scopedSendableShifts.length === 0) {
@@ -638,6 +665,33 @@ export default function Dienstplan() {
       toast.error("Versenden fehlgeschlagen. Bitte erneut versuchen.");
     } finally {
       setIsBulkConfirming(false);
+    }
+  }
+
+  /**
+   * Assistenzkraft bestätigt EINEN eigenen Dienst (Vorschlag oder Korrektur).
+   * Eigene Route statt PATCH /shifts/:id — die ist planerpflichtig, weshalb
+   * die Einzelbestätigung für Assistenzkräfte bisher gar nicht möglich war
+   * (nur "Alle bestätigen"). Kay-Feedback 28.08.2026.
+   */
+  async function confirmOwnShift(shift: Shift) {
+    if (confirmingShiftId !== null) return;
+    setConfirmingShiftId(shift.id);
+    try {
+      await confirmOwnShiftMutation.mutateAsync({ id: shift.id });
+      const bestaetigt = { ...shift, planningStatus: "FIX" as const };
+      upsertShiftsInCache(queryClient, [bestaetigt], selectedTeamId);
+      void invalidateShiftDerivedQueries(queryClient);
+      toast.success(
+        isPastCorrection(shift)
+          ? "Korrektur bestätigt — die geänderte Zeit zählt jetzt in Auswertungen und Stundennachweis."
+          : "Dienst bestätigt — zählt jetzt in Auswertungen und Stundennachweis.",
+      );
+    } catch (err) {
+      if (!navigator.onLine) return;
+      toast.error(readableApiError(err, "Bestätigen fehlgeschlagen. Bitte erneut versuchen."));
+    } finally {
+      setConfirmingShiftId(null);
     }
   }
 
@@ -781,6 +835,7 @@ export default function Dienstplan() {
 
   return (
     <PersonColorsContext.Provider value={personColors}>
+    <CorrectedShiftsProvider shiftIds={correctedShiftIds}>
     <div className="flex flex-col gap-3 animate-in fade-in duration-300">
       {header}
 
@@ -791,15 +846,36 @@ export default function Dienstplan() {
         </PlanLimitBanner>
       )}
 
-      {/* Assistenz-Banner: Vorgeschlagene Dienste bestätigen */}
-      {!isAdmin && myAngebotenShifts.length > 0 && (
+      {/* Assistenz-Banner 1: KORREKTUREN. Bewusst zuerst und farblich getrennt
+          von den Vorschlägen — hier geht es um bereits gearbeitete Dienste,
+          deren Zeit der Planer nachträglich geändert hat. Das ist die
+          arbeitszeitrechtlich bedeutsamere Zustimmung und darf nicht mit
+          gewöhnlicher Planung in einem Topf landen (Kay-Feedback 28.08.2026).
+          Kein Sammel-Knopf: jede Korrektur wird einzeln in der Tagesleiste
+          bestätigt, damit niemand geänderte Zeiten unbesehen abnickt. */}
+      {!isAdmin && myKorrekturShifts.length > 0 && (
+        <div className="flex items-center gap-2 rounded-lg border border-[#e2c88a] bg-[#fdf7e8] px-4 py-3 text-[#7a5406]">
+          <StatusBadge kind="correction" compact />
+          <span className="text-sm font-medium">
+            {myKorrekturShifts.length === 1
+              ? "1 Korrektur wartet auf deine Bestätigung — bitte in der Tagesleiste prüfen."
+              : `${myKorrekturShifts.length} Korrekturen warten auf deine Bestätigung — bitte in der Tagesleiste prüfen.`}
+          </span>
+        </div>
+      )}
+
+      {/* Assistenz-Banner 2: echte Dienstvorschläge (noch nicht gearbeitet).
+          Sammelbestätigung bleibt hier erhalten — bei reiner Vorausplanung ist
+          sie eine Erleichterung, keine Gefahr. Einzeln geht jetzt zusätzlich
+          über die Tagesleiste. */}
+      {!isAdmin && myVorschlagShifts.length > 0 && (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3">
           <div className="flex items-center gap-2 text-sky-900">
             <Check className="h-4 w-4 shrink-0 text-sky-600" />
             <span className="text-sm font-medium">
-              {myAngebotenShifts.length === 1
+              {myVorschlagShifts.length === 1
                 ? "1 Dienstvorschlag wartet auf Ihre Bestätigung."
-                : `${myAngebotenShifts.length} Dienstvorschläge warten auf Ihre Bestätigung.`}
+                : `${myVorschlagShifts.length} Dienstvorschläge warten auf Ihre Bestätigung.`}
             </span>
           </div>
           <Button
@@ -996,6 +1072,7 @@ export default function Dienstplan() {
         onDayClick={(day) => openCreate(day)}
         onShiftClick={openEdit}
         onConfirmShift={confirmShift}
+            onConfirmOwnShift={confirmOwnShift}
         deviationReports={deviationReportsByShiftId}
         onReportDeviation={reportDeviation}
         onAcceptDeviation={canPlan ? acceptDeviation : undefined}
@@ -1163,6 +1240,7 @@ export default function Dienstplan() {
         />
       )}
     </div>
+    </CorrectedShiftsProvider>
     </PersonColorsContext.Provider>
   );
 }

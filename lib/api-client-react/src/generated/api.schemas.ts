@@ -945,6 +945,20 @@ export interface BulkConfirmOwnShiftsResult {
   confirmed: number;
 }
 
+export type ConfirmOwnShiftResultPlanningStatus = typeof ConfirmOwnShiftResultPlanningStatus[keyof typeof ConfirmOwnShiftResultPlanningStatus];
+
+
+export const ConfirmOwnShiftResultPlanningStatus = {
+  VORLAEUFIG: 'VORLAEUFIG',
+  ANGEBOTEN: 'ANGEBOTEN',
+  FIX: 'FIX',
+} as const;
+
+export interface ConfirmOwnShiftResult {
+  id: number;
+  planningStatus: ConfirmOwnShiftResultPlanningStatus;
+}
+
 export interface BulkConfirmShiftsInput {
   /**
      * @minimum 1

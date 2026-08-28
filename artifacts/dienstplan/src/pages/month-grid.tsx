@@ -20,6 +20,7 @@ import {
   WEEKDAY_LABELS,
   WEEKDAY_LABELS_FULL,
 } from "./dienstplan-helpers";
+import { useCorrectedShiftIds } from "./corrected-shifts";
 
 export function MonthGrid({
   days,
@@ -72,6 +73,9 @@ export function MonthGrid({
   onCollapsedDayActivate?: (day: Date) => void;
 }) {
   const personColors = usePersonColors();
+  // Dienste mit angenommener Abweichungsmeldung: bleiben FIX, bekommen aber
+  // zusaetzlich das Korrektur-Symbol (s. corrected-shifts.tsx).
+  const correctedShiftIds = useCorrectedShiftIds();
   const selectedDateSet = new Set(selectedDates ?? []);
   const offset = (getDay(monthStart) + 6) % 7;
   const blanks = Array.from({ length: offset });
@@ -434,6 +438,7 @@ export function MonthGrid({
                         // einzige Personen-Kennung (voller Name im title-Attribut).
                         const avatarLabel = isTeam ? "T" : s.user?.name ? lastNameInitial(s.user.name) : "?";
                         const pastCorrection = isPastCorrection(s);
+                        const korrigiert = correctedShiftIds.has(s.id);
                         const statusColor = dienstStatusColor(status, hasAusfall, s.isVertretung, pastCorrection);
                         return (
                           <span
@@ -482,6 +487,13 @@ export function MonthGrid({
                                   <StatusBadge
                                     kind={status === "ANGEBOTEN" ? "sent" : "draft"}
                                     label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
+                                    calendarCompact
+                                  />
+                                )}
+                                {korrigiert && (
+                                  <StatusBadge
+                                    kind="correction"
+                                    label="Nachträglich korrigiert"
                                     calendarCompact
                                   />
                                 )}
@@ -555,6 +567,7 @@ export function MonthGrid({
                     const shortNameLabel = isTeam ? "Team" : s.user?.name ? lastName(s.user.name) : "?";
                     const avatarLabel = isTeam ? "T" : s.user?.name ? nameInitials(s.user.name) : "?";
                     const pastCorrection = isPastCorrection(s);
+                    const korrigiert = correctedShiftIds.has(s.id);
                     const statusColor = dienstStatusColor(status, hasAusfall, s.isVertretung, pastCorrection);
                     const statusLabel = dienstStatusLabel(status, hasAusfall, s.isVertretung, pastCorrection);
                     const commonHandlers = {
@@ -576,6 +589,13 @@ export function MonthGrid({
                           <StatusBadge
                             kind={status === "ANGEBOTEN" ? "sent" : "draft"}
                             label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
+                            calendarCompact={pillMinimiert}
+                          />
+                        )}
+                        {korrigiert && (
+                          <StatusBadge
+                            kind="correction"
+                            label="Nachträglich korrigiert"
                             calendarCompact={pillMinimiert}
                           />
                         )}

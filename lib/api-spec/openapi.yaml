@@ -808,6 +808,37 @@ paths:
                 items:
                   $ref: "#/components/schemas/ShiftDeviationReport"
 
+  /shifts/{id}/confirm-own:
+    post:
+      operationId: confirmOwnShift
+      tags: [shifts]
+      summary: Einen eigenen vorgeschlagenen Dienst bestätigen (Assistenzkraft)
+      description: >-
+        Setzt genau einen eigenen Dienst von ANGEBOTEN auf FIX. Gegenstück zu
+        bulk-confirm-own, das nur den ganzen Monat auf einmal bestätigen kann:
+        Vorschläge und nachträgliche Korrekturen des Planers sollen einzeln
+        annehmbar sein. Fremde Dienst-IDs liefern 404 (nicht 403), damit sie
+        nicht ausspähbar sind.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Dienst bestätigt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfirmOwnShiftResult"
+        "400":
+          description: Ungültige ID oder Dienst ist nicht im Status ANGEBOTEN
+        "404":
+          description: Kein eigener Dienst mit dieser ID
+        "409":
+          description: Status wurde zwischenzeitlich von anderer Stelle geändert
+
   /shifts/{id}/deviation:
     post:
       operationId: reportShiftDeviation
@@ -3606,6 +3637,16 @@ components:
         confirmed:
           type: integer
           description: Anzahl auf FIX gesetzter Dienste.
+
+    ConfirmOwnShiftResult:
+      type: object
+      required: [id, planningStatus]
+      properties:
+        id:
+          type: integer
+        planningStatus:
+          type: string
+          enum: [VORLAEUFIG, ANGEBOTEN, FIX]
 
     BulkConfirmShiftsInput:
       type: object

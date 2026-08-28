@@ -45,6 +45,8 @@ export * from './bulkShiftsResult';
 export * from './calendarToken';
 export * from './changePassword200';
 export * from './changePasswordInput';
+export * from './confirmOwnShiftResult';
+export * from './confirmOwnShiftResultPlanningStatus';
 export * from './contract';
 export * from './contractInput';
 export * from './contractUpdate';

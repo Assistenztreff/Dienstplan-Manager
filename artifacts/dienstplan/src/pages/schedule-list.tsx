@@ -61,6 +61,7 @@ export function ScheduleList({
   onDayClick,
   onShiftClick,
   onConfirmShift,
+  onConfirmOwnShift,
   canEdit,
   selectionMode,
   selectedDates,
@@ -86,6 +87,7 @@ export function ScheduleList({
   onDayClick: (day: Date) => void;
   onShiftClick: (shift: Shift) => void;
   onConfirmShift?: (shift: Shift) => void;
+  onConfirmOwnShift?: (shift: Shift) => void;
   canEdit: boolean;
   selectionMode?: boolean;
   selectedDates?: string[];
@@ -414,6 +416,7 @@ export function ScheduleList({
         onDayClick={onDayClick}
         onShiftClick={onShiftClick}
         onConfirmShift={onConfirmShift}
+        onConfirmOwnShift={onConfirmOwnShift}
         deviationReports={deviationReports}
         onReportDeviation={onReportDeviation}
         onAcceptDeviation={onAcceptDeviation}

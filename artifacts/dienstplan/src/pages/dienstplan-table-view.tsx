@@ -3,6 +3,7 @@ import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { Plus, Check, MessageSquare } from "lucide-react";
 import { StatusBadge, type StatusBadgeKind } from "@/components/status-badge";
+import { useIsCorrectedShift } from "./corrected-shifts";
 import { useTeam } from "@/context/team";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { userDotClass, type PersonColorAssignment } from "@/lib/shift-model-colors";
@@ -56,9 +57,14 @@ function TableShiftCell({
   // Vorschlag — oder "Korrektur" bei einem vergangenen, zurückgefallenen
   // Dienst, s. isPastCorrection).
   const pastCorrection = isPastCorrection(shift);
+  // Einvernehmlich korrigiert: bleibt bestaetigt, bekommt zusaetzlich das
+  // Korrektur-Symbol (s. corrected-shifts.tsx).
+  const korrigiert = useIsCorrectedShift(shift.id);
   const statusWord =
     status === "FIX"
-      ? "Bestätigt"
+      ? korrigiert
+        ? "Bestätigt · korrigiert"
+        : "Bestätigt"
       : pastCorrection
         ? "Korrektur"
         : (PLANNING_STATUS_LABELS[status] ?? status);
@@ -87,6 +93,7 @@ function TableShiftCell({
       <div className="flex min-h-[20px] items-center gap-[4px]">
         <span className="flex shrink-0 items-center gap-[3px]">
           <StatusBadge kind={baseIconKind} label={statusWord} />
+          {korrigiert && <StatusBadge kind="correction" label="Nachträglich korrigiert" />}
           {shift.isVertretung && <StatusBadge kind="vertretung" label="Vertretung" />}
         </span>
         <span className="min-w-0 flex-1 truncate text-[9px] font-semibold uppercase tracking-wide text-[#444444]">

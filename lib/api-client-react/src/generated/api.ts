@@ -40,6 +40,7 @@ import type {
   CalendarToken,
   ChangePassword200,
   ChangePasswordInput,
+  ConfirmOwnShiftResult,
   Contract,
   ContractInput,
   ContractUpdate,
@@ -2451,6 +2452,77 @@ export function useListShiftDeviations<TData = Awaited<ReturnType<typeof listShi
 
 
 
+
+export const getConfirmOwnShiftUrl = (id: number,) => {
+
+
+
+
+  return `/api/shifts/${id}/confirm-own`
+}
+
+/**
+ * Setzt genau einen eigenen Dienst von ANGEBOTEN auf FIX. Gegenstück zu bulk-confirm-own, das nur den ganzen Monat auf einmal bestätigen kann: Vorschläge und nachträgliche Korrekturen des Planers sollen einzeln annehmbar sein. Fremde Dienst-IDs liefern 404 (nicht 403), damit sie nicht ausspähbar sind.
+ * @summary Einen eigenen vorgeschlagenen Dienst bestätigen (Assistenzkraft)
+ */
+export const confirmOwnShift = async (id: number, options?: RequestInit): Promise<ConfirmOwnShiftResult> => {
+
+  return customFetch<ConfirmOwnShiftResult>(getConfirmOwnShiftUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getConfirmOwnShiftMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmOwnShift>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmOwnShift>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['confirmOwnShift'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmOwnShift>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  confirmOwnShift(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmOwnShiftMutationResult = NonNullable<Awaited<ReturnType<typeof confirmOwnShift>>>
+
+    export type ConfirmOwnShiftMutationError = ErrorType<void>
+
+    /**
+ * @summary Einen eigenen vorgeschlagenen Dienst bestätigen (Assistenzkraft)
+ */
+export const useConfirmOwnShift = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmOwnShift>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmOwnShift>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getConfirmOwnShiftMutationOptions(options));
+    }
 
 export const getReportShiftDeviationUrl = (id: number,) => {
 

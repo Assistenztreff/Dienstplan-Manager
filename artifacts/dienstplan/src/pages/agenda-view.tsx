@@ -19,6 +19,7 @@ export function AgendaView({
   onDayClick,
   onShiftClick,
   onConfirmShift,
+  onConfirmOwnShift,
   canEdit,
   selectionMode = false,
   selectedDates,
@@ -42,6 +43,8 @@ export function AgendaView({
   onDayClick: (day: Date) => void;
   onShiftClick: (shift: Shift) => void;
   onConfirmShift?: (shift: Shift) => void;
+  /** Eigenbestätigung der Assistenzkraft (eigene Route, s. day-detail-row). */
+  onConfirmOwnShift?: (shift: Shift) => void;
   canEdit: boolean;
   /** Abweichungsmodell: shiftId → Meldung, plus die drei Aktionen. Fehlen
    *  sie, bleibt die Zeile unverändert (Ownership-/Rollenprüfung lebt in
@@ -293,6 +296,11 @@ export function AgendaView({
                             hasAusfall={!isAbsenceShift(shift) && dayAusfallUserIds.has(shift.userId)}
                             onClick={dayClickable && !selectionMode ? () => onShiftClick(shift) : undefined}
                             onConfirm={dayClickable && !selectionMode ? onConfirmShift : undefined}
+                            // Wie "War anders" bewusst OHNE den canEdit-Anteil
+                            // von dayClickable: die Eigenbestätigung ist gerade
+                            // für Nicht-Planer gedacht. Ownership und Status
+                            // prüft die Zeile selbst (selfConfirmable).
+                            onConfirmOwn={!other && !selectionMode ? onConfirmOwnShift : undefined}
                             deviationReport={deviationReports?.get(shift.id)}
                             // "War anders" ist für die Assistenzkraft selbst
                             // gedacht, NICHT nur für Bearbeitungsberechtigte —

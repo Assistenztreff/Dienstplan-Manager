@@ -6,6 +6,7 @@ import {
   SendShiftProposalsBody,
   BulkConfirmOwnShiftsBody,
   BulkConfirmShiftsBody,
+  ConfirmOwnShiftParams,
 } from "@workspace/api-zod";
 import { sendProposalEmail } from "../lib/mailer";
 import { getBaseUrl } from "../lib/base-url";
@@ -223,5 +224,58 @@ router.post(
     res.json({ confirmed: updated.length });
   }
 );
+
+// POST /shifts/:id/confirm-own — Assistenzkraft bestaetigt EINEN eigenen
+// vorgeschlagenen Dienst (ANGEBOTEN -> FIX). Gegenstueck zu
+// bulk-confirm-own, das nur den ganzen Monat auf einmal kann: Kay-Feedback
+// 28.08.2026 — Vorschlaege und nachtraegliche Korrekturen des Planers sollen
+// einzeln annehmbar sein, nicht nur als Block.
+//
+// Der Pfad hat zwei Segmente und kollidiert deshalb nicht mit GET /shifts/:id
+// (s. Reihenfolgen-Hinweis in routes/index.ts).
+router.post("/shifts/:id/confirm-own", requireAuth, async (req, res): Promise<void> => {
+  const params = ConfirmOwnShiftParams.safeParse({ id: Number(req.params["id"]) });
+  if (!params.success) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  const userId = req.session.userId!;
+
+  const [shift] = await db
+    .select()
+    .from(shiftsTable)
+    .where(eq(shiftsTable.id, params.data.id))
+    .limit(1);
+  // Nur der eigene Dienst im eigenen Team — 404 statt 403, damit fremde
+  // Dienst-IDs nicht ausspaehbar sind (Muster wie beim Abweichungs-Melden).
+  if (
+    !shift ||
+    shift.userId !== userId ||
+    shift.teamId == null ||
+    !(await getAllowedTeamIds(userId)).includes(shift.teamId)
+  ) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (shift.planningStatus !== "ANGEBOTEN") {
+    res.status(400).json({
+      error: "Nur vorgeschlagene Dienste koennen bestaetigt werden.",
+      code: "confirm_own_invalid_status",
+    });
+    return;
+  }
+
+  const [updated] = await db
+    .update(shiftsTable)
+    .set({ planningStatus: "FIX" })
+    .where(and(eq(shiftsTable.id, shift.id), eq(shiftsTable.planningStatus, "ANGEBOTEN")))
+    .returning();
+  if (!updated) {
+    // Zwischen Lesen und Schreiben hat jemand anders den Status geaendert.
+    res.status(409).json({ error: "Der Dienst wurde zwischenzeitlich geaendert." });
+    return;
+  }
+  res.json({ id: updated.id, planningStatus: updated.planningStatus });
+});
 
 export default router;

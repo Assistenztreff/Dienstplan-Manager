@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import { useState } from "react";
 import { Check, MessageSquare } from "lucide-react";
 import { StatusBadge, type StatusBadgeKind } from "@/components/status-badge";
+import { useIsCorrectedShift } from "./corrected-shifts";
 import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -38,6 +39,7 @@ export function DayDetailRow({
   modelMap,
   onClick,
   onConfirm,
+  onConfirmOwn,
   testId,
   hasAusfall = false,
   deviationReport,
@@ -50,6 +52,13 @@ export function DayDetailRow({
   modelMap: Map<number, ShiftModelInfo>;
   onClick?: () => void;
   onConfirm?: (shift: Shift) => void;
+  /** Bestätigung durch die Assistenzkraft SELBST (eigener Dienst,
+   *  Vorschlag oder Korrektur). Eigener Callback statt onConfirm, weil
+   *  dahinter eine andere Route steckt: onConfirm ist planerpflichtig
+   *  (PATCH /shifts/:id), dies nutzt POST /shifts/:id/confirm-own.
+   *  Kay-Feedback 28.08.2026 — vorher gab es für Assistenzkräfte nur
+   *  "Alle bestätigen". */
+  onConfirmOwn?: (shift: Shift) => void;
   /** data-testid der Zeile — die Wochen-Liste vergibt `shift-badge-<id>`,
    *  damit die bestehenden E2E-Selektoren greifen. */
   testId: string;
@@ -85,9 +94,14 @@ export function DayDetailRow({
         : `Aushilfe für ${shift.einsatzTeamName ?? "anderes Team"}`
       : null;
   const pastCorrection = isPastCorrection(shift);
+  // Einvernehmlich korrigiert (gemeldete Abweichung wurde angenommen):
+  // Dienst bleibt FIX, bekommt aber zusaetzlich das Korrektur-Symbol.
+  const korrigiert = useIsCorrectedShift(shift.id);
   const statusText =
     status === "FIX"
-      ? "bestätigt"
+      ? korrigiert
+        ? "bestätigt · korrigiert"
+        : "bestätigt"
       : pastCorrection
         ? "Korrektur"
         : (PLANNING_STATUS_LABELS[status] ?? status);
@@ -122,6 +136,15 @@ export function DayDetailRow({
           : "draft";
 
   const confirmable = onConfirm && !mirror && isConfirmableShift(shift);
+  // Eigenbestätigung: nur der eigene, vorgeschlagene Dienst und nur, wenn
+  // nicht ohnehin schon der Planer-Knopf steht (sonst zwei Knöpfe).
+  const selfConfirmable =
+    !confirmable &&
+    !!onConfirmOwn &&
+    !mirror &&
+    shift.planningStatus === "ANGEBOTEN" &&
+    isConfirmableShift(shift) &&
+    currentUser?.id === shift.userId;
 
   // Abweichungsmodell: "War anders" nur für die eigene, bereits vergangene
   // FIX-Schicht (Arbeitsdienst, keine Abwesenheit/Teamdienst), solange noch
@@ -221,6 +244,33 @@ export function DayDetailRow({
         >
           <Check className="h-3 w-3" />
           Bestätigen
+        </button>
+      )}
+
+      {/* Eigenbestätigung der Assistenzkraft — Beschriftung macht den
+          Unterschied sichtbar: eine Korrektur betrifft einen bereits
+          gearbeiteten Dienst, ein Vorschlag die reine Planung. */}
+      {selfConfirmable && (
+        <button
+          type="button"
+          data-testid={`shift-confirm-own-${shift.id}`}
+          title={
+            pastCorrection
+              ? "Geänderte Zeit dieses vergangenen Dienstes bestätigen"
+              : "Diesen Dienstvorschlag verbindlich annehmen"
+          }
+          onClick={(e) => {
+            e.stopPropagation();
+            onConfirmOwn(shift);
+          }}
+          className={`relative z-10 inline-flex shrink-0 items-center gap-1 rounded-md border bg-white px-2 py-0.5 text-[11px] font-semibold transition-colors after:absolute after:inset-x-0 after:top-1/2 after:h-[44px] after:-translate-y-1/2 after:content-[''] ${
+            pastCorrection
+              ? "border-[#b5790a] text-[#966408] hover:border-[#966408]"
+              : "border-[#d8d8d4] text-[#092948] hover:border-[#092948]"
+          }`}
+        >
+          <Check className="h-3 w-3" />
+          {pastCorrection ? "Korrektur bestätigen" : "Annehmen"}
         </button>
       )}
 
@@ -360,6 +410,13 @@ export function DayDetailRow({
                     : "Entwurf"
             }
           />
+          {korrigiert && (
+            <StatusBadge
+              kind="correction"
+              compact
+              label="Nachträglich korrigiert (gemeldete Abweichung angenommen)"
+            />
+          )}
           {shift.isVertretung && (
             <StatusBadge kind="vertretung" compact label="Vertretung" />
           )}
