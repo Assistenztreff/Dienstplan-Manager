@@ -74,6 +74,7 @@ import {
 } from "./dienstplan-helpers";
 import { MonthGrid } from "./month-grid";
 import type { DeviationReportValues } from "./deviation-dialog";
+import { readableApiError } from "@/lib/api-error";
 import { ScheduleList } from "./schedule-list";
 import { DienstplanHeader } from "./dienstplan-header";
 import { DienstplanTableView } from "./dienstplan-table-view";
@@ -207,9 +208,9 @@ export default function Dienstplan() {
       await reportDeviationMutation.mutateAsync({ id: shift.id, data: values });
       void invalidateShiftDerivedQueries(queryClient);
       toast.success("Abweichung gemeldet — der Planer wird benachrichtigt.");
-    } catch {
+    } catch (err) {
       if (!navigator.onLine) return;
-      toast.error("Melden fehlgeschlagen. Bitte erneut versuchen.");
+      toast.error(readableApiError(err, "Melden fehlgeschlagen. Bitte erneut versuchen."));
     }
   }
 
@@ -224,9 +225,9 @@ export default function Dienstplan() {
           updated?.reportedAusgefallen ? " (ausgefallen)" : ""
         }.`,
       );
-    } catch {
+    } catch (err) {
       if (!navigator.onLine) return;
-      toast.error("Annehmen fehlgeschlagen. Bitte erneut versuchen.");
+      toast.error(readableApiError(err, "Annehmen fehlgeschlagen. Bitte erneut versuchen."));
     }
   }
 
@@ -235,9 +236,9 @@ export default function Dienstplan() {
       await disputeDeviationMutation.mutateAsync({ id: shift.id, data: { reason } });
       void invalidateShiftDerivedQueries(queryClient);
       toast.success("Widerspruch gesendet — der Planwert bleibt maßgeblich.");
-    } catch {
+    } catch (err) {
       if (!navigator.onLine) return;
-      toast.error("Widersprechen fehlgeschlagen. Bitte erneut versuchen.");
+      toast.error(readableApiError(err, "Widersprechen fehlgeschlagen. Bitte erneut versuchen."));
     }
   }
 
