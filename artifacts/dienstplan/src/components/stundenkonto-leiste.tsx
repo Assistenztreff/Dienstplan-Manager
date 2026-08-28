@@ -572,7 +572,7 @@ export function StundenkontoPanel({
                 aria-label={pillAriaLabel(e)}
                 title={pillTitle(e)}
                 onClick={() => onToggleUser(e.id)}
-                className={`relative w-full flex flex-col text-left px-2.5 py-1.5 rounded-lg border transition-colors overflow-hidden ${
+                className={`relative w-full flex flex-col text-left px-2.5 py-1 rounded-lg border transition-colors overflow-hidden ${
                   isSelected
                     ? "bg-primary/5 border-primary/30"
                     : "bg-card border-border hover:bg-muted"
@@ -595,7 +595,7 @@ export function StundenkontoPanel({
                     >
                       {nameInitials(e.name)}
                     </span>
-                    <span className="font-medium text-xs truncate">{getLastName(e.name)}</span>
+                    <span className="font-semibold text-[13px] leading-none truncate">{getLastName(e.name)}</span>
                   </div>
                   {status.hasShifts && <StatusBadge kind={status.kind} label={status.label} compact />}
                 </div>
@@ -604,7 +604,7 @@ export function StundenkontoPanel({
                     hinterlegte Vertragsstunden steht statt eines Saldos ein
                     neutraler Hinweis: Die Bilanz soll nur dort eine Aussage
                     treffen, wo sie eine treffen kann. */}
-                <div className="flex items-center gap-1.5 text-[10px] leading-none text-muted-foreground pr-2 mt-1">
+                <div className="flex items-center gap-1.5 text-xs leading-none text-muted-foreground pr-2 mt-0.5">
                   <span className="flex items-center gap-0.5">
                     <FileSignature className="w-3 h-3 shrink-0" aria-hidden="true" />
                     {e.hasContract ? `${formatHours(e.contractTarget)} h` : "—"}
@@ -615,23 +615,23 @@ export function StundenkontoPanel({
                   </span>
                   {e.hasContract ? (
                     <span
-                      className={`ml-auto flex items-center gap-0.5 font-medium ${e.balance > 0 ? "text-green-600" : e.balance < 0 ? "text-amber-600" : "text-muted-foreground"}`}
+                      className={`ml-auto flex items-center gap-0.5 font-semibold tabular-nums ${e.balance > 0 ? "text-green-600" : e.balance < 0 ? "text-amber-600" : "text-muted-foreground"}`}
                     >
                       {formatBalance(e.balance)}
-                      <BalanceIcon balance={e.balance} className="w-2.5 h-2.5" />
+                      <BalanceIcon balance={e.balance} className="w-3 h-3" />
                     </span>
                   ) : (
-                    <span className="ml-auto font-medium text-muted-foreground">kein Vertrag</span>
+                    <span className="ml-auto font-semibold text-muted-foreground">kein Vertrag</span>
                   )}
                 </div>
 
                 {/* Zeile 3: Füllstand des Monatskontos + Hinweis auf noch
                     unbestätigte Stunden, der verschwindet, sobald der Monat
                     vollständig bestätigt ist. */}
-                {e.hasContract && <FortschrittsBalken eintrag={e} className="mt-1.5 mr-2" />}
+                {e.hasContract && <FortschrittsBalken eintrag={e} className="mt-1 mr-2" />}
                 {e.entwurf > 0 && (
-                  <span className="mt-1 flex items-center gap-0.5 text-[10px] leading-none text-muted-foreground">
-                    <PencilLine className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
+                  <span className="mt-0.5 flex items-center gap-0.5 text-xs leading-none text-muted-foreground">
+                    <PencilLine className="w-3 h-3 shrink-0" aria-hidden="true" />
                     davon {formatHours(e.entwurf)} h Entwurf
                   </span>
                 )}
@@ -748,11 +748,11 @@ export function StundenkontoReihe({
                       />
                     )}
                     {!e.hasContract ? (
-                      <span className="text-[11px] leading-none text-muted-foreground">–</span>
+                      <span className="text-xs leading-none text-muted-foreground">–</span>
                     ) : balanced ? (
                       <Check className="w-3.5 h-3.5 text-green-600 shrink-0" aria-hidden="true" />
                     ) : (
-                      <span className="flex items-center gap-0.5 text-[11px] font-medium leading-none text-amber-600">
+                      <span className="flex items-center gap-0.5 text-xs font-semibold tabular-nums leading-none text-amber-600">
                         {formatBalance(e.balance)}
                         <BalanceIcon balance={e.balance} className="w-2.5 h-2.5" />
                       </span>
@@ -764,16 +764,16 @@ export function StundenkontoReihe({
                       <StatusBadge kind={status.kind} label={status.label} compact />
                     )}
 
-                    <span className="flex items-center gap-0.5 text-[11px] leading-none text-muted-foreground">
+                    <span className="flex items-center gap-0.5 text-xs leading-none text-muted-foreground">
                       <FileSignature className="w-3 h-3 shrink-0" aria-hidden="true" />
                       {e.hasContract ? `${formatHours(e.contractTarget)} h` : "—"}
                     </span>
-                    <span className="flex items-center gap-0.5 text-[11px] leading-none text-muted-foreground">
+                    <span className="flex items-center gap-0.5 text-xs leading-none text-muted-foreground">
                       <CalendarClock className="w-3 h-3 shrink-0" aria-hidden="true" />
                       {formatHours(e.verplant)} h
                     </span>
                     {e.entwurf > 0 && (
-                      <span className="flex items-center gap-0.5 text-[11px] leading-none text-muted-foreground">
+                      <span className="flex items-center gap-0.5 text-xs leading-none text-muted-foreground">
                         <PencilLine className="w-3 h-3 shrink-0" aria-hidden="true" />
                         {formatHours(e.entwurf)} h
                       </span>
@@ -781,13 +781,13 @@ export function StundenkontoReihe({
 
                     {e.hasContract ? (
                       <span
-                        className={`flex items-center gap-0.5 text-[11px] font-medium leading-none ${e.balance > 0 ? "text-green-600" : e.balance < 0 ? "text-amber-600" : "text-muted-foreground"}`}
+                        className={`flex items-center gap-0.5 text-xs font-semibold tabular-nums leading-none ${e.balance > 0 ? "text-green-600" : e.balance < 0 ? "text-amber-600" : "text-muted-foreground"}`}
                       >
                         {formatBalance(e.balance)}
                         <BalanceIcon balance={e.balance} className="w-2.5 h-2.5" />
                       </span>
                     ) : (
-                      <span className="text-[11px] font-medium leading-none text-muted-foreground">
+                      <span className="text-xs font-semibold tabular-nums leading-none text-muted-foreground">
                         kein Vertrag
                       </span>
                     )}
