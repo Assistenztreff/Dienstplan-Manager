@@ -17,6 +17,7 @@ import {
   isAbsenceShift,
   isConfirmableShift,
   isMirrorShift,
+  isPastCorrection,
   lastNameInitial,
   PLANNING_STATUS_LABELS,
   planningStatusBadgeOutline,
@@ -83,7 +84,13 @@ export function DayDetailRow({
         ? `Aushilfe aus ${shift.homeTeamName ?? "anderem Team"}`
         : `Aushilfe für ${shift.einsatzTeamName ?? "anderes Team"}`
       : null;
-  const statusText = status === "FIX" ? "bestätigt" : (PLANNING_STATUS_LABELS[status] ?? status);
+  const pastCorrection = isPastCorrection(shift);
+  const statusText =
+    status === "FIX"
+      ? "bestätigt"
+      : pastCorrection
+        ? "Korrektur"
+        : (PLANNING_STATUS_LABELS[status] ?? status);
   // Halbtägiger Urlaub (#862): eigene Zeitspanne statt "ganztägig" zeigen,
   // damit die Tagesleiste den echten Zeitraum erkennbar macht.
   const timeLabel = isAbsence
@@ -102,11 +109,17 @@ export function DayDetailRow({
   const avatarLabel = isTeam ? "T" : shift.user?.name ? lastNameInitial(shift.user.name) : "?";
 
   // Rechter Statusfarbbalken: exakt dieselbe Prioritätslogik wie in der Pille.
-  const statusBarColor = dienstStatusColor(status, hasAusfall, shift.isVertretung);
+  const statusBarColor = dienstStatusColor(status, hasAusfall, shift.isVertretung, pastCorrection);
 
   // Basis-Status-Icon (ohne Vertretung/Krank-Overlay).
   const baseIconKind: StatusBadgeKind =
-    status === "FIX" ? "confirmed" : status === "ANGEBOTEN" ? "sent" : "draft";
+    status === "FIX"
+      ? "confirmed"
+      : pastCorrection
+        ? "correction"
+        : status === "ANGEBOTEN"
+          ? "sent"
+          : "draft";
 
   const confirmable = onConfirm && !mirror && isConfirmableShift(shift);
 
@@ -337,7 +350,15 @@ export function DayDetailRow({
           <StatusBadge
             kind={baseIconKind}
             compact
-            label={status === "FIX" ? "Bestätigt" : status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
+            label={
+              status === "FIX"
+                ? "Bestätigt"
+                : pastCorrection
+                  ? "Korrektur"
+                  : status === "ANGEBOTEN"
+                    ? "Vorschlag"
+                    : "Entwurf"
+            }
           />
           {shift.isVertretung && (
             <StatusBadge kind="vertretung" compact label="Vertretung" />

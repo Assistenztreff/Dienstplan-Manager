@@ -13,7 +13,8 @@ export type StatusBadgeKind =
   | "confirmed"
   | "krank"
   | "vertretung"
-  | "clock";
+  | "clock"
+  | "correction";
 
 const KIND_CONFIG: Record<
   StatusBadgeKind,
@@ -108,6 +109,35 @@ const KIND_CONFIG: Record<
         <path d="M3 11V9a4 4 0 0 1 4-4h14" />
         <polyline points="7 23 3 19 7 15" />
         <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+      </svg>
+    ),
+  },
+  // Korrektur: Kreis 16px #b5790a (Abweichungs-/Korrektur-Orange, dieselbe
+  // Farbfamilie wie "War anders"/"Gemeldet" im Abweichungsmodell), weißes
+  // Uhr-Symbol wie bei "clock" — markiert einen VERGANGENEN Dienst, der nach
+  // einer Planer-Änderung auf ANGEBOTEN zurückgefallen ist. Bewusst NICHT
+  // dieselbe Optik wie "sent" (Papierflieger, Vorschlag an eine noch
+  // unentschiedene Zukunft) und NICHT wie "draft" (Stift, unversendeter
+  // Entwurf) — hier geht es um eine Korrektur der Vergangenheit, kein neuer
+  // Vorschlag (Kay-Feedback 28.08.2026).
+  correction: {
+    circle: 16,
+    compactCircle: 10,
+    bg: "#b5790a",
+    symbol: (s) => (
+      <svg
+        width={s}
+        height={s}
+        viewBox="0 0 20 20"
+        fill="none"
+        stroke="#fff"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <circle cx="10" cy="10" r="7.2" />
+        <path d="M10 6.3v4l2.8 1.8" />
       </svg>
     ),
   },

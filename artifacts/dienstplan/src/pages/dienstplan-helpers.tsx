@@ -48,6 +48,21 @@ const PLANNING_STATUS_BADGE_CLASSES: Record<string, string> = {
   VORLAEUFIG: "bg-foreground/10 text-foreground/70",
   ANGEBOTEN: "bg-sky-200 text-sky-900",
 };
+// Korrektur (vergangener, zurückgefallener Dienst) statt Vorschlag-Blau —
+// dieselbe Amber-/Orange-Farbfamilie wie das Abweichungsmodell.
+const KORREKTUR_BADGE_CLASSES = "bg-[#b5790a]/15 text-[#966408]";
+
+// Korrektur statt Vorschlag (Kay-Feedback 28.08.2026): Fällt ein bereits
+// VERGANGENER Dienst durch eine Planer-Änderung auf ANGEBOTEN zurück, ist
+// "Vorschlag" die falsche Beschriftung — klingt nach einer offenen Zukunfts-
+// entscheidung, dabei geht es um eine rückwirkende Korrektur eines bereits
+// gearbeiteten Dienstes. Derselbe Mechanismus (Rückfall + erneute
+// Bestätigung, s. shifts-crud.ts faelltZurueck) bleibt unverändert — nur die
+// Beschriftung/Farbe/Icon unterscheidet sich. Ein zukünftiger, noch nicht
+// gearbeiteter Dienst bleibt bewusst "Vorschlag".
+export function isPastCorrection(shift: Shift): boolean {
+  return shift.planningStatus === "ANGEBOTEN" && new Date(shift.endTime).getTime() < Date.now();
+}
 
 export function isConfirmableShift(shift: Shift): boolean {
   if (shift.type === "vacation" || shift.type === "sick") return false;
@@ -149,21 +164,31 @@ export function usePersonSlotLookup(): (userId: number) => PersonSlot {
  *  ANGEBOTEN ("Vorschlag versendet, wartet auf Bestätigung") bekommt seit
  *  18.08.2026 eine eigene Farbe (Himmelblau), statt wie zuvor dieselbe wie
  *  der noch unversendete Entwurf (VORLAEUFIG). */
-export function dienstStatusColor(status: string, hasAusfall: boolean, isVertretung: boolean | null | undefined): string {
+export function dienstStatusColor(
+  status: string,
+  hasAusfall: boolean,
+  isVertretung: boolean | null | undefined,
+  isPastCorrection = false,
+): string {
   if (hasAusfall) return "#b23b3b";
   if (isVertretung) return "#0f6e8c";
   if (status === "FIX") return "#1e8f4e";
-  if (status === "ANGEBOTEN") return "#0284c7";
+  if (status === "ANGEBOTEN") return isPastCorrection ? "#b5790a" : "#0284c7";
   return "#b5790a";
 }
 
 /** Kontraststarke Textfarbe für die Statusbeschriftung auf dem hellgrauen
  *  Hintergrund der zweiten Desktop-Pillenzeile (mindestens WCAG AA). */
-export function dienstStatusTextColor(status: string, hasAusfall: boolean, isVertretung: boolean | null | undefined): string {
+export function dienstStatusTextColor(
+  status: string,
+  hasAusfall: boolean,
+  isVertretung: boolean | null | undefined,
+  isPastCorrection = false,
+): string {
   if (hasAusfall) return "#b23b3b";
   if (isVertretung) return "#0f6e8c";
   if (status === "FIX") return "#1a7e45";
-  if (status === "ANGEBOTEN") return "#0267a0";
+  if (status === "ANGEBOTEN") return isPastCorrection ? "#966408" : "#0267a0";
   return "#966408";
 }
 
@@ -171,10 +196,18 @@ export function dienstStatusTextColor(status: string, hasAusfall: boolean, isVer
  *  auf Nutzerwunsch, s. Bildvergleich Monatsraster vs. Referenz-Mockup):
  *  dieselbe Prioritätsreihenfolge wie dienstStatusColor(), damit Farbe und
  *  Text immer zusammenpassen. Nur in der zweizeiligen Desktop-Pille genutzt
- *  (@[215px]-Schwelle in Zeile 2) — die Smartphone-Pille hat keine Zeile 2. */
-export function dienstStatusLabel(status: string, hasAusfall: boolean, isVertretung: boolean | null | undefined): string {
+ *  (@[215px]-Schwelle in Zeile 2) — die Smartphone-Pille hat keine Zeile 2.
+ *  isPastCorrection (Kay-Feedback 28.08.2026): vergangener, durch Planer-
+ *  Änderung zurückgefallener Dienst zeigt "Korrektur" statt "Vorschlag". */
+export function dienstStatusLabel(
+  status: string,
+  hasAusfall: boolean,
+  isVertretung: boolean | null | undefined,
+  isPastCorrection = false,
+): string {
   if (hasAusfall) return "Krank";
   if (isVertretung) return "Vertretung";
+  if (status === "ANGEBOTEN" && isPastCorrection) return "Korrektur";
   if (status === "FIX") return "Bestätigt";
   return status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf";
 }
@@ -575,7 +608,12 @@ function ShiftBadge({
   const startLabel = format(start, "HH:mm");
   const endLabel = format(end, "HH:mm");
   const label = shiftLabel(shift, modelMap);
-  const statusLabel = !isAbsence ? PLANNING_STATUS_LABELS[shift.planningStatus ?? ""] : undefined;
+  const pastCorrection = isPastCorrection(shift);
+  const statusLabel = !isAbsence
+    ? pastCorrection
+      ? "Korrektur"
+      : PLANNING_STATUS_LABELS[shift.planningStatus ?? ""]
+    : undefined;
   return (
     <div
       data-testid={`shift-badge-${shift.id}`}
@@ -603,15 +641,21 @@ function ShiftBadge({
       )}
       {statusLabel && (
         <div
-          className={`mb-0.5 inline-flex items-center gap-1 rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide ${PLANNING_STATUS_BADGE_CLASSES[shift.planningStatus ?? ""] ?? ""}`}
+          className={`mb-0.5 inline-flex items-center gap-1 rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide ${
+            pastCorrection
+              ? KORREKTUR_BADGE_CLASSES
+              : (PLANNING_STATUS_BADGE_CLASSES[shift.planningStatus ?? ""] ?? "")
+          }`}
         >
           <StatusBadge
             kind={
-              shift.planningStatus === "FIX"
-                ? "confirmed"
-                : shift.planningStatus === "ANGEBOTEN"
-                  ? "sent"
-                  : "draft"
+              pastCorrection
+                ? "correction"
+                : shift.planningStatus === "FIX"
+                  ? "confirmed"
+                  : shift.planningStatus === "ANGEBOTEN"
+                    ? "sent"
+                    : "draft"
             }
           />
           {statusLabel}

@@ -11,6 +11,7 @@ import {
   isAbsenceShift,
   isConfirmableShift,
   isMirrorShift,
+  isPastCorrection,
   nameLines,
   PLANNING_STATUS_LABELS,
   type Shift,
@@ -51,11 +52,25 @@ function TableShiftCell({
         ? `Aushilfe aus ${shift.homeTeamName ?? "anderem Team"}`
         : `Aushilfe für ${shift.einsatzTeamName ?? "anderes Team"}`
       : null;
-  // Titel wie bisher: Label + Statuswort (FIX → „Bestätigt", sonst Entwurf/Vorschlag).
-  const statusWord = status === "FIX" ? "Bestätigt" : (PLANNING_STATUS_LABELS[status] ?? status);
+  // Titel wie bisher: Label + Statuswort (FIX → „Bestätigt", sonst Entwurf/
+  // Vorschlag — oder "Korrektur" bei einem vergangenen, zurückgefallenen
+  // Dienst, s. isPastCorrection).
+  const pastCorrection = isPastCorrection(shift);
+  const statusWord =
+    status === "FIX"
+      ? "Bestätigt"
+      : pastCorrection
+        ? "Korrektur"
+        : (PLANNING_STATUS_LABELS[status] ?? status);
   const timeRange = `${format(new Date(shift.startTime), "HH:mm")} – ${format(new Date(shift.endTime), "HH:mm")}`;
   const baseIconKind: StatusBadgeKind =
-    status === "FIX" ? "confirmed" : status === "ANGEBOTEN" ? "sent" : "draft";
+    status === "FIX"
+      ? "confirmed"
+      : pastCorrection
+        ? "correction"
+        : status === "ANGEBOTEN"
+          ? "sent"
+          : "draft";
   return (
     <div
       data-testid={`shift-badge-${shift.id}`}
