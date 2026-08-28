@@ -254,7 +254,14 @@ export function MonthGrid({
           // FRÜHESTEN Dienste zeigen, unabhängig von der API-Reihenfolge.
           const nonAbsence = dayShifts
             .filter((s) => !isAbsenceShift(s))
-            .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+            .sort((a, b) => {
+              const byTime = new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
+              if (byTime !== 0) return byTime;
+              // Kay-Feedback 28.08.2026: eine aktivierte Vertretung (gleiche
+              // Zeit wie der ersetzte Dienst) soll immer UNTERHALB des
+              // vertretenen Dienstes stehen, nicht davor.
+              return (a.isVertretung ? 1 : 0) - (b.isVertretung ? 1 : 0);
+            });
           const absences = dayShifts.filter((s) => isAbsenceShift(s));
            // Desktop/Tablet zeigen bis zu vier Pillen; die Smartphone-Zelle
            // (Dauerzustand „collapsed") bleibt mit höchstens zwei einzeiligen
@@ -582,7 +589,16 @@ export function MonthGrid({
                     const statusBadgeStack = (
                       <>
                         {status === "FIX" ? (
-                          <StatusBadge kind="confirmed" label="Bestätigt" calendarCompact={pillMinimiert} />
+                          // Kay-Feedback 28.08.2026 Punkt 2: eine bestätigte
+                          // Vertretung zeigt das Vertretungs-Icon ANSTATT des
+                          // grünen Bestätigt-Hakens (nicht zusätzlich) — der
+                          // Haken wäre hier irreführend, weil der auffälligere
+                          // Punkt "das ist eine Vertretung" ist.
+                          s.isVertretung ? (
+                            <StatusBadge kind="vertretung" label="Vertretung, bestätigt" calendarCompact={pillMinimiert} />
+                          ) : (
+                            <StatusBadge kind="confirmed" label="Bestätigt" calendarCompact={pillMinimiert} />
+                          )
                         ) : pastCorrection ? (
                           <StatusBadge kind="correction" label="Korrektur" calendarCompact={pillMinimiert} />
                         ) : (
@@ -599,15 +615,13 @@ export function MonthGrid({
                             calendarCompact={pillMinimiert}
                           />
                         )}
-                        {pillMinimiert && s.isVertretung && (
-                          <StatusBadge kind="vertretung" label="Vertretung" calendarCompact />
-                        )}
-                        {s.standbyUserId != null && (
-                          <StatusBadge
-                            kind="standby"
-                            label={`Vertretung vorgemerkt: ${s.standbyUserName ?? ""}`.trim()}
-                            calendarCompact={pillMinimiert}
-                          />
+                        {/* Vor FIX (Entwurf/Vorschlag) trägt der Basis-Status
+                            noch nicht das Vertretungs-Icon (s.o.) — hier
+                            zusätzlich zeigen, sonst wäre eine noch nicht
+                            bestätigte Vertretung nicht von einem normalen
+                            Entwurf zu unterscheiden. */}
+                        {status !== "FIX" && s.isVertretung && (
+                          <StatusBadge kind="vertretung" label="Vertretung" calendarCompact={pillMinimiert} />
                         )}
                         {hasAusfall && (
                           <StatusBadge
@@ -654,6 +668,20 @@ export function MonthGrid({
                           />
                           <span className="flex min-h-[23px] w-full items-center gap-[4px] bg-white py-[2px] pl-[6px] pr-[6px] leading-none">
                             <PillAvatar color={barColor} label={avatarLabel} />
+                            {/* Kay-Feedback 28.08.2026 Punkt 4/5: zweiter
+                                Avatar mit Initialen zeigt auf einen Blick, OB
+                                und FÜR WEN eine Vertretung vorgemerkt ist —
+                                ohne Klick/Hover. Eigene Farbe (Vormerk-Violett,
+                                s. StatusBadge "standby"), nicht die
+                                Personenfarbe, damit "vorgemerkt" auch ohne
+                                Namen erkennbar bleibt. Kein Platzhalter ohne
+                                Vormerkung (Punkt 5: so schlank wie möglich). */}
+                            {!isTeam && s.standbyUserId != null && (
+                              <PillAvatar
+                                color="#6d28d9"
+                                label={s.standbyUserName ? nameInitials(s.standbyUserName) : "?"}
+                              />
+                            )}
                             {/* Arbeitsanweisung 17.08.2026, Folgeauftrag: kein
                                 shrink-0 mehr — der Name soll bei wenig Platz
                                 wie im ausgeklappten Modus per truncate mit „…"
@@ -709,6 +737,12 @@ export function MonthGrid({
                         <span className="flex min-h-[23px] items-center justify-between gap-1 bg-white py-[2px] pl-[6px] pr-[6px] leading-none">
                           <span className="flex min-w-0 items-center gap-[4px]">
                             <PillAvatar color={barColor} label={avatarLabel} />
+                            {!isTeam && s.standbyUserId != null && (
+                              <PillAvatar
+                                color="#6d28d9"
+                                label={s.standbyUserName ? nameInitials(s.standbyUserName) : "?"}
+                              />
+                            )}
                             <span className="min-w-0 truncate text-[12px] font-bold text-[#151515]">
                               <span className="@max-[154px]:hidden">{fullName}</span>
                               <span className="hidden @max-[154px]:inline">{shortNameLabel}</span>
