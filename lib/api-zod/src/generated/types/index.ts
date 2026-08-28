@@ -139,6 +139,7 @@ export * from './shiftType';
 export * from './shiftUpdate';
 export * from './shiftUpdatePlanningStatus';
 export * from './shiftUpdateType';
+export * from './shiftVertretungsVorschlag';
 export * from './team';
 export * from './teamInput';
 export * from './teamMember';

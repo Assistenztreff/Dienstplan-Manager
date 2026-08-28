@@ -427,6 +427,17 @@ export const ListShiftsResponseItem = zod.object({
   "einsatzTeamName": zod.string().nullish().describe('Name des Einsatz-Teams (nur gesetzt, wenn einsatzTeamId gesetzt ist).'),
   "homeTeamName": zod.string().nullish().describe('Name des Stammteams der Schicht (nur gesetzt, wenn einsatzTeamId gesetzt ist) — für den Badge \"Aushilfe aus …\" im Ziel-Team-Kalender.'),
   "isVertretung": zod.boolean().optional().describe('Vertretung: Arbeitsdienst als kurzfristige Vertretung markiert (Info-Kennzahl der Auswertung; Stunden zählen normal).'),
+  "standbyUserId": zod.number().nullish().describe('Vorgemerkte Vertretung: Person, die bei Ausfall dieses Arbeitsdienstes kurzfristig einspringen könnte. Nur informativ, keine Auswirkung auf Planung\/Stunden, bis sie aktiviert wird.'),
+  "standbyUserName": zod.string().nullish().describe('Name der vorgemerkten Vertretung (nur gesetzt, wenn standbyUserId gesetzt ist).'),
+  "vertretungsVorschlag": zod.object({
+  "userId": zod.number().describe('standbyUserId des ersetzten Dienstes.'),
+  "userName": zod.string(),
+  "teamId": zod.number(),
+  "startTime": zod.coerce.date(),
+  "endTime": zod.coerce.date(),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team', 'kind_krank', 'freistellung', 'abgesagt_ag', 'abgesagt_an', 'urlaubsabgeltung']),
+  "shiftModelId": zod.number().nullish()
+}).nullish().describe('Nur in der Antwort von POST\/PATCH gesetzt, wenn dieser Aufruf den Dienst zu einer Abwesenheit gemacht hat UND eine Vertretung vorgemerkt war: Vorschlag, mit den ORIGINAL-Zeiten\/-Dienstart des ersetzten Arbeitsdienstes einen Dienst für die Vertretung anzulegen (ein Klick im Frontend). Kein gespeichertes Feld.'),
   "pauseMinutes": zod.number().optional().describe('Unbezahlte Pausenminuten (reine Info-Kennzahl; reduziert NICHT die gewerteten Stunden).'),
   "isPartialAbsence": zod.boolean().optional().describe('Nur bei Abwesenheits-Typen relevant: true = bewusst gewählter Teil-Tag (Halbtag\/Zeitraum), false = ganztägig — auch wenn die gespeicherten Uhrzeiten (Lohnausfallprinzip-Erbschaft eines ersetzten Dienstes) wie ein Teil-Tag aussehen. Maßgeblich für Kollisionsprüfung und Anzeige, NICHT die Uhrzeiten selbst.'),
   "valuedHours": zod.number().optional(),
@@ -478,6 +489,7 @@ export const CreateShiftBody = zod.object({
   "notes": zod.string().max(createShiftBodyNotesMax).optional().describe('Optionale Notiz \/ Kommentar zur Schicht (max. 500 Zeichen).'),
   "einsatzTeamId": zod.number().nullish().describe('Aushilfe-Einsatz: ID eines anderen eigenen Teams, für das der Einsatz erfolgt. Muss ein erlaubtes Team des Aufrufers sein und darf nicht das Team der Schicht selbst sein; bei Abwesenheiten nicht erlaubt.'),
   "isVertretung": zod.boolean().optional().describe('Vertretung: Arbeitsdienst als kurzfristige Vertretung markieren (nur für Arbeitsdienste; bei Abwesenheiten\/Team-Einträgen serverseitig zurückgesetzt).'),
+  "standbyUserId": zod.number().nullish().describe('Vertretung vormerken oder mit null entfernen. Nur für Arbeitsdienste setzbar (muss Mitglied desselben Teams sein, darf nicht der zugewiesene Nutzer selbst sein); bei Abwesenheiten\/ Team-Einträgen 400.'),
   "pauseMinutes": zod.number().min(createShiftBodyPauseMinutesMin).max(createShiftBodyPauseMinutesMax).optional().describe('Unbezahlte Pausenminuten (Info-Kennzahl; reduziert NICHT die gewerteten Stunden).')
 })
 
@@ -732,6 +744,17 @@ export const GetShiftResponse = zod.object({
   "einsatzTeamName": zod.string().nullish().describe('Name des Einsatz-Teams (nur gesetzt, wenn einsatzTeamId gesetzt ist).'),
   "homeTeamName": zod.string().nullish().describe('Name des Stammteams der Schicht (nur gesetzt, wenn einsatzTeamId gesetzt ist) — für den Badge \"Aushilfe aus …\" im Ziel-Team-Kalender.'),
   "isVertretung": zod.boolean().optional().describe('Vertretung: Arbeitsdienst als kurzfristige Vertretung markiert (Info-Kennzahl der Auswertung; Stunden zählen normal).'),
+  "standbyUserId": zod.number().nullish().describe('Vorgemerkte Vertretung: Person, die bei Ausfall dieses Arbeitsdienstes kurzfristig einspringen könnte. Nur informativ, keine Auswirkung auf Planung\/Stunden, bis sie aktiviert wird.'),
+  "standbyUserName": zod.string().nullish().describe('Name der vorgemerkten Vertretung (nur gesetzt, wenn standbyUserId gesetzt ist).'),
+  "vertretungsVorschlag": zod.object({
+  "userId": zod.number().describe('standbyUserId des ersetzten Dienstes.'),
+  "userName": zod.string(),
+  "teamId": zod.number(),
+  "startTime": zod.coerce.date(),
+  "endTime": zod.coerce.date(),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team', 'kind_krank', 'freistellung', 'abgesagt_ag', 'abgesagt_an', 'urlaubsabgeltung']),
+  "shiftModelId": zod.number().nullish()
+}).nullish().describe('Nur in der Antwort von POST\/PATCH gesetzt, wenn dieser Aufruf den Dienst zu einer Abwesenheit gemacht hat UND eine Vertretung vorgemerkt war: Vorschlag, mit den ORIGINAL-Zeiten\/-Dienstart des ersetzten Arbeitsdienstes einen Dienst für die Vertretung anzulegen (ein Klick im Frontend). Kein gespeichertes Feld.'),
   "pauseMinutes": zod.number().optional().describe('Unbezahlte Pausenminuten (reine Info-Kennzahl; reduziert NICHT die gewerteten Stunden).'),
   "isPartialAbsence": zod.boolean().optional().describe('Nur bei Abwesenheits-Typen relevant: true = bewusst gewählter Teil-Tag (Halbtag\/Zeitraum), false = ganztägig — auch wenn die gespeicherten Uhrzeiten (Lohnausfallprinzip-Erbschaft eines ersetzten Dienstes) wie ein Teil-Tag aussehen. Maßgeblich für Kollisionsprüfung und Anzeige, NICHT die Uhrzeiten selbst.'),
   "valuedHours": zod.number().optional(),
@@ -785,6 +808,7 @@ export const UpdateShiftBody = zod.object({
   "notes": zod.string().max(updateShiftBodyNotesMax).nullish().describe('Notiz \/ Kommentar setzen oder mit null löschen (max. 500 Zeichen).'),
   "einsatzTeamId": zod.number().nullish().describe('Aushilfe-Einsatz setzen oder mit null entfernen. Gleiche Regeln wie beim Anlegen (eigenes anderes Team, keine Abwesenheiten).'),
   "isVertretung": zod.boolean().optional().describe('Vertretung setzen\/entfernen (nur für Arbeitsdienste; bei Abwesenheiten\/Team-Einträgen serverseitig zurückgesetzt).'),
+  "standbyUserId": zod.number().nullish().describe('Vertretung vormerken oder mit null entfernen. Nur setzbar, solange der (effektive) Diensttyp ein Arbeitsdienst ist; beim Übergang ZU einer Abwesenheit bleibt ein vorher gesetzter Wert unverändert stehen (Grundlage für vertretungsVorschlag).'),
   "pauseMinutes": zod.number().min(updateShiftBodyPauseMinutesMin).max(updateShiftBodyPauseMinutesMax).optional().describe('Unbezahlte Pausenminuten (Info-Kennzahl; reduziert NICHT die gewerteten Stunden).')
 })
 
@@ -801,6 +825,17 @@ export const UpdateShiftResponse = zod.object({
   "einsatzTeamName": zod.string().nullish().describe('Name des Einsatz-Teams (nur gesetzt, wenn einsatzTeamId gesetzt ist).'),
   "homeTeamName": zod.string().nullish().describe('Name des Stammteams der Schicht (nur gesetzt, wenn einsatzTeamId gesetzt ist) — für den Badge \"Aushilfe aus …\" im Ziel-Team-Kalender.'),
   "isVertretung": zod.boolean().optional().describe('Vertretung: Arbeitsdienst als kurzfristige Vertretung markiert (Info-Kennzahl der Auswertung; Stunden zählen normal).'),
+  "standbyUserId": zod.number().nullish().describe('Vorgemerkte Vertretung: Person, die bei Ausfall dieses Arbeitsdienstes kurzfristig einspringen könnte. Nur informativ, keine Auswirkung auf Planung\/Stunden, bis sie aktiviert wird.'),
+  "standbyUserName": zod.string().nullish().describe('Name der vorgemerkten Vertretung (nur gesetzt, wenn standbyUserId gesetzt ist).'),
+  "vertretungsVorschlag": zod.object({
+  "userId": zod.number().describe('standbyUserId des ersetzten Dienstes.'),
+  "userName": zod.string(),
+  "teamId": zod.number(),
+  "startTime": zod.coerce.date(),
+  "endTime": zod.coerce.date(),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team', 'kind_krank', 'freistellung', 'abgesagt_ag', 'abgesagt_an', 'urlaubsabgeltung']),
+  "shiftModelId": zod.number().nullish()
+}).nullish().describe('Nur in der Antwort von POST\/PATCH gesetzt, wenn dieser Aufruf den Dienst zu einer Abwesenheit gemacht hat UND eine Vertretung vorgemerkt war: Vorschlag, mit den ORIGINAL-Zeiten\/-Dienstart des ersetzten Arbeitsdienstes einen Dienst für die Vertretung anzulegen (ein Klick im Frontend). Kein gespeichertes Feld.'),
   "pauseMinutes": zod.number().optional().describe('Unbezahlte Pausenminuten (reine Info-Kennzahl; reduziert NICHT die gewerteten Stunden).'),
   "isPartialAbsence": zod.boolean().optional().describe('Nur bei Abwesenheits-Typen relevant: true = bewusst gewählter Teil-Tag (Halbtag\/Zeitraum), false = ganztägig — auch wenn die gespeicherten Uhrzeiten (Lohnausfallprinzip-Erbschaft eines ersetzten Dienstes) wie ein Teil-Tag aussehen. Maßgeblich für Kollisionsprüfung und Anzeige, NICHT die Uhrzeiten selbst.'),
   "valuedHours": zod.number().optional(),
@@ -1932,6 +1967,17 @@ export const GetDashboardSummaryResponse = zod.object({
   "einsatzTeamName": zod.string().nullish().describe('Name des Einsatz-Teams (nur gesetzt, wenn einsatzTeamId gesetzt ist).'),
   "homeTeamName": zod.string().nullish().describe('Name des Stammteams der Schicht (nur gesetzt, wenn einsatzTeamId gesetzt ist) — für den Badge \"Aushilfe aus …\" im Ziel-Team-Kalender.'),
   "isVertretung": zod.boolean().optional().describe('Vertretung: Arbeitsdienst als kurzfristige Vertretung markiert (Info-Kennzahl der Auswertung; Stunden zählen normal).'),
+  "standbyUserId": zod.number().nullish().describe('Vorgemerkte Vertretung: Person, die bei Ausfall dieses Arbeitsdienstes kurzfristig einspringen könnte. Nur informativ, keine Auswirkung auf Planung\/Stunden, bis sie aktiviert wird.'),
+  "standbyUserName": zod.string().nullish().describe('Name der vorgemerkten Vertretung (nur gesetzt, wenn standbyUserId gesetzt ist).'),
+  "vertretungsVorschlag": zod.object({
+  "userId": zod.number().describe('standbyUserId des ersetzten Dienstes.'),
+  "userName": zod.string(),
+  "teamId": zod.number(),
+  "startTime": zod.coerce.date(),
+  "endTime": zod.coerce.date(),
+  "type": zod.enum(['active', 'standby', 'night', 'full_day', 'vacation', 'sick', 'work', 'freizeitausgleich', 'team', 'kind_krank', 'freistellung', 'abgesagt_ag', 'abgesagt_an', 'urlaubsabgeltung']),
+  "shiftModelId": zod.number().nullish()
+}).nullish().describe('Nur in der Antwort von POST\/PATCH gesetzt, wenn dieser Aufruf den Dienst zu einer Abwesenheit gemacht hat UND eine Vertretung vorgemerkt war: Vorschlag, mit den ORIGINAL-Zeiten\/-Dienstart des ersetzten Arbeitsdienstes einen Dienst für die Vertretung anzulegen (ein Klick im Frontend). Kein gespeichertes Feld.'),
   "pauseMinutes": zod.number().optional().describe('Unbezahlte Pausenminuten (reine Info-Kennzahl; reduziert NICHT die gewerteten Stunden).'),
   "isPartialAbsence": zod.boolean().optional().describe('Nur bei Abwesenheits-Typen relevant: true = bewusst gewählter Teil-Tag (Halbtag\/Zeitraum), false = ganztägig — auch wenn die gespeicherten Uhrzeiten (Lohnausfallprinzip-Erbschaft eines ersetzten Dienstes) wie ein Teil-Tag aussehen. Maßgeblich für Kollisionsprüfung und Anzeige, NICHT die Uhrzeiten selbst.'),
   "valuedHours": zod.number().optional(),

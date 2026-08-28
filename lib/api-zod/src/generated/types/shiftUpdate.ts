@@ -32,6 +32,11 @@ export interface ShiftUpdate {
   /** Vertretung setzen/entfernen (nur für Arbeitsdienste; bei Abwesenheiten/Team-Einträgen serverseitig zurückgesetzt). */
   isVertretung?: boolean;
   /**
+     * Vertretung vormerken oder mit null entfernen. Nur setzbar, solange der (effektive) Diensttyp ein Arbeitsdienst ist; beim Übergang ZU einer Abwesenheit bleibt ein vorher gesetzter Wert unverändert stehen (Grundlage für vertretungsVorschlag).
+     * @nullable
+     */
+  standbyUserId?: number | null;
+  /**
      * Unbezahlte Pausenminuten (Info-Kennzahl; reduziert NICHT die gewerteten Stunden).
      * @minimum 0
      * @maximum 1440

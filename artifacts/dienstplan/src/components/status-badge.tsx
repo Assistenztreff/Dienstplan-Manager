@@ -13,6 +13,7 @@ export type StatusBadgeKind =
   | "confirmed"
   | "krank"
   | "vertretung"
+  | "standby"
   | "clock"
   | "correction";
 
@@ -109,6 +110,20 @@ const KIND_CONFIG: Record<
         <path d="M3 11V9a4 4 0 0 1 4-4h14" />
         <polyline points="7 23 3 19 7 15" />
         <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+      </svg>
+    ),
+  },
+  // Vertretung vormerken (28.08.2026): bewusst ein anderes Symbol/Farbe als
+  // "vertretung" (Rotationspfeile #0f6e8c, DIESER Dienst IST eine Vertretung)
+  // — "standby" markiert nur eine vorgemerkte Person FÜR DEN Fall eines
+  // Ausfalls, noch kein aktiver Ersatz. Lesezeichen-Symbol = "vorgemerkt".
+  standby: {
+    circle: 15,
+    compactCircle: 9,
+    bg: "#6d28d9",
+    symbol: (s) => (
+      <svg width={s} height={s} viewBox="0 0 20 20" fill="#fff" stroke="none" aria-hidden="true">
+        <path d="M5 2h10a1 1 0 0 1 1 1v15l-6-4-6 4V3a1 1 0 0 1 1-1z" />
       </svg>
     ),
   },

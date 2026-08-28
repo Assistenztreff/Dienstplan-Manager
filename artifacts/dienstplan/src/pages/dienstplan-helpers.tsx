@@ -34,9 +34,34 @@ export type Shift = {
   einsatzTeamName?: string | null;
   homeTeamName?: string | null;
   isVertretung?: boolean | null;
+  /** Vertretung vormerken: Person, die bei Ausfall dieses Dienstes einspringen könnte (reine Planungshilfe). */
+  standbyUserId?: number | null;
+  standbyUserName?: string | null;
+  /**
+   * Nur in der Antwort von Erstellen/Bearbeiten gesetzt, wenn dieser Aufruf
+   * den Dienst zu einer Abwesenheit gemacht hat UND eine Vertretung
+   * vorgemerkt war — Grundlage für den Aktivierungs-Vorschlag (Toast mit
+   * einem Klick, s. useVertretungsVorschlag).
+   */
+  vertretungsVorschlag?: {
+    userId: number;
+    userName: string;
+    teamId: number;
+    startTime: string;
+    endTime: string;
+    type: string;
+    shiftModelId?: number | null;
+  } | null;
   /** Halbtägiger Urlaub (#862): true = bewusst gewählter Teil-Tag, false/undefined = ganztägig. */
   isPartialAbsence?: boolean | null;
   pauseMinutes?: number | null;
+  /**
+   * Serverseitig gewertete Stunden des Eintrags. Bei Abwesenheiten steckt hier
+   * das vertragliche Tages-Soll (bzw. die geerbten Zeiten eines ersetzten
+   * Dienstes) — ein ganztägiger Urlaubstag zählt damit als 8 h statt als 24 h.
+   * Quelle der Abwesenheits-Stunden im Stundenkonto (stundenkonto-leiste.tsx).
+   */
+  valuedHours?: number | null;
 };
 
 export const PLANNING_STATUS_LABELS: Record<string, string> = {

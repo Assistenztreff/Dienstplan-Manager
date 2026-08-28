@@ -571,6 +571,22 @@ export const ShiftPlanningStatus = {
   FIX: 'FIX',
 } as const;
 
+/**
+ * Nur in der Antwort von POST/PATCH gesetzt, wenn dieser Aufruf den Dienst zu einer Abwesenheit gemacht hat UND eine Vertretung vorgemerkt war: Vorschlag, mit den ORIGINAL-Zeiten/-Dienstart des ersetzten Arbeitsdienstes einen Dienst für die Vertretung anzulegen (ein Klick im Frontend). Kein gespeichertes Feld.
+ * @nullable
+ */
+export type ShiftVertretungsVorschlag = {
+  /** standbyUserId des ersetzten Dienstes. */
+  userId: number;
+  userName: string;
+  teamId: number;
+  startTime: string;
+  endTime: string;
+  type: 'active' | 'standby' | 'night' | 'full_day' | 'vacation' | 'sick' | 'work' | 'freizeitausgleich' | 'team' | 'kind_krank' | 'freistellung' | 'abgesagt_ag' | 'abgesagt_an' | 'urlaubsabgeltung';
+  /** @nullable */
+  shiftModelId?: number | null;
+} | null;
+
 export interface Shift {
   id: number;
   userId: number;
@@ -600,6 +616,21 @@ export interface Shift {
   homeTeamName?: string | null;
   /** Vertretung: Arbeitsdienst als kurzfristige Vertretung markiert (Info-Kennzahl der Auswertung; Stunden zählen normal). */
   isVertretung?: boolean;
+  /**
+     * Vorgemerkte Vertretung: Person, die bei Ausfall dieses Arbeitsdienstes kurzfristig einspringen könnte. Nur informativ, keine Auswirkung auf Planung/Stunden, bis sie aktiviert wird.
+     * @nullable
+     */
+  standbyUserId?: number | null;
+  /**
+     * Name der vorgemerkten Vertretung (nur gesetzt, wenn standbyUserId gesetzt ist).
+     * @nullable
+     */
+  standbyUserName?: string | null;
+  /**
+     * Nur in der Antwort von POST/PATCH gesetzt, wenn dieser Aufruf den Dienst zu einer Abwesenheit gemacht hat UND eine Vertretung vorgemerkt war: Vorschlag, mit den ORIGINAL-Zeiten/-Dienstart des ersetzten Arbeitsdienstes einen Dienst für die Vertretung anzulegen (ein Klick im Frontend). Kein gespeichertes Feld.
+     * @nullable
+     */
+  vertretungsVorschlag?: ShiftVertretungsVorschlag;
   /** Unbezahlte Pausenminuten (reine Info-Kennzahl; reduziert NICHT die gewerteten Stunden). */
   pauseMinutes?: number;
   /** Nur bei Abwesenheits-Typen relevant: true = bewusst gewählter Teil-Tag (Halbtag/Zeitraum), false = ganztägig — auch wenn die gespeicherten Uhrzeiten (Lohnausfallprinzip-Erbschaft eines ersetzten Dienstes) wie ein Teil-Tag aussehen. Maßgeblich für Kollisionsprüfung und Anzeige, NICHT die Uhrzeiten selbst. */
@@ -667,6 +698,11 @@ export interface ShiftInput {
   einsatzTeamId?: number | null;
   /** Vertretung: Arbeitsdienst als kurzfristige Vertretung markieren (nur für Arbeitsdienste; bei Abwesenheiten/Team-Einträgen serverseitig zurückgesetzt). */
   isVertretung?: boolean;
+  /**
+     * Vertretung vormerken oder mit null entfernen. Nur für Arbeitsdienste setzbar (muss Mitglied desselben Teams sein, darf nicht der zugewiesene Nutzer selbst sein); bei Abwesenheiten/ Team-Einträgen 400.
+     * @nullable
+     */
+  standbyUserId?: number | null;
   /**
      * Unbezahlte Pausenminuten (Info-Kennzahl; reduziert NICHT die gewerteten Stunden).
      * @minimum 0
@@ -992,6 +1028,11 @@ export interface ShiftUpdate {
   einsatzTeamId?: number | null;
   /** Vertretung setzen/entfernen (nur für Arbeitsdienste; bei Abwesenheiten/Team-Einträgen serverseitig zurückgesetzt). */
   isVertretung?: boolean;
+  /**
+     * Vertretung vormerken oder mit null entfernen. Nur setzbar, solange der (effektive) Diensttyp ein Arbeitsdienst ist; beim Übergang ZU einer Abwesenheit bleibt ein vorher gesetzter Wert unverändert stehen (Grundlage für vertretungsVorschlag).
+     * @nullable
+     */
+  standbyUserId?: number | null;
   /**
      * Unbezahlte Pausenminuten (Info-Kennzahl; reduziert NICHT die gewerteten Stunden).
      * @minimum 0

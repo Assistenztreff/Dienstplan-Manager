@@ -31,6 +31,7 @@ import {
   adjustVacationHours,
   applyVacationDelta,
   bookAbsenceTimeTracking,
+  buildVertretungsVorschlag,
   dayKey,
   duplicateAbsenceResponseBody,
   einsatzTeamsTable,
@@ -40,6 +41,7 @@ import {
   findPlannedWorkShiftsForDay,
   forwardPlanningBlocked,
   homeTeamsTable,
+  standbyUsersTable,
   normalizeTeamEntryTimes,
   overlapResponseBody,
   removeAbsenceTimeTracking,
@@ -255,6 +257,29 @@ router.post("/shifts", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
+  // Vertretung vormerken: nur für Arbeitsdienste sinnvoll (Abwesenheiten/
+  // Team-Einträge werden nicht "vertreten"), die Person muss Mitglied
+  // desselben Teams sein (gleiche Invariante wie beim zugewiesenen Nutzer)
+  // und darf nicht der zugewiesene Nutzer selbst sein.
+  if (body.data.standbyUserId != null) {
+    if (isAbsenceType(body.data.type) || body.data.type === "team") {
+      res.status(400).json({ error: "Eine Vertretung kann nur für Arbeitsdienste vorgemerkt werden." });
+      return;
+    }
+    if (body.data.standbyUserId === body.data.userId) {
+      res.status(400).json({ error: "Die Vertretung darf nicht dieselbe Person sein." });
+      return;
+    }
+    if (!(await isUserMemberOfTeam(body.data.standbyUserId, write.teamId))) {
+      res.status(403).json({ error: "Vertretung gehört nicht zu diesem Team" });
+      return;
+    }
+    if (await isKoordinatorUser(body.data.standbyUserId)) {
+      res.status(403).json({ error: "Für Teamkoordinatoren kann keine Vertretung vorgemerkt werden." });
+      return;
+    }
+  }
+
   // Abwesenheiten (Urlaub/Krankheit) sind produktseitig IMMER verbindlich: Der
   // Planungsstatus wird serverseitig autoritativ auf FIX gesetzt, unabhängig vom
   // Client und vom Erstellungsweg (Abwesenheiten-Seite ODER Kalender-Schicht-
@@ -278,7 +303,7 @@ router.post("/shifts", requireAuth, async (req, res): Promise<void> => {
     // Vertretungs-Markierung und Pausenminuten sind reine Arbeitsdienst-Infos
     // und werden dort serverseitig zurückgesetzt.
     ...(isAbsenceType(body.data.type) || body.data.type === "team"
-      ? { planningStatus: "FIX" as const, isVertretung: false, pauseMinutes: 0 }
+      ? { planningStatus: "FIX" as const, isVertretung: false, pauseMinutes: 0, standbyUserId: null }
       : {}),
     ...(isAbsenceType(body.data.type) ? { isPartialAbsence } : {}),
   };
@@ -308,6 +333,11 @@ router.post("/shifts", requireAuth, async (req, res): Promise<void> => {
   // mit dem gewählten Fenster überschneidet — findPlannedWorkShiftsForDay
   // filtert das bereits serverseitig.
   let plannedForDelete: number[] = [];
+  // Vertretungs-Aktivierungs-Vorschlag (nur in dieser Antwort, kein
+  // gespeichertes Feld): wird der ersetzte Arbeitsdienst als vorgemerkte
+  // Vertretung geführt, geht ihre Zeit/Dienstart/Modell verloren, sobald er
+  // gleich gelöscht wird — deshalb HIER (vor dem Löschen) einfangen.
+  let vertretungsVorschlag: Awaited<ReturnType<typeof buildVertretungsVorschlag>> = null;
   if (isAbsenceType(body.data.type)) {
     const planned = await findPlannedWorkShiftsForDay(
       body.data.userId,
@@ -320,6 +350,21 @@ router.post("/shifts", requireAuth, async (req, res): Promise<void> => {
       if (!isPartialAbsence) {
         insertValues.startTime = planned[0]!.startTime;
         insertValues.endTime = planned[0]!.endTime;
+      }
+      // Die neue Abwesenheit erbt die Vormerkung: der Hinweis "Vertretung
+      // vorgemerkt" bleibt für den Planer auf dem jetzt entstehenden
+      // Ausfall-Eintrag sichtbar (Badge in der Pille), nicht nur auf dem
+      // gelöschten Original.
+      insertValues.standbyUserId = planned[0]!.standbyUserId;
+      if (planned[0]!.standbyUserId != null) {
+        vertretungsVorschlag = await buildVertretungsVorschlag({
+          teamId: write.teamId,
+          standbyUserId: planned[0]!.standbyUserId,
+          startTime: planned[0]!.startTime,
+          endTime: planned[0]!.endTime,
+          type: planned[0]!.type,
+          shiftModelId: planned[0]!.shiftModelId,
+        });
       }
     } else if (!isPartialAbsence && body.data.shiftModelId != null) {
       const [model] = await db
@@ -376,10 +421,11 @@ router.post("/shifts", requireAuth, async (req, res): Promise<void> => {
       .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
       .leftJoin(einsatzTeamsTable, eq(einsatzTeamsTable.id, shiftsTable.einsatzTeamId))
       .leftJoin(homeTeamsTable, eq(homeTeamsTable.id, shiftsTable.teamId))
+      .leftJoin(standbyUsersTable, eq(standbyUsersTable.id, shiftsTable.standbyUserId))
       .where(eq(shiftsTable.id, shift.id));
     return row;
   });
-  res.status(201).json(withUser);
+  res.status(201).json({ ...withUser, vertretungsVorschlag });
 });
 
 router.get("/shifts/:id", requireAuth, async (req, res): Promise<void> => {
@@ -394,6 +440,7 @@ router.get("/shifts/:id", requireAuth, async (req, res): Promise<void> => {
     .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
     .leftJoin(einsatzTeamsTable, eq(einsatzTeamsTable.id, shiftsTable.einsatzTeamId))
     .leftJoin(homeTeamsTable, eq(homeTeamsTable.id, shiftsTable.teamId))
+    .leftJoin(standbyUsersTable, eq(standbyUsersTable.id, shiftsTable.standbyUserId))
     .where(eq(shiftsTable.id, params.data.id));
   if (!row) {
     res.status(404).json({ error: "Not found" });
@@ -613,6 +660,30 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
     }
   }
 
+  // Vertretung vormerken/ändern: nur solange der (effektive) Diensttyp ein
+  // Arbeitsdienst ist — sonst gleiche Regeln wie beim Anlegen. Entfernen
+  // (null) ist immer erlaubt. Ein bereits gesetzter Wert bleibt beim
+  // ECHTEN Übergang zu einer Abwesenheit bewusst unverändert stehen (kein
+  // Reset hier — Grundlage für vertretungsVorschlag weiter unten).
+  if (body.data.standbyUserId != null) {
+    if (isAbsenceType(effectiveType) || effectiveType === "team") {
+      res.status(400).json({ error: "Eine Vertretung kann nur für Arbeitsdienste vorgemerkt werden." });
+      return;
+    }
+    if (body.data.standbyUserId === effectiveUserId) {
+      res.status(400).json({ error: "Die Vertretung darf nicht dieselbe Person sein." });
+      return;
+    }
+    if (!(await isUserMemberOfTeam(body.data.standbyUserId, oldShift.teamId))) {
+      res.status(403).json({ error: "Vertretung gehört nicht zu diesem Team" });
+      return;
+    }
+    if (await isKoordinatorUser(body.data.standbyUserId)) {
+      res.status(403).json({ error: "Für Teamkoordinatoren kann keine Vertretung vorgemerkt werden." });
+      return;
+    }
+  }
+
   // Abwesenheiten bleiben verbindlich: Wird eine Schicht zu Urlaub/Krankheit
   // (oder bleibt sie es), setzt der Server den Planungsstatus autoritativ auf
   // FIX — analog zum POST, damit kein Weg eine vorläufige Abwesenheit erzeugt.
@@ -683,6 +754,9 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
         }
       : {}),
     ...(isAbsenceType(effectiveType) ? { isPartialAbsence } : {}),
+    // Team-Einträge sind nicht personenbezogen vertretbar — anders als bei
+    // Abwesenheiten (dort bleibt der Wert bewusst stehen, s. Kommentar oben).
+    ...(effectiveType === "team" ? { standbyUserId: null } : {}),
     ...(faelltZurueck ? { planningStatus: "ANGEBOTEN" as const } : {}),
   };
 
@@ -693,6 +767,24 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
     updateValues.startTime = normalized.startTime;
     updateValues.endTime = normalized.endTime;
   }
+
+  // Vertretungs-Aktivierungs-Vorschlag (nur in dieser Antwort, kein
+  // gespeichertes Feld): der ECHTE Übergang Arbeitsdienst → Abwesenheit
+  // (in-place, gleiche Zeile) mit vorgemerkter Vertretung. oldShift trägt
+  // noch die Original-Zeiten/-Dienstart/-Modell — updateValues überschreibt
+  // sie unten in derselben Zeile.
+  let vertretungsVorschlag: Awaited<ReturnType<typeof buildVertretungsVorschlag>> = null;
+  if (!isAbsenceType(oldShift.type) && isAbsenceType(effectiveType) && oldShift.standbyUserId != null) {
+    vertretungsVorschlag = await buildVertretungsVorschlag({
+      teamId: oldShift.teamId,
+      standbyUserId: oldShift.standbyUserId,
+      startTime: oldShift.startTime,
+      endTime: oldShift.endTime,
+      type: oldShift.type,
+      shiftModelId: oldShift.shiftModelId,
+    });
+  }
+
   // Alle Schreiboperationen transaktional: UPDATE, Zeiterfassung-Sync,
   // Urlaubs-Rebalancierung und Kennzahlen in einem atomaren Block.
   // Sentinel für parallele Löschung zwischen Vorab-Read und UPDATE (Race).
@@ -810,6 +902,7 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
         .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
         .leftJoin(einsatzTeamsTable, eq(einsatzTeamsTable.id, shiftsTable.einsatzTeamId))
         .leftJoin(homeTeamsTable, eq(homeTeamsTable.id, shiftsTable.teamId))
+        .leftJoin(standbyUsersTable, eq(standbyUsersTable.id, shiftsTable.standbyUserId))
         .where(eq(shiftsTable.id, params.data.id));
       return row;
     });
@@ -820,7 +913,7 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
     }
     throw err;
   }
-  res.json(patchResult);
+  res.json({ ...patchResult, vertretungsVorschlag });
 });
 
 router.delete("/shifts/:id", requireAuth, async (req, res): Promise<void> => {

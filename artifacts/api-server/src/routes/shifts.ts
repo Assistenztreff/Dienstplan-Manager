@@ -29,6 +29,11 @@ import { resolveAllowanceOps } from "../lib/allowance-resolve";
 // LEFT JOINs, die der Planer einmal ausführt und über alle Zeilen wiederverwendet.
 export const einsatzTeamsTable = alias(teamsTable, "einsatz_teams");
 export const homeTeamsTable = alias(teamsTable, "home_teams");
+// Vertretung vormerken: Name der Standby-Person per eigenem JOIN auf
+// usersTable (die "echte" usersTable ist bereits für den zugewiesenen
+// Nutzer belegt). Alle Query-Sites müssen leftJoin(standbyUsersTable)
+// ergänzen — genau wie bei einsatzTeamsTable/homeTeamsTable oben.
+export const standbyUsersTable = alias(usersTable, "standby_users");
 
 // Transaktions-Executor: Schreib-Helfer akzeptieren wahlweise die globale
 // db-Instanz oder eine offene Drizzle-Transaktion (Sammel-Anlage, s. u.).
@@ -45,6 +50,8 @@ export const SHIFT_SELECT = {
   shiftModelId: shiftsTable.shiftModelId,
   notes: shiftsTable.notes,
   isVertretung: shiftsTable.isVertretung,
+  standbyUserId: shiftsTable.standbyUserId,
+  standbyUserName: standbyUsersTable.name,
   pauseMinutes: shiftsTable.pauseMinutes,
   isPartialAbsence: shiftsTable.isPartialAbsence,
   valuedHours: shiftsTable.valuedHours,
@@ -722,7 +729,9 @@ export async function findPlannedWorkShiftsForDay(
   teamId: number,
   rangeStart: Date,
   rangeEnd: Date
-): Promise<{ id: number; startTime: Date; endTime: Date }[]> {
+): Promise<
+  { id: number; startTime: Date; endTime: Date; type: string; shiftModelId: number | null; standbyUserId: number | null }[]
+> {
   const dayStart = new Date(
     `${rangeStart.toISOString().split("T")[0]}T00:00:00.000Z`
   );
@@ -732,6 +741,12 @@ export async function findPlannedWorkShiftsForDay(
       id: shiftsTable.id,
       startTime: shiftsTable.startTime,
       endTime: shiftsTable.endTime,
+      // Werden für den Vertretungs-Aktivierungs-Vorschlag gebraucht (Original-
+      // Dienstart/-Modell, bevor die Schicht gleich als "ersetzt" gilt — s.
+      // buildVertretungsVorschlag in shifts-crud.ts).
+      type: shiftsTable.type,
+      shiftModelId: shiftsTable.shiftModelId,
+      standbyUserId: shiftsTable.standbyUserId,
     })
     .from(shiftsTable)
     .where(
@@ -761,6 +776,47 @@ export async function findPlannedWorkShiftsForDay(
       b.startTime.getTime() -
       (a.endTime.getTime() - a.startTime.getTime())
   );
+}
+
+// Vertretungs-Aktivierungs-Vorschlag: nur ein Antwort-Feld, kein gespeicherter
+// Wert. Wird aufgerufen, wenn ein Arbeitsdienst MIT vorgemerkter Vertretung
+// gerade zu einer Abwesenheit wird/wurde (POST ersetzt+löscht den Original-
+// Dienst, PATCH ändert ihn in-place) — der Aufrufer muss die Original-Werte
+// (Zeiten/Typ/Modell) VOR der Umwandlung übergeben, da sie danach überschrieben
+// bzw. gelöscht sind. Liefert null ohne standbyUserId oder wenn die Person
+// zwischenzeitlich gelöscht wurde.
+export async function buildVertretungsVorschlag(params: {
+  teamId: number;
+  standbyUserId: number | null;
+  startTime: Date;
+  endTime: Date;
+  type: string;
+  shiftModelId: number | null;
+}): Promise<{
+  userId: number;
+  userName: string;
+  teamId: number;
+  startTime: Date;
+  endTime: Date;
+  type: string;
+  shiftModelId: number | null;
+} | null> {
+  if (params.standbyUserId == null) return null;
+  const [standby] = await db
+    .select({ name: usersTable.name })
+    .from(usersTable)
+    .where(eq(usersTable.id, params.standbyUserId))
+    .limit(1);
+  if (!standby) return null;
+  return {
+    userId: params.standbyUserId,
+    userName: standby.name,
+    teamId: params.teamId,
+    startTime: params.startTime,
+    endTime: params.endTime,
+    type: params.type,
+    shiftModelId: params.shiftModelId,
+  };
 }
 
 // Entfernt eine geplante Arbeitsschicht samt zugehöriger Zeiterfassung. Wird eine

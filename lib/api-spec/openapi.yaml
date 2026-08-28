@@ -3189,6 +3189,43 @@ components:
           description: >-
             Vertretung: Arbeitsdienst als kurzfristige Vertretung markiert
             (Info-Kennzahl der Auswertung; Stunden zählen normal).
+        standbyUserId:
+          type: ["integer", "null"]
+          description: >-
+            Vorgemerkte Vertretung: Person, die bei Ausfall dieses
+            Arbeitsdienstes kurzfristig einspringen könnte. Nur informativ,
+            keine Auswirkung auf Planung/Stunden, bis sie aktiviert wird.
+        standbyUserName:
+          type: ["string", "null"]
+          description: Name der vorgemerkten Vertretung (nur gesetzt, wenn standbyUserId gesetzt ist).
+        vertretungsVorschlag:
+          type: ["object", "null"]
+          description: >-
+            Nur in der Antwort von POST/PATCH gesetzt, wenn dieser Aufruf den
+            Dienst zu einer Abwesenheit gemacht hat UND eine Vertretung
+            vorgemerkt war: Vorschlag, mit den ORIGINAL-Zeiten/-Dienstart des
+            ersetzten Arbeitsdienstes einen Dienst für die Vertretung
+            anzulegen (ein Klick im Frontend). Kein gespeichertes Feld.
+          required: [userId, userName, teamId, startTime, endTime, type]
+          properties:
+            userId:
+              type: integer
+              description: standbyUserId des ersetzten Dienstes.
+            userName:
+              type: string
+            teamId:
+              type: integer
+            startTime:
+              type: string
+              format: date-time
+            endTime:
+              type: string
+              format: date-time
+            type:
+              type: string
+              enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team, kind_krank, freistellung, abgesagt_ag, abgesagt_an, urlaubsabgeltung]
+            shiftModelId:
+              type: ["integer", "null"]
         pauseMinutes:
           type: integer
           description: >-
@@ -3259,6 +3296,13 @@ components:
             Vertretung: Arbeitsdienst als kurzfristige Vertretung markieren
             (nur für Arbeitsdienste; bei Abwesenheiten/Team-Einträgen
             serverseitig zurückgesetzt).
+        standbyUserId:
+          type: ["integer", "null"]
+          description: >-
+            Vertretung vormerken oder mit null entfernen. Nur für
+            Arbeitsdienste setzbar (muss Mitglied desselben Teams sein, darf
+            nicht der zugewiesene Nutzer selbst sein); bei Abwesenheiten/
+            Team-Einträgen 400.
         pauseMinutes:
           type: integer
           minimum: 0
@@ -3648,6 +3692,13 @@ components:
           description: >-
             Vertretung setzen/entfernen (nur für Arbeitsdienste; bei
             Abwesenheiten/Team-Einträgen serverseitig zurückgesetzt).
+        standbyUserId:
+          type: ["integer", "null"]
+          description: >-
+            Vertretung vormerken oder mit null entfernen. Nur setzbar,
+            solange der (effektive) Diensttyp ein Arbeitsdienst ist; beim
+            Übergang ZU einer Abwesenheit bleibt ein vorher gesetzter Wert
+            unverändert stehen (Grundlage für vertretungsVorschlag).
         pauseMinutes:
           type: integer
           minimum: 0

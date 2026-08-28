@@ -84,9 +84,23 @@ type ShiftForEdit = {
   notes?: string | null;
   einsatzTeamId?: number | null;
   isVertretung?: boolean | null;
+  standbyUserId?: number | null;
   pauseMinutes?: number | null;
   /** Halbtägiger Urlaub (#862): true = bewusst gewählter Teil-Tag, false/undefined = ganztägig. */
   isPartialAbsence?: boolean | null;
+};
+
+// Vertretungs-Aktivierungs-Vorschlag: kommt nur in der Server-Antwort vor
+// (kein gespeichertes Feld), wenn dieser Speichervorgang einen Arbeitsdienst
+// mit vorgemerkter Vertretung zu einer Abwesenheit gemacht hat.
+export type VertretungsVorschlag = {
+  userId: number;
+  userName: string;
+  teamId: number;
+  startTime: string;
+  endTime: string;
+  type: string;
+  shiftModelId?: number | null;
 };
 
 // Planungsstatus: Entwurf (intern) → Vorschlag (angeboten) → Bestätigt (fix).
@@ -132,6 +146,12 @@ type ShiftDialogProps = {
   bulkDates?: string[];
   /** Wird nach erfolgreichem Speichern aufgerufen (z. B. Auswahl zurücksetzen). */
   onSaved?: () => void;
+  /**
+   * Wird aufgerufen, wenn Speichern eine vorgemerkte Vertretung aktivierbar
+   * macht (Dienst wurde zu einer Abwesenheit) — der Aufrufer (dienstplan.tsx,
+   * lebt länger als dieser Dialog) zeigt den Ein-Klick-Toast an.
+   */
+  onVertretungsVorschlag?: (vorschlag: VertretungsVorschlag) => void;
 };
 
 // Abwesenheitstypen — spiegelt ABSENCE_TYPES in dienstplan.tsx; muss bei
@@ -187,6 +207,10 @@ type FormState = {
   einsatzTeamId: string;
   // Vertretung: Info-Markierung für Arbeitsdienste (Auswertungs-Zählung).
   isVertretung: boolean;
+  // Vertretung vormerken: userId als String, "" = keine. Planungshilfe für
+  // den Ausfall-Fall — unabhängig von isVertretung (das markiert DIESEN
+  // Dienst rückwirkend als Vertretung für jemand anderen).
+  standbyUserId: string;
   // Unbezahlte Pause in Minuten als String ("" = 0; reine Info-Kennzahl).
   pauseMinutes: string;
 };
@@ -278,6 +302,7 @@ export function ShiftDialog({
   teamId,
   bulkDates,
   onSaved,
+  onVertretungsVorschlag,
 }: ShiftDialogProps) {
   const queryClient = useQueryClient();
   const createShift = useCreateShift();
@@ -372,6 +397,7 @@ export function ShiftDialog({
       notes: editShift?.notes ?? "",
       einsatzTeamId: editShift?.einsatzTeamId != null ? String(editShift.einsatzTeamId) : "",
       isVertretung: editShift?.isVertretung === true,
+      standbyUserId: editShift?.standbyUserId != null ? String(editShift.standbyUserId) : "",
       pauseMinutes:
         editShift?.pauseMinutes != null && editShift.pauseMinutes > 0
           ? String(editShift.pauseMinutes)
@@ -906,6 +932,10 @@ export function ShiftDialog({
               ? Number(form.einsatzTeamId)
               : null,
           isVertretung: !isAbsence && !isTeam ? form.isVertretung : false,
+          // Vertretung vormerken bleibt beim Übergang ZU einer Abwesenheit
+          // serverseitig bewusst stehen (Grundlage für den Aktivierungs-
+          // Vorschlag) — hier nur senden, wenn es noch ein Arbeitsdienst ist.
+          ...(!isAbsence && !isTeam ? { standbyUserId: form.standbyUserId ? Number(form.standbyUserId) : null } : {}),
           pauseMinutes:
             !isAbsence && !isTeam ? Math.max(0, Number(form.pauseMinutes) || 0) : 0,
         };
@@ -914,6 +944,7 @@ export function ShiftDialog({
           data: { ...data, ...(force ? { force: true } : {}) } as typeof data,
         });
         upsertShiftsInCache(queryClient, [updated], teamId ?? null);
+        if (updated.vertretungsVorschlag) onVertretungsVorschlag?.(updated.vertretungsVorschlag);
       } else {
         const data = {
           userId: Number(form.userId),
@@ -929,6 +960,7 @@ export function ShiftDialog({
           ...(!isAbsence && !isTeam
             ? {
                 isVertretung: form.isVertretung,
+                standbyUserId: form.standbyUserId ? Number(form.standbyUserId) : undefined,
                 pauseMinutes: Math.max(0, Number(form.pauseMinutes) || 0),
               }
             : {}),
@@ -941,6 +973,7 @@ export function ShiftDialog({
           } as typeof data,
         });
         upsertShiftsInCache(queryClient, [created], teamId ?? null);
+        if (created.vertretungsVorschlag) onVertretungsVorschlag?.(created.vertretungsVorschlag);
       }
       // Sofort reagieren: der gespeicherte Eintrag steht schon im Cache; der
       // Abgleich abgeleiteter Daten läuft im Hintergrund.
@@ -1642,6 +1675,41 @@ export function ShiftDialog({
                   }}
                 />
               </div>
+            </div>
+          )}
+
+          {/* Vertretung vormerken: reine Planungshilfe für den Ausfall-Fall,
+              unabhängig von "Vertretung" oben (das markiert DIESEN Dienst
+              rückwirkend als Vertretung für jemand anderen). Nur beim
+              Einzel-Anlegen/-Bearbeiten — Sammelaufträge kennen keine
+              einzelne Vormerkung pro Tag. */}
+          {!isAbsence && !isTeam && !isBulk && (
+            <div className="space-y-1.5">
+              <Label>Vertretung vormerken (optional)</Label>
+              <Select
+                value={form.standbyUserId || "none"}
+                onValueChange={(v) => set("standbyUserId", v === "none" ? "" : v)}
+              >
+                <SelectTrigger data-testid="shift-dialog-standby">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Keine Vertretung vorgemerkt</SelectItem>
+                  {assistants
+                    .filter((a) => String(a.id) !== form.userId)
+                    .map((a) => (
+                      <SelectItem key={a.id} value={String(a.id)}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              {form.standbyUserId && (
+                <p className="text-xs text-muted-foreground">
+                  Fällt der Dienst aus, schlägt die App vor, mit denselben
+                  Zeiten einen Dienst für diese Person anzulegen.
+                </p>
+              )}
             </div>
           )}
 
