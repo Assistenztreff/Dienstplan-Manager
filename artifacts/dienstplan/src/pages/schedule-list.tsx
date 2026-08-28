@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SHIFT_LIST_STALE_TIME_MS, SHIFT_LIST_GC_TIME_MS } from "@/lib/shift-cache";
+import type { ShiftDeviationReport } from "@workspace/api-client-react";
 import {
   isAbsenceShift,
   type Shift,
@@ -30,6 +31,7 @@ import {
   usePersistentState,
 } from "./dienstplan-helpers";
 import { AgendaView } from "./agenda-view";
+import type { DeviationReportValues } from "./deviation-dialog";
 
 type ScheduleListType = "alle" | "dienste" | "abwesenheiten";
 type ScheduleListRange = "tag" | "woche" | "monat" | "zweiMonate";
@@ -65,6 +67,11 @@ export function ScheduleList({
   onToggleDate,
   onPrevMonth,
   onNextMonth,
+  deviationReports,
+  onReportDeviation,
+  onAcceptDeviation,
+  onDisputeDeviation,
+  deviationActionPending,
 }: {
   month: number;
   year: number;
@@ -85,6 +92,11 @@ export function ScheduleList({
   onToggleDate?: (day: Date) => void;
   onPrevMonth?: () => void;
   onNextMonth?: () => void;
+  deviationReports?: Map<number, ShiftDeviationReport>;
+  onReportDeviation?: (shift: Shift, values: DeviationReportValues) => void;
+  onAcceptDeviation?: (shift: Shift) => void;
+  onDisputeDeviation?: (shift: Shift, reason: string) => void;
+  deviationActionPending?: boolean;
 }) {
   const [detailType, setDetailType] = usePersistentState<ScheduleListType>(
     "dienstplan.scheduleListType",
@@ -402,6 +414,11 @@ export function ScheduleList({
         onDayClick={onDayClick}
         onShiftClick={onShiftClick}
         onConfirmShift={onConfirmShift}
+        deviationReports={deviationReports}
+        onReportDeviation={onReportDeviation}
+        onAcceptDeviation={onAcceptDeviation}
+        onDisputeDeviation={onDisputeDeviation}
+        deviationActionPending={deviationActionPending}
         canEdit={canEdit}
         selectionMode={selectionMode}
         selectedDates={selectedDates}

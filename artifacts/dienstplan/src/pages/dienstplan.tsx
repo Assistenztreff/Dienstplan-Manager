@@ -10,9 +10,14 @@ import {
   useSendShiftProposals,
   useBulkConfirmOwnShifts,
   useGetHoursBalance,
+  useListShiftDeviations,
+  useReportShiftDeviation,
+  useAcceptShiftDeviation,
+  useDisputeShiftDeviation,
   type User,
   type ShiftModel,
   type HoursBalance,
+  type ShiftDeviationReport,
 } from "@workspace/api-client-react";
 import { useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isValid } from "date-fns";
@@ -68,6 +73,7 @@ import {
   usePersistentState,
 } from "./dienstplan-helpers";
 import { MonthGrid } from "./month-grid";
+import type { DeviationReportValues } from "./deviation-dialog";
 import { ScheduleList } from "./schedule-list";
 import { DienstplanHeader } from "./dienstplan-header";
 import { DienstplanTableView } from "./dienstplan-table-view";
@@ -169,6 +175,71 @@ export default function Dienstplan() {
     } as unknown as Parameters<typeof useListShifts>[1],
   ) as { data?: Shift[]; isLoading: boolean; isFetching: boolean };
   const queryClient = useQueryClient();
+
+  // Abweichungsmodell: alle Meldungen im Team-Scope, als shiftId → Meldung
+  // nachgeschlagen. Kein Monatsfilter — die Route kennt keinen, und das
+  // Datenaufkommen bleibt klein (nur tatsächlich gemeldete Abweichungen).
+  const { data: deviationReportsData } = useListShiftDeviations(teamParam, {
+    query: { enabled: isTeamScopeReady },
+  } as unknown as Parameters<typeof useListShiftDeviations>[1]) as {
+    data?: ShiftDeviationReport[];
+  };
+  const deviationReportsByShiftId = useMemo(() => {
+    const map = new Map<number, ShiftDeviationReport>();
+    for (const report of deviationReportsData ?? []) map.set(report.shiftId, report);
+    return map;
+  }, [deviationReportsData]);
+
+  const reportDeviationMutation = useReportShiftDeviation();
+  const acceptDeviationMutation = useAcceptShiftDeviation();
+  const disputeDeviationMutation = useDisputeShiftDeviation();
+  const deviationActionPending =
+    reportDeviationMutation.isPending ||
+    acceptDeviationMutation.isPending ||
+    disputeDeviationMutation.isPending;
+
+  // invalidateShiftDerivedQueries invalidiert per Präfix alles unter
+  // /api/shifts (Details s. shift-cache.ts) — deckt sowohl die Monatsliste
+  // als auch /api/shifts/deviations in einem Rutsch ab, kein separater
+  // Invalidierungs-Aufruf für die Meldungsliste nötig.
+  async function reportDeviation(shift: Shift, values: DeviationReportValues) {
+    try {
+      await reportDeviationMutation.mutateAsync({ id: shift.id, data: values });
+      void invalidateShiftDerivedQueries(queryClient);
+      toast.success("Abweichung gemeldet — der Planer wird benachrichtigt.");
+    } catch {
+      if (!navigator.onLine) return;
+      toast.error("Melden fehlgeschlagen. Bitte erneut versuchen.");
+    }
+  }
+
+  async function acceptDeviation(shift: Shift) {
+    try {
+      const updated = await acceptDeviationMutation.mutateAsync({ id: shift.id });
+      // Die Schicht selbst hat sich geändert (Zeiten/Stunden) — Monatsliste
+      // und abgeleitete Auswertungen mit aktualisieren, wie bei confirmShift.
+      void invalidateShiftDerivedQueries(queryClient);
+      toast.success(
+        `Abweichung angenommen — Dienst übernimmt die gemeldete Zeit${
+          updated?.reportedAusgefallen ? " (ausgefallen)" : ""
+        }.`,
+      );
+    } catch {
+      if (!navigator.onLine) return;
+      toast.error("Annehmen fehlgeschlagen. Bitte erneut versuchen.");
+    }
+  }
+
+  async function disputeDeviation(shift: Shift, reason: string) {
+    try {
+      await disputeDeviationMutation.mutateAsync({ id: shift.id, data: { reason } });
+      void invalidateShiftDerivedQueries(queryClient);
+      toast.success("Widerspruch gesendet — der Planwert bleibt maßgeblich.");
+    } catch {
+      if (!navigator.onLine) return;
+      toast.error("Widersprechen fehlgeschlagen. Bitte erneut versuchen.");
+    }
+  }
 
   // Vor-/Folgemonat im Hintergrund vorladen (Task #758): ein Klick auf
   // "Vorheriger/Nächster Monat" findet die Daten dann meist schon im Cache.
@@ -852,6 +923,11 @@ export default function Dienstplan() {
         onDayClick={(day) => openCreate(day)}
         onShiftClick={openEdit}
         onConfirmShift={confirmShift}
+        deviationReports={deviationReportsByShiftId}
+        onReportDeviation={reportDeviation}
+        onAcceptDeviation={canPlan ? acceptDeviation : undefined}
+        onDisputeDeviation={canPlan ? disputeDeviation : undefined}
+        deviationActionPending={deviationActionPending}
         canEdit={canPlan}
         selectionMode={isSelectionMode}
         selectedDates={selectedDates}

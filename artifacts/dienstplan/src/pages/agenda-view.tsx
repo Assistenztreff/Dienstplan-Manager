@@ -2,6 +2,7 @@ import { format, isSameDay, isToday, getDay, getISOWeek, startOfWeek } from "dat
 import { de } from "date-fns/locale";
 import { Plus, ChevronDown } from "lucide-react";
 import { ABSENCE_CATEGORY } from "@/components/abwesenheits-kalender";
+import type { ShiftDeviationReport } from "@workspace/api-client-react";
 import {
   isAbsenceShift,
   type Shift,
@@ -9,6 +10,7 @@ import {
   usePersonSlotLookup,
 } from "./dienstplan-helpers";
 import { DayDetailRow } from "./day-detail-row";
+import type { DeviationReportValues } from "./deviation-dialog";
 
 export function AgendaView({
   days,
@@ -28,6 +30,11 @@ export function AgendaView({
   anchorInterval,
   collapsedWeeks,
   onToggleWeek,
+  deviationReports,
+  onReportDeviation,
+  onAcceptDeviation,
+  onDisputeDeviation,
+  deviationActionPending,
 }: {
   days: Date[];
   shifts: Shift[];
@@ -36,6 +43,14 @@ export function AgendaView({
   onShiftClick: (shift: Shift) => void;
   onConfirmShift?: (shift: Shift) => void;
   canEdit: boolean;
+  /** Abweichungsmodell: shiftId → Meldung, plus die drei Aktionen. Fehlen
+   *  sie, bleibt die Zeile unverändert (Ownership-/Rollenprüfung lebt in
+   *  DayDetailRow selbst). */
+  deviationReports?: Map<number, ShiftDeviationReport>;
+  onReportDeviation?: (shift: Shift, values: DeviationReportValues) => void;
+  onAcceptDeviation?: (shift: Shift) => void;
+  onDisputeDeviation?: (shift: Shift, reason: string) => void;
+  deviationActionPending?: boolean;
   selectionMode?: boolean;
   selectedDates?: string[];
   onToggleDate?: (day: Date) => void;
@@ -278,6 +293,11 @@ export function AgendaView({
                             hasAusfall={!isAbsenceShift(shift) && dayAusfallUserIds.has(shift.userId)}
                             onClick={dayClickable && !selectionMode ? () => onShiftClick(shift) : undefined}
                             onConfirm={dayClickable && !selectionMode ? onConfirmShift : undefined}
+                            deviationReport={deviationReports?.get(shift.id)}
+                            onReportDeviation={dayClickable && !selectionMode ? onReportDeviation : undefined}
+                            onAcceptDeviation={dayClickable && !selectionMode ? onAcceptDeviation : undefined}
+                            onDisputeDeviation={dayClickable && !selectionMode ? onDisputeDeviation : undefined}
+                            deviationActionPending={deviationActionPending}
                           />
                           {shift.notes && (
                             <p

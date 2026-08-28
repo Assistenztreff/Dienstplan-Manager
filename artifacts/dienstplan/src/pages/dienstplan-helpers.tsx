@@ -36,6 +36,7 @@ export type Shift = {
   isVertretung?: boolean | null;
   /** Halbtägiger Urlaub (#862): true = bewusst gewählter Teil-Tag, false/undefined = ganztägig. */
   isPartialAbsence?: boolean | null;
+  pauseMinutes?: number | null;
 };
 
 export const PLANNING_STATUS_LABELS: Record<string, string> = {

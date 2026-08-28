@@ -1,9 +1,17 @@
 import { formatAbsenceTimeSpan } from "@/lib/absence-time";
 import { format } from "date-fns";
+import { useState } from "react";
 import { Check, MessageSquare } from "lucide-react";
 import { StatusBadge, type StatusBadgeKind } from "@/components/status-badge";
 import { useTeam } from "@/context/team";
+import { useAuth } from "@/context/auth";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import type { ShiftDeviationReport } from "@workspace/api-client-react";
+import {
+  DisputeDeviationDialog,
+  ReportDeviationDialog,
+  type DeviationReportValues,
+} from "./deviation-dialog";
 import {
   dienstStatusColor,
   isAbsenceShift,
@@ -31,6 +39,11 @@ export function DayDetailRow({
   onConfirm,
   testId,
   hasAusfall = false,
+  deviationReport,
+  onReportDeviation,
+  onAcceptDeviation,
+  onDisputeDeviation,
+  deviationActionPending = false,
 }: {
   shift: Shift;
   modelMap: Map<number, ShiftModelInfo>;
@@ -41,9 +54,24 @@ export function DayDetailRow({
   testId: string;
   /** Task #792: Person ist am selben Tag krank/kind-krank — rotes Warn-Icon anzeigen. */
   hasAusfall?: boolean;
+  /** Abweichungsmodell: vorhandene Meldung zu dieser Schicht (falls eine
+   *  existiert — pro Schicht höchstens eine, s. shift_deviation_reports). */
+  deviationReport?: ShiftDeviationReport | null;
+  /** Nur gesetzt, wenn die Assistenzkraft für diese Schicht melden darf —
+   *  Ownership/Vergangenheits-Check übernimmt der Aufrufer NICHT, die Zeile
+   *  prüft selbst (eigener Dienst, bestätigt, vorbei, kein Report). */
+  onReportDeviation?: (shift: Shift, values: DeviationReportValues) => void;
+  /** Nur vom Planer übergeben (analog zu onConfirm) — Annehmen/Widersprechen
+   *  erscheinen nur, wenn beide gesetzt sind UND die Meldung offen ist. */
+  onAcceptDeviation?: (shift: Shift) => void;
+  onDisputeDeviation?: (shift: Shift, reason: string) => void;
+  deviationActionPending?: boolean;
 }) {
   const { selectedTeamId } = useTeam();
+  const { currentUser } = useAuth();
   const getPersonSlot = usePersonSlotLookup();
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [disputeDialogOpen, setDisputeDialogOpen] = useState(false);
   const mirror = isMirrorShift(shift, selectedTeamId);
   const isAbsence = isAbsenceShift(shift);
   const isTeam = shift.type === "team";
@@ -81,6 +109,25 @@ export function DayDetailRow({
     status === "FIX" ? "confirmed" : status === "ANGEBOTEN" ? "sent" : "draft";
 
   const confirmable = onConfirm && !mirror && isConfirmableShift(shift);
+
+  // Abweichungsmodell: "War anders" nur für die eigene, bereits vergangene
+  // FIX-Schicht (Arbeitsdienst, keine Abwesenheit/Teamdienst), solange noch
+  // keine Meldung existiert (Abbruchregel — genau eine Meldung pro Dienst).
+  const isPastFixWorkShift =
+    !mirror &&
+    !isAbsence &&
+    !isTeam &&
+    status === "FIX" &&
+    new Date(shift.endTime).getTime() < Date.now();
+  const canReportDeviation =
+    !!onReportDeviation &&
+    isPastFixWorkShift &&
+    !deviationReport &&
+    currentUser?.id === shift.userId;
+  // Annehmen/Widersprechen nur für den Planer (Aufrufer übergibt die
+  // Callbacks nur dann, analog zu onConfirm) und nur solange offen.
+  const canRespondToDeviation =
+    !!onAcceptDeviation && !!onDisputeDeviation && deviationReport?.status === "PENDING";
 
   return (
     <div
@@ -164,6 +211,84 @@ export function DayDetailRow({
         </button>
       )}
 
+      {/* "War anders" — Abweichungsmodell (Assistenzkraft). */}
+      {canReportDeviation && (
+        <button
+          type="button"
+          data-testid={`deviation-report-${shift.id}`}
+          title="Abweichung von der geplanten Zeit melden"
+          onClick={(e) => {
+            e.stopPropagation();
+            setReportDialogOpen(true);
+          }}
+          className="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-md border border-[#d8d8d4] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#092948] transition-colors after:absolute after:inset-x-0 after:top-1/2 after:h-[44px] after:-translate-y-1/2 after:content-[''] hover:border-[#092948]"
+        >
+          War anders
+        </button>
+      )}
+
+      {/* Meldung offen und der Betrachter ist NICHT der Planer (der bekommt
+          stattdessen die Annehmen/Widersprechen-Buttons unten) — kurzer
+          Warte-Hinweis für die meldende Assistenzkraft. */}
+      {deviationReport?.status === "PENDING" && !canRespondToDeviation && (
+        <span
+          data-testid={`deviation-status-${shift.id}`}
+          className="relative z-10 shrink-0 whitespace-nowrap rounded-full bg-sky-100 px-2 py-0.5 text-[10.5px] font-semibold text-sky-800"
+        >
+          Gemeldet
+        </span>
+      )}
+
+      {/* Strittig — beide Seiten sehen den Grund per Tooltip; Planwert gilt. */}
+      {deviationReport?.status === "DISPUTED" && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                data-testid={`deviation-status-${shift.id}`}
+                className="relative z-10 shrink-0 cursor-default whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-[10.5px] font-semibold text-red-800"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Strittig
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-[240px] break-words text-xs">
+              {deviationReport.disputeReason}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+
+      {/* Annehmen/Widersprechen — nur Planer, nur solange offen. */}
+      {canRespondToDeviation && (
+        <span className="relative z-10 flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            data-testid={`deviation-accept-${shift.id}`}
+            title="Gemeldete Abweichung annehmen"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAcceptDeviation!(shift);
+            }}
+            className="inline-flex items-center whitespace-nowrap rounded-md border border-[#1e8f4e] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#1e8f4e] transition-colors hover:bg-[#1e8f4e]/10"
+          >
+            Annehmen
+          </button>
+          <button
+            type="button"
+            data-testid={`deviation-dispute-open-${shift.id}`}
+            title="Gemeldeter Abweichung widersprechen"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDisputeDialogOpen(true);
+            }}
+            className="inline-flex items-center whitespace-nowrap rounded-md border border-[#d8d8d4] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#092948] transition-colors hover:border-[#092948]"
+          >
+            Widersprechen
+          </button>
+        </span>
+      )}
+
       {/* Notiz-Icon */}
       {shift.notes && (
         <TooltipProvider>
@@ -226,6 +351,30 @@ export function DayDetailRow({
         className="absolute bottom-0 right-0 top-0 w-[4px]"
         style={{ backgroundColor: statusBarColor }}
       />
+
+      {reportDialogOpen && onReportDeviation && (
+        <ReportDeviationDialog
+          shift={shift}
+          open={reportDialogOpen}
+          onOpenChange={setReportDialogOpen}
+          submitting={deviationActionPending}
+          onSubmit={(values) => {
+            onReportDeviation(shift, values);
+            setReportDialogOpen(false);
+          }}
+        />
+      )}
+      {disputeDialogOpen && onDisputeDeviation && (
+        <DisputeDeviationDialog
+          open={disputeDialogOpen}
+          onOpenChange={setDisputeDialogOpen}
+          submitting={deviationActionPending}
+          onSubmit={(reason) => {
+            onDisputeDeviation(shift, reason);
+            setDisputeDialogOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }
