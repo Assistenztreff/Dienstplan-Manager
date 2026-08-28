@@ -254,6 +254,59 @@ export const PRE_PUSH_SQL: string[] = [
   `ALTER TABLE time_tracking DROP CONSTRAINT IF EXISTS time_tracking_user_id_users_id_fk;`,
   `ALTER TABLE time_tracking ADD CONSTRAINT time_tracking_user_id_users_id_fk
      FOREIGN KEY (user_id) REFERENCES users(id);`,
+  // shift_changes (Änderungshistorie für bereits bestätigte Dienste): NEUER
+  // Enum-Typ PLUS neue Tabelle mit mehreren FKs auf einer bestehenden,
+  // befüllten Bestands-DB — dieselbe Kombination wie bei absence_requests
+  // oben, bei der drizzle-kit push ohne TTY interaktiv nachfragen kann.
+  // Daher vorab idempotent anlegen, exakt wie im Drizzle-Schema
+  // (shift_changes.ts).
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'shift_change_source') THEN
+       CREATE TYPE shift_change_source AS ENUM ('planner_edit', 'deviation_accepted');
+     END IF;
+   END $$;`,
+  `CREATE TABLE IF NOT EXISTS shift_changes (
+     id serial PRIMARY KEY,
+     shift_id integer NOT NULL,
+     team_id integer NOT NULL,
+     user_id integer NOT NULL,
+     changed_by integer NOT NULL,
+     change_source shift_change_source NOT NULL,
+     before jsonb NOT NULL,
+     after jsonb NOT NULL,
+     created_at timestamp DEFAULT now() NOT NULL
+   );`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shift_changes_shift_id_shifts_id_fk') THEN
+       ALTER TABLE shift_changes
+         ADD CONSTRAINT shift_changes_shift_id_shifts_id_fk
+         FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE CASCADE;
+     END IF;
+   END $$;`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shift_changes_team_id_teams_id_fk') THEN
+       ALTER TABLE shift_changes
+         ADD CONSTRAINT shift_changes_team_id_teams_id_fk
+         FOREIGN KEY (team_id) REFERENCES teams(id);
+     END IF;
+   END $$;`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shift_changes_user_id_users_id_fk') THEN
+       ALTER TABLE shift_changes
+         ADD CONSTRAINT shift_changes_user_id_users_id_fk
+         FOREIGN KEY (user_id) REFERENCES users(id);
+     END IF;
+   END $$;`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shift_changes_changed_by_users_id_fk') THEN
+       ALTER TABLE shift_changes
+         ADD CONSTRAINT shift_changes_changed_by_users_id_fk
+         FOREIGN KEY (changed_by) REFERENCES users(id);
+     END IF;
+   END $$;`,
+  `CREATE INDEX IF NOT EXISTS shift_changes_shift_id_idx ON shift_changes (shift_id);`,
+  `CREATE INDEX IF NOT EXISTS shift_changes_user_id_created_at_idx ON shift_changes (user_id, created_at);`,
+  `CREATE INDEX IF NOT EXISTS shift_changes_team_id_created_at_idx ON shift_changes (team_id, created_at);`,
 ];
 
 /** Alle Vorab-Schritte sequenziell gegen den übergebenen Client ausführen. */

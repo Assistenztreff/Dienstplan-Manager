@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { shiftsTable, usersTable, timeTrackingTable, shiftModelsTable } from "@workspace/db";
+import { shiftsTable, usersTable, timeTrackingTable, shiftModelsTable, shiftChangesTable } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 import {
   CreateShiftBody,
@@ -706,6 +706,33 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
         .where(eq(shiftsTable.id, params.data.id))
         .returning();
       if (!updated) throw notFoundError;
+
+      // Änderungshistorie: nur wenn ein bereits bestätigter Dienst inhaltlich
+      // geändert wurde — exakt die faelltZurueck-Bedingung oben. Aufzeichnungs-
+      // pflicht der tatsächlich geleisteten Arbeitszeit (§ 3 Abs. 2 Nr. 1
+      // ArbSchG): der alte Wert darf beim Überschreiben nicht spurlos
+      // verschwinden. changedBy IMMER aus der Session, nie aus dem Body.
+      if (faelltZurueck) {
+        await tx.insert(shiftChangesTable).values({
+          shiftId: updated.id,
+          teamId: oldShift.teamId,
+          userId: oldShift.userId,
+          changedBy: req.session.userId!,
+          changeSource: "planner_edit",
+          before: {
+            startTime: oldShift.startTime.toISOString(),
+            endTime: oldShift.endTime.toISOString(),
+            pauseMinutes: oldShift.pauseMinutes,
+            userId: oldShift.userId,
+          },
+          after: {
+            startTime: updated.startTime.toISOString(),
+            endTime: updated.endTime.toISOString(),
+            pauseMinutes: updated.pauseMinutes,
+            userId: updated.userId,
+          },
+        });
+      }
 
       const newType = updated.type;
       const oldType = oldShift.type;
