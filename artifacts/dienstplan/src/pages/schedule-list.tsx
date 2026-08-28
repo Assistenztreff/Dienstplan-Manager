@@ -33,7 +33,10 @@ import {
 import { AgendaView } from "./agenda-view";
 import type { DeviationReportValues } from "./deviation-dialog";
 
-type ScheduleListType = "alle" | "dienste" | "abwesenheiten";
+// "korrekturen": nur Dienste, deren nachträgliche Änderung noch auf die
+// Bestätigung der Assistenzkraft wartet (Kay-Feedback 28.08.2026 — vorher
+// musste man jeden Tag einzeln durchklicken, um sie zu finden).
+type ScheduleListType = "alle" | "dienste" | "abwesenheiten" | "korrekturen";
 type ScheduleListRange = "tag" | "woche" | "monat" | "zweiMonate";
 
 /** Vereinheitlichte, KW-gruppierte Wochen-Liste unter Kalender UND Tabelle
@@ -62,6 +65,8 @@ export function ScheduleList({
   onShiftClick,
   onConfirmShift,
   onConfirmOwnShift,
+  korrekturShiftIds,
+  focusKorrekturenSignal,
   canEdit,
   selectionMode,
   selectedDates,
@@ -88,6 +93,14 @@ export function ScheduleList({
   onShiftClick: (shift: Shift) => void;
   onConfirmShift?: (shift: Shift) => void;
   onConfirmOwnShift?: (shift: Shift) => void;
+  /** IDs der Dienste mit offener, noch unbestätigter Korrektur. Wird von
+   *  der Seite berechnet (dort liegen Rolle und Team-Kontext) und hier nur
+   *  zum Filtern genutzt. */
+  korrekturShiftIds?: ReadonlySet<number>;
+  /** Zähler: jede Erhöhung schaltet die Liste auf den Korrektur-Filter.
+   *  So kann der Banner oben auf der Seite die Ansicht setzen, ohne dass
+   *  der Filterzustand aus dieser Komponente herauswandern muss. */
+  focusKorrekturenSignal?: number;
   canEdit: boolean;
   selectionMode?: boolean;
   selectedDates?: string[];
@@ -103,13 +116,33 @@ export function ScheduleList({
   const [detailType, setDetailType] = usePersistentState<ScheduleListType>(
     "dienstplan.scheduleListType",
     "alle",
-    ["alle", "dienste", "abwesenheiten"],
+    ["alle", "dienste", "abwesenheiten", "korrekturen"],
   );
   // Zeitraum startet bei JEDEM Seitenaufruf auf „Heute" (Nutzer-Entscheidung
   // 27.08.2026, zweite Runde) — bewusst NICHT persistiert, anders als der
   // Anzeigetyp: Der Tagesblick ist der gewollte Einstieg, Monats-/Wochenblick
   // ist eine bewusste Sitzungs-Entscheidung.
   const [detailRange, setDetailRange] = useState<ScheduleListRange>("tag");
+
+  // Banner-Knopf "Korrekturen anzeigen": schaltet Filter und Zeitraum so, dass
+  // ALLE offenen Korrekturen des Monats auf einen Blick dastehen — bisher
+  // musste man jeden betroffenen Tag einzeln im Kalender anklicken.
+  useEffect(() => {
+    if (focusKorrekturenSignal == null || focusKorrekturenSignal === 0) return;
+    setDetailType("korrekturen");
+    setDetailRange("monat");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKorrekturenSignal]);
+
+  // Ist die letzte Korrektur bestaetigt, waere der Filter eine Sackgasse
+  // ("Keine offenen Korrekturen", und der Auswahl-Eintrag verschwindet dann
+  // auch aus dem Menue). Deshalb automatisch zurueck auf "Alle".
+  useEffect(() => {
+    if (detailType === "korrekturen" && (korrekturShiftIds?.size ?? 0) === 0) {
+      setDetailType("alle");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailType, korrekturShiftIds]);
 
   // Eingeklappte Wochenkarten (Abnahme 27.08.2026). Bewusst NICHT
   // persistiert: beim nächsten Seitenaufruf sind alle Wochen wieder offen.
@@ -219,6 +252,7 @@ export function ScheduleList({
         if (d < dFrom || d > dTo) return false;
         if (detailType === "dienste") return !isAbsenceShift(s);
         if (detailType === "abwesenheiten") return isAbsenceShift(s);
+        if (detailType === "korrekturen") return korrekturShiftIds?.has(s.id) ?? false;
         return true;
       })
       .sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime));
@@ -228,7 +262,7 @@ export function ScheduleList({
     });
     return { rangeShifts: filtered, countShifts: counted, rangeStart: from, rangeEnd: to, displayStart: dFrom, displayEnd: dTo };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMonthShifts, prevMonthShiftsRaw, nextMonthShiftsRaw, afterNextMonthShiftsRaw, selectedDay, detailRange, detailType]);
+  }, [currentMonthShifts, prevMonthShiftsRaw, nextMonthShiftsRaw, afterNextMonthShiftsRaw, selectedDay, detailRange, detailType, korrekturShiftIds]);
 
   const rangeDays = useMemo(
     () => eachDayOfInterval({ start: displayStart, end: displayEnd }),
@@ -345,6 +379,9 @@ export function ScheduleList({
             <SelectItem value="alle">Alle</SelectItem>
             <SelectItem value="dienste">Dienste</SelectItem>
             <SelectItem value="abwesenheiten">Abwesenheiten</SelectItem>
+            {(korrekturShiftIds?.size ?? 0) > 0 && (
+              <SelectItem value="korrekturen">Offene Korrekturen</SelectItem>
+            )}
           </SelectContent>
         </Select>
         <Select value={detailRange} onValueChange={(v) => setDetailRange(v as ScheduleListRange)}>
@@ -372,11 +409,15 @@ export function ScheduleList({
             {countShifts.length === 0
               ? detailType === "abwesenheiten"
                 ? "Keine Abwesenheiten"
-                : "Keine Dienste geplant"
+                : detailType === "korrekturen"
+                  ? "Keine offenen Korrekturen"
+                  : "Keine Dienste geplant"
               : `${countShifts.length} ${
                   detailType === "abwesenheiten"
                     ? countShifts.length === 1 ? "Abwesenheit" : "Abwesenheiten"
-                    : countShifts.length === 1 ? "Dienst" : "Dienste"
+                    : detailType === "korrekturen"
+                      ? countShifts.length === 1 ? "offene Korrektur" : "offene Korrekturen"
+                      : countShifts.length === 1 ? "Dienst" : "Dienste"
                 }`}
           </p>
         </div>

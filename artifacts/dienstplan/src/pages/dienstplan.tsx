@@ -597,6 +597,15 @@ export default function Dienstplan() {
   // Sammel-Hinweis, und beide mit Einzelbestätigung.
   const myKorrekturShifts = myAngebotenShifts.filter((s) => isPastCorrection(s));
   const myVorschlagShifts = myAngebotenShifts.filter((s) => !isPastCorrection(s));
+  const myKorrekturShiftIds = useMemo(
+    () => new Set(myKorrekturShifts.map((s) => s.id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [myKorrekturShifts.map((s) => s.id).join(",")],
+  );
+  // Zaehler statt boolean: jeder Klick auf "Korrekturen anzeigen" soll die
+  // Liste erneut umschalten, auch wenn der Nutzer den Filter zwischendurch
+  // von Hand geaendert hat.
+  const [focusKorrekturenSignal, setFocusKorrekturenSignal] = useState(0);
 
   async function sendProposals() {
     if (!isAdmin || isBulkConfirming) return;
@@ -854,13 +863,24 @@ export default function Dienstplan() {
           Kein Sammel-Knopf: jede Korrektur wird einzeln in der Tagesleiste
           bestätigt, damit niemand geänderte Zeiten unbesehen abnickt. */}
       {!isAdmin && myKorrekturShifts.length > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-[#e2c88a] bg-[#fdf7e8] px-4 py-3 text-[#7a5406]">
-          <StatusBadge kind="correction" compact />
-          <span className="text-sm font-medium">
-            {myKorrekturShifts.length === 1
-              ? "1 Korrektur wartet auf deine Bestätigung — bitte in der Tagesleiste prüfen."
-              : `${myKorrekturShifts.length} Korrekturen warten auf deine Bestätigung — bitte in der Tagesleiste prüfen.`}
-          </span>
+        <div className="flex flex-col gap-3 rounded-lg border border-[#e2c88a] bg-[#fdf7e8] px-4 py-3 text-[#7a5406] sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-2">
+            <StatusBadge kind="correction" compact className="mt-0.5" />
+            <span className="text-sm font-medium">
+              {myKorrekturShifts.length === 1
+                ? "1 Korrektur wartet auf deine Bestätigung."
+                : `${myKorrekturShifts.length} Korrekturen warten auf deine Bestätigung.`}
+            </span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="shrink-0 self-start border-[#e2c88a] bg-white text-[#7a5406] hover:bg-[#fdf3dc] sm:self-auto"
+            data-testid="korrekturen-anzeigen"
+            onClick={() => setFocusKorrekturenSignal((n) => n + 1)}
+          >
+            {myKorrekturShifts.length === 1 ? "Korrektur anzeigen" : "Korrekturen anzeigen"}
+          </Button>
         </div>
       )}
 
@@ -1073,6 +1093,8 @@ export default function Dienstplan() {
         onShiftClick={openEdit}
         onConfirmShift={confirmShift}
             onConfirmOwnShift={confirmOwnShift}
+            korrekturShiftIds={myKorrekturShiftIds}
+            focusKorrekturenSignal={focusKorrekturenSignal}
         deviationReports={deviationReportsByShiftId}
         onReportDeviation={reportDeviation}
         onAcceptDeviation={canPlan ? acceptDeviation : undefined}

@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
 import { AlertTriangle, AlertCircle, CalendarX, Clock, CheckCircle2, Plane, ChevronRight, Info } from "lucide-react";
+import { isPastCorrection } from "./dienstplan-helpers";
 import { useLocation } from "wouter";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
@@ -644,35 +645,75 @@ function PendingShiftProposalsBanner() {
   );
   if (offeredShifts.length === 0) return null;
 
-  const earliestDate = offeredShifts
-    .map((s) => s.startTime)
-    .sort()[0];
+  // Kay-Feedback 28.08.2026: Schon auf dem Dashboard trennen. Eine KORREKTUR
+  // betrifft einen bereits gearbeiteten Dienst, dessen Zeit der Arbeitgeber
+  // nachträglich geändert hat — arbeitszeitrechtlich eine ganz andere Aussage
+  // als ein VORSCHLAG für einen noch nicht gearbeiteten Dienst. Deshalb zwei
+  // Meldungen mit eigener Farbe, eigenem Text und eigenem Ziel-Knopf, statt
+  // beides unter "Bitte Vorschläge bestätigen" zu mischen.
+  const korrekturen = offeredShifts.filter((s) => isPastCorrection(s));
+  const vorschlaege = offeredShifts.filter((s) => !isPastCorrection(s));
+
+  const earliest = (list: Shift[]) => list.map((s) => s.startTime).sort()[0]!;
+  const gotoDate = (list: Shift[]) =>
+    navigate(`/dienstplan?date=${format(new Date(earliest(list)), "yyyy-MM-dd")}`);
 
   return (
-    <div
-      className="flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-      data-testid="dashboard-shift-proposal-banner"
-    >
-      <div className="flex items-start gap-2 text-amber-900">
-        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-        <span className="text-sm font-medium">
-          Achtung:{" "}
-          {offeredShifts.length === 1
-            ? "Ein Dienst wurde vom Arbeitgeber geändert."
-            : `${offeredShifts.length} Dienste wurden vom Arbeitgeber geändert.`}{" "}
-          Bitte {offeredShifts.length === 1 ? "Vorschlag" : "Vorschläge"} bestätigen.
-        </span>
-      </div>
-      <Button
-        size="sm"
-        variant="outline"
-        className="shrink-0 self-start border-amber-400 bg-white text-amber-900 hover:bg-amber-100 sm:self-auto"
-        data-testid="dashboard-shift-proposal-review"
-        onClick={() => navigate(`/dienstplan?date=${format(new Date(earliestDate), "yyyy-MM-dd")}`)}
-      >
-        Vorschlag prüfen
-      </Button>
-    </div>
+    <>
+      {/* Korrekturen zuerst: der dringlichere und rechtlich gewichtigere Fall. */}
+      {korrekturen.length > 0 && (
+        <div
+          className="flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+          data-testid="dashboard-shift-correction-banner"
+        >
+          <div className="flex items-start gap-2 text-amber-900">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+            <span className="text-sm font-medium">
+              Achtung:{" "}
+              {korrekturen.length === 1
+                ? "Ein bereits gearbeiteter Dienst wurde vom Arbeitgeber geändert. Bitte Korrektur bestätigen."
+                : `${korrekturen.length} bereits gearbeitete Dienste wurden vom Arbeitgeber geändert. Bitte Korrekturen bestätigen.`}
+            </span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="shrink-0 self-start border-amber-400 bg-white text-amber-900 hover:bg-amber-100 sm:self-auto"
+            data-testid="dashboard-shift-correction-review"
+            onClick={() => gotoDate(korrekturen)}
+          >
+            Korrektur prüfen
+          </Button>
+        </div>
+      )}
+
+      {/* Vorschläge: gewöhnliche Vorausplanung, deshalb der ruhige blaue
+          Standard-Hinweis statt einer Warnfarbe. */}
+      {vorschlaege.length > 0 && (
+        <div
+          className="flex flex-col gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+          data-testid="dashboard-shift-proposal-banner"
+        >
+          <div className="flex items-start gap-2 text-sky-900">
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-sky-600" />
+            <span className="text-sm font-medium">
+              {vorschlaege.length === 1
+                ? "1 Dienstvorschlag wartet auf Ihre Bestätigung."
+                : `${vorschlaege.length} Dienstvorschläge warten auf Ihre Bestätigung.`}
+            </span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="shrink-0 self-start border-sky-300 bg-white text-sky-900 hover:bg-sky-100 sm:self-auto"
+            data-testid="dashboard-shift-proposal-review"
+            onClick={() => gotoDate(vorschlaege)}
+          >
+            {vorschlaege.length === 1 ? "Vorschlag prüfen" : "Vorschläge prüfen"}
+          </Button>
+        </div>
+      )}
+    </>
   );
 }
 
