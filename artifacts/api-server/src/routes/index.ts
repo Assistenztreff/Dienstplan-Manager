@@ -30,10 +30,19 @@ router.use(healthRouter);
 router.use(usersRouter);
 router.use(contractsRouter);
 router.use(shiftsListRouter);
+// REIHENFOLGE IST PFLICHT: Alle Router mit einem STATISCHEN GET-Pfad unter
+// /shifts/<wort> muessen VOR shiftsCrudRouter stehen — der bringt
+// GET /shifts/:id mit und wuerde "deviations" sonst als ID lesen
+// (Number("deviations") => NaN => 400 "Invalid id"). Genau das ist am
+// 28.08.2026 passiert: GET /shifts/deviations lief ins Leere, die
+// Abweichungs-Liste blieb im Frontend dauerhaft leer und das "Gemeldet"-Badge
+// erschien nie. Die uebrigen /shifts/<wort>-Routen (bulk, send-proposals, ...)
+// sind POST und kollidieren deshalb nicht — shifts-crud hat kein POST
+// /shifts/:id. Regressionstest: routes/index.route-order.test.ts.
+router.use(shiftsDeviationsRouter);
 router.use(shiftsCrudRouter);
 router.use(shiftsBulkRouter);
 router.use(shiftsConfirmationsRouter);
-router.use(shiftsDeviationsRouter);
 router.use(shiftModelsRouter);
 router.use(allowancesRouter);
 router.use(brandingRouter);
