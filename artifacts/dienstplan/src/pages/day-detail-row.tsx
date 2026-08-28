@@ -237,7 +237,7 @@ export function DayDetailRow({
       {deviationReport?.status === "PENDING" && !canRespondToDeviation && (
         <span
           data-testid={`deviation-status-${shift.id}`}
-          className="relative z-10 shrink-0 whitespace-nowrap rounded-full bg-sky-100 px-2 py-0.5 text-[10.5px] font-semibold text-sky-800"
+          className="relative z-10 shrink-0 whitespace-nowrap rounded-md border border-[#b5790a] bg-white px-2.5 py-1 text-[14px] font-semibold text-[#b5790a]"
         >
           Gemeldet
         </span>
