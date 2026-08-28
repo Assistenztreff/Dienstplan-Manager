@@ -307,6 +307,60 @@ export const PRE_PUSH_SQL: string[] = [
   `CREATE INDEX IF NOT EXISTS shift_changes_shift_id_idx ON shift_changes (shift_id);`,
   `CREATE INDEX IF NOT EXISTS shift_changes_user_id_created_at_idx ON shift_changes (user_id, created_at);`,
   `CREATE INDEX IF NOT EXISTS shift_changes_team_id_created_at_idx ON shift_changes (team_id, created_at);`,
+  // shift_deviation_reports (Abweichungsmodell): gleiche TTY-Prompt-Gefahr wie
+  // shift_changes/absence_requests oben — vorab idempotent anlegen, exakt wie
+  // im Drizzle-Schema (shift_deviation_reports.ts).
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'shift_deviation_status') THEN
+       CREATE TYPE shift_deviation_status AS ENUM ('PENDING', 'ACCEPTED', 'DISPUTED');
+     END IF;
+   END $$;`,
+  `CREATE TABLE IF NOT EXISTS shift_deviation_reports (
+     id serial PRIMARY KEY,
+     shift_id integer NOT NULL,
+     team_id integer NOT NULL,
+     user_id integer NOT NULL,
+     status shift_deviation_status NOT NULL DEFAULT 'PENDING',
+     reported_start_time timestamp NOT NULL,
+     reported_end_time timestamp NOT NULL,
+     reported_pause_minutes integer NOT NULL DEFAULT 0,
+     reported_ausgefallen boolean NOT NULL DEFAULT false,
+     reported_at timestamp DEFAULT now() NOT NULL,
+     resolved_by integer,
+     resolved_at timestamp,
+     dispute_reason text
+   );`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shift_deviation_reports_shift_id_shifts_id_fk') THEN
+       ALTER TABLE shift_deviation_reports
+         ADD CONSTRAINT shift_deviation_reports_shift_id_shifts_id_fk
+         FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE CASCADE;
+     END IF;
+   END $$;`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shift_deviation_reports_team_id_teams_id_fk') THEN
+       ALTER TABLE shift_deviation_reports
+         ADD CONSTRAINT shift_deviation_reports_team_id_teams_id_fk
+         FOREIGN KEY (team_id) REFERENCES teams(id);
+     END IF;
+   END $$;`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shift_deviation_reports_user_id_users_id_fk') THEN
+       ALTER TABLE shift_deviation_reports
+         ADD CONSTRAINT shift_deviation_reports_user_id_users_id_fk
+         FOREIGN KEY (user_id) REFERENCES users(id);
+     END IF;
+   END $$;`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shift_deviation_reports_resolved_by_users_id_fk') THEN
+       ALTER TABLE shift_deviation_reports
+         ADD CONSTRAINT shift_deviation_reports_resolved_by_users_id_fk
+         FOREIGN KEY (resolved_by) REFERENCES users(id);
+     END IF;
+   END $$;`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS shift_deviation_reports_shift_id_unique ON shift_deviation_reports (shift_id);`,
+  `CREATE INDEX IF NOT EXISTS shift_deviation_reports_team_id_status_idx ON shift_deviation_reports (team_id, status);`,
+  `CREATE INDEX IF NOT EXISTS shift_deviation_reports_user_id_idx ON shift_deviation_reports (user_id);`,
 ];
 
 /** Alle Vorab-Schritte sequenziell gegen den übergebenen Client ausführen. */

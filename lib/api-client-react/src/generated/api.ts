@@ -94,6 +94,9 @@ import type {
   SendShiftProposalsResult,
   SetPasswordInput,
   Shift,
+  ShiftDeviationDisputeInput,
+  ShiftDeviationReport,
+  ShiftDeviationReportInput,
   ShiftInput,
   ShiftModel,
   ShiftModelInput,
@@ -2361,6 +2364,223 @@ export const useDeleteShift = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteShiftMutationOptions(options));
+    }
+
+export const getReportShiftDeviationUrl = (id: number,) => {
+
+
+
+
+  return `/api/shifts/${id}/deviation`
+}
+
+/**
+ * Nur für die eigene, bereits vergangene FIX-Schicht. Genau eine Meldung pro Dienst ist möglich (Abbruchregel gegen Ping-Pong) — ein zweiter Versuch liefert 409.
+ * @summary Abweichung von der geplanten Arbeitszeit melden (Assistenzkraft)
+ */
+export const reportShiftDeviation = async (id: number,
+    shiftDeviationReportInput: ShiftDeviationReportInput, options?: RequestInit): Promise<ShiftDeviationReport> => {
+
+  return customFetch<ShiftDeviationReport>(getReportShiftDeviationUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      shiftDeviationReportInput,)
+  }
+);}
+
+
+
+
+export const getReportShiftDeviationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reportShiftDeviation>>, TError,{id: number;data: BodyType<ShiftDeviationReportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reportShiftDeviation>>, TError,{id: number;data: BodyType<ShiftDeviationReportInput>}, TContext> => {
+
+const mutationKey = ['reportShiftDeviation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reportShiftDeviation>>, {id: number;data: BodyType<ShiftDeviationReportInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reportShiftDeviation(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReportShiftDeviationMutationResult = NonNullable<Awaited<ReturnType<typeof reportShiftDeviation>>>
+    export type ReportShiftDeviationMutationBody = BodyType<ShiftDeviationReportInput>
+    export type ReportShiftDeviationMutationError = ErrorType<void>
+
+    /**
+ * @summary Abweichung von der geplanten Arbeitszeit melden (Assistenzkraft)
+ */
+export const useReportShiftDeviation = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reportShiftDeviation>>, TError,{id: number;data: BodyType<ShiftDeviationReportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reportShiftDeviation>>,
+        TError,
+        {id: number;data: BodyType<ShiftDeviationReportInput>},
+        TContext
+      > => {
+      return useMutation(getReportShiftDeviationMutationOptions(options));
+    }
+
+export const getAcceptShiftDeviationUrl = (id: number,) => {
+
+
+
+
+  return `/api/shifts/${id}/deviation/accept`
+}
+
+/**
+ * Der gemeldete Wert übernimmt die Schicht (startTime/endTime/ pauseMinutes); die Änderung landet in der Änderungshistorie (shift_changes, changeSource=deviation_accepted).
+ * @summary Gemeldete Abweichung annehmen (Planer)
+ */
+export const acceptShiftDeviation = async (id: number, options?: RequestInit): Promise<ShiftDeviationReport> => {
+
+  return customFetch<ShiftDeviationReport>(getAcceptShiftDeviationUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getAcceptShiftDeviationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptShiftDeviation>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof acceptShiftDeviation>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['acceptShiftDeviation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof acceptShiftDeviation>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  acceptShiftDeviation(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AcceptShiftDeviationMutationResult = NonNullable<Awaited<ReturnType<typeof acceptShiftDeviation>>>
+
+    export type AcceptShiftDeviationMutationError = ErrorType<void>
+
+    /**
+ * @summary Gemeldete Abweichung annehmen (Planer)
+ */
+export const useAcceptShiftDeviation = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptShiftDeviation>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof acceptShiftDeviation>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getAcceptShiftDeviationMutationOptions(options));
+    }
+
+export const getDisputeShiftDeviationUrl = (id: number,) => {
+
+
+
+
+  return `/api/shifts/${id}/deviation/dispute`
+}
+
+/**
+ * Der Planwert bleibt maßgeblich; die Schicht wird NICHT geändert. Beide Werte (Plan und gemeldet) bleiben sichtbar.
+ * @summary Gemeldete Abweichung mit Begründung ablehnen (Planer)
+ */
+export const disputeShiftDeviation = async (id: number,
+    shiftDeviationDisputeInput: ShiftDeviationDisputeInput, options?: RequestInit): Promise<ShiftDeviationReport> => {
+
+  return customFetch<ShiftDeviationReport>(getDisputeShiftDeviationUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      shiftDeviationDisputeInput,)
+  }
+);}
+
+
+
+
+export const getDisputeShiftDeviationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disputeShiftDeviation>>, TError,{id: number;data: BodyType<ShiftDeviationDisputeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof disputeShiftDeviation>>, TError,{id: number;data: BodyType<ShiftDeviationDisputeInput>}, TContext> => {
+
+const mutationKey = ['disputeShiftDeviation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof disputeShiftDeviation>>, {id: number;data: BodyType<ShiftDeviationDisputeInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  disputeShiftDeviation(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DisputeShiftDeviationMutationResult = NonNullable<Awaited<ReturnType<typeof disputeShiftDeviation>>>
+    export type DisputeShiftDeviationMutationBody = BodyType<ShiftDeviationDisputeInput>
+    export type DisputeShiftDeviationMutationError = ErrorType<void>
+
+    /**
+ * @summary Gemeldete Abweichung mit Begründung ablehnen (Planer)
+ */
+export const useDisputeShiftDeviation = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disputeShiftDeviation>>, TError,{id: number;data: BodyType<ShiftDeviationDisputeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof disputeShiftDeviation>>,
+        TError,
+        {id: number;data: BodyType<ShiftDeviationDisputeInput>},
+        TContext
+      > => {
+      return useMutation(getDisputeShiftDeviationMutationOptions(options));
     }
 
 export const getListShiftModelsUrl = (params?: ListShiftModelsParams,) => {

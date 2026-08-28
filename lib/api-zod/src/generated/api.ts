@@ -839,6 +839,83 @@ export const DeleteShiftParams = zod.object({
 
 
 /**
+ * Nur für die eigene, bereits vergangene FIX-Schicht. Genau eine Meldung pro Dienst ist möglich (Abbruchregel gegen Ping-Pong) — ein zweiter Versuch liefert 409.
+ * @summary Abweichung von der geplanten Arbeitszeit melden (Assistenzkraft)
+ */
+export const ReportShiftDeviationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const reportShiftDeviationBodyPauseMinutesMin = 0;
+export const reportShiftDeviationBodyPauseMinutesMax = 1440;
+
+
+
+export const ReportShiftDeviationBody = zod.object({
+  "startTime": zod.coerce.date().describe('Tatsächlicher Beginn laut Meldung.'),
+  "endTime": zod.coerce.date().describe('Tatsächliches Ende laut Meldung.'),
+  "pauseMinutes": zod.number().min(reportShiftDeviationBodyPauseMinutesMin).max(reportShiftDeviationBodyPauseMinutesMax).optional(),
+  "ausgefallen": zod.boolean().optional().describe('\"Dienst ist ausgefallen\" — der Server ignoriert startTime\/endTime in diesem Fall und speichert eine Nulldauer-Meldung.')
+})
+
+
+/**
+ * Der gemeldete Wert übernimmt die Schicht (startTime/endTime/ pauseMinutes); die Änderung landet in der Änderungshistorie (shift_changes, changeSource=deviation_accepted).
+ * @summary Gemeldete Abweichung annehmen (Planer)
+ */
+export const AcceptShiftDeviationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AcceptShiftDeviationResponse = zod.object({
+  "id": zod.number(),
+  "shiftId": zod.number(),
+  "userId": zod.number(),
+  "status": zod.enum(['PENDING', 'ACCEPTED', 'DISPUTED']),
+  "reportedStartTime": zod.coerce.date(),
+  "reportedEndTime": zod.coerce.date(),
+  "reportedPauseMinutes": zod.number(),
+  "reportedAusgefallen": zod.boolean(),
+  "reportedAt": zod.coerce.date(),
+  "resolvedBy": zod.number().nullish(),
+  "resolvedAt": zod.coerce.date().nullish(),
+  "disputeReason": zod.string().nullish()
+})
+
+
+/**
+ * Der Planwert bleibt maßgeblich; die Schicht wird NICHT geändert. Beide Werte (Plan und gemeldet) bleiben sichtbar.
+ * @summary Gemeldete Abweichung mit Begründung ablehnen (Planer)
+ */
+export const DisputeShiftDeviationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const disputeShiftDeviationBodyReasonMax = 500;
+
+
+
+export const DisputeShiftDeviationBody = zod.object({
+  "reason": zod.string().min(1).max(disputeShiftDeviationBodyReasonMax)
+})
+
+export const DisputeShiftDeviationResponse = zod.object({
+  "id": zod.number(),
+  "shiftId": zod.number(),
+  "userId": zod.number(),
+  "status": zod.enum(['PENDING', 'ACCEPTED', 'DISPUTED']),
+  "reportedStartTime": zod.coerce.date(),
+  "reportedEndTime": zod.coerce.date(),
+  "reportedPauseMinutes": zod.number(),
+  "reportedAusgefallen": zod.boolean(),
+  "reportedAt": zod.coerce.date(),
+  "resolvedBy": zod.number().nullish(),
+  "resolvedAt": zod.coerce.date().nullish(),
+  "disputeReason": zod.string().nullish()
+})
+
+
+/**
  * @summary Schichtmodelle auflisten
  */
 export const ListShiftModelsQueryParams = zod.object({

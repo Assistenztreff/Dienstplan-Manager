@@ -782,6 +782,100 @@ paths:
         "204":
           description: Gelöscht
 
+  /shifts/{id}/deviation:
+    post:
+      operationId: reportShiftDeviation
+      tags: [shifts]
+      summary: Abweichung von der geplanten Arbeitszeit melden (Assistenzkraft)
+      description: >-
+        Nur für die eigene, bereits vergangene FIX-Schicht. Genau eine
+        Meldung pro Dienst ist möglich (Abbruchregel gegen Ping-Pong) — ein
+        zweiter Versuch liefert 409.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftDeviationReportInput"
+      responses:
+        "201":
+          description: Gemeldet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShiftDeviationReport"
+        "400":
+          description: Ungültige Anfrage (z. B. Dienst nicht FIX oder noch nicht vergangen)
+        "404":
+          description: Nicht gefunden
+        "409":
+          description: Für diesen Dienst wurde bereits eine Abweichung gemeldet
+
+  /shifts/{id}/deviation/accept:
+    post:
+      operationId: acceptShiftDeviation
+      tags: [shifts]
+      summary: Gemeldete Abweichung annehmen (Planer)
+      description: >-
+        Der gemeldete Wert übernimmt die Schicht (startTime/endTime/
+        pauseMinutes); die Änderung landet in der Änderungshistorie
+        (shift_changes, changeSource=deviation_accepted).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Angenommen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShiftDeviationReport"
+        "404":
+          description: Nicht gefunden
+        "409":
+          description: Meldung ist nicht mehr offen (bereits angenommen/widersprochen)
+
+  /shifts/{id}/deviation/dispute:
+    post:
+      operationId: disputeShiftDeviation
+      tags: [shifts]
+      summary: Gemeldete Abweichung mit Begründung ablehnen (Planer)
+      description: >-
+        Der Planwert bleibt maßgeblich; die Schicht wird NICHT geändert.
+        Beide Werte (Plan und gemeldet) bleiben sichtbar.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftDeviationDisputeInput"
+      responses:
+        "200":
+          description: Widersprochen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShiftDeviationReport"
+        "404":
+          description: Nicht gefunden
+        "409":
+          description: Meldung ist nicht mehr offen (bereits angenommen/widersprochen)
+
   /shift-models:
     get:
       operationId: listShiftModels
@@ -3535,6 +3629,71 @@ components:
           description: >-
             Unbezahlte Pausenminuten (Info-Kennzahl; reduziert NICHT die
             gewerteten Stunden).
+
+    ShiftDeviationReportInput:
+      type: object
+      required: [startTime, endTime]
+      properties:
+        startTime:
+          type: string
+          format: date-time
+          description: Tatsächlicher Beginn laut Meldung.
+        endTime:
+          type: string
+          format: date-time
+          description: Tatsächliches Ende laut Meldung.
+        pauseMinutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+        ausgefallen:
+          type: boolean
+          description: >-
+            "Dienst ist ausgefallen" — der Server ignoriert startTime/endTime
+            in diesem Fall und speichert eine Nulldauer-Meldung.
+
+    ShiftDeviationDisputeInput:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+
+    ShiftDeviationReport:
+      type: object
+      required: [id, shiftId, userId, status, reportedStartTime, reportedEndTime, reportedPauseMinutes, reportedAusgefallen, reportedAt]
+      properties:
+        id:
+          type: integer
+        shiftId:
+          type: integer
+        userId:
+          type: integer
+        status:
+          type: string
+          enum: [PENDING, ACCEPTED, DISPUTED]
+        reportedStartTime:
+          type: string
+          format: date-time
+        reportedEndTime:
+          type: string
+          format: date-time
+        reportedPauseMinutes:
+          type: integer
+        reportedAusgefallen:
+          type: boolean
+        reportedAt:
+          type: string
+          format: date-time
+        resolvedBy:
+          type: ["integer", "null"]
+        resolvedAt:
+          type: ["string", "null"]
+          format: date-time
+        disputeReason:
+          type: ["string", "null"]
 
     ShiftModel:
       type: object

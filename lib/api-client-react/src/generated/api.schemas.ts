@@ -1000,6 +1000,55 @@ export interface ShiftUpdate {
   pauseMinutes?: number;
 }
 
+export interface ShiftDeviationReportInput {
+  /** Tatsächlicher Beginn laut Meldung. */
+  startTime: string;
+  /** Tatsächliches Ende laut Meldung. */
+  endTime: string;
+  /**
+     * @minimum 0
+     * @maximum 1440
+     */
+  pauseMinutes?: number;
+  /** "Dienst ist ausgefallen" — der Server ignoriert startTime/endTime in diesem Fall und speichert eine Nulldauer-Meldung. */
+  ausgefallen?: boolean;
+}
+
+export interface ShiftDeviationDisputeInput {
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  reason: string;
+}
+
+export type ShiftDeviationReportStatus = typeof ShiftDeviationReportStatus[keyof typeof ShiftDeviationReportStatus];
+
+
+export const ShiftDeviationReportStatus = {
+  PENDING: 'PENDING',
+  ACCEPTED: 'ACCEPTED',
+  DISPUTED: 'DISPUTED',
+} as const;
+
+export interface ShiftDeviationReport {
+  id: number;
+  shiftId: number;
+  userId: number;
+  status: ShiftDeviationReportStatus;
+  reportedStartTime: string;
+  reportedEndTime: string;
+  reportedPauseMinutes: number;
+  reportedAusgefallen: boolean;
+  reportedAt: string;
+  /** @nullable */
+  resolvedBy?: number | null;
+  /** @nullable */
+  resolvedAt?: string | null;
+  /** @nullable */
+  disputeReason?: string | null;
+}
+
 /**
  * Vergütungstyp (Geld) — regulär, prozentualer Stundenlohn oder Festbetrag pro Schicht.
  */
