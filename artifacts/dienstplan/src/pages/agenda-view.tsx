@@ -294,7 +294,14 @@ export function AgendaView({
                             onClick={dayClickable && !selectionMode ? () => onShiftClick(shift) : undefined}
                             onConfirm={dayClickable && !selectionMode ? onConfirmShift : undefined}
                             deviationReport={deviationReports?.get(shift.id)}
-                            onReportDeviation={dayClickable && !selectionMode ? onReportDeviation : undefined}
+                            // "War anders" ist für die Assistenzkraft selbst
+                            // gedacht, NICHT nur für Bearbeitungsberechtigte —
+                            // anders als onClick/onConfirm daher bewusst ohne
+                            // canEdit-Anteil von dayClickable (Ownership/FIX/
+                            // Vergangenheits-Check übernimmt DayDetailRow
+                            // selbst). Annehmen/Widersprechen bleiben Planer-
+                            // exklusiv, also weiterhin an dayClickable gekoppelt.
+                            onReportDeviation={!other && !selectionMode ? onReportDeviation : undefined}
                             onAcceptDeviation={dayClickable && !selectionMode ? onAcceptDeviation : undefined}
                             onDisputeDeviation={dayClickable && !selectionMode ? onDisputeDeviation : undefined}
                             deviationActionPending={deviationActionPending}
