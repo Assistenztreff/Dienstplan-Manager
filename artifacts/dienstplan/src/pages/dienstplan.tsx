@@ -597,15 +597,48 @@ export default function Dienstplan() {
   // Sammel-Hinweis, und beide mit Einzelbestätigung.
   const myKorrekturShifts = myAngebotenShifts.filter((s) => isPastCorrection(s));
   const myVorschlagShifts = myAngebotenShifts.filter((s) => !isPastCorrection(s));
-  const myKorrekturShiftIds = useMemo(
-    () => new Set(myKorrekturShifts.map((s) => s.id)),
+  // Die drei Pruef-Listen der Tagesleiste. Sie werden HIER berechnet, weil nur
+  // die Seite Rolle, Team-Kontext und die Abweichungs-Meldungen kennt; die
+  // Liste filtert damit nur noch.
+  const meldungShiftIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const report of deviationReportsData ?? []) {
+      if (report.status === "PENDING") ids.add(report.shiftId);
+    }
+    return ids;
+  }, [deviationReportsData]);
+  const korrekturIdKey = myKorrekturShifts.map((s) => s.id).join(",");
+  const vorschlagIdKey = myVorschlagShifts.map((s) => s.id).join(",");
+  const pruefListen = useMemo(
+    () => ({
+      korrekturen: new Set(myKorrekturShifts.map((s) => s.id)),
+      vorschlaege: new Set(myVorschlagShifts.map((s) => s.id)),
+      // Nur der Planer handelt auf Meldungen — bei der Assistenzkraft bliebe
+      // der Filter sonst als leerer Eintrag im Menue stehen.
+      meldungen: canPlan ? meldungShiftIds : new Set<number>(),
+    }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [myKorrekturShifts.map((s) => s.id).join(",")],
+    [korrekturIdKey, vorschlagIdKey, meldungShiftIds, canPlan],
   );
-  // Zaehler statt boolean: jeder Klick auf "Korrekturen anzeigen" soll die
-  // Liste erneut umschalten, auch wenn der Nutzer den Filter zwischendurch
-  // von Hand geaendert hat.
-  const [focusKorrekturenSignal, setFocusKorrekturenSignal] = useState(0);
+
+  // Sprungziel der Tagesleiste. nonce statt boolean, damit derselbe Filter
+  // erneut greift, wenn der Nutzer zwischendurch von Hand umgestellt hat.
+  const [focusFilter, setFocusFilter] = useState<
+    { type: "korrekturen" | "vorschlaege" | "meldungen"; nonce: number } | null
+  >(null);
+  const focusPruefliste = (type: "korrekturen" | "vorschlaege" | "meldungen") =>
+    setFocusFilter((prev) => ({ type, nonce: (prev?.nonce ?? 0) + 1 }));
+
+  // Dashboard verlinkt mit ?fokus=... direkt in die gefilterte Tagesleiste,
+  // damit "Korrektur pruefen" nicht nur den Monat oeffnet, sondern sofort die
+  // betroffenen Tageszeilen zeigt (Kay-Feedback 28.08.2026).
+  const fokusParam = searchParams.get("fokus");
+  useEffect(() => {
+    if (fokusParam === "korrekturen" || fokusParam === "vorschlaege" || fokusParam === "meldungen") {
+      focusPruefliste(fokusParam);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fokusParam]);
 
   async function sendProposals() {
     if (!isAdmin || isBulkConfirming) return;
@@ -877,7 +910,7 @@ export default function Dienstplan() {
             variant="outline"
             className="shrink-0 self-start border-[#e2c88a] bg-white text-[#7a5406] hover:bg-[#fdf3dc] sm:self-auto"
             data-testid="korrekturen-anzeigen"
-            onClick={() => setFocusKorrekturenSignal((n) => n + 1)}
+            onClick={() => focusPruefliste("korrekturen")}
           >
             {myKorrekturShifts.length === 1 ? "Korrektur anzeigen" : "Korrekturen anzeigen"}
           </Button>
@@ -1093,8 +1126,8 @@ export default function Dienstplan() {
         onShiftClick={openEdit}
         onConfirmShift={confirmShift}
             onConfirmOwnShift={confirmOwnShift}
-            korrekturShiftIds={myKorrekturShiftIds}
-            focusKorrekturenSignal={focusKorrekturenSignal}
+            pruefListen={pruefListen}
+            focusFilter={focusFilter}
         deviationReports={deviationReportsByShiftId}
         onReportDeviation={reportDeviation}
         onAcceptDeviation={canPlan ? acceptDeviation : undefined}

@@ -656,8 +656,14 @@ function PendingShiftProposalsBanner() {
   const vorschlaege = offeredShifts.filter((s) => !isPastCorrection(s));
 
   const earliest = (list: Shift[]) => list.map((s) => s.startTime).sort()[0]!;
-  const gotoDate = (list: Shift[]) =>
-    navigate(`/dienstplan?date=${format(new Date(earliest(list)), "yyyy-MM-dd")}`);
+  // fokus=... schaltet die Tagesleiste im Dienstplan direkt auf den passenden
+  // Prüf-Filter und scrollt hin — sonst landet man im Monatsraster und muss
+  // die betroffenen Tage erst suchen und einzeln anklicken (Kay-Feedback
+  // 28.08.2026).
+  const gotoPruefliste = (list: Shift[], fokus: "korrekturen" | "vorschlaege") =>
+    navigate(
+      `/dienstplan?date=${format(new Date(earliest(list)), "yyyy-MM-dd")}&fokus=${fokus}`,
+    );
 
   return (
     <>
@@ -681,7 +687,7 @@ function PendingShiftProposalsBanner() {
             variant="outline"
             className="shrink-0 self-start border-amber-400 bg-white text-amber-900 hover:bg-amber-100 sm:self-auto"
             data-testid="dashboard-shift-correction-review"
-            onClick={() => gotoDate(korrekturen)}
+            onClick={() => gotoPruefliste(korrekturen, "korrekturen")}
           >
             Korrektur prüfen
           </Button>
@@ -708,7 +714,7 @@ function PendingShiftProposalsBanner() {
             variant="outline"
             className="shrink-0 self-start border-sky-300 bg-white text-sky-900 hover:bg-sky-100 sm:self-auto"
             data-testid="dashboard-shift-proposal-review"
-            onClick={() => gotoDate(vorschlaege)}
+            onClick={() => gotoPruefliste(vorschlaege, "vorschlaege")}
           >
             {vorschlaege.length === 1 ? "Vorschlag prüfen" : "Vorschläge prüfen"}
           </Button>
@@ -757,7 +763,9 @@ function PendingDeviationsBanner() {
         variant="outline"
         className="shrink-0 self-start border-amber-400 bg-white text-amber-900 hover:bg-amber-100 sm:self-auto"
         data-testid="dashboard-deviation-review"
-        onClick={() => navigate(`/dienstplan?date=${format(new Date(earliest), "yyyy-MM-dd")}`)}
+        onClick={() =>
+          navigate(`/dienstplan?date=${format(new Date(earliest), "yyyy-MM-dd")}&fokus=meldungen`)
+        }
       >
         {offen.length === 1 ? "Meldung prüfen" : "Meldungen prüfen"}
       </Button>
