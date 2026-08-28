@@ -42,9 +42,11 @@ export const absenceRequestsTable = pgTable(
     teamId: integer("team_id")
       .notNull()
       .references(() => teamsTable.id),
+    // Löschschutz: KEIN CASCADE, siehe shifts.ts (dieselbe Aufbewahrungspflicht
+    // gilt für Urlaubs-/Krankheitsanträge als Teil des Zeitnachweises).
     userId: integer("user_id")
       .notNull()
-      .references(() => usersTable.id, { onDelete: "cascade" }),
+      .references(() => usersTable.id, { onDelete: "restrict" }),
     type: absenceRequestTypeEnum("type").notNull(),
     status: absenceRequestStatusEnum("status").notNull().default("PENDING"),
     days: jsonb("days").$type<AbsenceRequestDay[]>().notNull(),

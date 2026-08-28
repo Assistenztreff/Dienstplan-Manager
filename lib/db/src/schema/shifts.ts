@@ -38,7 +38,12 @@ export const shiftPlanningStatusEnum = pgEnum("shift_planning_status", ["VORLAEU
 export const shiftsTable = pgTable("shifts", {
   id: serial("id").primaryKey(),
   teamId: integer("team_id").notNull().references(() => teamsTable.id),
-  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  // Löschschutz: KEIN CASCADE. Dienste sind aufzeichnungspflichtige
+  // Zeitnachweise (§ 3 Abs. 2 Nr. 1 ArbSchG) mit gesetzlicher Aufbewahrung
+  // (§ 16 ArbZG, § 17 MiLoG, 2 Jahre) — ein Löschen der Assistenzkraft darf
+  // sie nicht automatisch mit wegreißen. DELETE /users/:id faengt die
+  // resultierende FK-Verletzung (Postgres-Code 23503) bereits als 409 ab.
+  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
   startTime: timestamp("start_time").notNull(),
   endTime: timestamp("end_time").notNull(),
   type: shiftTypeEnum("type").notNull().default("active"),

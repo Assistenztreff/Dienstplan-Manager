@@ -14,7 +14,9 @@ export const billingMethodEnum = pgEnum("billing_method", ["SOLL", "IST"]);
 export const contractsTable = pgTable("contracts", {
   id: serial("id").primaryKey(),
   teamId: integer("team_id").notNull().references(() => teamsTable.id),
-  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  // Löschschutz: KEIN CASCADE, siehe shifts.ts (Vertragsdaten sind Teil des
+  // aufzeichnungspflichtigen Nachweises, gleiche Aufbewahrungspflicht).
+  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
   weeklyHours: real("weekly_hours").notNull(),
   // Arbeitstage pro Woche (0,1–7, Dezimalwerte erlaubt, z. B. 1,15 bei
   // wöchentlichen bzw. 0,23 bei monatlichen 24-h-Diensten): Basis für den

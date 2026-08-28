@@ -232,6 +232,28 @@ export const PRE_PUSH_SQL: string[] = [
      ON absence_requests (team_id, status);`,
   `CREATE INDEX IF NOT EXISTS absence_requests_user_status_idx
      ON absence_requests (user_id, status);`,
+  // Löschschutz für Zeitnachweise (§ 16 ArbZG, § 17 MiLoG, 2 Jahre
+  // Aufbewahrungspflicht): shifts/absence_requests/contracts/time_tracking
+  // verlieren ON DELETE CASCADE auf user_id. Löschen einer Assistenzkraft darf
+  // ihre Dienste/Anträge/Verträge/Ist-Zeiten nicht automatisch mitreißen.
+  // DELETE /users/:id faengt die resultierende FK-Verletzung (23503) bereits
+  // als 409 ab — kein Verhaltenswechsel für den Aufrufer. Konstraint-Name
+  // bleibt gleich, nur die ON-DELETE-Klausel aendert sich: unconditional
+  // Drop+Recreate ist sicher bei jedem Lauf (Tabelle existiert zu dem
+  // Zeitpunkt bereits — diese Migrationen laufen nach den entsprechenden
+  // CREATE-TABLE-Vorab-Schritten weiter oben).
+  `ALTER TABLE shifts DROP CONSTRAINT IF EXISTS shifts_user_id_users_id_fk;`,
+  `ALTER TABLE shifts ADD CONSTRAINT shifts_user_id_users_id_fk
+     FOREIGN KEY (user_id) REFERENCES users(id);`,
+  `ALTER TABLE absence_requests DROP CONSTRAINT IF EXISTS absence_requests_user_id_users_id_fk;`,
+  `ALTER TABLE absence_requests ADD CONSTRAINT absence_requests_user_id_users_id_fk
+     FOREIGN KEY (user_id) REFERENCES users(id);`,
+  `ALTER TABLE contracts DROP CONSTRAINT IF EXISTS contracts_user_id_users_id_fk;`,
+  `ALTER TABLE contracts ADD CONSTRAINT contracts_user_id_users_id_fk
+     FOREIGN KEY (user_id) REFERENCES users(id);`,
+  `ALTER TABLE time_tracking DROP CONSTRAINT IF EXISTS time_tracking_user_id_users_id_fk;`,
+  `ALTER TABLE time_tracking ADD CONSTRAINT time_tracking_user_id_users_id_fk
+     FOREIGN KEY (user_id) REFERENCES users(id);`,
 ];
 
 /** Alle Vorab-Schritte sequenziell gegen den übergebenen Client ausführen. */
