@@ -8,7 +8,7 @@ import {
   ShieldCheck,
   ArrowUp,
 } from "lucide-react";
-import platformLogoUrl from "@assets/assistenzplaner-logo-getrimmt.png";
+import platformLogoUrl from "@/assets/assistenzplaner-logo.png";
 import { useAuth, hasTeamAccessLevel, type TeamAccessLevel } from "@/context/auth";
 import { useToast } from "@/hooks/use-toast";
 import { isAdminRole } from "@/lib/roles";

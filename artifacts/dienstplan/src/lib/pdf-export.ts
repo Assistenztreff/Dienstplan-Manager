@@ -1,7 +1,7 @@
 import { listShifts, getBrandingSettings } from "@workspace/api-client-react";
 import { format, differenceInMinutes } from "date-fns";
 import { de } from "date-fns/locale";
-import logoUrl from "@assets/assistenzplaner-logo-getrimmt.png";
+import logoUrl from "@/assets/assistenzplaner-logo.png";
 import { logoSrcFromPath } from "@/lib/logo";
 import { formatDays } from "@/lib/utils";
 
