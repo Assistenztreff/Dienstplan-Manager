@@ -107,13 +107,42 @@ async function main(): Promise<void> {
   // durchlaufen, ohne alle Änderungen anzuwenden (z. B. verschluckte Prompts).
   // Fehlen danach Tabellen/Spalten, greift dieselbe Selbstheilung wie beim
   // Push-Fehlschlag: Drop + Recreate + erneuter Push.
-  const pushAndVerify = (): void => {
+  const pushAndVerify = async (): Promise<void> => {
+    // Erst die idempotenten SQL-Vorab-Schritte, dann push — exakt die
+    // Reihenfolge aus post-merge.sh und migrate-prod. Grund (verifiziert
+    // 30.08.2026): `drizzle-kit push` aendert die ON-DELETE-Regel eines
+    // BESTEHENDEN Fremdschluessels nicht. Der Loeschschutz auf
+    // shift_changes.shift_id (cascade -> set null) kam auf der Test-DB
+    // deshalb nie an, und ein Test, der ihn prueft, waere gruen geblieben,
+    // obwohl die Regel dort noch die alte war. Ohne diesen Schritt testet
+    // die E2E-Suite ein anderes Schema als das, was ausgeliefert wird.
+    //
+    // NUR auf einer bereits bestehenden Test-DB: die Vorab-Schritte setzen
+    // Bestandstabellen voraus (der erste ist `ALTER TABLE users ...`) und
+    // laufen auf einer eben frisch angelegten, leeren DB in einen 42P01.
+    // Dort braucht es sie auch nicht — push legt alles neu an, und neue
+    // Fremdschluessel bekommen ihre Regeln direkt aus dem Drizzle-Schema.
+    if (await hatBestandsschema()) {
+      run("pnpm --filter @workspace/scripts run pre-push-sql");
+    }
     pushSchema();
     run("pnpm --filter @workspace/scripts run verify-test-db-schema");
   };
 
+  /** Steht in der Test-DB schon ein Schema (Kerntabelle `users` vorhanden)? */
+  async function hatBestandsschema(): Promise<boolean> {
+    const probe = new pg.Client({ connectionString: testUrl });
+    await probe.connect();
+    try {
+      const res = await probe.query("SELECT to_regclass('public.users') AS t");
+      return res.rows[0]?.t != null;
+    } finally {
+      await probe.end();
+    }
+  }
+
   try {
-    pushAndVerify();
+    await pushAndVerify();
   } catch {
     // Push gescheitert (typisch: veraltete Test-DB + Schema-Änderung, die eine
     // interaktive Bestätigung bräuchte). Die Test-DB ist wegwerfbar: komplett
@@ -131,7 +160,7 @@ async function main(): Promise<void> {
       "@workspace/test-fixtures/test-db-name"
     );
     await touchAfterRebuild(base, testDbName);
-    pushAndVerify();
+    await pushAndVerify();
   }
   run("pnpm --filter @workspace/scripts run setup-admin");
   run("pnpm --filter @workspace/scripts run migrate-teams");

@@ -267,7 +267,7 @@ export const PRE_PUSH_SQL: string[] = [
    END $$;`,
   `CREATE TABLE IF NOT EXISTS shift_changes (
      id serial PRIMARY KEY,
-     shift_id integer NOT NULL,
+     shift_id integer,
      team_id integer NOT NULL,
      user_id integer NOT NULL,
      changed_by integer NOT NULL,
@@ -276,13 +276,15 @@ export const PRE_PUSH_SQL: string[] = [
      after jsonb NOT NULL,
      created_at timestamp DEFAULT now() NOT NULL
    );`,
-  `DO $$ BEGIN
-     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shift_changes_shift_id_shifts_id_fk') THEN
-       ALTER TABLE shift_changes
-         ADD CONSTRAINT shift_changes_shift_id_shifts_id_fk
-         FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE CASCADE;
-     END IF;
-   END $$;`,
+  // Loeschschutz fuer die Historie (Stufe 4): shift_id war ON DELETE CASCADE —
+  // das Loeschen eines einzelnen Dienstes riss seine Aenderungszeilen mit.
+  // Jetzt nullable + ON DELETE SET NULL: die Zeile ueberlebt, before/after
+  // tragen den vollstaendigen Snapshot. Idempotent, auch auf Bestands-DBs.
+  `ALTER TABLE shift_changes ALTER COLUMN shift_id DROP NOT NULL;`,
+  `ALTER TABLE shift_changes DROP CONSTRAINT IF EXISTS shift_changes_shift_id_shifts_id_fk;`,
+  `ALTER TABLE shift_changes
+     ADD CONSTRAINT shift_changes_shift_id_shifts_id_fk
+     FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE SET NULL;`,
   `DO $$ BEGIN
      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shift_changes_team_id_teams_id_fk') THEN
        ALTER TABLE shift_changes

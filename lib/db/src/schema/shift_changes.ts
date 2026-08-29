@@ -57,9 +57,17 @@ export const shiftChangesTable = pgTable(
   "shift_changes",
   {
     id: serial("id").primaryKey(),
-    shiftId: integer("shift_id")
-      .notNull()
-      .references(() => shiftsTable.id, { onDelete: "cascade" }),
+    // Loeschschutz: der Dienst darf verschwinden, seine Aenderungshistorie
+    // nicht. Frueher `cascade` — damit riss das Loeschen eines einzelnen
+    // Dienstes genau die Nachweiszeilen mit, die Stufe 1 schuetzen sollte,
+    // und der Vormonats-Export haette die Aenderung stillschweigend verloren.
+    // `restrict` scheidet aus (dann liesse sich gar kein Dienst mehr
+    // loeschen); `set null` haelt die Zeile am Leben. Die Auswertung braucht
+    // den Fremdschluessel ohnehin nicht: before/after sind vollstaendige
+    // Snapshots inklusive Zeitraum und Assistenzkraft.
+    shiftId: integer("shift_id").references(() => shiftsTable.id, {
+      onDelete: "set null",
+    }),
     // Team zum Zeitpunkt der Änderung — eigene Spalte statt JOIN über shiftId,
     // damit team-gescopte Abfragen (Export, spätere Auswertung) ohne Join
     // filtern können (Muster wie überall sonst im Projekt).
