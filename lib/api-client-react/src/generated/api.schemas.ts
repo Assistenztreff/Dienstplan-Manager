@@ -1128,6 +1128,41 @@ export interface ShiftChangeSummary {
 }
 
 /**
+ * Zustand der zeitrelevanten Felder eines Dienstes zu einem Zeitpunkt.
+ */
+export interface ShiftChangeSnapshot {
+  startTime: string;
+  endTime: string;
+  pauseMinutes: number;
+  userId: number;
+  /** Name der Assistenzkraft zu diesem Snapshot, sofern noch aufloesbar. */
+  userName?: string | null;
+}
+
+export type ShiftChangeHistoryEntryChangeSource = typeof ShiftChangeHistoryEntryChangeSource[keyof typeof ShiftChangeHistoryEntryChangeSource];
+
+
+export const ShiftChangeHistoryEntryChangeSource = {
+  planner_edit: 'planner_edit',
+  deviation_accepted: 'deviation_accepted',
+  correction_withdrawn: 'correction_withdrawn',
+} as const;
+
+export interface ShiftChangeHistoryEntry {
+  id: number;
+  /** Null, wenn der Dienst inzwischen geloescht wurde — die Historie bleibt. */
+  shiftId?: number | null;
+  changeSource: ShiftChangeHistoryEntryChangeSource;
+  changedBy: number;
+  changedByName?: string | null;
+  userId: number;
+  shiftType?: string | null;
+  createdAt: string;
+  before: ShiftChangeSnapshot;
+  after: ShiftChangeSnapshot;
+}
+
+/**
  * Vergütungstyp (Geld) — regulär, prozentualer Stundenlohn oder Festbetrag pro Schicht.
  */
 export type ShiftModelCompensationType = typeof ShiftModelCompensationType[keyof typeof ShiftModelCompensationType];
@@ -2228,6 +2263,16 @@ teamId?: number;
 
 export type ListShiftChangesParams = {
 teamId?: number;
+};
+
+export type ListShiftChangeHistoryParams = {
+teamId?: number;
+/**
+ * @minimum 1
+ * @maximum 12
+ */
+month: number;
+year: number;
 };
 
 export type ListShiftModelsParams = {

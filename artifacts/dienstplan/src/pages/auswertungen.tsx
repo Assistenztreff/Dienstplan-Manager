@@ -240,6 +240,7 @@ function AuswertungenHeader({
       prevMonthLabel={exportPrevMonthLabel}
       month={month}
       year={year}
+      teamId={selectedTeamId ?? undefined}
       disabled={exportDisabled}
     />
   );

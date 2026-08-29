@@ -74,6 +74,7 @@ import type {
   ListHourBudgetsParams,
   ListOperatorErrorsParams,
   ListOperatorPlanChangesParams,
+  ListShiftChangeHistoryParams,
   ListShiftChangesParams,
   ListShiftDeviationsParams,
   ListShiftModelsParams,
@@ -97,6 +98,7 @@ import type {
   SendShiftProposalsResult,
   SetPasswordInput,
   Shift,
+  ShiftChangeHistoryEntry,
   ShiftChangeSummary,
   ShiftDeviationDisputeInput,
   ShiftDeviationReport,
@@ -2528,6 +2530,91 @@ export function useListShiftChanges<TData = Awaited<ReturnType<typeof listShiftC
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListShiftChangesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListShiftChangeHistoryUrl = (params: ListShiftChangeHistoryParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/shifts/changes/history?${stringifiedParams}` : `/api/shifts/changes/history`
+}
+
+/**
+ * Alle Aenderungen an bestaetigten (FIX) Diensten eines Kalendermonats — eine Zeile je Aenderung, nicht je Dienst. Grundlage des Vormonats-Blocks im Stundenlisten-Export: alter Wert, neuer Wert, wer, wann. Ein Dienst, der mehrfach geaendert wurde, erscheint mehrfach. Zugeordnet wird ueber das Dienst-Datum aus dem Snapshot (vorher ODER nachher im Monat), damit auch ein ueber die Monatsgrenze verschobener Dienst in beiden Monaten auftaucht. Wer nicht planen darf, sieht ausschliesslich die eigenen Zeilen.
+ * @summary Vollstaendige Aenderungshistorie eines Monats
+ */
+export const listShiftChangeHistory = async (params: ListShiftChangeHistoryParams, options?: RequestInit): Promise<ShiftChangeHistoryEntry[]> => {
+
+  return customFetch<ShiftChangeHistoryEntry[]>(getListShiftChangeHistoryUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListShiftChangeHistoryQueryKey = (params?: ListShiftChangeHistoryParams,) => {
+    return [
+    `/api/shifts/changes/history`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListShiftChangeHistoryQueryOptions = <TData = Awaited<ReturnType<typeof listShiftChangeHistory>>, TError = ErrorType<void>>(params: ListShiftChangeHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShiftChangeHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListShiftChangeHistoryQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listShiftChangeHistory>>> = ({ signal }) => listShiftChangeHistory(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listShiftChangeHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListShiftChangeHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof listShiftChangeHistory>>>
+export type ListShiftChangeHistoryQueryError = ErrorType<void>
+
+
+/**
+ * @summary Vollstaendige Aenderungshistorie eines Monats
+ */
+
+export function useListShiftChangeHistory<TData = Awaited<ReturnType<typeof listShiftChangeHistory>>, TError = ErrorType<void>>(
+ params: ListShiftChangeHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShiftChangeHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListShiftChangeHistoryQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

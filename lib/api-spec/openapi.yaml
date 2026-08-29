@@ -837,6 +837,52 @@ paths:
         "403":
           description: Kein Zugriff auf dieses Team
 
+  /shifts/changes/history:
+    get:
+      operationId: listShiftChangeHistory
+      tags: [shifts]
+      summary: Vollstaendige Aenderungshistorie eines Monats
+      description: >-
+        Alle Aenderungen an bestaetigten (FIX) Diensten eines Kalendermonats —
+        eine Zeile je Aenderung, nicht je Dienst. Grundlage des Vormonats-Blocks
+        im Stundenlisten-Export: alter Wert, neuer Wert, wer, wann. Ein Dienst,
+        der mehrfach geaendert wurde, erscheint mehrfach. Zugeordnet wird ueber
+        das Dienst-Datum aus dem Snapshot (vorher ODER nachher im Monat), damit
+        auch ein ueber die Monatsgrenze verschobener Dienst in beiden Monaten
+        auftaucht. Wer nicht planen darf, sieht ausschliesslich die eigenen
+        Zeilen.
+      parameters:
+        - name: teamId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Aenderungen des Monats, aeltester Dienst zuerst
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ShiftChangeHistoryEntry"
+        "400":
+          description: Ungueltige Query-Parameter
+        "403":
+          description: Kein Zugriff auf dieses Team
+
   /shifts/{id}/confirm-own:
     post:
       operationId: confirmOwnShift
@@ -3865,6 +3911,57 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    ShiftChangeSnapshot:
+      type: object
+      description: Zustand der zeitrelevanten Felder eines Dienstes zu einem Zeitpunkt.
+      required: [startTime, endTime, pauseMinutes, userId]
+      properties:
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        pauseMinutes:
+          type: integer
+        userId:
+          type: integer
+        userName:
+          type: string
+          nullable: true
+          description: Name der Assistenzkraft zu diesem Snapshot, sofern noch aufloesbar.
+
+    ShiftChangeHistoryEntry:
+      type: object
+      required: [id, changeSource, changedBy, userId, createdAt, before, after]
+      properties:
+        id:
+          type: integer
+        shiftId:
+          type: integer
+          nullable: true
+          description: Null, wenn der Dienst inzwischen geloescht wurde — die Historie bleibt.
+        changeSource:
+          type: string
+          enum: [planner_edit, deviation_accepted, correction_withdrawn]
+        changedBy:
+          type: integer
+        changedByName:
+          type: string
+          nullable: true
+        userId:
+          type: integer
+        shiftType:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        before:
+          $ref: "#/components/schemas/ShiftChangeSnapshot"
+        after:
+          $ref: "#/components/schemas/ShiftChangeSnapshot"
 
     ShiftModel:
       type: object

@@ -6,6 +6,8 @@
 - [Arbeitstage-Rechner & workdaysConfirm](workdays-confirm-pattern.md) — Vorschau muss Server-Formel spiegeln; Bestätigungen als Steuerfeld, nie Ist-Wert erneut senden (Race).
 - [Externe Postgres-URL Kodierung & TLS](scaleway-db-url-tls.md) — normalizeDatabaseUrl repariert unkodierte Passwörter; selbstsignierte Zertifikate brauchen Opt-in DATABASE_SSL_NO_VERIFY=1 (kein stiller Downgrade).
 - [DATABASE_URL secret shadows managed DB](database-url-secret-shadowing.md) — a user's DATABASE_URL secret overrides the managed URL; malformed value = 500 on all DB ops; agent can't delete secrets, env change needs workflow restart.
+- [drizzle push ignoriert FK-Aktionen](drizzle-push-ignores-fk-actions.md) — geänderte ON-DELETE-Regeln kommen NUR über pre-push-sql.ts an; push meldet trotzdem „Changes applied"; setup-test-db muss pre-push-sql mitlaufen lassen, sonst testet E2E ein anderes Schema.
+- [Stundenlisten-Vormonats-Block](stundenliste-vormonats-block.md) — Export zeigt Änderungen aus `shift_changes` (nicht aus den Diensten); eigener Endpunkt /shifts/changes/history mit JEDER Änderung; Monatszuordnung über das Dienst-Datum, nicht created_at.
 - [DB push & session table](db-push-session-table.md) — connect-pg-simple's session table must live in the Drizzle schema or `db push` (incl. non-interactive post-merge) tries to drop it as data loss.
 - [Orval query hooks enabled cast](orval-query-hooks-enabled.md) — generated query hooks require queryKey in full UseQueryOptions; pass `enabled` via dual cast (options + result), or data infers to `{}`.
 - [Time-tracking shift linkage](time-tracking-shift-link.md) — validate shift ownership (403) before the global shiftId dedupe (409) on POST /api/time-tracking

@@ -11,6 +11,12 @@
  *
  * Im Free-Tarif (payrollLocked) bleiben die Premium-Optionen sichtbar, aber
  * gesperrt (Lock-Icon + Upgrade-Hinweis) — Muster wie bei den Free-Limits.
+ *
+ * Die Stundenliste enthaelt zusaetzlich den Vormonats-Block (Aenderungen an
+ * bestaetigten Diensten). Dessen Daten werden ERST beim Klick auf Exportieren
+ * geladen, nicht beim Oeffnen der Seite: die Auswertungsseite feuert ohnehin
+ * schon mehrere Abfragen, und die Historie braucht nur, wer wirklich
+ * exportiert.
  */
 
 import { useState } from "react";
@@ -33,6 +39,7 @@ import { toast } from "sonner";
 import { PlanUpgradeLink } from "@/components/plan-limit-banner";
 import type { MatrixBalance, MatrixRecalc } from "@/components/gesamt-auswertung-matrix";
 import type { StundenlisteShift } from "@/lib/stundenliste-xlsx";
+import { listShiftChangeHistory } from "@workspace/api-client-react";
 
 type ExportMode = "stundenliste" | "lohn" | "zeitkonto" | "zip";
 
@@ -44,6 +51,8 @@ type ExportData = {
   prevMonthLabel?: string;
   month: number;
   year: number;
+  /** Team-Scope fuer die Vormonats-Historie; undefined = alle eigenen Teams. */
+  teamId?: number;
   disabled?: boolean;
   /** true im Free-Tarif: Lohn-/Zeitkonto-Exporte gesperrt, Stundenliste frei. */
   payrollLocked?: boolean;
@@ -53,7 +62,7 @@ type ExportData = {
 // Kern-Logik (geteilt zwischen Popover und Card)
 // ---------------------------------------------------------------------------
 
-function ExportContent({ balances, shifts, recalcByUser, prevMonthLabel, month, year, disabled, payrollLocked, onDone }: ExportData & { onDone?: () => void }) {
+function ExportContent({ balances, shifts, recalcByUser, prevMonthLabel, month, year, teamId, disabled, payrollLocked, onDone }: ExportData & { onDone?: () => void }) {
   const [selected, setSelected] = useState<Set<ExportMode>>(new Set());
   const [isPending, setIsPending] = useState(false);
 
@@ -92,6 +101,23 @@ function ExportContent({ balances, shifts, recalcByUser, prevMonthLabel, month, 
     (!needsBalances || balances.length > 0);
   const canExport = selected.size > 0 && !disabled && dataReady;
 
+  // Aenderungen des Vormonats. Faellt der Aufruf aus (offline, Serverfehler),
+  // bleibt der Export trotzdem stehen — die Monatstabelle ist die Hauptsache,
+  // der Block entfaellt dann still statt den ganzen Download zu verhindern.
+  async function ladeVormonatsChanges() {
+    const vorMonat = new Date(year, month - 2, 1);
+    try {
+      return await listShiftChangeHistory({
+        month: vorMonat.getMonth() + 1,
+        year: vorMonat.getFullYear(),
+        ...(teamId != null ? { teamId } : {}),
+      });
+    } catch (err) {
+      console.error("Vormonats-Änderungen konnten nicht geladen werden:", err);
+      return undefined;
+    }
+  }
+
   async function handleExport() {
     if (!canExport) return;
     setIsPending(true);
@@ -122,7 +148,7 @@ function ExportContent({ balances, shifts, recalcByUser, prevMonthLabel, month, 
       } else {
         if (hasStundenliste) {
           const { downloadStundenlisteXlsx } = await import("@/lib/stundenliste-xlsx");
-          await downloadStundenlisteXlsx(shifts ?? [], month, year);
+          await downloadStundenlisteXlsx(shifts ?? [], month, year, await ladeVormonatsChanges());
         }
         if (hasLohn) {
           const { downloadLohnexportXlsx } = await import("@/lib/lohnexport-xlsx");

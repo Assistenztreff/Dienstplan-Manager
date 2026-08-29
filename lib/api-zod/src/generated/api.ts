@@ -917,6 +917,47 @@ export const ListShiftChangesResponse = zod.array(ListShiftChangesResponseItem)
 
 
 /**
+ * Alle Aenderungen an bestaetigten (FIX) Diensten eines Kalendermonats — eine Zeile je Aenderung, nicht je Dienst. Grundlage des Vormonats-Blocks im Stundenlisten-Export: alter Wert, neuer Wert, wer, wann. Ein Dienst, der mehrfach geaendert wurde, erscheint mehrfach. Zugeordnet wird ueber das Dienst-Datum aus dem Snapshot (vorher ODER nachher im Monat), damit auch ein ueber die Monatsgrenze verschobener Dienst in beiden Monaten auftaucht. Wer nicht planen darf, sieht ausschliesslich die eigenen Zeilen.
+ * @summary Vollstaendige Aenderungshistorie eines Monats
+ */
+export const listShiftChangeHistoryQueryMonthMax = 12;
+
+
+
+export const ListShiftChangeHistoryQueryParams = zod.object({
+  "teamId": zod.coerce.number().optional(),
+  "month": zod.coerce.number().min(1).max(listShiftChangeHistoryQueryMonthMax),
+  "year": zod.coerce.number()
+})
+
+export const ListShiftChangeHistoryResponseItem = zod.object({
+  "id": zod.number(),
+  "shiftId": zod.number().nullish().describe('Null, wenn der Dienst inzwischen geloescht wurde — die Historie bleibt.'),
+  "changeSource": zod.enum(['planner_edit', 'deviation_accepted', 'correction_withdrawn']),
+  "changedBy": zod.number(),
+  "changedByName": zod.string().nullish(),
+  "userId": zod.number(),
+  "shiftType": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "before": zod.object({
+  "startTime": zod.coerce.date(),
+  "endTime": zod.coerce.date(),
+  "pauseMinutes": zod.number(),
+  "userId": zod.number(),
+  "userName": zod.string().nullish().describe('Name der Assistenzkraft zu diesem Snapshot, sofern noch aufloesbar.')
+}).describe('Zustand der zeitrelevanten Felder eines Dienstes zu einem Zeitpunkt.'),
+  "after": zod.object({
+  "startTime": zod.coerce.date(),
+  "endTime": zod.coerce.date(),
+  "pauseMinutes": zod.number(),
+  "userId": zod.number(),
+  "userName": zod.string().nullish().describe('Name der Assistenzkraft zu diesem Snapshot, sofern noch aufloesbar.')
+}).describe('Zustand der zeitrelevanten Felder eines Dienstes zu einem Zeitpunkt.')
+})
+export const ListShiftChangeHistoryResponse = zod.array(ListShiftChangeHistoryResponseItem)
+
+
+/**
  * Setzt genau einen eigenen Dienst von ANGEBOTEN auf FIX. Gegenstück zu bulk-confirm-own, das nur den ganzen Monat auf einmal bestätigen kann: Vorschläge und nachträgliche Korrekturen des Planers sollen einzeln annehmbar sein. Fremde Dienst-IDs liefern 404 (nicht 403), damit sie nicht ausspähbar sind.
  * @summary Einen eigenen vorgeschlagenen Dienst bestätigen (Assistenzkraft)
  */
