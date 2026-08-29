@@ -39,18 +39,16 @@ import type { DeviationReportValues } from "./deviation-dialog";
 //   "korrekturen"  Assistenzkraft: nachträgliche Änderung des Planers offen
 //   "vorschlaege"  Assistenzkraft: gewöhnlicher Dienstvorschlag offen
 //   "meldungen"    Planer: gemeldete Abweichung wartet auf Annehmen/Widerspruch
-//   "widersprueche" Planer: Korrektur wurde bestritten, Klärung offen
 type ScheduleListType =
   | "alle"
   | "dienste"
   | "abwesenheiten"
   | "korrekturen"
   | "vorschlaege"
-  | "meldungen"
-  | "widersprueche";
+  | "meldungen";
 
 /** Die drei Prüf-Filter — als Menge von Dienst-IDs je Filter. */
-type PruefFilter = "korrekturen" | "vorschlaege" | "meldungen" | "widersprueche";
+type PruefFilter = "korrekturen" | "vorschlaege" | "meldungen";
 
 export type PruefListen = Partial<Record<PruefFilter, ReadonlySet<number>>>;
 
@@ -58,18 +56,16 @@ const PRUEF_FILTER_LABELS: Record<PruefFilter, string> = {
   korrekturen: "Offene Korrekturen",
   vorschlaege: "Offene Vorschläge",
   meldungen: "Gemeldete Abweichungen",
-  widersprueche: "Bestrittene Korrekturen",
 };
 
 const PRUEF_FILTER_EMPTY: Record<PruefFilter, string> = {
   korrekturen: "Keine offenen Korrekturen",
   vorschlaege: "Keine offenen Vorschläge",
   meldungen: "Keine gemeldeten Abweichungen",
-  widersprueche: "Keine bestrittenen Korrekturen",
 };
 
 function istPruefFilter(t: ScheduleListType): t is PruefFilter {
-  return t === "korrekturen" || t === "vorschlaege" || t === "meldungen" || t === "widersprueche";
+  return t === "korrekturen" || t === "vorschlaege" || t === "meldungen";
 }
 type ScheduleListRange = "tag" | "woche" | "monat" | "zweiMonate";
 
@@ -99,10 +95,6 @@ export function ScheduleList({
   onShiftClick,
   onConfirmShift,
   onConfirmOwnShift,
-  plannerCorrectedShiftIds,
-  correctionObjections,
-  onObjectCorrection,
-  onWithdrawCorrection,
   pruefListen,
   focusFilter,
   canEdit,
@@ -131,10 +123,6 @@ export function ScheduleList({
   onShiftClick: (shift: Shift) => void;
   onConfirmShift?: (shift: Shift) => void;
   onConfirmOwnShift?: (shift: Shift) => void;
-  plannerCorrectedShiftIds?: ReadonlySet<number>;
-  correctionObjections?: Map<number, { id: number; reason: string; status: string }>;
-  onObjectCorrection?: (shift: Shift, reason: string) => void;
-  onWithdrawCorrection?: (shift: Shift) => void;
   /** Dienst-IDs je Prüf-Filter. Wird von der Seite berechnet (dort liegen
    *  Rolle, Team-Kontext und die Abweichungs-Meldungen) und hier nur zum
    *  Filtern genutzt. */
@@ -160,7 +148,7 @@ export function ScheduleList({
   const [detailType, setDetailType] = usePersistentState<ScheduleListType>(
     "dienstplan.scheduleListType",
     "alle",
-    ["alle", "dienste", "abwesenheiten", "korrekturen", "vorschlaege", "meldungen", "widersprueche"],
+    ["alle", "dienste", "abwesenheiten", "korrekturen", "vorschlaege", "meldungen"],
   );
   // Zeitraum startet bei JEDEM Seitenaufruf auf „Heute" (Nutzer-Entscheidung
   // 27.08.2026, zweite Runde) — bewusst NICHT persistiert, anders als der
@@ -445,7 +433,7 @@ export function ScheduleList({
             <SelectItem value="alle">Alle</SelectItem>
             <SelectItem value="dienste">Dienste</SelectItem>
             <SelectItem value="abwesenheiten">Abwesenheiten</SelectItem>
-            {(["korrekturen", "vorschlaege", "meldungen", "widersprueche"] as const)
+            {(["korrekturen", "vorschlaege", "meldungen"] as const)
               .filter((k) => (pruefListen?.[k]?.size ?? 0) > 0)
               .map((k) => (
                 <SelectItem key={k} value={k}>
@@ -528,10 +516,6 @@ export function ScheduleList({
         onShiftClick={onShiftClick}
         onConfirmShift={onConfirmShift}
         onConfirmOwnShift={onConfirmOwnShift}
-        plannerCorrectedShiftIds={plannerCorrectedShiftIds}
-        correctionObjections={correctionObjections}
-        onObjectCorrection={onObjectCorrection}
-        onWithdrawCorrection={onWithdrawCorrection}
         deviationReports={deviationReports}
         onReportDeviation={onReportDeviation}
         onAcceptDeviation={onAcceptDeviation}

@@ -11,11 +11,16 @@
 // Begründung widersprechen (Planwert bleibt maßgeblich, beide Werte bleiben
 // sichtbar).
 //
-// Abbruchregel gegen Ping-Pong: GENAU EINE Meldung pro Dienst, für die ganze
-// Lebensdauer der Schicht — UNIQUE(shift_id). Nach der Planer-Reaktion
-// (angenommen ODER strittig) ist der Melde-Button für beide Seiten endgültig
-// weg, kein zweiter Zyklus. Der Planer korrigiert eine Meldung nie still, nur
-// annehmen oder widersprechen — daher keine "in Bearbeitung"-Zwischenstände.
+// Abbruchregel gegen Ping-Pong: nur EINE OFFENE Meldung je Dienst
+// (partieller Unique-Index WHERE status = 'PENDING'). Nach der Reaktion des
+// Planers ist die Sache erledigt — ein zweiter Anlauf zum selben Stand ist
+// nicht moeglich.
+//
+// ABER (28.08.2026): Korrigiert der Planer den Dienst danach erneut, ist das
+// ein NEUER Sachverhalt — dann oeffnet sich der Melde-Kanal wieder. Sonst
+// haette die Assistenzkraft nach einer spaeteren Aenderung gar keine Stimme
+// mehr, obwohl "Zeit korrigieren" seit dem Wegfall des Widerspruchs ihr
+// einziger Weg ist. Die Pruefung dafuer steckt in shifts-deviations.ts.
 //
 // "Dienst ist ausgefallen": reportedAusgefallen=true, der Server setzt beim
 // Melden reportedEndTime = reportedStartTime (Nulldauer) — läuft dadurch bei
@@ -24,6 +29,7 @@
 // ---------------------------------------------------------------------------
 
 import { pgTable, serial, integer, timestamp, boolean, text, pgEnum, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { usersTable } from "./users";
 import { teamsTable } from "./teams";
 import { shiftsTable } from "./shifts";
@@ -63,7 +69,9 @@ export const shiftDeviationReportsTable = pgTable(
   },
   (t) => [
     // Abbruchregel: genau eine Meldung pro Dienst, für immer.
-    uniqueIndex("shift_deviation_reports_shift_id_unique").on(t.shiftId),
+    uniqueIndex("shift_deviation_reports_open_unique")
+      .on(t.shiftId)
+      .where(sql`status = 'PENDING'`),
     index("shift_deviation_reports_team_id_status_idx").on(t.teamId, t.status),
     index("shift_deviation_reports_user_id_idx").on(t.userId),
   ],

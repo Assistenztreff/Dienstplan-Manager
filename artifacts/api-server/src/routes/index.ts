@@ -7,7 +7,6 @@ import shiftsCrudRouter from "./shifts-crud";
 import shiftsBulkRouter from "./shifts-bulk";
 import shiftsConfirmationsRouter from "./shifts-confirmations";
 import shiftsDeviationsRouter from "./shifts-deviations";
-import shiftsCorrectionObjectionsRouter from "./shifts-correction-objections";
 import shiftsChangesRouter from "./shifts-changes";
 import shiftModelsRouter from "./shift_models";
 import allowancesRouter from "./allowances";
@@ -42,7 +41,6 @@ router.use(shiftsListRouter);
 // sind POST und kollidieren deshalb nicht — shifts-crud hat kein POST
 // /shifts/:id. Regressionstest: routes/index.route-order.test.ts.
 router.use(shiftsDeviationsRouter);
-router.use(shiftsCorrectionObjectionsRouter);
 router.use(shiftsChangesRouter);
 router.use(shiftsCrudRouter);
 router.use(shiftsBulkRouter);

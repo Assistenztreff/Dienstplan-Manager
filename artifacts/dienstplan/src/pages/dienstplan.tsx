@@ -13,10 +13,7 @@ import {
   useGetHoursBalance,
   useListShiftDeviations,
   useConfirmOwnShift,
-  useListShiftCorrectionObjections,
   useListShiftChanges,
-  useObjectShiftCorrection,
-  useWithdrawShiftCorrection,
   useReportShiftDeviation,
   useAcceptShiftDeviation,
   useDisputeShiftDeviation,
@@ -27,7 +24,6 @@ import {
   type HoursBalance,
   type HourBudgetBalance,
   type ShiftDeviationReport,
-  type ShiftCorrectionObjection,
 } from "@workspace/api-client-react";
 import { useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isValid } from "date-fns";
@@ -209,22 +205,6 @@ export default function Dienstplan() {
   // sind sich einig, eine erneute Bestaetigung waere sinnlos), sollen aber in
   // allen Ansichten als nachtraeglich korrigiert erkennbar sein — per Context
   // statt Prop-Kette, s. corrected-shifts.tsx.
-  // Widersprüche gegen Planer-Korrekturen ("Weg A"). Eigene Liste statt eines
-  // Feldes am Dienst — dieselbe Bauweise wie beim Abweichungsmodell, damit die
-  // Schicht-Abfragen unverändert bleiben.
-  const { data: correctionObjectionsData } = useListShiftCorrectionObjections(teamParam, {
-    query: { enabled: isTeamScopeReady },
-  } as unknown as Parameters<typeof useListShiftCorrectionObjections>[1]) as {
-    data?: ShiftCorrectionObjection[];
-  };
-  const openObjectionsByShiftId = useMemo(() => {
-    const map = new Map<number, ShiftCorrectionObjection>();
-    for (const o of correctionObjectionsData ?? []) {
-      if (o.status === "OPEN") map.set(o.shiftId, o);
-    }
-    return map;
-  }, [correctionObjectionsData]);
-
   // Letzte Aenderung je Dienst. Seit Korrekturen sofort gelten (28.08.2026),
   // taugt der Planungsstatus nicht mehr als Erkennungsmerkmal — der Dienst
   // bleibt bestaetigt. Diese Liste ist die neue Quelle.
@@ -256,8 +236,6 @@ export default function Dienstplan() {
   }, [shiftChangesData]);
 
   const confirmOwnShiftMutation = useConfirmOwnShift();
-  const objectCorrectionMutation = useObjectShiftCorrection();
-  const withdrawCorrectionMutation = useWithdrawShiftCorrection();
   const reportDeviationMutation = useReportShiftDeviation();
   const acceptDeviationMutation = useAcceptShiftDeviation();
   const disputeDeviationMutation = useDisputeShiftDeviation();
@@ -675,8 +653,7 @@ export default function Dienstplan() {
         (s) =>
           s.userId === currentUser?.id &&
           !isMirrorShift(s, selectedTeamId) &&
-          plannerCorrectedShiftIds.has(s.id) &&
-          !openObjectionsByShiftId.has(s.id),
+          plannerCorrectedShiftIds.has(s.id),
       )
     : [];
   // Vorschlaege sind unveraendert echte Aufgaben: alles ANGEBOTEN, das keine
@@ -701,19 +678,18 @@ export default function Dienstplan() {
       // Nur der Planer handelt auf Meldungen und Widersprüchen — bei der
       // Assistenzkraft bliebe der Filter sonst als leerer Eintrag im Menü.
       meldungen: canPlan ? meldungShiftIds : new Set<number>(),
-      widersprueche: canPlan ? new Set(openObjectionsByShiftId.keys()) : new Set<number>(),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [korrekturIdKey, vorschlagIdKey, meldungShiftIds, openObjectionsByShiftId, canPlan],
+    [korrekturIdKey, vorschlagIdKey, meldungShiftIds, canPlan],
   );
 
   // Sprungziel der Tagesleiste. nonce statt boolean, damit derselbe Filter
   // erneut greift, wenn der Nutzer zwischendurch von Hand umgestellt hat.
   const [focusFilter, setFocusFilter] = useState<
-    { type: "korrekturen" | "vorschlaege" | "meldungen" | "widersprueche"; nonce: number } | null
+    { type: "korrekturen" | "vorschlaege" | "meldungen"; nonce: number } | null
   >(null);
   const focusPruefliste = (
-    type: "korrekturen" | "vorschlaege" | "meldungen" | "widersprueche",
+    type: "korrekturen" | "vorschlaege" | "meldungen",
   ) =>
     setFocusFilter((prev) => ({ type, nonce: (prev?.nonce ?? 0) + 1 }));
 
@@ -725,8 +701,7 @@ export default function Dienstplan() {
     if (
       fokusParam === "korrekturen" ||
       fokusParam === "vorschlaege" ||
-      fokusParam === "meldungen" ||
-      fokusParam === "widersprueche"
+      fokusParam === "meldungen"
     ) {
       focusPruefliste(fokusParam);
     }
@@ -827,30 +802,6 @@ export default function Dienstplan() {
       toast.error(readableApiError(err, "Bestätigen fehlgeschlagen. Bitte erneut versuchen."));
     } finally {
       setConfirmingShiftId(null);
-    }
-  }
-
-  /** Assistenzkraft widerspricht einer nachträglichen Änderung des Planers. */
-  async function objectCorrection(shift: Shift, reason: string) {
-    try {
-      await objectCorrectionMutation.mutateAsync({ id: shift.id, data: { reason } });
-      await invalidateShiftDerivedQueries(queryClient, { refetchType: "all" });
-      toast.success("Widerspruch gesendet — der Arbeitgeber wurde informiert.");
-    } catch (err) {
-      if (!navigator.onLine) return;
-      toast.error(readableApiError(err, "Widerspruch fehlgeschlagen. Bitte erneut versuchen."));
-    }
-  }
-
-  /** Planer nimmt eine bestrittene Korrektur zurück (alter Wert gilt wieder). */
-  async function withdrawCorrection(shift: Shift) {
-    try {
-      await withdrawCorrectionMutation.mutateAsync({ id: shift.id });
-      await invalidateShiftDerivedQueries(queryClient, { refetchType: "all" });
-      toast.success("Korrektur zurückgenommen — der Stand vor der Änderung gilt wieder.");
-    } catch (err) {
-      if (!navigator.onLine) return;
-      toast.error(readableApiError(err, "Zurücknehmen fehlgeschlagen. Bitte erneut versuchen."));
     }
   }
 
@@ -1242,10 +1193,6 @@ export default function Dienstplan() {
         onShiftClick={openEdit}
         onConfirmShift={confirmShift}
             onConfirmOwnShift={confirmOwnShift}
-            plannerCorrectedShiftIds={plannerCorrectedShiftIds}
-            correctionObjections={openObjectionsByShiftId}
-            onObjectCorrection={objectCorrection}
-            onWithdrawCorrection={canPlan ? withdrawCorrection : undefined}
             pruefListen={pruefListen}
             focusFilter={focusFilter}
         deviationReports={deviationReportsByShiftId}

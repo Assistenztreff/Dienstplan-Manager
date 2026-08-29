@@ -8,7 +8,6 @@ import {
   useGetMonthClosings,
   useListShifts,
   useListShiftDeviations,
-  useListShiftCorrectionObjections,
   useListAbsenceRequests,
 } from "@workspace/api-client-react";
 import type { MonthClosingStatus } from "@workspace/api-client-react";
@@ -774,55 +773,6 @@ function PendingDeviationsBanner() {
   );
 }
 
-// Planer-Hinweis: bestrittene Korrekturen. Gegenstueck zum Korrektur-Banner
-// der Assistenzkraft — hier hat SIE widersprochen und der Planer ist am Zug
-// (zuruecknehmen oder nach einem Gespraech nachbearbeiten). Bewusst getrennt
-// vom Meldungs-Banner: eine gemeldete Abweichung ist ein normaler Vorgang,
-// ein Widerspruch bedeutet, dass zwei Seiten sich uneinig sind.
-function OpenObjectionsBanner() {
-  const [, navigate] = useLocation();
-  const { isTeamScopeReady, selectedTeamId } = useTeam();
-  const teamParam = selectedTeamId != null ? { teamId: selectedTeamId } : {};
-  const { data: objections } = useListShiftCorrectionObjections(teamParam, {
-    query: { enabled: isTeamScopeReady },
-  } as Parameters<typeof useListShiftCorrectionObjections>[1]) as {
-    data?: { id: number; status: string; disputedStartTime: string }[];
-  };
-
-  const offen = (objections ?? []).filter((o) => o.status === "OPEN");
-  if (offen.length === 0) return null;
-
-  const earliest = offen.map((o) => o.disputedStartTime).sort()[0]!;
-
-  return (
-    <div
-      className="flex flex-col gap-3 rounded-lg border border-[#e0a5a5] bg-[#fdf2f2] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-      data-testid="dashboard-objection-banner"
-    >
-      <div className="flex items-start gap-2 text-[#8f2f2f]">
-        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-[#b23b3b]" />
-        <span className="text-sm font-medium">
-          {offen.length === 1
-            ? "Eine Assistenzkraft hat einer Korrektur widersprochen. Bitte klären: zurücknehmen oder nachbearbeiten."
-            : `${offen.length} Korrekturen wurden bestritten. Bitte klären: zurücknehmen oder nachbearbeiten.`}
-        </span>
-      </div>
-      <Button
-        size="sm"
-        variant="outline"
-        className="shrink-0 self-start border-[#e0a5a5] bg-white text-[#8f2f2f] hover:bg-[#fbe8e8] sm:self-auto"
-        data-testid="dashboard-objection-review"
-        onClick={() =>
-          navigate(
-            `/dienstplan?date=${format(new Date(earliest), "yyyy-MM-dd")}&fokus=widersprueche`,
-          )
-        }
-      >
-        {offen.length === 1 ? "Widerspruch prüfen" : "Widersprüche prüfen"}
-      </Button>
-    </div>
-  );
-}
 
 export default function Dashboard() {
   const now = new Date();
@@ -855,7 +805,6 @@ export default function Dashboard() {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {!isAdmin && <PendingShiftProposalsBanner />}
-      {isAdmin && <OpenObjectionsBanner />}
       {isAdmin && <PendingDeviationsBanner />}
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

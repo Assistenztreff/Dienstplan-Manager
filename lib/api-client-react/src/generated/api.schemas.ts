@@ -1127,46 +1127,6 @@ export interface ShiftChangeSummary {
   createdAt: string;
 }
 
-export interface ShiftCorrectionObjectionInput {
-  /**
-     * Begründung — Pflicht, sonst ist der Widerspruch wertlos.
-     * @minLength 1
-     * @maxLength 1000
-     */
-  reason: string;
-}
-
-export type ShiftCorrectionObjectionStatus = typeof ShiftCorrectionObjectionStatus[keyof typeof ShiftCorrectionObjectionStatus];
-
-
-export const ShiftCorrectionObjectionStatus = {
-  OPEN: 'OPEN',
-  RESOLVED: 'RESOLVED',
-} as const;
-
-export type ShiftCorrectionObjectionResolution = typeof ShiftCorrectionObjectionResolution[keyof typeof ShiftCorrectionObjectionResolution] | null;
-
-
-export const ShiftCorrectionObjectionResolution = {
-  WITHDRAWN: 'WITHDRAWN',
-  REWORKED: 'REWORKED',
-} as const;
-
-export interface ShiftCorrectionObjection {
-  id: number;
-  shiftId: number;
-  teamId: number;
-  userId: number;
-  reason: string;
-  disputedStartTime: string;
-  disputedEndTime: string;
-  status: ShiftCorrectionObjectionStatus;
-  createdAt: string;
-  resolution?: ShiftCorrectionObjectionResolution;
-  resolvedBy?: number | null;
-  resolvedAt?: string | null;
-}
-
 /**
  * Vergütungstyp (Geld) — regulär, prozentualer Stundenlohn oder Festbetrag pro Schicht.
  */
@@ -2267,10 +2227,6 @@ teamId?: number;
 };
 
 export type ListShiftChangesParams = {
-teamId?: number;
-};
-
-export type ListShiftCorrectionObjectionsParams = {
 teamId?: number;
 };
 

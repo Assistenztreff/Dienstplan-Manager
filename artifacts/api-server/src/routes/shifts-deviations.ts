@@ -7,7 +7,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { shiftsTable, shiftChangesTable, shiftDeviationReportsTable } from "@workspace/db";
-import { eq, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import {
   ListShiftDeviationsQueryParams,
   ReportShiftDeviationParams,
@@ -100,6 +100,40 @@ router.post("/shifts/:id/deviation", requireAuth, async (req, res): Promise<void
     return;
   }
 
+  // Melde-Kanal wieder offen? Erledigt ist erledigt — ausser der Planer hat den
+  // Dienst DANACH erneut korrigiert. Dann ist es ein neuer Sachverhalt und die
+  // Assistenzkraft darf erneut melden; "Zeit korrigieren" ist seit dem Wegfall
+  // des Widerspruchs ihr einziger Weg (Kay-Entscheidung 28.08.2026).
+  const [letzteMeldung] = await db
+    .select()
+    .from(shiftDeviationReportsTable)
+    .where(eq(shiftDeviationReportsTable.shiftId, shift.id))
+    .orderBy(desc(shiftDeviationReportsTable.id))
+    .limit(1);
+  if (letzteMeldung) {
+    if (letzteMeldung.status === "PENDING") {
+      res.status(409).json({ error: "Für diesen Dienst wurde bereits eine Korrektur gemeldet." });
+      return;
+    }
+    const [letzteAenderung] = await db
+      .select()
+      .from(shiftChangesTable)
+      .where(eq(shiftChangesTable.shiftId, shift.id))
+      .orderBy(desc(shiftChangesTable.id))
+      .limit(1);
+    const seitherKorrigiert =
+      letzteAenderung != null &&
+      letzteAenderung.changeSource === "planner_edit" &&
+      letzteAenderung.createdAt.getTime() >
+        (letzteMeldung.resolvedAt ?? letzteMeldung.reportedAt).getTime();
+    if (!seitherKorrigiert) {
+      res.status(409).json({
+        error: "Diese Korrektur wurde bereits abschließend bearbeitet.",
+      });
+      return;
+    }
+  }
+
   // "Dienst ist ausgefallen": Server ignoriert das gemeldete Ende und
   // speichert eine Nulldauer-Meldung — läuft bei der Annahme ohne
   // Sonderfall durch die bestehende Stundenberechnung.
@@ -122,8 +156,8 @@ router.post("/shifts/:id/deviation", requireAuth, async (req, res): Promise<void
       .returning();
     res.status(201).json(inserted);
   } catch (err) {
-    // Abbruchregel gegen Ping-Pong: genau eine Meldung pro Dienst
-    // (UNIQUE(shift_id)) — ein zweiter Versuch ist ein sauberer 409.
+    // Sicherheitsnetz gegen ein Wettrennen zweier Anfragen: der partielle
+    // Unique-Index laesst nur EINE offene Meldung je Dienst zu.
     const pgCode =
       (err as { cause?: { code?: string }; code?: string })?.cause?.code ??
       (err as { code?: string })?.code;
