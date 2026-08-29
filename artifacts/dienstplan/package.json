@@ -62,6 +62,7 @@
     "@workspace/api-client-react": "workspace:*",
     "@workspace/db": "workspace:*",
     "@workspace/entitlements": "workspace:*",
+    "@workspace/shift-defaults": "workspace:*",
     "@workspace/test-fixtures": "workspace:*",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",

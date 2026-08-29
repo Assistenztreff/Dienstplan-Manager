@@ -70,6 +70,10 @@ import {
   invalidateShiftDerivedQueries,
 } from "@/lib/shift-cache";
 import {
+  istSeitherKorrigiert,
+  type LetzteAenderung,
+} from "@workspace/shift-defaults/deviation-rules";
+import {
   type DialogState,
   isAbsenceShift,
   isMirrorShift,
@@ -253,20 +257,23 @@ export default function Dienstplan() {
    * Knopf verschwunden, weil noch eine (alte) Meldung am Dienst hängt.
    */
   const meldungWiederMoeglichShiftIds = useMemo(() => {
-    const letzteAenderung = new Map<number, { source: string; at: number }>();
+    // Entscheidung faellt in der GEMEINSAMEN Regel
+    // (@workspace/shift-defaults/deviation-rules) — dieselbe Funktion, die der
+    // Server beim POST anwendet. Vorher stand die Regel hier ein zweites Mal
+    // und lief auseinander (Kay-Test 28.08.2026, Punkt 4).
+    // /api/shifts/changes liefert bereits genau eine Zeile je Dienst (die
+    // juengste), deshalb ist die Map hier schon "die letzte Aenderung".
+    const letzteAenderung = new Map<number, LetzteAenderung>();
     for (const c of shiftChangesData ?? []) {
       letzteAenderung.set(c.shiftId, {
-        source: c.changeSource,
-        at: new Date(c.createdAt).getTime(),
+        changeSource: c.changeSource,
+        createdAt: c.createdAt,
       });
     }
     const ids = new Set<number>();
     for (const [shiftId, report] of deviationReportsByShiftId) {
       if (report.status === "PENDING") continue;
-      const aenderung = letzteAenderung.get(shiftId);
-      if (!aenderung || aenderung.source !== "planner_edit") continue;
-      const erledigtAm = new Date(report.resolvedAt ?? report.reportedAt).getTime();
-      if (aenderung.at > erledigtAm) ids.add(shiftId);
+      if (istSeitherKorrigiert(report, letzteAenderung.get(shiftId))) ids.add(shiftId);
     }
     return ids;
   }, [shiftChangesData, deviationReportsByShiftId]);

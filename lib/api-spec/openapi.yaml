@@ -874,9 +874,12 @@ paths:
       tags: [shifts]
       summary: Abweichung von der geplanten Arbeitszeit melden (Assistenzkraft)
       description: >-
-        Nur für die eigene, bereits vergangene FIX-Schicht. Genau eine
-        Meldung pro Dienst ist möglich (Abbruchregel gegen Ping-Pong) — ein
-        zweiter Versuch liefert 409.
+        Nur für die eigene, bereits vergangene FIX-Schicht. Solange eine
+        Meldung offen ist, liefert ein zweiter Versuch 409; eine erledigte
+        Meldung (angenommen oder zurückgewiesen) schließt den Fall dauerhaft
+        — außer der Planer korrigiert den Dienst DANACH erneut, dann ist es
+        ein neuer Sachverhalt und die Meldung ist wieder möglich. Die Regel
+        liegt an einer Stelle: @workspace/shift-defaults/deviation-rules.
       parameters:
         - name: id
           in: path
@@ -901,7 +904,9 @@ paths:
         "404":
           description: Nicht gefunden
         "409":
-          description: Für diesen Dienst wurde bereits eine Abweichung gemeldet
+          description: >-
+            Melde-Kanal zu — entweder liegt bereits eine offene Meldung vor
+            oder die letzte wurde abschließend bearbeitet
 
   /shifts/{id}/deviation/accept:
     post:

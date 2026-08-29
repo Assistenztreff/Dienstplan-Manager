@@ -8,6 +8,7 @@ import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ShiftDeviationReport } from "@workspace/api-client-react";
+import { pruefeMeldungMoeglich } from "@workspace/shift-defaults/deviation-rules";
 import {
   DisputeDeviationDialog,
   ReportDeviationDialog,
@@ -147,20 +148,29 @@ export function DayDetailRow({
   // Abweichungsmodell: "Zeit korrigieren" nur für die eigene, bereits vergangene
   // FIX-Schicht (Arbeitsdienst, keine Abwesenheit/Teamdienst), solange noch
   // keine Meldung existiert (Abbruchregel — genau eine Meldung pro Dienst).
-  const isPastFixWorkShift =
-    !mirror &&
-    !isAbsence &&
-    !isTeam &&
-    status === "FIX" &&
-    new Date(shift.endTime).getTime() < Date.now();
-  // Eine ueberholte Meldung (der Planer hat seither erneut korrigiert) zaehlt
-  // nicht mehr — sonst bliebe der Knopf fuer immer weg und die Assistenzkraft
-  // haette zum neuen Stand keine Stimme (Kay-Test 28.08.2026, Punkt 4).
+  // Meldefaehig? Entscheidet die GEMEINSAME Regel
+  // (@workspace/shift-defaults/deviation-rules) — dieselbe Funktion, die der
+  // Server beim POST anwendet, damit der Knopf nie etwas anbietet, das der
+  // Server ablehnt (oder umgekehrt verschweigt, was erlaubt waere).
+  // `meldungWiederMoeglich` kommt aus dienstplan.tsx und ist bereits das
+  // Ergebnis von istSeitherKorrigiert() ueber die volle Historie; hier wird
+  // deshalb nur die Meldung selbst uebergeben, wenn sie noch blockiert.
+  // `mirror` (Einsatz-Spiegelzeile eines fremden Teams) kennt die Regel nicht —
+  // die bleibt eine reine Anzeige-Eigenschaft dieser Zeile.
   const meldungUeberholt = meldungWiederMoeglich;
+  const meldePruefung = pruefeMeldungMoeglich({
+    shift: {
+      planningStatus: status,
+      endTime: shift.endTime,
+      istAbwesenheit: isAbsence,
+      istTeamTermin: isTeam,
+    },
+    letzteMeldung: meldungUeberholt ? null : deviationReport,
+  });
   const canReportDeviation =
     !!onReportDeviation &&
-    isPastFixWorkShift &&
-    (!deviationReport || meldungUeberholt) &&
+    !mirror &&
+    meldePruefung.erlaubt &&
     currentUser?.id === shift.userId;
   // Annehmen/Widersprechen nur für den Planer (Aufrufer übergibt die
   // Callbacks nur dann, analog zu onConfirm) und nur solange offen.

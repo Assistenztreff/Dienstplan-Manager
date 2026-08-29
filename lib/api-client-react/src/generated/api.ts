@@ -2620,7 +2620,7 @@ export const getReportShiftDeviationUrl = (id: number,) => {
 }
 
 /**
- * Nur für die eigene, bereits vergangene FIX-Schicht. Genau eine Meldung pro Dienst ist möglich (Abbruchregel gegen Ping-Pong) — ein zweiter Versuch liefert 409.
+ * Nur für die eigene, bereits vergangene FIX-Schicht. Solange eine Meldung offen ist, liefert ein zweiter Versuch 409; eine erledigte Meldung (angenommen oder zurückgewiesen) schließt den Fall dauerhaft — außer der Planer korrigiert den Dienst DANACH erneut, dann ist es ein neuer Sachverhalt und die Meldung ist wieder möglich. Die Regel liegt an einer Stelle: @workspace/shift-defaults/deviation-rules.
  * @summary Abweichung von der geplanten Arbeitszeit melden (Assistenzkraft)
  */
 export const reportShiftDeviation = async (id: number,

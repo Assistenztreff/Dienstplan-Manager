@@ -350,6 +350,9 @@ importers:
       '@workspace/entitlements':
         specifier: workspace:*
         version: link:../../lib/entitlements
+      '@workspace/shift-defaults':
+        specifier: workspace:*
+        version: link:../../lib/shift-defaults
       '@workspace/test-fixtures':
         specifier: workspace:*
         version: link:../../lib/test-fixtures

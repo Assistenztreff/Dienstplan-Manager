@@ -24,6 +24,10 @@ import {
   parseTeamIdParam,
 } from "../lib/teams";
 import { isAbsenceType } from "../lib/shift-metrics-resolve";
+import {
+  pruefeMeldungMoeglich,
+  MELDUNG_BLOCK_TEXTE,
+} from "@workspace/shift-defaults/deviation-rules";
 import { storeShiftMetrics } from "./shifts";
 
 const router = Router();
@@ -85,53 +89,55 @@ router.post("/shifts/:id/deviation", requireAuth, async (req, res): Promise<void
     return;
   }
 
-  if (shift.planningStatus !== "FIX" || isAbsenceType(shift.type) || shift.type === "team") {
-    res.status(400).json({
-      error: "Abweichungen können nur für bestätigte Arbeitsdienste gemeldet werden.",
-      code: "deviation_invalid_shift",
-    });
-    return;
-  }
-  if (shift.endTime.getTime() >= Date.now()) {
-    res.status(400).json({
-      error: "Der Dienst liegt noch nicht in der Vergangenheit.",
-      code: "deviation_not_past",
-    });
-    return;
-  }
-
-  // Melde-Kanal wieder offen? Erledigt ist erledigt — ausser der Planer hat den
-  // Dienst DANACH erneut korrigiert. Dann ist es ein neuer Sachverhalt und die
-  // Assistenzkraft darf erneut melden; "Zeit korrigieren" ist seit dem Wegfall
-  // des Widerspruchs ihr einziger Weg (Kay-Entscheidung 28.08.2026).
+  // Melde-Regel: EINE Quelle fuer Server und Frontend
+  // (@workspace/shift-defaults/deviation-rules). Sie beantwortet beides in
+  // einem Zug — ist der Dienst ueberhaupt meldefaehig (vergangener, bestaetigter
+  // Arbeitsdienst) und ist der Melde-Kanal offen (keine offene Meldung; eine
+  // erledigte nur, wenn der Planer SEITHER erneut korrigiert hat).
+  // Die jeweils JUENGSTEN Zeilen liefern die beiden Lookups (id absteigend) —
+  // ohne orderBy gewinnt sonst die aelteste Zeile (Fehler vom 28.08.2026).
   const [letzteMeldung] = await db
     .select()
     .from(shiftDeviationReportsTable)
     .where(eq(shiftDeviationReportsTable.shiftId, shift.id))
     .orderBy(desc(shiftDeviationReportsTable.id))
     .limit(1);
-  if (letzteMeldung) {
-    if (letzteMeldung.status === "PENDING") {
-      res.status(409).json({ error: "Für diesen Dienst wurde bereits eine Korrektur gemeldet." });
-      return;
-    }
-    const [letzteAenderung] = await db
-      .select()
-      .from(shiftChangesTable)
-      .where(eq(shiftChangesTable.shiftId, shift.id))
-      .orderBy(desc(shiftChangesTable.id))
-      .limit(1);
-    const seitherKorrigiert =
-      letzteAenderung != null &&
-      letzteAenderung.changeSource === "planner_edit" &&
-      letzteAenderung.createdAt.getTime() >
-        (letzteMeldung.resolvedAt ?? letzteMeldung.reportedAt).getTime();
-    if (!seitherKorrigiert) {
-      res.status(409).json({
-        error: "Diese Korrektur wurde bereits abschließend bearbeitet.",
-      });
-      return;
-    }
+  const [letzteAenderung] = await db
+    .select()
+    .from(shiftChangesTable)
+    .where(eq(shiftChangesTable.shiftId, shift.id))
+    .orderBy(desc(shiftChangesTable.id))
+    .limit(1);
+
+  const pruefung = pruefeMeldungMoeglich({
+    shift: {
+      planningStatus: shift.planningStatus,
+      endTime: shift.endTime,
+      istAbwesenheit: isAbsenceType(shift.type),
+      istTeamTermin: shift.type === "team",
+    },
+    letzteMeldung,
+    letzteAenderung,
+  });
+  if (!pruefung.erlaubt) {
+    // 400 = der Dienst passt grundsaetzlich nicht, 409 = Zustand des
+    // Melde-Kreislaufs. Die Codes bleiben unveraendert (Frontend/Tests).
+    const status =
+      pruefung.grund === "kein_bestaetigter_arbeitsdienst" ||
+      pruefung.grund === "nicht_vergangen"
+        ? 400
+        : 409;
+    const code =
+      pruefung.grund === "kein_bestaetigter_arbeitsdienst"
+        ? "deviation_invalid_shift"
+        : pruefung.grund === "nicht_vergangen"
+          ? "deviation_not_past"
+          : undefined;
+    res.status(status).json({
+      error: MELDUNG_BLOCK_TEXTE[pruefung.grund],
+      ...(code ? { code } : {}),
+    });
+    return;
   }
 
   // "Dienst ist ausgefallen": Server ignoriert das gemeldete Ende und
