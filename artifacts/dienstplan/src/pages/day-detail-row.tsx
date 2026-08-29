@@ -18,7 +18,6 @@ import {
   isAbsenceShift,
   isConfirmableShift,
   isMirrorShift,
-  isPastCorrection,
   lastNameInitial,
   PLANNING_STATUS_LABELS,
   planningStatusBadgeOutline,
@@ -97,7 +96,6 @@ export function DayDetailRow({
         ? `Aushilfe aus ${shift.homeTeamName ?? "anderem Team"}`
         : `Aushilfe für ${shift.einsatzTeamName ?? "anderes Team"}`
       : null;
-  const pastCorrection = isPastCorrection(shift);
   // Einvernehmlich korrigiert (gemeldete Abweichung wurde angenommen):
   // Dienst bleibt FIX, bekommt aber zusaetzlich das Korrektur-Symbol.
   const korrigiert = useIsCorrectedShift(shift.id);
@@ -106,9 +104,7 @@ export function DayDetailRow({
       ? korrigiert
         ? "bestätigt · korrigiert"
         : "bestätigt"
-      : pastCorrection
-        ? "Korrektur"
-        : (PLANNING_STATUS_LABELS[status] ?? status);
+      : (PLANNING_STATUS_LABELS[status] ?? status);
   // Halbtägiger Urlaub (#862): eigene Zeitspanne statt "ganztägig" zeigen,
   // damit die Tagesleiste den echten Zeitraum erkennbar macht.
   const timeLabel = isAbsence
@@ -127,27 +123,17 @@ export function DayDetailRow({
   const avatarLabel = isTeam ? "T" : shift.user?.name ? lastNameInitial(shift.user.name) : "?";
 
   // Rechter Statusfarbbalken: exakt dieselbe Prioritätslogik wie in der Pille.
-  const statusBarColor = dienstStatusColor(status, hasAusfall, shift.isVertretung, pastCorrection);
+  const statusBarColor = dienstStatusColor(status, hasAusfall, shift.isVertretung);
 
   // Basis-Status-Icon (ohne Vertretung/Krank-Overlay).
   const baseIconKind: StatusBadgeKind =
     status === "FIX"
       ? "confirmed"
-      : pastCorrection
-        ? "correction"
         : status === "ANGEBOTEN"
           ? "sent"
           : "draft";
 
-  // Vier-Augen-Prinzip bei Korrekturen (Kay-Feedback 28.08.2026): Eine offene
-  // Korrektur an einem bereits gearbeiteten Dienst darf NUR die betroffene
-  // Assistenzkraft bestätigen — sonst könnte der Planer seine eigene Änderung
-  // selbst abnicken und der Rückfall auf ANGEBOTEN wäre eine Formalie. Der
-  // Server weist das ohnehin ab (403 correction_needs_assistant); hier wird
-  // der Knopf gar nicht erst angeboten. Ist die Assistenzkraft selbst die
-  // planende Person (Einzelkonto), bleibt er sichtbar.
-  const korrekturFremd = pastCorrection && currentUser?.id !== shift.userId;
-  const confirmable = onConfirm && !mirror && !korrekturFremd && isConfirmableShift(shift);
+  const confirmable = onConfirm && !mirror && isConfirmableShift(shift);
   // Eigenbestätigung: nur der eigene, vorgeschlagene Dienst und nur, wenn
   // nicht ohnehin schon der Planer-Knopf steht (sonst zwei Knöpfe).
   const selfConfirmable =
@@ -273,23 +259,15 @@ export function DayDetailRow({
         <button
           type="button"
           data-testid={`shift-confirm-own-${shift.id}`}
-          title={
-            pastCorrection
-              ? "Geänderte Zeit dieses vergangenen Dienstes bestätigen"
-              : "Diesen Dienstvorschlag verbindlich annehmen"
-          }
+          title="Diesen Dienstvorschlag verbindlich annehmen"
           onClick={(e) => {
             e.stopPropagation();
             onConfirmOwn(shift);
           }}
-          className={`relative z-10 inline-flex shrink-0 items-center gap-1 rounded-md border bg-white px-2 py-0.5 text-[11px] font-semibold transition-colors after:absolute after:inset-x-0 after:top-1/2 after:h-[44px] after:-translate-y-1/2 after:content-[''] ${
-            pastCorrection
-              ? "border-[#b5790a] text-[#966408] hover:border-[#966408]"
-              : "border-[#d8d8d4] text-[#092948] hover:border-[#092948]"
-          }`}
+          className="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-md border border-[#d8d8d4] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#092948] transition-colors after:absolute after:inset-x-0 after:top-1/2 after:h-[44px] after:-translate-y-1/2 after:content-[''] hover:border-[#092948]"
         >
           <Check className="h-3 w-3" />
-          {pastCorrection ? "Korrektur bestätigen" : "Annehmen"}
+          Annehmen
         </button>
       )}
 
@@ -423,13 +401,7 @@ export function DayDetailRow({
             kind={baseIconKind}
             compact
             label={
-              status === "FIX"
-                ? "Bestätigt"
-                : pastCorrection
-                  ? "Korrektur"
-                  : status === "ANGEBOTEN"
-                    ? "Vorschlag"
-                    : "Entwurf"
+              status === "FIX" ? "Bestätigt" : status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"
             }
           />
           {korrigiert && (

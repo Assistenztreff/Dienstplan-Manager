@@ -73,7 +73,6 @@ import {
   type DialogState,
   isAbsenceShift,
   isMirrorShift,
-  isPastCorrection,
   PersonColorsContext,
   scrollToAgendaDay,
   type Shift,
@@ -710,7 +709,9 @@ export default function Dienstplan() {
     : [];
   // Vorschlaege sind unveraendert echte Aufgaben: alles ANGEBOTEN, das keine
   // Alt-Korrektur aus der Zeit vor der Umstellung ist.
-  const myVorschlagShifts = myAngebotenShifts.filter((s) => !isPastCorrection(s));
+  // Alle offenen Vorschlaege — ein vergangener, noch unbestaetigter Vorschlag
+  // ist kein Sonderfall mehr, sondern schlicht ueberfaellig.
+  const myVorschlagShifts = myAngebotenShifts;
   // Die drei Pruef-Listen der Tagesleiste. Sie werden HIER berechnet, weil nur
   // die Seite Rolle, Team-Kontext und die Abweichungs-Meldungen kennt; die
   // Liste filtert damit nur noch.
@@ -844,11 +845,7 @@ export default function Dienstplan() {
       const bestaetigt = { ...shift, planningStatus: "FIX" as const };
       upsertShiftsInCache(queryClient, [bestaetigt], selectedTeamId);
       void invalidateShiftDerivedQueries(queryClient);
-      toast.success(
-        isPastCorrection(shift)
-          ? "Korrektur bestätigt — die geänderte Zeit zählt jetzt in Auswertungen und Stundennachweis."
-          : "Dienst bestätigt — zählt jetzt in Auswertungen und Stundennachweis.",
-      );
+      toast.success("Dienst bestätigt — zählt jetzt in Auswertungen und Stundennachweis.");
     } catch (err) {
       if (!navigator.onLine) return;
       toast.error(readableApiError(err, "Bestätigen fehlgeschlagen. Bitte erneut versuchen."));

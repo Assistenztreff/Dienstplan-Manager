@@ -9,7 +9,6 @@ import {
   dienstStatusLabel,
   dienstStatusTextColor,
   isAbsenceShift,
-  isPastCorrection,
   lastName,
   lastNameInitial,
   PillAvatar,
@@ -444,9 +443,8 @@ export function MonthGrid({
                         // Smartphone-Pille, die Avatar-Initialen sind hier die
                         // einzige Personen-Kennung (voller Name im title-Attribut).
                         const avatarLabel = isTeam ? "T" : s.user?.name ? lastNameInitial(s.user.name) : "?";
-                        const pastCorrection = isPastCorrection(s);
                         const korrigiert = correctedShiftIds.has(s.id);
-                        const statusColor = dienstStatusColor(status, hasAusfall, s.isVertretung, pastCorrection);
+                        const statusColor = dienstStatusColor(status, hasAusfall, s.isVertretung);
                         return (
                           <span
                             key={s.id}
@@ -488,8 +486,6 @@ export function MonthGrid({
                               <span className="flex shrink-0 items-center -space-x-[7px]">
                                 {status === "FIX" ? (
                                   <StatusBadge kind="confirmed" label="Bestätigt" calendarCompact />
-                                ) : pastCorrection ? (
-                                  <StatusBadge kind="correction" label="Korrektur" calendarCompact />
                                 ) : (
                                   <StatusBadge
                                     kind={status === "ANGEBOTEN" ? "sent" : "draft"}
@@ -573,10 +569,9 @@ export function MonthGrid({
                     const fullName = isTeam ? "Team" : s.user?.name ?? "?";
                     const shortNameLabel = isTeam ? "Team" : s.user?.name ? lastName(s.user.name) : "?";
                     const avatarLabel = isTeam ? "T" : s.user?.name ? nameInitials(s.user.name) : "?";
-                    const pastCorrection = isPastCorrection(s);
                     const korrigiert = correctedShiftIds.has(s.id);
-                    const statusColor = dienstStatusColor(status, hasAusfall, s.isVertretung, pastCorrection);
-                    const statusLabel = dienstStatusLabel(status, hasAusfall, s.isVertretung, pastCorrection);
+                    const statusColor = dienstStatusColor(status, hasAusfall, s.isVertretung);
+                    const statusLabel = dienstStatusLabel(status, hasAusfall, s.isVertretung);
                     const commonHandlers = {
                       role: chipClickable ? ("button" as const) : undefined,
                       tabIndex: chipClickable ? -1 : undefined,
@@ -599,8 +594,6 @@ export function MonthGrid({
                           ) : (
                             <StatusBadge kind="confirmed" label="Bestätigt" calendarCompact={pillMinimiert} />
                           )
-                        ) : pastCorrection ? (
-                          <StatusBadge kind="correction" label="Korrektur" calendarCompact={pillMinimiert} />
                         ) : (
                           <StatusBadge
                             kind={status === "ANGEBOTEN" ? "sent" : "draft"}
@@ -790,7 +783,7 @@ export function MonthGrid({
                               (weniger wichtig als Start-/Endzeit). */}
                           <span
                             className="ml-auto hidden shrink-0 items-center gap-[2px] @[168px]:inline-flex"
-                            style={{ color: dienstStatusTextColor(status, hasAusfall, s.isVertretung, pastCorrection) }}
+                            style={{ color: dienstStatusTextColor(status, hasAusfall, s.isVertretung) }}
                             title={statusLabel}
                           >
                             {s.isVertretung && <StatusBadge kind="vertretung" />}

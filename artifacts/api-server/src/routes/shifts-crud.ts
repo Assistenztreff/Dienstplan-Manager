@@ -780,31 +780,6 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
   const dienstLiegtInVergangenheit = new Date(effectiveEnd).getTime() < Date.now();
   const faelltZurueck = istSubstanzAenderungAnFixDienst && !dienstLiegtInVergangenheit;
 
-  // Vier-Augen-Prinzip bei Korrekturen (Kay-Feedback 28.08.2026): Eine bereits
-  // gearbeitete, vom Planer nachträglich geänderte Schicht steht auf ANGEBOTEN
-  // und wartet auf die Zustimmung der betroffenen Assistenzkraft. Genau diese
-  // Zustimmung darf der Planer NICHT selbst geben — sonst wäre der Rückfall
-  // auf ANGEBOTEN eine reine Formalie und die geänderte Arbeitszeit faktisch
-  // einseitig gesetzt. Bestätigen darf hier ausschliesslich die zugewiesene
-  // Person; ist sie selbst der Planer (Einzelkonto), bleibt es zulässig.
-  const istOffeneKorrektur =
-    oldShift.planningStatus === "ANGEBOTEN" &&
-    !isAbsenceType(oldShift.type) &&
-    oldShift.type !== "team" &&
-    oldShift.endTime.getTime() < Date.now();
-  if (
-    istOffeneKorrektur &&
-    body.data.planningStatus === "FIX" &&
-    oldShift.userId !== req.session.userId
-  ) {
-    res.status(403).json({
-      error:
-        "Eine Korrektur an einem bereits gearbeiteten Dienst muss die betroffene Assistenzkraft selbst bestätigen.",
-      code: "correction_needs_assistant",
-    });
-    return;
-  }
-
   const updateValues = {
     ...body.data,
     // Wird die Schicht zur Abwesenheit oder zum Team-Eintrag, verliert sie

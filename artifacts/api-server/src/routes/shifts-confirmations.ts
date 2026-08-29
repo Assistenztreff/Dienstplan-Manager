@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { shiftsTable, usersTable } from "@workspace/db";
-import { eq, and, or, lt, gte, gt, inArray, sql } from "drizzle-orm";
+import { eq, and, lt, gte, inArray } from "drizzle-orm";
 import {
   SendShiftProposalsBody,
   BulkConfirmOwnShiftsBody,
@@ -216,17 +216,7 @@ router.post(
           inArray(shiftsTable.teamId, teamScope),
           eq(shiftsTable.planningStatus, "ANGEBOTEN"),
           gte(shiftsTable.startTime, monthStart),
-          lt(shiftsTable.startTime, monthEnd),
-          // Vier-Augen-Prinzip bei Korrekturen (Kay-Feedback 28.08.2026):
-          // Offene Korrekturen an bereits gearbeiteten Diensten muss die
-          // betroffene Assistenzkraft selbst bestaetigen. Ohne diesen
-          // Ausschluss waere die Einzelfall-Sperre in PATCH /shifts/:id per
-          // Sammelbestaetigung umgehbar. Eigene Dienste bleiben zulaessig
-          // (Einzelkonto: Planer und Assistenzkraft sind dieselbe Person).
-          or(
-            gt(shiftsTable.endTime, sql`now()`),
-            eq(shiftsTable.userId, req.session.userId!),
-          )
+          lt(shiftsTable.startTime, monthEnd)
         )
       )
       .returning({ id: shiftsTable.id });

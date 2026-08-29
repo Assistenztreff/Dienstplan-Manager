@@ -20,7 +20,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
 import { AlertTriangle, AlertCircle, CalendarX, Clock, CheckCircle2, Plane, ChevronRight, Info } from "lucide-react";
-import { isPastCorrection } from "./dienstplan-helpers";
 import { useLocation } from "wouter";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { useTeam } from "@/context/team";
@@ -647,14 +646,11 @@ function PendingShiftProposalsBanner() {
   );
   if (offeredShifts.length === 0) return null;
 
-  // Kay-Feedback 28.08.2026: Schon auf dem Dashboard trennen. Eine KORREKTUR
-  // betrifft einen bereits gearbeiteten Dienst, dessen Zeit der Arbeitgeber
-  // nachträglich geändert hat — arbeitszeitrechtlich eine ganz andere Aussage
-  // als ein VORSCHLAG für einen noch nicht gearbeiteten Dienst. Deshalb zwei
-  // Meldungen mit eigener Farbe, eigenem Text und eigenem Ziel-Knopf, statt
-  // beides unter "Bitte Vorschläge bestätigen" zu mischen.
-  const korrekturen = offeredShifts.filter((s) => isPastCorrection(s));
-  const vorschlaege = offeredShifts.filter((s) => !isPastCorrection(s));
+  // Offene Vorschläge. Nachträgliche Korrekturen laufen NICHT mehr hierüber —
+  // sie gelten sofort und erscheinen im eigenen Hinweis darüber
+  // (CorrectedShiftsBanner). Ein vergangener, noch unbestätigter Vorschlag ist
+  // kein Sonderfall mehr, sondern schlicht überfällig.
+  const vorschlaege = offeredShifts;
 
   const earliest = (list: Shift[]) => list.map((s) => s.startTime).sort()[0]!;
   // fokus=... schaltet die Tagesleiste im Dienstplan direkt auf den passenden
@@ -668,33 +664,6 @@ function PendingShiftProposalsBanner() {
 
   return (
     <>
-      {/* Korrekturen zuerst: der dringlichere und rechtlich gewichtigere Fall. */}
-      {korrekturen.length > 0 && (
-        <div
-          className="flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-          data-testid="dashboard-shift-correction-banner"
-        >
-          <div className="flex items-start gap-2 text-amber-900">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-            <span className="text-sm font-medium">
-              Achtung:{" "}
-              {korrekturen.length === 1
-                ? "Ein bereits gearbeiteter Dienst wurde vom Arbeitgeber geändert. Bitte Korrektur bestätigen."
-                : `${korrekturen.length} bereits gearbeitete Dienste wurden vom Arbeitgeber geändert. Bitte Korrekturen bestätigen.`}
-            </span>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            className="shrink-0 self-start border-amber-400 bg-white text-amber-900 hover:bg-amber-100 sm:self-auto"
-            data-testid="dashboard-shift-correction-review"
-            onClick={() => gotoPruefliste(korrekturen, "korrekturen")}
-          >
-            Korrektur prüfen
-          </Button>
-        </div>
-      )}
-
       {/* Vorschläge: gewöhnliche Vorausplanung, deshalb der ruhige blaue
           Standard-Hinweis statt einer Warnfarbe. */}
       {vorschlaege.length > 0 && (
