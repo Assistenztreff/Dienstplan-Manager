@@ -73,6 +73,7 @@ import {
 const TYPE_LABEL: Record<AbsenceType, string> = {
   vacation: "Urlaub",
   sick: "Krank",
+  wunschfrei: "Wunschfrei",
 };
 
 const REQUEST_STATUS_LABEL: Record<AbsenceRequest["status"], string> = {
@@ -928,6 +929,7 @@ export default function Abwesenheiten() {
                 <SelectContent>
                   <SelectItem value="vacation">Urlaub</SelectItem>
                   <SelectItem value="sick">Krank</SelectItem>
+                  <SelectItem value="wunschfrei">Wunschfrei</SelectItem>
                 </SelectContent>
               </Select>
             </div>

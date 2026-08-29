@@ -25,6 +25,7 @@ const TYPE_LABELS: Record<string, string> = {
   abgesagt_ag: "Abgesagt (AG)",
   abgesagt_an: "Abgesagt (AN)",
   urlaubsabgeltung: "Urlaubsabgeltung",
+  wunschfrei: "Wunschfrei",
 };
 
 // Abwesenheits-/Info-Typen ohne gearbeitete Uhrzeit — fuer sie steht in der
@@ -38,6 +39,7 @@ const DAY_ABSENCE_TYPES = new Set([
   "abgesagt_ag",
   "abgesagt_an",
   "urlaubsabgeltung",
+  "wunschfrei",
 ]);
 
 /** Minimaler Shift-Shape, den der Stundenlisten-Export braucht (GET /shifts). */

@@ -25,7 +25,14 @@ import { pgTable, serial, integer, timestamp, jsonb, pgEnum, index } from "drizz
 import { usersTable } from "./users";
 import { teamsTable } from "./teams";
 
-export const absenceRequestTypeEnum = pgEnum("absence_request_type", ["vacation", "sick"]);
+// wunschfrei = Wunsch, an diesen Tagen nicht eingeplant zu werden (Termin,
+// private Gruende). Erst die Genehmigung macht daraus eine verbindliche
+// Sperre; abgelehnt bleibt der Tag normal planbar.
+export const absenceRequestTypeEnum = pgEnum("absence_request_type", [
+  "vacation",
+  "sick",
+  "wunschfrei",
+]);
 export const absenceRequestStatusEnum = pgEnum("absence_request_status", [
   "PENDING",
   "APPROVED",

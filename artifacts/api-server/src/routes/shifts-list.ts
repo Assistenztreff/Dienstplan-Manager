@@ -63,7 +63,7 @@ router.get("/shifts", requireAuth, async (req, res): Promise<void> => {
       inArray(shiftsTable.teamId, teamScope),
       inArray(shiftsTable.einsatzTeamId, teamScope),
       and(
-        sql`${shiftsTable.type} IN ('vacation','sick','freizeitausgleich','kind_krank','freistellung','abgesagt_ag','abgesagt_an','urlaubsabgeltung')`,
+        sql`${shiftsTable.type} IN ('vacation','sick','freizeitausgleich','kind_krank','freistellung','abgesagt_ag','abgesagt_an','urlaubsabgeltung','wunschfrei')`,
         sql`EXISTS (
           SELECT 1 FROM shifts a
           WHERE a.user_id = ${shiftsTable.userId}
@@ -74,7 +74,7 @@ router.get("/shifts", requireAuth, async (req, res): Promise<void> => {
     )!,
   ];
   if (effectiveUserId) conditions.push(eq(shiftsTable.userId, effectiveUserId));
-  if (query.data.type) conditions.push(eq(shiftsTable.type, query.data.type as "active" | "standby" | "night" | "full_day" | "vacation" | "sick" | "work" | "freizeitausgleich" | "team" | "kind_krank" | "freistellung" | "abgesagt_ag" | "abgesagt_an" | "urlaubsabgeltung"));
+  if (query.data.type) conditions.push(eq(shiftsTable.type, query.data.type as "active" | "standby" | "night" | "full_day" | "vacation" | "sick" | "work" | "freizeitausgleich" | "team" | "kind_krank" | "freistellung" | "abgesagt_ag" | "abgesagt_an" | "urlaubsabgeltung" | "wunschfrei"));
   // Zeitraum-Default: ohne month/year UND ohne explizites all=true liefert die
   // Route nicht mehr die gesamte Historie, sondern nur den aktuellen
   // Kalendermonat (Performance). year allein (ohne month) filtert auf das

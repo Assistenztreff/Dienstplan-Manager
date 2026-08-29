@@ -31,7 +31,7 @@ const ABSENCE_SHIFT_TYPES = new Set([
   "freistellung",
   "abgesagt_ag",
 ]);
-const INFO_ONLY_SHIFT_TYPES = new Set(["kind_krank", "abgesagt_an", "urlaubsabgeltung"]);
+const INFO_ONLY_SHIFT_TYPES = new Set(["kind_krank", "abgesagt_an", "urlaubsabgeltung", "wunschfrei"]);
 
 /** Faktor der Warnschwelle: mehr als 1,5 angesparte Monatsbudgets. */
 export const BUDGET_WARNING_FACTOR = 1.5;

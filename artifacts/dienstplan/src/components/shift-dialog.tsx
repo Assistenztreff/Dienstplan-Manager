@@ -173,6 +173,7 @@ const DIALOG_ABSENCE_TYPES = new Set([
   "abgesagt_ag",
   "abgesagt_an",
   "urlaubsabgeltung",
+  "wunschfrei",
 ]);
 
 const LEGACY_TYPE_LABELS: Record<string, string> = {
@@ -291,7 +292,8 @@ function initialSelection(editShift: ShiftForEdit | undefined, firstModelId: num
     editShift.type === "freistellung" ||
     editShift.type === "abgesagt_ag" ||
     editShift.type === "abgesagt_an" ||
-    editShift.type === "urlaubsabgeltung"
+    editShift.type === "urlaubsabgeltung" ||
+    editShift.type === "wunschfrei"
   )
     return editShift.type;
   if (editShift.type === "work" && editShift.shiftModelId) return `model:${editShift.shiftModelId}`;
@@ -580,7 +582,8 @@ export function ShiftDialog({
     form.selection === "freistellung" ||
     form.selection === "abgesagt_ag" ||
     form.selection === "abgesagt_an" ||
-    form.selection === "urlaubsabgeltung";
+    form.selection === "urlaubsabgeltung" ||
+    form.selection === "wunschfrei";
   // Halbtägiger Zeitraum ("Von-bis") ist bewusst NUR für Urlaub anlegbar
   // (#862) — andere Abwesenheitsarten bleiben ganztägig, wie im Auftrag
   // festgelegt (kein zusätzlicher Bedarf, weniger Sonderfälle in Auswertung
@@ -1547,6 +1550,12 @@ export function ShiftDialog({
                       Abgesagt durch Assistenz (unbezahlt)
                     </span>
                   </SelectItem>
+                  <SelectItem value="wunschfrei">
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block h-2.5 w-2.5 rounded-full bg-rose-600" />
+                      Wunschfrei (unbezahlt)
+                    </span>
+                  </SelectItem>
                   <SelectItem value="urlaubsabgeltung">
                     <span className="flex items-center gap-2">
                       <span className="inline-block h-2.5 w-2.5 rounded-full bg-lime-600" />
@@ -1877,7 +1886,9 @@ export function ShiftDialog({
                           ? "Von der Assistenzkraft abgesagter Dienst. Unbezahlt — die Stunden erscheinen in der Auswertung nur als Info-Kennzahl."
                           : form.selection === "urlaubsabgeltung"
                             ? "Urlaubsabgeltung: nicht genommener Urlaub wird ausgezahlt. Der Euro-Wert erscheint in der Auswertung als eigene Position (kein Arbeits-Soll)."
-                            : "Krankheitstag wird als ganzer Tag eingetragen. Vertragsstunden werden als Lohnfortzahlung gutgeschrieben."}
+                            : form.selection === "wunschfrei"
+                              ? "Wunschfrei sperrt den Tag für die Planung: Die Assistenzkraft kann an diesem Tag nicht eingeplant werden. Unbezahlt, verbraucht keine Vertragsstunden und keinen Urlaubstag."
+                              : "Krankheitstag wird als ganzer Tag eingetragen. Vertragsstunden werden als Lohnfortzahlung gutgeschrieben."}
             </p>
           )}
 

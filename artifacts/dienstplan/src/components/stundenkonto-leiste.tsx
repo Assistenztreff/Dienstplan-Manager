@@ -99,7 +99,12 @@ const PAID_ABSENCE_TYPES = new Set([
 ]);
 
 /** Unbezahlt bzw. reine Info-/Geldposition: verbrauchen KEINE Vertragszeit. */
-const UNPAID_SHIFT_TYPES = new Set(["kind_krank", "abgesagt_an", "urlaubsabgeltung"]);
+const UNPAID_SHIFT_TYPES = new Set([
+  "kind_krank",
+  "abgesagt_an",
+  "urlaubsabgeltung",
+  "wunschfrei",
+]);
 
 function shiftDurationHours(s: StundenkontoUserShift): number {
   if (!s.startTime || !s.endTime) return 0;

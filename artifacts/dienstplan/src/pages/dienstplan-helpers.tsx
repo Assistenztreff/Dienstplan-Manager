@@ -116,6 +116,7 @@ const SHIFT_TYPE_LABELS: Record<string, string> = {
   abgesagt_ag: "Abgesagt (Arbeitgeber)",
   abgesagt_an: "Abgesagt (Assistenz)",
   urlaubsabgeltung: "Urlaubsabgeltung",
+  wunschfrei: "Wunschfrei",
 };
 
 const SHIFT_TYPE_CLASSES: Record<string, string> = {
@@ -137,6 +138,7 @@ const SHIFT_TYPE_CLASSES: Record<string, string> = {
   abgesagt_ag: "bg-orange-200 text-orange-950 border-orange-600 hover:bg-orange-300",
   abgesagt_an: "bg-stone-200 text-stone-800 border-stone-500 hover:bg-stone-300",
   urlaubsabgeltung: "bg-lime-200 text-lime-950 border-lime-600 hover:bg-lime-300",
+  wunschfrei: "bg-rose-200 text-rose-950 border-rose-600 hover:bg-rose-300",
 };
 
 export function shiftLabel(shift: Shift, modelMap: Map<number, ShiftModelInfo>): string {
@@ -303,6 +305,7 @@ const SHIFT_TYPE_DOTS: Record<string, string> = {
   abgesagt_ag: "bg-orange-600",
   abgesagt_an: "bg-stone-500",
   urlaubsabgeltung: "bg-lime-600",
+  wunschfrei: "bg-rose-600",
 };
 
 // Planungsstatus in den Tageszellen: VORLAEUFIG = gestrichelter Rand + reduzierte
@@ -325,6 +328,7 @@ const ABSENCE_TYPES = new Set([
   "abgesagt_ag",
   "abgesagt_an",
   "urlaubsabgeltung",
+  "wunschfrei",
 ]);
 export function isAbsenceShift(shift: Shift): boolean {
   return ABSENCE_TYPES.has(shift.type);

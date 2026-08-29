@@ -17,7 +17,7 @@ export type ShiftVertretungsVorschlag = {
   teamId: number;
   startTime: Date;
   endTime: Date;
-  type: 'active' | 'standby' | 'night' | 'full_day' | 'vacation' | 'sick' | 'work' | 'freizeitausgleich' | 'team' | 'kind_krank' | 'freistellung' | 'abgesagt_ag' | 'abgesagt_an' | 'urlaubsabgeltung';
+  type: 'active' | 'standby' | 'night' | 'full_day' | 'vacation' | 'sick' | 'work' | 'freizeitausgleich' | 'team' | 'kind_krank' | 'freistellung' | 'abgesagt_ag' | 'abgesagt_an' | 'urlaubsabgeltung' | 'wunschfrei';
   /** @nullable */
   shiftModelId?: number | null;
 } | null;
