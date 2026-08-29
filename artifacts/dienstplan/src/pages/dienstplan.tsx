@@ -222,15 +222,29 @@ export default function Dienstplan() {
 
   /** Alle nachtraeglich geaenderten Dienste — bekommen das Korrektur-Symbol. */
   const correctedShiftIds = useMemo(() => {
+    // NUR vergangene Dienste tragen das Korrektur-Kennzeichen. Ein künftiger,
+    // vom Planer geänderter Dienst fällt auf "Vorschlag" zurück und wird dort
+    // bestätigt — er ist eine Planänderung, keine Korrektur einer geleisteten
+    // Zeit. Ohne diesen Filter stand an ihm "bestätigt · korrigiert" samt
+    // Uhr-Symbol, aber ohne Melde-Knopf (Kay-Test 28.08.2026, 31. August).
+    const vergangeneIds = new Set(
+      (shifts ?? [])
+        .filter((sh) => new Date(sh.endTime).getTime() < Date.now())
+        .map((sh) => sh.id),
+    );
     const ids = new Set<number>();
-    for (const c of shiftChangesData ?? []) ids.add(c.shiftId);
+    for (const c of shiftChangesData ?? []) {
+      if (vergangeneIds.has(c.shiftId)) ids.add(c.shiftId);
+    }
     // Bestandsdaten aus der Zeit vor /shifts/changes: eine angenommene
     // Abweichung ist ebenfalls eine Korrektur.
     for (const report of deviationReportsData ?? []) {
-      if (report.status === "ACCEPTED") ids.add(report.shiftId);
+      if (report.status === "ACCEPTED" && vergangeneIds.has(report.shiftId)) {
+        ids.add(report.shiftId);
+      }
     }
     return ids;
-  }, [shiftChangesData, deviationReportsData]);
+  }, [shifts, shiftChangesData, deviationReportsData]);
 
   /**
    * Dienste, bei denen die Assistenzkraft ERNEUT melden darf: Die letzte
@@ -262,10 +276,12 @@ export default function Dienstplan() {
   const plannerCorrectedShiftIds = useMemo(() => {
     const ids = new Set<number>();
     for (const c of shiftChangesData ?? []) {
-      if (c.changeSource === "planner_edit") ids.add(c.shiftId);
+      if (c.changeSource === "planner_edit" && correctedShiftIds.has(c.shiftId)) {
+        ids.add(c.shiftId);
+      }
     }
     return ids;
-  }, [shiftChangesData]);
+  }, [shiftChangesData, correctedShiftIds]);
 
   const confirmOwnShiftMutation = useConfirmOwnShift();
   const reportDeviationMutation = useReportShiftDeviation();
