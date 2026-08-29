@@ -54,7 +54,7 @@ import {
 import { CalendarIcon, Check, ChevronsUpDown, Trash2, X } from "lucide-react";
 import { de } from "date-fns/locale";
 import { Calendar } from "@/components/ui/calendar";
-import { cn } from "@/lib/utils";
+import { cn, formatHours } from "@/lib/utils";
 import { readableApiError, planUpgradeMessage } from "@/lib/api-error";
 import {
   invalidateShiftDerivedQueries,
@@ -135,6 +135,14 @@ type ShiftDialogProps = {
   preselectedUserId?: number;
   editShift?: ShiftForEdit;
   assistants: Assistant[];
+  /**
+   * Kapazitäts-Ampel für die Vertretung-Auswahl (Kay-Feedback 28.08.2026,
+   * eigene Lösung statt AssistenzConnects Zahlen-Tabelle): "frei" = noch
+   * freie Vertragsstunden diesen Monat (contractTarget - verplant, dieselbe
+   * Bilanz wie im Stundenkonto). Ohne Eintrag (kein Vertrag oder Stundenkonto
+   * nicht sichtbar) erscheint kein Punkt.
+   */
+  capacityByUserId?: Map<number, { frei: number; hasContract: boolean }>;
   month: number;
   year: number;
   teamId?: number | null;
@@ -290,6 +298,36 @@ function initialSelection(editShift: ShiftForEdit | undefined, firstModelId: num
   return `legacy:${editShift.type}`;
 }
 
+// Kapazitäts-Ampel für die Vertretung-Auswahl (Kay-Feedback 28.08.2026,
+// eigene Lösung statt AssistenzConnects Zahlen-Tabelle pro Zeile): ein
+// Farbpunkt statt drei Rohzahlen, genaue Stunden nur im title-Tooltip.
+// Schwelle ±2h als Rauschband — kleinere Abweichungen vom Soll sind im
+// Alltag normal und sollen nicht sofort als "knapp"/"überplant" wirken.
+function capacityDotColor(frei: number): string {
+  if (frei >= 2) return "#1e8f4e"; // grün — hat noch Luft (StatusBadge "confirmed")
+  if (frei <= -2) return "#b23b3b"; // rot — schon überplant (StatusBadge "krank")
+  return "#b5790a"; // gelb — knapp am Soll (StatusBadge "draft")
+}
+
+function capacityDotLabel(cap: { frei: number; hasContract: boolean } | undefined): string | null {
+  if (!cap || !cap.hasContract) return null;
+  if (Math.abs(cap.frei) < 0.05) return "Konto ausgeglichen";
+  return cap.frei > 0
+    ? `${formatHours(cap.frei)} h frei diesen Monat`
+    : `${formatHours(Math.abs(cap.frei))} h über Vertrag diesen Monat`;
+}
+
+function CapacityDot({ cap }: { cap: { frei: number; hasContract: boolean } | undefined }) {
+  if (!cap || !cap.hasContract) return null;
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-block h-2 w-2 shrink-0 rounded-full"
+      style={{ backgroundColor: capacityDotColor(cap.frei) }}
+    />
+  );
+}
+
 export function ShiftDialog({
   open,
   onClose,
@@ -297,6 +335,7 @@ export function ShiftDialog({
   preselectedUserId,
   editShift,
   assistants,
+  capacityByUserId,
   month,
   year,
   teamId,
@@ -1713,17 +1752,44 @@ export function ShiftDialog({
                   <SelectItem value="none">Keine Vertretung vorgemerkt</SelectItem>
                   {assistants
                     .filter((a) => String(a.id) !== form.userId)
-                    .map((a) => (
-                      <SelectItem key={a.id} value={String(a.id)}>
-                        {a.name}
-                      </SelectItem>
-                    ))}
+                    // Meiste freie Kapazität zuerst (wie Stundenkonto-Sortierung
+                    // "kapazitaet") — die naheliegendste Vertretung steht oben,
+                    // ohne dass man selbst rechnen muss. Personen ohne Vertrag
+                    // (keine Kapazität berechenbar) ans Ende, dann alphabetisch.
+                    .slice()
+                    .sort((a, b) => {
+                      const capA = capacityByUserId?.get(a.id);
+                      const capB = capacityByUserId?.get(b.id);
+                      const hasA = capA?.hasContract ?? false;
+                      const hasB = capB?.hasContract ?? false;
+                      if (hasA !== hasB) return hasA ? -1 : 1;
+                      if (hasA && hasB && Math.abs(capB!.frei - capA!.frei) > 0.001) {
+                        return capB!.frei - capA!.frei;
+                      }
+                      return a.name.localeCompare(b.name, "de");
+                    })
+                    .map((a) => {
+                      const cap = capacityByUserId?.get(a.id);
+                      const label = capacityDotLabel(cap);
+                      return (
+                        <SelectItem key={a.id} value={String(a.id)} title={label ?? undefined}>
+                          <span className="flex items-center gap-1.5">
+                            <CapacityDot cap={cap} />
+                            {a.name}
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
                 </SelectContent>
               </Select>
               {form.standbyUserId && (
                 <p className="text-xs text-muted-foreground">
                   Fällt der Dienst aus, schlägt die App vor, mit denselben
                   Zeiten einen Dienst für diese Person anzulegen.
+                  {(() => {
+                    const label = capacityDotLabel(capacityByUserId?.get(Number(form.standbyUserId)));
+                    return label ? ` (${label})` : "";
+                  })()}
                 </p>
               )}
             </div>

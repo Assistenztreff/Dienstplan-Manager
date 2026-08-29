@@ -46,6 +46,7 @@ import {
   useSelectedUserIds,
   useIsWideStundenkontoLayout,
   useStundenkontoSort,
+  useStundenkontoEintraege,
 } from "@/components/stundenkonto-leiste";
 import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { exportSimpleMonthPdf } from "@/lib/pdf-export";
@@ -428,6 +429,25 @@ export default function Dienstplan() {
   );
 
   const allShifts: Shift[] = shifts ?? [];
+
+  // Kapazitäts-Ampel für die Vertretungs-Auswahl im ShiftDialog (Kay-Feedback
+  // 28.08.2026): wiederverwendet exakt dieselbe Stundenkonto-Bilanz statt
+  // eigener Berechnung — "frei" > 0 heißt noch freie Vertragsstunden diesen
+  // Monat. Ohne sichtbares Stundenkonto (canSeeStundenkonto=false) bleiben
+  // hoursBalances leer → ShiftDialog zeigt dann einfach keine Punkte an.
+  const stundenkontoEintraege = useStundenkontoEintraege(
+    assistants,
+    allShifts,
+    hoursBalances ?? [],
+    "name",
+  );
+  const capacityByUserId = useMemo(
+    () =>
+      new Map(
+        stundenkontoEintraege.map((e) => [e.id, { frei: e.frei, hasContract: e.hasContract }]),
+      ),
+    [stundenkontoEintraege],
+  );
 
   // Map userId → Set<dayKey "yyyy-MM-dd"> aller Abwesenheitstage im geladenen Monat.
   // Wird ausschließlich in der Tabellenansicht (Zell-Styling + Klick-Sperre) genutzt.
@@ -1218,6 +1238,7 @@ export default function Dienstplan() {
           }}
           onVertretungsVorschlag={handleVertretungsVorschlag}
           assistants={assistants}
+          capacityByUserId={capacityByUserId}
           month={month}
           year={year}
           teamId={selectedTeamId}

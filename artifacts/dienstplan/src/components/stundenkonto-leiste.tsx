@@ -189,7 +189,7 @@ export function useStundenkontoSort(): {
  * Fuellen einer Luecke steht die passende Person damit vorn. Personen ohne
  * hinterlegte Vertragsstunden landen ans Ende (keine Kapazitaet berechenbar).
  */
-function useStundenkontoEintraege(
+export function useStundenkontoEintraege(
   assistants: { id: number; name: string }[],
   shifts: StundenkontoUserShift[],
   balances: HoursBalance[],
