@@ -32,6 +32,7 @@ export function AgendaView({
   collapsedWeeks,
   onToggleWeek,
   deviationReports,
+  meldungWiederMoeglichShiftIds,
   onReportDeviation,
   onAcceptDeviation,
   onDisputeDeviation,
@@ -50,6 +51,7 @@ export function AgendaView({
    *  sie, bleibt die Zeile unverändert (Ownership-/Rollenprüfung lebt in
    *  DayDetailRow selbst). */
   deviationReports?: Map<number, ShiftDeviationReport>;
+  meldungWiederMoeglichShiftIds?: ReadonlySet<number>;
   onReportDeviation?: (shift: Shift, values: DeviationReportValues) => void;
   onAcceptDeviation?: (shift: Shift) => void;
   onDisputeDeviation?: (shift: Shift, reason: string) => void;
@@ -302,6 +304,7 @@ export function AgendaView({
                             // prüft die Zeile selbst (selfConfirmable).
                             onConfirmOwn={!other && !selectionMode ? onConfirmOwnShift : undefined}
                             deviationReport={deviationReports?.get(shift.id)}
+                            meldungWiederMoeglich={meldungWiederMoeglichShiftIds?.has(shift.id) ?? false}
                             // "War anders" ist für die Assistenzkraft selbst
                             // gedacht, NICHT nur für Bearbeitungsberechtigte —
                             // anders als onClick/onConfirm daher bewusst ohne

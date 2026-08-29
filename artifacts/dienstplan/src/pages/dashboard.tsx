@@ -8,6 +8,7 @@ import {
   useGetMonthClosings,
   useListShifts,
   useListShiftDeviations,
+  useListShiftChanges,
   useListAbsenceRequests,
 } from "@workspace/api-client-react";
 import type { MonthClosingStatus } from "@workspace/api-client-react";
@@ -774,6 +775,68 @@ function PendingDeviationsBanner() {
 }
 
 
+// Assistenz-Hinweis: nachtraeglich geaenderte eigene Arbeitszeiten. Seit dem
+// 28.08.2026 gilt eine Korrektur des Planers sofort — das ist deshalb ein
+// HINWEIS, keine Aufgabe. Er steht bewusst hier im Dashboard und nicht mehr
+// ueber dem Dienstplan (Kay-Feedback 28.08.2026): Das Dashboard ist die Seite,
+// die eine Assistenzkraft zuerst sieht.
+function CorrectedShiftsBanner() {
+  const [, navigate] = useLocation();
+  const { isTeamScopeReady, selectedTeamId } = useTeam();
+  const { currentUser } = useAuth();
+  const teamParam = selectedTeamId != null ? { teamId: selectedTeamId } : {};
+
+  const { data: changes } = useListShiftChanges(teamParam, {
+    query: { enabled: isTeamScopeReady },
+  } as Parameters<typeof useListShiftChanges>[1]) as {
+    data?: { shiftId: number; changeSource: string }[];
+  };
+  const { data: shifts } = useListShifts(
+    { all: true, userId: currentUser?.id, ...teamParam },
+    { query: { enabled: isTeamScopeReady && currentUser?.id != null } } as Parameters<typeof useListShifts>[1],
+  ) as { data?: Shift[] };
+
+  const korrigierteIds = new Set(
+    (changes ?? []).filter((c) => c.changeSource === "planner_edit").map((c) => c.shiftId),
+  );
+  // Der Server liefert Nicht-Planenden ohnehin nur die eigenen Zeilen; die
+  // userId-Pruefung deckt Teamleiter-Assistenzkraefte ab (gleiches Muster wie
+  // beim Vorschlags-Banner).
+  const betroffen = (shifts ?? []).filter(
+    (s) => s.userId === currentUser?.id && korrigierteIds.has(s.id),
+  );
+  if (betroffen.length === 0) return null;
+
+  const earliest = betroffen.map((s) => s.startTime).sort()[0]!;
+
+  return (
+    <div
+      className="flex flex-col gap-3 rounded-lg border border-[#e2c88a] bg-[#fdf7e8] px-4 py-3 text-[#7a5406] sm:flex-row sm:items-center sm:justify-between"
+      data-testid="dashboard-corrected-shifts-banner"
+    >
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-[#b5790a]" />
+        <span className="text-sm font-medium">
+          {betroffen.length === 1
+            ? "Der Arbeitgeber hat 1 deiner Arbeitszeiten nachträglich geändert. Sie gilt bereits — du kannst eine abweichende Zeit melden."
+            : `Der Arbeitgeber hat ${betroffen.length} deiner Arbeitszeiten nachträglich geändert. Sie gelten bereits — du kannst abweichende Zeiten melden.`}
+        </span>
+      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        className="shrink-0 self-start border-[#e2c88a] bg-white text-[#7a5406] hover:bg-[#fdf3dc] sm:self-auto"
+        data-testid="dashboard-corrected-shifts-review"
+        onClick={() =>
+          navigate(`/dienstplan?date=${format(new Date(earliest), "yyyy-MM-dd")}&fokus=korrekturen`)
+        }
+      >
+        {betroffen.length === 1 ? "Korrektur anzeigen" : "Korrekturen anzeigen"}
+      </Button>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const now = new Date();
   const month = now.getMonth() + 1;
@@ -804,6 +867,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {!isAdmin && <CorrectedShiftsBanner />}
       {!isAdmin && <PendingShiftProposalsBanner />}
       {isAdmin && <PendingDeviationsBanner />}
 

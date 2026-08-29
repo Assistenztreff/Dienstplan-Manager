@@ -104,6 +104,7 @@ export function ScheduleList({
   onPrevMonth,
   onNextMonth,
   deviationReports,
+  meldungWiederMoeglichShiftIds,
   onReportDeviation,
   onAcceptDeviation,
   onDisputeDeviation,
@@ -140,6 +141,9 @@ export function ScheduleList({
   onPrevMonth?: () => void;
   onNextMonth?: () => void;
   deviationReports?: Map<number, ShiftDeviationReport>;
+  /** Dienste, bei denen trotz vorhandener (erledigter) Meldung erneut
+   *  gemeldet werden darf — der Planer hat seither nochmals korrigiert. */
+  meldungWiederMoeglichShiftIds?: ReadonlySet<number>;
   onReportDeviation?: (shift: Shift, values: DeviationReportValues) => void;
   onAcceptDeviation?: (shift: Shift) => void;
   onDisputeDeviation?: (shift: Shift, reason: string) => void;
@@ -517,6 +521,7 @@ export function ScheduleList({
         onConfirmShift={onConfirmShift}
         onConfirmOwnShift={onConfirmOwnShift}
         deviationReports={deviationReports}
+        meldungWiederMoeglichShiftIds={meldungWiederMoeglichShiftIds}
         onReportDeviation={onReportDeviation}
         onAcceptDeviation={onAcceptDeviation}
         onDisputeDeviation={onDisputeDeviation}

@@ -196,9 +196,15 @@ export default function Dienstplan() {
   } as unknown as Parameters<typeof useListShiftDeviations>[1]) as {
     data?: ShiftDeviationReport[];
   };
+  // JÜNGSTE Meldung je Dienst. Seit dem 28.08.2026 kann ein Dienst mehrere
+  // Meldungen haben — nach jeder erneuten Planer-Korrektur öffnet sich der
+  // Kanal wieder. Ohne die id-Prüfung gewönne hier eine zufällige alte Zeile.
   const deviationReportsByShiftId = useMemo(() => {
     const map = new Map<number, ShiftDeviationReport>();
-    for (const report of deviationReportsData ?? []) map.set(report.shiftId, report);
+    for (const report of deviationReportsData ?? []) {
+      const vorhanden = map.get(report.shiftId);
+      if (!vorhanden || report.id > vorhanden.id) map.set(report.shiftId, report);
+    }
     return map;
   }, [deviationReportsData]);
   // Dienste mit ANGENOMMENER Abweichungsmeldung. Sie bleiben FIX (beide Seiten
@@ -225,6 +231,32 @@ export default function Dienstplan() {
     }
     return ids;
   }, [shiftChangesData, deviationReportsData]);
+
+  /**
+   * Dienste, bei denen die Assistenzkraft ERNEUT melden darf: Die letzte
+   * Meldung ist abgeschlossen (angenommen oder abgelehnt), und der Planer hat
+   * den Dienst DANACH nochmals geändert — ein neuer Sachverhalt. Spiegelt
+   * exakt die Serverregel in shifts-deviations.ts; ohne diese Menge bliebe der
+   * Knopf verschwunden, weil noch eine (alte) Meldung am Dienst hängt.
+   */
+  const meldungWiederMoeglichShiftIds = useMemo(() => {
+    const letzteAenderung = new Map<number, { source: string; at: number }>();
+    for (const c of shiftChangesData ?? []) {
+      letzteAenderung.set(c.shiftId, {
+        source: c.changeSource,
+        at: new Date(c.createdAt).getTime(),
+      });
+    }
+    const ids = new Set<number>();
+    for (const [shiftId, report] of deviationReportsByShiftId) {
+      if (report.status === "PENDING") continue;
+      const aenderung = letzteAenderung.get(shiftId);
+      if (!aenderung || aenderung.source !== "planner_edit") continue;
+      const erledigtAm = new Date(report.resolvedAt ?? report.reportedAt).getTime();
+      if (aenderung.at > erledigtAm) ids.add(shiftId);
+    }
+    return ids;
+  }, [shiftChangesData, deviationReportsByShiftId]);
 
   /** Vom PLANER zuletzt geaenderte Dienste — nur hier ist Widerspruch moeglich. */
   const plannerCorrectedShiftIds = useMemo(() => {
@@ -956,34 +988,6 @@ export default function Dienstplan() {
         </PlanLimitBanner>
       )}
 
-      {/* Assistenz-Banner 1: KORREKTUREN — ein HINWEIS, keine Aufgabe. Seit dem
-          28.08.2026 gilt eine Korrektur des Planers sofort; die Assistenzkraft
-          soll sie sehen und widersprechen können, aber sie haelt die
-          Aufzeichnung nicht mehr auf. Bewusst zuerst und farblich getrennt von
-          den Vorschlägen: dort geht es um Planung, hier um bereits geleistete
-          Arbeitszeit. */}
-      {!isAdmin && myKorrekturShifts.length > 0 && (
-        <div className="flex flex-col gap-3 rounded-lg border border-[#e2c88a] bg-[#fdf7e8] px-4 py-3 text-[#7a5406] sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-2">
-            <StatusBadge kind="correction" compact className="mt-0.5" />
-            <span className="text-sm font-medium">
-              {myKorrekturShifts.length === 1
-                ? "Der Arbeitgeber hat 1 deiner Arbeitszeiten nachträglich geändert. Sie gilt bereits — du kannst widersprechen."
-                : `Der Arbeitgeber hat ${myKorrekturShifts.length} deiner Arbeitszeiten nachträglich geändert. Sie gelten bereits — du kannst widersprechen.`}
-            </span>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            className="shrink-0 self-start border-[#e2c88a] bg-white text-[#7a5406] hover:bg-[#fdf3dc] sm:self-auto"
-            data-testid="korrekturen-anzeigen"
-            onClick={() => focusPruefliste("korrekturen")}
-          >
-            {myKorrekturShifts.length === 1 ? "Korrektur anzeigen" : "Korrekturen anzeigen"}
-          </Button>
-        </div>
-      )}
-
       {/* Assistenz-Banner 2: echte Dienstvorschläge (noch nicht gearbeitet).
           Sammelbestätigung bleibt hier erhalten — bei reiner Vorausplanung ist
           sie eine Erleichterung, keine Gefahr. Einzeln geht jetzt zusätzlich
@@ -1196,6 +1200,7 @@ export default function Dienstplan() {
             pruefListen={pruefListen}
             focusFilter={focusFilter}
         deviationReports={deviationReportsByShiftId}
+        meldungWiederMoeglichShiftIds={meldungWiederMoeglichShiftIds}
         onReportDeviation={reportDeviation}
         onAcceptDeviation={canPlan ? acceptDeviation : undefined}
         onDisputeDeviation={canPlan ? disputeDeviation : undefined}

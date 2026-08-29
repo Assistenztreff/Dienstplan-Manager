@@ -43,6 +43,7 @@ export function DayDetailRow({
   testId,
   hasAusfall = false,
   deviationReport,
+  meldungWiederMoeglich = false,
   onReportDeviation,
   onAcceptDeviation,
   onDisputeDeviation,
@@ -67,6 +68,9 @@ export function DayDetailRow({
   /** Abweichungsmodell: vorhandene Meldung zu dieser Schicht (falls eine
    *  existiert — pro Schicht höchstens eine, s. shift_deviation_reports). */
   deviationReport?: ShiftDeviationReport | null;
+  /** Der Planer hat nach der letzten (erledigten) Meldung erneut korrigiert —
+   *  dann darf erneut gemeldet werden und die alte Meldung ist überholt. */
+  meldungWiederMoeglich?: boolean;
   /** Nur gesetzt, wenn die Assistenzkraft für diese Schicht melden darf —
    *  Ownership/Vergangenheits-Check übernimmt der Aufrufer NICHT, die Zeile
    *  prüft selbst (eigener Dienst, bestätigt, vorbei, kein Report). */
@@ -163,15 +167,22 @@ export function DayDetailRow({
     !isTeam &&
     status === "FIX" &&
     new Date(shift.endTime).getTime() < Date.now();
+  // Eine ueberholte Meldung (der Planer hat seither erneut korrigiert) zaehlt
+  // nicht mehr — sonst bliebe der Knopf fuer immer weg und die Assistenzkraft
+  // haette zum neuen Stand keine Stimme (Kay-Test 28.08.2026, Punkt 4).
+  const meldungUeberholt = meldungWiederMoeglich;
   const canReportDeviation =
     !!onReportDeviation &&
     isPastFixWorkShift &&
-    !deviationReport &&
+    (!deviationReport || meldungUeberholt) &&
     currentUser?.id === shift.userId;
   // Annehmen/Widersprechen nur für den Planer (Aufrufer übergibt die
   // Callbacks nur dann, analog zu onConfirm) und nur solange offen.
   const canRespondToDeviation =
-    !!onAcceptDeviation && !!onDisputeDeviation && deviationReport?.status === "PENDING";
+    !!onAcceptDeviation &&
+    !!onDisputeDeviation &&
+    !meldungUeberholt &&
+    deviationReport?.status === "PENDING";
 
   return (
     <div
@@ -308,7 +319,7 @@ export function DayDetailRow({
       {/* Meldung offen und der Betrachter ist NICHT der Planer (der bekommt
           stattdessen die Annehmen/Widersprechen-Buttons unten) — kurzer
           Warte-Hinweis für die meldende Assistenzkraft. */}
-      {deviationReport?.status === "PENDING" && !canRespondToDeviation && (
+      {deviationReport?.status === "PENDING" && !meldungUeberholt && !canRespondToDeviation && (
         <span
           data-testid={`deviation-status-${shift.id}`}
           className="relative z-10 shrink-0 whitespace-nowrap rounded-md border border-[#b5790a] bg-white px-2.5 py-1 text-[14px] font-semibold text-[#b5790a]"
@@ -318,7 +329,7 @@ export function DayDetailRow({
       )}
 
       {/* Strittig — beide Seiten sehen den Grund per Tooltip; Planwert gilt. */}
-      {deviationReport?.status === "DISPUTED" && (
+      {deviationReport?.status === "DISPUTED" && !meldungUeberholt && (
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
