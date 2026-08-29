@@ -44,7 +44,9 @@ export const TEST_ERROR_CONTEXTS = [
 
 export {
   TEAM_BOUND_TABLES,
+  USER_BOUND_RESTRICT_TABLES,
   deleteAccountTrees,
+  deleteUserBoundRows,
   type AccountTreeDbClient,
   type DeleteAccountTreesResult,
 } from "./account-tree.js";
