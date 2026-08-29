@@ -74,6 +74,7 @@ import type {
   ListHourBudgetsParams,
   ListOperatorErrorsParams,
   ListOperatorPlanChangesParams,
+  ListShiftCorrectionObjectionsParams,
   ListShiftDeviationsParams,
   ListShiftModelsParams,
   ListShiftsParams,
@@ -96,6 +97,8 @@ import type {
   SendShiftProposalsResult,
   SetPasswordInput,
   Shift,
+  ShiftCorrectionObjection,
+  ShiftCorrectionObjectionInput,
   ShiftDeviationDisputeInput,
   ShiftDeviationReport,
   ShiftDeviationReportInput,
@@ -2452,6 +2455,235 @@ export function useListShiftDeviations<TData = Awaited<ReturnType<typeof listShi
 
 
 
+
+export const getListShiftCorrectionObjectionsUrl = (params?: ListShiftCorrectionObjectionsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/shifts/correction-objections?${stringifiedParams}` : `/api/shifts/correction-objections`
+}
+
+/**
+ * Alle Widersprüche im lesbaren Team-Scope. Ohne teamId gilt der gesamte zugängliche Scope. Assistenzkräfte sehen dadurch ihre eigenen, Planer die ihres Teams.
+ * @summary Widersprüche gegen Planer-Korrekturen auflisten
+ */
+export const listShiftCorrectionObjections = async (params?: ListShiftCorrectionObjectionsParams, options?: RequestInit): Promise<ShiftCorrectionObjection[]> => {
+
+  return customFetch<ShiftCorrectionObjection[]>(getListShiftCorrectionObjectionsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListShiftCorrectionObjectionsQueryKey = (params?: ListShiftCorrectionObjectionsParams,) => {
+    return [
+    `/api/shifts/correction-objections`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListShiftCorrectionObjectionsQueryOptions = <TData = Awaited<ReturnType<typeof listShiftCorrectionObjections>>, TError = ErrorType<void>>(params?: ListShiftCorrectionObjectionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShiftCorrectionObjections>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListShiftCorrectionObjectionsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listShiftCorrectionObjections>>> = ({ signal }) => listShiftCorrectionObjections(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listShiftCorrectionObjections>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListShiftCorrectionObjectionsQueryResult = NonNullable<Awaited<ReturnType<typeof listShiftCorrectionObjections>>>
+export type ListShiftCorrectionObjectionsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Widersprüche gegen Planer-Korrekturen auflisten
+ */
+
+export function useListShiftCorrectionObjections<TData = Awaited<ReturnType<typeof listShiftCorrectionObjections>>, TError = ErrorType<void>>(
+ params?: ListShiftCorrectionObjectionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShiftCorrectionObjections>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListShiftCorrectionObjectionsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getObjectShiftCorrectionUrl = (id: number,) => {
+
+
+
+
+  return `/api/shifts/${id}/correction/object`
+}
+
+/**
+ * Nur für den eigenen Dienst und nur, solange eine Korrektur offen ist (vergangener Arbeitsdienst im Status ANGEBOTEN). Der Widerspruch ändert die Schicht NICHT — er dokumentiert nur, dass keine Einigkeit besteht. Höchstens ein offener Widerspruch je Dienst; ein zweiter liefert 409.
+ * @summary Einer nachträglichen Korrektur widersprechen (Assistenzkraft)
+ */
+export const objectShiftCorrection = async (id: number,
+    shiftCorrectionObjectionInput: ShiftCorrectionObjectionInput, options?: RequestInit): Promise<ShiftCorrectionObjection> => {
+
+  return customFetch<ShiftCorrectionObjection>(getObjectShiftCorrectionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      shiftCorrectionObjectionInput,)
+  }
+);}
+
+
+
+
+export const getObjectShiftCorrectionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof objectShiftCorrection>>, TError,{id: number;data: BodyType<ShiftCorrectionObjectionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof objectShiftCorrection>>, TError,{id: number;data: BodyType<ShiftCorrectionObjectionInput>}, TContext> => {
+
+const mutationKey = ['objectShiftCorrection'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof objectShiftCorrection>>, {id: number;data: BodyType<ShiftCorrectionObjectionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  objectShiftCorrection(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ObjectShiftCorrectionMutationResult = NonNullable<Awaited<ReturnType<typeof objectShiftCorrection>>>
+    export type ObjectShiftCorrectionMutationBody = BodyType<ShiftCorrectionObjectionInput>
+    export type ObjectShiftCorrectionMutationError = ErrorType<void>
+
+    /**
+ * @summary Einer nachträglichen Korrektur widersprechen (Assistenzkraft)
+ */
+export const useObjectShiftCorrection = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof objectShiftCorrection>>, TError,{id: number;data: BodyType<ShiftCorrectionObjectionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof objectShiftCorrection>>,
+        TError,
+        {id: number;data: BodyType<ShiftCorrectionObjectionInput>},
+        TContext
+      > => {
+      return useMutation(getObjectShiftCorrectionMutationOptions(options));
+    }
+
+export const getWithdrawShiftCorrectionUrl = (id: number,) => {
+
+
+
+
+  return `/api/shifts/${id}/correction/withdraw`
+}
+
+/**
+ * Setzt die Schicht auf den Stand VOR der Korrektur zurück (Quelle: jüngster Eintrag der Änderungshistorie) und wieder auf FIX — der zuvor einvernehmliche Stand gilt, eine erneute Bestätigung wäre sinnlos. Die Rücknahme wird selbst als Änderung protokolliert und erledigt den Widerspruch. Zum Nachbearbeiten stattdessen PATCH /shifts/{id} nutzen; das erledigt einen offenen Widerspruch ebenfalls.
+ * @summary Bestrittene Korrektur zurücknehmen (Planer)
+ */
+export const withdrawShiftCorrection = async (id: number, options?: RequestInit): Promise<ShiftCorrectionObjection> => {
+
+  return customFetch<ShiftCorrectionObjection>(getWithdrawShiftCorrectionUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getWithdrawShiftCorrectionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof withdrawShiftCorrection>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof withdrawShiftCorrection>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['withdrawShiftCorrection'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof withdrawShiftCorrection>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  withdrawShiftCorrection(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type WithdrawShiftCorrectionMutationResult = NonNullable<Awaited<ReturnType<typeof withdrawShiftCorrection>>>
+
+    export type WithdrawShiftCorrectionMutationError = ErrorType<void>
+
+    /**
+ * @summary Bestrittene Korrektur zurücknehmen (Planer)
+ */
+export const useWithdrawShiftCorrection = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof withdrawShiftCorrection>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof withdrawShiftCorrection>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getWithdrawShiftCorrectionMutationOptions(options));
+    }
 
 export const getConfirmOwnShiftUrl = (id: number,) => {
 

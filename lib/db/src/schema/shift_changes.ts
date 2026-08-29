@@ -38,6 +38,11 @@ export const shiftChangeSourceEnum = pgEnum("shift_change_source", [
   // Assistenzkraft hat eine Abweichung gemeldet, Planer hat sie angenommen —
   // die Schicht übernimmt die gemeldete Ist-Zeit.
   "deviation_accepted",
+  // Assistenzkraft hat einer Korrektur widersprochen, Planer hat sie
+  // zurückgenommen — die Schicht steht wieder auf dem Wert VOR der Korrektur
+  // (s. shift_correction_objections.ts). Auch das ist eine Änderung an einem
+  // bereits gearbeiteten Dienst und gehört lückenlos in die Aufzeichnung.
+  "correction_withdrawn",
 ]);
 
 // Snapshot der zeitrelevanten Felder einer Schicht zu einem Zeitpunkt.

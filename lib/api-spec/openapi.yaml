@@ -808,6 +808,99 @@ paths:
                 items:
                   $ref: "#/components/schemas/ShiftDeviationReport"
 
+  /shifts/correction-objections:
+    get:
+      operationId: listShiftCorrectionObjections
+      tags: [shifts]
+      summary: Widersprüche gegen Planer-Korrekturen auflisten
+      description: >-
+        Alle Widersprüche im lesbaren Team-Scope. Ohne teamId gilt der gesamte
+        zugängliche Scope. Assistenzkräfte sehen dadurch ihre eigenen, Planer
+        die ihres Teams.
+      parameters:
+        - name: teamId
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Liste der Widersprüche
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ShiftCorrectionObjection"
+        "403":
+          description: Kein Zugriff auf dieses Team
+
+  /shifts/{id}/correction/object:
+    post:
+      operationId: objectShiftCorrection
+      tags: [shifts]
+      summary: Einer nachträglichen Korrektur widersprechen (Assistenzkraft)
+      description: >-
+        Nur für den eigenen Dienst und nur, solange eine Korrektur offen ist
+        (vergangener Arbeitsdienst im Status ANGEBOTEN). Der Widerspruch ändert
+        die Schicht NICHT — er dokumentiert nur, dass keine Einigkeit besteht.
+        Höchstens ein offener Widerspruch je Dienst; ein zweiter liefert 409.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftCorrectionObjectionInput"
+      responses:
+        "201":
+          description: Widerspruch eingelegt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShiftCorrectionObjection"
+        "400":
+          description: Keine offene Korrektur zu diesem Dienst
+        "404":
+          description: Kein eigener Dienst mit dieser ID
+        "409":
+          description: Es steht bereits ein Widerspruch offen
+
+  /shifts/{id}/correction/withdraw:
+    post:
+      operationId: withdrawShiftCorrection
+      tags: [shifts]
+      summary: Bestrittene Korrektur zurücknehmen (Planer)
+      description: >-
+        Setzt die Schicht auf den Stand VOR der Korrektur zurück (Quelle:
+        jüngster Eintrag der Änderungshistorie) und wieder auf FIX — der zuvor
+        einvernehmliche Stand gilt, eine erneute Bestätigung wäre sinnlos. Die
+        Rücknahme wird selbst als Änderung protokolliert und erledigt den
+        Widerspruch. Zum Nachbearbeiten stattdessen PATCH /shifts/{id} nutzen;
+        das erledigt einen offenen Widerspruch ebenfalls.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Korrektur zurückgenommen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShiftCorrectionObjection"
+        "404":
+          description: Kein offener Widerspruch zu diesem Dienst
+        "409":
+          description: Stand vor der Korrektur nicht mehr auffindbar
+
   /shifts/{id}/confirm-own:
     post:
       operationId: confirmOwnShift
@@ -3812,6 +3905,54 @@ components:
           format: date-time
         disputeReason:
           type: ["string", "null"]
+
+    ShiftCorrectionObjectionInput:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          description: Begründung — Pflicht, sonst ist der Widerspruch wertlos.
+
+    ShiftCorrectionObjection:
+      type: object
+      required: [id, shiftId, teamId, userId, reason, disputedStartTime, disputedEndTime, status, createdAt]
+      properties:
+        id:
+          type: integer
+        shiftId:
+          type: integer
+        teamId:
+          type: integer
+        userId:
+          type: integer
+        reason:
+          type: string
+        disputedStartTime:
+          type: string
+          format: date-time
+        disputedEndTime:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [OPEN, RESOLVED]
+        createdAt:
+          type: string
+          format: date-time
+        resolution:
+          type: string
+          nullable: true
+          enum: [WITHDRAWN, REWORKED]
+        resolvedBy:
+          type: integer
+          nullable: true
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
 
     ShiftModel:
       type: object

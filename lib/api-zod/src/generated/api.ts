@@ -899,6 +899,72 @@ export const ListShiftDeviationsResponse = zod.array(ListShiftDeviationsResponse
 
 
 /**
+ * Alle Widersprüche im lesbaren Team-Scope. Ohne teamId gilt der gesamte zugängliche Scope. Assistenzkräfte sehen dadurch ihre eigenen, Planer die ihres Teams.
+ * @summary Widersprüche gegen Planer-Korrekturen auflisten
+ */
+export const ListShiftCorrectionObjectionsQueryParams = zod.object({
+  "teamId": zod.coerce.number().optional()
+})
+
+export const ListShiftCorrectionObjectionsResponseItem = zod.object({
+  "id": zod.number(),
+  "shiftId": zod.number(),
+  "teamId": zod.number(),
+  "userId": zod.number(),
+  "reason": zod.string(),
+  "disputedStartTime": zod.coerce.date(),
+  "disputedEndTime": zod.coerce.date(),
+  "status": zod.enum(['OPEN', 'RESOLVED']),
+  "createdAt": zod.coerce.date(),
+  "resolution": zod.enum(['WITHDRAWN', 'REWORKED']).nullish(),
+  "resolvedBy": zod.number().nullish(),
+  "resolvedAt": zod.coerce.date().nullish()
+})
+export const ListShiftCorrectionObjectionsResponse = zod.array(ListShiftCorrectionObjectionsResponseItem)
+
+
+/**
+ * Nur für den eigenen Dienst und nur, solange eine Korrektur offen ist (vergangener Arbeitsdienst im Status ANGEBOTEN). Der Widerspruch ändert die Schicht NICHT — er dokumentiert nur, dass keine Einigkeit besteht. Höchstens ein offener Widerspruch je Dienst; ein zweiter liefert 409.
+ * @summary Einer nachträglichen Korrektur widersprechen (Assistenzkraft)
+ */
+export const ObjectShiftCorrectionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const objectShiftCorrectionBodyReasonMax = 1000;
+
+
+
+export const ObjectShiftCorrectionBody = zod.object({
+  "reason": zod.string().min(1).max(objectShiftCorrectionBodyReasonMax).describe('Begründung — Pflicht, sonst ist der Widerspruch wertlos.')
+})
+
+
+/**
+ * Setzt die Schicht auf den Stand VOR der Korrektur zurück (Quelle: jüngster Eintrag der Änderungshistorie) und wieder auf FIX — der zuvor einvernehmliche Stand gilt, eine erneute Bestätigung wäre sinnlos. Die Rücknahme wird selbst als Änderung protokolliert und erledigt den Widerspruch. Zum Nachbearbeiten stattdessen PATCH /shifts/{id} nutzen; das erledigt einen offenen Widerspruch ebenfalls.
+ * @summary Bestrittene Korrektur zurücknehmen (Planer)
+ */
+export const WithdrawShiftCorrectionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const WithdrawShiftCorrectionResponse = zod.object({
+  "id": zod.number(),
+  "shiftId": zod.number(),
+  "teamId": zod.number(),
+  "userId": zod.number(),
+  "reason": zod.string(),
+  "disputedStartTime": zod.coerce.date(),
+  "disputedEndTime": zod.coerce.date(),
+  "status": zod.enum(['OPEN', 'RESOLVED']),
+  "createdAt": zod.coerce.date(),
+  "resolution": zod.enum(['WITHDRAWN', 'REWORKED']).nullish(),
+  "resolvedBy": zod.number().nullish(),
+  "resolvedAt": zod.coerce.date().nullish()
+})
+
+
+/**
  * Setzt genau einen eigenen Dienst von ANGEBOTEN auf FIX. Gegenstück zu bulk-confirm-own, das nur den ganzen Monat auf einmal bestätigen kann: Vorschläge und nachträgliche Korrekturen des Planers sollen einzeln annehmbar sein. Fremde Dienst-IDs liefern 404 (nicht 403), damit sie nicht ausspähbar sind.
  * @summary Einen eigenen vorgeschlagenen Dienst bestätigen (Assistenzkraft)
  */

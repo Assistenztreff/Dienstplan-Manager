@@ -361,6 +361,71 @@ export const PRE_PUSH_SQL: string[] = [
   `CREATE UNIQUE INDEX IF NOT EXISTS shift_deviation_reports_shift_id_unique ON shift_deviation_reports (shift_id);`,
   `CREATE INDEX IF NOT EXISTS shift_deviation_reports_team_id_status_idx ON shift_deviation_reports (team_id, status);`,
   `CREATE INDEX IF NOT EXISTS shift_deviation_reports_user_id_idx ON shift_deviation_reports (user_id);`,
+  // Neuer Wert im bestehenden Enum der Aenderungshistorie. ADD VALUE IF NOT
+  // EXISTS ist idempotent und laeuft — anders als ein Enum-Neuaufbau — ohne
+  // Rueckfrage auf einer befuellten DB durch.
+  `ALTER TYPE shift_change_source ADD VALUE IF NOT EXISTS 'correction_withdrawn';`,
+  // ── Widerspruch gegen eine Planer-Korrektur (28.08.2026, "Weg A") ────────
+  // Neue Enums + Tabelle: drizzle-kit push fragt bei beidem auf einer
+  // befuellten DB interaktiv nach und bricht ohne TTY ab. Deshalb hier
+  // idempotent vorweg, wie bei shift_deviation_reports.
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'shift_correction_objection_status') THEN
+       CREATE TYPE shift_correction_objection_status AS ENUM ('OPEN', 'RESOLVED');
+     END IF;
+   END $$;`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'shift_correction_objection_resolution') THEN
+       CREATE TYPE shift_correction_objection_resolution AS ENUM ('WITHDRAWN', 'REWORKED');
+     END IF;
+   END $$;`,
+  `CREATE TABLE IF NOT EXISTS shift_correction_objections (
+     id serial PRIMARY KEY,
+     shift_id integer NOT NULL,
+     team_id integer NOT NULL,
+     user_id integer NOT NULL,
+     reason text NOT NULL,
+     disputed_start_time timestamp with time zone NOT NULL,
+     disputed_end_time timestamp with time zone NOT NULL,
+     status shift_correction_objection_status NOT NULL DEFAULT 'OPEN',
+     created_at timestamp with time zone NOT NULL DEFAULT now(),
+     resolution shift_correction_objection_resolution,
+     resolved_by integer,
+     resolved_at timestamp with time zone
+   );`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shift_correction_objections_shift_id_shifts_id_fk') THEN
+       ALTER TABLE shift_correction_objections
+         ADD CONSTRAINT shift_correction_objections_shift_id_shifts_id_fk
+         FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE CASCADE;
+     END IF;
+   END $$;`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shift_correction_objections_team_id_teams_id_fk') THEN
+       ALTER TABLE shift_correction_objections
+         ADD CONSTRAINT shift_correction_objections_team_id_teams_id_fk
+         FOREIGN KEY (team_id) REFERENCES teams(id);
+     END IF;
+   END $$;`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shift_correction_objections_user_id_users_id_fk') THEN
+       ALTER TABLE shift_correction_objections
+         ADD CONSTRAINT shift_correction_objections_user_id_users_id_fk
+         FOREIGN KEY (user_id) REFERENCES users(id);
+     END IF;
+   END $$;`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shift_correction_objections_resolved_by_users_id_fk') THEN
+       ALTER TABLE shift_correction_objections
+         ADD CONSTRAINT shift_correction_objections_resolved_by_users_id_fk
+         FOREIGN KEY (resolved_by) REFERENCES users(id);
+     END IF;
+   END $$;`,
+  // Hoechstens EIN offener Widerspruch je Dienst — erledigte beliebig viele.
+  `CREATE UNIQUE INDEX IF NOT EXISTS shift_correction_objections_open_unique
+     ON shift_correction_objections (shift_id) WHERE status = 'OPEN';`,
+  `CREATE INDEX IF NOT EXISTS shift_correction_objections_team_status_idx ON shift_correction_objections (team_id, status);`,
+  `CREATE INDEX IF NOT EXISTS shift_correction_objections_user_idx ON shift_correction_objections (user_id);`,
 ];
 
 /** Alle Vorab-Schritte sequenziell gegen den übergebenen Client ausführen. */

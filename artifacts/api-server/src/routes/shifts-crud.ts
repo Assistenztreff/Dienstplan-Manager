@@ -1,7 +1,14 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { shiftsTable, usersTable, timeTrackingTable, shiftModelsTable, shiftChangesTable } from "@workspace/db";
-import { eq, inArray } from "drizzle-orm";
+import {
+  shiftsTable,
+  usersTable,
+  timeTrackingTable,
+  shiftModelsTable,
+  shiftChangesTable,
+  shiftCorrectionObjectionsTable,
+} from "@workspace/db";
+import { eq, and, inArray } from "drizzle-orm";
 import {
   CreateShiftBody,
   GetShiftParams,
@@ -849,6 +856,29 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
             userId: updated.userId,
           },
         });
+      }
+
+      // Nachbearbeitung nach einem Widerspruch: Aendert der Planer die Zeit
+      // eines bestrittenen Dienstes erneut, ist der alte Streitpunkt vom Tisch
+      // — die Assistenzkraft bekommt die NEUE Zeit zur Bestaetigung und kann
+      // ihr bei Bedarf erneut widersprechen. Ohne diesen Schritt bliebe der
+      // Widerspruch offen stehen und wuerde eine laengst geklaerte Sache
+      // weiter als strittig melden. Bewusst in derselben Transaktion.
+      if (substanzGeaendert) {
+        await tx
+          .update(shiftCorrectionObjectionsTable)
+          .set({
+            status: "RESOLVED",
+            resolution: "REWORKED",
+            resolvedBy: req.session.userId!,
+            resolvedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(shiftCorrectionObjectionsTable.shiftId, updated.id),
+              eq(shiftCorrectionObjectionsTable.status, "OPEN"),
+            ),
+          );
       }
 
       const newType = updated.type;
