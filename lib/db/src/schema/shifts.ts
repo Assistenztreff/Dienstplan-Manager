@@ -22,11 +22,14 @@ export const shiftTypeEnum = pgEnum("shift_type", [
   // abgesagt_ag     = vom Arbeitgeber abgesagte Stunden (bezahlt, Lohnausfallprinzip)
   // abgesagt_an     = vom Arbeitnehmer abgesagte Stunden (unbezahlt, nur Info)
   // urlaubsabgeltung = ausgezahlter, nicht genommener Urlaub (nur Geldwert)
+  // wunschfrei      = genehmigter Wunschfrei-Tag (unbezahlt, verbraucht KEINE
+  //                   Vertragszeit; sperrt den Tag nur fuer die Planung)
   "kind_krank",
   "freistellung",
   "abgesagt_ag",
   "abgesagt_an",
   "urlaubsabgeltung",
+  "wunschfrei",
 ]);
 
 // Planungsstatus einer Schicht im Lebenszyklus: VORLAEUFIG = Entwurf (interne

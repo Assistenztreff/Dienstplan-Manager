@@ -88,6 +88,7 @@ const SHIFT_TYPE_LABELS: Record<string, string> = {
   abgesagt_ag: "Abgesagt (AG)",
   abgesagt_an: "Abgesagt (AN)",
   urlaubsabgeltung: "Urlaubsabgeltung",
+  wunschfrei: "Wunschfrei",
 };
 
 function hoursFromShift(startTime: string, endTime: string): number {
@@ -658,6 +659,7 @@ const ABSENCE_TYPES = new Set([
   "abgesagt_ag",
   "abgesagt_an",
   "urlaubsabgeltung",
+  "wunschfrei",
 ]);
 
 export type SimpleMonthShift = {

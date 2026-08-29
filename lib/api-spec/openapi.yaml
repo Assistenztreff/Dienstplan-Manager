@@ -364,7 +364,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team, kind_krank, freistellung, abgesagt_ag, abgesagt_an, urlaubsabgeltung]
+            enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team, kind_krank, freistellung, abgesagt_ag, abgesagt_an, urlaubsabgeltung, wunschfrei]
         - name: teamId
           in: query
           description: Optionaler Team-Kontext für die Datentrennung.
@@ -3282,7 +3282,7 @@ components:
           format: date-time
         type:
           type: string
-          enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team, kind_krank, freistellung, abgesagt_ag, abgesagt_an, urlaubsabgeltung]
+          enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team, kind_krank, freistellung, abgesagt_ag, abgesagt_an, urlaubsabgeltung, wunschfrei]
         planningStatus:
           type: string
           description: >-
@@ -3347,7 +3347,7 @@ components:
               format: date-time
             type:
               type: string
-              enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team, kind_krank, freistellung, abgesagt_ag, abgesagt_an, urlaubsabgeltung]
+              enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team, kind_krank, freistellung, abgesagt_ag, abgesagt_an, urlaubsabgeltung, wunschfrei]
             shiftModelId:
               type: ["integer", "null"]
         pauseMinutes:
@@ -3394,7 +3394,7 @@ components:
           format: date-time
         type:
           type: string
-          enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team, kind_krank, freistellung, abgesagt_ag, abgesagt_an, urlaubsabgeltung]
+          enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team, kind_krank, freistellung, abgesagt_ag, abgesagt_an, urlaubsabgeltung, wunschfrei]
         planningStatus:
           type: string
           description: >-
@@ -3447,7 +3447,7 @@ components:
         type:
           type: string
           description: Abwesenheitsart — nur Abwesenheiten sind als Sammelauftrag erlaubt.
-          enum: [vacation, sick, freizeitausgleich, kind_krank, freistellung, abgesagt_ag, abgesagt_an, urlaubsabgeltung]
+          enum: [vacation, sick, freizeitausgleich, kind_krank, freistellung, abgesagt_ag, abgesagt_an, urlaubsabgeltung, wunschfrei]
         days:
           type: array
           minItems: 1
@@ -3529,8 +3529,10 @@ components:
       properties:
         type:
           type: string
-          description: Antragsarten sind bewusst auf Urlaub/Krank beschränkt (§887).
-          enum: [vacation, sick]
+          description: >-
+            Antragsarten: Urlaub, Krank und Wunschfrei (Wunsch, an diesen Tagen
+            nicht eingeplant zu werden). Erst die Genehmigung sperrt die Tage.
+          enum: [vacation, sick, wunschfrei]
         teamId:
           type: integer
           description: >-
@@ -3571,7 +3573,7 @@ components:
           type: ["string", "null"]
         type:
           type: string
-          enum: [vacation, sick]
+          enum: [vacation, sick, wunschfrei]
         status:
           type: string
           enum: [PENDING, APPROVED, REJECTED]
@@ -3803,7 +3805,7 @@ components:
           format: date-time
         type:
           type: string
-          enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team, kind_krank, freistellung, abgesagt_ag, abgesagt_an, urlaubsabgeltung]
+          enum: [active, standby, night, full_day, vacation, sick, work, freizeitausgleich, team, kind_krank, freistellung, abgesagt_ag, abgesagt_an, urlaubsabgeltung, wunschfrei]
         planningStatus:
           type: string
           description: >-

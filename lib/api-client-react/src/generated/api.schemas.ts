@@ -557,6 +557,7 @@ export const ShiftType = {
   abgesagt_ag: 'abgesagt_ag',
   abgesagt_an: 'abgesagt_an',
   urlaubsabgeltung: 'urlaubsabgeltung',
+  wunschfrei: 'wunschfrei',
 } as const;
 
 /**
@@ -582,7 +583,7 @@ export type ShiftVertretungsVorschlag = {
   teamId: number;
   startTime: string;
   endTime: string;
-  type: 'active' | 'standby' | 'night' | 'full_day' | 'vacation' | 'sick' | 'work' | 'freizeitausgleich' | 'team' | 'kind_krank' | 'freistellung' | 'abgesagt_ag' | 'abgesagt_an' | 'urlaubsabgeltung';
+  type: 'active' | 'standby' | 'night' | 'full_day' | 'vacation' | 'sick' | 'work' | 'freizeitausgleich' | 'team' | 'kind_krank' | 'freistellung' | 'abgesagt_ag' | 'abgesagt_an' | 'urlaubsabgeltung' | 'wunschfrei';
   /** @nullable */
   shiftModelId?: number | null;
 } | null;
@@ -661,6 +662,7 @@ export const ShiftInputType = {
   abgesagt_ag: 'abgesagt_ag',
   abgesagt_an: 'abgesagt_an',
   urlaubsabgeltung: 'urlaubsabgeltung',
+  wunschfrei: 'wunschfrei',
 } as const;
 
 /**
@@ -726,6 +728,7 @@ export const BulkAbsenceInputType = {
   abgesagt_ag: 'abgesagt_ag',
   abgesagt_an: 'abgesagt_an',
   urlaubsabgeltung: 'urlaubsabgeltung',
+  wunschfrei: 'wunschfrei',
 } as const;
 
 export type BulkAbsenceInputDaysItem = {
@@ -774,7 +777,7 @@ export interface AbsenceRequestDay {
 }
 
 /**
- * Antragsarten sind bewusst auf Urlaub/Krank beschränkt (§887).
+ * Antragsarten: Urlaub, Krank und Wunschfrei (Wunsch, an diesen Tagen nicht eingeplant zu werden). Erst die Genehmigung sperrt die Tage.
  */
 export type AbsenceRequestInputType = typeof AbsenceRequestInputType[keyof typeof AbsenceRequestInputType];
 
@@ -782,10 +785,11 @@ export type AbsenceRequestInputType = typeof AbsenceRequestInputType[keyof typeo
 export const AbsenceRequestInputType = {
   vacation: 'vacation',
   sick: 'sick',
+  wunschfrei: 'wunschfrei',
 } as const;
 
 export interface AbsenceRequestInput {
-  /** Antragsarten sind bewusst auf Urlaub/Krank beschränkt (§887). */
+  /** Antragsarten: Urlaub, Krank und Wunschfrei (Wunsch, an diesen Tagen nicht eingeplant zu werden). Erst die Genehmigung sperrt die Tage. */
   type: AbsenceRequestInputType;
   /** Optionaler Team-Kontext für Mehrteam-Assistenzkräfte; muss ein Mitglieds-Team der Assistenzkraft sein. */
   teamId?: number;
@@ -803,6 +807,7 @@ export type AbsenceRequestType = typeof AbsenceRequestType[keyof typeof AbsenceR
 export const AbsenceRequestType = {
   vacation: 'vacation',
   sick: 'sick',
+  wunschfrei: 'wunschfrei',
 } as const;
 
 export type AbsenceRequestStatus = typeof AbsenceRequestStatus[keyof typeof AbsenceRequestStatus];
@@ -1005,6 +1010,7 @@ export const ShiftUpdateType = {
   abgesagt_ag: 'abgesagt_ag',
   abgesagt_an: 'abgesagt_an',
   urlaubsabgeltung: 'urlaubsabgeltung',
+  wunschfrei: 'wunschfrei',
 } as const;
 
 /**
@@ -2219,6 +2225,7 @@ export const ListShiftsType = {
   abgesagt_ag: 'abgesagt_ag',
   abgesagt_an: 'abgesagt_an',
   urlaubsabgeltung: 'urlaubsabgeltung',
+  wunschfrei: 'wunschfrei',
 } as const;
 
 export type ListAbsenceRequestsParams = {

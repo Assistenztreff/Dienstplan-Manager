@@ -496,6 +496,7 @@ router.post("/shifts/bulk", requireAuth, async (req, res): Promise<void> => {
               "abgesagt_an",
               "urlaubsabgeltung",
               "freizeitausgleich",
+              "wunschfrei",
             ]),
             lt(shiftsTable.startTime, maxEnd),
             gt(shiftsTable.endTime, minStart),

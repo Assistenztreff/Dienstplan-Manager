@@ -763,6 +763,7 @@ export async function findPlannedWorkShiftsForDay(
           "abgesagt_ag",
           "abgesagt_an",
           "urlaubsabgeltung",
+          "wunschfrei",
         ]),
         gte(shiftsTable.startTime, dayStart),
         lt(shiftsTable.startTime, dayEnd),
@@ -901,6 +902,7 @@ export type BulkAbsenceType =
   | "freistellung"
   | "abgesagt_ag"
   | "abgesagt_an"
+  | "wunschfrei"
   | "urlaubsabgeltung";
 
 export type BulkAbsenceCreationInput = {
@@ -1025,6 +1027,7 @@ export async function runBulkAbsenceCreation(
               "abgesagt_ag",
               "abgesagt_an",
               "urlaubsabgeltung",
+              "wunschfrei",
             ]),
             // Sargable Bereichsprädikat aktiviert den (user_id, start_time)-Index.
             gte(shiftsTable.startTime, firstDayStart),

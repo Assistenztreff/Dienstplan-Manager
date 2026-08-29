@@ -9,7 +9,7 @@ import type { AbsenceRequestDay } from './absenceRequestDay';
 import type { AbsenceRequestInputType } from './absenceRequestInputType';
 
 export interface AbsenceRequestInput {
-  /** Antragsarten sind bewusst auf Urlaub/Krank beschränkt (§887). */
+  /** Antragsarten: Urlaub, Krank und Wunschfrei (Wunsch, an diesen Tagen nicht eingeplant zu werden). Erst die Genehmigung sperrt die Tage. */
   type: AbsenceRequestInputType;
   /** Optionaler Team-Kontext für Mehrteam-Assistenzkräfte; muss ein Mitglieds-Team der Assistenzkraft sein. */
   teamId?: number;

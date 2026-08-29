@@ -34,7 +34,7 @@ const isAbsenceShiftType = (type: string): boolean => ABSENCE_SHIFT_TYPES.has(ty
 // sondern nur in ihre eigenen Auswertungs-Spalten. Muss mit
 // isUnpaidAbsenceType/urlaubsabgeltung (shift-metrics-resolve) übereinstimmen;
 // bewusst lokal dupliziert, damit dieses Modul DB-/Express-frei bleibt.
-const INFO_ONLY_SHIFT_TYPES = new Set(["kind_krank", "abgesagt_an", "urlaubsabgeltung"]);
+const INFO_ONLY_SHIFT_TYPES = new Set(["kind_krank", "abgesagt_an", "urlaubsabgeltung", "wunschfrei"]);
 
 /** Schicht-Felder, die in die Auswertung einfließen. */
 export interface BalanceShift {

@@ -1,7 +1,7 @@
 import { format } from "date-fns";
 import { formatAbsenceTimeSpan } from "@/lib/absence-time";
 
-export type AbsenceType = "vacation" | "sick";
+export type AbsenceType = "vacation" | "sick" | "wunschfrei";
 
 export type AbsenceShift = {
   id: number;

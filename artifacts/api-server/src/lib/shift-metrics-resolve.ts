@@ -34,6 +34,8 @@ export function isAbsenceType(type: string): boolean {
   //  - abgesagt_an:      vom Arbeitnehmer abgesagt — unbezahlt, Metriken = 0
   //  - urlaubsabgeltung: ausgezahlter Urlaub — gewertete Stunden nur als Basis
   //    für den Euro-Wert der Auswertung (fließt dort nicht in Soll/Erfüllt).
+  //  - wunschfrei:       genehmigter Wunschfrei-Tag — unbezahlt, Metriken = 0;
+  //    sperrt den Tag nur für die Planung (Abstimmung 29.08.2026).
   return (
     type === "vacation" ||
     type === "sick" ||
@@ -42,14 +44,15 @@ export function isAbsenceType(type: string): boolean {
     type === "freistellung" ||
     type === "abgesagt_ag" ||
     type === "abgesagt_an" ||
-    type === "urlaubsabgeltung"
+    type === "urlaubsabgeltung" ||
+    type === "wunschfrei"
   );
 }
 
 // Unbezahlte Kategorien: reine Info-Zählung, KEINE gewerteten Stunden und keine
 // Zuschläge — sie dürfen weder Erfüllung noch Lohn erzeugen.
 export function isUnpaidAbsenceType(type: string): boolean {
-  return type === "kind_krank" || type === "abgesagt_an";
+  return type === "kind_krank" || type === "abgesagt_an" || type === "wunschfrei";
 }
 
 // Ein "ganztägiger" Abwesenheitseintrag folgt der Frontend-Konvention
