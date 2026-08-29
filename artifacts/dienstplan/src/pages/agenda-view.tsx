@@ -20,6 +20,9 @@ export function AgendaView({
   onShiftClick,
   onConfirmShift,
   onConfirmOwnShift,
+  correctionObjections,
+  onObjectCorrection,
+  onWithdrawCorrection,
   canEdit,
   selectionMode = false,
   selectedDates,
@@ -45,6 +48,10 @@ export function AgendaView({
   onConfirmShift?: (shift: Shift) => void;
   /** Eigenbestätigung der Assistenzkraft (eigene Route, s. day-detail-row). */
   onConfirmOwnShift?: (shift: Shift) => void;
+  /** Offene Widersprüche je Dienst-ID. */
+  correctionObjections?: Map<number, { id: number; reason: string; status: string }>;
+  onObjectCorrection?: (shift: Shift, reason: string) => void;
+  onWithdrawCorrection?: (shift: Shift) => void;
   canEdit: boolean;
   /** Abweichungsmodell: shiftId → Meldung, plus die drei Aktionen. Fehlen
    *  sie, bleibt die Zeile unverändert (Ownership-/Rollenprüfung lebt in
@@ -301,6 +308,12 @@ export function AgendaView({
                             // für Nicht-Planer gedacht. Ownership und Status
                             // prüft die Zeile selbst (selfConfirmable).
                             onConfirmOwn={!other && !selectionMode ? onConfirmOwnShift : undefined}
+                            correctionObjection={correctionObjections?.get(shift.id)}
+                            // Widersprechen ist Sache der betroffenen Person —
+                            // wie "War anders" bewusst ohne canEdit-Anteil.
+                            onObjectCorrection={!other && !selectionMode ? onObjectCorrection : undefined}
+                            // Zurücknehmen ist Planer-Sache.
+                            onWithdrawCorrection={dayClickable && !selectionMode ? onWithdrawCorrection : undefined}
                             deviationReport={deviationReports?.get(shift.id)}
                             // "War anders" ist für die Assistenzkraft selbst
                             // gedacht, NICHT nur für Bearbeitungsberechtigte —

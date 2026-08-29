@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import type { ShiftDeviationReport } from "@workspace/api-client-react";
 import {
   DisputeDeviationDialog,
+  ObjectCorrectionDialog,
   ReportDeviationDialog,
   type DeviationReportValues,
 } from "./deviation-dialog";
@@ -40,6 +41,9 @@ export function DayDetailRow({
   onClick,
   onConfirm,
   onConfirmOwn,
+  correctionObjection,
+  onObjectCorrection,
+  onWithdrawCorrection,
   testId,
   hasAusfall = false,
   deviationReport,
@@ -59,6 +63,12 @@ export function DayDetailRow({
    *  Kay-Feedback 28.08.2026 — vorher gab es für Assistenzkräfte nur
    *  "Alle bestätigen". */
   onConfirmOwn?: (shift: Shift) => void;
+  /** Offener Widerspruch gegen die Korrektur dieses Dienstes, falls vorhanden. */
+  correctionObjection?: { id: number; reason: string; status: string } | null;
+  /** Assistenzkraft widerspricht der Korrektur (mit Begründung). */
+  onObjectCorrection?: (shift: Shift, reason: string) => void;
+  /** Planer nimmt die bestrittene Korrektur zurück. */
+  onWithdrawCorrection?: (shift: Shift) => void;
   /** data-testid der Zeile — die Wochen-Liste vergibt `shift-badge-<id>`,
    *  damit die bestehenden E2E-Selektoren greifen. */
   testId: string;
@@ -82,6 +92,7 @@ export function DayDetailRow({
   const getPersonSlot = usePersonSlotLookup();
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [disputeDialogOpen, setDisputeDialogOpen] = useState(false);
+  const [objectDialogOpen, setObjectDialogOpen] = useState(false);
   const mirror = isMirrorShift(shift, selectedTeamId);
   const isAbsence = isAbsenceShift(shift);
   const isTeam = shift.type === "team";
@@ -143,6 +154,17 @@ export function DayDetailRow({
   // der Knopf gar nicht erst angeboten. Ist die Assistenzkraft selbst die
   // planende Person (Einzelkonto), bleibt er sichtbar.
   const korrekturFremd = pastCorrection && currentUser?.id !== shift.userId;
+  const strittig = correctionObjection?.status === "OPEN";
+  // Widersprechen darf nur die betroffene Person, nur bei offener Korrektur und
+  // nur solange noch kein Widerspruch steht (einer je Dienst, s. Schema).
+  const canObjectCorrection =
+    !!onObjectCorrection &&
+    !mirror &&
+    pastCorrection &&
+    !strittig &&
+    currentUser?.id === shift.userId;
+  // Zurücknehmen ist Planer-Sache — der Aufrufer übergibt den Callback nur dann.
+  const canWithdrawCorrection = !!onWithdrawCorrection && !mirror && strittig;
   const confirmable = onConfirm && !mirror && !korrekturFremd && isConfirmableShift(shift);
   // Eigenbestätigung: nur der eigene, vorgeschlagene Dienst und nur, wenn
   // nicht ohnehin schon der Planer-Knopf steht (sonst zwei Knöpfe).
@@ -150,6 +172,9 @@ export function DayDetailRow({
     !confirmable &&
     !!onConfirmOwn &&
     !mirror &&
+    // Solange der Widerspruch offen ist, wird nicht bestätigt — sonst hebt
+    // ein Fehlklick den eigenen Einspruch stillschweigend auf.
+    !strittig &&
     shift.planningStatus === "ANGEBOTEN" &&
     isConfirmableShift(shift) &&
     currentUser?.id === shift.userId;
@@ -279,6 +304,50 @@ export function DayDetailRow({
         >
           <Check className="h-3 w-3" />
           {pastCorrection ? "Korrektur bestätigen" : "Annehmen"}
+        </button>
+      )}
+
+      {/* Korrektur ablehnen — Gegenstück zum Widerspruch des Planers. */}
+      {canObjectCorrection && (
+        <button
+          type="button"
+          data-testid={`correction-object-${shift.id}`}
+          title="Dieser nachträglichen Änderung widersprechen"
+          onClick={(e) => {
+            e.stopPropagation();
+            setObjectDialogOpen(true);
+          }}
+          className="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-md border border-[#b23b3b] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#b23b3b] transition-colors after:absolute after:inset-x-0 after:top-1/2 after:h-[44px] after:-translate-y-1/2 after:content-[''] hover:bg-[#fdf2f2]"
+        >
+          Ablehnen
+        </button>
+      )}
+
+      {/* Strittig — beide Seiten sehen die Begründung per Tooltip. */}
+      {strittig && (
+        <span
+          data-testid={`correction-objection-badge-${shift.id}`}
+          title={`Widerspruch: ${correctionObjection?.reason ?? ""}`}
+          className="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-md bg-[#b23b3b]/15 px-2 py-0.5 text-[11px] font-semibold text-[#8f2f2f]"
+        >
+          Strittig
+        </span>
+      )}
+
+      {/* Planer: bestrittene Korrektur zurücknehmen. Nachbearbeiten geht über
+          den normalen Bearbeiten-Dialog (Klick auf die Zeile). */}
+      {canWithdrawCorrection && (
+        <button
+          type="button"
+          data-testid={`correction-withdraw-${shift.id}`}
+          title="Korrektur zurücknehmen — der Stand vor der Änderung gilt wieder"
+          onClick={(e) => {
+            e.stopPropagation();
+            onWithdrawCorrection(shift);
+          }}
+          className="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-md border border-[#d8d8d4] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#092948] transition-colors after:absolute after:inset-x-0 after:top-1/2 after:h-[44px] after:-translate-y-1/2 after:content-[''] hover:border-[#092948]"
+        >
+          Zurücknehmen
         </button>
       )}
 
@@ -462,6 +531,18 @@ export function DayDetailRow({
           onSubmit={(reason) => {
             onDisputeDeviation(shift, reason);
             setDisputeDialogOpen(false);
+          }}
+        />
+      )}
+      {objectDialogOpen && onObjectCorrection && (
+        <ObjectCorrectionDialog
+          open={objectDialogOpen}
+          onOpenChange={setObjectDialogOpen}
+          submitting={deviationActionPending}
+          zeitraum={timeLabel}
+          onSubmit={(reason) => {
+            onObjectCorrection(shift, reason);
+            setObjectDialogOpen(false);
           }}
         />
       )}
