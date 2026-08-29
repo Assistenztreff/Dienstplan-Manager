@@ -74,6 +74,7 @@ import type {
   ListHourBudgetsParams,
   ListOperatorErrorsParams,
   ListOperatorPlanChangesParams,
+  ListShiftChangesParams,
   ListShiftCorrectionObjectionsParams,
   ListShiftDeviationsParams,
   ListShiftModelsParams,
@@ -97,6 +98,7 @@ import type {
   SendShiftProposalsResult,
   SetPasswordInput,
   Shift,
+  ShiftChangeSummary,
   ShiftCorrectionObjection,
   ShiftCorrectionObjectionInput,
   ShiftDeviationDisputeInput,
@@ -2444,6 +2446,91 @@ export function useListShiftDeviations<TData = Awaited<ReturnType<typeof listShi
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListShiftDeviationsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListShiftChangesUrl = (params?: ListShiftChangesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/shifts/changes?${stringifiedParams}` : `/api/shifts/changes`
+}
+
+/**
+ * Genau eine Zeile je Dienst — die jüngste Änderung. Grundlage für die Korrektur-Kennzeichnung im Dienstplan, seit Korrekturen sofort gelten und der Dienst dabei bestätigt bleibt. Wer nicht planen darf, sieht ausschließlich die eigenen Zeilen. Die vollständige Historie bleibt in der Datenbank und ist dem Monats-Export vorbehalten.
+ * @summary Letzte Änderung je Dienst
+ */
+export const listShiftChanges = async (params?: ListShiftChangesParams, options?: RequestInit): Promise<ShiftChangeSummary[]> => {
+
+  return customFetch<ShiftChangeSummary[]>(getListShiftChangesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListShiftChangesQueryKey = (params?: ListShiftChangesParams,) => {
+    return [
+    `/api/shifts/changes`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListShiftChangesQueryOptions = <TData = Awaited<ReturnType<typeof listShiftChanges>>, TError = ErrorType<void>>(params?: ListShiftChangesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShiftChanges>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListShiftChangesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listShiftChanges>>> = ({ signal }) => listShiftChanges(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listShiftChanges>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListShiftChangesQueryResult = NonNullable<Awaited<ReturnType<typeof listShiftChanges>>>
+export type ListShiftChangesQueryError = ErrorType<void>
+
+
+/**
+ * @summary Letzte Änderung je Dienst
+ */
+
+export function useListShiftChanges<TData = Awaited<ReturnType<typeof listShiftChanges>>, TError = ErrorType<void>>(
+ params?: ListShiftChangesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShiftChanges>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListShiftChangesQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

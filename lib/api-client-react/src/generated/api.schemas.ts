@@ -1110,6 +1110,23 @@ export interface ShiftDeviationReport {
   disputeReason?: string | null;
 }
 
+export type ShiftChangeSummaryChangeSource = typeof ShiftChangeSummaryChangeSource[keyof typeof ShiftChangeSummaryChangeSource];
+
+
+export const ShiftChangeSummaryChangeSource = {
+  planner_edit: 'planner_edit',
+  deviation_accepted: 'deviation_accepted',
+  correction_withdrawn: 'correction_withdrawn',
+} as const;
+
+export interface ShiftChangeSummary {
+  shiftId: number;
+  changeSource: ShiftChangeSummaryChangeSource;
+  changedBy: number;
+  userId: number;
+  createdAt: string;
+}
+
 export interface ShiftCorrectionObjectionInput {
   /**
      * Begründung — Pflicht, sonst ist der Widerspruch wertlos.
@@ -2246,6 +2263,10 @@ export type ListShiftDeviationsParams = {
 /**
  * Optionaler Team-Kontext; muss ein erlaubtes Team sein.
  */
+teamId?: number;
+};
+
+export type ListShiftChangesParams = {
 teamId?: number;
 };
 

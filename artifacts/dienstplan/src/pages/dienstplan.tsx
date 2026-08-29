@@ -14,6 +14,7 @@ import {
   useListShiftDeviations,
   useConfirmOwnShift,
   useListShiftCorrectionObjections,
+  useListShiftChanges,
   useObjectShiftCorrection,
   useWithdrawShiftCorrection,
   useReportShiftDeviation,
@@ -224,13 +225,35 @@ export default function Dienstplan() {
     return map;
   }, [correctionObjectionsData]);
 
+  // Letzte Aenderung je Dienst. Seit Korrekturen sofort gelten (28.08.2026),
+  // taugt der Planungsstatus nicht mehr als Erkennungsmerkmal — der Dienst
+  // bleibt bestaetigt. Diese Liste ist die neue Quelle.
+  const { data: shiftChangesData } = useListShiftChanges(teamParam, {
+    query: { enabled: isTeamScopeReady },
+  } as unknown as Parameters<typeof useListShiftChanges>[1]) as {
+    data?: { shiftId: number; changeSource: string; createdAt: string }[];
+  };
+
+  /** Alle nachtraeglich geaenderten Dienste — bekommen das Korrektur-Symbol. */
   const correctedShiftIds = useMemo(() => {
     const ids = new Set<number>();
+    for (const c of shiftChangesData ?? []) ids.add(c.shiftId);
+    // Bestandsdaten aus der Zeit vor /shifts/changes: eine angenommene
+    // Abweichung ist ebenfalls eine Korrektur.
     for (const report of deviationReportsData ?? []) {
       if (report.status === "ACCEPTED") ids.add(report.shiftId);
     }
     return ids;
-  }, [deviationReportsData]);
+  }, [shiftChangesData, deviationReportsData]);
+
+  /** Vom PLANER zuletzt geaenderte Dienste — nur hier ist Widerspruch moeglich. */
+  const plannerCorrectedShiftIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const c of shiftChangesData ?? []) {
+      if (c.changeSource === "planner_edit") ids.add(c.shiftId);
+    }
+    return ids;
+  }, [shiftChangesData]);
 
   const confirmOwnShiftMutation = useConfirmOwnShift();
   const objectCorrectionMutation = useObjectShiftCorrection();
@@ -642,9 +665,22 @@ export default function Dienstplan() {
   // bliebe der Dienst im Banner und im Prüf-Filter stehen, die Liste leerte
   // sich nie und die Ansicht sprang nach dem Ablehnen nicht zurück — anders
   // als nach dem Bestätigen (Kay-Feedback 28.08.2026).
-  const myKorrekturShifts = myAngebotenShifts.filter(
-    (s) => isPastCorrection(s) && !openObjectionsByShiftId.has(s.id),
-  );
+  // Korrekturen sind seit dem 28.08.2026 KEINE Aufgabe mehr, sondern eine
+  // Information: der Dienst gilt bereits. Die Liste treibt deshalb nur noch
+  // den Hinweis und den Pruef-Filter — bestaetigt wird nichts. Bereits
+  // bestrittene fallen raus (der Ball liegt beim Planer), ebenso die vom
+  // Planer schon zurueckgenommenen (dort ist changeSource nicht planner_edit).
+  const myKorrekturShifts = !isAdmin
+    ? allShifts.filter(
+        (s) =>
+          s.userId === currentUser?.id &&
+          !isMirrorShift(s, selectedTeamId) &&
+          plannerCorrectedShiftIds.has(s.id) &&
+          !openObjectionsByShiftId.has(s.id),
+      )
+    : [];
+  // Vorschlaege sind unveraendert echte Aufgaben: alles ANGEBOTEN, das keine
+  // Alt-Korrektur aus der Zeit vor der Umstellung ist.
   const myVorschlagShifts = myAngebotenShifts.filter((s) => !isPastCorrection(s));
   // Die drei Pruef-Listen der Tagesleiste. Sie werden HIER berechnet, weil nur
   // die Seite Rolle, Team-Kontext und die Abweichungs-Meldungen kennt; die
@@ -969,21 +1005,20 @@ export default function Dienstplan() {
         </PlanLimitBanner>
       )}
 
-      {/* Assistenz-Banner 1: KORREKTUREN. Bewusst zuerst und farblich getrennt
-          von den Vorschlägen — hier geht es um bereits gearbeitete Dienste,
-          deren Zeit der Planer nachträglich geändert hat. Das ist die
-          arbeitszeitrechtlich bedeutsamere Zustimmung und darf nicht mit
-          gewöhnlicher Planung in einem Topf landen (Kay-Feedback 28.08.2026).
-          Kein Sammel-Knopf: jede Korrektur wird einzeln in der Tagesleiste
-          bestätigt, damit niemand geänderte Zeiten unbesehen abnickt. */}
+      {/* Assistenz-Banner 1: KORREKTUREN — ein HINWEIS, keine Aufgabe. Seit dem
+          28.08.2026 gilt eine Korrektur des Planers sofort; die Assistenzkraft
+          soll sie sehen und widersprechen können, aber sie haelt die
+          Aufzeichnung nicht mehr auf. Bewusst zuerst und farblich getrennt von
+          den Vorschlägen: dort geht es um Planung, hier um bereits geleistete
+          Arbeitszeit. */}
       {!isAdmin && myKorrekturShifts.length > 0 && (
         <div className="flex flex-col gap-3 rounded-lg border border-[#e2c88a] bg-[#fdf7e8] px-4 py-3 text-[#7a5406] sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-2">
             <StatusBadge kind="correction" compact className="mt-0.5" />
             <span className="text-sm font-medium">
               {myKorrekturShifts.length === 1
-                ? "1 Korrektur wartet auf deine Bestätigung."
-                : `${myKorrekturShifts.length} Korrekturen warten auf deine Bestätigung.`}
+                ? "Der Arbeitgeber hat 1 deiner Arbeitszeiten nachträglich geändert. Sie gilt bereits — du kannst widersprechen."
+                : `Der Arbeitgeber hat ${myKorrekturShifts.length} deiner Arbeitszeiten nachträglich geändert. Sie gelten bereits — du kannst widersprechen.`}
             </span>
           </div>
           <Button
@@ -1207,6 +1242,7 @@ export default function Dienstplan() {
         onShiftClick={openEdit}
         onConfirmShift={confirmShift}
             onConfirmOwnShift={confirmOwnShift}
+            plannerCorrectedShiftIds={plannerCorrectedShiftIds}
             correctionObjections={openObjectionsByShiftId}
             onObjectCorrection={objectCorrection}
             onWithdrawCorrection={canPlan ? withdrawCorrection : undefined}

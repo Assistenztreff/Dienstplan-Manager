@@ -20,6 +20,7 @@ export function AgendaView({
   onShiftClick,
   onConfirmShift,
   onConfirmOwnShift,
+  plannerCorrectedShiftIds,
   correctionObjections,
   onObjectCorrection,
   onWithdrawCorrection,
@@ -48,6 +49,8 @@ export function AgendaView({
   onConfirmShift?: (shift: Shift) => void;
   /** Eigenbestätigung der Assistenzkraft (eigene Route, s. day-detail-row). */
   onConfirmOwnShift?: (shift: Shift) => void;
+  /** Dienste, die der Planer zuletzt nachträglich geändert hat. */
+  plannerCorrectedShiftIds?: ReadonlySet<number>;
   /** Offene Widersprüche je Dienst-ID. */
   correctionObjections?: Map<number, { id: number; reason: string; status: string }>;
   onObjectCorrection?: (shift: Shift, reason: string) => void;
@@ -308,6 +311,7 @@ export function AgendaView({
                             // für Nicht-Planer gedacht. Ownership und Status
                             // prüft die Zeile selbst (selfConfirmable).
                             onConfirmOwn={!other && !selectionMode ? onConfirmOwnShift : undefined}
+                            korrekturVomPlaner={plannerCorrectedShiftIds?.has(shift.id) ?? false}
                             correctionObjection={correctionObjections?.get(shift.id)}
                             // Widersprechen ist Sache der betroffenen Person —
                             // wie "War anders" bewusst ohne canEdit-Anteil.

@@ -39,18 +39,40 @@ import { storeShiftMetrics } from "./shifts";
 
 const router = Router();
 
-/** Offene Korrektur = vergangener Arbeitsdienst, der auf ANGEBOTEN zurueckfiel. */
-function istOffeneKorrektur(shift: {
+/**
+ * Widerspruchsfaehig = vergangener Arbeitsdienst, den der PLANER zuletzt
+ * geaendert hat.
+ *
+ * Seit dem 28.08.2026 gilt eine Korrektur sofort und der Dienst bleibt FIX —
+ * der Status taugt also nicht mehr als Erkennungsmerkmal. Massgeblich ist
+ * stattdessen die juengste Zeile der Aenderungshistorie: stammt sie von einem
+ * planner_edit, hat der Planer einseitig geaendert und die Assistenzkraft darf
+ * widersprechen. Bei deviation_accepted hat sie die Zeit selbst gemeldet und
+ * der Planer sie angenommen (Einigkeit — nichts zu bestreiten), bei
+ * correction_withdrawn ist die Sache bereits erledigt.
+ */
+function istArbeitsdienstInVergangenheit(shift: {
   planningStatus: string;
   type: string;
   endTime: Date;
 }): boolean {
   return (
-    shift.planningStatus === "ANGEBOTEN" &&
+    shift.planningStatus === "FIX" &&
     !isAbsenceType(shift.type) &&
     shift.type !== "team" &&
     shift.endTime.getTime() < Date.now()
   );
+}
+
+/** Juengste Aenderung dieses Dienstes — null, wenn er nie geaendert wurde. */
+async function letzteAenderung(shiftId: number) {
+  const [row] = await db
+    .select()
+    .from(shiftChangesTable)
+    .where(eq(shiftChangesTable.shiftId, shiftId))
+    .orderBy(desc(shiftChangesTable.id))
+    .limit(1);
+  return row ?? null;
 }
 
 // Muss VOR /shifts/:id stehen (s. Reihenfolgen-Hinweis in routes/index.ts).
@@ -104,9 +126,10 @@ router.post("/shifts/:id/correction/object", requireAuth, async (req, res): Prom
     res.status(404).json({ error: "Not found" });
     return;
   }
-  if (!istOffeneKorrektur(shift)) {
+  const letzte = await letzteAenderung(shift.id);
+  if (!istArbeitsdienstInVergangenheit(shift) || letzte?.changeSource !== "planner_edit") {
     res.status(400).json({
-      error: "Es liegt keine offene Korrektur zu diesem Dienst vor.",
+      error: "Zu diesem Dienst liegt keine Korrektur des Arbeitgebers vor.",
       code: "objection_no_open_correction",
     });
     return;

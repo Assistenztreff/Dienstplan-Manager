@@ -41,6 +41,7 @@ export function DayDetailRow({
   onClick,
   onConfirm,
   onConfirmOwn,
+  korrekturVomPlaner = false,
   correctionObjection,
   onObjectCorrection,
   onWithdrawCorrection,
@@ -63,6 +64,8 @@ export function DayDetailRow({
    *  Kay-Feedback 28.08.2026 — vorher gab es für Assistenzkräfte nur
    *  "Alle bestätigen". */
   onConfirmOwn?: (shift: Shift) => void;
+  /** Der Planer hat diesen Dienst zuletzt nachtraeglich geaendert. */
+  korrekturVomPlaner?: boolean;
   /** Offener Widerspruch gegen die Korrektur dieses Dienstes, falls vorhanden. */
   correctionObjection?: { id: number; reason: string; status: string } | null;
   /** Assistenzkraft widerspricht der Korrektur (mit Begründung). */
@@ -157,10 +160,14 @@ export function DayDetailRow({
   const strittig = correctionObjection?.status === "OPEN";
   // Widersprechen darf nur die betroffene Person, nur bei offener Korrektur und
   // nur solange noch kein Widerspruch steht (einer je Dienst, s. Schema).
+  // Widersprechen darf die betroffene Person bei einer Korrektur des Planers.
+  // Seit dem 28.08.2026 erkennt man die nicht mehr am Status (der Dienst bleibt
+  // bestaetigt), sondern am Kennzeichen aus der Aenderungshistorie — pastCorrection
+  // deckt weiterhin Bestandsdaten aus der Zeit davor ab.
   const canObjectCorrection =
     !!onObjectCorrection &&
     !mirror &&
-    pastCorrection &&
+    (pastCorrection || korrekturVomPlaner) &&
     !strittig &&
     currentUser?.id === shift.userId;
   // Zurücknehmen ist Planer-Sache — der Aufrufer übergibt den Callback nur dann.

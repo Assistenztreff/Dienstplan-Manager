@@ -808,6 +808,35 @@ paths:
                 items:
                   $ref: "#/components/schemas/ShiftDeviationReport"
 
+  /shifts/changes:
+    get:
+      operationId: listShiftChanges
+      tags: [shifts]
+      summary: Letzte Änderung je Dienst
+      description: >-
+        Genau eine Zeile je Dienst — die jüngste Änderung. Grundlage für die
+        Korrektur-Kennzeichnung im Dienstplan, seit Korrekturen sofort gelten
+        und der Dienst dabei bestätigt bleibt. Wer nicht planen darf, sieht
+        ausschließlich die eigenen Zeilen. Die vollständige Historie bleibt in
+        der Datenbank und ist dem Monats-Export vorbehalten.
+      parameters:
+        - name: teamId
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Letzte Änderung je Dienst
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ShiftChangeSummary"
+        "403":
+          description: Kein Zugriff auf dieses Team
+
   /shifts/correction-objections:
     get:
       operationId: listShiftCorrectionObjections
@@ -3907,6 +3936,23 @@ components:
           format: date-time
         disputeReason:
           type: ["string", "null"]
+
+    ShiftChangeSummary:
+      type: object
+      required: [shiftId, changeSource, changedBy, userId, createdAt]
+      properties:
+        shiftId:
+          type: integer
+        changeSource:
+          type: string
+          enum: [planner_edit, deviation_accepted, correction_withdrawn]
+        changedBy:
+          type: integer
+        userId:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
 
     ShiftCorrectionObjectionInput:
       type: object

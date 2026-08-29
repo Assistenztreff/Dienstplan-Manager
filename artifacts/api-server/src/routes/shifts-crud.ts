@@ -737,7 +737,24 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
     (body.data.userId !== undefined && body.data.userId !== oldShift.userId) ||
     (body.data.pauseMinutes !== undefined &&
       body.data.pauseMinutes !== oldShift.pauseMinutes);
-  const faelltZurueck =
+  // Nachtraegliche Korrektur eines bereits bestaetigten Dienstes.
+  //
+  // ACHTUNG, geaenderte Regel (Kay-Entscheidung 28.08.2026): Frueher fiel der
+  // Dienst dabei auf ANGEBOTEN zurueck und wartete auf die Zustimmung der
+  // Assistenzkraft. Das hatte einen schweren Nachteil — klickte sie nicht,
+  // stand der Dienst dauerhaft auf "Korrektur" und zaehlte nirgends mit. Ein
+  // Zeitnachweis, der in der Schwebe haengt, ist arbeitszeitrechtlich
+  // schlechter als eine dokumentierte Aenderung mit Widerspruchsrecht.
+  //
+  // Jetzt gilt: Die Korrektur wirkt SOFORT, der Dienst bleibt FIX. Die
+  // Assistenzkraft sieht sie im Dienstplan (Korrektur-Kennzeichen + Hinweis)
+  // und kann ihr widersprechen (shift_correction_objections). Ihre Stimme
+  // bleibt also erhalten — nur haelt sie die Aufzeichnung nicht mehr auf.
+  //
+  // Der Name bleibt, weil daran die Aenderungshistorie haengt: Diese Bedingung
+  // ist weiterhin die exakte Definition von "aufzeichnungspflichtige Korrektur"
+  // (§ 3 Abs. 2 Nr. 1 ArbSchG).
+  const istKorrektur =
     oldShift.planningStatus === "FIX" &&
     !isAbsenceType(effectiveType) &&
     effectiveType !== "team" &&
@@ -789,7 +806,7 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
     // Team-Einträge sind nicht personenbezogen vertretbar — anders als bei
     // Abwesenheiten (dort bleibt der Wert bewusst stehen, s. Kommentar oben).
     ...(effectiveType === "team" ? { standbyUserId: null } : {}),
-    ...(faelltZurueck ? { planningStatus: "ANGEBOTEN" as const } : {}),
+    // Kein Statuswechsel mehr — die Korrektur gilt sofort (s. istKorrektur).
   };
 
   // Team-Einträge ganztägig erzwingen — auch beim Bearbeiten (Typwechsel zu
@@ -832,11 +849,11 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
       if (!updated) throw notFoundError;
 
       // Änderungshistorie: nur wenn ein bereits bestätigter Dienst inhaltlich
-      // geändert wurde — exakt die faelltZurueck-Bedingung oben. Aufzeichnungs-
+      // geändert wurde — exakt die istKorrektur-Bedingung oben. Aufzeichnungs-
       // pflicht der tatsächlich geleisteten Arbeitszeit (§ 3 Abs. 2 Nr. 1
       // ArbSchG): der alte Wert darf beim Überschreiben nicht spurlos
       // verschwinden. changedBy IMMER aus der Session, nie aus dem Body.
-      if (faelltZurueck) {
+      if (istKorrektur) {
         await tx.insert(shiftChangesTable).values({
           shiftId: updated.id,
           teamId: oldShift.teamId,

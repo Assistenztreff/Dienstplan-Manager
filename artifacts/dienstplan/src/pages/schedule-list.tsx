@@ -99,6 +99,7 @@ export function ScheduleList({
   onShiftClick,
   onConfirmShift,
   onConfirmOwnShift,
+  plannerCorrectedShiftIds,
   correctionObjections,
   onObjectCorrection,
   onWithdrawCorrection,
@@ -130,6 +131,7 @@ export function ScheduleList({
   onShiftClick: (shift: Shift) => void;
   onConfirmShift?: (shift: Shift) => void;
   onConfirmOwnShift?: (shift: Shift) => void;
+  plannerCorrectedShiftIds?: ReadonlySet<number>;
   correctionObjections?: Map<number, { id: number; reason: string; status: string }>;
   onObjectCorrection?: (shift: Shift, reason: string) => void;
   onWithdrawCorrection?: (shift: Shift) => void;
@@ -526,6 +528,7 @@ export function ScheduleList({
         onShiftClick={onShiftClick}
         onConfirmShift={onConfirmShift}
         onConfirmOwnShift={onConfirmOwnShift}
+        plannerCorrectedShiftIds={plannerCorrectedShiftIds}
         correctionObjections={correctionObjections}
         onObjectCorrection={onObjectCorrection}
         onWithdrawCorrection={onWithdrawCorrection}

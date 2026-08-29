@@ -899,6 +899,24 @@ export const ListShiftDeviationsResponse = zod.array(ListShiftDeviationsResponse
 
 
 /**
+ * Genau eine Zeile je Dienst — die jüngste Änderung. Grundlage für die Korrektur-Kennzeichnung im Dienstplan, seit Korrekturen sofort gelten und der Dienst dabei bestätigt bleibt. Wer nicht planen darf, sieht ausschließlich die eigenen Zeilen. Die vollständige Historie bleibt in der Datenbank und ist dem Monats-Export vorbehalten.
+ * @summary Letzte Änderung je Dienst
+ */
+export const ListShiftChangesQueryParams = zod.object({
+  "teamId": zod.coerce.number().optional()
+})
+
+export const ListShiftChangesResponseItem = zod.object({
+  "shiftId": zod.number(),
+  "changeSource": zod.enum(['planner_edit', 'deviation_accepted', 'correction_withdrawn']),
+  "changedBy": zod.number(),
+  "userId": zod.number(),
+  "createdAt": zod.coerce.date()
+})
+export const ListShiftChangesResponse = zod.array(ListShiftChangesResponseItem)
+
+
+/**
  * Alle Widersprüche im lesbaren Team-Scope. Ohne teamId gilt der gesamte zugängliche Scope. Assistenzkräfte sehen dadurch ihre eigenen, Planer die ihres Teams.
  * @summary Widersprüche gegen Planer-Korrekturen auflisten
  */
