@@ -17,15 +17,33 @@ import { registerFreeAccount, deleteFreeAccount, type FreeAccount } from "./help
  * vorbelegt mit dem ALTEN Wert — ein mitgesendeter, unveränderter Status ist
  * also keine bewusste Entscheidung und darf den Rückfall NICHT verhindern.
  *
+ * NUR FÜR KÜNFTIGE DIENSTE (Kay-Entscheidung 28.08.2026): Bei einem bereits
+ * gearbeiteten Dienst gilt die Korrektur sofort und der Dienst bleibt FIX —
+ * eine schwebende Rückbestätigung wäre arbeitszeitrechtlich schlechter als
+ * eine dokumentierte Änderung mit Widerspruchsrecht. Der vergangene Fall
+ * steht in dienstplan-korrektur-kreislauf-api.spec.ts.
+ *
+ * Datumsfest: die Testtage werden RELATIV zu heute berechnet. Vorher standen
+ * hier feste Juni-Tage — die Spec war dadurch nur im ersten Halbjahr grün und
+ * ab Juli rot, weil ihre Dienste in die Vergangenheit rutschten und dort
+ * (korrekterweise) nicht mehr zurückfallen. Dieselbe Zeitbombe wie in der
+ * Abwesenheitskalender-Spec.
+ *
  * Läuft rein über die API gegen den isolierten Test-Stack (kein UI nötig, da
  * der Rückfall serverseitig in PATCH /api/shifts/:id greift).
  */
 
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
 
-const YEAR = new Date().getFullYear();
-const WORK_DAY = `${YEAR}-06-10`;
-const VACATION_DAY = `${YEAR}-06-11`;
+/** Kalendertag `tageVoraus` Tage in der ZUKUNFT, als YYYY-MM-DD. */
+function kuenftigerTag(tageVoraus: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + tageVoraus);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+const WORK_DAY = kuenftigerTag(20);
+const VACATION_DAY = kuenftigerTag(21);
 
 type Shift = { id: number; planningStatus: string; endTime: string };
 
