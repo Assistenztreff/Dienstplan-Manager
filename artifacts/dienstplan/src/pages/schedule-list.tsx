@@ -541,7 +541,12 @@ export function ScheduleList({
         onPrevMonth={onPrevMonth}
         onNextMonth={onNextMonth}
         selectedDay={selectedDay}
-        hideEmptyDays={detailType !== "alle"}
+        // Leere Tage sind nur fuer Planende nuetzlich — dort ist die leere Zeile
+        // die Stelle, an der ein Dienst angelegt wird. Einer Assistenzkraft
+        // nuetzen sie nichts: sie kann dort nichts eintragen und muss sich durch
+        // lauter leere Zeilen scrollen, um ihre eigenen Dienste zu finden
+        // (Kay-Feedback 28.08.2026). Deshalb blendet "Alle" sie fuer sie aus.
+        hideEmptyDays={detailType !== "alle" || !canEdit}
         anchorInterval={detailRange === "monat" ? { from: rangeStart, to: rangeEnd } : undefined}
         collapsedWeeks={collapsedWeeks}
         onToggleWeek={toggleWeek}
