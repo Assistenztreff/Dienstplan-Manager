@@ -685,7 +685,11 @@ export default function Dienstplan() {
         (s) =>
           s.userId === currentUser?.id &&
           !isMirrorShift(s, selectedTeamId) &&
-          plannerCorrectedShiftIds.has(s.id),
+          plannerCorrectedShiftIds.has(s.id) &&
+          // Nur VERGANGENE Dienste: ein künftiger, vom Planer geänderter Dienst
+          // fällt auf "Vorschlag" zurück und wird dort bestätigt — er gehört
+          // nicht in den Korrektur-Hinweis (Kay-Test 28.08.2026, 31. August).
+          new Date(s.endTime).getTime() < Date.now(),
       )
     : [];
   // Vorschlaege sind unveraendert echte Aufgaben: alles ANGEBOTEN, das keine

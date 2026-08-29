@@ -198,6 +198,12 @@ router.post(
       .select()
       .from(shiftDeviationReportsTable)
       .where(eq(shiftDeviationReportsTable.shiftId, shift.id))
+      // JUENGSTE Meldung — seit ein Dienst nach jeder erneuten Korrektur wieder
+      // gemeldet werden darf, gibt es mehrere Zeilen je Dienst. Ohne die
+      // Sortierung griff hier die aelteste (laengst erledigte) und der Planer
+      // bekam "Meldung ist nicht mehr offen", obwohl eine offene vorlag
+      // (Kay-Test 28.08.2026).
+      .orderBy(desc(shiftDeviationReportsTable.id))
       .limit(1);
     if (!report) {
       res.status(404).json({ error: "Not found" });
@@ -285,6 +291,12 @@ router.post(
       .select()
       .from(shiftDeviationReportsTable)
       .where(eq(shiftDeviationReportsTable.shiftId, shift.id))
+      // JUENGSTE Meldung — seit ein Dienst nach jeder erneuten Korrektur wieder
+      // gemeldet werden darf, gibt es mehrere Zeilen je Dienst. Ohne die
+      // Sortierung griff hier die aelteste (laengst erledigte) und der Planer
+      // bekam "Meldung ist nicht mehr offen", obwohl eine offene vorlag
+      // (Kay-Test 28.08.2026).
+      .orderBy(desc(shiftDeviationReportsTable.id))
       .limit(1);
     if (!report) {
       res.status(404).json({ error: "Not found" });

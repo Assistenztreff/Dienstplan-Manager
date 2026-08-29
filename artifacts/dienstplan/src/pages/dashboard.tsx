@@ -803,7 +803,12 @@ function CorrectedShiftsBanner() {
   // userId-Pruefung deckt Teamleiter-Assistenzkraefte ab (gleiches Muster wie
   // beim Vorschlags-Banner).
   const betroffen = (shifts ?? []).filter(
-    (s) => s.userId === currentUser?.id && korrigierteIds.has(s.id),
+    (s) =>
+      s.userId === currentUser?.id &&
+      korrigierteIds.has(s.id) &&
+      // Nur VERGANGENE Dienste: ein künftiger, geänderter Dienst fällt auf
+      // "Vorschlag" zurück und erscheint im Vorschlags-Banner darunter.
+      new Date(s.endTime).getTime() < Date.now(),
   );
   if (betroffen.length === 0) return null;
 

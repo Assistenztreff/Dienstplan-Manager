@@ -753,13 +753,32 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
   // Der Name bleibt, weil daran die Aenderungshistorie haengt: Diese Bedingung
   // ist weiterhin die exakte Definition von "aufzeichnungspflichtige Korrektur"
   // (§ 3 Abs. 2 Nr. 1 ArbSchG).
-  const istKorrektur =
+  const istSubstanzAenderungAnFixDienst =
     oldShift.planningStatus === "FIX" &&
     !isAbsenceType(effectiveType) &&
     effectiveType !== "team" &&
     (body.data.planningStatus === undefined ||
       body.data.planningStatus === oldShift.planningStatus) &&
     substanzGeaendert;
+
+  // Vergangenheit und Zukunft sind zwei verschiedene Vorgaenge (Kay-Test
+  // 28.08.2026):
+  //
+  // VERGANGEN = Korrektur eines bereits gearbeiteten Dienstes. Sie gilt sofort,
+  //   der Dienst bleibt FIX; die Assistenzkraft kann eine abweichende Zeit
+  //   melden. Eine Rueckbestaetigung wuerde den Zeitnachweis nur in der
+  //   Schwebe halten.
+  //
+  // ZUKUENFTIG = Aenderung der PLANUNG. Hier gibt es nichts zu dokumentieren,
+  //   aber sehr wohl etwas abzustimmen: die Assistenzkraft hat sich auf die
+  //   zugesagte Zeit eingerichtet. Deshalb faellt der Dienst wie eh und je auf
+  //   ANGEBOTEN zurueck und muss neu bestaetigt werden.
+  //
+  // Ohne diese Trennung landete eine Aenderung an einem kuenftigen Dienst als
+  // "Korrektur" im Hinweis der Assistenzkraft — mit einem Melde-Knopf, den es
+  // dort zu Recht nicht gibt, weil der Dienst noch gar nicht gearbeitet wurde.
+  const dienstLiegtInVergangenheit = new Date(effectiveEnd).getTime() < Date.now();
+  const faelltZurueck = istSubstanzAenderungAnFixDienst && !dienstLiegtInVergangenheit;
 
   // Vier-Augen-Prinzip bei Korrekturen (Kay-Feedback 28.08.2026): Eine bereits
   // gearbeitete, vom Planer nachträglich geänderte Schicht steht auf ANGEBOTEN
@@ -805,7 +824,8 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
     // Team-Einträge sind nicht personenbezogen vertretbar — anders als bei
     // Abwesenheiten (dort bleibt der Wert bewusst stehen, s. Kommentar oben).
     ...(effectiveType === "team" ? { standbyUserId: null } : {}),
-    // Kein Statuswechsel mehr — die Korrektur gilt sofort (s. istKorrektur).
+    // Nur kuenftige Dienste fallen zurueck; eine Korrektur gilt sofort.
+    ...(faelltZurueck ? { planningStatus: "ANGEBOTEN" as const } : {}),
   };
 
   // Team-Einträge ganztägig erzwingen — auch beim Bearbeiten (Typwechsel zu
@@ -848,11 +868,11 @@ router.patch("/shifts/:id", requireTeamPlanningOrAdmin, async (req, res): Promis
       if (!updated) throw notFoundError;
 
       // Änderungshistorie: nur wenn ein bereits bestätigter Dienst inhaltlich
-      // geändert wurde — exakt die istKorrektur-Bedingung oben. Aufzeichnungs-
+      // geändert wurde — für Vergangenheit UND Zukunft. Aufzeichnungs-
       // pflicht der tatsächlich geleisteten Arbeitszeit (§ 3 Abs. 2 Nr. 1
       // ArbSchG): der alte Wert darf beim Überschreiben nicht spurlos
       // verschwinden. changedBy IMMER aus der Session, nie aus dem Body.
-      if (istKorrektur) {
+      if (istSubstanzAenderungAnFixDienst) {
         await tx.insert(shiftChangesTable).values({
           shiftId: updated.id,
           teamId: oldShift.teamId,
