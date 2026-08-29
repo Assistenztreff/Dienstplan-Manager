@@ -24,7 +24,7 @@ export interface DeviationReportValues {
   ausgefallen: boolean;
 }
 
-/** Melde-Dialog "War anders" — Assistenzkraft meldet die tatsächlich
+/** Melde-Dialog "Zeit korrigieren" — Assistenzkraft meldet die tatsächlich
  *  geleistete Zeit für einen bereits vergangenen, bestätigten Dienst.
  *  Feldset/Verhalten folgt dem abgenommenen Mockup
  *  (02 Projekte/Dienstplan-Mockups/abweichung-mockup.html im Vault). */
@@ -76,7 +76,7 @@ export function ReportDeviationDialog({
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle>Abweichung melden</DialogTitle>
+          <DialogTitle>Zeit korrigieren</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <p className="text-sm text-muted-foreground">
@@ -151,7 +151,7 @@ export function ReportDeviationDialog({
               })
             }
           >
-            Abweichung melden
+            Korrektur senden
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -182,7 +182,7 @@ export function DisputeDeviationDialog({
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle>Abweichung ablehnen</DialogTitle>
+          <DialogTitle>Gemeldete Korrektur ablehnen</DialogTitle>
         </DialogHeader>
         <div className="space-y-1.5 py-2">
           <Label>Grund *</Label>

@@ -179,7 +179,7 @@ export function DayDetailRow({
     isConfirmableShift(shift) &&
     currentUser?.id === shift.userId;
 
-  // Abweichungsmodell: "War anders" nur für die eigene, bereits vergangene
+  // Abweichungsmodell: "Zeit korrigieren" nur für die eigene, bereits vergangene
   // FIX-Schicht (Arbeitsdienst, keine Abwesenheit/Teamdienst), solange noch
   // keine Meldung existiert (Abbruchregel — genau eine Meldung pro Dienst).
   const isPastFixWorkShift =
@@ -351,12 +351,15 @@ export function DayDetailRow({
         </button>
       )}
 
-      {/* "War anders" — Abweichungsmodell (Assistenzkraft). */}
+      {/* "Zeit korrigieren" — Abweichungsmodell (Assistenzkraft). Bewusst
+          dasselbe Wort wie beim Planer-Weg: es ist derselbe Vorgang aus der
+          anderen Richtung, und zwei Begriffe für eine Sache haben beim
+          Testen zuverlässig verwirrt (Kay-Feedback 28.08.2026). */}
       {canReportDeviation && (
         <button
           type="button"
           data-testid={`deviation-report-${shift.id}`}
-          title="Abweichung von der geplanten Zeit melden"
+          title="Tatsächlich geleistete Zeit melden — der Arbeitgeber bestätigt sie"
           onClick={(e) => {
             e.stopPropagation();
             setReportDialogOpen(true);
@@ -367,7 +370,7 @@ export function DayDetailRow({
           // auffallen, nicht wie eine Routine-Aktion wirken.
           className="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-md border border-[#b5790a] bg-white px-2.5 py-1 text-[14px] font-semibold text-[#b5790a] transition-colors after:absolute after:inset-x-0 after:top-1/2 after:h-[44px] after:-translate-y-1/2 after:content-[''] hover:bg-[#b5790a]/10"
         >
-          War anders
+          Zeit korrigieren
         </button>
       )}
 

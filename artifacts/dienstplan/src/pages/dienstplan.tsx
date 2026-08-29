@@ -637,7 +637,14 @@ export default function Dienstplan() {
   // shifts-crud.ts) — Zustimmung zu einer geänderten Arbeitszeit, also eine
   // arbeitszeitrechtlich ganz andere Aussage. Deshalb zwei Banner statt einem
   // Sammel-Hinweis, und beide mit Einzelbestätigung.
-  const myKorrekturShifts = myAngebotenShifts.filter((s) => isPastCorrection(s));
+  // Eine BESTRITTENE Korrektur zählt hier NICHT mehr mit: Die Assistenzkraft
+  // hat ihren Teil getan, der Ball liegt beim Planer. Ohne diesen Ausschluss
+  // bliebe der Dienst im Banner und im Prüf-Filter stehen, die Liste leerte
+  // sich nie und die Ansicht sprang nach dem Ablehnen nicht zurück — anders
+  // als nach dem Bestätigen (Kay-Feedback 28.08.2026).
+  const myKorrekturShifts = myAngebotenShifts.filter(
+    (s) => isPastCorrection(s) && !openObjectionsByShiftId.has(s.id),
+  );
   const myVorschlagShifts = myAngebotenShifts.filter((s) => !isPastCorrection(s));
   // Die drei Pruef-Listen der Tagesleiste. Sie werden HIER berechnet, weil nur
   // die Seite Rolle, Team-Kontext und die Abweichungs-Meldungen kennt; die
