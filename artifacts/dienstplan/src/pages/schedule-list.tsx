@@ -174,10 +174,16 @@ export function ScheduleList({
     if (!focusFilter) return;
     setDetailType(focusFilter.type);
     setDetailRange("monat");
+    // Doppeltes rAF: Filter- und Einklapp-Effekt müssen erst gelaufen sein,
+    // sonst steht die Zielzeile noch gar nicht im DOM. Ziel ist die ERSTE
+    // betroffene Tageszeile — nicht die Listen-Kopfzeile und erst recht nicht
+    // die aktuelle Woche (Kay-Feedback 28.08.2026).
     requestAnimationFrame(() => {
-      document
-        .querySelector('[data-testid="schedule-list-header"]')
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      requestAnimationFrame(() => {
+        const ersteZeile = document.querySelector('[data-testid^="agenda-day-"]');
+        (ersteZeile ?? document.querySelector('[data-testid="schedule-list-header"]'))
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusFilter?.type, focusFilter?.nonce]);
@@ -341,9 +347,15 @@ export function ScheduleList({
   // auch beim Monatswechsel neu, damit der Einstieg vorhersehbar bleibt;
   // „Heute"/„Diese Woche" öffnen immer alles.
   const todayWeekKey = format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd");
-  const displayRangeKey = `${detailRange}|${format(displayStart, "yyyy-MM-dd")}|${format(displayEnd, "yyyy-MM-dd")}`;
+  const displayRangeKey = `${detailRange}|${detailType}|${format(displayStart, "yyyy-MM-dd")}|${format(displayEnd, "yyyy-MM-dd")}`;
   useEffect(() => {
-    if (detailRange === "monat" || detailRange === "zweiMonate") {
+    // Prüf-Filter (Korrekturen, Vorschläge, Meldungen, Widersprüche) zeigen
+    // ohnehin NUR die betroffenen Tage — da ist Einklappen sinnlos und schädlich:
+    // die gesuchte Woche wäre zu und der Fall unsichtbar (Kay-Feedback
+    // 28.08.2026, nach dem ersten Test des Dashboard-Sprungs).
+    if (istPruefFilter(detailType)) {
+      setCollapsedWeeks(new Set());
+    } else if (detailRange === "monat" || detailRange === "zweiMonate") {
       setCollapsedWeeks(new Set(weekKeys.filter((k) => k !== todayWeekKey)));
     } else {
       setCollapsedWeeks(new Set());
@@ -368,6 +380,10 @@ export function ScheduleList({
       (detailRange === "woche" || detailRange === "monat");
     prevDetailRangeRef.current = detailRange;
     if (!enteringWeekOrMonth) return;
+    // Bei einem Prüf-Filter ist die aktuelle Woche das falsche Ziel — dort
+    // steht in aller Regel gar kein Fall. Das Scrollen übernimmt der
+    // Fokus-Effekt weiter oben, der zur ERSTEN betroffenen Zeile springt.
+    if (istPruefFilter(detailType)) return;
     const weekKey =
       detailRange === "woche"
         ? format(startOfWeek(selectedDay, { weekStartsOn: 1 }), "yyyy-MM-dd")
