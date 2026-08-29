@@ -9,6 +9,7 @@ import {
   type AllowanceSettingsInputState,
   type AllowanceSettingsInputBillingMethod,
   type AllowanceSettingsInputVacationMethod,
+  type AllowanceSettingsInputVertretungCompensationMode,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,6 +61,8 @@ type FormState = {
   pauseThreshold2Hours: string;
   pauseMinutes2: string;
   deductPausesEnabled: boolean;
+  vertretungCompensationMode: string;
+  vertretungCompensationValue: string;
 };
 
 // Sonderwert für "erbt" (Abrechnungsart nicht auf dieser Ebene gesetzt).
@@ -210,6 +213,8 @@ export function AllowanceSettingsForm() {
     pauseThreshold2Hours: "9",
     pauseMinutes2: "45",
     deductPausesEnabled: false,
+    vertretungCompensationMode: "none",
+    vertretungCompensationValue: "0",
   });
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [saving, setSaving] = useState(false);
@@ -254,6 +259,8 @@ export function AllowanceSettingsForm() {
         pauseThreshold2Hours: String(settings.pauseThreshold2Hours ?? 9),
         pauseMinutes2: String(settings.pauseMinutes2 ?? 45),
         deductPausesEnabled: settings.deductPausesEnabled ?? false,
+        vertretungCompensationMode: settings.vertretungCompensationMode ?? "none",
+        vertretungCompensationValue: String(settings.vertretungCompensationValue ?? 0),
       });
       setErrors({});
       setSaved(false);
@@ -287,6 +294,12 @@ export function AllowanceSettingsForm() {
     errs.holidayPercent = validatePercent(form.holidayPercent);
     if (!TIME_PATTERN.test(form.nightStart)) errs.nightStart = "Ungültige Uhrzeit";
     if (!TIME_PATTERN.test(form.nightEnd)) errs.nightEnd = "Ungültige Uhrzeit";
+    if (form.vertretungCompensationMode !== "none") {
+      const vcv = Number(form.vertretungCompensationValue);
+      if (form.vertretungCompensationValue === "" || Number.isNaN(vcv) || vcv < 0) {
+        errs.vertretungCompensationValue = "Mindestens 0";
+      }
+    }
     if (scopeTeamId === undefined) {
       if (form.vacationMethod === "factor") {
         const vf = Number(form.vacationFactor);
@@ -358,6 +371,9 @@ export function AllowanceSettingsForm() {
           billingMethod: (f.billingMethod === INHERIT_BILLING
             ? null
             : f.billingMethod) as AllowanceSettingsInputBillingMethod,
+          vertretungCompensationMode:
+            f.vertretungCompensationMode as AllowanceSettingsInputVertretungCompensationMode,
+          vertretungCompensationValue: Number(f.vertretungCompensationValue),
           // Konto-weite Regeln (Auto-Genehmigung, Zeiterfassung, Urlaubsberechnung)
           // gelten global und werden nur im Konto-Bereich mitgesendet, nicht bei
           // Team-Overrides.
@@ -585,6 +601,48 @@ export function AllowanceSettingsForm() {
                   geplanten Schichten (Soll) oder aus den tatsächlich erfassten Zeiten (Ist)
                   berechnet werden. Eine Einstellung pro Assistenzkraft (Personalakte) hat Vorrang
                   vor dieser {isTeamScope ? "Team-" : "Konto-"}Regelung.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="vertretungCompensationMode">Vertretungsvergütung</Label>
+                <Select
+                  value={form.vertretungCompensationMode}
+                  onValueChange={(v) => set("vertretungCompensationMode", v)}
+                >
+                  <SelectTrigger id="vertretungCompensationMode" data-testid="allowance-vertretung-compensation-mode-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Keine Sonderregel</SelectItem>
+                    <SelectItem value="percent">Reduzierter Satz (% des eigenen Stundenlohns)</SelectItem>
+                    <SelectItem value="flat">Pauschale (€ pro Tag)</SelectItem>
+                  </SelectContent>
+                </Select>
+                {form.vertretungCompensationMode !== "none" && (
+                  <div className="relative max-w-[160px]">
+                    <Input
+                      id="vertretungCompensationValue"
+                      type="number"
+                      min="0"
+                      step={form.vertretungCompensationMode === "percent" ? "1" : "0.01"}
+                      value={form.vertretungCompensationValue}
+                      onChange={(e) => set("vertretungCompensationValue", e.target.value)}
+                      className={errors.vertretungCompensationValue ? "border-destructive pr-8" : "pr-8"}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                      {form.vertretungCompensationMode === "percent" ? "%" : "€"}
+                    </span>
+                  </div>
+                )}
+                {errors.vertretungCompensationValue && (
+                  <p className="text-xs text-destructive">{errors.vertretungCompensationValue}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Gilt für Dienste, die als Vertretung eingesetzt wurden (siehe Dienstplan):
+                  "Reduzierter Satz" zahlt einen Prozentsatz des eigenen Stundenlohns der
+                  Vertretung, "Pauschale" einen festen Betrag für den Tag. "Keine Sonderregel"
+                  = regulärer Lohn wie jeder andere Dienst.
                 </p>
               </div>
 

@@ -8,6 +8,7 @@
 import type { AllowanceSettingsInputBillingMethod } from './allowanceSettingsInputBillingMethod';
 import type { AllowanceSettingsInputState } from './allowanceSettingsInputState';
 import type { AllowanceSettingsInputVacationMethod } from './allowanceSettingsInputVacationMethod';
+import type { AllowanceSettingsInputVertretungCompensationMode } from './allowanceSettingsInputVertretungCompensationMode';
 
 export interface AllowanceSettingsInput {
   /**
@@ -94,4 +95,11 @@ export interface AllowanceSettingsInput {
   pauseMinutes2?: number;
   /** Pausen von den bezahlten Stunden abziehen (konto-global, kein Team-Override). */
   deductPausesEnabled?: boolean;
+  /** Vergütung für aktivierte Vertretungen (Team-Override-fähig). */
+  vertretungCompensationMode?: AllowanceSettingsInputVertretungCompensationMode;
+  /**
+     * Prozentsatz (mode=percent) oder Euro-Betrag (mode=flat).
+     * @minimum 0
+     */
+  vertretungCompensationValue?: number;
 }

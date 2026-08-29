@@ -307,6 +307,62 @@ describe("computeHoursBalanceRow — Zuschlagsberechnung (Prozentsätze)", () =>
     expect(result.totalPay).toBe(310);
   });
 
+  it("Vertretungsvergütung 'percent' überschreibt die reguläre Vergütung NUR bei isVertretung=true", () => {
+    // Team 1 hat 80% Vertretungsvergütung konfiguriert. Zwei Dienste, 8h,
+    // regulärer Stundenlohn 20 (also normal 160 je Dienst) — nur der
+    // zweite ist eine Vertretung: 8h * 20 * 80% = 128 statt 160.
+    const result = computeHoursBalanceRow({
+      userId: 1,
+      userName: "Camillo",
+      shifts: [
+        { type: "active", startTime: local(2026, 6, 1, 8), endTime: local(2026, 6, 1, 16), valuedHours: 8, teamId: 1, compensationType: "regular" },
+        { type: "active", startTime: local(2026, 6, 2, 8), endTime: local(2026, 6, 2, 16), valuedHours: 8, teamId: 1, compensationType: "regular", isVertretung: true },
+      ],
+      timeEntries: [],
+      allowance: STD_ALLOWANCE,
+      contract: null,
+      billingMethod: "SOLL",
+      hourlyWage: 20,
+      vertretungCompensationByTeam: new Map([[1, { mode: "percent", value: 80 }]]),
+    });
+    expect(result.basePay).toBe(288); // 160 (normal) + 128 (Vertretung, 80%)
+  });
+
+  it("Vertretungsvergütung 'flat' zahlt eine Tages-Pauschale unabhängig von der Dienstlänge", () => {
+    const result = computeHoursBalanceRow({
+      userId: 1,
+      userName: "Camillo",
+      shifts: [
+        { type: "active", startTime: local(2026, 6, 1, 8), endTime: local(2026, 6, 1, 20), valuedHours: 12, teamId: 1, compensationType: "regular", isVertretung: true },
+      ],
+      timeEntries: [],
+      allowance: STD_ALLOWANCE,
+      contract: null,
+      billingMethod: "SOLL",
+      hourlyWage: 20,
+      vertretungCompensationByTeam: new Map([[1, { mode: "flat", value: 75 }]]),
+    });
+    // 12h * 20 = 240 regulär, aber die Pauschale (75) gilt statt der Stunden-Rechnung.
+    expect(result.basePay).toBe(75);
+  });
+
+  it("Vertretungsvergütung 'none' (Default) ändert nichts — regulärer Lohn wie jeder andere Dienst", () => {
+    const result = computeHoursBalanceRow({
+      userId: 1,
+      userName: "Camillo",
+      shifts: [
+        { type: "active", startTime: local(2026, 6, 1, 8), endTime: local(2026, 6, 1, 16), valuedHours: 8, teamId: 1, compensationType: "regular", isVertretung: true },
+      ],
+      timeEntries: [],
+      allowance: STD_ALLOWANCE,
+      contract: null,
+      billingMethod: "SOLL",
+      hourlyWage: 20,
+      // Kein vertretungCompensationByTeam-Eintrag für Team 1 gesetzt.
+    });
+    expect(result.basePay).toBe(160);
+  });
+
   it("Camillo-Beispiel: SOLL-Nachtzuschlag 63 h * 25 % * 20,40 € = 321,30 €", () => {
     const result = computeHoursBalanceRow({
       userId: 1,

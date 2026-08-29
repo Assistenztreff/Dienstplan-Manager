@@ -3959,6 +3959,8 @@ components:
           pauseThreshold2Hours,
           pauseMinutes2,
           deductPausesEnabled,
+          vertretungCompensationMode,
+          vertretungCompensationValue,
           updatedAt,
         ]
       properties:
@@ -4064,6 +4066,21 @@ components:
             Pausenminuten die gewerteten Stunden und den Grundlohn der
             Arbeitsdienste in BEIDEN Abrechnungsarten (zur Lesezeit angewandt);
             Zuschlagsstunden bleiben unberührt.
+        vertretungCompensationMode:
+          type: string
+          enum: [none, percent, flat]
+          description: >-
+            Vergütung für aktivierte Vertretungen (isVertretung=true).
+            Team-Override-fähig (wie night-/sunday-/holidayPercent oben):
+            Team-Override → Konto-Zeile des Team-Eigentümers → "none".
+            none = regulärer Lohn wie jeder andere Dienst; percent = Prozentsatz
+            des eigenen Stundenlohns der Vertretung für diesen Tag; flat =
+            fester Euro-Betrag für den Tag, unabhängig von der Dienstlänge.
+        vertretungCompensationValue:
+          type: number
+          description: >-
+            Bei "percent" ein Prozentsatz (z. B. 80 = 80 % des eigenen
+            Stundenlohns), bei "flat" ein Euro-Betrag; bei "none" unbenutzt.
         updatedAt:
           type: string
           format: date-time
@@ -4159,6 +4176,14 @@ components:
           description: >-
             Pausen von den bezahlten Stunden abziehen (konto-global, kein
             Team-Override).
+        vertretungCompensationMode:
+          type: string
+          enum: [none, percent, flat]
+          description: Vergütung für aktivierte Vertretungen (Team-Override-fähig).
+        vertretungCompensationValue:
+          type: number
+          minimum: 0
+          description: Prozentsatz (mode=percent) oder Euro-Betrag (mode=flat).
 
     TimeTrackingStatus:
       type: object

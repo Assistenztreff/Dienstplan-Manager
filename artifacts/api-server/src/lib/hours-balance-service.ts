@@ -30,6 +30,7 @@ import {
   DEFAULT_SUNDAY_PERCENT,
   DEFAULT_HOLIDAY_PERCENT,
   type HoursBalanceRow,
+  type VertretungCompensationMode,
 } from "./dashboard-hours-balance";
 import { HoursBalanceCache } from "./hours-balance-cache";
 import { logger } from "./logger";
@@ -252,6 +253,12 @@ async function computeHoursBalancesUncached(
               // KONTO-GLOBAL: Pausen von den bezahlten Stunden abziehen.
               deductPausesEnabled: allowanceSettingsTable.deductPausesEnabled,
               timeTrackingEnabled: allowanceSettingsTable.timeTrackingEnabled,
+              // Vertretungsvergütung: Team-Override-fähig wie die
+              // Zuschlags-Prozente oben (Kay-Feedback 28.08.2026).
+              overrideVertretungCompensationMode: overrideSettings.vertretungCompensationMode,
+              overrideVertretungCompensationValue: overrideSettings.vertretungCompensationValue,
+              vertretungCompensationMode: allowanceSettingsTable.vertretungCompensationMode,
+              vertretungCompensationValue: allowanceSettingsTable.vertretungCompensationValue,
               overrideVacationHoursPerDay: overrideSettings.vacationHoursPerDay,
               overrideFulltimeWorkdaysPerWeek: overrideSettings.fulltimeWorkdaysPerWeek,
               vacationHoursPerDay: allowanceSettingsTable.vacationHoursPerDay,
@@ -376,6 +383,7 @@ async function computeHoursBalancesUncached(
               compensationType: shiftModelsTable.compensationType,
               compensationPercent: shiftModelsTable.compensationPercent,
               compensationFlatCents: shiftModelsTable.compensationFlatCents,
+              isVertretung: shiftsTable.isVertretung,
             })
             .from(timeTrackingTable)
             .innerJoin(usersTable, eq(timeTrackingTable.userId, usersTable.id))
@@ -542,6 +550,23 @@ async function computeHoursBalancesUncached(
   // Bestandsschutz: Pausen bleiben reine Info-Kennzahl).
   const deductPausesByTeam = new Map(
     teamAllowanceRows.map((r) => [r.teamId, r.deductPausesEnabled ?? false])
+  );
+  // Vertretungsvergütung je Team: Team-Override → Konto-Zeile des
+  // Team-Eigentümers → "none" (kein Sonderfall). Gilt nur für Schichten mit
+  // isVertretung=true; rückwirkend angewandt wie die Zuschlags-Prozente.
+  const vertretungCompensationByTeam = new Map(
+    teamAllowanceRows.map((r) => [
+      r.teamId,
+      {
+        mode: (r.overrideVertretungCompensationMode ??
+          r.vertretungCompensationMode ??
+          "none") as VertretungCompensationMode,
+        value:
+          r.overrideVertretungCompensationMode != null
+            ? (r.overrideVertretungCompensationValue ?? 0)
+            : (r.vertretungCompensationValue ?? 0),
+      },
+    ])
   );
 
   // teamMeetingDayRows kommt bereits aus der Promise.all-Gruppe oben.
@@ -761,6 +786,7 @@ async function computeHoursBalancesUncached(
         vacationRefDate,
         teamsitzungStunden,
         deductPausesByTeam,
+        vertretungCompensationByTeam,
       });
     })
   );
