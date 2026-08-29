@@ -1368,6 +1368,8 @@ export const GetAllowanceSettingsResponse = zod.object({
   "pauseThreshold2Hours": zod.number().describe('Ab dieser Dienstdauer (Stunden) gilt Pausen-Stufe 2 (Standard 9).'),
   "pauseMinutes2": zod.number().describe('Pausenminuten der Stufe 2 (Standard 45).'),
   "deductPausesEnabled": zod.boolean().describe('Pausen von den bezahlten Stunden abziehen? Konto-global (kein Team-Override); Standard AUS. Bei AN reduzieren die unbezahlten Pausenminuten die gewerteten Stunden und den Grundlohn der Arbeitsdienste in BEIDEN Abrechnungsarten (zur Lesezeit angewandt); Zuschlagsstunden bleiben unberührt.'),
+  "vertretungCompensationMode": zod.enum(['none', 'percent', 'flat']).describe('Vergütung für aktivierte Vertretungen (isVertretung=true). Team-Override-fähig (wie night-\/sunday-\/holidayPercent oben): Team-Override → Konto-Zeile des Team-Eigentümers → \"none\". none = regulärer Lohn wie jeder andere Dienst; percent = Prozentsatz des eigenen Stundenlohns der Vertretung für diesen Tag; flat = fester Euro-Betrag für den Tag, unabhängig von der Dienstlänge.'),
+  "vertretungCompensationValue": zod.number().describe('Bei \"percent\" ein Prozentsatz (z. B. 80 = 80 % des eigenen Stundenlohns), bei \"flat\" ein Euro-Betrag; bei \"none\" unbenutzt.'),
   "updatedAt": zod.coerce.date()
 })
 
@@ -1411,6 +1413,8 @@ export const updateAllowanceSettingsBodyPauseThreshold2HoursMin = 0.1;
 export const updateAllowanceSettingsBodyPauseMinutes2Min = 0;
 export const updateAllowanceSettingsBodyPauseMinutes2Max = 1440;
 
+export const updateAllowanceSettingsBodyVertretungCompensationValueMin = 0;
+
 
 
 export const UpdateAllowanceSettingsBody = zod.object({
@@ -1437,7 +1441,9 @@ export const UpdateAllowanceSettingsBody = zod.object({
   "pauseMinutes1": zod.number().min(updateAllowanceSettingsBodyPauseMinutes1Min).max(updateAllowanceSettingsBodyPauseMinutes1Max).optional().describe('Pausenminuten der Stufe 1.'),
   "pauseThreshold2Hours": zod.number().min(updateAllowanceSettingsBodyPauseThreshold2HoursMin).optional().describe('Ab dieser Dienstdauer (Stunden) gilt Pausen-Stufe 2.'),
   "pauseMinutes2": zod.number().min(updateAllowanceSettingsBodyPauseMinutes2Min).max(updateAllowanceSettingsBodyPauseMinutes2Max).optional().describe('Pausenminuten der Stufe 2.'),
-  "deductPausesEnabled": zod.boolean().optional().describe('Pausen von den bezahlten Stunden abziehen (konto-global, kein Team-Override).')
+  "deductPausesEnabled": zod.boolean().optional().describe('Pausen von den bezahlten Stunden abziehen (konto-global, kein Team-Override).'),
+  "vertretungCompensationMode": zod.enum(['none', 'percent', 'flat']).optional().describe('Vergütung für aktivierte Vertretungen (Team-Override-fähig).'),
+  "vertretungCompensationValue": zod.number().min(updateAllowanceSettingsBodyVertretungCompensationValueMin).optional().describe('Prozentsatz (mode=percent) oder Euro-Betrag (mode=flat).')
 })
 
 export const UpdateAllowanceSettingsResponse = zod.object({
@@ -1468,6 +1474,8 @@ export const UpdateAllowanceSettingsResponse = zod.object({
   "pauseThreshold2Hours": zod.number().describe('Ab dieser Dienstdauer (Stunden) gilt Pausen-Stufe 2 (Standard 9).'),
   "pauseMinutes2": zod.number().describe('Pausenminuten der Stufe 2 (Standard 45).'),
   "deductPausesEnabled": zod.boolean().describe('Pausen von den bezahlten Stunden abziehen? Konto-global (kein Team-Override); Standard AUS. Bei AN reduzieren die unbezahlten Pausenminuten die gewerteten Stunden und den Grundlohn der Arbeitsdienste in BEIDEN Abrechnungsarten (zur Lesezeit angewandt); Zuschlagsstunden bleiben unberührt.'),
+  "vertretungCompensationMode": zod.enum(['none', 'percent', 'flat']).describe('Vergütung für aktivierte Vertretungen (isVertretung=true). Team-Override-fähig (wie night-\/sunday-\/holidayPercent oben): Team-Override → Konto-Zeile des Team-Eigentümers → \"none\". none = regulärer Lohn wie jeder andere Dienst; percent = Prozentsatz des eigenen Stundenlohns der Vertretung für diesen Tag; flat = fester Euro-Betrag für den Tag, unabhängig von der Dienstlänge.'),
+  "vertretungCompensationValue": zod.number().describe('Bei \"percent\" ein Prozentsatz (z. B. 80 = 80 % des eigenen Stundenlohns), bei \"flat\" ein Euro-Betrag; bei \"none\" unbenutzt.'),
   "updatedAt": zod.coerce.date()
 })
 

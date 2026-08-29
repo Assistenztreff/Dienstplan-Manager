@@ -72,6 +72,21 @@ export type BillingMethod = "SOLL" | "IST";
 export type CompensationType = "regular" | "percentage" | "flat";
 
 /**
+ * Vertretungsvergütung (Kay-Feedback 28.08.2026): Team-Override-fähige
+ * Sonderregel für aktivierte Vertretungen (isVertretung=true) — ÜBERSCHREIBT
+ * für diese Schicht die sonst geltende compensationType/-Percent/-FlatCents
+ * des Schichtmodells. "none" = kein Sonderfall, regulärer Lohn wie jeder
+ * andere Dienst. "percent" = value ist ein Prozentsatz des EIGENEN
+ * Stundenlohns der Vertretung. "flat" = value ist ein fester Euro-Betrag für
+ * den ganzen Tag, unabhängig von der Dienstlänge.
+ */
+export type VertretungCompensationMode = "none" | "percent" | "flat";
+export interface VertretungCompensation {
+  mode: VertretungCompensationMode;
+  value: number;
+}
+
+/**
  * Berechnungs-Weiche für die Abrechnungsart: Ist die Zeiterfassung des
  * Team-Eigentümers DEAKTIVIERT (Konto-Schalter, Standard AUS), existieren
  * keine (neuen) IST-Zeiten — die gesamte Lohnberechnung (Grundvergütung UND
@@ -108,6 +123,8 @@ export interface BalanceTimeEntry {
   compensationType?: CompensationType | null;
   compensationPercent?: number | null;
   compensationFlatCents?: number | null;
+  /** Vertretungs-Markierung der verknüpften Schicht (Info-Kennzahl, s. BalanceShift). */
+  isVertretung?: boolean | null;
 }
 
 export interface AllowancePercents {
@@ -331,6 +348,16 @@ export function computeHoursBalanceRow(params: {
    */
   deductPausesByTeam?: Map<number, boolean>;
   deductPausesFallback?: boolean;
+  /**
+   * Vertretungsvergütung je Team (Kay-Feedback 28.08.2026, Team-Override wie
+   * night-/sunday-/holidayPercent). Gilt NUR für Schichten mit
+   * isVertretung=true — überschreibt dort compensationType/-Percent/
+   * -FlatCents des Schichtmodells. Ohne Eintrag (oder ohne teamId an der
+   * Schicht) gilt `vertretungCompensationFallback` (Default "none" = kein
+   * Sonderfall, regulärer Lohn wie jeder andere Dienst).
+   */
+  vertretungCompensationByTeam?: Map<number, VertretungCompensation>;
+  vertretungCompensationFallback?: VertretungCompensation;
   /**
    * Stichtag für die Wartezeit-Proration des Urlaubssockels (§ 4 BUrlG,
    * siehe vacationPoolHours). Ohne Angabe der aktuelle Zeitpunkt — pure
@@ -589,14 +616,36 @@ export function computeHoursBalanceRow(params: {
   let sundaySurchargePay: number | null = null;
   let holidaySurchargePay: number | null = null;
   let totalPay: number | null = null;
+  // Vertretungsvergütung (Kay-Feedback 28.08.2026): Team-Override-fähig wie
+  // die Zuschlags-Prozente oben. Ohne Eintrag/teamId gilt der Fallback
+  // (Default "none" — kein Sonderfall, regulärer Lohn wie jeder andere Dienst).
+  const vertretungCompFor = (teamId?: number | null): VertretungCompensation =>
+    (teamId != null ? params.vertretungCompensationByTeam?.get(teamId) : undefined) ??
+    params.vertretungCompensationFallback ?? { mode: "none", value: 0 };
+
   if (wage != null) {
     let base = 0;
     const addBase = (entry: {
       hours: number;
+      teamId?: number | null;
+      isVertretung?: boolean | null;
       compensationType?: CompensationType | null;
       compensationPercent?: number | null;
       compensationFlatCents?: number | null;
     }) => {
+      // Eine aktivierte Vertretung übernimmt NUR bei einer konfigurierten
+      // Sonderregel deren Vergütung — bei "none" gilt exakt dieselbe
+      // Berechnung wie für jeden anderen Dienst (isVertretung ändert dann
+      // nichts an der Vergütung, nur die Info-Kennzahl bleibt gesetzt).
+      const vertretungComp = entry.isVertretung ? vertretungCompFor(entry.teamId) : null;
+      if (vertretungComp && vertretungComp.mode !== "none") {
+        if (vertretungComp.mode === "flat") {
+          base += vertretungComp.value;
+        } else {
+          base += wage * entry.hours * (vertretungComp.value / 100);
+        }
+        return;
+      }
       const compType = entry.compensationType ?? "regular";
       if (compType === "flat") {
         // Festbetrag pro Schicht (dauerunabhängig).

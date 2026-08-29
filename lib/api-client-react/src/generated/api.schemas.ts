@@ -1303,6 +1303,18 @@ export const AllowanceSettingsVacationMethod = {
   factor: 'factor',
 } as const;
 
+/**
+ * Vergütung für aktivierte Vertretungen (isVertretung=true). Team-Override-fähig (wie night-/sunday-/holidayPercent oben): Team-Override → Konto-Zeile des Team-Eigentümers → "none". none = regulärer Lohn wie jeder andere Dienst; percent = Prozentsatz des eigenen Stundenlohns der Vertretung für diesen Tag; flat = fester Euro-Betrag für den Tag, unabhängig von der Dienstlänge.
+ */
+export type AllowanceSettingsVertretungCompensationMode = typeof AllowanceSettingsVertretungCompensationMode[keyof typeof AllowanceSettingsVertretungCompensationMode];
+
+
+export const AllowanceSettingsVertretungCompensationMode = {
+  none: 'none',
+  percent: 'percent',
+  flat: 'flat',
+} as const;
+
 export interface AllowanceSettings {
   id: number;
   /**
@@ -1358,6 +1370,10 @@ export interface AllowanceSettings {
   pauseMinutes2: number;
   /** Pausen von den bezahlten Stunden abziehen? Konto-global (kein Team-Override); Standard AUS. Bei AN reduzieren die unbezahlten Pausenminuten die gewerteten Stunden und den Grundlohn der Arbeitsdienste in BEIDEN Abrechnungsarten (zur Lesezeit angewandt); Zuschlagsstunden bleiben unberührt. */
   deductPausesEnabled: boolean;
+  /** Vergütung für aktivierte Vertretungen (isVertretung=true). Team-Override-fähig (wie night-/sunday-/holidayPercent oben): Team-Override → Konto-Zeile des Team-Eigentümers → "none". none = regulärer Lohn wie jeder andere Dienst; percent = Prozentsatz des eigenen Stundenlohns der Vertretung für diesen Tag; flat = fester Euro-Betrag für den Tag, unabhängig von der Dienstlänge. */
+  vertretungCompensationMode: AllowanceSettingsVertretungCompensationMode;
+  /** Bei "percent" ein Prozentsatz (z. B. 80 = 80 % des eigenen Stundenlohns), bei "flat" ein Euro-Betrag; bei "none" unbenutzt. */
+  vertretungCompensationValue: number;
   updatedAt: string;
 }
 
@@ -1404,6 +1420,18 @@ export type AllowanceSettingsInputVacationMethod = typeof AllowanceSettingsInput
 export const AllowanceSettingsInputVacationMethod = {
   bwavg: 'bwavg',
   factor: 'factor',
+} as const;
+
+/**
+ * Vergütung für aktivierte Vertretungen (Team-Override-fähig).
+ */
+export type AllowanceSettingsInputVertretungCompensationMode = typeof AllowanceSettingsInputVertretungCompensationMode[keyof typeof AllowanceSettingsInputVertretungCompensationMode];
+
+
+export const AllowanceSettingsInputVertretungCompensationMode = {
+  none: 'none',
+  percent: 'percent',
+  flat: 'flat',
 } as const;
 
 export interface AllowanceSettingsInput {
@@ -1491,6 +1519,13 @@ export interface AllowanceSettingsInput {
   pauseMinutes2?: number;
   /** Pausen von den bezahlten Stunden abziehen (konto-global, kein Team-Override). */
   deductPausesEnabled?: boolean;
+  /** Vergütung für aktivierte Vertretungen (Team-Override-fähig). */
+  vertretungCompensationMode?: AllowanceSettingsInputVertretungCompensationMode;
+  /**
+     * Prozentsatz (mode=percent) oder Euro-Betrag (mode=flat).
+     * @minimum 0
+     */
+  vertretungCompensationValue?: number;
 }
 
 /**

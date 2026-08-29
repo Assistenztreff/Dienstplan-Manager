@@ -115,6 +115,8 @@ router.put("/allowance-settings", requireAdmin, async (req, res): Promise<void> 
       holidayPercent: body.data.holidayPercent,
       state: body.data.state,
       billingMethod: body.data.billingMethod,
+      vertretungCompensationMode: body.data.vertretungCompensationMode,
+      vertretungCompensationValue: body.data.vertretungCompensationValue,
     };
     // Upsert des Team-Overrides (UNIQUE team_id).
     const [saved] = await db
