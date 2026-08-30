@@ -141,6 +141,22 @@ paths:
       operationId: deleteUser
       tags: [users]
       summary: Benutzer löschen
+      description: >-
+        Löscht das Konto samt seiner aufbewahrungspflichtigen Zeilen (Dienste,
+        Abwesenheiten, Verträge, Zeiterfassung, Änderungshistorie).
+
+
+        Hat das Konto solche Daten, ist vorher ein Lösch-Archiv Pflicht: es
+        muss ein über POST /users/{id}/deletion-archive erzeugtes Archiv für
+        dieses Konto geben, das derselbe Admin angelegt hat, das noch für keine
+        Löschung verwendet wurde und das nicht älter als 30 Minuten ist. Sonst
+        409 `deletion_archive_required`. Das Archiv wird beim erfolgreichen
+        Löschen als verwendet gestempelt.
+
+
+        Konten ohne aufbewahrungspflichtige Daten (z. B. eine eben angelegte
+        Assistenzkraft) werden ohne Archiv gelöscht — ein Export-Ritual für ein
+        leeres Konto wäre reine Schikane.
       parameters:
         - name: id
           in: path
@@ -150,6 +166,53 @@ paths:
       responses:
         "204":
           description: Gelöscht
+        "409":
+          description: >-
+            Archiv fehlt (`deletion_archive_required`), Konto besitzt noch
+            Teams, oder es bestehen Abhängigkeiten aus fremden Datensätzen.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteUserConflict"
+
+  /users/{id}/deletion-archive:
+    post:
+      operationId: createDeletionArchive
+      tags: [users]
+      summary: Lösch-Archiv erzeugen und herunterladen
+      description: >-
+        Erzeugt serverseitig aus der Datenbank ein vollständiges Archiv der
+        aufbewahrungspflichtigen Daten dieser Person (Stundenliste,
+        Zeiterfassung, Stundenkonto, Lohnauswertung, Änderungshistorie,
+        Verträge) als ZIP mit CSV-Tabellen, legt es im Server-Archiv ab und
+        liefert **dieselben Bytes** als Download zurück. Die abgelegte Datei
+        ist damit byte-gleich mit der im Archiv.
+
+
+        Die ID des erzeugten Archivs steht im Antwort-Header
+        `X-Deletion-Archive-Id` und wird beim anschließenden DELETE als
+        `archiveId` mitgegeben.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: ZIP-Archiv; Archiv-ID im Header `X-Deletion-Archive-Id`.
+          headers:
+            X-Deletion-Archive-Id:
+              description: ID der abgelegten Archiv-Zeile.
+              schema:
+                type: integer
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Kein Konto mit dieser ID im erlaubten Team-Scope
 
   /contracts:
     get:
@@ -3911,6 +3974,19 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    DeleteUserConflict:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+          enum: [deletion_archive_required, owned_team, foreign_dependency]
+          description: >-
+            `deletion_archive_required`: das Konto hat aufbewahrungspflichtige
+            Daten, es wurde aber kein (gültiges, frisches) Archiv mitgegeben.
 
     ShiftChangeSnapshot:
       type: object

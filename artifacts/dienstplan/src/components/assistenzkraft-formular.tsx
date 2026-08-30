@@ -306,6 +306,13 @@ export function AssistentDialog({ open, onClose, editUser, editContract, teamId 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Loesch-Workflow (Stufe 5): der Loeschen-Knopf bleibt gesperrt, bis das
+  // Archiv tatsaechlich heruntergeladen wurde — nicht nur angeboten. Eine
+  // Warnung mit Export-Knopf laesst sich wegklicken; das hier nicht. Die
+  // eigentliche Durchsetzung sitzt serverseitig (409
+  // deletion_archive_required), das hier ist die sichtbare Haelfte davon.
+  const [archivLaeuft, setArchivLaeuft] = useState(false);
+  const [archivDatei, setArchivDatei] = useState<string | null>(null);
 
   const [form, setForm] = useState<FormState>(() => {
     if (editUser) {
@@ -494,6 +501,46 @@ export function AssistentDialog({ open, onClose, editUser, editContract, teamId 
       }
     } finally {
       setSaving(false);
+    }
+  }
+
+  /**
+   * Holt das Archiv vom Server und laedt es herunter. Der Server erzeugt es
+   * aus der Datenbank UND legt dieselben Bytes ab — die Datei im Ordner des
+   * Planers ist damit byte-gleich mit der im Server-Archiv.
+   */
+  async function handleArchivDownload() {
+    if (!editUser) return;
+    setArchivLaeuft(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/users/${editUser.id}/deletion-archive`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`Archiv fehlgeschlagen (${res.status})`);
+      const blob = await res.blob();
+      // Dateiname aus dem Content-Disposition-Header; faellt der aus, bleibt
+      // ein sprechender Ersatzname statt eines zufaelligen Blob-Namens.
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const treffer = /filename="([^"]+)"/.exec(disposition);
+      const name = treffer?.[1] ?? `archiv-konto-${editUser.id}.zip`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(url);
+      setArchivDatei(name);
+    } catch (err) {
+      console.error("Loesch-Archiv fehlgeschlagen:", err);
+      setDeleteError(
+        !navigator.onLine
+          ? "Keine Internetverbindung. Bitte spaeter erneut versuchen."
+          : "Archiv konnte nicht erzeugt werden. Ohne Archiv wird nicht geloescht.",
+      );
+    } finally {
+      setArchivLaeuft(false);
     }
   }
 
@@ -817,6 +864,7 @@ export function AssistentDialog({ open, onClose, editUser, editContract, teamId 
               variant="ghost"
               onClick={() => {
                 setDeleteError(null);
+                setArchivDatei(null);
                 setConfirmDeleteOpen(true);
               }}
               disabled={saving || deleting}
@@ -843,7 +891,15 @@ export function AssistentDialog({ open, onClose, editUser, editContract, teamId 
     <AlertDialog
       open={confirmDeleteOpen}
       onOpenChange={(v) => {
-        if (!deleting) setConfirmDeleteOpen(v);
+        if (deleting) return;
+        setConfirmDeleteOpen(v);
+        // Schliessen setzt den Archiv-Schritt zurueck — sonst waere der
+        // Loeschen-Knopf beim naechsten Oeffnen schon offen, obwohl fuer
+        // diesen Vorgang nichts heruntergeladen wurde.
+        if (!v) {
+          setArchivDatei(null);
+          setDeleteError(null);
+        }
       }}
     >
       <AlertDialogContent>
@@ -855,18 +911,70 @@ export function AssistentDialog({ open, onClose, editUser, editContract, teamId 
             erfasster Zeiten. Diese Aktion kann nicht rueckgaengig gemacht werden.
           </AlertDialogDescription>
         </AlertDialogHeader>
+
+        {/*
+          Schritt 1 von 2: das Archiv. Arbeitszeit-Aufzeichnungen muessen zwei
+          Jahre aufbewahrt werden (§ 16 ArbZG, § 17 MiLoG) — deshalb ist der
+          Export hier keine Empfehlung, sondern die Bedingung. Der Server
+          lehnt das Loeschen ohne frisches Archiv ohnehin ab; dieser Schritt
+          macht sichtbar, warum.
+        */}
+        <div
+          className="rounded-md border border-border bg-muted/40 px-3 py-3 space-y-2"
+          data-testid="delete-archive-step"
+        >
+          <p className="text-sm font-medium text-foreground">
+            Schritt 1: Nachweise sichern
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Stundenliste, Zeiterfassung, Stundenkonto, Lohnauswertung,
+            Aenderungshistorie und Vertraege – als ZIP. Zwei Jahre
+            aufzubewahren (§ 16 ArbZG, § 17 MiLoG). Eine Kopie bleibt
+            zusaetzlich im Server-Archiv.
+          </p>
+          <Button
+            type="button"
+            variant={archivDatei ? "outline" : "default"}
+            size="sm"
+            className="w-full gap-2"
+            onClick={handleArchivDownload}
+            disabled={archivLaeuft || deleting}
+            data-testid="delete-archive-button"
+          >
+            {archivLaeuft
+              ? "Archiv wird erstellt…"
+              : archivDatei
+                ? "Archiv erneut herunterladen"
+                : "Archiv herunterladen"}
+          </Button>
+          {archivDatei && (
+            <p
+              className="text-xs text-green-700 dark:text-green-500 break-all"
+              data-testid="delete-archive-done"
+            >
+              Heruntergeladen: {archivDatei}
+            </p>
+          )}
+        </div>
+
         {deleteError && (
-          <p className="text-sm text-destructive">{deleteError}</p>
+          <p className="text-sm text-destructive" data-testid="delete-error">{deleteError}</p>
         )}
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={deleting}>Abbrechen</AlertDialogCancel>
+          <AlertDialogCancel disabled={deleting || archivLaeuft}>Abbrechen</AlertDialogCancel>
           <AlertDialogAction
             onClick={(e) => {
               e.preventDefault();
               handleDelete();
             }}
-            disabled={deleting}
+            disabled={deleting || archivLaeuft || !archivDatei}
+            title={
+              archivDatei
+                ? undefined
+                : "Erst das Archiv herunterladen – danach ist das Loeschen moeglich."
+            }
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            data-testid="delete-confirm-button"
           >
             {deleting ? "Loeschen..." : "Endgueltig loeschen"}
           </AlertDialogAction>

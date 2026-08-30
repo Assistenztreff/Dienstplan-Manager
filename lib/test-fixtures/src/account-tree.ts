@@ -53,6 +53,8 @@ export interface AccountTreeDbClient {
  * mit FK-Fehler fehl und die Test-DB sammelt wieder Konten-Leichen an. Das
  * Skript `verify-test-db-cleanup` prueft genau diese Invariante automatisch.
  */
+import { USER_BOUND_RESTRICT_TABLES } from "@workspace/db/user-bound-tables";
+
 export const TEAM_BOUND_TABLES = [
   "month_closings",
   "time_tracking",
@@ -66,6 +68,12 @@ export const TEAM_BOUND_TABLES = [
   "shift_changes",
   "shift_deviation_reports",
   "shift_correction_objections",
+  // Loesch-Archive (Stufe 5). In der PRODUKTION haengen sie NICHT am Team:
+  // team_id ist ON DELETE SET NULL, ein geloeschtes Team laesst das Archiv
+  // also stehen — genau so gewollt, der Nachweis soll alles ueberleben. Fuer
+  // die Test-DB muessen sie trotzdem mit weg, sonst sammeln sich ueber die
+  // Laeufe hinweg Archiv-Leichen mit verwaisten Konto-IDs an.
+  "deletion_archives",
 ] as const;
 
 /**
@@ -79,15 +87,7 @@ export const TEAM_BOUND_TABLES = [
  * Reihenfolge ist relevant: die drei Schicht-Protokolltabellen zuerst
  * (haengen zusaetzlich am Dienst), danach die uebrigen, zuletzt die Dienste.
  */
-export const USER_BOUND_RESTRICT_TABLES = [
-  "shift_changes",
-  "shift_deviation_reports",
-  "shift_correction_objections",
-  "time_tracking",
-  "absence_requests",
-  "contracts",
-  "shifts",
-] as const;
+export { USER_BOUND_RESTRICT_TABLES };
 
 export async function deleteUserBoundRows(
   client: AccountTreeDbClient,

@@ -199,8 +199,31 @@ test("Assistenzkraft kann samt Daten über den Bearbeiten-Dialog gelöscht werde
   // Der Name der konkreten Kraft taucht in der Warnung auf.
   await expect(confirm).toContainText(assistant.name);
 
+  // Loesch-Workflow (Stufe 5): Diese Kraft hat Vertrag und Schichten, also
+  // aufbewahrungspflichtige Daten. Der Loeschen-Knopf ist deshalb GESPERRT,
+  // bis das Archiv wirklich heruntergeladen wurde — eine Warnung mit
+  // Export-Knopf liesse sich wegklicken, das hier nicht.
+  const loeschKnopf = confirm.getByTestId("delete-confirm-button");
+  await expect(
+    loeschKnopf,
+    "Ohne Archiv darf der Loeschen-Knopf nicht klickbar sein",
+  ).toBeDisabled();
+
+  // Archiv herunterladen — der Browser bekommt eine echte ZIP.
+  const downloadPromise = page.waitForEvent("download");
+  await confirm.getByTestId("delete-archive-button").click();
+  const download = await downloadPromise;
+  expect(
+    download.suggestedFilename(),
+    "Das Archiv muss als .zip mit sprechendem Namen ankommen",
+  ).toMatch(/\.zip$/);
+  await expect(confirm.getByTestId("delete-archive-done")).toBeVisible();
+
+  // Erst jetzt ist das Loeschen moeglich.
+  await expect(loeschKnopf).toBeEnabled();
+
   // Endgültig bestätigen.
-  await confirm.getByRole("button", { name: "Endgueltig loeschen" }).click();
+  await loeschKnopf.click();
 
   // Die Karte verschwindet aus der Liste.
   await expect(card).toHaveCount(0, { timeout: 15000 });

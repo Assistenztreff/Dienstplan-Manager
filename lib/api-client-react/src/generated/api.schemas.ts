@@ -1128,6 +1128,24 @@ export interface ShiftChangeSummary {
 }
 
 /**
+ * `deletion_archive_required`: das Konto hat aufbewahrungspflichtige Daten, es wurde aber kein (gültiges, frisches) Archiv mitgegeben.
+ */
+export type DeleteUserConflictCode = typeof DeleteUserConflictCode[keyof typeof DeleteUserConflictCode];
+
+
+export const DeleteUserConflictCode = {
+  deletion_archive_required: 'deletion_archive_required',
+  owned_team: 'owned_team',
+  foreign_dependency: 'foreign_dependency',
+} as const;
+
+export interface DeleteUserConflict {
+  error: string;
+  /** `deletion_archive_required`: das Konto hat aufbewahrungspflichtige Daten, es wurde aber kein (gültiges, frisches) Archiv mitgegeben. */
+  code?: DeleteUserConflictCode;
+}
+
+/**
  * Zustand der zeitrelevanten Felder eines Dienstes zu einem Zeitpunkt.
  */
 export interface ShiftChangeSnapshot {

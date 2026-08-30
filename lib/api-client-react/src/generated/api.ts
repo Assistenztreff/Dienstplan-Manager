@@ -47,6 +47,7 @@ import type {
   CreateMonthClosingInput,
   DashboardSummary,
   DeleteAllowanceSettingsOverrideParams,
+  DeleteUserConflict,
   ErrorEnvelope,
   ExportCalendarParams,
   GetAllowanceSettingsParams,
@@ -535,6 +536,11 @@ export const getDeleteUserUrl = (id: number,) => {
 }
 
 /**
+ * Löscht das Konto samt seiner aufbewahrungspflichtigen Zeilen (Dienste, Abwesenheiten, Verträge, Zeiterfassung, Änderungshistorie).
+
+Hat das Konto solche Daten, ist vorher ein Lösch-Archiv Pflicht: es muss ein über POST /users/{id}/deletion-archive erzeugtes Archiv für dieses Konto geben, das derselbe Admin angelegt hat, das noch für keine Löschung verwendet wurde und das nicht älter als 30 Minuten ist. Sonst 409 `deletion_archive_required`. Das Archiv wird beim erfolgreichen Löschen als verwendet gestempelt.
+
+Konten ohne aufbewahrungspflichtige Daten (z. B. eine eben angelegte Assistenzkraft) werden ohne Archiv gelöscht — ein Export-Ritual für ein leeres Konto wäre reine Schikane.
  * @summary Benutzer löschen
  */
 export const deleteUser = async (id: number, options?: RequestInit): Promise<void> => {
@@ -551,7 +557,7 @@ export const deleteUser = async (id: number, options?: RequestInit): Promise<voi
 
 
 
-export const getDeleteUserMutationOptions = <TError = ErrorType<unknown>,
+export const getDeleteUserMutationOptions = <TError = ErrorType<DeleteUserConflict>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUser>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteUser>>, TError,{id: number}, TContext> => {
 
@@ -580,12 +586,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type DeleteUserMutationResult = NonNullable<Awaited<ReturnType<typeof deleteUser>>>
 
-    export type DeleteUserMutationError = ErrorType<unknown>
+    export type DeleteUserMutationError = ErrorType<DeleteUserConflict>
 
     /**
  * @summary Benutzer löschen
  */
-export const useDeleteUser = <TError = ErrorType<unknown>,
+export const useDeleteUser = <TError = ErrorType<DeleteUserConflict>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUser>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof deleteUser>>,
@@ -594,6 +600,79 @@ export const useDeleteUser = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteUserMutationOptions(options));
+    }
+
+export const getCreateDeletionArchiveUrl = (id: number,) => {
+
+
+
+
+  return `/api/users/${id}/deletion-archive`
+}
+
+/**
+ * Erzeugt serverseitig aus der Datenbank ein vollständiges Archiv der aufbewahrungspflichtigen Daten dieser Person (Stundenliste, Zeiterfassung, Stundenkonto, Lohnauswertung, Änderungshistorie, Verträge) als ZIP mit CSV-Tabellen, legt es im Server-Archiv ab und liefert **dieselben Bytes** als Download zurück. Die abgelegte Datei ist damit byte-gleich mit der im Archiv.
+
+Die ID des erzeugten Archivs steht im Antwort-Header `X-Deletion-Archive-Id` und wird beim anschließenden DELETE als `archiveId` mitgegeben.
+ * @summary Lösch-Archiv erzeugen und herunterladen
+ */
+export const createDeletionArchive = async (id: number, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getCreateDeletionArchiveUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getCreateDeletionArchiveMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDeletionArchive>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createDeletionArchive>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['createDeletionArchive'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createDeletionArchive>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  createDeletionArchive(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateDeletionArchiveMutationResult = NonNullable<Awaited<ReturnType<typeof createDeletionArchive>>>
+
+    export type CreateDeletionArchiveMutationError = ErrorType<void>
+
+    /**
+ * @summary Lösch-Archiv erzeugen und herunterladen
+ */
+export const useCreateDeletionArchive = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDeletionArchive>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createDeletionArchive>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getCreateDeletionArchiveMutationOptions(options));
     }
 
 export const getListContractsUrl = (params?: ListContractsParams,) => {

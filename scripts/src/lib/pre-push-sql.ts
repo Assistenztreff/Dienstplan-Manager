@@ -309,6 +309,36 @@ export const PRE_PUSH_SQL: string[] = [
   `CREATE INDEX IF NOT EXISTS shift_changes_shift_id_idx ON shift_changes (shift_id);`,
   `CREATE INDEX IF NOT EXISTS shift_changes_user_id_created_at_idx ON shift_changes (user_id, created_at);`,
   `CREATE INDEX IF NOT EXISTS shift_changes_team_id_created_at_idx ON shift_changes (team_id, created_at);`,
+  // deletion_archives (Loesch-Workflow, Stufe 5): neue Tabelle mit bytea-Spalte
+  // auf einer befuellten Bestands-DB — dieselbe Prompt-Gefahr wie bei
+  // shift_changes oben. Vorab idempotent anlegen, exakt wie im Drizzle-Schema
+  // (deletion_archives.ts). Einziger Fremdschluessel ist team_id; auf users
+  // gibt es bewusst KEINEN, sonst blockierte das Archiv genau das Loeschen,
+  // das es ermoeglichen soll.
+  `CREATE TABLE IF NOT EXISTS deletion_archives (
+     id serial PRIMARY KEY,
+     user_id integer NOT NULL,
+     user_name text NOT NULL,
+     user_email text,
+     team_id integer,
+     created_by integer NOT NULL,
+     created_by_name text NOT NULL,
+     file_name text NOT NULL,
+     content_type text NOT NULL,
+     content bytea NOT NULL,
+     byte_size integer NOT NULL,
+     created_at timestamp DEFAULT now() NOT NULL,
+     deleted_at timestamp
+   );`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'deletion_archives_team_id_teams_id_fk') THEN
+       ALTER TABLE deletion_archives
+         ADD CONSTRAINT deletion_archives_team_id_teams_id_fk
+         FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE SET NULL;
+     END IF;
+   END $$;`,
+  `CREATE INDEX IF NOT EXISTS deletion_archives_user_id_idx ON deletion_archives (user_id);`,
+  `CREATE INDEX IF NOT EXISTS deletion_archives_team_id_created_at_idx ON deletion_archives (team_id, created_at);`,
   // shift_deviation_reports (Abweichungsmodell): gleiche TTY-Prompt-Gefahr wie
   // shift_changes/absence_requests oben — vorab idempotent anlegen, exakt wie
   // im Drizzle-Schema (shift_deviation_reports.ts).

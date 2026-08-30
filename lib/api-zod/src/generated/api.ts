@@ -147,9 +147,25 @@ export const UpdateUserResponse = zod.object({
 
 
 /**
+ * Löscht das Konto samt seiner aufbewahrungspflichtigen Zeilen (Dienste, Abwesenheiten, Verträge, Zeiterfassung, Änderungshistorie).
+
+Hat das Konto solche Daten, ist vorher ein Lösch-Archiv Pflicht: es muss ein über POST /users/{id}/deletion-archive erzeugtes Archiv für dieses Konto geben, das derselbe Admin angelegt hat, das noch für keine Löschung verwendet wurde und das nicht älter als 30 Minuten ist. Sonst 409 `deletion_archive_required`. Das Archiv wird beim erfolgreichen Löschen als verwendet gestempelt.
+
+Konten ohne aufbewahrungspflichtige Daten (z. B. eine eben angelegte Assistenzkraft) werden ohne Archiv gelöscht — ein Export-Ritual für ein leeres Konto wäre reine Schikane.
  * @summary Benutzer löschen
  */
 export const DeleteUserParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * Erzeugt serverseitig aus der Datenbank ein vollständiges Archiv der aufbewahrungspflichtigen Daten dieser Person (Stundenliste, Zeiterfassung, Stundenkonto, Lohnauswertung, Änderungshistorie, Verträge) als ZIP mit CSV-Tabellen, legt es im Server-Archiv ab und liefert **dieselben Bytes** als Download zurück. Die abgelegte Datei ist damit byte-gleich mit der im Archiv.
+
+Die ID des erzeugten Archivs steht im Antwort-Header `X-Deletion-Archive-Id` und wird beim anschließenden DELETE als `archiveId` mitgegeben.
+ * @summary Lösch-Archiv erzeugen und herunterladen
+ */
+export const CreateDeletionArchiveParams = zod.object({
   "id": zod.coerce.number()
 })
 
