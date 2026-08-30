@@ -79,6 +79,7 @@ import type {
   ListShiftChangesParams,
   ListShiftDeviationsParams,
   ListShiftModelsParams,
+  ListShiftSwapRequestsParams,
   ListShiftsParams,
   ListTimeEntriesParams,
   ListUsersParams,
@@ -108,6 +109,9 @@ import type {
   ShiftModel,
   ShiftModelInput,
   ShiftModelUpdate,
+  ShiftSwapRequest,
+  ShiftSwapRequestInput,
+  ShiftSwapResolveInput,
   ShiftUpdate,
   Team,
   TeamInput,
@@ -2992,6 +2996,237 @@ export const useDisputeShiftDeviation = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getDisputeShiftDeviationMutationOptions(options));
+    }
+
+export const getListShiftSwapRequestsUrl = (params?: ListShiftSwapRequestsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/shifts/swap-requests?${stringifiedParams}` : `/api/shifts/swap-requests`
+}
+
+/**
+ * Alle Tauschwünsche (OPEN/RESOLVED) im Team-Scope des Aufrufers. Assistenzkräfte sehen ausschließlich ihre eigenen. Basis für den Anfrage-Zustand einzelner Dienste in der Oberfläche und den Planer-Hinweis "N offene Tauschwünsche".
+ * @summary Tauschwünsche auflisten (team-gescoped)
+ */
+export const listShiftSwapRequests = async (params?: ListShiftSwapRequestsParams, options?: RequestInit): Promise<ShiftSwapRequest[]> => {
+
+  return customFetch<ShiftSwapRequest[]>(getListShiftSwapRequestsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListShiftSwapRequestsQueryKey = (params?: ListShiftSwapRequestsParams,) => {
+    return [
+    `/api/shifts/swap-requests`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListShiftSwapRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listShiftSwapRequests>>, TError = ErrorType<unknown>>(params?: ListShiftSwapRequestsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShiftSwapRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListShiftSwapRequestsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listShiftSwapRequests>>> = ({ signal }) => listShiftSwapRequests(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listShiftSwapRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListShiftSwapRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof listShiftSwapRequests>>>
+export type ListShiftSwapRequestsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Tauschwünsche auflisten (team-gescoped)
+ */
+
+export function useListShiftSwapRequests<TData = Awaited<ReturnType<typeof listShiftSwapRequests>>, TError = ErrorType<unknown>>(
+ params?: ListShiftSwapRequestsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShiftSwapRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListShiftSwapRequestsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getRequestShiftSwapUrl = (id: number,) => {
+
+
+
+
+  return `/api/shifts/${id}/swap-request`
+}
+
+/**
+ * Nur für den eigenen, noch nicht vergangenen Arbeitsdienst — bei einem Vorschlag (ANGEBOTEN) ebenso wie bei einem bereits bestätigten Dienst (FIX). Der Dienst selbst bleibt unverändert: weder Planungsstatus noch Zeiten noch die zugewiesene Person ändern sich. Solange ein Wunsch offen ist, liefert ein zweiter Versuch 409; ein erledigter Wunsch blockiert einen späteren neuen Wunsch NICHT (ein zweiter Termin kann dazwischenkommen).
+ * @summary Tauschwunsch für den eigenen Dienst stellen (Assistenzkraft)
+ */
+export const requestShiftSwap = async (id: number,
+    shiftSwapRequestInput: ShiftSwapRequestInput, options?: RequestInit): Promise<ShiftSwapRequest> => {
+
+  return customFetch<ShiftSwapRequest>(getRequestShiftSwapUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      shiftSwapRequestInput,)
+  }
+);}
+
+
+
+
+export const getRequestShiftSwapMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestShiftSwap>>, TError,{id: number;data: BodyType<ShiftSwapRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestShiftSwap>>, TError,{id: number;data: BodyType<ShiftSwapRequestInput>}, TContext> => {
+
+const mutationKey = ['requestShiftSwap'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestShiftSwap>>, {id: number;data: BodyType<ShiftSwapRequestInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  requestShiftSwap(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestShiftSwapMutationResult = NonNullable<Awaited<ReturnType<typeof requestShiftSwap>>>
+    export type RequestShiftSwapMutationBody = BodyType<ShiftSwapRequestInput>
+    export type RequestShiftSwapMutationError = ErrorType<void>
+
+    /**
+ * @summary Tauschwunsch für den eigenen Dienst stellen (Assistenzkraft)
+ */
+export const useRequestShiftSwap = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestShiftSwap>>, TError,{id: number;data: BodyType<ShiftSwapRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestShiftSwap>>,
+        TError,
+        {id: number;data: BodyType<ShiftSwapRequestInput>},
+        TContext
+      > => {
+      return useMutation(getRequestShiftSwapMutationOptions(options));
+    }
+
+export const getResolveShiftSwapRequestUrl = (id: number,) => {
+
+
+
+
+  return `/api/shifts/${id}/swap-request/resolve`
+}
+
+/**
+ * Schließt den offenen Wunsch ab — entweder als erfüllt (REASSIGNED, nachdem der Dienst umbesetzt wurde) oder als abgelehnt (DECLINED). Die Route ändert die Schicht NICHT; das Umbesetzen läuft wie immer über PATCH /shifts/{id}. So bleibt der Dienst-Statusfluss an einer Stelle.
+ * @summary Tauschwunsch erledigen (Planer)
+ */
+export const resolveShiftSwapRequest = async (id: number,
+    shiftSwapResolveInput: ShiftSwapResolveInput, options?: RequestInit): Promise<ShiftSwapRequest> => {
+
+  return customFetch<ShiftSwapRequest>(getResolveShiftSwapRequestUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      shiftSwapResolveInput,)
+  }
+);}
+
+
+
+
+export const getResolveShiftSwapRequestMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resolveShiftSwapRequest>>, TError,{id: number;data: BodyType<ShiftSwapResolveInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resolveShiftSwapRequest>>, TError,{id: number;data: BodyType<ShiftSwapResolveInput>}, TContext> => {
+
+const mutationKey = ['resolveShiftSwapRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resolveShiftSwapRequest>>, {id: number;data: BodyType<ShiftSwapResolveInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  resolveShiftSwapRequest(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResolveShiftSwapRequestMutationResult = NonNullable<Awaited<ReturnType<typeof resolveShiftSwapRequest>>>
+    export type ResolveShiftSwapRequestMutationBody = BodyType<ShiftSwapResolveInput>
+    export type ResolveShiftSwapRequestMutationError = ErrorType<void>
+
+    /**
+ * @summary Tauschwunsch erledigen (Planer)
+ */
+export const useResolveShiftSwapRequest = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resolveShiftSwapRequest>>, TError,{id: number;data: BodyType<ShiftSwapResolveInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resolveShiftSwapRequest>>,
+        TError,
+        {id: number;data: BodyType<ShiftSwapResolveInput>},
+        TContext
+      > => {
+      return useMutation(getResolveShiftSwapRequestMutationOptions(options));
     }
 
 export const getListShiftModelsUrl = (params?: ListShiftModelsParams,) => {

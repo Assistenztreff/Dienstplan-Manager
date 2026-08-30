@@ -2,7 +2,7 @@ import { format, isSameDay, isToday, getDay, getISOWeek, startOfWeek } from "dat
 import { de } from "date-fns/locale";
 import { Plus, ChevronDown } from "lucide-react";
 import { ABSENCE_CATEGORY } from "@/components/abwesenheits-kalender";
-import type { ShiftDeviationReport } from "@workspace/api-client-react";
+import type { ShiftDeviationReport, ShiftSwapRequest } from "@workspace/api-client-react";
 import {
   isAbsenceShift,
   type Shift,
@@ -37,6 +37,10 @@ export function AgendaView({
   onAcceptDeviation,
   onDisputeDeviation,
   deviationActionPending,
+  swapRequests,
+  onRequestSwap,
+  onResolveSwap,
+  swapActionPending,
 }: {
   days: Date[];
   shifts: Shift[];
@@ -56,6 +60,10 @@ export function AgendaView({
   onAcceptDeviation?: (shift: Shift) => void;
   onDisputeDeviation?: (shift: Shift, reason: string) => void;
   deviationActionPending?: boolean;
+  swapRequests?: Map<number, ShiftSwapRequest>;
+  onRequestSwap?: (shift: Shift, reason: string) => void;
+  onResolveSwap?: (shift: Shift, resolution: "REASSIGNED" | "DECLINED", note?: string) => void;
+  swapActionPending?: boolean;
   selectionMode?: boolean;
   selectedDates?: string[];
   onToggleDate?: (day: Date) => void;
@@ -316,6 +324,10 @@ export function AgendaView({
                             onAcceptDeviation={dayClickable && !selectionMode ? onAcceptDeviation : undefined}
                             onDisputeDeviation={dayClickable && !selectionMode ? onDisputeDeviation : undefined}
                             deviationActionPending={deviationActionPending}
+                            swapRequest={swapRequests?.get(shift.id)}
+                            onRequestSwap={!other && !selectionMode ? onRequestSwap : undefined}
+                            onResolveSwap={dayClickable && !selectionMode ? onResolveSwap : undefined}
+                            swapActionPending={swapActionPending}
                           />
                           {shift.notes && (
                             <p

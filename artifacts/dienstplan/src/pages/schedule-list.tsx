@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SHIFT_LIST_STALE_TIME_MS, SHIFT_LIST_GC_TIME_MS } from "@/lib/shift-cache";
-import type { ShiftDeviationReport } from "@workspace/api-client-react";
+import type { ShiftDeviationReport, ShiftSwapRequest } from "@workspace/api-client-react";
 import {
   isAbsenceShift,
   type Shift,
@@ -109,6 +109,10 @@ export function ScheduleList({
   onAcceptDeviation,
   onDisputeDeviation,
   deviationActionPending,
+  swapRequests,
+  onRequestSwap,
+  onResolveSwap,
+  swapActionPending,
 }: {
   month: number;
   year: number;
@@ -148,6 +152,10 @@ export function ScheduleList({
   onAcceptDeviation?: (shift: Shift) => void;
   onDisputeDeviation?: (shift: Shift, reason: string) => void;
   deviationActionPending?: boolean;
+  swapRequests?: Map<number, ShiftSwapRequest>;
+  onRequestSwap?: (shift: Shift, reason: string) => void;
+  onResolveSwap?: (shift: Shift, resolution: "REASSIGNED" | "DECLINED", note?: string) => void;
+  swapActionPending?: boolean;
 }) {
   const [detailType, setDetailType] = usePersistentState<ScheduleListType>(
     "dienstplan.scheduleListType",
@@ -526,6 +534,10 @@ export function ScheduleList({
         onAcceptDeviation={onAcceptDeviation}
         onDisputeDeviation={onDisputeDeviation}
         deviationActionPending={deviationActionPending}
+        swapRequests={swapRequests}
+        onRequestSwap={onRequestSwap}
+        onResolveSwap={onResolveSwap}
+        swapActionPending={swapActionPending}
         canEdit={canEdit}
         selectionMode={selectionMode}
         selectedDates={selectedDates}

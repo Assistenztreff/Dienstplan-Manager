@@ -12,6 +12,9 @@ import {
   useBulkConfirmOwnShifts,
   useGetHoursBalance,
   useListShiftDeviations,
+  useListShiftSwapRequests,
+  useRequestShiftSwap,
+  useResolveShiftSwapRequest,
   useConfirmOwnShift,
   useListShiftChanges,
   useReportShiftDeviation,
@@ -24,6 +27,7 @@ import {
   type HoursBalance,
   type HourBudgetBalance,
   type ShiftDeviationReport,
+  type ShiftSwapRequest,
 } from "@workspace/api-client-react";
 import { useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isValid } from "date-fns";
@@ -210,6 +214,26 @@ export default function Dienstplan() {
     }
     return map;
   }, [deviationReportsData]);
+
+  // Tauschwuensche (Kay 30.08.2026), gleiche Bauart wie die Abweichungen:
+  // team-gescopte Liste, im Frontend als shiftId → Anfrage nachgeschlagen.
+  // Die Route liefert einer Assistenzkraft nur ihre EIGENEN Anfragen — der
+  // Grund ist oft privat.
+  const { data: swapRequestsData } = useListShiftSwapRequests(teamParam, {
+    query: { enabled: isTeamScopeReady },
+  } as unknown as Parameters<typeof useListShiftSwapRequests>[1]) as {
+    data?: ShiftSwapRequest[];
+  };
+  // JUENGSTE Anfrage je Dienst: Ein abgelehnter Wunsch schliesst einen
+  // spaeteren neuen nicht aus (zweiter Termin), also kann es mehrere geben.
+  const swapRequestsByShiftId = useMemo(() => {
+    const map = new Map<number, ShiftSwapRequest>();
+    for (const request of swapRequestsData ?? []) {
+      const vorhanden = map.get(request.shiftId);
+      if (!vorhanden || request.id > vorhanden.id) map.set(request.shiftId, request);
+    }
+    return map;
+  }, [swapRequestsData]);
   // Dienste mit ANGENOMMENER Abweichungsmeldung. Sie bleiben FIX (beide Seiten
   // sind sich einig, eine erneute Bestaetigung waere sinnlos), sollen aber in
   // allen Ansichten als nachtraeglich korrigiert erkennbar sein — per Context
@@ -298,6 +322,10 @@ export default function Dienstplan() {
     acceptDeviationMutation.isPending ||
     disputeDeviationMutation.isPending;
 
+  const requestSwapMutation = useRequestShiftSwap();
+  const resolveSwapMutation = useResolveShiftSwapRequest();
+  const swapActionPending = requestSwapMutation.isPending || resolveSwapMutation.isPending;
+
   // invalidateShiftDerivedQueries invalidiert per Präfix alles unter
   // /api/shifts (Details s. shift-cache.ts) — deckt sowohl die Monatsliste
   // als auch /api/shifts/deviations in einem Rutsch ab, kein separater
@@ -338,6 +366,42 @@ export default function Dienstplan() {
     } catch (err) {
       if (!navigator.onLine) return;
       toast.error(readableApiError(err, "Widersprechen fehlgeschlagen. Bitte erneut versuchen."));
+    }
+  }
+
+  // Tauschwunsch stellen (Assistenzkraft). invalidateShiftDerivedQueries
+  // deckt per Praefix auch /api/shifts/swap-requests ab — kein zweiter
+  // Invalidierungs-Aufruf noetig (s. shift-cache.ts).
+  async function requestSwap(shift: Shift, reason: string) {
+    try {
+      await requestSwapMutation.mutateAsync({ id: shift.id, data: { reason } });
+      void invalidateShiftDerivedQueries(queryClient, { refetchType: "all" });
+      toast.success("Tausch angefragt — die Planung meldet sich.");
+    } catch (err) {
+      if (!navigator.onLine) return;
+      toast.error(readableApiError(err, "Anfrage fehlgeschlagen. Bitte erneut versuchen."));
+    }
+  }
+
+  // Tauschwunsch erledigen (Planer). Der Dienst selbst wird hier NICHT
+  // angefasst — umbesetzt wird wie immer ueber den Dienst-Dialog; dieser
+  // Klick hakt nur die Anfrage ab.
+  async function resolveSwap(
+    shift: Shift,
+    resolution: "REASSIGNED" | "DECLINED",
+    note?: string,
+  ) {
+    try {
+      await resolveSwapMutation.mutateAsync({ id: shift.id, data: { resolution, note } });
+      void invalidateShiftDerivedQueries(queryClient, { refetchType: "all" });
+      toast.success(
+        resolution === "REASSIGNED"
+          ? "Tauschwunsch als erledigt abgehakt."
+          : "Tauschwunsch abgelehnt — die Assistenzkraft sieht deine Antwort.",
+      );
+    } catch (err) {
+      if (!navigator.onLine) return;
+      toast.error(readableApiError(err, "Aktion fehlgeschlagen. Bitte erneut versuchen."));
     }
   }
 
@@ -1229,6 +1293,10 @@ export default function Dienstplan() {
         onAcceptDeviation={canPlan ? acceptDeviation : undefined}
         onDisputeDeviation={canPlan ? disputeDeviation : undefined}
         deviationActionPending={deviationActionPending}
+        swapRequests={swapRequestsByShiftId}
+        onRequestSwap={requestSwap}
+        onResolveSwap={canPlan ? resolveSwap : undefined}
+        swapActionPending={swapActionPending}
         canEdit={canPlan}
         selectionMode={isSelectionMode}
         selectedDates={selectedDates}

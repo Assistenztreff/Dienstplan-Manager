@@ -21,6 +21,7 @@
 export const USER_BOUND_RESTRICT_TABLES = [
   "shift_changes",
   "shift_deviation_reports",
+  "shift_swap_requests",
   "time_tracking",
   "absence_requests",
   "contracts",

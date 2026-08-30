@@ -1076,6 +1076,108 @@ paths:
         "409":
           description: Meldung ist nicht mehr offen (bereits angenommen/widersprochen)
 
+  /shifts/swap-requests:
+    get:
+      operationId: listShiftSwapRequests
+      tags: [shifts]
+      summary: Tauschwünsche auflisten (team-gescoped)
+      description: >-
+        Alle Tauschwünsche (OPEN/RESOLVED) im Team-Scope des Aufrufers.
+        Assistenzkräfte sehen ausschließlich ihre eigenen. Basis für den
+        Anfrage-Zustand einzelner Dienste in der Oberfläche und den
+        Planer-Hinweis "N offene Tauschwünsche".
+      parameters:
+        - name: teamId
+          in: query
+          description: Optionaler Team-Kontext; muss ein erlaubtes Team sein.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Liste der Tauschwünsche
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ShiftSwapRequest"
+
+  /shifts/{id}/swap-request:
+    post:
+      operationId: requestShiftSwap
+      tags: [shifts]
+      summary: Tauschwunsch für den eigenen Dienst stellen (Assistenzkraft)
+      description: >-
+        Nur für den eigenen, noch nicht vergangenen Arbeitsdienst — bei einem
+        Vorschlag (ANGEBOTEN) ebenso wie bei einem bereits bestätigten Dienst
+        (FIX). Der Dienst selbst bleibt unverändert: weder Planungsstatus noch
+        Zeiten noch die zugewiesene Person ändern sich. Solange ein Wunsch
+        offen ist, liefert ein zweiter Versuch 409; ein erledigter Wunsch
+        blockiert einen späteren neuen Wunsch NICHT (ein zweiter Termin kann
+        dazwischenkommen).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftSwapRequestInput"
+      responses:
+        "201":
+          description: Tauschwunsch gestellt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShiftSwapRequest"
+        "400":
+          description: Ungültige Anfrage (z. B. Dienst liegt in der Vergangenheit oder ist eine Abwesenheit)
+        "403":
+          description: Nicht der eigene Dienst
+        "404":
+          description: Nicht gefunden
+        "409":
+          description: Es liegt bereits ein offener Tauschwunsch vor
+
+  /shifts/{id}/swap-request/resolve:
+    post:
+      operationId: resolveShiftSwapRequest
+      tags: [shifts]
+      summary: Tauschwunsch erledigen (Planer)
+      description: >-
+        Schließt den offenen Wunsch ab — entweder als erfüllt (REASSIGNED,
+        nachdem der Dienst umbesetzt wurde) oder als abgelehnt (DECLINED).
+        Die Route ändert die Schicht NICHT; das Umbesetzen läuft wie immer
+        über PATCH /shifts/{id}. So bleibt der Dienst-Statusfluss an einer
+        Stelle.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftSwapResolveInput"
+      responses:
+        "200":
+          description: Erledigt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShiftSwapRequest"
+        "404":
+          description: Nicht gefunden
+        "409":
+          description: Kein offener Tauschwunsch für diesen Dienst
+
   /shift-models:
     get:
       operationId: listShiftModels
@@ -3957,6 +4059,63 @@ components:
           format: date-time
         disputeReason:
           type: ["string", "null"]
+
+    ShiftSwapRequest:
+      type: object
+      required: [id, shiftId, userId, userName, teamId, status, reason, requestedAt, resolution, resolutionNote, resolvedBy, resolvedAt]
+      properties:
+        id:
+          type: integer
+        shiftId:
+          type: integer
+        userId:
+          type: integer
+        userName:
+          type: ["string", "null"]
+        teamId:
+          type: integer
+        status:
+          type: string
+          enum: [OPEN, RESOLVED]
+        reason:
+          type: string
+        requestedAt:
+          type: string
+          format: date-time
+        resolution:
+          type: ["string", "null"]
+          enum: [REASSIGNED, DECLINED, null]
+        resolutionNote:
+          type: ["string", "null"]
+        resolvedBy:
+          type: ["integer", "null"]
+        resolvedAt:
+          type: ["string", "null"]
+          format: date-time
+
+    ShiftSwapRequestInput:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 500
+          description: >-
+            Begründung der Assistenzkraft (Pflicht). Ohne Grund kann der
+            Planer nicht abwägen, und die Anfrage ist später nicht belegbar.
+
+    ShiftSwapResolveInput:
+      type: object
+      required: [resolution]
+      properties:
+        resolution:
+          type: string
+          enum: [REASSIGNED, DECLINED]
+        note:
+          type: string
+          maxLength: 500
+          description: Optionale Antwort des Planers, vor allem bei einer Ablehnung.
 
     ShiftChangeSummary:
       type: object

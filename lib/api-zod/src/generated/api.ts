@@ -1065,6 +1065,82 @@ export const DisputeShiftDeviationResponse = zod.object({
 
 
 /**
+ * Alle Tauschwünsche (OPEN/RESOLVED) im Team-Scope des Aufrufers. Assistenzkräfte sehen ausschließlich ihre eigenen. Basis für den Anfrage-Zustand einzelner Dienste in der Oberfläche und den Planer-Hinweis "N offene Tauschwünsche".
+ * @summary Tauschwünsche auflisten (team-gescoped)
+ */
+export const ListShiftSwapRequestsQueryParams = zod.object({
+  "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext; muss ein erlaubtes Team sein.')
+})
+
+export const ListShiftSwapRequestsResponseItem = zod.object({
+  "id": zod.number(),
+  "shiftId": zod.number(),
+  "userId": zod.number(),
+  "userName": zod.string().nullable(),
+  "teamId": zod.number(),
+  "status": zod.enum(['OPEN', 'RESOLVED']),
+  "reason": zod.string(),
+  "requestedAt": zod.coerce.date(),
+  "resolution": zod.union([zod.literal('REASSIGNED'),zod.literal('DECLINED'),zod.literal(null)]).nullable(),
+  "resolutionNote": zod.string().nullable(),
+  "resolvedBy": zod.number().nullable(),
+  "resolvedAt": zod.coerce.date().nullable()
+})
+export const ListShiftSwapRequestsResponse = zod.array(ListShiftSwapRequestsResponseItem)
+
+
+/**
+ * Nur für den eigenen, noch nicht vergangenen Arbeitsdienst — bei einem Vorschlag (ANGEBOTEN) ebenso wie bei einem bereits bestätigten Dienst (FIX). Der Dienst selbst bleibt unverändert: weder Planungsstatus noch Zeiten noch die zugewiesene Person ändern sich. Solange ein Wunsch offen ist, liefert ein zweiter Versuch 409; ein erledigter Wunsch blockiert einen späteren neuen Wunsch NICHT (ein zweiter Termin kann dazwischenkommen).
+ * @summary Tauschwunsch für den eigenen Dienst stellen (Assistenzkraft)
+ */
+export const RequestShiftSwapParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const requestShiftSwapBodyReasonMin = 3;
+export const requestShiftSwapBodyReasonMax = 500;
+
+
+
+export const RequestShiftSwapBody = zod.object({
+  "reason": zod.string().min(requestShiftSwapBodyReasonMin).max(requestShiftSwapBodyReasonMax).describe('Begründung der Assistenzkraft (Pflicht). Ohne Grund kann der Planer nicht abwägen, und die Anfrage ist später nicht belegbar.')
+})
+
+
+/**
+ * Schließt den offenen Wunsch ab — entweder als erfüllt (REASSIGNED, nachdem der Dienst umbesetzt wurde) oder als abgelehnt (DECLINED). Die Route ändert die Schicht NICHT; das Umbesetzen läuft wie immer über PATCH /shifts/{id}. So bleibt der Dienst-Statusfluss an einer Stelle.
+ * @summary Tauschwunsch erledigen (Planer)
+ */
+export const ResolveShiftSwapRequestParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const resolveShiftSwapRequestBodyNoteMax = 500;
+
+
+
+export const ResolveShiftSwapRequestBody = zod.object({
+  "resolution": zod.enum(['REASSIGNED', 'DECLINED']),
+  "note": zod.string().max(resolveShiftSwapRequestBodyNoteMax).optional().describe('Optionale Antwort des Planers, vor allem bei einer Ablehnung.')
+})
+
+export const ResolveShiftSwapRequestResponse = zod.object({
+  "id": zod.number(),
+  "shiftId": zod.number(),
+  "userId": zod.number(),
+  "userName": zod.string().nullable(),
+  "teamId": zod.number(),
+  "status": zod.enum(['OPEN', 'RESOLVED']),
+  "reason": zod.string(),
+  "requestedAt": zod.coerce.date(),
+  "resolution": zod.union([zod.literal('REASSIGNED'),zod.literal('DECLINED'),zod.literal(null)]).nullable(),
+  "resolutionNote": zod.string().nullable(),
+  "resolvedBy": zod.number().nullable(),
+  "resolvedAt": zod.coerce.date().nullable()
+})
+
+
+/**
  * @summary Schichtmodelle auflisten
  */
 export const ListShiftModelsQueryParams = zod.object({

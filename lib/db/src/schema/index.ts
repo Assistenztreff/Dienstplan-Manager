@@ -21,3 +21,4 @@ export * from "./absence_requests";
 export * from "./deletion_archives";
 export * from "./shift_changes";
 export * from "./shift_deviation_reports";
+export * from "./shift_swap_requests";

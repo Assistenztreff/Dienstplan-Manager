@@ -1110,6 +1110,71 @@ export interface ShiftDeviationReport {
   disputeReason?: string | null;
 }
 
+export type ShiftSwapRequestStatus = typeof ShiftSwapRequestStatus[keyof typeof ShiftSwapRequestStatus];
+
+
+export const ShiftSwapRequestStatus = {
+  OPEN: 'OPEN',
+  RESOLVED: 'RESOLVED',
+} as const;
+
+/**
+ * @nullable
+ */
+export type ShiftSwapRequestResolution = typeof ShiftSwapRequestResolution[keyof typeof ShiftSwapRequestResolution] | null;
+
+
+export const ShiftSwapRequestResolution = {
+  REASSIGNED: 'REASSIGNED',
+  DECLINED: 'DECLINED',
+} as const;
+
+export interface ShiftSwapRequest {
+  id: number;
+  shiftId: number;
+  userId: number;
+  /** @nullable */
+  userName: string | null;
+  teamId: number;
+  status: ShiftSwapRequestStatus;
+  reason: string;
+  requestedAt: string;
+  /** @nullable */
+  resolution: ShiftSwapRequestResolution;
+  /** @nullable */
+  resolutionNote: string | null;
+  /** @nullable */
+  resolvedBy: number | null;
+  /** @nullable */
+  resolvedAt: string | null;
+}
+
+export interface ShiftSwapRequestInput {
+  /**
+     * Begründung der Assistenzkraft (Pflicht). Ohne Grund kann der Planer nicht abwägen, und die Anfrage ist später nicht belegbar.
+     * @minLength 3
+     * @maxLength 500
+     */
+  reason: string;
+}
+
+export type ShiftSwapResolveInputResolution = typeof ShiftSwapResolveInputResolution[keyof typeof ShiftSwapResolveInputResolution];
+
+
+export const ShiftSwapResolveInputResolution = {
+  REASSIGNED: 'REASSIGNED',
+  DECLINED: 'DECLINED',
+} as const;
+
+export interface ShiftSwapResolveInput {
+  resolution: ShiftSwapResolveInputResolution;
+  /**
+     * Optionale Antwort des Planers, vor allem bei einer Ablehnung.
+     * @maxLength 500
+     */
+  note?: string;
+}
+
 export type ShiftChangeSummaryChangeSource = typeof ShiftChangeSummaryChangeSource[keyof typeof ShiftChangeSummaryChangeSource];
 
 
@@ -2291,6 +2356,13 @@ teamId?: number;
  */
 month: number;
 year: number;
+};
+
+export type ListShiftSwapRequestsParams = {
+/**
+ * Optionaler Team-Kontext; muss ein erlaubtes Team sein.
+ */
+teamId?: number;
 };
 
 export type ListShiftModelsParams = {

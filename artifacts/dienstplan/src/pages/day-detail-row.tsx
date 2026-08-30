@@ -1,19 +1,20 @@
 import { formatAbsenceTimeSpan } from "@/lib/absence-time";
 import { format } from "date-fns";
 import { useState } from "react";
-import { Check, MessageSquare } from "lucide-react";
+import { ArrowLeftRight, Check, MessageSquare } from "lucide-react";
 import { StatusBadge, type StatusBadgeKind } from "@/components/status-badge";
 import { useIsCorrectedShift } from "./corrected-shifts";
 import { useTeam } from "@/context/team";
 import { useAuth } from "@/context/auth";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import type { ShiftDeviationReport } from "@workspace/api-client-react";
+import type { ShiftDeviationReport, ShiftSwapRequest } from "@workspace/api-client-react";
 import { pruefeMeldungMoeglich } from "@workspace/shift-defaults/deviation-rules";
 import {
   DisputeDeviationDialog,
   ReportDeviationDialog,
   type DeviationReportValues,
 } from "./deviation-dialog";
+import { DeclineSwapRequestDialog, SwapRequestDialog } from "./swap-request-dialog";
 import {
   dienstStatusColor,
   isAbsenceShift,
@@ -48,6 +49,10 @@ export function DayDetailRow({
   onAcceptDeviation,
   onDisputeDeviation,
   deviationActionPending = false,
+  swapRequest,
+  onRequestSwap,
+  onResolveSwap,
+  swapActionPending = false,
 }: {
   shift: Shift;
   modelMap: Map<number, ShiftModelInfo>;
@@ -80,12 +85,24 @@ export function DayDetailRow({
   onAcceptDeviation?: (shift: Shift) => void;
   onDisputeDeviation?: (shift: Shift, reason: string) => void;
   deviationActionPending?: boolean;
+  /** Tauschwunsch: vorhandene Anfrage zu diesem Dienst (hoechstens eine
+   *  OFFENE, s. shift_swap_requests). */
+  swapRequest?: ShiftSwapRequest | null;
+  /** Nur gesetzt, wenn die Assistenzkraft anfragen darf — die Zeile prueft
+   *  selbst, ob es ihr eigener, noch nicht vergangener Dienst ist. */
+  onRequestSwap?: (shift: Shift, reason: string) => void;
+  /** Nur vom Planer uebergeben (analog zu onConfirm) — Umbesetzt/Ablehnen
+   *  erscheinen nur, wenn beide gesetzt sind UND die Anfrage offen ist. */
+  onResolveSwap?: (shift: Shift, resolution: "REASSIGNED" | "DECLINED", note?: string) => void;
+  swapActionPending?: boolean;
 }) {
   const { selectedTeamId } = useTeam();
   const { currentUser } = useAuth();
   const getPersonSlot = usePersonSlotLookup();
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [disputeDialogOpen, setDisputeDialogOpen] = useState(false);
+  const [swapDialogOpen, setSwapDialogOpen] = useState(false);
+  const [swapDeclineDialogOpen, setSwapDeclineDialogOpen] = useState(false);
   const mirror = isMirrorShift(shift, selectedTeamId);
   const isAbsence = isAbsenceShift(shift);
   const isTeam = shift.type === "team";
@@ -179,6 +196,23 @@ export function DayDetailRow({
     !!onDisputeDeviation &&
     !meldungUeberholt &&
     deviationReport?.status === "PENDING";
+
+  // Tauschwunsch (Kay 30.08.2026): der eigene, noch nicht vergangene
+  // Arbeitsdienst — beim Vorschlag wie beim bereits bestaetigten Dienst.
+  // Ein Entwurf zaehlt nicht: der ist der Assistenzkraft noch gar nicht
+  // zugesagt worden. Dieselben Regeln prueft die Route noch einmal.
+  const swapOffen = swapRequest?.status === "OPEN";
+  const canRequestSwap =
+    !!onRequestSwap &&
+    !mirror &&
+    !isAbsence &&
+    !isTeam &&
+    !swapOffen &&
+    status !== "VORLAEUFIG" &&
+    new Date(shift.endTime).getTime() > Date.now() &&
+    currentUser?.id === shift.userId;
+  // Umbesetzt/Ablehnen nur fuer den Planer und nur solange offen.
+  const canResolveSwap = !!onResolveSwap && swapOffen;
 
   return (
     <div
@@ -279,6 +313,75 @@ export function DayDetailRow({
           <Check className="h-3 w-3" />
           Annehmen
         </button>
+      )}
+
+      {/* "Tausch anfragen" — Kay 30.08.2026. Der fehlende Rueckweg: Bisher
+          liess sich ein Vorschlag nur ANNEHMEN, und ein bestaetigter Dienst
+          gar nicht mehr kommentieren. Bewusst neutral gestaltet (nicht in
+          der auffaelligen Melde-Farbe): Es ist eine Bitte, kein Alarm. */}
+      {canRequestSwap && (
+        <button
+          type="button"
+          data-testid={`swap-request-${shift.id}`}
+          title="Anfragen, ob dieser Dienst getauscht werden kann"
+          onClick={(e) => {
+            e.stopPropagation();
+            setSwapDialogOpen(true);
+          }}
+          className="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-md border border-[#d8d8d4] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#092948] transition-colors after:absolute after:inset-x-0 after:top-1/2 after:h-[44px] after:-translate-y-1/2 after:content-[''] hover:border-[#092948]"
+        >
+          <ArrowLeftRight className="h-3 w-3" />
+          Tausch anfragen
+        </button>
+      )}
+
+      {/* Offener Tauschwunsch: Fuer den Planer zwei Knoepfe, fuer die
+          anfragende Assistenzkraft nur der Hinweis, dass die Anfrage laeuft. */}
+      {swapOffen && !canResolveSwap && (
+        <span
+          data-testid={`swap-pending-${shift.id}`}
+          title={swapRequest?.reason ?? undefined}
+          className="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-md border border-[#d8d8d4] bg-[#f6f6f4] px-2 py-0.5 text-[11px] font-semibold text-[#5a5a55]"
+        >
+          <ArrowLeftRight className="h-3 w-3" />
+          Tausch angefragt
+        </span>
+      )}
+
+      {canResolveSwap && (
+        <>
+          <button
+            type="button"
+            data-testid={`swap-reassigned-${shift.id}`}
+            title={
+              swapRequest?.reason
+                ? `Tauschwunsch: ${swapRequest.reason} — als umbesetzt abhaken`
+                : "Als umbesetzt abhaken"
+            }
+            disabled={swapActionPending}
+            onClick={(e) => {
+              e.stopPropagation();
+              onResolveSwap(shift, "REASSIGNED");
+            }}
+            className="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-md border border-[#d8d8d4] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#092948] transition-colors after:absolute after:inset-x-0 after:top-1/2 after:h-[44px] after:-translate-y-1/2 after:content-[''] hover:border-[#092948] disabled:opacity-50"
+          >
+            <Check className="h-3 w-3" />
+            Tausch erledigt
+          </button>
+          <button
+            type="button"
+            data-testid={`swap-decline-${shift.id}`}
+            title="Tauschwunsch ablehnen"
+            disabled={swapActionPending}
+            onClick={(e) => {
+              e.stopPropagation();
+              setSwapDeclineDialogOpen(true);
+            }}
+            className="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-md border border-[#d8d8d4] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#8a2b2b] transition-colors after:absolute after:inset-x-0 after:top-1/2 after:h-[44px] after:-translate-y-1/2 after:content-[''] hover:border-[#8a2b2b] disabled:opacity-50"
+          >
+            Ablehnen
+          </button>
+        </>
       )}
 
       {/* "Zeit korrigieren" — Abweichungsmodell (Assistenzkraft). Bewusst
@@ -458,6 +561,30 @@ export function DayDetailRow({
           onSubmit={(reason) => {
             onDisputeDeviation(shift, reason);
             setDisputeDialogOpen(false);
+          }}
+        />
+      )}
+
+      {swapDialogOpen && onRequestSwap && (
+        <SwapRequestDialog
+          open={swapDialogOpen}
+          onOpenChange={setSwapDialogOpen}
+          submitting={swapActionPending}
+          onSubmit={(reason) => {
+            onRequestSwap(shift, reason);
+            setSwapDialogOpen(false);
+          }}
+        />
+      )}
+
+      {swapDeclineDialogOpen && onResolveSwap && (
+        <DeclineSwapRequestDialog
+          open={swapDeclineDialogOpen}
+          onOpenChange={setSwapDeclineDialogOpen}
+          submitting={swapActionPending}
+          onSubmit={(note) => {
+            onResolveSwap(shift, "DECLINED", note || undefined);
+            setSwapDeclineDialogOpen(false);
           }}
         />
       )}
