@@ -65,6 +65,7 @@ export const TEAM_BOUND_TABLES = [
   // damit eine neue Tabelle nie stillschweigend durchrutscht.
   "shift_changes",
   "shift_deviation_reports",
+  "shift_correction_objections",
 ] as const;
 
 /**
@@ -75,12 +76,13 @@ export const TEAM_BOUND_TABLES = [
  * verschwinden. Fuer die Test-Infrastruktur muessen sie deshalb ausdruecklich
  * vorher weg — frueher erledigte das die Kaskade.
  *
- * Reihenfolge ist relevant: shift_changes/shift_deviation_reports zuerst
+ * Reihenfolge ist relevant: die drei Schicht-Protokolltabellen zuerst
  * (haengen zusaetzlich am Dienst), danach die uebrigen, zuletzt die Dienste.
  */
 export const USER_BOUND_RESTRICT_TABLES = [
   "shift_changes",
   "shift_deviation_reports",
+  "shift_correction_objections",
   "time_tracking",
   "absence_requests",
   "contracts",
