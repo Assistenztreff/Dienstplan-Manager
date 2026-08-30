@@ -7,6 +7,7 @@ import {
   FREE_ACCOUNT_PASSWORD,
   type FreeAccount,
 } from "./helpers/teams";
+import { openSettingsGroup } from "./helpers/einstellungen";
 
 /**
  * E2E-Test für den Team-Filter im Dienste-Bereich der Einstellungen (#486).
@@ -65,6 +66,7 @@ async function listModels(teamId: number): Promise<Model[]> {
 
 async function gotoEinstellungen(page: Page): Promise<void> {
   await page.goto("/einstellungen");
+  await openSettingsGroup(page, "struktur");
   // Warten, bis der Dienste-Bereich geladen ist (Skeletons weg).
   await expect(page.getByRole("heading", { name: "Einstellungen" })).toBeVisible();
 }

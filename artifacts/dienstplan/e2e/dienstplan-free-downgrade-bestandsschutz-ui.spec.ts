@@ -6,6 +6,7 @@ import {
   setAccountPlan,
   type FreeAccount,
 } from "./helpers/teams";
+import { openSettingsGroup } from "./helpers/einstellungen";
 
 /**
  * UI-Test (#248): Nach einem Downgrade Premium -> Free zeigt das WEB-FRONTEND
@@ -169,6 +170,7 @@ test.describe("Downgrade auf Free: Bestandsdaten bleiben im UI sichtbar", () => 
     await adoptSession(page, acc);
 
     await page.goto("/einstellungen");
+    await openSettingsGroup(page, "struktur");
     await expect(page.getByRole("heading", { name: "Einstellungen" })).toBeVisible();
 
     // ALLE 7 Dienste (5 Seeds + 2 als Premium angelegte) bleiben gelistet —

@@ -12,6 +12,7 @@ import {
   setAccountPlan,
   type FreeAccount,
 } from "./helpers/teams";
+import { openSettingsGroup } from "./helpers/einstellungen";
 
 /**
  * End-to-End-Beweis (Task #408): Das ERNEUERN (Rotieren) des Kalender-Abo-Links
@@ -126,6 +127,7 @@ test("Admin: Link erneuern macht die alte Abo-URL sofort ungültig; neue URL lie
   await adoptAdmin(page);
 
   await page.goto("/einstellungen");
+  await openSettingsGroup(page, "darstellung");
 
   // --- 1. Abo-Link über die UI erstellen ------------------------------------
   const createButton = page.getByTestId("calendar-feed-create");

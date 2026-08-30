@@ -12,6 +12,7 @@ import {
   setAccountPlan,
   type FreeAccount,
 } from "./helpers/teams";
+import { openSettingsGroup } from "./helpers/einstellungen";
 
 /**
  * End-to-End (Task #390): Das Erneuern des Kalender-Abo-Links („Link erneuern")
@@ -119,6 +120,7 @@ test("Link erneuern macht die alte Abo-URL ungueltig, die neue liefert dieselben
   await adoptAssistant(page);
 
   await page.goto("/einstellungen");
+  await openSettingsGroup(page, "darstellung");
 
   // Abo-Link erstellen.
   const createButton = page.getByTestId("calendar-feed-create");

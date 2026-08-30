@@ -1499,6 +1499,7 @@ export function HandbuchEinstellungen() {
       bereich="Verwaltung"
       titel="Einstellungen"
       toc={[
+        { id: "aufbau", label: "Aufbau der Seite" },
         { id: "profil", label: "Profil & Passwort" },
         { id: "kalender-abo", label: "Kalender-Export & Abo" },
         { id: "schichtmodelle", label: "Schichtmodelle (Dienste)" },
@@ -1520,6 +1521,46 @@ export function HandbuchEinstellungen() {
         Administrierende sehen alle Bereiche; Assistenzkräfte finden hier nur ihr Profil und den
         Kalender-Export.
       </p>
+
+      <h2 id="aufbau">Aufbau der Seite</h2>
+      <p>
+        Die Einstellungen sind nach Tragweite geordnet — oben steht, was Stunden und Geld bestimmt,
+        unten das Aussehen. Vier Gruppen:
+      </p>
+      <ul>
+        <li>
+          <strong>Abrechnungsgrundlagen</strong> — Zeiterfassung, Abrechnungsart, Vollzeit-Bezug,
+          Urlaubsanspruch und Bundesland. Änderungen hier wirken auf Auswertung und
+          Stundennachweis.
+        </li>
+        <li>
+          <strong>Zuschläge und Zeitregeln</strong> — Zuschlagssätze, Pausen, Ersatzruhetag,
+          Teamsitzung und die automatische Genehmigung von Stundenzetteln.
+        </li>
+        <li>
+          <strong>Dienste und Struktur</strong> — Schichtmodelle, monatliches Stundenbudget und Ihr
+          Profil.
+        </li>
+        <li>
+          <strong>Darstellung und Export</strong> — Firmenlogo, Assistenzkraft-Farben sowie
+          Kalender-Export und Abo.
+        </li>
+      </ul>
+      <p>
+        Die beiden oberen Gruppen sind immer geöffnet. Die beiden unteren sind zugeklappt; ein
+        Klick auf die Überschrift öffnet sie, und die Seite merkt sich Ihre Wahl für den nächsten
+        Besuch.
+      </p>
+
+      <HinweisBox titel="Hinweis: Speichern in den oberen beiden Gruppen">
+        <p>
+          Abrechnungsgrundlagen und Zuschläge gehören zu einem gemeinsamen Formular. Sobald Sie
+          etwas ändern, erscheint unten am Bildschirmrand eine Leiste mit der Anzahl der offenen
+          Änderungen sowie <strong>Speichern</strong> und <strong>Verwerfen</strong>. Eine Ausnahme
+          ist der Schalter <strong>Zeiterfassung aktivieren</strong>: Er wird sofort nach der
+          Rückfrage gespeichert, damit er nie in einem unklaren Zwischenzustand hängt.
+        </p>
+      </HinweisBox>
 
       <h2 id="profil">Profil &amp; Passwort</h2>
       <p>

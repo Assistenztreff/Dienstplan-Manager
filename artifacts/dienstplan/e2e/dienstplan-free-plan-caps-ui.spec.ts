@@ -2,6 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { addMonths, format } from "date-fns";
 import { deleteFreeAccount, registerFreeAccount, type FreeAccount } from "./helpers/teams";
 import { pickShiftDialogDate } from "./helpers/shifts";
+import { openSettingsGroup } from "./helpers/einstellungen";
 
 /**
  * UI-Test (#239): Die beiden verbleibenden serverseitig durchgesetzten
@@ -86,6 +87,7 @@ test.describe("Free-Limit Schichtmodelle (UI)", () => {
     // muss dann den servergemappten Upgrade-Hinweis anzeigen — genau der Pfad,
     // der bei einer Regression still verschluckt wuerde.
     await page.goto("/einstellungen");
+    await openSettingsGroup(page, "struktur");
     await expect(page.getByRole("heading", { name: "Einstellungen" })).toBeVisible();
 
     // Kopf-Button der Schichtmodell-Verwaltung (mobiles Viewport zeigt "Neu";

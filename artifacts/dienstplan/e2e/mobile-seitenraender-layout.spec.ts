@@ -41,7 +41,7 @@ test.use({ viewport: { width: 390, height: 844 } });
  *  - Auswertungen:    [data-testid="fix-only-hint"]  (auswertungen.tsx ~Z. 449)
  *  - Team-Verwaltung: h2 "Team-Verwaltung"      (team-verwaltung.tsx ~Z. 1204)
  *  - Zeiterfassung:   h1 "Zeiterfassung"        (zeiterfassung.tsx ~Z. 603)
- *  - Einstellungen:   h3 "Profilinformationen"  (einstellungen.tsx ~Z. 617)
+ *  - Einstellungen:   h2 "Abrechnungsgrundlagen" (erste, immer offene Gruppe)
  */
 type PageEntry = {
   label: string;
@@ -77,8 +77,11 @@ const PAGES: PageEntry[] = [
   {
     label: "Einstellungen",
     path: "/einstellungen",
+    // Profil steckt seit der Neuordnung in der eingeklappten Gruppe
+    // "Dienste und Struktur". Die erste Gruppe ist immer offen und damit der
+    // verlaessliche Beweis, dass die Seite fertig gerendert hat.
     readyLocator: (page) =>
-      page.getByRole("heading", { name: "Profilinformationen" }),
+      page.getByRole("heading", { name: "Abrechnungsgrundlagen" }),
   },
 ];
 

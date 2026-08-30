@@ -1,5 +1,6 @@
 import { test, expect, type Page, type APIRequestContext } from "@playwright/test";
 import { deleteAccountByEmail, registerFreeAccount } from "./helpers/teams";
+import { openSettingsGroup } from "./helpers/einstellungen";
 
 /**
  * E2E-Test für den Firmenlogo-Upload (Einstellungen) und dessen Verwendung.
@@ -60,6 +61,7 @@ async function gotoSettingsAsAdmin(page: Page): Promise<void> {
   });
   expect(loginRes.ok(), `Admin-Login fehlgeschlagen (${loginRes.status()})`).toBe(true);
   await page.goto("/einstellungen");
+  await openSettingsGroup(page, "darstellung");
   await expect(
     page.getByRole("heading", { name: "Einstellungen", exact: true }),
   ).toBeVisible({ timeout: 30000 });

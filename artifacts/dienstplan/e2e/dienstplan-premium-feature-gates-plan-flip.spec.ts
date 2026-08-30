@@ -6,6 +6,7 @@ import {
   setAccountPlan,
   type FreeAccount,
 } from "./helpers/teams";
+import { openSettingsGroup } from "./helpers/einstellungen";
 
 /**
  * E2E-Absicherung: Premium-Sperren greifen nach einem Plan-Wechsel SOFORT und
@@ -389,6 +390,7 @@ test.describe("Premium-Feature-Gates: Sperr-Hinweise im Frontend (UI)", () => {
     await adoptSession(page, free);
 
     await page.goto("/einstellungen");
+    await openSettingsGroup(page, "darstellung");
     const exportButton = page.getByTestId("calendar-export-button");
     await expect(exportButton).toBeVisible();
     await expect(exportButton, "Export-Button muss im Free-Tarif gesperrt sein").toBeDisabled();

@@ -12,6 +12,7 @@ import {
   setAccountPlan,
   type FreeAccount,
 } from "./helpers/teams";
+import { openSettingsGroup } from "./helpers/einstellungen";
 
 /**
  * End-to-End (Task #391): Das Widerrufen des Kalender-Abo-Links („Widerrufen")
@@ -95,6 +96,7 @@ test("Widerrufen sperrt die Feed-URL sofort und löscht den Token", async ({ pag
   await adoptAssistant(page);
 
   await page.goto("/einstellungen");
+  await openSettingsGroup(page, "darstellung");
 
   const createButton = page.getByTestId("calendar-feed-create");
   await expect(createButton).toBeVisible();

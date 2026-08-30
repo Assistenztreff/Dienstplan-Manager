@@ -12,6 +12,7 @@ import {
   setAccountPlan,
   type FreeAccount,
 } from "./helpers/teams";
+import { openSettingsGroup } from "./helpers/einstellungen";
 
 /**
  * UI-Test (Task #373, frühere Idee #311): Ein ASSISTENT mit einem
@@ -103,6 +104,7 @@ test("Premium-Arbeitgeber: Assistent sieht die Kalender-Abo-Karte freigeschaltet
   await adoptAssistant(page);
 
   await page.goto("/einstellungen");
+  await openSettingsGroup(page, "darstellung");
 
   // Der Export-Button ist sichtbar UND freigeschaltet (kein disabled).
   const exportButton = page.getByTestId("calendar-export-button");
@@ -136,6 +138,7 @@ test("Free-Arbeitgeber: Karte bleibt für den Assistenten gesperrt (Gegentest)",
   await adoptAssistant(page);
 
   await page.goto("/einstellungen");
+  await openSettingsGroup(page, "darstellung");
 
   const exportButton = page.getByTestId("calendar-export-button");
   await expect(exportButton).toBeVisible();

@@ -12,6 +12,7 @@ import {
   setAccountPlan,
   type FreeAccount,
 } from "./helpers/teams";
+import { openSettingsGroup } from "./helpers/einstellungen";
 
 /**
  * End-to-End-Flow (Task #389): Ein ASSISTENT mit einem PREMIUM-Arbeitgeber kann
@@ -167,6 +168,7 @@ test("Assistent erstellt Abo-Link über die UI; Feed liefert nur eigene FIX-Schi
   await adoptAssistant(page);
 
   await page.goto("/einstellungen");
+  await openSettingsGroup(page, "darstellung");
 
   // Der Abo-Bereich ist freigeschaltet und der Assistent hat noch keinen Token:
   // der „Abo-Link erstellen"-Button ist sichtbar.

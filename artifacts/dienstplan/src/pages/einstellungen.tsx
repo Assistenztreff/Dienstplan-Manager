@@ -42,7 +42,15 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, GripVertical, Upload, ImageIcon, KeyRound, Mail, User as UserIcon, Lock, CalendarDays, Copy, RefreshCw } from "lucide-react";
-import { AllowanceSettingsForm } from "@/components/allowance-settings-form";
+import { EinstellungsGruppe } from "@/components/einstellungen/settings-group";
+import { AllowanceSettingsProvider } from "@/components/einstellungen/allowance-settings-context";
+import {
+  AllowanceScopePicker,
+  AbrechnungsgrundlagenFelder,
+  ZuschlaegeUndZeitregelnFelder,
+  AllowanceSaveBar,
+  ZeiterfassungBestaetigung,
+} from "@/components/einstellungen/allowance-fields";
 import { HourBudgetSettingsCard } from "@/components/hour-budget-settings";
 import { logoSrcFromPath, ACCEPTED_LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/logo";
 import { readableApiError, planUpgradeMessage, planFeatureMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
@@ -1218,14 +1226,17 @@ export default function Einstellungen() {
   const [editModel, setEditModel] = useState<ShiftModel | undefined>();
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
-  // Sprungziel-Anker (#zuschlaege): Verweise aus anderen Seiten (z. B. der
-  // Hinweis auf der Zeiterfassungs-Seite) scrollen zum Zuschläge-Bereich.
-  // Kurzes Polling, weil der Bereich erst nach dem Laden der Daten rendert.
+  // Sprungziel-Anker: Verweise aus anderen Seiten (z. B. der Hinweis auf der
+  // Zeiterfassungs-Seite auf #zuschlaege oder die Budget-Kachel auf
+  // #stundenbudget) scrollen zum passenden Bereich. Kurzes Polling, weil der
+  // Bereich erst nach dem Laden der Daten rendert — und weil eine
+  // eingeklappte Gruppe sich erst noch oeffnen muss.
   useEffect(() => {
-    if (window.location.hash !== "#zuschlaege") return;
+    const ziel = window.location.hash.replace(/^#/, "");
+    if (!ziel) return;
     let attempts = 0;
     const timer = window.setInterval(() => {
-      const el = document.getElementById("zuschlaege");
+      const el = document.getElementById(ziel);
       attempts += 1;
       if (el) {
         el.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1282,27 +1293,112 @@ export default function Einstellungen() {
     }
   }
 
-  return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Einstellungen</h2>
-          <p className="text-muted-foreground mt-1 text-sm">
-            {isAdmin
-              ? "Schichtmodelle für den Dienstplan verwalten"
-              : "Profil und Kalender-Abo verwalten"}
-          </p>
+  // Ein Dienst-Eintrag in der Liste der Schichtmodelle.
+  const dienstListe = (
+    <div className="rounded-lg border border-border/50 overflow-hidden">
+      {isLoading ? (
+        <div className="p-4 space-y-3">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-14 w-full rounded-lg" />
+          ))}
         </div>
-      </div>
+      ) : sortedModels.length === 0 ? (
+        <div className="p-12 text-center">
+          <p className="text-muted-foreground mb-4">Noch keine Schichtmodelle angelegt.</p>
+          <Button onClick={openCreate} variant="outline" className="gap-2">
+            <Plus className="h-4 w-4" /> Erstes Modell anlegen
+          </Button>
+        </div>
+      ) : (
+        <ul className="divide-y divide-border/50">
+          {sortedModels.map((model) => (
+            <li
+              key={model.id}
+              className="flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors"
+            >
+              <GripVertical className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium truncate">{model.name}</span>
+                  {!model.isActive && (
+                    <Badge variant="secondary" className="text-xs">Inaktiv</Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {model.defaultStartTime}–{model.defaultEndTime} · Zeitwertung{" "}
+                  {model.valuationPercent} %
+                  {model.compensationType === "percentage" && model.compensationPercent != null
+                    ? ` · Lohn ${model.compensationPercent} %`
+                    : model.compensationType === "flat" && model.compensationFlatCents != null
+                      ? ` · Festbetrag ${(model.compensationFlatCents / 100).toFixed(2)} €`
+                      : ""}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => openEdit(model)}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Bearbeiten</span>
+              </Button>
+              <Button
+                variant={confirmDelete === model.id ? "destructive" : "ghost"}
+                size="sm"
+                className="gap-1.5"
+                onClick={() => handleDelete(model.id)}
+                onBlur={() => setConfirmDelete(null)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">
+                  {confirmDelete === model.id ? "Wirklich?" : "Löschen"}
+                </span>
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 
-      <ProfileCard />
+  const schichtmodelleKarte = (
+    <Card id="schichtmodelle" className="border-border/50 shadow-sm scroll-mt-4">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="font-serif text-lg font-bold text-foreground">Schichtmodelle</h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Stehen beim Anlegen einer Schicht im Dienstplan zur Auswahl. Die Zeitwertung bestimmt,
+              wie die geleistete Zeit in der Auswertung auf die Sollstunden angerechnet wird.
+            </p>
+          </div>
+          {canAddModel ? (
+            <Button
+              onClick={openCreate}
+              className="gap-2 shrink-0"
+              data-testid="model-create"
+              disabled={!isTeamScopeReady}
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Neuen Dienst</span>
+              <span className="sm:hidden">Neu</span>
+            </Button>
+          ) : (
+            <Button
+              disabled
+              className="gap-2 shrink-0"
+              title={`Im Free-Plan sind max. ${modelLimit} Dienste möglich. Upgrade auf Premium für unbegrenzte Dienste.`}
+              data-testid="model-create-locked"
+            >
+              <Lock className="h-4 w-4" />
+              <span className="hidden sm:inline">Neuen Dienst</span>
+              <span className="sm:hidden">Neu</span>
+            </Button>
+          )}
+        </div>
 
-      <CalendarExportCard />
-
-      {isAdmin && (
-      <>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        {showTeamFilter ? (
+        {showTeamFilter && (
           <div className="flex items-center gap-2 min-w-0">
             <Label htmlFor="model-team-filter" className="text-sm text-muted-foreground shrink-0">
               Dienste für Team
@@ -1328,133 +1424,107 @@ export default function Einstellungen() {
               </SelectContent>
             </Select>
           </div>
-        ) : (
-          <div />
         )}
-        {canAddModel ? (
-          <Button
-            onClick={openCreate}
-            className="gap-2"
-            data-testid="model-create"
-            disabled={!isTeamScopeReady}
-          >
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Neuen Dienst</span>
-            <span className="sm:hidden">Neu</span>
-          </Button>
-        ) : (
-          <Button
-            disabled
-            className="gap-2"
-            title={`Im Free-Plan sind max. ${modelLimit} Dienste möglich. Upgrade auf Premium für unbegrenzte Dienste.`}
-            data-testid="model-create-locked"
-          >
-            <Lock className="h-4 w-4" />
-            <span className="hidden sm:inline">Neuen Dienst</span>
-            <span className="sm:hidden">Neu</span>
-          </Button>
+
+        {/* Limit-Hinweis (Free-Plan). Bei Premium ist modelLimit null. */}
+        {!canAddModel && modelLimit !== null && (
+          <PlanLimitBanner>
+            Im Free-Plan sind maximal {modelLimit} Dienste möglich. Für unbegrenzte Dienste ist ein
+            Upgrade auf Premium nötig.
+          </PlanLimitBanner>
         )}
-      </div>
-      {/* Limit-Hinweis (Free-Plan). Bei Premium ist modelLimit null. */}
-      {!canAddModel && modelLimit !== null && (
-        <PlanLimitBanner>
-          Im Free-Plan sind maximal {modelLimit} Dienste möglich. Für unbegrenzte Dienste ist ein
-          Upgrade auf Premium nötig.
-        </PlanLimitBanner>
-      )}
-      <Card className="border-border/50 shadow-sm">
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="p-4 space-y-3">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-14 w-full rounded-lg" />
-              ))}
-            </div>
-          ) : sortedModels.length === 0 ? (
-            <div className="p-12 text-center">
-              <p className="text-muted-foreground mb-4">Noch keine Schichtmodelle angelegt.</p>
-              <Button onClick={openCreate} variant="outline" className="gap-2">
-                <Plus className="h-4 w-4" /> Erstes Modell anlegen
-              </Button>
-            </div>
-          ) : (
-            <ul className="divide-y divide-border/50">
-              {sortedModels.map((model) => (
-                <li
-                  key={model.id}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors"
-                >
-                  <GripVertical className="h-4 w-4 text-muted-foreground/40 shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium truncate">{model.name}</span>
-                      {!model.isActive && (
-                        <Badge variant="secondary" className="text-xs">Inaktiv</Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {model.defaultStartTime}–{model.defaultEndTime} · Zeitwertung{" "}
-                      {model.valuationPercent} %
-                      {model.compensationType === "percentage" && model.compensationPercent != null
-                        ? ` · Lohn ${model.compensationPercent} %`
-                        : model.compensationType === "flat" && model.compensationFlatCents != null
-                          ? ` · Festbetrag ${(model.compensationFlatCents / 100).toFixed(2)} €`
-                          : ""}
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={() => openEdit(model)}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Bearbeiten</span>
-                  </Button>
-                  <Button
-                    variant={confirmDelete === model.id ? "destructive" : "ghost"}
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={() => handleDelete(model.id)}
-                    onBlur={() => setConfirmDelete(null)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">
-                      {confirmDelete === model.id ? "Wirklich?" : "Löschen"}
-                    </span>
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
 
-      <p className="text-xs text-muted-foreground">
-        Schichtmodelle stehen beim Anlegen einer Schicht im Dienstplan zur Auswahl. Die Zeitwertung
-        bestimmt, wie die geleistete Zeit in der Auswertung auf die Sollstunden angerechnet wird.
-      </p>
+        {dienstListe}
+      </CardContent>
+    </Card>
+  );
 
-
-      {isDienstleister && <LogoSettingsCard />}
-
-      {isAdmin && <AssistantPaletteCard />}
-
-      {/* Sprungziel für Verweise aus anderen Seiten (z. B. Hinweis auf der
-          Zeiterfassungs-Seite bei deaktivierter Zeiterfassung). */}
-      <div id="zuschlaege" className="scroll-mt-4">
-        <AllowanceSettingsForm />
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Einstellungen</h2>
+          <p className="text-muted-foreground mt-1 text-sm">
+            {isAdmin
+              ? "Von oben nach unten geordnet: zuerst was Stunden und Geld bestimmt, zuletzt das Aussehen"
+              : "Profil und Kalender-Abo verwalten"}
+          </p>
+        </div>
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        Zuschläge gelten nur für Ihr Konto und werden bei der Auswertung angewandt. Änderungen wirken
-        sich rückwirkend auf Ihre Auswertungen aus, ohne dass Schichten neu gespeichert werden müssen.
-      </p>
+      {!isAdmin ? (
+        <>
+          <ProfileCard />
+          <CalendarExportCard />
+        </>
+      ) : (
+        <AllowanceSettingsProvider>
+          <EinstellungsGruppe
+            id="abrechnungsgrundlagen"
+            titel="Abrechnungsgrundlagen"
+            beschreibung="Bestimmt, wie Stunden und Geld berechnet werden. Eine Änderung wirkt sich auf Auswertung und Stundennachweis aus."
+          >
+            <div className="space-y-5">
+              <AllowanceScopePicker />
+              <AbrechnungsgrundlagenFelder />
+            </div>
+          </EinstellungsGruppe>
 
-      {/* Monatliches Stundenbudget (Bedarfsseite): Premium-Feature —
-          Free-Konten sehen die Karte gesperrt mit Premium-Verweis. */}
-      <HourBudgetSettingsCard />
-      </>
+          <EinstellungsGruppe
+            id="zuschlaege"
+            titel="Zuschläge und Zeitregeln"
+            beschreibung="Sätze und Regeln, die regelmäßig gepflegt werden, ohne die Abrechnung als Ganzes umzuschalten. Änderungen wirken rückwirkend auf Ihre Auswertungen, ohne dass Schichten neu gespeichert werden müssen."
+          >
+            <ZuschlaegeUndZeitregelnFelder />
+          </EinstellungsGruppe>
+
+          <EinstellungsGruppe
+            id="struktur"
+            titel="Dienste und Struktur"
+            beschreibung="Einmal eingerichtet, danach selten geändert."
+            inhaltsangabe={`Schichtmodelle (${sortedModels.length}) · Monatliches Stundenbudget · Profilinformationen`}
+            einklappbar
+            anker={["schichtmodelle", "stundenbudget", "profil"]}
+          >
+            {schichtmodelleKarte}
+            {/* Monatliches Stundenbudget (Bedarfsseite): Premium-Feature —
+                Free-Konten sehen die Karte gesperrt mit Premium-Verweis. */}
+            <div id="stundenbudget" className="scroll-mt-4">
+              <HourBudgetSettingsCard />
+            </div>
+            <div id="profil" className="scroll-mt-4">
+              <ProfileCard />
+            </div>
+          </EinstellungsGruppe>
+
+          <EinstellungsGruppe
+            id="darstellung"
+            titel="Darstellung und Export"
+            beschreibung="Aussehen und Nebenfunktionen — verändert keine Zahlen in der Auswertung."
+            inhaltsangabe={
+              isDienstleister
+                ? "Firmenlogo · Assistenzkraft-Farben · Kalender-Export und Abo"
+                : "Assistenzkraft-Farben · Kalender-Export und Abo"
+            }
+            einklappbar
+            anker={["firmenlogo", "farben", "kalender-abo"]}
+          >
+            {isDienstleister && (
+              <div id="firmenlogo" className="scroll-mt-4">
+                <LogoSettingsCard />
+              </div>
+            )}
+            <div id="farben" className="scroll-mt-4">
+              <AssistantPaletteCard />
+            </div>
+            <div id="kalender-abo" className="scroll-mt-4">
+              <CalendarExportCard />
+            </div>
+          </EinstellungsGruppe>
+
+          <AllowanceSaveBar />
+          <ZeiterfassungBestaetigung />
+        </AllowanceSettingsProvider>
       )}
 
       {isAdmin && dialogOpen && (

@@ -8,6 +8,7 @@ import {
   FREE_ACCOUNT_PASSWORD,
   type FreeAccount,
 } from "./helpers/teams";
+import { openSettingsGroup } from "./helpers/einstellungen";
 
 /**
  * E2E-UI-Test: Stundenbilanz (monatliches Stundenbudget) — Einstellungen +
@@ -87,6 +88,7 @@ test.describe("Stundenbilanz UI (Premium)", () => {
   test("Einstellungen: Stundenbudget anzeigen, anlegen und loeschen", async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto("/einstellungen");
+    await openSettingsGroup(page, "struktur");
 
     // Bestehendes (geseedetes) Budget ist in der Liste sichtbar; mit
     // vorhandenem Budget lautet der Anlegen-Button "Neues Stundenbudget".
@@ -169,6 +171,7 @@ test.describe("Stundenbilanz UI (Free gesperrt)", () => {
     await loginViaUi(page, free.email, FREE_ACCOUNT_PASSWORD);
 
     await page.goto("/einstellungen");
+    await openSettingsGroup(page, "struktur");
     // Gesperrte Karte mit Premium-Verweis (PlanLimitBanner-Muster).
     await expect(page.getByTestId("hour-budget-card-locked")).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId("hour-budget-card")).toHaveCount(0);
