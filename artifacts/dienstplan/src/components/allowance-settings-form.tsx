@@ -615,8 +615,8 @@ export function AllowanceSettingsForm() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Keine Sonderregel</SelectItem>
-                    <SelectItem value="percent">Reduzierter Satz (% des eigenen Stundenlohns)</SelectItem>
-                    <SelectItem value="flat">Pauschale (€ pro Tag)</SelectItem>
+                    <SelectItem value="percent">Zuschlag (% des Dienst-Lohns)</SelectItem>
+                    <SelectItem value="flat">Pauschale (€ pro Dienst)</SelectItem>
                   </SelectContent>
                 </Select>
                 {form.vertretungCompensationMode !== "none" && (
@@ -639,10 +639,11 @@ export function AllowanceSettingsForm() {
                   <p className="text-xs text-destructive">{errors.vertretungCompensationValue}</p>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Gilt für Dienste, die als Vertretung eingesetzt wurden (siehe Dienstplan):
-                  "Reduzierter Satz" zahlt einen Prozentsatz des eigenen Stundenlohns der
-                  Vertretung, "Pauschale" einen festen Betrag für den Tag. "Keine Sonderregel"
-                  = regulärer Lohn wie jeder andere Dienst.
+                  Gilt für Dienste, die als Vertretung eingesetzt wurden. Die Vergütung kommt
+                  ZUSÄTZLICH zum normalen Lohn — wer kurzfristig einspringt, verdient nicht
+                  weniger, sondern bekommt einen Aufschlag. "Zuschlag" rechnet einen Prozentsatz
+                  des für diesen Dienst verdienten Lohns obendrauf, "Pauschale" einen festen
+                  Betrag. "Keine Sonderregel" = regulärer Lohn wie jeder andere Dienst.
                 </p>
               </div>
 

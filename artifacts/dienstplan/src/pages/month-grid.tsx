@@ -603,49 +603,41 @@ export function MonthGrid({
                         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onShiftClick(s); }
                       } : undefined,
                     };
-                    const statusBadgeStack = (
-                      <>
-                        {status === "FIX" ? (
-                          // Kay-Feedback 28.08.2026 Punkt 2: eine bestätigte
-                          // Vertretung zeigt das Vertretungs-Icon ANSTATT des
-                          // grünen Bestätigt-Hakens (nicht zusätzlich) — der
-                          // Haken wäre hier irreführend, weil der auffälligere
-                          // Punkt "das ist eine Vertretung" ist.
-                          s.isVertretung ? (
-                            <StatusBadge kind="vertretung" label="Vertretung, bestätigt" calendarCompact={pillMinimiert} />
-                          ) : (
-                            <StatusBadge kind="confirmed" label="Bestätigt" calendarCompact={pillMinimiert} />
-                          )
-                        ) : (
-                          <StatusBadge
-                            kind={status === "ANGEBOTEN" ? "sent" : "draft"}
-                            label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
-                            calendarCompact={pillMinimiert}
-                          />
-                        )}
-                        {korrigiert && (
-                          <StatusBadge
-                            kind="correction"
-                            label="Nachträglich korrigiert"
-                            calendarCompact={pillMinimiert}
-                          />
-                        )}
-                        {/* Vor FIX (Entwurf/Vorschlag) trägt der Basis-Status
-                            noch nicht das Vertretungs-Icon (s.o.) — hier
-                            zusätzlich zeigen, sonst wäre eine noch nicht
-                            bestätigte Vertretung nicht von einem normalen
-                            Entwurf zu unterscheiden. */}
-                        {status !== "FIX" && s.isVertretung && (
-                          <StatusBadge kind="vertretung" label="Vertretung" calendarCompact={pillMinimiert} />
-                        )}
-                        {hasAusfall && (
-                          <StatusBadge
-                            kind="krank"
-                            label="Ausfall: Assistenzkraft abwesend"
-                            calendarCompact={pillMinimiert}
-                          />
-                        )}
-                      </>
+                    // Kay-Entscheidung 30.08.2026: GENAU EIN Icon je Pille.
+                    // Vorher konnten sich vier Zeichen stapeln (zwei Avatare,
+                    // Haken, Korrektur-Kreis) — auf dem Smartphone wurde die
+                    // Zelle damit unlesbar. Gezeigt wird nur das Wichtigste,
+                    // in dieser Rangfolge; der Rest steht im Dienst-Dialog:
+                    //   1. Ausfall  — die Person ist heute abwesend
+                    //   2. Korrektur — nachtraeglich geaenderte Arbeitszeit
+                    //   3. Vertretung — dieser Dienst ist ein Einspringen
+                    //   4. Planungsstatus (Entwurf/Vorschlag/Bestaetigt)
+                    const statusBadgeStack = hasAusfall ? (
+                      <StatusBadge
+                        kind="krank"
+                        label="Ausfall: Assistenzkraft abwesend"
+                        calendarCompact={pillMinimiert}
+                      />
+                    ) : korrigiert ? (
+                      <StatusBadge
+                        kind="correction"
+                        label="Nachträglich korrigiert"
+                        calendarCompact={pillMinimiert}
+                      />
+                    ) : s.isVertretung ? (
+                      <StatusBadge
+                        kind="vertretung"
+                        label={status === "FIX" ? "Vertretung, bestätigt" : "Vertretung"}
+                        calendarCompact={pillMinimiert}
+                      />
+                    ) : status === "FIX" ? (
+                      <StatusBadge kind="confirmed" label="Bestätigt" calendarCompact={pillMinimiert} />
+                    ) : (
+                      <StatusBadge
+                        kind={status === "ANGEBOTEN" ? "sent" : "draft"}
+                        label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
+                        calendarCompact={pillMinimiert}
+                      />
                     );
                     // Punkt 1 (17.08.2026): globaler Minimiert-Umschalter —
                     // kollabiert die zweizeilige Pille auf eine Zeile (Avatar/
@@ -683,20 +675,10 @@ export function MonthGrid({
                           />
                           <span className="flex min-h-[23px] w-full items-center gap-[4px] bg-white py-[2px] pl-[6px] pr-[6px] leading-none">
                             <PillAvatar color={barColor} label={avatarLabel} />
-                            {/* Kay-Feedback 28.08.2026 Punkt 4/5: zweiter
-                                Avatar mit Initialen zeigt auf einen Blick, OB
-                                und FÜR WEN eine Vertretung vorgemerkt ist —
-                                ohne Klick/Hover. Eigene Farbe (Vormerk-Violett,
-                                s. StatusBadge "standby"), nicht die
-                                Personenfarbe, damit "vorgemerkt" auch ohne
-                                Namen erkennbar bleibt. Kein Platzhalter ohne
-                                Vormerkung (Punkt 5: so schlank wie möglich). */}
-                            {!isTeam && s.standbyUserId != null && (
-                              <PillAvatar
-                                color="#6d28d9"
-                                label={s.standbyUserName ? nameInitials(s.standbyUserName) : "?"}
-                              />
-                            )}
+                            {/* Kein zweiter Avatar mehr (Kay 30.08.2026): Die
+                                Vormerkung stand hier als lila Initialen — auf
+                                dem Smartphone wurde die Pille damit zu voll.
+                                Sie steht weiter im Tooltip und im Dialog. */}
                             {/* Arbeitsanweisung 17.08.2026, Folgeauftrag: kein
                                 shrink-0 mehr — der Name soll bei wenig Platz
                                 wie im ausgeklappten Modus per truncate mit „…"
@@ -752,12 +734,6 @@ export function MonthGrid({
                         <span className="flex min-h-[23px] items-center justify-between gap-1 bg-white py-[2px] pl-[6px] pr-[6px] leading-none">
                           <span className="flex min-w-0 items-center gap-[4px]">
                             <PillAvatar color={barColor} label={avatarLabel} />
-                            {!isTeam && s.standbyUserId != null && (
-                              <PillAvatar
-                                color="#6d28d9"
-                                label={s.standbyUserName ? nameInitials(s.standbyUserName) : "?"}
-                              />
-                            )}
                             <span className="min-w-0 truncate text-[12px] font-bold text-[#151515]">
                               <span className="@max-[154px]:hidden">{fullName}</span>
                               <span className="hidden @max-[154px]:inline">{shortNameLabel}</span>

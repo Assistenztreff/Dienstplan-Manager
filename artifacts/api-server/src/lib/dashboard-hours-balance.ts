@@ -633,27 +633,37 @@ export function computeHoursBalanceRow(params: {
       compensationPercent?: number | null;
       compensationFlatCents?: number | null;
     }) => {
-      // Eine aktivierte Vertretung übernimmt NUR bei einer konfigurierten
-      // Sonderregel deren Vergütung — bei "none" gilt exakt dieselbe
-      // Berechnung wie für jeden anderen Dienst (isVertretung ändert dann
-      // nichts an der Vergütung, nur die Info-Kennzahl bleibt gesetzt).
+      // Vertretungsvergütung kommt ZUSÄTZLICH zum regulären Lohn des
+      // Dienstes (Kay-Korrektur 30.08.2026: "Tritt die Vertretung ein, soll
+      // der Tageslohn INKLUSIVE Vertretungsvergütung ausgezahlt werden").
+      // Sie ersetzt den Lohn also NICHT — wer einspringt, verdient nicht
+      // weniger, sondern bekommt einen Aufschlag dafür, dass er kurzfristig
+      // eingesprungen ist. Erst wird der reguläre Lohn nach den normalen
+      // Regeln gerechnet (unten), dann kommt der Aufschlag oben drauf.
+      //   flat    = fester Euro-Betrag für den Dienst, dauerunabhängig
+      //   percent = Prozentsatz des für DIESEN Dienst verdienten Lohns
+      // Bei "none" passiert nichts — isVertretung bleibt reine Info-Kennzahl.
       const vertretungComp = entry.isVertretung ? vertretungCompFor(entry.teamId) : null;
-      if (vertretungComp && vertretungComp.mode !== "none") {
-        if (vertretungComp.mode === "flat") {
-          base += vertretungComp.value;
-        } else {
-          base += wage * entry.hours * (vertretungComp.value / 100);
+
+      const regulaererLohn = (): number => {
+        const compType = entry.compensationType ?? "regular";
+        if (compType === "flat") {
+          // Festbetrag pro Schicht (dauerunabhängig).
+          return (entry.compensationFlatCents ?? 0) / 100;
         }
-        return;
-      }
-      const compType = entry.compensationType ?? "regular";
-      if (compType === "flat") {
-        // Festbetrag pro Schicht (dauerunabhängig).
-        base += (entry.compensationFlatCents ?? 0) / 100;
-      } else if (compType === "percentage") {
-        base += wage * entry.hours * ((entry.compensationPercent ?? 100) / 100);
-      } else {
-        base += wage * entry.hours;
+        if (compType === "percentage") {
+          return wage * entry.hours * ((entry.compensationPercent ?? 100) / 100);
+        }
+        return wage * entry.hours;
+      };
+
+      const lohn = regulaererLohn();
+      base += lohn;
+      if (vertretungComp && vertretungComp.mode !== "none") {
+        base +=
+          vertretungComp.mode === "flat"
+            ? vertretungComp.value
+            : lohn * (vertretungComp.value / 100);
       }
     };
     if (billingMethod === "IST") {

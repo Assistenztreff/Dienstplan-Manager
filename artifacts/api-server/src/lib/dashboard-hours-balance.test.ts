@@ -307,10 +307,10 @@ describe("computeHoursBalanceRow — Zuschlagsberechnung (Prozentsätze)", () =>
     expect(result.totalPay).toBe(310);
   });
 
-  it("Vertretungsvergütung 'percent' überschreibt die reguläre Vergütung NUR bei isVertretung=true", () => {
+  it("Vertretungsvergütung 'percent' kommt ZUSÄTZLICH zum Lohn, nur bei isVertretung=true", () => {
     // Team 1 hat 80% Vertretungsvergütung konfiguriert. Zwei Dienste, 8h,
-    // regulärer Stundenlohn 20 (also normal 160 je Dienst) — nur der
-    // zweite ist eine Vertretung: 8h * 20 * 80% = 128 statt 160.
+    // regulärer Stundenlohn 20 (also 160 je Dienst) — nur der zweite ist
+    // eine Vertretung: 160 Lohn + 128 Aufschlag (80% von 160) = 288.
     const result = computeHoursBalanceRow({
       userId: 1,
       userName: "Camillo",
@@ -325,10 +325,10 @@ describe("computeHoursBalanceRow — Zuschlagsberechnung (Prozentsätze)", () =>
       hourlyWage: 20,
       vertretungCompensationByTeam: new Map([[1, { mode: "percent", value: 80 }]]),
     });
-    expect(result.basePay).toBe(288); // 160 (normal) + 128 (Vertretung, 80%)
+    expect(result.basePay).toBe(448); // 160 (normal) + 160 (Vertretung) + 128 (80% Aufschlag)
   });
 
-  it("Vertretungsvergütung 'flat' zahlt eine Tages-Pauschale unabhängig von der Dienstlänge", () => {
+  it("Vertretungsvergütung 'flat' legt eine dauerunabhängige Pauschale OBEN DRAUF", () => {
     const result = computeHoursBalanceRow({
       userId: 1,
       userName: "Camillo",
@@ -342,8 +342,8 @@ describe("computeHoursBalanceRow — Zuschlagsberechnung (Prozentsätze)", () =>
       hourlyWage: 20,
       vertretungCompensationByTeam: new Map([[1, { mode: "flat", value: 75 }]]),
     });
-    // 12h * 20 = 240 regulär, aber die Pauschale (75) gilt statt der Stunden-Rechnung.
-    expect(result.basePay).toBe(75);
+    // 12h * 20 = 240 regulärer Lohn PLUS 75 Pauschale obendrauf.
+    expect(result.basePay).toBe(315);
   });
 
   it("Vertretungsvergütung 'none' (Default) ändert nichts — regulärer Lohn wie jeder andere Dienst", () => {
