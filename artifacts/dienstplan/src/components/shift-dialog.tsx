@@ -1690,38 +1690,15 @@ export function ShiftDialog({
             </div>
           )}
 
-          {/* Vertretung + unbezahlte Pause: reine Info-Kennzahlen der
-              Lohnauswertung, nur für Arbeitsdienste (Server setzt sie bei
-              Abwesenheiten/Team-Einträgen zurück).
-              Kay-Feedback 28.08.2026 (Punkt 2+3): "Vertretung" (isVertretung —
-              DIESER Dienst IST eine Vertretung für jemand anderen) und
-              "Vertretung vormerken" (standbyUserId — an DIESEM Dienst eine
-              Person für den EIGENEN Ausfall hinterlegen) wurden verwechselt,
-              weil beide Felder direkt untereinander standen und ähnlich
-              hießen. Label + Hinweistext jetzt eindeutig, statt nur im
-              Code-Kommentar zu erklären. */}
-          {!isAbsence && !isTeam && (
-            <div className="space-y-1.5">
-              <label
-                className="flex h-9 cursor-pointer items-center gap-2 text-sm"
-                data-testid="shift-dialog-vertretung"
-              >
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-primary"
-                  checked={form.isVertretung}
-                  onChange={(e) => set("isVertretung", e.target.checked)}
-                />
-                Dieser Dienst ist selbst eine Vertretung
-              </label>
-              <p className="text-xs text-muted-foreground">
-                Nur ankreuzen, wenn {selectedAssistant?.name ?? "diese Person"} hier
-                kurzfristig für einen ausgefallenen Kollegen einspringt. Für die
-                Vormerkung "wer springt ein, falls DIESER Dienst ausfällt" das
-                Feld weiter unten nutzen.
-              </p>
-            </div>
-          )}
+          {/* Kay-Entscheidung 30.08.2026: Das Häkchen "Dieser Dienst ist
+              selbst eine Vertretung" ist RAUS. Eine Vertretung entsteht jetzt
+              ausschließlich auf einem Weg — beim Eintragen der Abwesenheit
+              fragt die App, ob die vorgemerkte Person einspringt, und legt den
+              Dienst mit isVertretung=true an. Das Häkchen war der zweite Weg
+              zum selben Ziel: umständlich (Dienst von Hand doppelt anlegen)
+              und im Test regelmäßig mit "Vertretung vormerken" verwechselt.
+              Das Feld isVertretung selbst bleibt — es wird nur nicht mehr von
+              Hand gesetzt, sondern beim Aktivieren der Vormerkung. */}
 
           {!isAbsence && !isTeam && (
             <div className="space-y-1.5">

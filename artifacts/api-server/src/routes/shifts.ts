@@ -918,6 +918,17 @@ export type BulkAbsenceCreationResult = {
   created: (typeof shiftsTable.$inferSelect)[];
   replaced: number[];
   skippedDates: string[];
+  /**
+   * Vertretungs-Vorschlaege aus den ersetzten Diensten (Kay 30.08.2026):
+   * War an einem verdraengten Arbeitsdienst jemand als Vertretung vorgemerkt,
+   * soll der Planer direkt nach dem Eintragen der Abwesenheit gefragt werden,
+   * ob die Vertretung eingesetzt wird. Ohne das blieb der Tag nach einer aus
+   * der App gemeldeten Krankheit einfach leer — die Vormerkung ging beim
+   * Loeschen des Dienstes verloren.
+   */
+  vertretungsVorschlaege: NonNullable<
+    Awaited<ReturnType<typeof buildVertretungsVorschlag>>
+  >[];
 };
 
 // Wirft InvalidShiftModelError (Schichtmodell gehört nicht zum Team) oder
@@ -1011,6 +1022,12 @@ export async function runBulkAbsenceCreation(
           id: shiftsTable.id,
           startTime: shiftsTable.startTime,
           endTime: shiftsTable.endTime,
+          // Fuer den Vertretungs-Vorschlag: Wer war an diesem Dienst als
+          // Vertretung vorgemerkt? Der Dienst wird gleich geloescht, die
+          // Information muss also VORHER mit heraus (Kay 30.08.2026).
+          type: shiftsTable.type,
+          shiftModelId: shiftsTable.shiftModelId,
+          standbyUserId: shiftsTable.standbyUserId,
         })
         .from(shiftsTable)
         .where(
@@ -1125,6 +1142,26 @@ export async function runBulkAbsenceCreation(
 
     const replaced = resolved.flatMap(({ planned }) => planned.map((shift) => shift.id));
 
+    // VOR dem Loeschen: Vormerkungen der verdraengten Dienste einsammeln.
+    // Danach ist die Information weg (die Zeile wird geloescht, nicht
+    // umgeschrieben) — genau daran scheiterte der Weg ueber die App-Meldung.
+    const vertretungsVorschlaege = (
+      await Promise.all(
+        resolved.flatMap(({ planned }) =>
+          planned.map((shift) =>
+            buildVertretungsVorschlag({
+              teamId,
+              standbyUserId: shift.standbyUserId ?? null,
+              startTime: shift.startTime,
+              endTime: shift.endTime,
+              type: shift.type,
+              shiftModelId: shift.shiftModelId ?? null,
+            }),
+          ),
+        ),
+      )
+    ).filter((v): v is NonNullable<typeof v> => v != null);
+
     // REIHENFOLGE: Löschen der ersetzten Dienste läuft VOR der Berechnung —
     // exakt wie der Einzelpfad, der deleteReplacedWorkShift ebenfalls vor
     // storeShiftMetrics aufruft. Relevant wird das im Sammelauftrag, weil der
@@ -1232,7 +1269,7 @@ export async function runBulkAbsenceCreation(
         await applyVacationDelta(contract, delta, tx);
       }
     }
-    return { created, replaced, skippedDates: skipped };
+    return { created, replaced, skippedDates: skipped, vertretungsVorschlaege };
   };
 
   return outerTx ? body(outerTx) : db.transaction(body);

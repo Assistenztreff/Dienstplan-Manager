@@ -3745,6 +3745,34 @@ components:
           type: ["array", "null"]
           items:
             type: integer
+        vertretungsVorschlaege:
+          type: array
+          description: >-
+            Nur in der Antwort von POST /absence-requests/{id}/approve gesetzt:
+            Vertretungs-Vorschläge aus den Diensten, die die Abwesenheit
+            verdrängt hat. War an einem dieser Dienste jemand als Vertretung
+            vorgemerkt, fragt das Frontend direkt nach dem Bestätigen, ob sie
+            eingesetzt wird. Kein gespeichertes Feld.
+          items:
+            type: object
+            required: [userId, userName, teamId, startTime, endTime, type]
+            properties:
+              userId:
+                type: integer
+              userName:
+                type: string
+              teamId:
+                type: integer
+              startTime:
+                type: string
+                format: date-time
+              endTime:
+                type: string
+                format: date-time
+              type:
+                type: string
+              shiftModelId:
+                type: ["integer", "null"]
 
     BulkShiftsInput:
       type: object

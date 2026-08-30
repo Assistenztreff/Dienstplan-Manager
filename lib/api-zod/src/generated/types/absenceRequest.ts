@@ -8,6 +8,7 @@
 import type { AbsenceRequestDay } from './absenceRequestDay';
 import type { AbsenceRequestStatus } from './absenceRequestStatus';
 import type { AbsenceRequestType } from './absenceRequestType';
+import type { AbsenceRequestVertretungsVorschlaegeItem } from './absenceRequestVertretungsVorschlaegeItem';
 
 export interface AbsenceRequest {
   id: number;
@@ -25,4 +26,6 @@ export interface AbsenceRequest {
   resolvedByUserId: number | null;
   /** @nullable */
   resultShiftIds: number[] | null;
+  /** Nur in der Antwort von POST /absence-requests/{id}/approve gesetzt: Vertretungs-Vorschläge aus den Diensten, die die Abwesenheit verdrängt hat. War an einem dieser Dienste jemand als Vertretung vorgemerkt, fragt das Frontend direkt nach dem Bestätigen, ob sie eingesetzt wird. Kein gespeichertes Feld. */
+  vertretungsVorschlaege?: AbsenceRequestVertretungsVorschlaegeItem[];
 }

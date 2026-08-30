@@ -12,6 +12,7 @@ export * from './absenceRequestInput';
 export * from './absenceRequestInputType';
 export * from './absenceRequestStatus';
 export * from './absenceRequestType';
+export * from './absenceRequestVertretungsVorschlaegeItem';
 export * from './allowanceSettings';
 export * from './allowanceSettingsBillingMethod';
 export * from './allowanceSettingsInput';

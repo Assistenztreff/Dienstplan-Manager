@@ -574,7 +574,16 @@ export const ListAbsenceRequestsResponseItem = zod.object({
   "createdAt": zod.coerce.date(),
   "resolvedAt": zod.coerce.date().nullable(),
   "resolvedByUserId": zod.number().nullable(),
-  "resultShiftIds": zod.array(zod.number()).nullable()
+  "resultShiftIds": zod.array(zod.number()).nullable(),
+  "vertretungsVorschlaege": zod.array(zod.object({
+  "userId": zod.number(),
+  "userName": zod.string(),
+  "teamId": zod.number(),
+  "startTime": zod.coerce.date(),
+  "endTime": zod.coerce.date(),
+  "type": zod.string(),
+  "shiftModelId": zod.number().nullish()
+})).optional().describe('Nur in der Antwort von POST \/absence-requests\/{id}\/approve gesetzt: Vertretungs-Vorschläge aus den Diensten, die die Abwesenheit verdrängt hat. War an einem dieser Dienste jemand als Vertretung vorgemerkt, fragt das Frontend direkt nach dem Bestätigen, ob sie eingesetzt wird. Kein gespeichertes Feld.')
 })
 export const ListAbsenceRequestsResponse = zod.array(ListAbsenceRequestsResponseItem)
 
@@ -601,7 +610,16 @@ export const ApproveAbsenceRequestResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "resolvedAt": zod.coerce.date().nullable(),
   "resolvedByUserId": zod.number().nullable(),
-  "resultShiftIds": zod.array(zod.number()).nullable()
+  "resultShiftIds": zod.array(zod.number()).nullable(),
+  "vertretungsVorschlaege": zod.array(zod.object({
+  "userId": zod.number(),
+  "userName": zod.string(),
+  "teamId": zod.number(),
+  "startTime": zod.coerce.date(),
+  "endTime": zod.coerce.date(),
+  "type": zod.string(),
+  "shiftModelId": zod.number().nullish()
+})).optional().describe('Nur in der Antwort von POST \/absence-requests\/{id}\/approve gesetzt: Vertretungs-Vorschläge aus den Diensten, die die Abwesenheit verdrängt hat. War an einem dieser Dienste jemand als Vertretung vorgemerkt, fragt das Frontend direkt nach dem Bestätigen, ob sie eingesetzt wird. Kein gespeichertes Feld.')
 })
 
 
@@ -627,7 +645,16 @@ export const RejectAbsenceRequestResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "resolvedAt": zod.coerce.date().nullable(),
   "resolvedByUserId": zod.number().nullable(),
-  "resultShiftIds": zod.array(zod.number()).nullable()
+  "resultShiftIds": zod.array(zod.number()).nullable(),
+  "vertretungsVorschlaege": zod.array(zod.object({
+  "userId": zod.number(),
+  "userName": zod.string(),
+  "teamId": zod.number(),
+  "startTime": zod.coerce.date(),
+  "endTime": zod.coerce.date(),
+  "type": zod.string(),
+  "shiftModelId": zod.number().nullish()
+})).optional().describe('Nur in der Antwort von POST \/absence-requests\/{id}\/approve gesetzt: Vertretungs-Vorschläge aus den Diensten, die die Abwesenheit verdrängt hat. War an einem dieser Dienste jemand als Vertretung vorgemerkt, fragt das Frontend direkt nach dem Bestätigen, ob sie eingesetzt wird. Kein gespeichertes Feld.')
 })
 
 

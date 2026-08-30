@@ -261,7 +261,29 @@ export function MonthGrid({
               // vertretenen Dienstes stehen, nicht davor.
               return (a.isVertretung ? 1 : 0) - (b.isVertretung ? 1 : 0);
             });
-          const absences = dayShifts.filter((s) => isAbsenceShift(s));
+          // Abgedeckte Abwesenheit ausblenden (Kay 30.08.2026): Ist der
+          // Ausfall durch eine Vertretung ersetzt, zeigt die Zelle NUR die
+          // Vertretung — die Lücke ist ja geschlossen. Der Krank-Eintrag
+          // bleibt vollständig erhalten (Lohnfortzahlung, Abwesenheits-
+          // kalender, Tagesleiste), er verschwindet nur aus dem Monatsraster.
+          // Eine NICHT abgedeckte Abwesenheit bleibt sichtbar — dort klafft
+          // eine offene Lücke, die man sehen muss.
+          const vertretungStunden = new Set(
+            dayShifts
+              .filter((s) => s.isVertretung && !isAbsenceShift(s))
+              .map((s) => new Date(s.startTime).getTime()),
+          );
+          // alleAbwesenheiten = Grundlage der Warn-Logik weiter unten (die soll
+          // sich durch das Ausblenden NICHT ändern); absences = was die Zelle
+          // tatsächlich zeigt.
+          const alleAbwesenheiten = dayShifts.filter((s) => isAbsenceShift(s));
+          const absences = alleAbwesenheiten.filter(
+            (s) =>
+              !(
+                ABSENCE_CATEGORY[s.type] === "ausfall" &&
+                vertretungStunden.has(new Date(s.startTime).getTime())
+              ),
+          );
            // Desktop/Tablet zeigen bis zu vier Pillen; die Smartphone-Zelle
            // (Dauerzustand „collapsed") bleibt mit höchstens zwei einzeiligen
            // Initialen-Pillen gleich hoch.
@@ -271,7 +293,7 @@ export function MonthGrid({
           // Task #726: Personen mit einer Ausfall-Abwesenheit (Krank/Kind krank)
           // am selben Tag — deren Dienst-Pillen erhalten das rote Warn-Icon.
           const ausfallUserIds = new Set(
-            absences
+            alleAbwesenheiten
               .filter((s) => ABSENCE_CATEGORY[s.type] === "ausfall")
               .map((s) => s.userId),
           );
