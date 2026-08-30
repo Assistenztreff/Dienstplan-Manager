@@ -21,7 +21,6 @@
 export const USER_BOUND_RESTRICT_TABLES = [
   "shift_changes",
   "shift_deviation_reports",
-  "shift_correction_objections",
   "time_tracking",
   "absence_requests",
   "contracts",
@@ -29,3 +28,11 @@ export const USER_BOUND_RESTRICT_TABLES = [
 ] as const;
 
 export type UserBoundRestrictTable = (typeof USER_BOUND_RESTRICT_TABLES)[number];
+
+// NICHT eintragen: shift_correction_objections. Die Tabelle gab es kurzzeitig
+// (Commit 2a10de3), sie wurde mit dem Rueckbau des Widerspruchs aber wieder
+// entfernt (a78274c) — "Zeit korrigieren" ist seitdem der einzige Weg. Ein
+// Eintrag hier laesst jedes Aufraeumen mit
+// `relation "shift_correction_objections" does not exist` scheitern und legt
+// die komplette E2E-Suite lahm. Sollte der Widerspruch je zurueckkehren,
+// gehoert sie zusammen mit ihrem Schema wieder hierher.

@@ -67,7 +67,6 @@ export const TEAM_BOUND_TABLES = [
   // damit eine neue Tabelle nie stillschweigend durchrutscht.
   "shift_changes",
   "shift_deviation_reports",
-  "shift_correction_objections",
   // Loesch-Archive (Stufe 5). In der PRODUKTION haengen sie NICHT am Team:
   // team_id ist ON DELETE SET NULL, ein geloeschtes Team laesst das Archiv
   // also stehen — genau so gewollt, der Nachweis soll alles ueberleben. Fuer
