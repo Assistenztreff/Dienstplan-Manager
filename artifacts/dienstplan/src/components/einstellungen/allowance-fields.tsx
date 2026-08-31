@@ -235,8 +235,8 @@ export function AllowanceScopePicker() {
       {isTeamScope && (
         <p className="text-xs text-muted-foreground" data-testid="allowance-scope-hint">
           {hasOverride
-            ? "Für dieses Team gilt eine eigene Regelung. Sie überschreibt den Konto-Standard."
-            : "Dieses Team nutzt aktuell den Konto-Standard. Speichern legt eine eigene Regelung für dieses Team an."}
+            ? "Eigene Regelung, überschreibt den Konto-Standard."
+            : "Nutzt den Konto-Standard. Speichern legt eine eigene Regelung an."}
         </p>
       )}
       {hasOverride && (
@@ -276,17 +276,10 @@ export function AbrechnungsgrundlagenFelder() {
           label="Zeiterfassung aktivieren"
           anker="weitere-schalter"
           erklaerung={
-            <>
-              <p>
-                Erlaubt das Erfassen und Bearbeiten von Ist-Zeiten (Stundenzettel) für alle Teams
-                dieses Kontos.
-              </p>
-              <p>
-                Solange ausgeschaltet, können keine neuen Zeiteinträge angelegt oder bestätigt
-                werden; bestehende Einträge bleiben sichtbar.
-              </p>
-              <p>Die Änderung wird sofort gespeichert.</p>
-            </>
+            <p>
+              Assistenzkräfte tragen ihre tatsächlichen Zeiten ein. Ausgeschaltet zählt nur der
+              Plan. Wird sofort gespeichert.
+            </p>
           }
           gesperrt={switchesLocked}
           lockTestId="lock-time-tracking"
@@ -302,17 +295,10 @@ export function AbrechnungsgrundlagenFelder() {
           titel="Abrechnungsart"
           anker="zuschlaege"
           erklaerung={
-            <>
-              <p>
-                Bestimmt, ob Stunden und Zuschläge in Auswertungen und Stundennachweis aus den
-                geplanten Schichten (Soll) oder aus den tatsächlich erfassten Zeiten (Ist) berechnet
-                werden.
-              </p>
-              <p>
-                Eine Einstellung pro Assistenzkraft (Personalakte) hat Vorrang vor dieser{" "}
-                {isTeamScope ? "Team-" : "Konto-"}Regelung.
-              </p>
-            </>
+            <p>
+              Soll rechnet mit den geplanten Schichten, Ist mit den erfassten Zeiten. Die
+              Personalakte einer Person schlägt diese {isTeamScope ? "Team-" : "Konto-"}Regel.
+            </p>
           }
         />
         <Select value={form.billingMethod} onValueChange={(v) => set("billingMethod", v)}>
@@ -341,11 +327,7 @@ export function AbrechnungsgrundlagenFelder() {
                 titel="Vollzeit entspricht"
                 fett
                 anker="weitere-schalter"
-                erklaerung={
-                  <p>
-                    Bezugsgröße für Teilzeit-Anteile und für die Umrechnung des Urlaubsanspruchs.
-                  </p>
-                }
+                erklaerung={<p>Bezugsgröße für Teilzeit und Urlaubsanspruch.</p>}
               />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
@@ -401,17 +383,10 @@ export function AbrechnungsgrundlagenFelder() {
                 titel="Urlaub bei Vollzeit"
                 anker="weitere-schalter"
                 erklaerung={
-                  <>
-                    <p>Vorbelegung für neue Verträge, je Person änderbar.</p>
-                    <p>
-                      Ein Urlaubstag zieht die Stunden des Dienstes an diesem Tag ab — ohne
-                      geplanten Dienst die typische Dienstlänge, etwa 8,0 h.
-                    </p>
-                    <p>
-                      Bestätigte Arbeitsstunden oberhalb des zeitanteiligen Monatssolls erhöhen das
-                      Urlaubsguthaben. Der vertragliche Sockel bleibt garantiert.
-                    </p>
-                  </>
+                  <p>
+                    Vorbelegung für neue Verträge, pro Person änderbar. Ein Urlaubstag zieht die
+                    Stunden des Dienstes an dem Tag ab, sonst etwa 8 Stunden.
+                  </p>
                 }
               />
               <div className={`relative ${KURZFELD}`}>
@@ -454,8 +429,8 @@ export function AbrechnungsgrundlagenFelder() {
               anker="weitere-schalter"
               erklaerung={
                 <p>
-                  Schätzt den Stand zum Jahresende aus den bestätigten Arbeitszeiten der letzten 13
-                  Wochen. Die Prognose verändert den verfügbaren Urlaub nicht.
+                  Schätzt den Jahresendstand aus den letzten 13 Wochen. Ändert den verfügbaren
+                  Urlaub nicht.
                 </p>
               }
               checked={form.vacationForecastEnabled}
@@ -472,16 +447,9 @@ export function AbrechnungsgrundlagenFelder() {
             titel="Bundesland"
             anker="zuschlaege"
             erklaerung={
-              <>
-                <p>
-                  Bestimmt, welche regionalen gesetzlichen Feiertage (z. B. Fronleichnam) für den
-                  Feiertagszuschlag berücksichtigt werden.
-                </p>
-                <p>
-                  Ohne Auswahl gelten nur die bundesweiten Feiertage. Die Änderung wirkt sich auf
-                  neu gespeicherte Schichten aus.
-                </p>
-              </>
+              <p>
+                Legt fest, welche regionalen Feiertage zählen. Ohne Auswahl nur die bundesweiten.
+              </p>
             }
           />
           <Select value={form.state} onValueChange={(v) => set("state", v)}>
@@ -521,9 +489,7 @@ export function ZuschlaegeUndZeitregelnFelder() {
         <div className="mb-3 flex items-center gap-1.5">
           <h3 className="text-sm font-semibold">Nachtzuschlag</h3>
           <ErklaerHilfe titel="Nachtzuschlag" anker="zuschlaege">
-            <p>
-              Zeitfenster, in dem der Nachtzuschlag gilt — über Mitternacht hinweg möglich.
-            </p>
+            <p>Das Zeitfenster darf über Mitternacht laufen.</p>
           </ErklaerHilfe>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -601,22 +567,10 @@ export function ZuschlaegeUndZeitregelnFelder() {
               label="Pausen automatisch vorbefüllen"
               anker="pausen"
               erklaerung={
-                <>
-                  <p>
-                    Befüllt beim Anlegen neuer Dienste die unbezahlte Pause automatisch anhand der
-                    Dienstdauer.
-                  </p>
-                  <p>
-                    Der Wert bleibt pro Dienst überschreibbar; bestehende Dienste werden nicht
-                    verändert.
-                  </p>
-                  <p>
-                    Zweistufige Staffel: Erreicht die Dienstdauer eine Schwelle, wird die zugehörige
-                    Pause vorbefüllt — die höhere erreichte Stufe gewinnt. Voreinstellung ist die
-                    gesetzliche Staffel (§ 4 ArbZG): ab 6 Std. → 30 Min., ab 9 Std. → 45 Min. Gilt
-                    konto-weit für alle Teams.
-                  </p>
-                </>
+                <p>
+                  Trägt die Pause beim Anlegen eines Dienstes nach Dauer ein, pro Dienst
+                  überschreibbar. Voreinstellung ist § 4 ArbZG: ab 6 Std. 30 Min., ab 9 Std. 45 Min.
+                </p>
               }
               gesperrt={switchesLocked}
               lockTestId="lock-pause-auto"
@@ -703,17 +657,10 @@ export function ZuschlaegeUndZeitregelnFelder() {
               label="Pausen von bezahlten Stunden abziehen"
               anker="pausen"
               erklaerung={
-                <>
-                  <p>
-                    Zieht die eingetragenen unbezahlten Pausenminuten von den gewerteten Stunden und
-                    dem Grundlohn der Arbeitsdienste ab — in beiden Abrechnungsarten (Soll und Ist),
-                    rückwirkend schaltbar. Zuschläge bleiben unverändert.
-                  </p>
-                  <p>
-                    Solange ausgeschaltet, sind Pausen eine reine Info-Kennzahl. Gilt konto-weit für
-                    alle Teams.
-                  </p>
-                </>
+                <p>
+                  Zieht unbezahlte Pausen von Stunden und Grundlohn ab, auch rückwirkend. Zuschläge
+                  bleiben.
+                </p>
               }
               gesperrt={switchesLocked}
               lockTestId="lock-deduct-pauses"
@@ -729,16 +676,10 @@ export function ZuschlaegeUndZeitregelnFelder() {
               label="Ersatzruhetag-Konto für Feiertage"
               anker="weitere-schalter"
               erklaerung={
-                <>
-                  <p>
-                    Wer an einem gesetzlichen Feiertag arbeitet, erhält nach § 11 Abs. 3 ArbZG einen
-                    Ausgleichs-Ruhetag gutgeschrieben.
-                  </p>
-                  <p>
-                    Nur Feiertage an Werktagen (Mo–Sa) zählen — fällt ein Feiertag auf einen
-                    Sonntag, entstehen nur Zuschläge, aber kein zusätzlicher Ausgleichstag.
-                  </p>
-                </>
+                <p>
+                  Wer an einem Feiertag arbeitet, bekommt einen Ausgleichstag (§ 11 Abs. 3 ArbZG).
+                  Nur Feiertage von Montag bis Samstag zählen.
+                </p>
               }
               checked={form.ersatzruhetagEnabled}
               onCheckedChange={(v) => set("ersatzruhetagEnabled", v)}
@@ -753,9 +694,7 @@ export function ZuschlaegeUndZeitregelnFelder() {
               anker="weitere-schalter"
               erklaerung={
                 <p>
-                  Erlaubt das Anlegen von Team-Einträgen im Dienstplan. Ein Team-Eintrag pro Tag
-                  schreibt allen Assistenzkräften des Teams die eingestellte Stundenzahl als
-                  Arbeitszeit gut (gilt für alle Teams dieses Kontos).
+                  Ein Team-Eintrag pro Tag schreibt allen im Team die eingestellte Stundenzahl gut.
                 </p>
               }
               checked={form.teamMeetingEnabled}
@@ -768,10 +707,7 @@ export function ZuschlaegeUndZeitregelnFelder() {
                     titel="Stunden-Gutschrift pro Teamsitzung"
                     anker="weitere-schalter"
                     erklaerung={
-                      <p>
-                        Diese Stundenzahl wird jeder Assistenzkraft des Teams je Team-Eintrag
-                        gutgeschrieben und mit dem Stundenlohn vergütet.
-                      </p>
+                      <p>Wird jeder Assistenzkraft je Team-Eintrag gutgeschrieben und vergütet.</p>
                     }
                   />
                   <Input
@@ -799,10 +735,7 @@ export function ZuschlaegeUndZeitregelnFelder() {
               label="Stundenzettel automatisch genehmigen"
               anker="weitere-schalter"
               erklaerung={
-                <p>
-                  Eingereichte Zeiteinträge werden ohne manuelle Prüfung sofort bestätigt und in die
-                  Auswertung übernommen.
-                </p>
+                <p>Eingereichte Zeiten gelten sofort als bestätigt, ohne Prüfung.</p>
               }
               checked={form.autoApproveTimesheets}
               onCheckedChange={(v) => set("autoApproveTimesheets", v)}

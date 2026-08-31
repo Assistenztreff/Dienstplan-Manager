@@ -1369,8 +1369,8 @@ export default function Einstellungen() {
           <div className="min-w-0">
             <h3 className="font-serif text-lg font-bold text-foreground">Schichtmodelle</h3>
             <p className="text-xs text-muted-foreground mt-1">
-              Stehen beim Anlegen einer Schicht im Dienstplan zur Auswahl. Die Zeitwertung bestimmt,
-              wie die geleistete Zeit in der Auswertung auf die Sollstunden angerechnet wird.
+              Vorlagen für den Dienstplan. Die Zeitwertung bestimmt, wie die Zeit auf die
+              Sollstunden angerechnet wird.
             </p>
           </div>
           {canAddModel ? (
@@ -1450,7 +1450,7 @@ export default function Einstellungen() {
           <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Einstellungen</h2>
           <p className="text-muted-foreground mt-1 text-sm">
             {isAdmin
-              ? "Von oben nach unten geordnet: zuerst was Stunden und Geld bestimmt, zuletzt das Aussehen"
+              ? "Oben steht, was Stunden und Geld bestimmt. Unten das Aussehen."
               : "Profil und Kalender-Abo verwalten"}
           </p>
         </div>
@@ -1466,7 +1466,7 @@ export default function Einstellungen() {
           <EinstellungsGruppe
             id="abrechnungsgrundlagen"
             titel="Abrechnungsgrundlagen"
-            beschreibung="Bestimmt, wie Stunden und Geld berechnet werden. Eine Änderung wirkt sich auf Auswertung und Stundennachweis aus."
+            beschreibung="Wirkt auf Auswertung und Stundennachweis."
           >
             <div className="space-y-5">
               <AllowanceScopePicker />
@@ -1477,7 +1477,7 @@ export default function Einstellungen() {
           <EinstellungsGruppe
             id="zuschlaege"
             titel="Zuschläge und Zeitregeln"
-            beschreibung="Sätze und Regeln, die regelmäßig gepflegt werden, ohne die Abrechnung als Ganzes umzuschalten. Änderungen wirken rückwirkend auf Ihre Auswertungen, ohne dass Schichten neu gespeichert werden müssen."
+            beschreibung="Sätze und Regeln, auch rückwirkend änderbar."
           >
             <ZuschlaegeUndZeitregelnFelder />
           </EinstellungsGruppe>
@@ -1504,7 +1504,7 @@ export default function Einstellungen() {
           <EinstellungsGruppe
             id="darstellung"
             titel="Darstellung und Export"
-            beschreibung="Aussehen und Nebenfunktionen — verändert keine Zahlen in der Auswertung."
+            beschreibung="Ändert nur das Aussehen, keine Zahlen."
             inhaltsangabe={
               isDienstleister
                 ? "Firmenlogo · Assistenzkraft-Farben · Kalender-Export und Abo"
