@@ -1440,7 +1440,11 @@ export default function Einstellungen() {
   );
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    // Lesebreite: Erklaerungen und Formularfelder ueber die volle Breite eines
+    // 1440er-Bildschirms zu ziehen macht Zeilen von ueber 1200 px — weit
+    // jenseits dessen, was sich noch angenehm liest. Die Seite bleibt deshalb
+    // in einer Spalte; auf dem Handy hat die Begrenzung keine Wirkung.
+    <div className="max-w-3xl space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Einstellungen</h2>

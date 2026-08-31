@@ -2,6 +2,10 @@
  * Die Eingabefelder der Abrechnungs-Einstellungen, aufgeteilt auf die beiden
  * oberen Gruppen der Einstellungsseite. Zustand und Speichern liegen im
  * gemeinsamen Context (allowance-settings-context.tsx).
+ *
+ * Sichtbar bleiben Name, Wert und Bedienelement — die Erklärungen stecken
+ * hinter dem Fragezeichen daneben (siehe erklaer-hilfe.tsx). Rechtlich
+ * relevante Warnungen bleiben als Hinweiskasten stehen.
  */
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -21,6 +25,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { PlanUpgradeLink } from "@/components/plan-limit-banner";
 import { Lock } from "lucide-react";
+import type { ReactNode } from "react";
 import {
   useAllowanceSettings,
   ACCOUNT_SCOPE,
@@ -28,13 +33,24 @@ import {
   NO_STATE,
   GERMAN_STATE_OPTIONS,
 } from "./allowance-settings-context";
+import { ErklaerHilfe, type HandbuchAnker } from "./erklaer-hilfe";
 import { useTeam } from "@/context/team";
+
+/**
+ * Breite für Auswahlfelder mit kurzem Inhalt. Ein Bundesland-Auswahlfeld über
+ * die volle Spaltenbreite zu ziehen macht "Bayern" nicht lesbarer, kostet aber
+ * Ruhe im Layout.
+ */
+const KURZFELD = "max-w-sm";
 
 /**
  * Premium-Hinweis unter gesperrten Schaltern (Free-Tarif): nach dem Muster der
  * bestehenden Free-Limits — sichtbar, aber gesperrt, mit direktem Upgrade-Weg.
  * Bereits aktive Einstellungen bleiben wirksam (Bestandsschutz), gesperrt ist
  * nur das Ändern; der Server lehnt Wert-Änderungen im Free-Tarif zusätzlich ab.
+ *
+ * Bleibt bewusst sichtbar statt hinter dem Fragezeichen: das ist keine
+ * Erklärung, sondern der Grund, warum das Bedienelement nicht reagiert.
  */
 function PremiumSwitchHint() {
   return (
@@ -48,24 +64,54 @@ function PremiumSwitchHint() {
   );
 }
 
+/** Beschriftung mit Fragezeichen daneben. */
+function FeldLabel({
+  htmlFor,
+  titel,
+  anker,
+  erklaerung,
+  fett = false,
+}: {
+  htmlFor?: string;
+  titel: string;
+  anker?: HandbuchAnker;
+  erklaerung?: ReactNode;
+  fett?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <Label htmlFor={htmlFor} className={fett ? "text-sm font-semibold" : undefined}>
+        {titel}
+      </Label>
+      {erklaerung && (
+        <ErklaerHilfe titel={titel} anker={anker}>
+          {erklaerung}
+        </ErklaerHilfe>
+      )}
+    </div>
+  );
+}
+
 function PercentField({
   id,
   label,
   value,
   error,
-  hint,
+  anker,
+  erklaerung,
   onChange,
 }: {
   id: string;
   label: string;
   value: string;
   error?: string;
-  hint?: string;
+  anker?: HandbuchAnker;
+  erklaerung?: ReactNode;
   onChange: (v: string) => void;
 }) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
+      <FeldLabel htmlFor={id} titel={label} anker={anker} erklaerung={erklaerung} />
       <div className="relative">
         <Input
           id={id}
@@ -80,21 +126,18 @@ function PercentField({
           %
         </span>
       </div>
-      {error ? (
-        <p className="text-xs text-destructive">{error}</p>
-      ) : hint ? (
-        <p className="text-xs text-muted-foreground">{hint}</p>
-      ) : null}
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }
 
-/** Ein Schalter mit Beschriftung, Erklärtext und optionalem Premium-Schloss. */
+/** Ein Schalter mit Beschriftung, Erklärung auf Abruf und optionalem Schloss. */
 function SchalterZeile({
   id,
   testId,
   label,
-  beschreibung,
+  anker,
+  erklaerung,
   gesperrt = false,
   lockTestId,
   disabled = false,
@@ -105,30 +148,32 @@ function SchalterZeile({
   id: string;
   testId: string;
   label: string;
-  beschreibung: string;
+  anker?: HandbuchAnker;
+  erklaerung: ReactNode;
   gesperrt?: boolean;
   lockTestId?: string;
   disabled?: boolean;
   checked: boolean;
   onCheckedChange: (v: boolean) => void;
-  children?: React.ReactNode;
+  children?: ReactNode;
 }) {
   return (
     <div className="space-y-3">
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-0.5">
-          <Label htmlFor={id} className="text-sm font-semibold flex items-center gap-1.5">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <Label htmlFor={id} className="text-sm font-semibold">
             {label}
-            {gesperrt && (
-              <Lock
-                className="h-3.5 w-3.5 text-muted-foreground"
-                data-testid={lockTestId}
-                aria-label="Premium-Feature"
-              />
-            )}
           </Label>
-          <p className="text-xs text-muted-foreground">{beschreibung}</p>
-          {gesperrt && <PremiumSwitchHint />}
+          {gesperrt && (
+            <Lock
+              className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+              data-testid={lockTestId}
+              aria-label="Premium-Feature"
+            />
+          )}
+          <ErklaerHilfe titel={label} anker={anker}>
+            {erklaerung}
+          </ErklaerHilfe>
         </div>
         <Switch
           id={id}
@@ -138,13 +183,14 @@ function SchalterZeile({
           onCheckedChange={onCheckedChange}
         />
       </div>
+      {gesperrt && <PremiumSwitchHint />}
       {children}
     </div>
   );
 }
 
 /** Trennlinie zwischen zwei Unterabschnitten innerhalb einer Gruppe. */
-function Abschnitt({ children }: { children: React.ReactNode }) {
+function Abschnitt({ children }: { children: ReactNode }) {
   return <div className="border-t border-border/60 pt-5">{children}</div>;
 }
 
@@ -174,7 +220,7 @@ export function AllowanceScopePicker() {
     <div className="space-y-1.5">
       <Label htmlFor="allowance-scope">Gilt für</Label>
       <Select value={scope} onValueChange={changeScope}>
-        <SelectTrigger id="allowance-scope" data-testid="allowance-scope-select">
+        <SelectTrigger id="allowance-scope" data-testid="allowance-scope-select" className={KURZFELD}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -213,8 +259,7 @@ export function AllowanceScopePicker() {
  * Gruppe 1 — Abrechnungsgrundlagen.
  *
  * Alles, was die Grundlage von Stunden und Geld umschaltet: Zeiterfassung,
- * Abrechnungsart, Vollzeit-Bezug, Urlaubsanspruch, Bundesland. Steht bewusst
- * ganz oben auf der Seite.
+ * Abrechnungsart, Vollzeit-Bezug, Urlaubsanspruch, Bundesland.
  */
 export function AbrechnungsgrundlagenFelder() {
   const { form, errors, set, isLoading, isTeamScope, switchesLocked, saving, onTimeTrackingToggle } =
@@ -229,7 +274,20 @@ export function AbrechnungsgrundlagenFelder() {
           id="timeTrackingEnabled"
           testId="allowance-time-tracking-switch"
           label="Zeiterfassung aktivieren"
-          beschreibung="Erlaubt das Erfassen und Bearbeiten von Ist-Zeiten (Stundenzettel) für alle Teams dieses Kontos. Solange ausgeschaltet, können keine neuen Zeiteinträge angelegt oder bestätigt werden; bestehende Einträge bleiben sichtbar. Die Änderung wird sofort gespeichert."
+          anker="weitere-schalter"
+          erklaerung={
+            <>
+              <p>
+                Erlaubt das Erfassen und Bearbeiten von Ist-Zeiten (Stundenzettel) für alle Teams
+                dieses Kontos.
+              </p>
+              <p>
+                Solange ausgeschaltet, können keine neuen Zeiteinträge angelegt oder bestätigt
+                werden; bestehende Einträge bleiben sichtbar.
+              </p>
+              <p>Die Änderung wird sofort gespeichert.</p>
+            </>
+          }
           gesperrt={switchesLocked}
           lockTestId="lock-time-tracking"
           disabled={saving}
@@ -239,9 +297,30 @@ export function AbrechnungsgrundlagenFelder() {
       )}
 
       <div className={isTeamScope ? "space-y-1.5" : "border-t border-border/60 pt-5 space-y-1.5"}>
-        <Label htmlFor="billingMethod">Abrechnungsart</Label>
+        <FeldLabel
+          htmlFor="billingMethod"
+          titel="Abrechnungsart"
+          anker="zuschlaege"
+          erklaerung={
+            <>
+              <p>
+                Bestimmt, ob Stunden und Zuschläge in Auswertungen und Stundennachweis aus den
+                geplanten Schichten (Soll) oder aus den tatsächlich erfassten Zeiten (Ist) berechnet
+                werden.
+              </p>
+              <p>
+                Eine Einstellung pro Assistenzkraft (Personalakte) hat Vorrang vor dieser{" "}
+                {isTeamScope ? "Team-" : "Konto-"}Regelung.
+              </p>
+            </>
+          }
+        />
         <Select value={form.billingMethod} onValueChange={(v) => set("billingMethod", v)}>
-          <SelectTrigger id="billingMethod" data-testid="allowance-billing-method-select">
+          <SelectTrigger
+            id="billingMethod"
+            data-testid="allowance-billing-method-select"
+            className={KURZFELD}
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -252,20 +331,23 @@ export function AbrechnungsgrundlagenFelder() {
             <SelectItem value="IST">Ist – nach erfassten Zeiten</SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground">
-          Bestimmt, ob Stunden und Zuschläge in Auswertungen und Stundennachweis aus den geplanten
-          Schichten (Soll) oder aus den tatsächlich erfassten Zeiten (Ist) berechnet werden. Eine
-          Einstellung pro Assistenzkraft (Personalakte) hat Vorrang vor dieser{" "}
-          {isTeamScope ? "Team-" : "Konto-"}Regelung.
-        </p>
       </div>
 
       {!isTeamScope && (
         <Abschnitt>
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label className="text-sm font-semibold">Vollzeit entspricht</Label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FeldLabel
+                titel="Vollzeit entspricht"
+                fett
+                anker="weitere-schalter"
+                erklaerung={
+                  <p>
+                    Bezugsgröße für Teilzeit-Anteile und für die Umrechnung des Urlaubsanspruchs.
+                  </p>
+                }
+              />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <div className="relative">
                     <Input
@@ -314,8 +396,25 @@ export function AbrechnungsgrundlagenFelder() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="defaultVacationDays">Urlaub bei Vollzeit</Label>
-              <div className="relative">
+              <FeldLabel
+                htmlFor="defaultVacationDays"
+                titel="Urlaub bei Vollzeit"
+                anker="weitere-schalter"
+                erklaerung={
+                  <>
+                    <p>Vorbelegung für neue Verträge, je Person änderbar.</p>
+                    <p>
+                      Ein Urlaubstag zieht die Stunden des Dienstes an diesem Tag ab — ohne
+                      geplanten Dienst die typische Dienstlänge, etwa 8,0 h.
+                    </p>
+                    <p>
+                      Bestätigte Arbeitsstunden oberhalb des zeitanteiligen Monatssolls erhöhen das
+                      Urlaubsguthaben. Der vertragliche Sockel bleibt garantiert.
+                    </p>
+                  </>
+                }
+              />
+              <div className={`relative ${KURZFELD}`}>
                 <Input
                   id="defaultVacationDays"
                   data-testid="allowance-default-vacation-days"
@@ -333,6 +432,7 @@ export function AbrechnungsgrundlagenFelder() {
               {errors.defaultVacationDays && (
                 <p className="text-xs text-destructive">{errors.defaultVacationDays}</p>
               )}
+              {/* Berechneter Wert, keine Erklärung — bleibt sichtbar. */}
               {(() => {
                 const fwd = Number(form.fulltimeWorkdaysPerWeek);
                 const dvd = Number(form.defaultVacationDays);
@@ -345,46 +445,47 @@ export function AbrechnungsgrundlagenFelder() {
                   </p>
                 );
               })()}
-              <p className="text-xs text-muted-foreground">
-                Vorbelegung für neue Verträge, je Person änderbar.
-              </p>
             </div>
 
-            <div className="flex items-start justify-between gap-4 rounded-lg border border-border/60 p-3">
-              <div className="space-y-1">
-                <Label htmlFor="vacationForecastEnabled" className="text-sm font-semibold">
-                  13-Wochen-Prognose anzeigen
-                </Label>
-                <p className="text-xs text-muted-foreground">
+            <SchalterZeile
+              id="vacationForecastEnabled"
+              testId="allowance-vacation-forecast-switch"
+              label="13-Wochen-Prognose anzeigen"
+              anker="weitere-schalter"
+              erklaerung={
+                <p>
                   Schätzt den Stand zum Jahresende aus den bestätigten Arbeitszeiten der letzten 13
                   Wochen. Die Prognose verändert den verfügbaren Urlaub nicht.
                 </p>
-              </div>
-              <Switch
-                id="vacationForecastEnabled"
-                data-testid="allowance-vacation-forecast-switch"
-                checked={form.vacationForecastEnabled}
-                onCheckedChange={(value) => set("vacationForecastEnabled", value)}
-              />
-            </div>
-
-            <p className="text-xs text-muted-foreground">
-              Ein Urlaubstag zieht die Stunden des Dienstes an diesem Tag ab — ohne geplanten Dienst
-              die typische Dienstlänge, etwa 8,0 h.
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Bestätigte Arbeitsstunden oberhalb des zeitanteiligen Monatssolls erhöhen das
-              Urlaubsguthaben. Der vertragliche Sockel bleibt garantiert.
-            </p>
+              }
+              checked={form.vacationForecastEnabled}
+              onCheckedChange={(value) => set("vacationForecastEnabled", value)}
+            />
           </div>
         </Abschnitt>
       )}
 
       <Abschnitt>
         <div className="space-y-1.5">
-          <Label htmlFor="state">Bundesland</Label>
+          <FeldLabel
+            htmlFor="state"
+            titel="Bundesland"
+            anker="zuschlaege"
+            erklaerung={
+              <>
+                <p>
+                  Bestimmt, welche regionalen gesetzlichen Feiertage (z. B. Fronleichnam) für den
+                  Feiertagszuschlag berücksichtigt werden.
+                </p>
+                <p>
+                  Ohne Auswahl gelten nur die bundesweiten Feiertage. Die Änderung wirkt sich auf
+                  neu gespeicherte Schichten aus.
+                </p>
+              </>
+            }
+          />
           <Select value={form.state} onValueChange={(v) => set("state", v)}>
-            <SelectTrigger id="state">
+            <SelectTrigger id="state" className={KURZFELD}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -396,11 +497,6 @@ export function AbrechnungsgrundlagenFelder() {
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">
-            Bestimmt, welche regionalen gesetzlichen Feiertage (z.B. Fronleichnam) für den
-            Feiertagszuschlag berücksichtigt werden. Ohne Auswahl gelten nur die bundesweiten
-            Feiertage. Die Änderung wirkt sich auf neu gespeicherte Schichten aus.
-          </p>
         </div>
       </Abschnitt>
     </div>
@@ -422,8 +518,15 @@ export function ZuschlaegeUndZeitregelnFelder() {
   return (
     <div className="space-y-5">
       <div>
-        <h3 className="text-sm font-semibold mb-3">Nachtzuschlag</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="mb-3 flex items-center gap-1.5">
+          <h3 className="text-sm font-semibold">Nachtzuschlag</h3>
+          <ErklaerHilfe titel="Nachtzuschlag" anker="zuschlaege">
+            <p>
+              Zeitfenster, in dem der Nachtzuschlag gilt — über Mitternacht hinweg möglich.
+            </p>
+          </ErklaerHilfe>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <PercentField
             id="nightPercent"
             label="Zuschlag"
@@ -454,12 +557,9 @@ export function ZuschlaegeUndZeitregelnFelder() {
             {errors.nightEnd && <p className="text-xs text-destructive">{errors.nightEnd}</p>}
           </div>
         </div>
-        <p className="text-xs text-muted-foreground mt-2">
-          Zeitfenster, in dem der Nachtzuschlag gilt (über Mitternacht hinweg möglich).
-        </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <PercentField
           id="sundayPercent"
           label="Sonntagszuschlag"
@@ -476,7 +576,11 @@ export function ZuschlaegeUndZeitregelnFelder() {
         />
       </div>
 
-      {/* Hinweis SV-Pflicht bei Abwesenheits-Zuschlägen */}
+      {/*
+        Rechtlicher Hinweis, KEINE Erklärung: die Sozialversicherungspflicht
+        entscheidet über die Lohnabrechnung. Was man wegklicken muss, hat man
+        nicht gelesen — dieser Kasten bleibt deshalb sichtbar.
+      */}
       <div className="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/40 px-4 py-3 text-sm text-blue-900 dark:text-blue-200">
         <p className="font-medium mb-1">Zuschläge auf Urlaubs- und Kranktage</p>
         <p className="text-blue-800 dark:text-blue-300">
@@ -495,89 +599,99 @@ export function ZuschlaegeUndZeitregelnFelder() {
               id="pauseAutoEnabled"
               testId="allowance-pause-auto-switch"
               label="Pausen automatisch vorbefüllen"
-              beschreibung="Befüllt beim Anlegen neuer Dienste die unbezahlte Pause automatisch anhand der Dienstdauer (Staffel unten). Der Wert bleibt pro Dienst überschreibbar; bestehende Dienste werden nicht verändert."
+              anker="pausen"
+              erklaerung={
+                <>
+                  <p>
+                    Befüllt beim Anlegen neuer Dienste die unbezahlte Pause automatisch anhand der
+                    Dienstdauer.
+                  </p>
+                  <p>
+                    Der Wert bleibt pro Dienst überschreibbar; bestehende Dienste werden nicht
+                    verändert.
+                  </p>
+                  <p>
+                    Zweistufige Staffel: Erreicht die Dienstdauer eine Schwelle, wird die zugehörige
+                    Pause vorbefüllt — die höhere erreichte Stufe gewinnt. Voreinstellung ist die
+                    gesetzliche Staffel (§ 4 ArbZG): ab 6 Std. → 30 Min., ab 9 Std. → 45 Min. Gilt
+                    konto-weit für alle Teams.
+                  </p>
+                </>
+              }
               gesperrt={switchesLocked}
               lockTestId="lock-pause-auto"
               checked={form.pauseAutoEnabled}
               onCheckedChange={(v) => set("pauseAutoEnabled", v)}
             >
               {form.pauseAutoEnabled && (
-                <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="pauseThreshold1Hours">Ab Dienstdauer (Std.)</Label>
-                      <Input
-                        id="pauseThreshold1Hours"
-                        type="number"
-                        min="0.1"
-                        step="0.5"
-                        data-testid="allowance-pause-threshold1"
-                        value={form.pauseThreshold1Hours}
-                        onChange={(e) => set("pauseThreshold1Hours", e.target.value)}
-                        className={errors.pauseThreshold1Hours ? "border-destructive" : ""}
-                      />
-                      {errors.pauseThreshold1Hours && (
-                        <p className="text-xs text-destructive">{errors.pauseThreshold1Hours}</p>
-                      )}
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="pauseMinutes1">Pause (Min.)</Label>
-                      <Input
-                        id="pauseMinutes1"
-                        type="number"
-                        min="0"
-                        max="1440"
-                        step="5"
-                        data-testid="allowance-pause-minutes1"
-                        value={form.pauseMinutes1}
-                        onChange={(e) => set("pauseMinutes1", e.target.value)}
-                        className={errors.pauseMinutes1 ? "border-destructive" : ""}
-                      />
-                      {errors.pauseMinutes1 && (
-                        <p className="text-xs text-destructive">{errors.pauseMinutes1}</p>
-                      )}
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="pauseThreshold2Hours">Ab Dienstdauer (Std.)</Label>
-                      <Input
-                        id="pauseThreshold2Hours"
-                        type="number"
-                        min="0.1"
-                        step="0.5"
-                        data-testid="allowance-pause-threshold2"
-                        value={form.pauseThreshold2Hours}
-                        onChange={(e) => set("pauseThreshold2Hours", e.target.value)}
-                        className={errors.pauseThreshold2Hours ? "border-destructive" : ""}
-                      />
-                      {errors.pauseThreshold2Hours && (
-                        <p className="text-xs text-destructive">{errors.pauseThreshold2Hours}</p>
-                      )}
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="pauseMinutes2">Pause (Min.)</Label>
-                      <Input
-                        id="pauseMinutes2"
-                        type="number"
-                        min="0"
-                        max="1440"
-                        step="5"
-                        data-testid="allowance-pause-minutes2"
-                        value={form.pauseMinutes2}
-                        onChange={(e) => set("pauseMinutes2", e.target.value)}
-                        className={errors.pauseMinutes2 ? "border-destructive" : ""}
-                      />
-                      {errors.pauseMinutes2 && (
-                        <p className="text-xs text-destructive">{errors.pauseMinutes2}</p>
-                      )}
-                    </div>
+                <div className="grid max-w-md grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="pauseThreshold1Hours">Ab Dienstdauer (Std.)</Label>
+                    <Input
+                      id="pauseThreshold1Hours"
+                      type="number"
+                      min="0.1"
+                      step="0.5"
+                      data-testid="allowance-pause-threshold1"
+                      value={form.pauseThreshold1Hours}
+                      onChange={(e) => set("pauseThreshold1Hours", e.target.value)}
+                      className={errors.pauseThreshold1Hours ? "border-destructive" : ""}
+                    />
+                    {errors.pauseThreshold1Hours && (
+                      <p className="text-xs text-destructive">{errors.pauseThreshold1Hours}</p>
+                    )}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Zweistufige Staffel: Erreicht die Dienstdauer eine Schwelle, wird die zugehörige
-                    Pause vorbefüllt — die höhere erreichte Stufe gewinnt. Voreinstellung =
-                    gesetzliche Staffel (§ 4 ArbZG): ab 6 Std. → 30 Min., ab 9 Std. → 45 Min. Gilt
-                    konto-weit für alle Teams.
-                  </p>
-                </>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="pauseMinutes1">Pause (Min.)</Label>
+                    <Input
+                      id="pauseMinutes1"
+                      type="number"
+                      min="0"
+                      max="1440"
+                      step="5"
+                      data-testid="allowance-pause-minutes1"
+                      value={form.pauseMinutes1}
+                      onChange={(e) => set("pauseMinutes1", e.target.value)}
+                      className={errors.pauseMinutes1 ? "border-destructive" : ""}
+                    />
+                    {errors.pauseMinutes1 && (
+                      <p className="text-xs text-destructive">{errors.pauseMinutes1}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="pauseThreshold2Hours">Ab Dienstdauer (Std.)</Label>
+                    <Input
+                      id="pauseThreshold2Hours"
+                      type="number"
+                      min="0.1"
+                      step="0.5"
+                      data-testid="allowance-pause-threshold2"
+                      value={form.pauseThreshold2Hours}
+                      onChange={(e) => set("pauseThreshold2Hours", e.target.value)}
+                      className={errors.pauseThreshold2Hours ? "border-destructive" : ""}
+                    />
+                    {errors.pauseThreshold2Hours && (
+                      <p className="text-xs text-destructive">{errors.pauseThreshold2Hours}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="pauseMinutes2">Pause (Min.)</Label>
+                    <Input
+                      id="pauseMinutes2"
+                      type="number"
+                      min="0"
+                      max="1440"
+                      step="5"
+                      data-testid="allowance-pause-minutes2"
+                      value={form.pauseMinutes2}
+                      onChange={(e) => set("pauseMinutes2", e.target.value)}
+                      className={errors.pauseMinutes2 ? "border-destructive" : ""}
+                    />
+                    {errors.pauseMinutes2 && (
+                      <p className="text-xs text-destructive">{errors.pauseMinutes2}</p>
+                    )}
+                  </div>
+                </div>
               )}
             </SchalterZeile>
           </Abschnitt>
@@ -587,7 +701,20 @@ export function ZuschlaegeUndZeitregelnFelder() {
               id="deductPausesEnabled"
               testId="allowance-deduct-pauses-switch"
               label="Pausen von bezahlten Stunden abziehen"
-              beschreibung="Zieht die eingetragenen unbezahlten Pausenminuten von den gewerteten Stunden und dem Grundlohn der Arbeitsdienste ab — in beiden Abrechnungsarten (Soll und Ist), rückwirkend schaltbar. Zuschläge bleiben unverändert. Solange ausgeschaltet, sind Pausen eine reine Info-Kennzahl (bisheriges Verhalten). Gilt konto-weit für alle Teams."
+              anker="pausen"
+              erklaerung={
+                <>
+                  <p>
+                    Zieht die eingetragenen unbezahlten Pausenminuten von den gewerteten Stunden und
+                    dem Grundlohn der Arbeitsdienste ab — in beiden Abrechnungsarten (Soll und Ist),
+                    rückwirkend schaltbar. Zuschläge bleiben unverändert.
+                  </p>
+                  <p>
+                    Solange ausgeschaltet, sind Pausen eine reine Info-Kennzahl. Gilt konto-weit für
+                    alle Teams.
+                  </p>
+                </>
+              }
               gesperrt={switchesLocked}
               lockTestId="lock-deduct-pauses"
               checked={form.deductPausesEnabled}
@@ -600,7 +727,19 @@ export function ZuschlaegeUndZeitregelnFelder() {
               id="ersatzruhetagEnabled"
               testId="allowance-ersatzruhetag-switch"
               label="Ersatzruhetag-Konto für Feiertage"
-              beschreibung="Wer an einem gesetzlichen Feiertag arbeitet, erhält nach § 11 Abs. 3 ArbZG einen Ausgleichs-Ruhetag gutgeschrieben. Nur Feiertage an Werktagen (Mo–Sa) zählen — fällt ein Feiertag auf einen Sonntag, entstehen nur Zuschläge, aber kein zusätzlicher Ausgleichstag. Ausschalten, wenn kein Ausgleichskonto geführt werden soll."
+              anker="weitere-schalter"
+              erklaerung={
+                <>
+                  <p>
+                    Wer an einem gesetzlichen Feiertag arbeitet, erhält nach § 11 Abs. 3 ArbZG einen
+                    Ausgleichs-Ruhetag gutgeschrieben.
+                  </p>
+                  <p>
+                    Nur Feiertage an Werktagen (Mo–Sa) zählen — fällt ein Feiertag auf einen
+                    Sonntag, entstehen nur Zuschläge, aber kein zusätzlicher Ausgleichstag.
+                  </p>
+                </>
+              }
               checked={form.ersatzruhetagEnabled}
               onCheckedChange={(v) => set("ersatzruhetagEnabled", v)}
             />
@@ -611,13 +750,30 @@ export function ZuschlaegeUndZeitregelnFelder() {
               id="teamMeetingEnabled"
               testId="allowance-team-meeting-switch"
               label="Team-Dienst (Teamsitzung)"
-              beschreibung="Erlaubt das Anlegen von Team-Einträgen im Dienstplan. Ein Team-Eintrag pro Tag schreibt allen Assistenzkräften des Teams die eingestellte Stundenzahl als Arbeitszeit gut (gilt für alle Teams dieses Kontos)."
+              anker="weitere-schalter"
+              erklaerung={
+                <p>
+                  Erlaubt das Anlegen von Team-Einträgen im Dienstplan. Ein Team-Eintrag pro Tag
+                  schreibt allen Assistenzkräften des Teams die eingestellte Stundenzahl als
+                  Arbeitszeit gut (gilt für alle Teams dieses Kontos).
+                </p>
+              }
               checked={form.teamMeetingEnabled}
               onCheckedChange={(v) => set("teamMeetingEnabled", v)}
             >
               {form.teamMeetingEnabled && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="teamMeetingHours">Stunden-Gutschrift pro Teamsitzung</Label>
+                  <FeldLabel
+                    htmlFor="teamMeetingHours"
+                    titel="Stunden-Gutschrift pro Teamsitzung"
+                    anker="weitere-schalter"
+                    erklaerung={
+                      <p>
+                        Diese Stundenzahl wird jeder Assistenzkraft des Teams je Team-Eintrag
+                        gutgeschrieben und mit dem Stundenlohn vergütet.
+                      </p>
+                    }
+                  />
                   <Input
                     id="teamMeetingHours"
                     data-testid="allowance-team-meeting-hours"
@@ -626,15 +782,11 @@ export function ZuschlaegeUndZeitregelnFelder() {
                     step="0.1"
                     value={form.teamMeetingHours}
                     onChange={(e) => set("teamMeetingHours", e.target.value)}
-                    className={errors.teamMeetingHours ? "border-destructive" : ""}
+                    className={`${KURZFELD} ${errors.teamMeetingHours ? "border-destructive" : ""}`}
                   />
                   {errors.teamMeetingHours && (
                     <p className="text-xs text-destructive">{errors.teamMeetingHours}</p>
                   )}
-                  <p className="text-xs text-muted-foreground">
-                    Diese Stundenzahl wird jeder Assistenzkraft des Teams je Team-Eintrag
-                    gutgeschrieben und mit dem Stundenlohn vergütet.
-                  </p>
                 </div>
               )}
             </SchalterZeile>
@@ -645,7 +797,13 @@ export function ZuschlaegeUndZeitregelnFelder() {
               id="autoApproveTimesheets"
               testId="allowance-auto-approve-switch"
               label="Stundenzettel automatisch genehmigen"
-              beschreibung="Eingereichte Zeiteinträge werden ohne manuelle Prüfung sofort bestätigt und in die Auswertung übernommen."
+              anker="weitere-schalter"
+              erklaerung={
+                <p>
+                  Eingereichte Zeiteinträge werden ohne manuelle Prüfung sofort bestätigt und in die
+                  Auswertung übernommen.
+                </p>
+              }
               checked={form.autoApproveTimesheets}
               onCheckedChange={(v) => set("autoApproveTimesheets", v)}
             />
@@ -669,9 +827,7 @@ export function AllowanceSaveBar() {
 
   if (isLoading) return null;
 
-  const offen = geaenderteFelder > 0;
-
-  if (!offen) {
+  if (geaenderteFelder === 0) {
     // Nach dem Speichern kurz sichtbar bleiben: die Rückmeldung "Gespeichert."
     // gehört an dieselbe Stelle, an der der Knopf stand.
     return saved ? (
@@ -687,13 +843,13 @@ export function AllowanceSaveBar() {
           wuerde sonst die unterste Karte verdecken. */}
       <div className="h-20" aria-hidden="true" />
       <div
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 shadow-[0_-2px_12px_rgba(0,0,0,0.08)]"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background shadow-[0_-2px_12px_rgba(0,0,0,0.10)]"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         data-testid="allowance-save-bar"
         role="region"
         aria-label="Ungespeicherte Änderungen"
       >
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <p className="text-sm text-foreground">
             <span className="font-semibold">
               {geaenderteFelder === 1 ? "1 Änderung" : `${geaenderteFelder} Änderungen`}
