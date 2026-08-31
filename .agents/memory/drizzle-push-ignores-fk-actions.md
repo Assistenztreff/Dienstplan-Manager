@@ -36,4 +36,17 @@ SELECT conname, confdeltype FROM pg_constraint WHERE conname = '<fk_name>';
 
 **Auch beachten:** `verify-test-db-schema` und der Publish-Guard
 (`check-prod-schema-drift`) prüfen Tabellen und Spalten — eine abweichende
-FK-Aktion melden sie nicht.
+FK-Aktion melden sie nicht. Dafür gibt es jetzt
+`pnpm --filter @workspace/scripts run check-loeschregeln` (rein lesend), das
+genau diese Regeln gegen den Soll-Zustand prüft. Gegen die Produktion:
+`APP_DATABASE_URL="$PROD_DATABASE_URL" pnpm --filter @workspace/scripts run check-loeschregeln`.
+
+**Was dieser Wächter sofort gefunden hat:** `pre-push-sql.ts` legte
+`shifts/absence_requests/contracts/time_tracking.user_id` ohne
+`ON DELETE`-Klausel neu an — Postgres macht daraus `NO ACTION`, während das
+Drizzle-Schema `restrict` deklariert. Verhalten identisch (beide blockieren
+das Löschen, sie unterscheiden sich nur im Prüfzeitpunkt innerhalb der
+Anweisung), aber die Datenbank wich still vom Schema ab, auf **allen**
+Umgebungen inklusive Produktion. Nachgezogen am 30.08.2026: die Klausel steht
+jetzt ausdrücklich da. `NO ACTION` statt `restrict` meldet der Wächter
+deshalb als Abweichung ohne Datenrisiko, `cascade` dagegen als kritisch.

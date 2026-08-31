@@ -242,18 +242,27 @@ export const PRE_PUSH_SQL: string[] = [
   // Drop+Recreate ist sicher bei jedem Lauf (Tabelle existiert zu dem
   // Zeitpunkt bereits — diese Migrationen laufen nach den entsprechenden
   // CREATE-TABLE-Vorab-Schritten weiter oben).
+  //
+  // ON DELETE RESTRICT AUSDRUECKLICH HINSCHREIBEN (nachgezogen 30.08.2026):
+  // Ohne Klausel legt Postgres NO ACTION an. Das blockiert das Loeschen zwar
+  // genauso — der Schutz griff also — aber die Datenbank wich damit still vom
+  // Drizzle-Schema ab, das `restrict` deklariert. Auffallen konnte das nie:
+  // `drizzle-kit push` fasst bestehende Fremdschluessel nicht an, und weder
+  // verify-test-db-schema noch check-prod-schema-drift schauen auf
+  // Fremdschluessel-Aktionen. Gefunden hat es erst der neue
+  // `check-loeschregeln`-Waechter.
   `ALTER TABLE shifts DROP CONSTRAINT IF EXISTS shifts_user_id_users_id_fk;`,
   `ALTER TABLE shifts ADD CONSTRAINT shifts_user_id_users_id_fk
-     FOREIGN KEY (user_id) REFERENCES users(id);`,
+     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT;`,
   `ALTER TABLE absence_requests DROP CONSTRAINT IF EXISTS absence_requests_user_id_users_id_fk;`,
   `ALTER TABLE absence_requests ADD CONSTRAINT absence_requests_user_id_users_id_fk
-     FOREIGN KEY (user_id) REFERENCES users(id);`,
+     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT;`,
   `ALTER TABLE contracts DROP CONSTRAINT IF EXISTS contracts_user_id_users_id_fk;`,
   `ALTER TABLE contracts ADD CONSTRAINT contracts_user_id_users_id_fk
-     FOREIGN KEY (user_id) REFERENCES users(id);`,
+     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT;`,
   `ALTER TABLE time_tracking DROP CONSTRAINT IF EXISTS time_tracking_user_id_users_id_fk;`,
   `ALTER TABLE time_tracking ADD CONSTRAINT time_tracking_user_id_users_id_fk
-     FOREIGN KEY (user_id) REFERENCES users(id);`,
+     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT;`,
   // shift_changes (Änderungshistorie für bereits bestätigte Dienste): NEUER
   // Enum-Typ PLUS neue Tabelle mit mehreren FKs auf einer bestehenden,
   // befüllten Bestands-DB — dieselbe Kombination wie bei absence_requests
@@ -296,7 +305,7 @@ export const PRE_PUSH_SQL: string[] = [
      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shift_changes_user_id_users_id_fk') THEN
        ALTER TABLE shift_changes
          ADD CONSTRAINT shift_changes_user_id_users_id_fk
-         FOREIGN KEY (user_id) REFERENCES users(id);
+         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT;
      END IF;
    END $$;`,
   `DO $$ BEGIN
