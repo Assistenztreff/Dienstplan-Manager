@@ -24,6 +24,13 @@ export async function openSettingsGroup(
   page: Page,
   gruppe: Einstellungsgruppe,
 ): Promise<void> {
+  // Erst auf die gerenderte Seite warten. Direkt nach `goto()` ist die lazy
+  // geladene Route noch nicht da; ein `count() === 0` hiesse dann faelschlich
+  // "diese Rolle hat gar keine Gruppen", und der Test liefe gegen eine
+  // zugeklappte Gruppe weiter.
+  await expect(page.getByRole("heading", { name: "Einstellungen", exact: true })).toBeVisible({
+    timeout: 30_000,
+  });
   const schalter = page.getByTestId(`gruppe-schalter-${gruppe}`);
   // Assistenzkräfte bekommen keine Gruppen — dann gibt es nichts zu öffnen.
   if ((await schalter.count()) === 0) return;
