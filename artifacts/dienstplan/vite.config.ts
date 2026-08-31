@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, type PluginOption } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
@@ -31,9 +31,50 @@ if (!basePath) {
   );
 }
 
+/**
+ * Im E2E-Stack die Google-Fonts-Einbindung entfernen.
+ *
+ * WARUM (verifiziert 30.08.2026): index.html laedt das Inter/Rubik-Stylesheet
+ * von fonts.googleapis.com. Playwright wartet bei page.goto standardmaessig
+ * auf "load" — und "load" wartet auf genau dieses Stylesheet. Kommt der
+ * Browser nicht hinaus (Container mit eingeschraenktem Egress, CI ohne Netz,
+ * Bahnfahrt), haengt JEDER Seitenaufruf bis ins Test-Timeout. Genau daran
+ * scheiterten hier reihenweise UI-Specs mit
+ * `page.goto: Test timeout ... waiting until "load"` — nicht am Code: mit
+ * entfernter Einbindung liefen dieselben Specs in 17 Sekunden durch.
+ *
+ * Ein Test-Stack darf nicht von einem fremden CDN abhaengen. Greift NUR im
+ * E2E-Modus (E2E_API_PROXY_TARGET gesetzt); Dev und Produktion bleiben
+ * unveraendert, dort sind die Schriften erwuenscht. Die Specs pruefen
+ * Verhalten, keine Schriftarten — der System-Fallback genuegt ihnen.
+ */
+function e2eOhneFremdeSchriften(): PluginOption {
+  return {
+    name: "e2e-ohne-fremde-schriften",
+    apply: "serve",
+    enforce: "pre",
+    transformIndexHtml(html: string) {
+      if (!e2eApiProxyTarget) return html;
+      return html
+        .replace(/<link[^>]*fonts\.(googleapis|gstatic)\.com[^>]*>\s*/g, "")
+        .replace(/<\/head>/, "<\/head>");
+    },
+    transform(code: string, id: string) {
+      if (!e2eApiProxyTarget) return null;
+      if (!id.endsWith(".css")) return null;
+      if (!code.includes("fonts.googleapis.com")) return null;
+      return {
+        code: code.replace(/@import\s+url\(['"]https:\/\/fonts\.googleapis\.com[^)]*\);?/g, ""),
+        map: null,
+      };
+    },
+  };
+}
+
 export default defineConfig({
   base: basePath,
   plugins: [
+    e2eOhneFremdeSchriften(),
     react(),
     tailwindcss(),
     runtimeErrorOverlay(),
