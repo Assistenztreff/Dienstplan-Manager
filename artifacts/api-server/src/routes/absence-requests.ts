@@ -27,6 +27,7 @@ import {
 } from "../lib/teams";
 import {
   runBulkAbsenceCreation,
+  type BulkAbsenceCreationResult,
   normalizeAbsenceDays,
   forwardPlanningBlocked,
   InvalidAbsenceDayError,
@@ -227,7 +228,14 @@ type ApproveOutcome =
   | { kind: "not_found" }
   | { kind: "conflict" }
   | { kind: "responded" } // forwardPlanningBlocked hat bereits geantwortet
-  | { kind: "ok"; updated: typeof absenceRequestsTable.$inferSelect };
+  | {
+      kind: "ok";
+      updated: typeof absenceRequestsTable.$inferSelect;
+      // Vertretungs-Vorschlaege aus den verdraengten Diensten — der Planer
+      // wird direkt nach dem Bestaetigen gefragt, ob er sie einsetzt
+      // (Kay 30.08.2026).
+      vertretungsVorschlaege: BulkAbsenceCreationResult["vertretungsVorschlaege"];
+    };
 
 // POST /absence-requests/:id/approve — legt die beantragten Tage über
 // runBulkAbsenceCreation an (identische Logik zu POST /shifts/bulk-absence).
@@ -320,7 +328,11 @@ router.post("/absence-requests/:id/approve", requireAuth, async (req, res): Prom
         .where(eq(absenceRequestsTable.id, request.id))
         .returning();
 
-      return { kind: "ok", updated: updated! };
+      return {
+        kind: "ok",
+        updated: updated!,
+        vertretungsVorschlaege: result.vertretungsVorschlaege,
+      };
     });
   } catch (err) {
     if (err instanceof VacationOutsideContractError) {
@@ -345,7 +357,10 @@ router.post("/absence-requests/:id/approve", requireAuth, async (req, res): Prom
   if (outcome.kind === "responded") {
     return;
   }
-  res.json(serializeRequest(outcome.updated, null));
+  res.json({
+    ...serializeRequest(outcome.updated, null),
+    vertretungsVorschlaege: outcome.vertretungsVorschlaege,
+  });
 });
 
 type RejectOutcome =

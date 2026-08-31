@@ -18,3 +18,7 @@ export * from "./register_rate_limit_attempts";
 export * from "./data_migrations";
 export * from "./hours_balance_cache_versions";
 export * from "./absence_requests";
+export * from "./deletion_archives";
+export * from "./shift_changes";
+export * from "./shift_deviation_reports";
+export * from "./shift_swap_requests";

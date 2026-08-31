@@ -3,6 +3,7 @@ import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
 import { Plus, Check, MessageSquare } from "lucide-react";
 import { StatusBadge, type StatusBadgeKind } from "@/components/status-badge";
+import { useIsCorrectedShift } from "./corrected-shifts";
 import { useTeam } from "@/context/team";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { userDotClass, type PersonColorAssignment } from "@/lib/shift-model-colors";
@@ -51,8 +52,16 @@ function TableShiftCell({
         ? `Aushilfe aus ${shift.homeTeamName ?? "anderem Team"}`
         : `Aushilfe für ${shift.einsatzTeamName ?? "anderes Team"}`
       : null;
-  // Titel wie bisher: Label + Statuswort (FIX → „Bestätigt", sonst Entwurf/Vorschlag).
-  const statusWord = status === "FIX" ? "Bestätigt" : (PLANNING_STATUS_LABELS[status] ?? status);
+  // Titel wie bisher: Label + Statuswort (FIX → „Bestätigt", sonst Entwurf/
+  // Vorschlag). Nachträglich korrigiert: bleibt bestätigt, bekommt zusätzlich
+  // das Korrektur-Symbol (s. corrected-shifts.tsx).
+  const korrigiert = useIsCorrectedShift(shift.id);
+  const statusWord =
+    status === "FIX"
+      ? korrigiert
+        ? "Bestätigt · korrigiert"
+        : "Bestätigt"
+      : (PLANNING_STATUS_LABELS[status] ?? status);
   const timeRange = `${format(new Date(shift.startTime), "HH:mm")} – ${format(new Date(shift.endTime), "HH:mm")}`;
   const baseIconKind: StatusBadgeKind =
     status === "FIX" ? "confirmed" : status === "ANGEBOTEN" ? "sent" : "draft";
@@ -72,6 +81,7 @@ function TableShiftCell({
       <div className="flex min-h-[20px] items-center gap-[4px]">
         <span className="flex shrink-0 items-center gap-[3px]">
           <StatusBadge kind={baseIconKind} label={statusWord} />
+          {korrigiert && <StatusBadge kind="correction" label="Nachträglich korrigiert" />}
           {shift.isVertretung && <StatusBadge kind="vertretung" label="Vertretung" />}
         </span>
         <span className="min-w-0 flex-1 truncate text-[9px] font-semibold uppercase tracking-wide text-[#444444]">

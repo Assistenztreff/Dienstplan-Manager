@@ -25,7 +25,14 @@ import { pgTable, serial, integer, timestamp, jsonb, pgEnum, index } from "drizz
 import { usersTable } from "./users";
 import { teamsTable } from "./teams";
 
-export const absenceRequestTypeEnum = pgEnum("absence_request_type", ["vacation", "sick"]);
+// wunschfrei = Wunsch, an diesen Tagen nicht eingeplant zu werden (Termin,
+// private Gruende). Erst die Genehmigung macht daraus eine verbindliche
+// Sperre; abgelehnt bleibt der Tag normal planbar.
+export const absenceRequestTypeEnum = pgEnum("absence_request_type", [
+  "vacation",
+  "sick",
+  "wunschfrei",
+]);
 export const absenceRequestStatusEnum = pgEnum("absence_request_status", [
   "PENDING",
   "APPROVED",
@@ -42,9 +49,11 @@ export const absenceRequestsTable = pgTable(
     teamId: integer("team_id")
       .notNull()
       .references(() => teamsTable.id),
+    // Löschschutz: KEIN CASCADE, siehe shifts.ts (dieselbe Aufbewahrungspflicht
+    // gilt für Urlaubs-/Krankheitsanträge als Teil des Zeitnachweises).
     userId: integer("user_id")
       .notNull()
-      .references(() => usersTable.id, { onDelete: "cascade" }),
+      .references(() => usersTable.id, { onDelete: "restrict" }),
     type: absenceRequestTypeEnum("type").notNull(),
     status: absenceRequestStatusEnum("status").notNull().default("PENDING"),
     days: jsonb("days").$type<AbsenceRequestDay[]>().notNull(),

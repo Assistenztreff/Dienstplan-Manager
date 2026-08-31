@@ -12,4 +12,5 @@ export type AbsenceRequestType = typeof AbsenceRequestType[keyof typeof AbsenceR
 export const AbsenceRequestType = {
   vacation: 'vacation',
   sick: 'sick',
+  wunschfrei: 'wunschfrei',
 } as const;

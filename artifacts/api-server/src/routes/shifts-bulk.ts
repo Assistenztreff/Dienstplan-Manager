@@ -30,6 +30,7 @@ import {
   einsatzTeamsTable,
   forwardPlanningBlocked,
   homeTeamsTable,
+  standbyUsersTable,
   InvalidAbsenceDayError,
   InvalidShiftModelError,
   normalizeAbsenceDays,
@@ -233,6 +234,7 @@ router.post("/shifts/bulk-absence", requireAuth, async (req, res): Promise<void>
           .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
           .leftJoin(einsatzTeamsTable, eq(einsatzTeamsTable.id, shiftsTable.einsatzTeamId))
           .leftJoin(homeTeamsTable, eq(homeTeamsTable.id, shiftsTable.teamId))
+          .leftJoin(standbyUsersTable, eq(standbyUsersTable.id, shiftsTable.standbyUserId))
           .where(inArray(shiftsTable.id, createdShifts.map((s) => s.id)))
       : [];
 
@@ -494,6 +496,7 @@ router.post("/shifts/bulk", requireAuth, async (req, res): Promise<void> => {
               "abgesagt_an",
               "urlaubsabgeltung",
               "freizeitausgleich",
+              "wunschfrei",
             ]),
             lt(shiftsTable.startTime, maxEnd),
             gt(shiftsTable.endTime, minStart),
@@ -606,6 +609,7 @@ router.post("/shifts/bulk", requireAuth, async (req, res): Promise<void> => {
     .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
     .leftJoin(einsatzTeamsTable, eq(einsatzTeamsTable.id, shiftsTable.einsatzTeamId))
     .leftJoin(homeTeamsTable, eq(homeTeamsTable.id, shiftsTable.teamId))
+    .leftJoin(standbyUsersTable, eq(standbyUsersTable.id, shiftsTable.standbyUserId))
     .where(inArray(shiftsTable.id, createdIds));
 
   res.status(201).json({

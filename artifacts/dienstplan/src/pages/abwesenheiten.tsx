@@ -63,6 +63,10 @@ import { ArbeitstageRechnerDialog } from "@/components/arbeitstage-rechner-dialo
 import { KrankmeldungDialog } from "@/components/krankmeldung-dialog";
 import { formatDays, formatHours } from "@/lib/utils";
 import {
+  useVertretungAktivieren,
+  type VertretungsVorschlag,
+} from "@/lib/vertretung-aktivieren";
+import {
   buildRanges,
   dayKey,
   type AbsenceType,
@@ -73,6 +77,7 @@ import {
 const TYPE_LABEL: Record<AbsenceType, string> = {
   vacation: "Urlaub",
   sick: "Krank",
+  wunschfrei: "Wunschfrei",
 };
 
 const REQUEST_STATUS_LABEL: Record<AbsenceRequest["status"], string> = {
@@ -336,6 +341,7 @@ export default function Abwesenheiten() {
   const bulkDeleteShifts = useBulkDeleteShifts();
   const createAbsenceRequest = useCreateAbsenceRequest();
   const approveAbsenceRequest = useApproveAbsenceRequest();
+  const { frageVertretungen } = useVertretungAktivieren();
   const rejectAbsenceRequest = useRejectAbsenceRequest();
 
   // #887: eigene Anträge (Assistenzkraft) bzw. offene Anträge zur Bestätigung
@@ -365,9 +371,17 @@ export default function Abwesenheiten() {
   async function handleApproveRequest(item: AbsenceRequest) {
     setResolvingRequestId(item.id);
     try {
-      await approveAbsenceRequest.mutateAsync({ id: item.id });
+      const approved = (await approveAbsenceRequest.mutateAsync({ id: item.id })) as {
+        vertretungsVorschlaege?: VertretungsVorschlag[];
+      };
       await invalidateAbsenceRequests();
       void invalidate();
+      // War an einem verdraengten Dienst jemand als Vertretung vorgemerkt,
+      // direkt nachfragen — sonst bliebe der Tag nach einer aus der App
+      // gemeldeten Krankheit einfach leer (Kay 30.08.2026).
+      if (approved?.vertretungsVorschlaege?.length) {
+        frageVertretungen(approved.vertretungsVorschlaege);
+      }
       toast({
         title: `${TYPE_LABEL[item.type]}santrag bestätigt`,
         description: `${item.userName ?? "Assistenzkraft"} · ${item.days.length} ${
@@ -928,6 +942,7 @@ export default function Abwesenheiten() {
                 <SelectContent>
                   <SelectItem value="vacation">Urlaub</SelectItem>
                   <SelectItem value="sick">Krank</SelectItem>
+                  <SelectItem value="wunschfrei">Wunschfrei</SelectItem>
                 </SelectContent>
               </Select>
             </div>

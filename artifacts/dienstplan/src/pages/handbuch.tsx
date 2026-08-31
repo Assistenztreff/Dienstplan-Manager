@@ -15,7 +15,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import platformLogoUrl from "@assets/assistenzplaner-logo-getrimmt.png";
+import platformLogoUrl from "@/assets/assistenzplaner-logo.png";
 import { useAuth } from "@/context/auth";
 
 // ---------------------------------------------------------------------------

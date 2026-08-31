@@ -40,12 +40,14 @@ import type {
   CalendarToken,
   ChangePassword200,
   ChangePasswordInput,
+  ConfirmOwnShiftResult,
   Contract,
   ContractInput,
   ContractUpdate,
   CreateMonthClosingInput,
   DashboardSummary,
   DeleteAllowanceSettingsOverrideParams,
+  DeleteUserConflict,
   ErrorEnvelope,
   ExportCalendarParams,
   GetAllowanceSettingsParams,
@@ -73,7 +75,11 @@ import type {
   ListHourBudgetsParams,
   ListOperatorErrorsParams,
   ListOperatorPlanChangesParams,
+  ListShiftChangeHistoryParams,
+  ListShiftChangesParams,
+  ListShiftDeviationsParams,
   ListShiftModelsParams,
+  ListShiftSwapRequestsParams,
   ListShiftsParams,
   ListTimeEntriesParams,
   ListUsersParams,
@@ -94,10 +100,18 @@ import type {
   SendShiftProposalsResult,
   SetPasswordInput,
   Shift,
+  ShiftChangeHistoryEntry,
+  ShiftChangeSummary,
+  ShiftDeviationDisputeInput,
+  ShiftDeviationReport,
+  ShiftDeviationReportInput,
   ShiftInput,
   ShiftModel,
   ShiftModelInput,
   ShiftModelUpdate,
+  ShiftSwapRequest,
+  ShiftSwapRequestInput,
+  ShiftSwapResolveInput,
   ShiftUpdate,
   Team,
   TeamInput,
@@ -526,6 +540,11 @@ export const getDeleteUserUrl = (id: number,) => {
 }
 
 /**
+ * Löscht das Konto samt seiner aufbewahrungspflichtigen Zeilen (Dienste, Abwesenheiten, Verträge, Zeiterfassung, Änderungshistorie).
+
+Hat das Konto solche Daten, ist vorher ein Lösch-Archiv Pflicht: es muss ein über POST /users/{id}/deletion-archive erzeugtes Archiv für dieses Konto geben, das derselbe Admin angelegt hat, das noch für keine Löschung verwendet wurde und das nicht älter als 30 Minuten ist. Sonst 409 `deletion_archive_required`. Das Archiv wird beim erfolgreichen Löschen als verwendet gestempelt.
+
+Konten ohne aufbewahrungspflichtige Daten (z. B. eine eben angelegte Assistenzkraft) werden ohne Archiv gelöscht — ein Export-Ritual für ein leeres Konto wäre reine Schikane.
  * @summary Benutzer löschen
  */
 export const deleteUser = async (id: number, options?: RequestInit): Promise<void> => {
@@ -542,7 +561,7 @@ export const deleteUser = async (id: number, options?: RequestInit): Promise<voi
 
 
 
-export const getDeleteUserMutationOptions = <TError = ErrorType<unknown>,
+export const getDeleteUserMutationOptions = <TError = ErrorType<DeleteUserConflict>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUser>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteUser>>, TError,{id: number}, TContext> => {
 
@@ -571,12 +590,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type DeleteUserMutationResult = NonNullable<Awaited<ReturnType<typeof deleteUser>>>
 
-    export type DeleteUserMutationError = ErrorType<unknown>
+    export type DeleteUserMutationError = ErrorType<DeleteUserConflict>
 
     /**
  * @summary Benutzer löschen
  */
-export const useDeleteUser = <TError = ErrorType<unknown>,
+export const useDeleteUser = <TError = ErrorType<DeleteUserConflict>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUser>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof deleteUser>>,
@@ -585,6 +604,79 @@ export const useDeleteUser = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteUserMutationOptions(options));
+    }
+
+export const getCreateDeletionArchiveUrl = (id: number,) => {
+
+
+
+
+  return `/api/users/${id}/deletion-archive`
+}
+
+/**
+ * Erzeugt serverseitig aus der Datenbank ein vollständiges Archiv der aufbewahrungspflichtigen Daten dieser Person (Stundenliste, Zeiterfassung, Stundenkonto, Lohnauswertung, Änderungshistorie, Verträge) als ZIP mit CSV-Tabellen, legt es im Server-Archiv ab und liefert **dieselben Bytes** als Download zurück. Die abgelegte Datei ist damit byte-gleich mit der im Archiv.
+
+Die ID des erzeugten Archivs steht im Antwort-Header `X-Deletion-Archive-Id` und wird beim anschließenden DELETE als `archiveId` mitgegeben.
+ * @summary Lösch-Archiv erzeugen und herunterladen
+ */
+export const createDeletionArchive = async (id: number, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getCreateDeletionArchiveUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getCreateDeletionArchiveMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDeletionArchive>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createDeletionArchive>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['createDeletionArchive'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createDeletionArchive>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  createDeletionArchive(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateDeletionArchiveMutationResult = NonNullable<Awaited<ReturnType<typeof createDeletionArchive>>>
+
+    export type CreateDeletionArchiveMutationError = ErrorType<void>
+
+    /**
+ * @summary Lösch-Archiv erzeugen und herunterladen
+ */
+export const useCreateDeletionArchive = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDeletionArchive>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createDeletionArchive>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getCreateDeletionArchiveMutationOptions(options));
     }
 
 export const getListContractsUrl = (params?: ListContractsParams,) => {
@@ -2361,6 +2453,780 @@ export const useDeleteShift = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteShiftMutationOptions(options));
+    }
+
+export const getListShiftDeviationsUrl = (params?: ListShiftDeviationsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/shifts/deviations?${stringifiedParams}` : `/api/shifts/deviations`
+}
+
+/**
+ * Alle Abweichungsmeldungen (PENDING/ACCEPTED/DISPUTED) im Team-Scope des Aufrufers — Basis für den Melde-Zustand einzelner Dienste in der Oberfläche und den Planer-Hinweis "N gemeldete Abweichungen".
+ * @summary Gemeldete Abweichungen auflisten (team-gescoped)
+ */
+export const listShiftDeviations = async (params?: ListShiftDeviationsParams, options?: RequestInit): Promise<ShiftDeviationReport[]> => {
+
+  return customFetch<ShiftDeviationReport[]>(getListShiftDeviationsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListShiftDeviationsQueryKey = (params?: ListShiftDeviationsParams,) => {
+    return [
+    `/api/shifts/deviations`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListShiftDeviationsQueryOptions = <TData = Awaited<ReturnType<typeof listShiftDeviations>>, TError = ErrorType<unknown>>(params?: ListShiftDeviationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShiftDeviations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListShiftDeviationsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listShiftDeviations>>> = ({ signal }) => listShiftDeviations(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listShiftDeviations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListShiftDeviationsQueryResult = NonNullable<Awaited<ReturnType<typeof listShiftDeviations>>>
+export type ListShiftDeviationsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Gemeldete Abweichungen auflisten (team-gescoped)
+ */
+
+export function useListShiftDeviations<TData = Awaited<ReturnType<typeof listShiftDeviations>>, TError = ErrorType<unknown>>(
+ params?: ListShiftDeviationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShiftDeviations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListShiftDeviationsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListShiftChangesUrl = (params?: ListShiftChangesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/shifts/changes?${stringifiedParams}` : `/api/shifts/changes`
+}
+
+/**
+ * Genau eine Zeile je Dienst — die jüngste Änderung. Grundlage für die Korrektur-Kennzeichnung im Dienstplan, seit Korrekturen sofort gelten und der Dienst dabei bestätigt bleibt. Wer nicht planen darf, sieht ausschließlich die eigenen Zeilen. Die vollständige Historie bleibt in der Datenbank und ist dem Monats-Export vorbehalten.
+ * @summary Letzte Änderung je Dienst
+ */
+export const listShiftChanges = async (params?: ListShiftChangesParams, options?: RequestInit): Promise<ShiftChangeSummary[]> => {
+
+  return customFetch<ShiftChangeSummary[]>(getListShiftChangesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListShiftChangesQueryKey = (params?: ListShiftChangesParams,) => {
+    return [
+    `/api/shifts/changes`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListShiftChangesQueryOptions = <TData = Awaited<ReturnType<typeof listShiftChanges>>, TError = ErrorType<void>>(params?: ListShiftChangesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShiftChanges>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListShiftChangesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listShiftChanges>>> = ({ signal }) => listShiftChanges(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listShiftChanges>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListShiftChangesQueryResult = NonNullable<Awaited<ReturnType<typeof listShiftChanges>>>
+export type ListShiftChangesQueryError = ErrorType<void>
+
+
+/**
+ * @summary Letzte Änderung je Dienst
+ */
+
+export function useListShiftChanges<TData = Awaited<ReturnType<typeof listShiftChanges>>, TError = ErrorType<void>>(
+ params?: ListShiftChangesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShiftChanges>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListShiftChangesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListShiftChangeHistoryUrl = (params: ListShiftChangeHistoryParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/shifts/changes/history?${stringifiedParams}` : `/api/shifts/changes/history`
+}
+
+/**
+ * Alle Aenderungen an bestaetigten (FIX) Diensten eines Kalendermonats — eine Zeile je Aenderung, nicht je Dienst. Grundlage des Vormonats-Blocks im Stundenlisten-Export: alter Wert, neuer Wert, wer, wann. Ein Dienst, der mehrfach geaendert wurde, erscheint mehrfach. Zugeordnet wird ueber das Dienst-Datum aus dem Snapshot (vorher ODER nachher im Monat), damit auch ein ueber die Monatsgrenze verschobener Dienst in beiden Monaten auftaucht. Wer nicht planen darf, sieht ausschliesslich die eigenen Zeilen.
+ * @summary Vollstaendige Aenderungshistorie eines Monats
+ */
+export const listShiftChangeHistory = async (params: ListShiftChangeHistoryParams, options?: RequestInit): Promise<ShiftChangeHistoryEntry[]> => {
+
+  return customFetch<ShiftChangeHistoryEntry[]>(getListShiftChangeHistoryUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListShiftChangeHistoryQueryKey = (params?: ListShiftChangeHistoryParams,) => {
+    return [
+    `/api/shifts/changes/history`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListShiftChangeHistoryQueryOptions = <TData = Awaited<ReturnType<typeof listShiftChangeHistory>>, TError = ErrorType<void>>(params: ListShiftChangeHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShiftChangeHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListShiftChangeHistoryQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listShiftChangeHistory>>> = ({ signal }) => listShiftChangeHistory(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listShiftChangeHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListShiftChangeHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof listShiftChangeHistory>>>
+export type ListShiftChangeHistoryQueryError = ErrorType<void>
+
+
+/**
+ * @summary Vollstaendige Aenderungshistorie eines Monats
+ */
+
+export function useListShiftChangeHistory<TData = Awaited<ReturnType<typeof listShiftChangeHistory>>, TError = ErrorType<void>>(
+ params: ListShiftChangeHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShiftChangeHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListShiftChangeHistoryQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getConfirmOwnShiftUrl = (id: number,) => {
+
+
+
+
+  return `/api/shifts/${id}/confirm-own`
+}
+
+/**
+ * Setzt genau einen eigenen Dienst von ANGEBOTEN auf FIX. Gegenstück zu bulk-confirm-own, das nur den ganzen Monat auf einmal bestätigen kann: Vorschläge und nachträgliche Korrekturen des Planers sollen einzeln annehmbar sein. Fremde Dienst-IDs liefern 404 (nicht 403), damit sie nicht ausspähbar sind.
+ * @summary Einen eigenen vorgeschlagenen Dienst bestätigen (Assistenzkraft)
+ */
+export const confirmOwnShift = async (id: number, options?: RequestInit): Promise<ConfirmOwnShiftResult> => {
+
+  return customFetch<ConfirmOwnShiftResult>(getConfirmOwnShiftUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getConfirmOwnShiftMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmOwnShift>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmOwnShift>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['confirmOwnShift'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmOwnShift>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  confirmOwnShift(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmOwnShiftMutationResult = NonNullable<Awaited<ReturnType<typeof confirmOwnShift>>>
+
+    export type ConfirmOwnShiftMutationError = ErrorType<void>
+
+    /**
+ * @summary Einen eigenen vorgeschlagenen Dienst bestätigen (Assistenzkraft)
+ */
+export const useConfirmOwnShift = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmOwnShift>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmOwnShift>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getConfirmOwnShiftMutationOptions(options));
+    }
+
+export const getReportShiftDeviationUrl = (id: number,) => {
+
+
+
+
+  return `/api/shifts/${id}/deviation`
+}
+
+/**
+ * Nur für die eigene, bereits vergangene FIX-Schicht. Solange eine Meldung offen ist, liefert ein zweiter Versuch 409; eine erledigte Meldung (angenommen oder zurückgewiesen) schließt den Fall dauerhaft — außer der Planer korrigiert den Dienst DANACH erneut, dann ist es ein neuer Sachverhalt und die Meldung ist wieder möglich. Die Regel liegt an einer Stelle: @workspace/shift-defaults/deviation-rules.
+ * @summary Abweichung von der geplanten Arbeitszeit melden (Assistenzkraft)
+ */
+export const reportShiftDeviation = async (id: number,
+    shiftDeviationReportInput: ShiftDeviationReportInput, options?: RequestInit): Promise<ShiftDeviationReport> => {
+
+  return customFetch<ShiftDeviationReport>(getReportShiftDeviationUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      shiftDeviationReportInput,)
+  }
+);}
+
+
+
+
+export const getReportShiftDeviationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reportShiftDeviation>>, TError,{id: number;data: BodyType<ShiftDeviationReportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reportShiftDeviation>>, TError,{id: number;data: BodyType<ShiftDeviationReportInput>}, TContext> => {
+
+const mutationKey = ['reportShiftDeviation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reportShiftDeviation>>, {id: number;data: BodyType<ShiftDeviationReportInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reportShiftDeviation(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReportShiftDeviationMutationResult = NonNullable<Awaited<ReturnType<typeof reportShiftDeviation>>>
+    export type ReportShiftDeviationMutationBody = BodyType<ShiftDeviationReportInput>
+    export type ReportShiftDeviationMutationError = ErrorType<void>
+
+    /**
+ * @summary Abweichung von der geplanten Arbeitszeit melden (Assistenzkraft)
+ */
+export const useReportShiftDeviation = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reportShiftDeviation>>, TError,{id: number;data: BodyType<ShiftDeviationReportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reportShiftDeviation>>,
+        TError,
+        {id: number;data: BodyType<ShiftDeviationReportInput>},
+        TContext
+      > => {
+      return useMutation(getReportShiftDeviationMutationOptions(options));
+    }
+
+export const getAcceptShiftDeviationUrl = (id: number,) => {
+
+
+
+
+  return `/api/shifts/${id}/deviation/accept`
+}
+
+/**
+ * Der gemeldete Wert übernimmt die Schicht (startTime/endTime/ pauseMinutes); die Änderung landet in der Änderungshistorie (shift_changes, changeSource=deviation_accepted).
+ * @summary Gemeldete Abweichung annehmen (Planer)
+ */
+export const acceptShiftDeviation = async (id: number, options?: RequestInit): Promise<ShiftDeviationReport> => {
+
+  return customFetch<ShiftDeviationReport>(getAcceptShiftDeviationUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getAcceptShiftDeviationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptShiftDeviation>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof acceptShiftDeviation>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['acceptShiftDeviation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof acceptShiftDeviation>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  acceptShiftDeviation(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AcceptShiftDeviationMutationResult = NonNullable<Awaited<ReturnType<typeof acceptShiftDeviation>>>
+
+    export type AcceptShiftDeviationMutationError = ErrorType<void>
+
+    /**
+ * @summary Gemeldete Abweichung annehmen (Planer)
+ */
+export const useAcceptShiftDeviation = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptShiftDeviation>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof acceptShiftDeviation>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getAcceptShiftDeviationMutationOptions(options));
+    }
+
+export const getDisputeShiftDeviationUrl = (id: number,) => {
+
+
+
+
+  return `/api/shifts/${id}/deviation/dispute`
+}
+
+/**
+ * Der Planwert bleibt maßgeblich; die Schicht wird NICHT geändert. Beide Werte (Plan und gemeldet) bleiben sichtbar.
+ * @summary Gemeldete Abweichung mit Begründung ablehnen (Planer)
+ */
+export const disputeShiftDeviation = async (id: number,
+    shiftDeviationDisputeInput: ShiftDeviationDisputeInput, options?: RequestInit): Promise<ShiftDeviationReport> => {
+
+  return customFetch<ShiftDeviationReport>(getDisputeShiftDeviationUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      shiftDeviationDisputeInput,)
+  }
+);}
+
+
+
+
+export const getDisputeShiftDeviationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disputeShiftDeviation>>, TError,{id: number;data: BodyType<ShiftDeviationDisputeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof disputeShiftDeviation>>, TError,{id: number;data: BodyType<ShiftDeviationDisputeInput>}, TContext> => {
+
+const mutationKey = ['disputeShiftDeviation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof disputeShiftDeviation>>, {id: number;data: BodyType<ShiftDeviationDisputeInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  disputeShiftDeviation(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DisputeShiftDeviationMutationResult = NonNullable<Awaited<ReturnType<typeof disputeShiftDeviation>>>
+    export type DisputeShiftDeviationMutationBody = BodyType<ShiftDeviationDisputeInput>
+    export type DisputeShiftDeviationMutationError = ErrorType<void>
+
+    /**
+ * @summary Gemeldete Abweichung mit Begründung ablehnen (Planer)
+ */
+export const useDisputeShiftDeviation = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disputeShiftDeviation>>, TError,{id: number;data: BodyType<ShiftDeviationDisputeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof disputeShiftDeviation>>,
+        TError,
+        {id: number;data: BodyType<ShiftDeviationDisputeInput>},
+        TContext
+      > => {
+      return useMutation(getDisputeShiftDeviationMutationOptions(options));
+    }
+
+export const getListShiftSwapRequestsUrl = (params?: ListShiftSwapRequestsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/shifts/swap-requests?${stringifiedParams}` : `/api/shifts/swap-requests`
+}
+
+/**
+ * Alle Tauschwünsche (OPEN/RESOLVED) im Team-Scope des Aufrufers. Assistenzkräfte sehen ausschließlich ihre eigenen. Basis für den Anfrage-Zustand einzelner Dienste in der Oberfläche und den Planer-Hinweis "N offene Tauschwünsche".
+ * @summary Tauschwünsche auflisten (team-gescoped)
+ */
+export const listShiftSwapRequests = async (params?: ListShiftSwapRequestsParams, options?: RequestInit): Promise<ShiftSwapRequest[]> => {
+
+  return customFetch<ShiftSwapRequest[]>(getListShiftSwapRequestsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListShiftSwapRequestsQueryKey = (params?: ListShiftSwapRequestsParams,) => {
+    return [
+    `/api/shifts/swap-requests`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListShiftSwapRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listShiftSwapRequests>>, TError = ErrorType<unknown>>(params?: ListShiftSwapRequestsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShiftSwapRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListShiftSwapRequestsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listShiftSwapRequests>>> = ({ signal }) => listShiftSwapRequests(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listShiftSwapRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListShiftSwapRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof listShiftSwapRequests>>>
+export type ListShiftSwapRequestsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Tauschwünsche auflisten (team-gescoped)
+ */
+
+export function useListShiftSwapRequests<TData = Awaited<ReturnType<typeof listShiftSwapRequests>>, TError = ErrorType<unknown>>(
+ params?: ListShiftSwapRequestsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShiftSwapRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListShiftSwapRequestsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getRequestShiftSwapUrl = (id: number,) => {
+
+
+
+
+  return `/api/shifts/${id}/swap-request`
+}
+
+/**
+ * Nur für den eigenen, noch nicht vergangenen Arbeitsdienst — bei einem Vorschlag (ANGEBOTEN) ebenso wie bei einem bereits bestätigten Dienst (FIX). Der Dienst selbst bleibt unverändert: weder Planungsstatus noch Zeiten noch die zugewiesene Person ändern sich. Solange ein Wunsch offen ist, liefert ein zweiter Versuch 409; ein erledigter Wunsch blockiert einen späteren neuen Wunsch NICHT (ein zweiter Termin kann dazwischenkommen).
+ * @summary Tauschwunsch für den eigenen Dienst stellen (Assistenzkraft)
+ */
+export const requestShiftSwap = async (id: number,
+    shiftSwapRequestInput: ShiftSwapRequestInput, options?: RequestInit): Promise<ShiftSwapRequest> => {
+
+  return customFetch<ShiftSwapRequest>(getRequestShiftSwapUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      shiftSwapRequestInput,)
+  }
+);}
+
+
+
+
+export const getRequestShiftSwapMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestShiftSwap>>, TError,{id: number;data: BodyType<ShiftSwapRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestShiftSwap>>, TError,{id: number;data: BodyType<ShiftSwapRequestInput>}, TContext> => {
+
+const mutationKey = ['requestShiftSwap'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestShiftSwap>>, {id: number;data: BodyType<ShiftSwapRequestInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  requestShiftSwap(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestShiftSwapMutationResult = NonNullable<Awaited<ReturnType<typeof requestShiftSwap>>>
+    export type RequestShiftSwapMutationBody = BodyType<ShiftSwapRequestInput>
+    export type RequestShiftSwapMutationError = ErrorType<void>
+
+    /**
+ * @summary Tauschwunsch für den eigenen Dienst stellen (Assistenzkraft)
+ */
+export const useRequestShiftSwap = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestShiftSwap>>, TError,{id: number;data: BodyType<ShiftSwapRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestShiftSwap>>,
+        TError,
+        {id: number;data: BodyType<ShiftSwapRequestInput>},
+        TContext
+      > => {
+      return useMutation(getRequestShiftSwapMutationOptions(options));
+    }
+
+export const getResolveShiftSwapRequestUrl = (id: number,) => {
+
+
+
+
+  return `/api/shifts/${id}/swap-request/resolve`
+}
+
+/**
+ * Schließt den offenen Wunsch ab — entweder als erfüllt (REASSIGNED, nachdem der Dienst umbesetzt wurde) oder als abgelehnt (DECLINED). Die Route ändert die Schicht NICHT; das Umbesetzen läuft wie immer über PATCH /shifts/{id}. So bleibt der Dienst-Statusfluss an einer Stelle.
+ * @summary Tauschwunsch erledigen (Planer)
+ */
+export const resolveShiftSwapRequest = async (id: number,
+    shiftSwapResolveInput: ShiftSwapResolveInput, options?: RequestInit): Promise<ShiftSwapRequest> => {
+
+  return customFetch<ShiftSwapRequest>(getResolveShiftSwapRequestUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      shiftSwapResolveInput,)
+  }
+);}
+
+
+
+
+export const getResolveShiftSwapRequestMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resolveShiftSwapRequest>>, TError,{id: number;data: BodyType<ShiftSwapResolveInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resolveShiftSwapRequest>>, TError,{id: number;data: BodyType<ShiftSwapResolveInput>}, TContext> => {
+
+const mutationKey = ['resolveShiftSwapRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resolveShiftSwapRequest>>, {id: number;data: BodyType<ShiftSwapResolveInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  resolveShiftSwapRequest(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResolveShiftSwapRequestMutationResult = NonNullable<Awaited<ReturnType<typeof resolveShiftSwapRequest>>>
+    export type ResolveShiftSwapRequestMutationBody = BodyType<ShiftSwapResolveInput>
+    export type ResolveShiftSwapRequestMutationError = ErrorType<void>
+
+    /**
+ * @summary Tauschwunsch erledigen (Planer)
+ */
+export const useResolveShiftSwapRequest = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resolveShiftSwapRequest>>, TError,{id: number;data: BodyType<ShiftSwapResolveInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resolveShiftSwapRequest>>,
+        TError,
+        {id: number;data: BodyType<ShiftSwapResolveInput>},
+        TContext
+      > => {
+      return useMutation(getResolveShiftSwapRequestMutationOptions(options));
     }
 
 export const getListShiftModelsUrl = (params?: ListShiftModelsParams,) => {

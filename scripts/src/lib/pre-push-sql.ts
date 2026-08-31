@@ -232,6 +232,197 @@ export const PRE_PUSH_SQL: string[] = [
      ON absence_requests (team_id, status);`,
   `CREATE INDEX IF NOT EXISTS absence_requests_user_status_idx
      ON absence_requests (user_id, status);`,
+  // Löschschutz für Zeitnachweise (§ 16 ArbZG, § 17 MiLoG, 2 Jahre
+  // Aufbewahrungspflicht): shifts/absence_requests/contracts/time_tracking
+  // verlieren ON DELETE CASCADE auf user_id. Löschen einer Assistenzkraft darf
+  // ihre Dienste/Anträge/Verträge/Ist-Zeiten nicht automatisch mitreißen.
+  // DELETE /users/:id faengt die resultierende FK-Verletzung (23503) bereits
+  // als 409 ab — kein Verhaltenswechsel für den Aufrufer. Konstraint-Name
+  // bleibt gleich, nur die ON-DELETE-Klausel aendert sich: unconditional
+  // Drop+Recreate ist sicher bei jedem Lauf (Tabelle existiert zu dem
+  // Zeitpunkt bereits — diese Migrationen laufen nach den entsprechenden
+  // CREATE-TABLE-Vorab-Schritten weiter oben).
+  //
+  // ON DELETE RESTRICT AUSDRUECKLICH HINSCHREIBEN (nachgezogen 30.08.2026):
+  // Ohne Klausel legt Postgres NO ACTION an. Das blockiert das Loeschen zwar
+  // genauso — der Schutz griff also — aber die Datenbank wich damit still vom
+  // Drizzle-Schema ab, das `restrict` deklariert. Auffallen konnte das nie:
+  // `drizzle-kit push` fasst bestehende Fremdschluessel nicht an, und weder
+  // verify-test-db-schema noch check-prod-schema-drift schauen auf
+  // Fremdschluessel-Aktionen. Gefunden hat es erst der neue
+  // `check-loeschregeln`-Waechter.
+  `ALTER TABLE shifts DROP CONSTRAINT IF EXISTS shifts_user_id_users_id_fk;`,
+  `ALTER TABLE shifts ADD CONSTRAINT shifts_user_id_users_id_fk
+     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT;`,
+  `ALTER TABLE absence_requests DROP CONSTRAINT IF EXISTS absence_requests_user_id_users_id_fk;`,
+  `ALTER TABLE absence_requests ADD CONSTRAINT absence_requests_user_id_users_id_fk
+     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT;`,
+  `ALTER TABLE contracts DROP CONSTRAINT IF EXISTS contracts_user_id_users_id_fk;`,
+  `ALTER TABLE contracts ADD CONSTRAINT contracts_user_id_users_id_fk
+     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT;`,
+  `ALTER TABLE time_tracking DROP CONSTRAINT IF EXISTS time_tracking_user_id_users_id_fk;`,
+  `ALTER TABLE time_tracking ADD CONSTRAINT time_tracking_user_id_users_id_fk
+     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT;`,
+  // shift_changes (Änderungshistorie für bereits bestätigte Dienste): NEUER
+  // Enum-Typ PLUS neue Tabelle mit mehreren FKs auf einer bestehenden,
+  // befüllten Bestands-DB — dieselbe Kombination wie bei absence_requests
+  // oben, bei der drizzle-kit push ohne TTY interaktiv nachfragen kann.
+  // Daher vorab idempotent anlegen, exakt wie im Drizzle-Schema
+  // (shift_changes.ts).
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'shift_change_source') THEN
+       CREATE TYPE shift_change_source AS ENUM ('planner_edit', 'deviation_accepted');
+     END IF;
+   END $$;`,
+  `CREATE TABLE IF NOT EXISTS shift_changes (
+     id serial PRIMARY KEY,
+     shift_id integer,
+     team_id integer NOT NULL,
+     user_id integer NOT NULL,
+     changed_by integer NOT NULL,
+     change_source shift_change_source NOT NULL,
+     before jsonb NOT NULL,
+     after jsonb NOT NULL,
+     created_at timestamp DEFAULT now() NOT NULL
+   );`,
+  // Loeschschutz fuer die Historie (Stufe 4): shift_id war ON DELETE CASCADE —
+  // das Loeschen eines einzelnen Dienstes riss seine Aenderungszeilen mit.
+  // Jetzt nullable + ON DELETE SET NULL: die Zeile ueberlebt, before/after
+  // tragen den vollstaendigen Snapshot. Idempotent, auch auf Bestands-DBs.
+  `ALTER TABLE shift_changes ALTER COLUMN shift_id DROP NOT NULL;`,
+  `ALTER TABLE shift_changes DROP CONSTRAINT IF EXISTS shift_changes_shift_id_shifts_id_fk;`,
+  `ALTER TABLE shift_changes
+     ADD CONSTRAINT shift_changes_shift_id_shifts_id_fk
+     FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE SET NULL;`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shift_changes_team_id_teams_id_fk') THEN
+       ALTER TABLE shift_changes
+         ADD CONSTRAINT shift_changes_team_id_teams_id_fk
+         FOREIGN KEY (team_id) REFERENCES teams(id);
+     END IF;
+   END $$;`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shift_changes_user_id_users_id_fk') THEN
+       ALTER TABLE shift_changes
+         ADD CONSTRAINT shift_changes_user_id_users_id_fk
+         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT;
+     END IF;
+   END $$;`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shift_changes_changed_by_users_id_fk') THEN
+       ALTER TABLE shift_changes
+         ADD CONSTRAINT shift_changes_changed_by_users_id_fk
+         FOREIGN KEY (changed_by) REFERENCES users(id);
+     END IF;
+   END $$;`,
+  `CREATE INDEX IF NOT EXISTS shift_changes_shift_id_idx ON shift_changes (shift_id);`,
+  `CREATE INDEX IF NOT EXISTS shift_changes_user_id_created_at_idx ON shift_changes (user_id, created_at);`,
+  `CREATE INDEX IF NOT EXISTS shift_changes_team_id_created_at_idx ON shift_changes (team_id, created_at);`,
+  // deletion_archives (Loesch-Workflow, Stufe 5): neue Tabelle mit bytea-Spalte
+  // auf einer befuellten Bestands-DB — dieselbe Prompt-Gefahr wie bei
+  // shift_changes oben. Vorab idempotent anlegen, exakt wie im Drizzle-Schema
+  // (deletion_archives.ts). Einziger Fremdschluessel ist team_id; auf users
+  // gibt es bewusst KEINEN, sonst blockierte das Archiv genau das Loeschen,
+  // das es ermoeglichen soll.
+  `CREATE TABLE IF NOT EXISTS deletion_archives (
+     id serial PRIMARY KEY,
+     user_id integer NOT NULL,
+     user_name text NOT NULL,
+     user_email text,
+     team_id integer,
+     created_by integer NOT NULL,
+     created_by_name text NOT NULL,
+     file_name text NOT NULL,
+     content_type text NOT NULL,
+     content bytea NOT NULL,
+     byte_size integer NOT NULL,
+     created_at timestamp DEFAULT now() NOT NULL,
+     deleted_at timestamp
+   );`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'deletion_archives_team_id_teams_id_fk') THEN
+       ALTER TABLE deletion_archives
+         ADD CONSTRAINT deletion_archives_team_id_teams_id_fk
+         FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE SET NULL;
+     END IF;
+   END $$;`,
+  `CREATE INDEX IF NOT EXISTS deletion_archives_user_id_idx ON deletion_archives (user_id);`,
+  `CREATE INDEX IF NOT EXISTS deletion_archives_team_id_created_at_idx ON deletion_archives (team_id, created_at);`,
+  // shift_deviation_reports (Abweichungsmodell): gleiche TTY-Prompt-Gefahr wie
+  // shift_changes/absence_requests oben — vorab idempotent anlegen, exakt wie
+  // im Drizzle-Schema (shift_deviation_reports.ts).
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'shift_deviation_status') THEN
+       CREATE TYPE shift_deviation_status AS ENUM ('PENDING', 'ACCEPTED', 'DISPUTED');
+     END IF;
+   END $$;`,
+  `CREATE TABLE IF NOT EXISTS shift_deviation_reports (
+     id serial PRIMARY KEY,
+     shift_id integer NOT NULL,
+     team_id integer NOT NULL,
+     user_id integer NOT NULL,
+     status shift_deviation_status NOT NULL DEFAULT 'PENDING',
+     reported_start_time timestamp NOT NULL,
+     reported_end_time timestamp NOT NULL,
+     reported_pause_minutes integer NOT NULL DEFAULT 0,
+     reported_ausgefallen boolean NOT NULL DEFAULT false,
+     reported_at timestamp DEFAULT now() NOT NULL,
+     resolved_by integer,
+     resolved_at timestamp,
+     dispute_reason text
+   );`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shift_deviation_reports_shift_id_shifts_id_fk') THEN
+       ALTER TABLE shift_deviation_reports
+         ADD CONSTRAINT shift_deviation_reports_shift_id_shifts_id_fk
+         FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE CASCADE;
+     END IF;
+   END $$;`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shift_deviation_reports_team_id_teams_id_fk') THEN
+       ALTER TABLE shift_deviation_reports
+         ADD CONSTRAINT shift_deviation_reports_team_id_teams_id_fk
+         FOREIGN KEY (team_id) REFERENCES teams(id);
+     END IF;
+   END $$;`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shift_deviation_reports_user_id_users_id_fk') THEN
+       ALTER TABLE shift_deviation_reports
+         ADD CONSTRAINT shift_deviation_reports_user_id_users_id_fk
+         FOREIGN KEY (user_id) REFERENCES users(id);
+     END IF;
+   END $$;`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shift_deviation_reports_resolved_by_users_id_fk') THEN
+       ALTER TABLE shift_deviation_reports
+         ADD CONSTRAINT shift_deviation_reports_resolved_by_users_id_fk
+         FOREIGN KEY (resolved_by) REFERENCES users(id);
+     END IF;
+   END $$;`,
+  `CREATE INDEX IF NOT EXISTS shift_deviation_reports_team_id_status_idx ON shift_deviation_reports (team_id, status);`,
+  `CREATE INDEX IF NOT EXISTS shift_deviation_reports_user_id_idx ON shift_deviation_reports (user_id);`,
+  // Neuer Wert im bestehenden Enum der Aenderungshistorie. ADD VALUE IF NOT
+  // EXISTS ist idempotent und laeuft — anders als ein Enum-Neuaufbau — ohne
+  // Rueckfrage auf einer befuellten DB durch.
+  `ALTER TYPE shift_change_source ADD VALUE IF NOT EXISTS 'correction_withdrawn';`,
+  // ── Widerspruch zurueckgebaut (28.08.2026, Entscheidung "A") ─────────────
+  // Der Widerspruch ohne Gegenzeit hat sich als wertlos erwiesen: er sagte nur
+  // "falsch", ohne zu sagen was richtig ist — der Planer musste ohnehin
+  // nachfragen. Die Assistenzkraft meldet ihre tatsaechliche Zeit stattdessen
+  // ueber "Zeit korrigieren", das nennt eine Zahl. Tabelle und Enums werden
+  // deshalb wieder entfernt; sie waren nur wenige Stunden in Betrieb.
+  `DROP TABLE IF EXISTS shift_correction_objections;`,
+  `DROP TYPE IF EXISTS shift_correction_objection_status;`,
+  `DROP TYPE IF EXISTS shift_correction_objection_resolution;`,
+
+  // ── Melde-Kanal oeffnet sich nach einer erneuten Planer-Korrektur ────────
+  // Vorher: GENAU EINE Meldung je Dienst, fuer immer (UNIQUE(shift_id)).
+  // Jetzt: nur EINE OFFENE. Korrigiert der Planer den Dienst spaeter erneut,
+  // ist das ein neuer Sachverhalt und die Assistenzkraft darf erneut melden —
+  // sonst haette sie seit dem Wegfall des Widerspruchs gar keine Stimme mehr.
+  `DROP INDEX IF EXISTS shift_deviation_reports_shift_id_unique;`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS shift_deviation_reports_open_unique
+     ON shift_deviation_reports (shift_id) WHERE status = 'PENDING';`,
 ];
 
 /** Alle Vorab-Schritte sequenziell gegen den übergebenen Client ausführen. */

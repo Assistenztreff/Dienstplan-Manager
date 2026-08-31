@@ -99,7 +99,12 @@ const PAID_ABSENCE_TYPES = new Set([
 ]);
 
 /** Unbezahlt bzw. reine Info-/Geldposition: verbrauchen KEINE Vertragszeit. */
-const UNPAID_SHIFT_TYPES = new Set(["kind_krank", "abgesagt_an", "urlaubsabgeltung"]);
+const UNPAID_SHIFT_TYPES = new Set([
+  "kind_krank",
+  "abgesagt_an",
+  "urlaubsabgeltung",
+  "wunschfrei",
+]);
 
 function shiftDurationHours(s: StundenkontoUserShift): number {
   if (!s.startTime || !s.endTime) return 0;
@@ -189,7 +194,7 @@ export function useStundenkontoSort(): {
  * Fuellen einer Luecke steht die passende Person damit vorn. Personen ohne
  * hinterlegte Vertragsstunden landen ans Ende (keine Kapazitaet berechenbar).
  */
-function useStundenkontoEintraege(
+export function useStundenkontoEintraege(
   assistants: { id: number; name: string }[],
   shifts: StundenkontoUserShift[],
   balances: HoursBalance[],

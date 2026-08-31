@@ -558,6 +558,62 @@ export function ZuschlaegeUndZeitregelnFelder() {
         </p>
       </div>
 
+      {/*
+        Vertretungsverguetung gilt auch im Team-Bereich (wie die Zuschlagssaetze
+        darueber) und steht deshalb vor dem konto-weiten Block.
+      */}
+      <Abschnitt>
+        <div className="space-y-1.5">
+          <FeldLabel
+            htmlFor="vertretungCompensationMode"
+            titel="Vertretungsvergütung"
+            anker="zuschlaege"
+            erklaerung={
+              <p>
+                Kommt zusätzlich zum normalen Lohn. Zuschlag rechnet einen Prozentsatz des
+                Dienst-Lohns obendrauf, Pauschale einen festen Betrag.
+              </p>
+            }
+          />
+          <Select
+            value={form.vertretungCompensationMode}
+            onValueChange={(v) => set("vertretungCompensationMode", v)}
+          >
+            <SelectTrigger
+              id="vertretungCompensationMode"
+              data-testid="allowance-vertretung-compensation-mode-select"
+              className={KURZFELD}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Keine Sonderregel</SelectItem>
+              <SelectItem value="percent">Zuschlag (% des Dienst-Lohns)</SelectItem>
+              <SelectItem value="flat">Pauschale (€ pro Dienst)</SelectItem>
+            </SelectContent>
+          </Select>
+          {form.vertretungCompensationMode !== "none" && (
+            <div className="relative max-w-[160px]">
+              <Input
+                id="vertretungCompensationValue"
+                type="number"
+                min="0"
+                step={form.vertretungCompensationMode === "percent" ? "1" : "0.01"}
+                value={form.vertretungCompensationValue}
+                onChange={(e) => set("vertretungCompensationValue", e.target.value)}
+                className={errors.vertretungCompensationValue ? "border-destructive pr-8" : "pr-8"}
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                {form.vertretungCompensationMode === "percent" ? "%" : "€"}
+              </span>
+            </div>
+          )}
+          {errors.vertretungCompensationValue && (
+            <p className="text-xs text-destructive">{errors.vertretungCompensationValue}</p>
+          )}
+        </div>
+      </Abschnitt>
+
       {!isTeamScope && (
         <>
           <Abschnitt>

@@ -19,6 +19,7 @@ import {
   WEEKDAY_LABELS,
   WEEKDAY_LABELS_FULL,
 } from "./dienstplan-helpers";
+import { useCorrectedShiftIds } from "./corrected-shifts";
 
 export function MonthGrid({
   days,
@@ -71,6 +72,9 @@ export function MonthGrid({
   onCollapsedDayActivate?: (day: Date) => void;
 }) {
   const personColors = usePersonColors();
+  // Dienste mit angenommener Abweichungsmeldung: bleiben FIX, bekommen aber
+  // zusaetzlich das Korrektur-Symbol (s. corrected-shifts.tsx).
+  const correctedShiftIds = useCorrectedShiftIds();
   const selectedDateSet = new Set(selectedDates ?? []);
   const offset = (getDay(monthStart) + 6) % 7;
   const blanks = Array.from({ length: offset });
@@ -249,8 +253,37 @@ export function MonthGrid({
           // FRÜHESTEN Dienste zeigen, unabhängig von der API-Reihenfolge.
           const nonAbsence = dayShifts
             .filter((s) => !isAbsenceShift(s))
-            .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-          const absences = dayShifts.filter((s) => isAbsenceShift(s));
+            .sort((a, b) => {
+              const byTime = new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
+              if (byTime !== 0) return byTime;
+              // Kay-Feedback 28.08.2026: eine aktivierte Vertretung (gleiche
+              // Zeit wie der ersetzte Dienst) soll immer UNTERHALB des
+              // vertretenen Dienstes stehen, nicht davor.
+              return (a.isVertretung ? 1 : 0) - (b.isVertretung ? 1 : 0);
+            });
+          // Abgedeckte Abwesenheit ausblenden (Kay 30.08.2026): Ist der
+          // Ausfall durch eine Vertretung ersetzt, zeigt die Zelle NUR die
+          // Vertretung — die Lücke ist ja geschlossen. Der Krank-Eintrag
+          // bleibt vollständig erhalten (Lohnfortzahlung, Abwesenheits-
+          // kalender, Tagesleiste), er verschwindet nur aus dem Monatsraster.
+          // Eine NICHT abgedeckte Abwesenheit bleibt sichtbar — dort klafft
+          // eine offene Lücke, die man sehen muss.
+          const vertretungStunden = new Set(
+            dayShifts
+              .filter((s) => s.isVertretung && !isAbsenceShift(s))
+              .map((s) => new Date(s.startTime).getTime()),
+          );
+          // alleAbwesenheiten = Grundlage der Warn-Logik weiter unten (die soll
+          // sich durch das Ausblenden NICHT ändern); absences = was die Zelle
+          // tatsächlich zeigt.
+          const alleAbwesenheiten = dayShifts.filter((s) => isAbsenceShift(s));
+          const absences = alleAbwesenheiten.filter(
+            (s) =>
+              !(
+                ABSENCE_CATEGORY[s.type] === "ausfall" &&
+                vertretungStunden.has(new Date(s.startTime).getTime())
+              ),
+          );
            // Desktop/Tablet zeigen bis zu vier Pillen; die Smartphone-Zelle
            // (Dauerzustand „collapsed") bleibt mit höchstens zwei einzeiligen
            // Initialen-Pillen gleich hoch.
@@ -260,7 +293,7 @@ export function MonthGrid({
           // Task #726: Personen mit einer Ausfall-Abwesenheit (Krank/Kind krank)
           // am selben Tag — deren Dienst-Pillen erhalten das rote Warn-Icon.
           const ausfallUserIds = new Set(
-            absences
+            alleAbwesenheiten
               .filter((s) => ABSENCE_CATEGORY[s.type] === "ausfall")
               .map((s) => s.userId),
           );
@@ -356,7 +389,10 @@ export function MonthGrid({
                   className={[
                     "leading-none font-semibold rounded-md",
                     // Punkt 2: Datum 1–2 px größer; Smartphone = Desktop-Größe.
-                    "text-[12px] px-1.5 py-0.5",
+                    // Touch-Geräte (Tablet, siehe Kay-Feedback 28.08.2026): Ziel
+                    // war auf dem Tablet kaum lesbar/treffbar — pointer-coarse
+                    // greift nur bei Touch, Desktop-Maus bleibt unverändert.
+                    "text-[12px] px-1.5 py-0.5 pointer-coarse:text-[15px] pointer-coarse:px-2 pointer-coarse:py-1",
                     today
                       ? "bg-[#092948] text-white"
                       : isWeekend
@@ -381,7 +417,10 @@ export function MonthGrid({
                       if (e.key === "Enter" || e.key === " ") e.stopPropagation();
                     }}
                     // Punkt 2: Plus 1–2 px größer; Smartphone = Desktop-Größe.
-                    className="flex h-3.5 w-3.5 shrink-0 cursor-pointer select-none items-center justify-center rounded-[3px] border border-[#d8d8d4] bg-white p-0 text-[10px] font-bold leading-none text-[#092948] hover:border-[#092948]"
+                    // Touch-Geräte (Tablet, siehe Kay-Feedback 28.08.2026): 14px
+                    // Kantenlänge war auf dem Tablet zu klein zum Treffen —
+                    // pointer-coarse verdoppelt die Fläche nur bei Touch.
+                    className="flex h-3.5 w-3.5 shrink-0 cursor-pointer select-none items-center justify-center rounded-[3px] border border-[#d8d8d4] bg-white p-0 text-[10px] font-bold leading-none text-[#092948] hover:border-[#092948] pointer-coarse:h-6 pointer-coarse:w-6 pointer-coarse:rounded-[5px] pointer-coarse:text-sm"
                   >
                     +
                   </button>
@@ -426,6 +465,7 @@ export function MonthGrid({
                         // Smartphone-Pille, die Avatar-Initialen sind hier die
                         // einzige Personen-Kennung (voller Name im title-Attribut).
                         const avatarLabel = isTeam ? "T" : s.user?.name ? lastNameInitial(s.user.name) : "?";
+                        const korrigiert = correctedShiftIds.has(s.id);
                         const statusColor = dienstStatusColor(status, hasAusfall, s.isVertretung);
                         return (
                           <span
@@ -433,7 +473,7 @@ export function MonthGrid({
                             data-testid={`day-chip-${s.id}`}
                             role={chipClickable ? "button" : undefined}
                             tabIndex={chipClickable ? -1 : undefined}
-                            title={`${s.user?.name ?? ""} · ${timeRange}${s.isVertretung ? " · Vertretung" : ""}`.trim()}
+                            title={`${s.user?.name ?? ""} · ${timeRange}${s.isVertretung ? " · Vertretung" : ""}${s.standbyUserId != null ? ` · Vertretung vorgemerkt: ${s.standbyUserName ?? ""}` : ""}`.trim()}
                             onClick={chipClickable ? (e) => { e.stopPropagation(); onShiftClick(s); } : undefined}
                             onKeyDown={chipClickable ? (e) => {
                               if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onShiftClick(s); }
@@ -472,6 +512,13 @@ export function MonthGrid({
                                   <StatusBadge
                                     kind={status === "ANGEBOTEN" ? "sent" : "draft"}
                                     label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
+                                    calendarCompact
+                                  />
+                                )}
+                                {korrigiert && (
+                                  <StatusBadge
+                                    kind="correction"
+                                    label="Nachträglich korrigiert"
                                     calendarCompact
                                   />
                                 )}
@@ -544,39 +591,53 @@ export function MonthGrid({
                     const fullName = isTeam ? "Team" : s.user?.name ?? "?";
                     const shortNameLabel = isTeam ? "Team" : s.user?.name ? lastName(s.user.name) : "?";
                     const avatarLabel = isTeam ? "T" : s.user?.name ? nameInitials(s.user.name) : "?";
+                    const korrigiert = correctedShiftIds.has(s.id);
                     const statusColor = dienstStatusColor(status, hasAusfall, s.isVertretung);
                     const statusLabel = dienstStatusLabel(status, hasAusfall, s.isVertretung);
                     const commonHandlers = {
                       role: chipClickable ? ("button" as const) : undefined,
                       tabIndex: chipClickable ? -1 : undefined,
-                      title: `${s.user?.name ?? ""} · ${timeRange}${s.isVertretung ? " · Vertretung" : ""}`.trim(),
+                      title: `${s.user?.name ?? ""} · ${timeRange}${s.isVertretung ? " · Vertretung" : ""}${s.standbyUserId != null ? ` · Vertretung vorgemerkt: ${s.standbyUserName ?? ""}` : ""}`.trim(),
                       onClick: chipClickable ? (e: React.MouseEvent) => { e.stopPropagation(); onShiftClick(s); } : undefined,
                       onKeyDown: chipClickable ? (e: React.KeyboardEvent) => {
                         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onShiftClick(s); }
                       } : undefined,
                     };
-                    const statusBadgeStack = (
-                      <>
-                        {status === "FIX" ? (
-                          <StatusBadge kind="confirmed" label="Bestätigt" calendarCompact={pillMinimiert} />
-                        ) : (
-                          <StatusBadge
-                            kind={status === "ANGEBOTEN" ? "sent" : "draft"}
-                            label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
-                            calendarCompact={pillMinimiert}
-                          />
-                        )}
-                        {pillMinimiert && s.isVertretung && (
-                          <StatusBadge kind="vertretung" label="Vertretung" calendarCompact />
-                        )}
-                        {hasAusfall && (
-                          <StatusBadge
-                            kind="krank"
-                            label="Ausfall: Assistenzkraft abwesend"
-                            calendarCompact={pillMinimiert}
-                          />
-                        )}
-                      </>
+                    // Kay-Entscheidung 30.08.2026: GENAU EIN Icon je Pille.
+                    // Vorher konnten sich vier Zeichen stapeln (zwei Avatare,
+                    // Haken, Korrektur-Kreis) — auf dem Smartphone wurde die
+                    // Zelle damit unlesbar. Gezeigt wird nur das Wichtigste,
+                    // in dieser Rangfolge; der Rest steht im Dienst-Dialog:
+                    //   1. Ausfall  — die Person ist heute abwesend
+                    //   2. Korrektur — nachtraeglich geaenderte Arbeitszeit
+                    //   3. Vertretung — dieser Dienst ist ein Einspringen
+                    //   4. Planungsstatus (Entwurf/Vorschlag/Bestaetigt)
+                    const statusBadgeStack = hasAusfall ? (
+                      <StatusBadge
+                        kind="krank"
+                        label="Ausfall: Assistenzkraft abwesend"
+                        calendarCompact={pillMinimiert}
+                      />
+                    ) : korrigiert ? (
+                      <StatusBadge
+                        kind="correction"
+                        label="Nachträglich korrigiert"
+                        calendarCompact={pillMinimiert}
+                      />
+                    ) : s.isVertretung ? (
+                      <StatusBadge
+                        kind="vertretung"
+                        label={status === "FIX" ? "Vertretung, bestätigt" : "Vertretung"}
+                        calendarCompact={pillMinimiert}
+                      />
+                    ) : status === "FIX" ? (
+                      <StatusBadge kind="confirmed" label="Bestätigt" calendarCompact={pillMinimiert} />
+                    ) : (
+                      <StatusBadge
+                        kind={status === "ANGEBOTEN" ? "sent" : "draft"}
+                        label={status === "ANGEBOTEN" ? "Vorschlag" : "Entwurf"}
+                        calendarCompact={pillMinimiert}
+                      />
                     );
                     // Punkt 1 (17.08.2026): globaler Minimiert-Umschalter —
                     // kollabiert die zweizeilige Pille auf eine Zeile (Avatar/
@@ -614,6 +675,10 @@ export function MonthGrid({
                           />
                           <span className="flex min-h-[23px] w-full items-center gap-[4px] bg-white py-[2px] pl-[6px] pr-[6px] leading-none">
                             <PillAvatar color={barColor} label={avatarLabel} />
+                            {/* Kein zweiter Avatar mehr (Kay 30.08.2026): Die
+                                Vormerkung stand hier als lila Initialen — auf
+                                dem Smartphone wurde die Pille damit zu voll.
+                                Sie steht weiter im Tooltip und im Dialog. */}
                             {/* Arbeitsanweisung 17.08.2026, Folgeauftrag: kein
                                 shrink-0 mehr — der Name soll bei wenig Platz
                                 wie im ausgeklappten Modus per truncate mit „…"

@@ -34,8 +34,27 @@ export type Shift = {
   einsatzTeamName?: string | null;
   homeTeamName?: string | null;
   isVertretung?: boolean | null;
+  /** Vertretung vormerken: Person, die bei Ausfall dieses Dienstes einspringen könnte (reine Planungshilfe). */
+  standbyUserId?: number | null;
+  standbyUserName?: string | null;
+  /**
+   * Nur in der Antwort von Erstellen/Bearbeiten gesetzt, wenn dieser Aufruf
+   * den Dienst zu einer Abwesenheit gemacht hat UND eine Vertretung
+   * vorgemerkt war — Grundlage für den Aktivierungs-Vorschlag (Toast mit
+   * einem Klick, s. useVertretungsVorschlag).
+   */
+  vertretungsVorschlag?: {
+    userId: number;
+    userName: string;
+    teamId: number;
+    startTime: string;
+    endTime: string;
+    type: string;
+    shiftModelId?: number | null;
+  } | null;
   /** Halbtägiger Urlaub (#862): true = bewusst gewählter Teil-Tag, false/undefined = ganztägig. */
   isPartialAbsence?: boolean | null;
+  pauseMinutes?: number | null;
   /**
    * Serverseitig gewertete Stunden des Eintrags. Bei Abwesenheiten steckt hier
    * das vertragliche Tages-Soll (bzw. die geerbten Zeiten eines ersetzten
@@ -54,6 +73,8 @@ const PLANNING_STATUS_BADGE_CLASSES: Record<string, string> = {
   VORLAEUFIG: "bg-foreground/10 text-foreground/70",
   ANGEBOTEN: "bg-sky-200 text-sky-900",
 };
+// Korrektur (vergangener, zurückgefallener Dienst) statt Vorschlag-Blau —
+// dieselbe Amber-/Orange-Farbfamilie wie das Abweichungsmodell.
 
 export function isConfirmableShift(shift: Shift): boolean {
   if (shift.type === "vacation" || shift.type === "sick") return false;
@@ -82,6 +103,7 @@ const SHIFT_TYPE_LABELS: Record<string, string> = {
   abgesagt_ag: "Abgesagt (Arbeitgeber)",
   abgesagt_an: "Abgesagt (Assistenz)",
   urlaubsabgeltung: "Urlaubsabgeltung",
+  wunschfrei: "Wunschfrei",
 };
 
 const SHIFT_TYPE_CLASSES: Record<string, string> = {
@@ -103,6 +125,7 @@ const SHIFT_TYPE_CLASSES: Record<string, string> = {
   abgesagt_ag: "bg-orange-200 text-orange-950 border-orange-600 hover:bg-orange-300",
   abgesagt_an: "bg-stone-200 text-stone-800 border-stone-500 hover:bg-stone-300",
   urlaubsabgeltung: "bg-lime-200 text-lime-950 border-lime-600 hover:bg-lime-300",
+  wunschfrei: "bg-rose-200 text-rose-950 border-rose-600 hover:bg-rose-300",
 };
 
 export function shiftLabel(shift: Shift, modelMap: Map<number, ShiftModelInfo>): string {
@@ -155,7 +178,11 @@ export function usePersonSlotLookup(): (userId: number) => PersonSlot {
  *  ANGEBOTEN ("Vorschlag versendet, wartet auf Bestätigung") bekommt seit
  *  18.08.2026 eine eigene Farbe (Himmelblau), statt wie zuvor dieselbe wie
  *  der noch unversendete Entwurf (VORLAEUFIG). */
-export function dienstStatusColor(status: string, hasAusfall: boolean, isVertretung: boolean | null | undefined): string {
+export function dienstStatusColor(
+  status: string,
+  hasAusfall: boolean,
+  isVertretung: boolean | null | undefined,
+): string {
   if (hasAusfall) return "#b23b3b";
   if (isVertretung) return "#0f6e8c";
   if (status === "FIX") return "#1e8f4e";
@@ -165,7 +192,11 @@ export function dienstStatusColor(status: string, hasAusfall: boolean, isVertret
 
 /** Kontraststarke Textfarbe für die Statusbeschriftung auf dem hellgrauen
  *  Hintergrund der zweiten Desktop-Pillenzeile (mindestens WCAG AA). */
-export function dienstStatusTextColor(status: string, hasAusfall: boolean, isVertretung: boolean | null | undefined): string {
+export function dienstStatusTextColor(
+  status: string,
+  hasAusfall: boolean,
+  isVertretung: boolean | null | undefined,
+): string {
   if (hasAusfall) return "#b23b3b";
   if (isVertretung) return "#0f6e8c";
   if (status === "FIX") return "#1a7e45";
@@ -177,8 +208,13 @@ export function dienstStatusTextColor(status: string, hasAusfall: boolean, isVer
  *  auf Nutzerwunsch, s. Bildvergleich Monatsraster vs. Referenz-Mockup):
  *  dieselbe Prioritätsreihenfolge wie dienstStatusColor(), damit Farbe und
  *  Text immer zusammenpassen. Nur in der zweizeiligen Desktop-Pille genutzt
- *  (@[215px]-Schwelle in Zeile 2) — die Smartphone-Pille hat keine Zeile 2. */
-export function dienstStatusLabel(status: string, hasAusfall: boolean, isVertretung: boolean | null | undefined): string {
+ *  (@[215px]-Schwelle in Zeile 2) — die Smartphone-Pille hat keine Zeile 2.
+ */
+export function dienstStatusLabel(
+  status: string,
+  hasAusfall: boolean,
+  isVertretung: boolean | null | undefined,
+): string {
   if (hasAusfall) return "Krank";
   if (isVertretung) return "Vertretung";
   if (status === "FIX") return "Bestätigt";
@@ -251,6 +287,7 @@ const SHIFT_TYPE_DOTS: Record<string, string> = {
   abgesagt_ag: "bg-orange-600",
   abgesagt_an: "bg-stone-500",
   urlaubsabgeltung: "bg-lime-600",
+  wunschfrei: "bg-rose-600",
 };
 
 // Planungsstatus in den Tageszellen: VORLAEUFIG = gestrichelter Rand + reduzierte
@@ -273,6 +310,7 @@ const ABSENCE_TYPES = new Set([
   "abgesagt_ag",
   "abgesagt_an",
   "urlaubsabgeltung",
+  "wunschfrei",
 ]);
 export function isAbsenceShift(shift: Shift): boolean {
   return ABSENCE_TYPES.has(shift.type);
@@ -581,7 +619,9 @@ function ShiftBadge({
   const startLabel = format(start, "HH:mm");
   const endLabel = format(end, "HH:mm");
   const label = shiftLabel(shift, modelMap);
-  const statusLabel = !isAbsence ? PLANNING_STATUS_LABELS[shift.planningStatus ?? ""] : undefined;
+  const statusLabel = !isAbsence
+    ? PLANNING_STATUS_LABELS[shift.planningStatus ?? ""]
+    : undefined;
   return (
     <div
       data-testid={`shift-badge-${shift.id}`}
@@ -609,7 +649,9 @@ function ShiftBadge({
       )}
       {statusLabel && (
         <div
-          className={`mb-0.5 inline-flex items-center gap-1 rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide ${PLANNING_STATUS_BADGE_CLASSES[shift.planningStatus ?? ""] ?? ""}`}
+          className={`mb-0.5 inline-flex items-center gap-1 rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide ${
+            PLANNING_STATUS_BADGE_CLASSES[shift.planningStatus ?? ""] ?? ""
+          }`}
         >
           <StatusBadge
             kind={

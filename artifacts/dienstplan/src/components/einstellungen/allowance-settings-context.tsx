@@ -27,6 +27,7 @@ import {
   type AllowanceSettingsInputState,
   type AllowanceSettingsInputBillingMethod,
   type AllowanceSettingsInputVacationMethod,
+  type AllowanceSettingsInputVertretungCompensationMode,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { readableApiError } from "@/lib/api-error";
@@ -59,6 +60,8 @@ export type FormState = {
   pauseThreshold2Hours: string;
   pauseMinutes2: string;
   deductPausesEnabled: boolean;
+  vertretungCompensationMode: string;
+  vertretungCompensationValue: string;
 };
 
 /** Sonderwert fuer "erbt" (Abrechnungsart nicht auf dieser Ebene gesetzt). */
@@ -97,6 +100,8 @@ const LEERES_FORMULAR: FormState = {
   pauseThreshold2Hours: "9",
   pauseMinutes2: "45",
   deductPausesEnabled: false,
+  vertretungCompensationMode: "none",
+  vertretungCompensationValue: "0",
 };
 
 function ausSettings(settings: AllowanceSettings): FormState {
@@ -125,6 +130,8 @@ function ausSettings(settings: AllowanceSettings): FormState {
     pauseThreshold2Hours: String(settings.pauseThreshold2Hours ?? 9),
     pauseMinutes2: String(settings.pauseMinutes2 ?? 45),
     deductPausesEnabled: settings.deductPausesEnabled ?? false,
+    vertretungCompensationMode: settings.vertretungCompensationMode ?? "none",
+    vertretungCompensationValue: String(settings.vertretungCompensationValue ?? 0),
   };
 }
 
@@ -284,6 +291,12 @@ export function AllowanceSettingsProvider({ children }: { children: ReactNode })
     errs.holidayPercent = validatePercent(f.holidayPercent);
     if (!TIME_PATTERN.test(f.nightStart)) errs.nightStart = "Ungültige Uhrzeit";
     if (!TIME_PATTERN.test(f.nightEnd)) errs.nightEnd = "Ungültige Uhrzeit";
+    if (f.vertretungCompensationMode !== "none") {
+      const vcv = Number(f.vertretungCompensationValue);
+      if (f.vertretungCompensationValue === "" || Number.isNaN(vcv) || vcv < 0) {
+        errs.vertretungCompensationValue = "Mindestens 0";
+      }
+    }
     if (scopeTeamId === undefined) {
       if (f.vacationMethod === "factor") {
         const vf = Number(f.vacationFactor);
@@ -355,6 +368,9 @@ export function AllowanceSettingsProvider({ children }: { children: ReactNode })
           billingMethod: (f.billingMethod === INHERIT_BILLING
             ? null
             : f.billingMethod) as AllowanceSettingsInputBillingMethod,
+          vertretungCompensationMode:
+            f.vertretungCompensationMode as AllowanceSettingsInputVertretungCompensationMode,
+          vertretungCompensationValue: Number(f.vertretungCompensationValue),
           // Konto-weite Regeln (Auto-Genehmigung, Zeiterfassung, Urlaubsberechnung)
           // gelten global und werden nur im Konto-Bereich mitgesendet, nicht bei
           // Team-Overrides.

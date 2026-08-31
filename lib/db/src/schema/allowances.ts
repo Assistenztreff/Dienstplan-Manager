@@ -13,6 +13,18 @@ import { billingMethodEnum } from "./contracts";
 //            vacationFactor Urlaubsstunden aufgebaut.
 export const vacationMethodEnum = pgEnum("vacation_method", ["bwavg", "factor"]);
 
+// Vertretungsvergütung (Kay-Feedback 28.08.2026): wird eine vorgemerkte
+// Vertretung aktiv (isVertretung=true), kann sie statt des regulären
+// Stundenlohns eine eigene Vergütung erhalten. none = kein Sonderfall,
+// regulärer Lohn wie jeder andere Arbeitsdienst; percent = Prozentsatz des
+// EIGENEN sonst üblichen Stundenlohns der Vertretung für diesen Tag; flat =
+// fester Pauschalbetrag (€) für den Tag, unabhängig von der Dienstlänge.
+export const vertretungCompensationModeEnum = pgEnum("vertretung_compensation_mode", [
+  "none",
+  "percent",
+  "flat",
+]);
+
 // Zuschlags-Einstellungen sind PRO KONTO (Team-Eigentümer) gespeichert — früher
 // eine globale Singleton-Zeile (id=1), was in einem Multi-Tenant-SaaS ein
 // Daten-Leck war: ein Konto konnte die Prozente aller anderen mitändern.
@@ -111,6 +123,15 @@ export const allowanceSettingsTable = pgTable(
     // Neuberechnung). Zuschlagsstunden bleiben unberührt (Pausenlage unbekannt).
     // Default AUS = Bestandsschutz (Pausen bleiben reine Info-Kennzahl).
     deductPausesEnabled: boolean("deduct_pauses_enabled").notNull().default(false),
+    // Vertretungsvergütung: Team-Override-fähig (wie night-/sunday-/
+    // holidayPercent oben) — Fallback-Kette Team-Override → Konto-Zeile des
+    // Team-Eigentümers → "none". value ist bei "percent" ein Prozentsatz
+    // (0–100+) des eigenen Stundenlohns der Vertretung, bei "flat" ein
+    // Euro-Betrag für den ganzen Tag; bei "none" unbenutzt.
+    vertretungCompensationMode: vertretungCompensationModeEnum("vertretung_compensation_mode")
+      .notNull()
+      .default("none"),
+    vertretungCompensationValue: real("vertretung_compensation_value").notNull().default(0),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [

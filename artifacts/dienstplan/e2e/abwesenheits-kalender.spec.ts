@@ -80,18 +80,25 @@ test("Abwesenheitskalender: Zwei-Stufen-Klick, Mehrfachauswahl und Löschen im D
   page,
 }) => {
   test.setTimeout(120_000); // Urlaubs-POSTs brauchen im Test-Stack ~5 s pro Tag.
+  // Alle Tage dieses Tests liegen im FOLGEMONAT und damit garantiert in der
+  // Zukunft. Grund: der Loeschschritt am Ende. Vergangene Abwesenheiten sind
+  // seit #887 serverseitig unloeschbar (Urlaubskonto/Zeiterfassung sind dann
+  // bereits abgerechnet). Mit Tagen des laufenden Monats bestand der Test
+  // deshalb nur in den ersten Tagen eines Monats und schlug ab dem 10. eines
+  // Monats fehl — ein reiner Datums-Fehler des Tests, kein Produktfehler.
+  const tag = (dayOfMonth: number) => dateKey(dayOfMonth, 1);
   await loginAsAdmin(page);
   const assistant = await createAssistant(page);
 
   try {
-    // Zwei Urlaubstage im laufenden Monat vorbelegen (vor dem Seitenaufruf,
+    // Zwei Urlaubstage im Folgemonat vorbelegen (vor dem Seitenaufruf,
     // damit sie im ersten Render sichtbar sind).
     for (const d of [5, 6]) {
       const res = await page.request.post("/api/shifts", {
         data: {
           userId: assistant.id,
-          startTime: localIso(dateKey(d), "00:00:00"),
-          endTime: localIso(dateKey(d), "23:59:59"),
+          startTime: localIso(tag(d), "00:00:00"),
+          endTime: localIso(tag(d), "23:59:59"),
           type: "vacation",
           shiftModelId: null,
         },
@@ -114,8 +121,8 @@ test("Abwesenheitskalender: Zwei-Stufen-Klick, Mehrfachauswahl und Löschen im D
     await expect(kalender.getByTestId("abwkal-grid").locator('[data-testid^="abwkal-month-"]')).toHaveCount(12);
 
     // Vorbelegte Urlaubstage sind als „geplant" gefärbt.
-    await expect(grid.getByTestId(`abwkal-day-${dateKey(5)}`)).toHaveAttribute("data-category", "geplant");
-    await expect(grid.getByTestId(`abwkal-day-${dateKey(6)}`)).toHaveAttribute("data-category", "geplant");
+    await expect(grid.getByTestId(`abwkal-day-${tag(5)}`)).toHaveAttribute("data-category", "geplant");
+    await expect(grid.getByTestId(`abwkal-day-${tag(6)}`)).toHaveAttribute("data-category", "geplant");
 
     // Personenfilter auf den Test-Assistenten setzen (Klick-Auswahl betrachtet
     // danach nur noch dessen Abwesenheiten).
@@ -126,27 +133,27 @@ test("Abwesenheitskalender: Zwei-Stufen-Klick, Mehrfachauswahl und Löschen im D
     const createDialog = page.getByTestId("abwkal-create-dialog");
 
     // 1. Klick wählt den Tag nur aus — kein Dialog.
-    await grid.getByTestId(`abwkal-day-${dateKey(25)}`).click();
+    await grid.getByTestId(`abwkal-day-${tag(25)}`).click();
     await expect(kalender.getByTestId("abwkal-selected-hint")).toBeVisible();
-    await expect(grid.getByTestId(`abwkal-day-${dateKey(25)}`)).toHaveAttribute("data-selected", "true");
+    await expect(grid.getByTestId(`abwkal-day-${tag(25)}`)).toHaveAttribute("data-selected", "true");
     await expect(createDialog).toHaveCount(0);
 
     // Klick auf einen anderen Tag verschiebt nur die Auswahl — kein Dialog.
-    await grid.getByTestId(`abwkal-day-${dateKey(27)}`).click();
-    await expect(grid.getByTestId(`abwkal-day-${dateKey(27)}`)).toHaveAttribute("data-selected", "true");
-    await expect(grid.getByTestId(`abwkal-day-${dateKey(25)}`)).not.toHaveAttribute("data-selected", "true");
+    await grid.getByTestId(`abwkal-day-${tag(27)}`).click();
+    await expect(grid.getByTestId(`abwkal-day-${tag(27)}`)).toHaveAttribute("data-selected", "true");
+    await expect(grid.getByTestId(`abwkal-day-${tag(25)}`)).not.toHaveAttribute("data-selected", "true");
     await expect(createDialog).toHaveCount(0);
 
     // 2. Klick auf denselben Tag öffnet den Eintrags-Dialog (einzelner Tag).
-    await grid.getByTestId(`abwkal-day-${dateKey(27)}`).click();
+    await grid.getByTestId(`abwkal-day-${tag(27)}`).click();
     await expect(createDialog).toBeVisible();
     await createDialog.getByTestId("abwkal-create-save").click();
     // Jeder Urlaubs-POST braucht im Test-Stack ~5 s (serverseitige
     // Urlaubskonto-Neuberechnung, sequentiell pro Tag) — großzügiges Timeout.
     await expect(createDialog).toHaveCount(0, { timeout: 30_000 });
-    await expect(grid.getByTestId(`abwkal-day-${dateKey(27)}`)).toHaveAttribute("data-category", "geplant");
+    await expect(grid.getByTestId(`abwkal-day-${tag(27)}`)).toHaveAttribute("data-category", "geplant");
     // Der zuerst gewählte Tag 25 bleibt leer (Auswahl wurde verschoben).
-    await expect(grid.getByTestId(`abwkal-day-${dateKey(25)}`)).not.toHaveAttribute("data-category", "geplant");
+    await expect(grid.getByTestId(`abwkal-day-${tag(25)}`)).not.toHaveAttribute("data-category", "geplant");
 
     // --- Mehrfachauswahl: togglen, Zeitraum über Auswahl anlegen -----------
     await kalender.getByTestId("abwkal-toggle-selection").click();
@@ -156,20 +163,20 @@ test("Abwesenheitskalender: Zwei-Stufen-Klick, Mehrfachauswahl und Löschen im D
 
     // Tage 10, 12, 14 anwählen — Klicks öffnen keinen Dialog.
     for (const d of [10, 12, 14]) {
-      await grid.getByTestId(`abwkal-day-${dateKey(d)}`).click();
+      await grid.getByTestId(`abwkal-day-${tag(d)}`).click();
     }
     await expect(selectionBar).toContainText("3 Tage ausgewählt");
     await expect(createDialog).toHaveCount(0);
 
     // Tag 12 erneut antippen wählt ihn wieder ab.
-    await grid.getByTestId(`abwkal-day-${dateKey(12)}`).click();
+    await grid.getByTestId(`abwkal-day-${tag(12)}`).click();
     await expect(selectionBar).toContainText("2 Tage ausgewählt");
 
     // Belegter Tag toggelt im Mehrfachmodus statt den Detail-Dialog zu öffnen.
-    await grid.getByTestId(`abwkal-day-${dateKey(5)}`).click();
+    await grid.getByTestId(`abwkal-day-${tag(5)}`).click();
     await expect(page.getByTestId("abwkal-day-dialog")).toHaveCount(0);
-    await expect(grid.getByTestId(`abwkal-day-${dateKey(5)}`)).toHaveAttribute("data-selected", "true");
-    await grid.getByTestId(`abwkal-day-${dateKey(5)}`).click(); // wieder abwählen
+    await expect(grid.getByTestId(`abwkal-day-${tag(5)}`)).toHaveAttribute("data-selected", "true");
+    await grid.getByTestId(`abwkal-day-${tag(5)}`).click(); // wieder abwählen
 
     // Aktion öffnet den Dialog für den Zeitraum frühester → spätester Tag
     // (inklusive Zwischentage, wie die frühere Range-Anlage).
@@ -180,7 +187,7 @@ test("Abwesenheitskalender: Zwei-Stufen-Klick, Mehrfachauswahl und Löschen im D
 
     // Alle Tage des Zeitraums 10–14 sind gefärbt, Auswahlmodus ist beendet.
     for (const d of [10, 11, 12, 13, 14]) {
-      await expect(grid.getByTestId(`abwkal-day-${dateKey(d)}`)).toHaveAttribute(
+      await expect(grid.getByTestId(`abwkal-day-${tag(d)}`)).toHaveAttribute(
         "data-category",
         "geplant",
       );
@@ -191,12 +198,12 @@ test("Abwesenheitskalender: Zwei-Stufen-Klick, Mehrfachauswahl und Löschen im D
     await kalender.screenshot({ path: path.join(SHOT_DIR, "nachher-kalender.png") });
 
     // --- Löschen über den Detail-Dialog eines belegten Tages ----------------
-    await grid.getByTestId(`abwkal-day-${dateKey(10)}`).click();
+    await grid.getByTestId(`abwkal-day-${tag(10)}`).click();
     const dayDialog = page.getByTestId("abwkal-day-dialog");
     await expect(dayDialog).toBeVisible();
     await expect(dayDialog.getByText(assistant.name)).toBeVisible();
     await dayDialog.locator('[data-testid^="abwkal-delete-"]').first().click();
-    await expect(grid.getByTestId(`abwkal-day-${dateKey(10)}`)).not.toHaveAttribute(
+    await expect(grid.getByTestId(`abwkal-day-${tag(10)}`)).not.toHaveAttribute(
       "data-category",
       "geplant",
     );

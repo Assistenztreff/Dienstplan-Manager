@@ -87,30 +87,53 @@ test.afterAll(async () => {
   await deleteFreeAccount(premiumAcc);
 });
 
-test("Free-Plan: ZIP-Export-Button ist deaktiviert (#677)", async ({ page }) => {
+// HINWEIS ZUR OBERFLAECHE (nachgezogen 30.08.2026): Der Export ist kein
+// einzelner ZIP-Knopf mehr, sondern ein Popover mit Auswahl-Checkboxen
+// (export-auswahl-card.tsx). Diese Spec suchte weiterhin `export-zip-button` —
+// ein Testid, das es in der Oberflaeche nie gab. Sie war damit dauerhaft rot,
+// was niemandem auffiel, weil im Container ohnehin schon der Seitenaufruf am
+// blockierten Google-Fonts-Stylesheet haengenblieb. Jetzt prueft sie das
+// Free-Gate dort, wo es tatsaechlich sitzt: an der ZIP-Checkbox im Popover.
+
+async function exportPopoverOeffnen(page: import("@playwright/test").Page) {
+  await expect(page.getByTestId("month-label")).toBeVisible({ timeout: 20_000 });
+  const trigger = page.getByTestId("export-popover-button");
+  await expect(trigger, "Der Export-Knopf gehoert in den Kopfbereich").toBeVisible({
+    timeout: 10_000,
+  });
+  await trigger.click();
+  await expect(page.getByTestId("export-auswahl-content")).toBeVisible({ timeout: 10_000 });
+}
+
+test("Free-Plan: ZIP-Export ist gesperrt (#677)", async ({ page }) => {
   test.setTimeout(45_000);
 
   await loginViaUi(page, freeAcc.email, FREE_ACCOUNT_PASSWORD);
   await page.goto("/auswertungen");
+  await exportPopoverOeffnen(page);
 
-  // Seite vollständig geladen
-  await expect(page.getByTestId("month-label")).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByTestId("export-check-zip"),
+    "Die ZIP-Auswahl muss im Free-Plan gesperrt sein",
+  ).toBeDisabled();
+  await expect(
+    page.getByTestId("export-lock-zip"),
+    "Und als Premium-Funktion erkennbar sein",
+  ).toBeVisible();
+  await expect(
+    page.getByTestId("export-premium-hint"),
+    "Mit einem Hinweis, wie man sie freischaltet",
+  ).toBeVisible();
 
-  const zipBtn = page.getByTestId("export-zip-button");
-  await expect(zipBtn, "ZIP-Button muss im Free-Plan sichtbar sein").toBeVisible({
-    timeout: 10_000,
-  });
-
-  // Disabled-Attribut oder aria-disabled gesetzt
-  const isDisabled =
-    (await zipBtn.getAttribute("disabled")) !== null ||
-    (await zipBtn.getAttribute("aria-disabled")) === "true";
-  expect(isDisabled, "ZIP-Button muss im Free-Plan deaktiviert sein").toBe(true);
+  // Gegenprobe im selben Zug: die Stundenliste bleibt im Free-Tarif offen —
+  // sonst waere das Gate zu breit und Free-Konten kaemen an gar nichts mehr.
+  await expect(
+    page.getByTestId("export-check-stundenliste"),
+    "Die Stundenliste ist auch im Free-Tarif frei",
+  ).toBeEnabled();
 });
 
-test("Premium-Plan: ZIP-Export-Button ist aktiv wenn Auswertungsdaten vorhanden (#677)", async ({
-  page,
-}) => {
+test("Premium-Plan: ZIP-Export ist waehlbar (#677)", async ({ page }) => {
   test.setTimeout(45_000);
 
   await loginViaUi(page, premiumAcc.email, FREE_ACCOUNT_PASSWORD);
@@ -119,20 +142,18 @@ test("Premium-Plan: ZIP-Export-Button ist aktiv wenn Auswertungsdaten vorhanden 
   // Zum Vormonat navigieren (dort liegen die Daten)
   await expect(page.getByTestId("month-label")).toBeVisible({ timeout: 20_000 });
   await page.getByTestId("month-prev").click();
+  await exportPopoverOeffnen(page);
 
-  // Auswertungsdaten laden abwarten (Balances sollen vorhanden sein)
-  await page.waitForTimeout(2_000);
-
-  const zipBtn = page.getByTestId("export-zip-button");
-  await expect(zipBtn, "ZIP-Button muss im Premium-Plan sichtbar sein").toBeVisible({
-    timeout: 10_000,
-  });
-
-  // Nicht deaktiviert
-  const isDisabled =
-    (await zipBtn.getAttribute("disabled")) !== null ||
-    (await zipBtn.getAttribute("aria-disabled")) === "true";
-  expect(isDisabled, "ZIP-Button darf im Premium-Plan mit Daten NICHT deaktiviert sein").toBe(
-    false,
-  );
+  await expect(
+    page.getByTestId("export-check-zip"),
+    "Im Premium-Plan muss die ZIP-Auswahl waehlbar sein",
+  ).toBeEnabled();
+  await expect(
+    page.getByTestId("export-lock-zip"),
+    "Und ohne Schloss-Symbol erscheinen",
+  ).toHaveCount(0);
+  await expect(
+    page.getByTestId("export-premium-hint"),
+    "Der Upgrade-Hinweis gehoert hier nicht hin",
+  ).toHaveCount(0);
 });

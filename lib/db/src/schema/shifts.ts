@@ -22,11 +22,14 @@ export const shiftTypeEnum = pgEnum("shift_type", [
   // abgesagt_ag     = vom Arbeitgeber abgesagte Stunden (bezahlt, Lohnausfallprinzip)
   // abgesagt_an     = vom Arbeitnehmer abgesagte Stunden (unbezahlt, nur Info)
   // urlaubsabgeltung = ausgezahlter, nicht genommener Urlaub (nur Geldwert)
+  // wunschfrei      = genehmigter Wunschfrei-Tag (unbezahlt, verbraucht KEINE
+  //                   Vertragszeit; sperrt den Tag nur fuer die Planung)
   "kind_krank",
   "freistellung",
   "abgesagt_ag",
   "abgesagt_an",
   "urlaubsabgeltung",
+  "wunschfrei",
 ]);
 
 // Planungsstatus einer Schicht im Lebenszyklus: VORLAEUFIG = Entwurf (interne
@@ -38,7 +41,12 @@ export const shiftPlanningStatusEnum = pgEnum("shift_planning_status", ["VORLAEU
 export const shiftsTable = pgTable("shifts", {
   id: serial("id").primaryKey(),
   teamId: integer("team_id").notNull().references(() => teamsTable.id),
-  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  // Löschschutz: KEIN CASCADE. Dienste sind aufzeichnungspflichtige
+  // Zeitnachweise (§ 3 Abs. 2 Nr. 1 ArbSchG) mit gesetzlicher Aufbewahrung
+  // (§ 16 ArbZG, § 17 MiLoG, 2 Jahre) — ein Löschen der Assistenzkraft darf
+  // sie nicht automatisch mit wegreißen. DELETE /users/:id faengt die
+  // resultierende FK-Verletzung (Postgres-Code 23503) bereits als 409 ab.
+  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
   startTime: timestamp("start_time").notNull(),
   endTime: timestamp("end_time").notNull(),
   type: shiftTypeEnum("type").notNull().default("active"),
@@ -54,6 +62,14 @@ export const shiftsTable = pgTable("shifts", {
   // eine ausgefallene Kollegin/einen Kollegen (Info-Kennzahl der Auswertung;
   // Stunden zaehlen normal).
   isVertretung: boolean("is_vertretung").notNull().default(false),
+  // Vertretung vormerken (Planungshilfe): optionale Person, die bei Ausfall
+  // dieses Arbeitsdienstes kurzfristig einspringen könnte. Nur auf
+  // Arbeitsdiensten setzbar (Server-Validierung); bleibt beim Übergang
+  // ZU einer Abwesenheit (z.B. Typwechsel auf "sick") bewusst UNVERÄNDERT
+  // stehen — sie ist die Grundlage für den Aktivierungs-Vorschlag
+  // (vertretungsVorschlag in der POST/PATCH-Antwort), der die Original-
+  // Zeiten/den Dienst-Typ noch kennt, bevor der Server sie überschreibt.
+  standbyUserId: integer("standby_user_id").references(() => usersTable.id, { onDelete: "set null" }),
   // Unbezahlte Pausenminuten (reine Info-Kennzahl; reduziert NICHT die
   // gewerteten Stunden — Produktentscheidung v1).
   pauseMinutes: integer("pause_minutes").notNull().default(0),

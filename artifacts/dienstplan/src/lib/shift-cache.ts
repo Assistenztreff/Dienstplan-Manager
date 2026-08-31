@@ -181,8 +181,17 @@ const SHIFT_DERIVED_KEY_PREFIXES = [
  * Invalidierung ALLER abgeleiteten Daten an (Stunden-Salden, Urlaubszähler,
  * Zeiterfassung, Dashboard-Karten). Aktive Ansichten laden neu, alles andere
  * wird als veraltet markiert und beim nächsten Öffnen frisch geholt.
+ *
+ * refetchType (Default "active", wie bisher): "all" erzwingt den Refetch
+ * auch für Queries, die react-query gerade nicht als "aktiv beobachtet"
+ * einstuft — sinnvoll direkt nach einer Aktion, deren Ergebnis der Nutzer
+ * sofort sehen soll (z. B. Abweichungsmodell: Status muss unmittelbar nach
+ * dem Melden/Annehmen/Widersprechen wechseln, nicht erst nach Reload).
  */
-export function invalidateShiftDerivedQueries(queryClient: QueryClient): Promise<void> {
+export function invalidateShiftDerivedQueries(
+  queryClient: QueryClient,
+  options?: { refetchType?: "active" | "all" },
+): Promise<void> {
   return queryClient.invalidateQueries({
     predicate: (q) => {
       const key = q.queryKey[0];
@@ -191,5 +200,6 @@ export function invalidateShiftDerivedQueries(queryClient: QueryClient): Promise
         SHIFT_DERIVED_KEY_PREFIXES.some((p) => key === p || key.startsWith(`${p}/`))
       );
     },
+    refetchType: options?.refetchType ?? "active",
   });
 }

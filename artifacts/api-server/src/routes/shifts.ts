@@ -29,6 +29,11 @@ import { resolveAllowanceOps } from "../lib/allowance-resolve";
 // LEFT JOINs, die der Planer einmal ausführt und über alle Zeilen wiederverwendet.
 export const einsatzTeamsTable = alias(teamsTable, "einsatz_teams");
 export const homeTeamsTable = alias(teamsTable, "home_teams");
+// Vertretung vormerken: Name der Standby-Person per eigenem JOIN auf
+// usersTable (die "echte" usersTable ist bereits für den zugewiesenen
+// Nutzer belegt). Alle Query-Sites müssen leftJoin(standbyUsersTable)
+// ergänzen — genau wie bei einsatzTeamsTable/homeTeamsTable oben.
+export const standbyUsersTable = alias(usersTable, "standby_users");
 
 // Transaktions-Executor: Schreib-Helfer akzeptieren wahlweise die globale
 // db-Instanz oder eine offene Drizzle-Transaktion (Sammel-Anlage, s. u.).
@@ -45,6 +50,8 @@ export const SHIFT_SELECT = {
   shiftModelId: shiftsTable.shiftModelId,
   notes: shiftsTable.notes,
   isVertretung: shiftsTable.isVertretung,
+  standbyUserId: shiftsTable.standbyUserId,
+  standbyUserName: standbyUsersTable.name,
   pauseMinutes: shiftsTable.pauseMinutes,
   isPartialAbsence: shiftsTable.isPartialAbsence,
   valuedHours: shiftsTable.valuedHours,
@@ -722,7 +729,9 @@ export async function findPlannedWorkShiftsForDay(
   teamId: number,
   rangeStart: Date,
   rangeEnd: Date
-): Promise<{ id: number; startTime: Date; endTime: Date }[]> {
+): Promise<
+  { id: number; startTime: Date; endTime: Date; type: string; shiftModelId: number | null; standbyUserId: number | null }[]
+> {
   const dayStart = new Date(
     `${rangeStart.toISOString().split("T")[0]}T00:00:00.000Z`
   );
@@ -732,6 +741,12 @@ export async function findPlannedWorkShiftsForDay(
       id: shiftsTable.id,
       startTime: shiftsTable.startTime,
       endTime: shiftsTable.endTime,
+      // Werden für den Vertretungs-Aktivierungs-Vorschlag gebraucht (Original-
+      // Dienstart/-Modell, bevor die Schicht gleich als "ersetzt" gilt — s.
+      // buildVertretungsVorschlag in shifts-crud.ts).
+      type: shiftsTable.type,
+      shiftModelId: shiftsTable.shiftModelId,
+      standbyUserId: shiftsTable.standbyUserId,
     })
     .from(shiftsTable)
     .where(
@@ -748,6 +763,7 @@ export async function findPlannedWorkShiftsForDay(
           "abgesagt_ag",
           "abgesagt_an",
           "urlaubsabgeltung",
+          "wunschfrei",
         ]),
         gte(shiftsTable.startTime, dayStart),
         lt(shiftsTable.startTime, dayEnd),
@@ -761,6 +777,47 @@ export async function findPlannedWorkShiftsForDay(
       b.startTime.getTime() -
       (a.endTime.getTime() - a.startTime.getTime())
   );
+}
+
+// Vertretungs-Aktivierungs-Vorschlag: nur ein Antwort-Feld, kein gespeicherter
+// Wert. Wird aufgerufen, wenn ein Arbeitsdienst MIT vorgemerkter Vertretung
+// gerade zu einer Abwesenheit wird/wurde (POST ersetzt+löscht den Original-
+// Dienst, PATCH ändert ihn in-place) — der Aufrufer muss die Original-Werte
+// (Zeiten/Typ/Modell) VOR der Umwandlung übergeben, da sie danach überschrieben
+// bzw. gelöscht sind. Liefert null ohne standbyUserId oder wenn die Person
+// zwischenzeitlich gelöscht wurde.
+export async function buildVertretungsVorschlag(params: {
+  teamId: number;
+  standbyUserId: number | null;
+  startTime: Date;
+  endTime: Date;
+  type: string;
+  shiftModelId: number | null;
+}): Promise<{
+  userId: number;
+  userName: string;
+  teamId: number;
+  startTime: Date;
+  endTime: Date;
+  type: string;
+  shiftModelId: number | null;
+} | null> {
+  if (params.standbyUserId == null) return null;
+  const [standby] = await db
+    .select({ name: usersTable.name })
+    .from(usersTable)
+    .where(eq(usersTable.id, params.standbyUserId))
+    .limit(1);
+  if (!standby) return null;
+  return {
+    userId: params.standbyUserId,
+    userName: standby.name,
+    teamId: params.teamId,
+    startTime: params.startTime,
+    endTime: params.endTime,
+    type: params.type,
+    shiftModelId: params.shiftModelId,
+  };
 }
 
 // Entfernt eine geplante Arbeitsschicht samt zugehöriger Zeiterfassung. Wird eine
@@ -845,6 +902,7 @@ export type BulkAbsenceType =
   | "freistellung"
   | "abgesagt_ag"
   | "abgesagt_an"
+  | "wunschfrei"
   | "urlaubsabgeltung";
 
 export type BulkAbsenceCreationInput = {
@@ -860,6 +918,17 @@ export type BulkAbsenceCreationResult = {
   created: (typeof shiftsTable.$inferSelect)[];
   replaced: number[];
   skippedDates: string[];
+  /**
+   * Vertretungs-Vorschlaege aus den ersetzten Diensten (Kay 30.08.2026):
+   * War an einem verdraengten Arbeitsdienst jemand als Vertretung vorgemerkt,
+   * soll der Planer direkt nach dem Eintragen der Abwesenheit gefragt werden,
+   * ob die Vertretung eingesetzt wird. Ohne das blieb der Tag nach einer aus
+   * der App gemeldeten Krankheit einfach leer — die Vormerkung ging beim
+   * Loeschen des Dienstes verloren.
+   */
+  vertretungsVorschlaege: NonNullable<
+    Awaited<ReturnType<typeof buildVertretungsVorschlag>>
+  >[];
 };
 
 // Wirft InvalidShiftModelError (Schichtmodell gehört nicht zum Team) oder
@@ -953,6 +1022,12 @@ export async function runBulkAbsenceCreation(
           id: shiftsTable.id,
           startTime: shiftsTable.startTime,
           endTime: shiftsTable.endTime,
+          // Fuer den Vertretungs-Vorschlag: Wer war an diesem Dienst als
+          // Vertretung vorgemerkt? Der Dienst wird gleich geloescht, die
+          // Information muss also VORHER mit heraus (Kay 30.08.2026).
+          type: shiftsTable.type,
+          shiftModelId: shiftsTable.shiftModelId,
+          standbyUserId: shiftsTable.standbyUserId,
         })
         .from(shiftsTable)
         .where(
@@ -969,6 +1044,7 @@ export async function runBulkAbsenceCreation(
               "abgesagt_ag",
               "abgesagt_an",
               "urlaubsabgeltung",
+              "wunschfrei",
             ]),
             // Sargable Bereichsprädikat aktiviert den (user_id, start_time)-Index.
             gte(shiftsTable.startTime, firstDayStart),
@@ -1065,6 +1141,26 @@ export async function runBulkAbsenceCreation(
     });
 
     const replaced = resolved.flatMap(({ planned }) => planned.map((shift) => shift.id));
+
+    // VOR dem Loeschen: Vormerkungen der verdraengten Dienste einsammeln.
+    // Danach ist die Information weg (die Zeile wird geloescht, nicht
+    // umgeschrieben) — genau daran scheiterte der Weg ueber die App-Meldung.
+    const vertretungsVorschlaege = (
+      await Promise.all(
+        resolved.flatMap(({ planned }) =>
+          planned.map((shift) =>
+            buildVertretungsVorschlag({
+              teamId,
+              standbyUserId: shift.standbyUserId ?? null,
+              startTime: shift.startTime,
+              endTime: shift.endTime,
+              type: shift.type,
+              shiftModelId: shift.shiftModelId ?? null,
+            }),
+          ),
+        ),
+      )
+    ).filter((v): v is NonNullable<typeof v> => v != null);
 
     // REIHENFOLGE: Löschen der ersetzten Dienste läuft VOR der Berechnung —
     // exakt wie der Einzelpfad, der deleteReplacedWorkShift ebenfalls vor
@@ -1173,7 +1269,7 @@ export async function runBulkAbsenceCreation(
         await applyVacationDelta(contract, delta, tx);
       }
     }
-    return { created, replaced, skippedDates: skipped };
+    return { created, replaced, skippedDates: skipped, vertretungsVorschlaege };
   };
 
   return outerTx ? body(outerTx) : db.transaction(body);

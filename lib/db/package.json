@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./database-url": "./src/database-url.ts",
     "./schema": "./src/schema/index.ts",
-    "./verify-schema": "./src/verify-schema.ts"
+    "./verify-schema": "./src/verify-schema.ts",
+    "./user-bound-tables": "./src/user-bound-tables.ts"
   },
   "scripts": {
     "push": "drizzle-kit push --config ./drizzle.config.ts",

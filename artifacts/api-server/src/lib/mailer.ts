@@ -8,6 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import { logger } from "./logger";
+import { recordPlatformError } from "./platform-errors";
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 const FALLBACK_FROM = "Dienstplan-App <onboarding@resend.dev>";
@@ -30,7 +31,54 @@ function isTestEmail(address: string): boolean {
   return TEST_EMAIL_DOMAINS.some((d) => lower.endsWith(`@${d}`));
 }
 
-async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
+/**
+ * Art der Mail — landet als Kontext im Fehler-Tracking. Bewusst eine grobe
+ * Kategorie statt des Betreffs: Der Betreff enthaelt Namen und Monate, jede
+ * Variante waere sonst eine eigene Fehlerzeile statt eines hochgezaehlten
+ * Eintrags.
+ */
+type EmailKind =
+  | "Dienstvorschlag"
+  | "Passwort-Reset"
+  | "Krankmeldung"
+  | "E-Mail-Bestaetigung";
+
+/**
+ * Meldet einen fehlgeschlagenen Versand ans Fehler-Tracking (Operator-
+ * Dashboard). Bisher stand ein Fehlschlag NUR im Server-Log — eine
+ * unzustellbare Adresse fiel damit niemandem auf, waehrend der Dienst im
+ * Plan als "Vorschlag versendet" stand (Kay-Feedback 29.08.2026).
+ *
+ * Empfaenger und Betreff gehoeren in den Detailtext, nicht in die Meldung:
+ * Die Buendelung laeuft ueber Meldung + Kontext, eine Adresse in der Meldung
+ * wuerde daraus eine eigene Zeile je Empfaenger machen. Im Detailtext bleibt
+ * das JUENGSTE Auftreten sichtbar — genau das, was man zum Nachschauen
+ * braucht.
+ *
+ * Fire-and-forget: recordPlatformError wirft nie, und ein Fehler beim
+ * Protokollieren darf den Versandpfad nicht beeinflussen.
+ */
+function reportEmailFailure(
+  kind: EmailKind,
+  to: string,
+  subject: string,
+  message: string,
+  detail: string,
+): void {
+  void recordPlatformError({
+    level: "error",
+    message,
+    context: `E-Mail-Versand (${kind})`,
+    stack: `Empfaenger: ${to}\nBetreff: ${subject}\n${detail}`,
+  });
+}
+
+async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+  kind: EmailKind,
+): Promise<boolean> {
   if (isTestEmail(to)) {
     logger.info({ to, subject }, "E-Mail-Versand übersprungen (Testdomäne)");
     return true;
@@ -52,12 +100,26 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
     if (!response.ok) {
       const body = await response.text().catch(() => "");
       logger.error({ status: response.status, body: body.slice(0, 500), to }, "E-Mail-Versand fehlgeschlagen");
+      reportEmailFailure(
+        kind,
+        to,
+        subject,
+        `E-Mail-Versand fehlgeschlagen (HTTP ${response.status})`,
+        `Antwort: ${body.slice(0, 500)}`,
+      );
       return false;
     }
     logger.info({ to, subject }, "Transaktionale E-Mail gesendet");
     return true;
   } catch (err) {
     logger.error({ err, to }, "E-Mail-Versand fehlgeschlagen (Netzwerkfehler)");
+    reportEmailFailure(
+      kind,
+      to,
+      subject,
+      "E-Mail-Versand fehlgeschlagen (Netzwerkfehler)",
+      err instanceof Error ? (err.stack ?? err.message) : String(err),
+    );
     return false;
   }
 }
@@ -174,7 +236,7 @@ export async function sendProposalEmail(
     </p>
   `);
 
-  return sendEmail(to, `Dienstvorschlag für ${monthLabel} – Dienstplan`, html);
+  return sendEmail(to, `Dienstvorschlag für ${monthLabel} – Dienstplan`, html, "Dienstvorschlag");
 }
 
 /** Sendet eine Passwort-Reset-E-Mail. Gibt true zurück wenn gesendet. */
@@ -196,7 +258,7 @@ export async function sendPasswordResetEmail(to: string, resetUrl: string): Prom
       Falls der Button nicht funktioniert, kopieren Sie diesen Link in Ihren Browser:<br>${resetUrl}
     </p>
   `);
-  return sendEmail(to, "Passwort zurücksetzen – Dienstplan", html);
+  return sendEmail(to, "Passwort zurücksetzen – Dienstplan", html, "Passwort-Reset");
 }
 
 /**
@@ -262,6 +324,7 @@ export async function sendSickLeaveNotification(
     to,
     `Krankmeldung: ${assistantName} (${rangeLabel})`,
     html,
+    "Krankmeldung",
   );
 }
 
@@ -282,5 +345,5 @@ export async function sendVerificationEmail(to: string, verifyUrl: string): Prom
       Falls der Button nicht funktioniert, kopieren Sie diesen Link in Ihren Browser:<br>${verifyUrl}
     </p>
   `);
-  return sendEmail(to, "E-Mail-Adresse bestätigen – Dienstplan", html);
+  return sendEmail(to, "E-Mail-Adresse bestätigen – Dienstplan", html, "E-Mail-Bestaetigung");
 }

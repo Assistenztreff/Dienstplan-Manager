@@ -7,7 +7,7 @@
  */
 
 /**
- * Antragsarten sind bewusst auf Urlaub/Krank beschränkt (§887).
+ * Antragsarten: Urlaub, Krank und Wunschfrei (Wunsch, an diesen Tagen nicht eingeplant zu werden). Erst die Genehmigung sperrt die Tage.
  */
 export type AbsenceRequestInputType = typeof AbsenceRequestInputType[keyof typeof AbsenceRequestInputType];
 
@@ -15,4 +15,5 @@ export type AbsenceRequestInputType = typeof AbsenceRequestInputType[keyof typeo
 export const AbsenceRequestInputType = {
   vacation: 'vacation',
   sick: 'sick',
+  wunschfrei: 'wunschfrei',
 } as const;

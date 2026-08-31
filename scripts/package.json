@@ -23,6 +23,7 @@
     "check-prod-schema": "tsx ./src/migrate-prod.ts",
     "check-prod-schema-drift": "tsx ./src/check-prod-schema-drift.ts",
     "pre-push-sql": "tsx ./src/pre-push-sql.ts",
+    "check-loeschregeln": "tsx ./src/check-loeschregeln.ts",
     "migrate-allowance-settings": "tsx ./src/migrate-allowance-settings.ts",
     "migrate-absences-fix": "tsx ./src/migrate-absences-fix.ts",
     "dry-run-vacation-revaluation": "tsx ./src/dry-run-vacation-revaluation.ts",

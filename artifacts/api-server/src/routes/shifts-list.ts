@@ -5,7 +5,7 @@ import { eq, and, sql, or, lt, gte, inArray } from "drizzle-orm";
 import { ListShiftsQueryParams } from "@workspace/api-zod";
 import { requireAuth, isAdminLikeRole } from "../middleware/auth";
 import { resolveReadTeamScope, getTeamIdsWithCapability, parseTeamIdParam } from "../lib/teams";
-import { einsatzTeamsTable, homeTeamsTable, SHIFT_SELECT } from "./shifts";
+import { einsatzTeamsTable, homeTeamsTable, standbyUsersTable, SHIFT_SELECT } from "./shifts";
 
 const router = Router();
 
@@ -63,7 +63,7 @@ router.get("/shifts", requireAuth, async (req, res): Promise<void> => {
       inArray(shiftsTable.teamId, teamScope),
       inArray(shiftsTable.einsatzTeamId, teamScope),
       and(
-        sql`${shiftsTable.type} IN ('vacation','sick','freizeitausgleich','kind_krank','freistellung','abgesagt_ag','abgesagt_an','urlaubsabgeltung')`,
+        sql`${shiftsTable.type} IN ('vacation','sick','freizeitausgleich','kind_krank','freistellung','abgesagt_ag','abgesagt_an','urlaubsabgeltung','wunschfrei')`,
         sql`EXISTS (
           SELECT 1 FROM shifts a
           WHERE a.user_id = ${shiftsTable.userId}
@@ -74,7 +74,7 @@ router.get("/shifts", requireAuth, async (req, res): Promise<void> => {
     )!,
   ];
   if (effectiveUserId) conditions.push(eq(shiftsTable.userId, effectiveUserId));
-  if (query.data.type) conditions.push(eq(shiftsTable.type, query.data.type as "active" | "standby" | "night" | "full_day" | "vacation" | "sick" | "work" | "freizeitausgleich" | "team" | "kind_krank" | "freistellung" | "abgesagt_ag" | "abgesagt_an" | "urlaubsabgeltung"));
+  if (query.data.type) conditions.push(eq(shiftsTable.type, query.data.type as "active" | "standby" | "night" | "full_day" | "vacation" | "sick" | "work" | "freizeitausgleich" | "team" | "kind_krank" | "freistellung" | "abgesagt_ag" | "abgesagt_an" | "urlaubsabgeltung" | "wunschfrei"));
   // Zeitraum-Default: ohne month/year UND ohne explizites all=true liefert die
   // Route nicht mehr die gesamte Historie, sondern nur den aktuellen
   // Kalendermonat (Performance). year allein (ohne month) filtert auf das
@@ -110,6 +110,7 @@ router.get("/shifts", requireAuth, async (req, res): Promise<void> => {
     .leftJoin(usersTable, eq(shiftsTable.userId, usersTable.id))
     .leftJoin(einsatzTeamsTable, eq(einsatzTeamsTable.id, shiftsTable.einsatzTeamId))
     .leftJoin(homeTeamsTable, eq(homeTeamsTable.id, shiftsTable.teamId))
+    .leftJoin(standbyUsersTable, eq(standbyUsersTable.id, shiftsTable.standbyUserId))
     .where(conditions.length > 0 ? and(...conditions) : undefined);
   res.json(rows);
 });

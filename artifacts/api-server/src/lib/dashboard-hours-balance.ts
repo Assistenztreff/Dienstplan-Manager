@@ -34,7 +34,7 @@ const isAbsenceShiftType = (type: string): boolean => ABSENCE_SHIFT_TYPES.has(ty
 // sondern nur in ihre eigenen Auswertungs-Spalten. Muss mit
 // isUnpaidAbsenceType/urlaubsabgeltung (shift-metrics-resolve) übereinstimmen;
 // bewusst lokal dupliziert, damit dieses Modul DB-/Express-frei bleibt.
-const INFO_ONLY_SHIFT_TYPES = new Set(["kind_krank", "abgesagt_an", "urlaubsabgeltung"]);
+const INFO_ONLY_SHIFT_TYPES = new Set(["kind_krank", "abgesagt_an", "urlaubsabgeltung", "wunschfrei"]);
 
 /** Schicht-Felder, die in die Auswertung einfließen. */
 export interface BalanceShift {
@@ -70,6 +70,21 @@ export type BillingMethod = "SOLL" | "IST";
 
 /** Vergütungstyp des zugrundeliegenden Dienstes (Geld-Berechnung, Point 4). */
 export type CompensationType = "regular" | "percentage" | "flat";
+
+/**
+ * Vertretungsvergütung (Kay-Feedback 28.08.2026): Team-Override-fähige
+ * Sonderregel für aktivierte Vertretungen (isVertretung=true) — ÜBERSCHREIBT
+ * für diese Schicht die sonst geltende compensationType/-Percent/-FlatCents
+ * des Schichtmodells. "none" = kein Sonderfall, regulärer Lohn wie jeder
+ * andere Dienst. "percent" = value ist ein Prozentsatz des EIGENEN
+ * Stundenlohns der Vertretung. "flat" = value ist ein fester Euro-Betrag für
+ * den ganzen Tag, unabhängig von der Dienstlänge.
+ */
+export type VertretungCompensationMode = "none" | "percent" | "flat";
+export interface VertretungCompensation {
+  mode: VertretungCompensationMode;
+  value: number;
+}
 
 /**
  * Berechnungs-Weiche für die Abrechnungsart: Ist die Zeiterfassung des
@@ -108,6 +123,8 @@ export interface BalanceTimeEntry {
   compensationType?: CompensationType | null;
   compensationPercent?: number | null;
   compensationFlatCents?: number | null;
+  /** Vertretungs-Markierung der verknüpften Schicht (Info-Kennzahl, s. BalanceShift). */
+  isVertretung?: boolean | null;
 }
 
 export interface AllowancePercents {
@@ -331,6 +348,16 @@ export function computeHoursBalanceRow(params: {
    */
   deductPausesByTeam?: Map<number, boolean>;
   deductPausesFallback?: boolean;
+  /**
+   * Vertretungsvergütung je Team (Kay-Feedback 28.08.2026, Team-Override wie
+   * night-/sunday-/holidayPercent). Gilt NUR für Schichten mit
+   * isVertretung=true — überschreibt dort compensationType/-Percent/
+   * -FlatCents des Schichtmodells. Ohne Eintrag (oder ohne teamId an der
+   * Schicht) gilt `vertretungCompensationFallback` (Default "none" = kein
+   * Sonderfall, regulärer Lohn wie jeder andere Dienst).
+   */
+  vertretungCompensationByTeam?: Map<number, VertretungCompensation>;
+  vertretungCompensationFallback?: VertretungCompensation;
   /**
    * Stichtag für die Wartezeit-Proration des Urlaubssockels (§ 4 BUrlG,
    * siehe vacationPoolHours). Ohne Angabe der aktuelle Zeitpunkt — pure
@@ -589,22 +616,54 @@ export function computeHoursBalanceRow(params: {
   let sundaySurchargePay: number | null = null;
   let holidaySurchargePay: number | null = null;
   let totalPay: number | null = null;
+  // Vertretungsvergütung (Kay-Feedback 28.08.2026): Team-Override-fähig wie
+  // die Zuschlags-Prozente oben. Ohne Eintrag/teamId gilt der Fallback
+  // (Default "none" — kein Sonderfall, regulärer Lohn wie jeder andere Dienst).
+  const vertretungCompFor = (teamId?: number | null): VertretungCompensation =>
+    (teamId != null ? params.vertretungCompensationByTeam?.get(teamId) : undefined) ??
+    params.vertretungCompensationFallback ?? { mode: "none", value: 0 };
+
   if (wage != null) {
     let base = 0;
     const addBase = (entry: {
       hours: number;
+      teamId?: number | null;
+      isVertretung?: boolean | null;
       compensationType?: CompensationType | null;
       compensationPercent?: number | null;
       compensationFlatCents?: number | null;
     }) => {
-      const compType = entry.compensationType ?? "regular";
-      if (compType === "flat") {
-        // Festbetrag pro Schicht (dauerunabhängig).
-        base += (entry.compensationFlatCents ?? 0) / 100;
-      } else if (compType === "percentage") {
-        base += wage * entry.hours * ((entry.compensationPercent ?? 100) / 100);
-      } else {
-        base += wage * entry.hours;
+      // Vertretungsvergütung kommt ZUSÄTZLICH zum regulären Lohn des
+      // Dienstes (Kay-Korrektur 30.08.2026: "Tritt die Vertretung ein, soll
+      // der Tageslohn INKLUSIVE Vertretungsvergütung ausgezahlt werden").
+      // Sie ersetzt den Lohn also NICHT — wer einspringt, verdient nicht
+      // weniger, sondern bekommt einen Aufschlag dafür, dass er kurzfristig
+      // eingesprungen ist. Erst wird der reguläre Lohn nach den normalen
+      // Regeln gerechnet (unten), dann kommt der Aufschlag oben drauf.
+      //   flat    = fester Euro-Betrag für den Dienst, dauerunabhängig
+      //   percent = Prozentsatz des für DIESEN Dienst verdienten Lohns
+      // Bei "none" passiert nichts — isVertretung bleibt reine Info-Kennzahl.
+      const vertretungComp = entry.isVertretung ? vertretungCompFor(entry.teamId) : null;
+
+      const regulaererLohn = (): number => {
+        const compType = entry.compensationType ?? "regular";
+        if (compType === "flat") {
+          // Festbetrag pro Schicht (dauerunabhängig).
+          return (entry.compensationFlatCents ?? 0) / 100;
+        }
+        if (compType === "percentage") {
+          return wage * entry.hours * ((entry.compensationPercent ?? 100) / 100);
+        }
+        return wage * entry.hours;
+      };
+
+      const lohn = regulaererLohn();
+      base += lohn;
+      if (vertretungComp && vertretungComp.mode !== "none") {
+        base +=
+          vertretungComp.mode === "flat"
+            ? vertretungComp.value
+            : lohn * (vertretungComp.value / 100);
       }
     };
     if (billingMethod === "IST") {

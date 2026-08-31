@@ -557,6 +557,7 @@ export const ShiftType = {
   abgesagt_ag: 'abgesagt_ag',
   abgesagt_an: 'abgesagt_an',
   urlaubsabgeltung: 'urlaubsabgeltung',
+  wunschfrei: 'wunschfrei',
 } as const;
 
 /**
@@ -570,6 +571,22 @@ export const ShiftPlanningStatus = {
   ANGEBOTEN: 'ANGEBOTEN',
   FIX: 'FIX',
 } as const;
+
+/**
+ * Nur in der Antwort von POST/PATCH gesetzt, wenn dieser Aufruf den Dienst zu einer Abwesenheit gemacht hat UND eine Vertretung vorgemerkt war: Vorschlag, mit den ORIGINAL-Zeiten/-Dienstart des ersetzten Arbeitsdienstes einen Dienst für die Vertretung anzulegen (ein Klick im Frontend). Kein gespeichertes Feld.
+ * @nullable
+ */
+export type ShiftVertretungsVorschlag = {
+  /** standbyUserId des ersetzten Dienstes. */
+  userId: number;
+  userName: string;
+  teamId: number;
+  startTime: string;
+  endTime: string;
+  type: 'active' | 'standby' | 'night' | 'full_day' | 'vacation' | 'sick' | 'work' | 'freizeitausgleich' | 'team' | 'kind_krank' | 'freistellung' | 'abgesagt_ag' | 'abgesagt_an' | 'urlaubsabgeltung' | 'wunschfrei';
+  /** @nullable */
+  shiftModelId?: number | null;
+} | null;
 
 export interface Shift {
   id: number;
@@ -600,6 +617,21 @@ export interface Shift {
   homeTeamName?: string | null;
   /** Vertretung: Arbeitsdienst als kurzfristige Vertretung markiert (Info-Kennzahl der Auswertung; Stunden zählen normal). */
   isVertretung?: boolean;
+  /**
+     * Vorgemerkte Vertretung: Person, die bei Ausfall dieses Arbeitsdienstes kurzfristig einspringen könnte. Nur informativ, keine Auswirkung auf Planung/Stunden, bis sie aktiviert wird.
+     * @nullable
+     */
+  standbyUserId?: number | null;
+  /**
+     * Name der vorgemerkten Vertretung (nur gesetzt, wenn standbyUserId gesetzt ist).
+     * @nullable
+     */
+  standbyUserName?: string | null;
+  /**
+     * Nur in der Antwort von POST/PATCH gesetzt, wenn dieser Aufruf den Dienst zu einer Abwesenheit gemacht hat UND eine Vertretung vorgemerkt war: Vorschlag, mit den ORIGINAL-Zeiten/-Dienstart des ersetzten Arbeitsdienstes einen Dienst für die Vertretung anzulegen (ein Klick im Frontend). Kein gespeichertes Feld.
+     * @nullable
+     */
+  vertretungsVorschlag?: ShiftVertretungsVorschlag;
   /** Unbezahlte Pausenminuten (reine Info-Kennzahl; reduziert NICHT die gewerteten Stunden). */
   pauseMinutes?: number;
   /** Nur bei Abwesenheits-Typen relevant: true = bewusst gewählter Teil-Tag (Halbtag/Zeitraum), false = ganztägig — auch wenn die gespeicherten Uhrzeiten (Lohnausfallprinzip-Erbschaft eines ersetzten Dienstes) wie ein Teil-Tag aussehen. Maßgeblich für Kollisionsprüfung und Anzeige, NICHT die Uhrzeiten selbst. */
@@ -630,6 +662,7 @@ export const ShiftInputType = {
   abgesagt_ag: 'abgesagt_ag',
   abgesagt_an: 'abgesagt_an',
   urlaubsabgeltung: 'urlaubsabgeltung',
+  wunschfrei: 'wunschfrei',
 } as const;
 
 /**
@@ -668,6 +701,11 @@ export interface ShiftInput {
   /** Vertretung: Arbeitsdienst als kurzfristige Vertretung markieren (nur für Arbeitsdienste; bei Abwesenheiten/Team-Einträgen serverseitig zurückgesetzt). */
   isVertretung?: boolean;
   /**
+     * Vertretung vormerken oder mit null entfernen. Nur für Arbeitsdienste setzbar (muss Mitglied desselben Teams sein, darf nicht der zugewiesene Nutzer selbst sein); bei Abwesenheiten/ Team-Einträgen 400.
+     * @nullable
+     */
+  standbyUserId?: number | null;
+  /**
      * Unbezahlte Pausenminuten (Info-Kennzahl; reduziert NICHT die gewerteten Stunden).
      * @minimum 0
      * @maximum 1440
@@ -690,6 +728,7 @@ export const BulkAbsenceInputType = {
   abgesagt_ag: 'abgesagt_ag',
   abgesagt_an: 'abgesagt_an',
   urlaubsabgeltung: 'urlaubsabgeltung',
+  wunschfrei: 'wunschfrei',
 } as const;
 
 export type BulkAbsenceInputDaysItem = {
@@ -738,7 +777,7 @@ export interface AbsenceRequestDay {
 }
 
 /**
- * Antragsarten sind bewusst auf Urlaub/Krank beschränkt (§887).
+ * Antragsarten: Urlaub, Krank und Wunschfrei (Wunsch, an diesen Tagen nicht eingeplant zu werden). Erst die Genehmigung sperrt die Tage.
  */
 export type AbsenceRequestInputType = typeof AbsenceRequestInputType[keyof typeof AbsenceRequestInputType];
 
@@ -746,10 +785,11 @@ export type AbsenceRequestInputType = typeof AbsenceRequestInputType[keyof typeo
 export const AbsenceRequestInputType = {
   vacation: 'vacation',
   sick: 'sick',
+  wunschfrei: 'wunschfrei',
 } as const;
 
 export interface AbsenceRequestInput {
-  /** Antragsarten sind bewusst auf Urlaub/Krank beschränkt (§887). */
+  /** Antragsarten: Urlaub, Krank und Wunschfrei (Wunsch, an diesen Tagen nicht eingeplant zu werden). Erst die Genehmigung sperrt die Tage. */
   type: AbsenceRequestInputType;
   /** Optionaler Team-Kontext für Mehrteam-Assistenzkräfte; muss ein Mitglieds-Team der Assistenzkraft sein. */
   teamId?: number;
@@ -767,6 +807,7 @@ export type AbsenceRequestType = typeof AbsenceRequestType[keyof typeof AbsenceR
 export const AbsenceRequestType = {
   vacation: 'vacation',
   sick: 'sick',
+  wunschfrei: 'wunschfrei',
 } as const;
 
 export type AbsenceRequestStatus = typeof AbsenceRequestStatus[keyof typeof AbsenceRequestStatus];
@@ -777,6 +818,17 @@ export const AbsenceRequestStatus = {
   APPROVED: 'APPROVED',
   REJECTED: 'REJECTED',
 } as const;
+
+export type AbsenceRequestVertretungsVorschlaegeItem = {
+  userId: number;
+  userName: string;
+  teamId: number;
+  startTime: string;
+  endTime: string;
+  type: string;
+  /** @nullable */
+  shiftModelId?: number | null;
+};
 
 export interface AbsenceRequest {
   id: number;
@@ -794,6 +846,8 @@ export interface AbsenceRequest {
   resolvedByUserId: number | null;
   /** @nullable */
   resultShiftIds: number[] | null;
+  /** Nur in der Antwort von POST /absence-requests/{id}/approve gesetzt: Vertretungs-Vorschläge aus den Diensten, die die Abwesenheit verdrängt hat. War an einem dieser Dienste jemand als Vertretung vorgemerkt, fragt das Frontend direkt nach dem Bestätigen, ob sie eingesetzt wird. Kein gespeichertes Feld. */
+  vertretungsVorschlaege?: AbsenceRequestVertretungsVorschlaegeItem[];
 }
 
 /**
@@ -909,6 +963,20 @@ export interface BulkConfirmOwnShiftsResult {
   confirmed: number;
 }
 
+export type ConfirmOwnShiftResultPlanningStatus = typeof ConfirmOwnShiftResultPlanningStatus[keyof typeof ConfirmOwnShiftResultPlanningStatus];
+
+
+export const ConfirmOwnShiftResultPlanningStatus = {
+  VORLAEUFIG: 'VORLAEUFIG',
+  ANGEBOTEN: 'ANGEBOTEN',
+  FIX: 'FIX',
+} as const;
+
+export interface ConfirmOwnShiftResult {
+  id: number;
+  planningStatus: ConfirmOwnShiftResultPlanningStatus;
+}
+
 export interface BulkConfirmShiftsInput {
   /**
      * @minimum 1
@@ -955,6 +1023,7 @@ export const ShiftUpdateType = {
   abgesagt_ag: 'abgesagt_ag',
   abgesagt_an: 'abgesagt_an',
   urlaubsabgeltung: 'urlaubsabgeltung',
+  wunschfrei: 'wunschfrei',
 } as const;
 
 /**
@@ -993,11 +1062,200 @@ export interface ShiftUpdate {
   /** Vertretung setzen/entfernen (nur für Arbeitsdienste; bei Abwesenheiten/Team-Einträgen serverseitig zurückgesetzt). */
   isVertretung?: boolean;
   /**
+     * Vertretung vormerken oder mit null entfernen. Nur setzbar, solange der (effektive) Diensttyp ein Arbeitsdienst ist; beim Übergang ZU einer Abwesenheit bleibt ein vorher gesetzter Wert unverändert stehen (Grundlage für vertretungsVorschlag).
+     * @nullable
+     */
+  standbyUserId?: number | null;
+  /**
      * Unbezahlte Pausenminuten (Info-Kennzahl; reduziert NICHT die gewerteten Stunden).
      * @minimum 0
      * @maximum 1440
      */
   pauseMinutes?: number;
+}
+
+export interface ShiftDeviationReportInput {
+  /** Tatsächlicher Beginn laut Meldung. */
+  startTime: string;
+  /** Tatsächliches Ende laut Meldung. */
+  endTime: string;
+  /**
+     * @minimum 0
+     * @maximum 1440
+     */
+  pauseMinutes?: number;
+  /** "Dienst ist ausgefallen" — der Server ignoriert startTime/endTime in diesem Fall und speichert eine Nulldauer-Meldung. */
+  ausgefallen?: boolean;
+}
+
+export interface ShiftDeviationDisputeInput {
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  reason: string;
+}
+
+export type ShiftDeviationReportStatus = typeof ShiftDeviationReportStatus[keyof typeof ShiftDeviationReportStatus];
+
+
+export const ShiftDeviationReportStatus = {
+  PENDING: 'PENDING',
+  ACCEPTED: 'ACCEPTED',
+  DISPUTED: 'DISPUTED',
+} as const;
+
+export interface ShiftDeviationReport {
+  id: number;
+  shiftId: number;
+  userId: number;
+  status: ShiftDeviationReportStatus;
+  reportedStartTime: string;
+  reportedEndTime: string;
+  reportedPauseMinutes: number;
+  reportedAusgefallen: boolean;
+  reportedAt: string;
+  /** @nullable */
+  resolvedBy?: number | null;
+  /** @nullable */
+  resolvedAt?: string | null;
+  /** @nullable */
+  disputeReason?: string | null;
+}
+
+export type ShiftSwapRequestStatus = typeof ShiftSwapRequestStatus[keyof typeof ShiftSwapRequestStatus];
+
+
+export const ShiftSwapRequestStatus = {
+  OPEN: 'OPEN',
+  RESOLVED: 'RESOLVED',
+} as const;
+
+/**
+ * @nullable
+ */
+export type ShiftSwapRequestResolution = typeof ShiftSwapRequestResolution[keyof typeof ShiftSwapRequestResolution] | null;
+
+
+export const ShiftSwapRequestResolution = {
+  REASSIGNED: 'REASSIGNED',
+  DECLINED: 'DECLINED',
+} as const;
+
+export interface ShiftSwapRequest {
+  id: number;
+  shiftId: number;
+  userId: number;
+  /** @nullable */
+  userName: string | null;
+  teamId: number;
+  status: ShiftSwapRequestStatus;
+  reason: string;
+  requestedAt: string;
+  /** @nullable */
+  resolution: ShiftSwapRequestResolution;
+  /** @nullable */
+  resolutionNote: string | null;
+  /** @nullable */
+  resolvedBy: number | null;
+  /** @nullable */
+  resolvedAt: string | null;
+}
+
+export interface ShiftSwapRequestInput {
+  /**
+     * Begründung der Assistenzkraft (Pflicht). Ohne Grund kann der Planer nicht abwägen, und die Anfrage ist später nicht belegbar.
+     * @minLength 3
+     * @maxLength 500
+     */
+  reason: string;
+}
+
+export type ShiftSwapResolveInputResolution = typeof ShiftSwapResolveInputResolution[keyof typeof ShiftSwapResolveInputResolution];
+
+
+export const ShiftSwapResolveInputResolution = {
+  REASSIGNED: 'REASSIGNED',
+  DECLINED: 'DECLINED',
+} as const;
+
+export interface ShiftSwapResolveInput {
+  resolution: ShiftSwapResolveInputResolution;
+  /**
+     * Optionale Antwort des Planers, vor allem bei einer Ablehnung.
+     * @maxLength 500
+     */
+  note?: string;
+}
+
+export type ShiftChangeSummaryChangeSource = typeof ShiftChangeSummaryChangeSource[keyof typeof ShiftChangeSummaryChangeSource];
+
+
+export const ShiftChangeSummaryChangeSource = {
+  planner_edit: 'planner_edit',
+  deviation_accepted: 'deviation_accepted',
+  correction_withdrawn: 'correction_withdrawn',
+} as const;
+
+export interface ShiftChangeSummary {
+  shiftId: number;
+  changeSource: ShiftChangeSummaryChangeSource;
+  changedBy: number;
+  userId: number;
+  createdAt: string;
+}
+
+/**
+ * `deletion_archive_required`: das Konto hat aufbewahrungspflichtige Daten, es wurde aber kein (gültiges, frisches) Archiv mitgegeben.
+ */
+export type DeleteUserConflictCode = typeof DeleteUserConflictCode[keyof typeof DeleteUserConflictCode];
+
+
+export const DeleteUserConflictCode = {
+  deletion_archive_required: 'deletion_archive_required',
+  owned_team: 'owned_team',
+  foreign_dependency: 'foreign_dependency',
+} as const;
+
+export interface DeleteUserConflict {
+  error: string;
+  /** `deletion_archive_required`: das Konto hat aufbewahrungspflichtige Daten, es wurde aber kein (gültiges, frisches) Archiv mitgegeben. */
+  code?: DeleteUserConflictCode;
+}
+
+/**
+ * Zustand der zeitrelevanten Felder eines Dienstes zu einem Zeitpunkt.
+ */
+export interface ShiftChangeSnapshot {
+  startTime: string;
+  endTime: string;
+  pauseMinutes: number;
+  userId: number;
+  /** Name der Assistenzkraft zu diesem Snapshot, sofern noch aufloesbar. */
+  userName?: string | null;
+}
+
+export type ShiftChangeHistoryEntryChangeSource = typeof ShiftChangeHistoryEntryChangeSource[keyof typeof ShiftChangeHistoryEntryChangeSource];
+
+
+export const ShiftChangeHistoryEntryChangeSource = {
+  planner_edit: 'planner_edit',
+  deviation_accepted: 'deviation_accepted',
+  correction_withdrawn: 'correction_withdrawn',
+} as const;
+
+export interface ShiftChangeHistoryEntry {
+  id: number;
+  /** Null, wenn der Dienst inzwischen geloescht wurde — die Historie bleibt. */
+  shiftId?: number | null;
+  changeSource: ShiftChangeHistoryEntryChangeSource;
+  changedBy: number;
+  changedByName?: string | null;
+  userId: number;
+  shiftType?: string | null;
+  createdAt: string;
+  before: ShiftChangeSnapshot;
+  after: ShiftChangeSnapshot;
 }
 
 /**
@@ -1159,6 +1417,18 @@ export const AllowanceSettingsVacationMethod = {
   factor: 'factor',
 } as const;
 
+/**
+ * Vergütung für aktivierte Vertretungen (isVertretung=true). Team-Override-fähig (wie night-/sunday-/holidayPercent oben): Team-Override → Konto-Zeile des Team-Eigentümers → "none". none = regulärer Lohn wie jeder andere Dienst; percent = Prozentsatz des eigenen Stundenlohns der Vertretung für diesen Tag; flat = fester Euro-Betrag für den Tag, unabhängig von der Dienstlänge.
+ */
+export type AllowanceSettingsVertretungCompensationMode = typeof AllowanceSettingsVertretungCompensationMode[keyof typeof AllowanceSettingsVertretungCompensationMode];
+
+
+export const AllowanceSettingsVertretungCompensationMode = {
+  none: 'none',
+  percent: 'percent',
+  flat: 'flat',
+} as const;
+
 export interface AllowanceSettings {
   id: number;
   /**
@@ -1214,6 +1484,10 @@ export interface AllowanceSettings {
   pauseMinutes2: number;
   /** Pausen von den bezahlten Stunden abziehen? Konto-global (kein Team-Override); Standard AUS. Bei AN reduzieren die unbezahlten Pausenminuten die gewerteten Stunden und den Grundlohn der Arbeitsdienste in BEIDEN Abrechnungsarten (zur Lesezeit angewandt); Zuschlagsstunden bleiben unberührt. */
   deductPausesEnabled: boolean;
+  /** Vergütung für aktivierte Vertretungen (isVertretung=true). Team-Override-fähig (wie night-/sunday-/holidayPercent oben): Team-Override → Konto-Zeile des Team-Eigentümers → "none". none = regulärer Lohn wie jeder andere Dienst; percent = Prozentsatz des eigenen Stundenlohns der Vertretung für diesen Tag; flat = fester Euro-Betrag für den Tag, unabhängig von der Dienstlänge. */
+  vertretungCompensationMode: AllowanceSettingsVertretungCompensationMode;
+  /** Bei "percent" ein Prozentsatz (z. B. 80 = 80 % des eigenen Stundenlohns), bei "flat" ein Euro-Betrag; bei "none" unbenutzt. */
+  vertretungCompensationValue: number;
   updatedAt: string;
 }
 
@@ -1260,6 +1534,18 @@ export type AllowanceSettingsInputVacationMethod = typeof AllowanceSettingsInput
 export const AllowanceSettingsInputVacationMethod = {
   bwavg: 'bwavg',
   factor: 'factor',
+} as const;
+
+/**
+ * Vergütung für aktivierte Vertretungen (Team-Override-fähig).
+ */
+export type AllowanceSettingsInputVertretungCompensationMode = typeof AllowanceSettingsInputVertretungCompensationMode[keyof typeof AllowanceSettingsInputVertretungCompensationMode];
+
+
+export const AllowanceSettingsInputVertretungCompensationMode = {
+  none: 'none',
+  percent: 'percent',
+  flat: 'flat',
 } as const;
 
 export interface AllowanceSettingsInput {
@@ -1347,6 +1633,13 @@ export interface AllowanceSettingsInput {
   pauseMinutes2?: number;
   /** Pausen von den bezahlten Stunden abziehen (konto-global, kein Team-Override). */
   deductPausesEnabled?: boolean;
+  /** Vergütung für aktivierte Vertretungen (Team-Override-fähig). */
+  vertretungCompensationMode?: AllowanceSettingsInputVertretungCompensationMode;
+  /**
+     * Prozentsatz (mode=percent) oder Euro-Betrag (mode=flat).
+     * @minimum 0
+     */
+  vertretungCompensationValue?: number;
 }
 
 /**
@@ -2040,6 +2333,7 @@ export const ListShiftsType = {
   abgesagt_ag: 'abgesagt_ag',
   abgesagt_an: 'abgesagt_an',
   urlaubsabgeltung: 'urlaubsabgeltung',
+  wunschfrei: 'wunschfrei',
 } as const;
 
 export type ListAbsenceRequestsParams = {
@@ -2055,6 +2349,34 @@ export const ListAbsenceRequestsStatus = {
   APPROVED: 'APPROVED',
   REJECTED: 'REJECTED',
 } as const;
+
+export type ListShiftDeviationsParams = {
+/**
+ * Optionaler Team-Kontext; muss ein erlaubtes Team sein.
+ */
+teamId?: number;
+};
+
+export type ListShiftChangesParams = {
+teamId?: number;
+};
+
+export type ListShiftChangeHistoryParams = {
+teamId?: number;
+/**
+ * @minimum 1
+ * @maximum 12
+ */
+month: number;
+year: number;
+};
+
+export type ListShiftSwapRequestsParams = {
+/**
+ * Optionaler Team-Kontext; muss ein erlaubtes Team sein.
+ */
+teamId?: number;
+};
 
 export type ListShiftModelsParams = {
 activeOnly?: boolean;

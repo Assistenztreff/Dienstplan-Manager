@@ -31,6 +31,7 @@ import pg from "pg";
 import {
   TEAM_BOUND_TABLES,
   deleteAccountTrees,
+  deleteUserBoundRows,
   TEST_ERROR_CONTEXTS,
 } from "./index.js";
 import { deriveTestDbTarget } from "./test-db-name.js";
@@ -132,8 +133,17 @@ async function cleanupSeededConstellation(client: pg.Client): Promise<void> {
     await deleteAccountTrees(client, owners);
   }
   // Rest ohne Team-Besitz: Test-Assistent (falls uebrig), die 7
-  // Verify-Assistenzkraefte, versprengte Dummys. user_id-FKs (contracts,
-  // team_members, …) kaskadieren beim User-Delete.
+  // Verify-Assistenzkraefte, versprengte Dummys. Seit dem Loeschschutz
+  // (ON DELETE RESTRICT auf den Zeitnachweis-Tabellen) kaskadieren deren
+  // user_id-Daten NICHT mehr — sie muessen ausdruecklich vorher weg.
+  const restIds = await client.query<{ id: number }>(
+    `SELECT id FROM users
+      WHERE email = $1
+         OR email LIKE 'verify.assistenzkraft%@dienstplan.local'
+         OR email LIKE 'max.mustermann%@dienstplan.local'`,
+    [EMAIL_ASSISTENT],
+  );
+  await deleteUserBoundRows(client, restIds.rows.map((r) => r.id));
   await client.query(
     `DELETE FROM users
       WHERE email = $1
@@ -451,6 +461,11 @@ export async function runTestDbCleanupCheck(
     // 2) Abbruch simulieren: Zombie-Baum direkt in die _test-DB schreiben.
     // ------------------------------------------------------------------
     // Reste eines frueheren Check-Laufs entsorgen (idempotent).
+    const zombieIds = await client.query<{ id: number }>(
+      "SELECT id FROM users WHERE email IN ($1, $2)",
+      [ZOMBIE_ADMIN_EMAIL, ZOMBIE_ORPHAN_EMAIL],
+    );
+    await deleteUserBoundRows(client, zombieIds.rows.map((r) => r.id));
     await client.query("DELETE FROM users WHERE email IN ($1, $2)", [
       ZOMBIE_ADMIN_EMAIL,
       ZOMBIE_ORPHAN_EMAIL,

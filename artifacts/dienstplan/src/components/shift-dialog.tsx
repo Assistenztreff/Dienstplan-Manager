@@ -54,7 +54,7 @@ import {
 import { CalendarIcon, Check, ChevronsUpDown, Trash2, X } from "lucide-react";
 import { de } from "date-fns/locale";
 import { Calendar } from "@/components/ui/calendar";
-import { cn } from "@/lib/utils";
+import { cn, formatHours } from "@/lib/utils";
 import { readableApiError, planUpgradeMessage } from "@/lib/api-error";
 import {
   invalidateShiftDerivedQueries,
@@ -84,9 +84,23 @@ type ShiftForEdit = {
   notes?: string | null;
   einsatzTeamId?: number | null;
   isVertretung?: boolean | null;
+  standbyUserId?: number | null;
   pauseMinutes?: number | null;
   /** Halbtägiger Urlaub (#862): true = bewusst gewählter Teil-Tag, false/undefined = ganztägig. */
   isPartialAbsence?: boolean | null;
+};
+
+// Vertretungs-Aktivierungs-Vorschlag: kommt nur in der Server-Antwort vor
+// (kein gespeichertes Feld), wenn dieser Speichervorgang einen Arbeitsdienst
+// mit vorgemerkter Vertretung zu einer Abwesenheit gemacht hat.
+export type VertretungsVorschlag = {
+  userId: number;
+  userName: string;
+  teamId: number;
+  startTime: string;
+  endTime: string;
+  type: string;
+  shiftModelId?: number | null;
 };
 
 // Planungsstatus: Entwurf (intern) → Vorschlag (angeboten) → Bestätigt (fix).
@@ -121,6 +135,14 @@ type ShiftDialogProps = {
   preselectedUserId?: number;
   editShift?: ShiftForEdit;
   assistants: Assistant[];
+  /**
+   * Kapazitäts-Ampel für die Vertretung-Auswahl (Kay-Feedback 28.08.2026,
+   * eigene Lösung statt AssistenzConnects Zahlen-Tabelle): "frei" = noch
+   * freie Vertragsstunden diesen Monat (contractTarget - verplant, dieselbe
+   * Bilanz wie im Stundenkonto). Ohne Eintrag (kein Vertrag oder Stundenkonto
+   * nicht sichtbar) erscheint kein Punkt.
+   */
+  capacityByUserId?: Map<number, { frei: number; hasContract: boolean }>;
   month: number;
   year: number;
   teamId?: number | null;
@@ -132,6 +154,12 @@ type ShiftDialogProps = {
   bulkDates?: string[];
   /** Wird nach erfolgreichem Speichern aufgerufen (z. B. Auswahl zurücksetzen). */
   onSaved?: () => void;
+  /**
+   * Wird aufgerufen, wenn Speichern eine vorgemerkte Vertretung aktivierbar
+   * macht (Dienst wurde zu einer Abwesenheit) — der Aufrufer (dienstplan.tsx,
+   * lebt länger als dieser Dialog) zeigt den Ein-Klick-Toast an.
+   */
+  onVertretungsVorschlag?: (vorschlag: VertretungsVorschlag) => void;
 };
 
 // Abwesenheitstypen — spiegelt ABSENCE_TYPES in dienstplan.tsx; muss bei
@@ -145,6 +173,7 @@ const DIALOG_ABSENCE_TYPES = new Set([
   "abgesagt_ag",
   "abgesagt_an",
   "urlaubsabgeltung",
+  "wunschfrei",
 ]);
 
 const LEGACY_TYPE_LABELS: Record<string, string> = {
@@ -187,6 +216,10 @@ type FormState = {
   einsatzTeamId: string;
   // Vertretung: Info-Markierung für Arbeitsdienste (Auswertungs-Zählung).
   isVertretung: boolean;
+  // Vertretung vormerken: userId als String, "" = keine. Planungshilfe für
+  // den Ausfall-Fall — unabhängig von isVertretung (das markiert DIESEN
+  // Dienst rückwirkend als Vertretung für jemand anderen).
+  standbyUserId: string;
   // Unbezahlte Pause in Minuten als String ("" = 0; reine Info-Kennzahl).
   pauseMinutes: string;
 };
@@ -259,11 +292,42 @@ function initialSelection(editShift: ShiftForEdit | undefined, firstModelId: num
     editShift.type === "freistellung" ||
     editShift.type === "abgesagt_ag" ||
     editShift.type === "abgesagt_an" ||
-    editShift.type === "urlaubsabgeltung"
+    editShift.type === "urlaubsabgeltung" ||
+    editShift.type === "wunschfrei"
   )
     return editShift.type;
   if (editShift.type === "work" && editShift.shiftModelId) return `model:${editShift.shiftModelId}`;
   return `legacy:${editShift.type}`;
+}
+
+// Kapazitäts-Ampel für die Vertretung-Auswahl (Kay-Feedback 28.08.2026,
+// eigene Lösung statt AssistenzConnects Zahlen-Tabelle pro Zeile): ein
+// Farbpunkt statt drei Rohzahlen, genaue Stunden nur im title-Tooltip.
+// Schwelle ±2h als Rauschband — kleinere Abweichungen vom Soll sind im
+// Alltag normal und sollen nicht sofort als "knapp"/"überplant" wirken.
+function capacityDotColor(frei: number): string {
+  if (frei >= 2) return "#1e8f4e"; // grün — hat noch Luft (StatusBadge "confirmed")
+  if (frei <= -2) return "#b23b3b"; // rot — schon überplant (StatusBadge "krank")
+  return "#b5790a"; // gelb — knapp am Soll (StatusBadge "draft")
+}
+
+function capacityDotLabel(cap: { frei: number; hasContract: boolean } | undefined): string | null {
+  if (!cap || !cap.hasContract) return null;
+  if (Math.abs(cap.frei) < 0.05) return "Konto ausgeglichen";
+  return cap.frei > 0
+    ? `${formatHours(cap.frei)} h frei diesen Monat`
+    : `${formatHours(Math.abs(cap.frei))} h über Vertrag diesen Monat`;
+}
+
+function CapacityDot({ cap }: { cap: { frei: number; hasContract: boolean } | undefined }) {
+  if (!cap || !cap.hasContract) return null;
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-block h-2 w-2 shrink-0 rounded-full"
+      style={{ backgroundColor: capacityDotColor(cap.frei) }}
+    />
+  );
 }
 
 export function ShiftDialog({
@@ -273,11 +337,13 @@ export function ShiftDialog({
   preselectedUserId,
   editShift,
   assistants,
+  capacityByUserId,
   month,
   year,
   teamId,
   bulkDates,
   onSaved,
+  onVertretungsVorschlag,
 }: ShiftDialogProps) {
   const queryClient = useQueryClient();
   const createShift = useCreateShift();
@@ -372,6 +438,7 @@ export function ShiftDialog({
       notes: editShift?.notes ?? "",
       einsatzTeamId: editShift?.einsatzTeamId != null ? String(editShift.einsatzTeamId) : "",
       isVertretung: editShift?.isVertretung === true,
+      standbyUserId: editShift?.standbyUserId != null ? String(editShift.standbyUserId) : "",
       pauseMinutes:
         editShift?.pauseMinutes != null && editShift.pauseMinutes > 0
           ? String(editShift.pauseMinutes)
@@ -515,7 +582,8 @@ export function ShiftDialog({
     form.selection === "freistellung" ||
     form.selection === "abgesagt_ag" ||
     form.selection === "abgesagt_an" ||
-    form.selection === "urlaubsabgeltung";
+    form.selection === "urlaubsabgeltung" ||
+    form.selection === "wunschfrei";
   // Halbtägiger Zeitraum ("Von-bis") ist bewusst NUR für Urlaub anlegbar
   // (#862) — andere Abwesenheitsarten bleiben ganztägig, wie im Auftrag
   // festgelegt (kein zusätzlicher Bedarf, weniger Sonderfälle in Auswertung
@@ -906,6 +974,10 @@ export function ShiftDialog({
               ? Number(form.einsatzTeamId)
               : null,
           isVertretung: !isAbsence && !isTeam ? form.isVertretung : false,
+          // Vertretung vormerken bleibt beim Übergang ZU einer Abwesenheit
+          // serverseitig bewusst stehen (Grundlage für den Aktivierungs-
+          // Vorschlag) — hier nur senden, wenn es noch ein Arbeitsdienst ist.
+          ...(!isAbsence && !isTeam ? { standbyUserId: form.standbyUserId ? Number(form.standbyUserId) : null } : {}),
           pauseMinutes:
             !isAbsence && !isTeam ? Math.max(0, Number(form.pauseMinutes) || 0) : 0,
         };
@@ -914,6 +986,7 @@ export function ShiftDialog({
           data: { ...data, ...(force ? { force: true } : {}) } as typeof data,
         });
         upsertShiftsInCache(queryClient, [updated], teamId ?? null);
+        if (updated.vertretungsVorschlag) onVertretungsVorschlag?.(updated.vertretungsVorschlag);
       } else {
         const data = {
           userId: Number(form.userId),
@@ -929,6 +1002,7 @@ export function ShiftDialog({
           ...(!isAbsence && !isTeam
             ? {
                 isVertretung: form.isVertretung,
+                standbyUserId: form.standbyUserId ? Number(form.standbyUserId) : undefined,
                 pauseMinutes: Math.max(0, Number(form.pauseMinutes) || 0),
               }
             : {}),
@@ -941,6 +1015,7 @@ export function ShiftDialog({
           } as typeof data,
         });
         upsertShiftsInCache(queryClient, [created], teamId ?? null);
+        if (created.vertretungsVorschlag) onVertretungsVorschlag?.(created.vertretungsVorschlag);
       }
       // Sofort reagieren: der gespeicherte Eintrag steht schon im Cache; der
       // Abgleich abgeleiteter Daten läuft im Hintergrund.
@@ -1475,6 +1550,12 @@ export function ShiftDialog({
                       Abgesagt durch Assistenz (unbezahlt)
                     </span>
                   </SelectItem>
+                  <SelectItem value="wunschfrei">
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block h-2.5 w-2.5 rounded-full bg-rose-600" />
+                      Wunschfrei (unbezahlt)
+                    </span>
+                  </SelectItem>
                   <SelectItem value="urlaubsabgeltung">
                     <span className="flex items-center gap-2">
                       <span className="inline-block h-2.5 w-2.5 rounded-full bg-lime-600" />
@@ -1609,39 +1690,94 @@ export function ShiftDialog({
             </div>
           )}
 
-          {/* Vertretung + unbezahlte Pause: reine Info-Kennzahlen der
-              Lohnauswertung, nur für Arbeitsdienste (Server setzt sie bei
-              Abwesenheiten/Team-Einträgen zurück). */}
+          {/* Kay-Entscheidung 30.08.2026: Das Häkchen "Dieser Dienst ist
+              selbst eine Vertretung" ist RAUS. Eine Vertretung entsteht jetzt
+              ausschließlich auf einem Weg — beim Eintragen der Abwesenheit
+              fragt die App, ob die vorgemerkte Person einspringt, und legt den
+              Dienst mit isVertretung=true an. Das Häkchen war der zweite Weg
+              zum selben Ziel: umständlich (Dienst von Hand doppelt anlegen)
+              und im Test regelmäßig mit "Vertretung vormerken" verwechselt.
+              Das Feld isVertretung selbst bleibt — es wird nur nicht mehr von
+              Hand gesetzt, sondern beim Aktivieren der Vormerkung. */}
+
           {!isAbsence && !isTeam && (
-            <div className="grid grid-cols-2 items-end gap-3">
-              <label
-                className="flex h-9 cursor-pointer items-center gap-2 text-sm"
-                data-testid="shift-dialog-vertretung"
+            <div className="space-y-1.5">
+              <Label>Unbezahlte Pause (Min.)</Label>
+              <Input
+                type="number"
+                min={0}
+                max={1440}
+                step={5}
+                placeholder="0"
+                data-testid="shift-dialog-pause"
+                value={form.pauseMinutes}
+                onChange={(e) => {
+                  setPauseTouched(true);
+                  set("pauseMinutes", e.target.value);
+                }}
+              />
+            </div>
+          )}
+
+          {/* Vertretung vormerken: reine Planungshilfe für den Ausfall-Fall,
+              unabhängig von "Vertretung" oben (das markiert DIESEN Dienst
+              rückwirkend als Vertretung für jemand anderen). Nur beim
+              Einzel-Anlegen/-Bearbeiten — Sammelaufträge kennen keine
+              einzelne Vormerkung pro Tag. */}
+          {!isAbsence && !isTeam && !isBulk && (
+            <div className="space-y-1.5">
+              <Label>Vertretung vormerken – falls dieser Dienst ausfällt (optional)</Label>
+              <Select
+                value={form.standbyUserId || "none"}
+                onValueChange={(v) => set("standbyUserId", v === "none" ? "" : v)}
               >
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-primary"
-                  checked={form.isVertretung}
-                  onChange={(e) => set("isVertretung", e.target.checked)}
-                />
-                Vertretung
-              </label>
-              <div className="space-y-1.5">
-                <Label>Unbezahlte Pause (Min.)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={1440}
-                  step={5}
-                  placeholder="0"
-                  data-testid="shift-dialog-pause"
-                  value={form.pauseMinutes}
-                  onChange={(e) => {
-                    setPauseTouched(true);
-                    set("pauseMinutes", e.target.value);
-                  }}
-                />
-              </div>
+                <SelectTrigger data-testid="shift-dialog-standby">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Keine Vertretung vorgemerkt</SelectItem>
+                  {assistants
+                    .filter((a) => String(a.id) !== form.userId)
+                    // Meiste freie Kapazität zuerst (wie Stundenkonto-Sortierung
+                    // "kapazitaet") — die naheliegendste Vertretung steht oben,
+                    // ohne dass man selbst rechnen muss. Personen ohne Vertrag
+                    // (keine Kapazität berechenbar) ans Ende, dann alphabetisch.
+                    .slice()
+                    .sort((a, b) => {
+                      const capA = capacityByUserId?.get(a.id);
+                      const capB = capacityByUserId?.get(b.id);
+                      const hasA = capA?.hasContract ?? false;
+                      const hasB = capB?.hasContract ?? false;
+                      if (hasA !== hasB) return hasA ? -1 : 1;
+                      if (hasA && hasB && Math.abs(capB!.frei - capA!.frei) > 0.001) {
+                        return capB!.frei - capA!.frei;
+                      }
+                      return a.name.localeCompare(b.name, "de");
+                    })
+                    .map((a) => {
+                      const cap = capacityByUserId?.get(a.id);
+                      const label = capacityDotLabel(cap);
+                      return (
+                        <SelectItem key={a.id} value={String(a.id)} title={label ?? undefined}>
+                          <span className="flex items-center gap-1.5">
+                            <CapacityDot cap={cap} />
+                            {a.name}
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
+                </SelectContent>
+              </Select>
+              {form.standbyUserId && (
+                <p className="text-xs text-muted-foreground">
+                  Fällt der Dienst aus, schlägt die App vor, mit denselben
+                  Zeiten einen Dienst für diese Person anzulegen.
+                  {(() => {
+                    const label = capacityDotLabel(capacityByUserId?.get(Number(form.standbyUserId)));
+                    return label ? ` (${label})` : "";
+                  })()}
+                </p>
+              )}
             </div>
           )}
 
@@ -1727,7 +1863,9 @@ export function ShiftDialog({
                           ? "Von der Assistenzkraft abgesagter Dienst. Unbezahlt — die Stunden erscheinen in der Auswertung nur als Info-Kennzahl."
                           : form.selection === "urlaubsabgeltung"
                             ? "Urlaubsabgeltung: nicht genommener Urlaub wird ausgezahlt. Der Euro-Wert erscheint in der Auswertung als eigene Position (kein Arbeits-Soll)."
-                            : "Krankheitstag wird als ganzer Tag eingetragen. Vertragsstunden werden als Lohnfortzahlung gutgeschrieben."}
+                            : form.selection === "wunschfrei"
+                              ? "Wunschfrei sperrt den Tag für die Planung: Die Assistenzkraft kann an diesem Tag nicht eingeplant werden. Unbezahlt, verbraucht keine Vertragsstunden und keinen Urlaubstag."
+                              : "Krankheitstag wird als ganzer Tag eingetragen. Vertragsstunden werden als Lohnfortzahlung gutgeschrieben."}
             </p>
           )}
 

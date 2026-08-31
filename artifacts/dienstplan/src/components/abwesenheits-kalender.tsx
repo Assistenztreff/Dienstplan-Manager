@@ -76,6 +76,9 @@ export const ABSENCE_CATEGORY: Record<string, AbsenceCategory> = {
   freizeitausgleich: "geplant",
   freistellung: "geplant",
   urlaubsabgeltung: "geplant",
+  // Wunschfrei ist ein im Voraus genehmigter, geplanter freier Tag — daher
+  // "geplant" und nicht "absage" (kein kurzfristiger Ausfall).
+  wunschfrei: "geplant",
   sick: "ausfall",
   kind_krank: "ausfall",
   abgesagt_ag: "absage",
@@ -91,6 +94,7 @@ export const ABSENCE_TYPE_LABELS: Record<string, string> = {
   urlaubsabgeltung: "Urlaubsabgeltung",
   abgesagt_ag: "Abgesagt (Arbeitgeber)",
   abgesagt_an: "Abgesagt (Assistenz)",
+  wunschfrei: "Wunschfrei",
 };
 
 const ABSENCE_TYPES = Object.keys(ABSENCE_CATEGORY);

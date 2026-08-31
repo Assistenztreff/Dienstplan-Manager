@@ -2,6 +2,7 @@ import { format, isSameDay, isToday, getDay, getISOWeek, startOfWeek } from "dat
 import { de } from "date-fns/locale";
 import { Plus, ChevronDown } from "lucide-react";
 import { ABSENCE_CATEGORY } from "@/components/abwesenheits-kalender";
+import type { ShiftDeviationReport, ShiftSwapRequest } from "@workspace/api-client-react";
 import {
   isAbsenceShift,
   type Shift,
@@ -9,6 +10,7 @@ import {
   usePersonSlotLookup,
 } from "./dienstplan-helpers";
 import { DayDetailRow } from "./day-detail-row";
+import type { DeviationReportValues } from "./deviation-dialog";
 
 export function AgendaView({
   days,
@@ -17,6 +19,7 @@ export function AgendaView({
   onDayClick,
   onShiftClick,
   onConfirmShift,
+  onConfirmOwnShift,
   canEdit,
   selectionMode = false,
   selectedDates,
@@ -28,6 +31,16 @@ export function AgendaView({
   anchorInterval,
   collapsedWeeks,
   onToggleWeek,
+  deviationReports,
+  meldungWiederMoeglichShiftIds,
+  onReportDeviation,
+  onAcceptDeviation,
+  onDisputeDeviation,
+  deviationActionPending,
+  swapRequests,
+  onRequestSwap,
+  onResolveSwap,
+  swapActionPending,
 }: {
   days: Date[];
   shifts: Shift[];
@@ -35,7 +48,22 @@ export function AgendaView({
   onDayClick: (day: Date) => void;
   onShiftClick: (shift: Shift) => void;
   onConfirmShift?: (shift: Shift) => void;
+  /** Eigenbestätigung der Assistenzkraft (eigene Route, s. day-detail-row). */
+  onConfirmOwnShift?: (shift: Shift) => void;
   canEdit: boolean;
+  /** Abweichungsmodell: shiftId → Meldung, plus die drei Aktionen. Fehlen
+   *  sie, bleibt die Zeile unverändert (Ownership-/Rollenprüfung lebt in
+   *  DayDetailRow selbst). */
+  deviationReports?: Map<number, ShiftDeviationReport>;
+  meldungWiederMoeglichShiftIds?: ReadonlySet<number>;
+  onReportDeviation?: (shift: Shift, values: DeviationReportValues) => void;
+  onAcceptDeviation?: (shift: Shift) => void;
+  onDisputeDeviation?: (shift: Shift, reason: string) => void;
+  deviationActionPending?: boolean;
+  swapRequests?: Map<number, ShiftSwapRequest>;
+  onRequestSwap?: (shift: Shift, reason: string) => void;
+  onResolveSwap?: (shift: Shift, resolution: "REASSIGNED" | "DECLINED", note?: string) => void;
+  swapActionPending?: boolean;
   selectionMode?: boolean;
   selectedDates?: string[];
   onToggleDate?: (day: Date) => void;
@@ -278,6 +306,28 @@ export function AgendaView({
                             hasAusfall={!isAbsenceShift(shift) && dayAusfallUserIds.has(shift.userId)}
                             onClick={dayClickable && !selectionMode ? () => onShiftClick(shift) : undefined}
                             onConfirm={dayClickable && !selectionMode ? onConfirmShift : undefined}
+                            // Wie "War anders" bewusst OHNE den canEdit-Anteil
+                            // von dayClickable: die Eigenbestätigung ist gerade
+                            // für Nicht-Planer gedacht. Ownership und Status
+                            // prüft die Zeile selbst (selfConfirmable).
+                            onConfirmOwn={!other && !selectionMode ? onConfirmOwnShift : undefined}
+                            deviationReport={deviationReports?.get(shift.id)}
+                            meldungWiederMoeglich={meldungWiederMoeglichShiftIds?.has(shift.id) ?? false}
+                            // "War anders" ist für die Assistenzkraft selbst
+                            // gedacht, NICHT nur für Bearbeitungsberechtigte —
+                            // anders als onClick/onConfirm daher bewusst ohne
+                            // canEdit-Anteil von dayClickable (Ownership/FIX/
+                            // Vergangenheits-Check übernimmt DayDetailRow
+                            // selbst). Annehmen/Widersprechen bleiben Planer-
+                            // exklusiv, also weiterhin an dayClickable gekoppelt.
+                            onReportDeviation={!other && !selectionMode ? onReportDeviation : undefined}
+                            onAcceptDeviation={dayClickable && !selectionMode ? onAcceptDeviation : undefined}
+                            onDisputeDeviation={dayClickable && !selectionMode ? onDisputeDeviation : undefined}
+                            deviationActionPending={deviationActionPending}
+                            swapRequest={swapRequests?.get(shift.id)}
+                            onRequestSwap={!other && !selectionMode ? onRequestSwap : undefined}
+                            onResolveSwap={dayClickable && !selectionMode ? onResolveSwap : undefined}
+                            swapActionPending={swapActionPending}
                           />
                           {shift.notes && (
                             <p

@@ -53,6 +53,8 @@ export interface AccountTreeDbClient {
  * mit FK-Fehler fehl und die Test-DB sammelt wieder Konten-Leichen an. Das
  * Skript `verify-test-db-cleanup` prueft genau diese Invariante automatisch.
  */
+import { USER_BOUND_RESTRICT_TABLES } from "@workspace/db/user-bound-tables";
+
 export const TEAM_BOUND_TABLES = [
   "month_closings",
   "time_tracking",
@@ -60,7 +62,42 @@ export const TEAM_BOUND_TABLES = [
   "contracts",
   "shift_models",
   "absence_requests",
+  // Haengen zwar per ON DELETE CASCADE am Dienst und verschwinden mit ihm —
+  // der Selbstheilungs-Check verlangt aber jede team_id-Tabelle ausdruecklich,
+  // damit eine neue Tabelle nie stillschweigend durchrutscht.
+  "shift_changes",
+  "shift_deviation_reports",
+  "shift_swap_requests",
+  // Loesch-Archive (Stufe 5). In der PRODUKTION haengen sie NICHT am Team:
+  // team_id ist ON DELETE SET NULL, ein geloeschtes Team laesst das Archiv
+  // also stehen — genau so gewollt, der Nachweis soll alles ueberleben. Fuer
+  // die Test-DB muessen sie trotzdem mit weg, sonst sammeln sich ueber die
+  // Laeufe hinweg Archiv-Leichen mit verwaisten Konto-IDs an.
+  "deletion_archives",
 ] as const;
+
+/**
+ * Tabellen, die per user_id am Konto haengen und seit dem Loeschschutz
+ * (§ 16 ArbZG / § 17 MiLoG, 28.08.2026) mit ON DELETE RESTRICT statt CASCADE
+ * verknuepft sind. Genau das ist der Zweck des Loeschschutzes: Zeitnachweise
+ * duerfen beim Loeschen einer Assistenzkraft NICHT stillschweigend
+ * verschwinden. Fuer die Test-Infrastruktur muessen sie deshalb ausdruecklich
+ * vorher weg — frueher erledigte das die Kaskade.
+ *
+ * Reihenfolge ist relevant: die drei Schicht-Protokolltabellen zuerst
+ * (haengen zusaetzlich am Dienst), danach die uebrigen, zuletzt die Dienste.
+ */
+export { USER_BOUND_RESTRICT_TABLES };
+
+export async function deleteUserBoundRows(
+  client: AccountTreeDbClient,
+  ids: number[],
+): Promise<void> {
+  if (ids.length === 0) return;
+  for (const table of USER_BOUND_RESTRICT_TABLES) {
+    await client.query(`DELETE FROM ${table} WHERE user_id = ANY($1)`, [ids]);
+  }
+}
 
 export interface DeleteAccountTreesResult {
   deletedUsers: number;
@@ -92,8 +129,28 @@ export async function deleteAccountTrees(
       }
 
       // 2) Verwaiste Assistenten: nur Mitglied in den zu loeschenden Teams,
-      //    besitzen selbst keine Teams. (User-Delete kaskadiert deren
-      //    Restdaten ueber user_id-FKs.)
+      //    besitzen selbst keine Teams. Ihre user_id-gebundenen Daten werden
+      //    ausdruecklich vorher geloescht (Loeschschutz statt Kaskade).
+      const orphanIdsRes = await client.query(
+        `SELECT u.id FROM users u
+          WHERE NOT (u.id = ANY($1))
+            AND u.role = 'assistant'
+            AND EXISTS (
+              SELECT 1 FROM team_members tm
+               WHERE tm.user_id = u.id AND tm.team_id = ANY($2)
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM team_members tm
+               WHERE tm.user_id = u.id AND NOT (tm.team_id = ANY($2))
+            )
+            AND NOT EXISTS (SELECT 1 FROM teams t WHERE t.owner_id = u.id)`,
+        [userIds, teamIds],
+      );
+      await deleteUserBoundRows(
+        client,
+        (orphanIdsRes.rows as { id: number }[]).map((r) => r.id),
+      );
+
       const orphanRes = await client.query(
         `DELETE FROM users u
           WHERE NOT (u.id = ANY($1))
@@ -129,11 +186,20 @@ export async function deleteAccountTrees(
     //    Konto OHNE Cascade — ein uebrig gebliebener Teamkoordinator wuerde
     //    das Loeschen seines Dienstleister-Kontos blockieren. (Deren
     //    user_id-gebundene Restdaten kaskadieren ueber die User-FKs.)
+    const managedRes = await client.query(
+      "SELECT id FROM users WHERE managed_by_user_id = ANY($1)",
+      [userIds],
+    );
+    await deleteUserBoundRows(
+      client,
+      (managedRes.rows as { id: number }[]).map((r) => r.id),
+    );
     await client.query("DELETE FROM users WHERE managed_by_user_id = ANY($1)", [
       userIds,
     ]);
 
-    // 6) Konten selbst.
+    // 6) Konten selbst — vorher ihre per RESTRICT geschuetzten Daten.
+    await deleteUserBoundRows(client, userIds);
     const usersRes = await client.query("DELETE FROM users WHERE id = ANY($1)", [
       userIds,
     ]);

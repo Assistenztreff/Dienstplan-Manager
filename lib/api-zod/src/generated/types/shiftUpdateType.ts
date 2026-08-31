@@ -24,4 +24,5 @@ export const ShiftUpdateType = {
   abgesagt_ag: 'abgesagt_ag',
   abgesagt_an: 'abgesagt_an',
   urlaubsabgeltung: 'urlaubsabgeltung',
+  wunschfrei: 'wunschfrei',
 } as const;

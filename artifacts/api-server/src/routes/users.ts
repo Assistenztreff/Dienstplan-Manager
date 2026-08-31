@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable, teamMembersTable, teamsTable } from "@workspace/db";
+import { usersTable, teamMembersTable, teamsTable, deletionArchivesTable } from "@workspace/db";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import {
   ListUsersQueryParams,
@@ -21,6 +21,8 @@ import {
   isUserInAllowedTeams,
 } from "../lib/teams";
 import { userWithinLimit, getUserLimit, userHasFeature } from "../lib/plan";
+import { buildDeletionArchive } from "../lib/deletion-archive";
+import { USER_BOUND_RESTRICT_TABLES } from "@workspace/db/user-bound-tables";
 
 const router = Router();
 
@@ -453,6 +455,115 @@ router.patch("/users/:id", requireAdmin, async (req, res): Promise<void> => {
   res.json(user);
 });
 
+// ---------------------------------------------------------------------------
+// Loesch-Workflow (Stufe 5)
+// ---------------------------------------------------------------------------
+// Kay-Entscheidung: echtes Loeschen bleibt moeglich (nicht "deaktivieren" —
+// eine Kontenliste voller Karteileichen will niemand), aber nur mit Export
+// davor. Und zwar mit einem, der tatsaechlich stattgefunden hat: eine Warnung
+// mit Export-Knopf laesst sich wegklicken, ein serverseitiger Nachweis nicht.
+//
+// Das Archiv ist NICHT aelter als dieses Fenster sein zu lassen. Sonst
+// koennte ein Export von vor drei Monaten eine Loeschung freischalten, deren
+// Daten sich seitdem geaendert haben.
+const ARCHIV_FRISCHE_MINUTEN = 30;
+
+/**
+ * Hat dieses Konto aufbewahrungspflichtige Daten? Nur dann ist ein Archiv
+ * Pflicht — fuer eine eben angelegte Assistenzkraft ohne einen einzigen Dienst
+ * waere das Export-Ritual reine Schikane.
+ */
+async function hatAufbewahrungspflichtigeDaten(userId: number): Promise<boolean> {
+  // Dieselbe Liste wie beim Loeschen selbst — sonst koennte eine neue
+  // Nachweis-Tabelle hier durchrutschen und ein Konto ohne Archiv loeschbar
+  // machen, obwohl es aufbewahrungspflichtige Zeilen traegt.
+  const pruefungen = USER_BOUND_RESTRICT_TABLES.map(
+    (t) => sql`EXISTS (SELECT 1 FROM ${sql.raw(t)} WHERE user_id = ${userId})`,
+  );
+  const res = await db.execute<{ vorhanden: boolean }>(
+    sql`SELECT (${sql.join(pruefungen, sql` OR `)}) AS vorhanden`,
+  );
+  return res.rows[0]?.vorhanden === true;
+}
+
+/**
+ * POST /users/:id/deletion-archive
+ *
+ * Erzeugt das Archiv, legt es ab und liefert DIESELBEN Bytes als Download.
+ * Genau deshalb ist die Datei im Ordner des Planers byte-gleich mit der im
+ * Server-Archiv — es gibt keine zweite Erzeugung, die abweichen koennte.
+ */
+router.post("/users/:id/deletion-archive", requireAdmin, async (req, res): Promise<void> => {
+  const params = DeleteUserParams.safeParse({ id: Number(req.params["id"]) });
+  if (!params.success) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  if (req.session.userId !== params.data.id) {
+    const allowed = await isUserInAllowedTeams(req.session.userId!, params.data.id);
+    if (!allowed) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+  }
+
+  const [ziel] = await db
+    .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email })
+    .from(usersTable)
+    .where(eq(usersTable.id, params.data.id))
+    .limit(1);
+  if (!ziel) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const [mitgliedschaft] = await db
+    .select({ teamId: teamMembersTable.teamId })
+    .from(teamMembersTable)
+    .where(eq(teamMembersTable.userId, ziel.id))
+    .limit(1);
+
+  const [ausloeser] = await db
+    .select({ name: usersTable.name })
+    .from(usersTable)
+    .where(eq(usersTable.id, req.session.userId!))
+    .limit(1);
+
+  const archiv = await buildDeletionArchive(
+    req.session.userId!,
+    ziel,
+    mitgliedschaft?.teamId ?? null,
+  );
+
+  const [zeile] = await db
+    .insert(deletionArchivesTable)
+    .values({
+      userId: ziel.id,
+      userName: ziel.name,
+      userEmail: ziel.email ?? null,
+      teamId: mitgliedschaft?.teamId ?? null,
+      createdBy: req.session.userId!,
+      createdByName: ausloeser?.name ?? "unbekannt",
+      fileName: archiv.fileName,
+      contentType: archiv.contentType,
+      content: archiv.content,
+      byteSize: archiv.content.byteLength,
+    })
+    .returning({ id: deletionArchivesTable.id });
+
+  res
+    .status(200)
+    .set({
+      "Content-Type": archiv.contentType,
+      "Content-Disposition": `attachment; filename="${archiv.fileName}"`,
+      "X-Deletion-Archive-Id": String(zeile!.id),
+      // Ohne das sieht der Browser den Header nicht — die Antwort geht per
+      // fetch an den Client, nicht per Navigation.
+      "Access-Control-Expose-Headers": "X-Deletion-Archive-Id, Content-Disposition",
+    })
+    .send(archiv.content);
+});
+
 router.delete("/users/:id", requireAdmin, async (req, res): Promise<void> => {
   const params = DeleteUserParams.safeParse({ id: Number(req.params["id"]) });
   if (!params.success) {
@@ -477,22 +588,89 @@ router.delete("/users/:id", requireAdmin, async (req, res): Promise<void> => {
     .limit(1);
   if (ownedTeam) {
     res.status(409).json({
+      code: "owned_team",
       error:
         "Konto kann nicht gelöscht werden, solange es noch Teams besitzt. Bitte zuerst alle Teams des Kontos löschen.",
     });
     return;
   }
+  // Archiv-Pflicht (Stufe 5): nur fuer Konten, die tatsaechlich
+  // aufbewahrungspflichtige Daten tragen.
+  const brauchtArchiv = await hatAufbewahrungspflichtigeDaten(params.data.id);
+  let archivId: number | null = null;
+  if (brauchtArchiv) {
+    const frischeGrenze = new Date(Date.now() - ARCHIV_FRISCHE_MINUTEN * 60_000);
+    const [archiv] = await db
+      .select({ id: deletionArchivesTable.id })
+      .from(deletionArchivesTable)
+      .where(
+        and(
+          eq(deletionArchivesTable.userId, params.data.id),
+          // Derselbe Admin, der jetzt loescht — ein fremder Export von
+          // gestern soll niemandem die Loeschung freischalten.
+          eq(deletionArchivesTable.createdBy, req.session.userId!),
+          sql`${deletionArchivesTable.deletedAt} IS NULL`,
+          sql`${deletionArchivesTable.createdAt} >= ${frischeGrenze}`,
+        ),
+      )
+      .orderBy(sql`${deletionArchivesTable.id} DESC`)
+      .limit(1);
+    if (!archiv) {
+      res.status(409).json({
+        code: "deletion_archive_required",
+        error:
+          "Vor dem Löschen muss das Archiv dieser Assistenzkraft erzeugt und heruntergeladen werden.",
+      });
+      return;
+    }
+    archivId = archiv.id;
+  }
+
   try {
-    await db.delete(usersTable).where(eq(usersTable.id, params.data.id));
+    await db.transaction(async (tx) => {
+      // Reihenfolge zaehlt und steckt in der Liste selbst: die
+      // Schicht-Protokolltabellen zuerst (haengen zusaetzlich am Dienst), die
+      // Dienste zuletzt. Die Liste kommt aus @workspace/db und wird vom
+      // Test-Cleanup (lib/test-fixtures) GETEILT — bewusst keine zweite
+      // Kopie hier: eine neue Nachweis-Tabelle, die nur an einer der beiden
+      // Stellen nachgetragen wird, ist genau der Fehler vom 28.08.2026.
+      //
+      // WICHTIG: gefiltert wird strikt auf user_id — also nur die eigenen
+      // Zeilen dieser Person. Zeilen, in denen sie als Handelnde auftaucht
+      // (changed_by, confirmed_by, resolved_by), bleiben unangetastet: das
+      // sind die Nachweise ANDERER Menschen. Wo die Spalte das zulaesst,
+      // leert Postgres sie selbst (ON DELETE SET NULL); wo nicht, scheitert
+      // das DELETE bewusst und wird unten als 409 gemeldet, statt fremde
+      // Aufzeichnungen zu beschaedigen.
+      for (const tabelle of USER_BOUND_RESTRICT_TABLES) {
+        await tx.execute(
+          sql`DELETE FROM ${sql.raw(tabelle)} WHERE user_id = ${params.data.id}`,
+        );
+      }
+      await tx.delete(usersTable).where(eq(usersTable.id, params.data.id));
+      if (archivId != null) {
+        // Stempel erst hier: scheitert das Loeschen, bleibt das Archiv
+        // unbenutzt und der naechste Versuch kann es weiterverwenden.
+        await tx
+          .update(deletionArchivesTable)
+          .set({ deletedAt: new Date() })
+          .where(eq(deletionArchivesTable.id, archivId));
+      }
+    });
   } catch (err) {
     // Sicherheitsnetz: verbleibende FK-Abhängigkeiten (23503) sauber als 409
-    // melden statt als unbehandelter Serverfehler.
+    // melden statt als unbehandelter Serverfehler. Nach dem Aufraeumen oben
+    // bleibt genau ein Fall uebrig: das Konto ist in fremden Datensaetzen als
+    // handelnde Person eingetragen (z. B. ein Planer, der Zeiten anderer
+    // korrigiert hat). Diese Zeilen zu loeschen wuerde fremde Nachweise
+    // zerstoeren — deshalb bleibt das Konto stehen.
     const pgCode = (err as { cause?: { code?: string }; code?: string })?.cause?.code ??
       (err as { code?: string })?.code;
     if (pgCode === "23503") {
       res.status(409).json({
+        code: "foreign_dependency",
         error:
-          "Konto kann nicht gelöscht werden, solange noch abhängige Daten bestehen.",
+          "Konto kann nicht gelöscht werden: es ist in den Aufzeichnungen anderer Personen als handelnde Person eingetragen (z. B. als Planer einer Zeitkorrektur). Diese Nachweise dürfen nicht mitgelöscht werden.",
       });
       return;
     }

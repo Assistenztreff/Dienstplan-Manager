@@ -172,6 +172,7 @@ export function BulkEditDialog({
         s.type !== "abgesagt_ag" &&
         s.type !== "abgesagt_an" &&
         s.type !== "urlaubsabgeltung" &&
+        s.type !== "wunschfrei" &&
         dateSet.has(localDayKey(s.startTime)) &&
         (filterUserId === "all" || s.userId === filterUserId),
     );

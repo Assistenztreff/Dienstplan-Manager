@@ -10,11 +10,23 @@ import {
   useSendShiftProposals,
   useBulkConfirmOwnShifts,
   useGetHoursBalance,
+  useListShiftDeviations,
+  useListShiftSwapRequests,
+  useRequestShiftSwap,
+  useResolveShiftSwapRequest,
+  useConfirmOwnShift,
+  useListShiftChanges,
+  useReportShiftDeviation,
+  useAcceptShiftDeviation,
+  useDisputeShiftDeviation,
   useGetHourBudgetBalance,
+  type ShiftInputType,
   type User,
   type ShiftModel,
   type HoursBalance,
   type HourBudgetBalance,
+  type ShiftDeviationReport,
+  type ShiftSwapRequest,
 } from "@workspace/api-client-react";
 import { useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isValid } from "date-fns";
@@ -23,6 +35,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Check, X, CalendarPlus, Trash2, Pencil, ChevronsLeft } from "lucide-react";
 import { ShiftDialog } from "@/components/shift-dialog";
+import { useVertretungAktivieren } from "@/lib/vertretung-aktivieren";
 import { BulkDeleteDialog } from "@/components/bulk-delete-dialog";
 import { BulkEditDialog } from "@/components/bulk-edit-dialog";
 import { useTeam } from "@/context/team";
@@ -38,6 +51,7 @@ import {
   useSelectedUserIds,
   useIsWideStundenkontoLayout,
   useStundenkontoSort,
+  useStundenkontoEintraege,
 } from "@/components/stundenkonto-leiste";
 import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { exportSimpleMonthPdf } from "@/lib/pdf-export";
@@ -60,6 +74,10 @@ import {
   invalidateShiftDerivedQueries,
 } from "@/lib/shift-cache";
 import {
+  istSeitherKorrigiert,
+  type LetzteAenderung,
+} from "@workspace/shift-defaults/deviation-rules";
+import {
   type DialogState,
   isAbsenceShift,
   isMirrorShift,
@@ -70,7 +88,11 @@ import {
   TeamAbsenceOverview,
   usePersistentState,
 } from "./dienstplan-helpers";
+import { StatusBadge } from "@/components/status-badge";
+import { CorrectedShiftsProvider } from "./corrected-shifts";
 import { MonthGrid } from "./month-grid";
+import type { DeviationReportValues } from "./deviation-dialog";
+import { readableApiError } from "@/lib/api-error";
 import { ScheduleList } from "./schedule-list";
 import { DienstplanHeader } from "./dienstplan-header";
 import { DienstplanTableView } from "./dienstplan-table-view";
@@ -173,6 +195,216 @@ export default function Dienstplan() {
   ) as { data?: Shift[]; isLoading: boolean; isFetching: boolean };
   const queryClient = useQueryClient();
 
+  // Abweichungsmodell: alle Meldungen im Team-Scope, als shiftId → Meldung
+  // nachgeschlagen. Kein Monatsfilter — die Route kennt keinen, und das
+  // Datenaufkommen bleibt klein (nur tatsächlich gemeldete Abweichungen).
+  const { data: deviationReportsData } = useListShiftDeviations(teamParam, {
+    query: { enabled: isTeamScopeReady },
+  } as unknown as Parameters<typeof useListShiftDeviations>[1]) as {
+    data?: ShiftDeviationReport[];
+  };
+  // JÜNGSTE Meldung je Dienst. Seit dem 28.08.2026 kann ein Dienst mehrere
+  // Meldungen haben — nach jeder erneuten Planer-Korrektur öffnet sich der
+  // Kanal wieder. Ohne die id-Prüfung gewönne hier eine zufällige alte Zeile.
+  const deviationReportsByShiftId = useMemo(() => {
+    const map = new Map<number, ShiftDeviationReport>();
+    for (const report of deviationReportsData ?? []) {
+      const vorhanden = map.get(report.shiftId);
+      if (!vorhanden || report.id > vorhanden.id) map.set(report.shiftId, report);
+    }
+    return map;
+  }, [deviationReportsData]);
+
+  // Tauschwuensche (Kay 30.08.2026), gleiche Bauart wie die Abweichungen:
+  // team-gescopte Liste, im Frontend als shiftId → Anfrage nachgeschlagen.
+  // Die Route liefert einer Assistenzkraft nur ihre EIGENEN Anfragen — der
+  // Grund ist oft privat.
+  const { data: swapRequestsData } = useListShiftSwapRequests(teamParam, {
+    query: { enabled: isTeamScopeReady },
+  } as unknown as Parameters<typeof useListShiftSwapRequests>[1]) as {
+    data?: ShiftSwapRequest[];
+  };
+  // JUENGSTE Anfrage je Dienst: Ein abgelehnter Wunsch schliesst einen
+  // spaeteren neuen nicht aus (zweiter Termin), also kann es mehrere geben.
+  const swapRequestsByShiftId = useMemo(() => {
+    const map = new Map<number, ShiftSwapRequest>();
+    for (const request of swapRequestsData ?? []) {
+      const vorhanden = map.get(request.shiftId);
+      if (!vorhanden || request.id > vorhanden.id) map.set(request.shiftId, request);
+    }
+    return map;
+  }, [swapRequestsData]);
+  // Dienste mit ANGENOMMENER Abweichungsmeldung. Sie bleiben FIX (beide Seiten
+  // sind sich einig, eine erneute Bestaetigung waere sinnlos), sollen aber in
+  // allen Ansichten als nachtraeglich korrigiert erkennbar sein — per Context
+  // statt Prop-Kette, s. corrected-shifts.tsx.
+  // Letzte Aenderung je Dienst. Seit Korrekturen sofort gelten (28.08.2026),
+  // taugt der Planungsstatus nicht mehr als Erkennungsmerkmal — der Dienst
+  // bleibt bestaetigt. Diese Liste ist die neue Quelle.
+  const { data: shiftChangesData } = useListShiftChanges(teamParam, {
+    query: { enabled: isTeamScopeReady },
+  } as unknown as Parameters<typeof useListShiftChanges>[1]) as {
+    data?: { shiftId: number; changeSource: string; createdAt: string }[];
+  };
+
+  /** Alle nachtraeglich geaenderten Dienste — bekommen das Korrektur-Symbol. */
+  const correctedShiftIds = useMemo(() => {
+    // NUR vergangene Dienste tragen das Korrektur-Kennzeichen. Ein künftiger,
+    // vom Planer geänderter Dienst fällt auf "Vorschlag" zurück und wird dort
+    // bestätigt — er ist eine Planänderung, keine Korrektur einer geleisteten
+    // Zeit. Ohne diesen Filter stand an ihm "bestätigt · korrigiert" samt
+    // Uhr-Symbol, aber ohne Melde-Knopf (Kay-Test 28.08.2026, 31. August).
+    const vergangeneIds = new Set(
+      (shifts ?? [])
+        .filter((sh) => new Date(sh.endTime).getTime() < Date.now())
+        .map((sh) => sh.id),
+    );
+    const ids = new Set<number>();
+    for (const c of shiftChangesData ?? []) {
+      if (vergangeneIds.has(c.shiftId)) ids.add(c.shiftId);
+    }
+    // Bestandsdaten aus der Zeit vor /shifts/changes: eine angenommene
+    // Abweichung ist ebenfalls eine Korrektur.
+    for (const report of deviationReportsData ?? []) {
+      if (report.status === "ACCEPTED" && vergangeneIds.has(report.shiftId)) {
+        ids.add(report.shiftId);
+      }
+    }
+    return ids;
+  }, [shifts, shiftChangesData, deviationReportsData]);
+
+  /**
+   * Dienste, bei denen die Assistenzkraft ERNEUT melden darf: Die letzte
+   * Meldung ist abgeschlossen (angenommen oder abgelehnt), und der Planer hat
+   * den Dienst DANACH nochmals geändert — ein neuer Sachverhalt. Spiegelt
+   * exakt die Serverregel in shifts-deviations.ts; ohne diese Menge bliebe der
+   * Knopf verschwunden, weil noch eine (alte) Meldung am Dienst hängt.
+   */
+  const meldungWiederMoeglichShiftIds = useMemo(() => {
+    // Entscheidung faellt in der GEMEINSAMEN Regel
+    // (@workspace/shift-defaults/deviation-rules) — dieselbe Funktion, die der
+    // Server beim POST anwendet. Vorher stand die Regel hier ein zweites Mal
+    // und lief auseinander (Kay-Test 28.08.2026, Punkt 4).
+    // /api/shifts/changes liefert bereits genau eine Zeile je Dienst (die
+    // juengste), deshalb ist die Map hier schon "die letzte Aenderung".
+    const letzteAenderung = new Map<number, LetzteAenderung>();
+    for (const c of shiftChangesData ?? []) {
+      letzteAenderung.set(c.shiftId, {
+        changeSource: c.changeSource,
+        createdAt: c.createdAt,
+      });
+    }
+    const ids = new Set<number>();
+    for (const [shiftId, report] of deviationReportsByShiftId) {
+      if (report.status === "PENDING") continue;
+      if (istSeitherKorrigiert(report, letzteAenderung.get(shiftId))) ids.add(shiftId);
+    }
+    return ids;
+  }, [shiftChangesData, deviationReportsByShiftId]);
+
+  /** Vom PLANER zuletzt geaenderte Dienste — nur hier ist Widerspruch moeglich. */
+  const plannerCorrectedShiftIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const c of shiftChangesData ?? []) {
+      if (c.changeSource === "planner_edit" && correctedShiftIds.has(c.shiftId)) {
+        ids.add(c.shiftId);
+      }
+    }
+    return ids;
+  }, [shiftChangesData, correctedShiftIds]);
+
+  const confirmOwnShiftMutation = useConfirmOwnShift();
+  const reportDeviationMutation = useReportShiftDeviation();
+  const acceptDeviationMutation = useAcceptShiftDeviation();
+  const disputeDeviationMutation = useDisputeShiftDeviation();
+  const deviationActionPending =
+    reportDeviationMutation.isPending ||
+    acceptDeviationMutation.isPending ||
+    disputeDeviationMutation.isPending;
+
+  const requestSwapMutation = useRequestShiftSwap();
+  const resolveSwapMutation = useResolveShiftSwapRequest();
+  const swapActionPending = requestSwapMutation.isPending || resolveSwapMutation.isPending;
+
+  // invalidateShiftDerivedQueries invalidiert per Präfix alles unter
+  // /api/shifts (Details s. shift-cache.ts) — deckt sowohl die Monatsliste
+  // als auch /api/shifts/deviations in einem Rutsch ab, kein separater
+  // Invalidierungs-Aufruf für die Meldungsliste nötig.
+  async function reportDeviation(shift: Shift, values: DeviationReportValues) {
+    try {
+      await reportDeviationMutation.mutateAsync({ id: shift.id, data: values });
+      void invalidateShiftDerivedQueries(queryClient, { refetchType: "all" });
+      toast.success("Abweichung gemeldet — der Planer wird benachrichtigt.");
+    } catch (err) {
+      if (!navigator.onLine) return;
+      toast.error(readableApiError(err, "Melden fehlgeschlagen. Bitte erneut versuchen."));
+    }
+  }
+
+  async function acceptDeviation(shift: Shift) {
+    try {
+      const updated = await acceptDeviationMutation.mutateAsync({ id: shift.id });
+      // Die Schicht selbst hat sich geändert (Zeiten/Stunden) — Monatsliste
+      // und abgeleitete Auswertungen mit aktualisieren, wie bei confirmShift.
+      void invalidateShiftDerivedQueries(queryClient, { refetchType: "all" });
+      toast.success(
+        `Abweichung angenommen — Dienst übernimmt die gemeldete Zeit${
+          updated?.reportedAusgefallen ? " (ausgefallen)" : ""
+        }.`,
+      );
+    } catch (err) {
+      if (!navigator.onLine) return;
+      toast.error(readableApiError(err, "Annehmen fehlgeschlagen. Bitte erneut versuchen."));
+    }
+  }
+
+  async function disputeDeviation(shift: Shift, reason: string) {
+    try {
+      await disputeDeviationMutation.mutateAsync({ id: shift.id, data: { reason } });
+      void invalidateShiftDerivedQueries(queryClient, { refetchType: "all" });
+      toast.success("Widerspruch gesendet — der Planwert bleibt maßgeblich.");
+    } catch (err) {
+      if (!navigator.onLine) return;
+      toast.error(readableApiError(err, "Widersprechen fehlgeschlagen. Bitte erneut versuchen."));
+    }
+  }
+
+  // Tauschwunsch stellen (Assistenzkraft). invalidateShiftDerivedQueries
+  // deckt per Praefix auch /api/shifts/swap-requests ab — kein zweiter
+  // Invalidierungs-Aufruf noetig (s. shift-cache.ts).
+  async function requestSwap(shift: Shift, reason: string) {
+    try {
+      await requestSwapMutation.mutateAsync({ id: shift.id, data: { reason } });
+      void invalidateShiftDerivedQueries(queryClient, { refetchType: "all" });
+      toast.success("Tausch angefragt — die Planung meldet sich.");
+    } catch (err) {
+      if (!navigator.onLine) return;
+      toast.error(readableApiError(err, "Anfrage fehlgeschlagen. Bitte erneut versuchen."));
+    }
+  }
+
+  // Tauschwunsch erledigen (Planer). Der Dienst selbst wird hier NICHT
+  // angefasst — umbesetzt wird wie immer ueber den Dienst-Dialog; dieser
+  // Klick hakt nur die Anfrage ab.
+  async function resolveSwap(
+    shift: Shift,
+    resolution: "REASSIGNED" | "DECLINED",
+    note?: string,
+  ) {
+    try {
+      await resolveSwapMutation.mutateAsync({ id: shift.id, data: { resolution, note } });
+      void invalidateShiftDerivedQueries(queryClient, { refetchType: "all" });
+      toast.success(
+        resolution === "REASSIGNED"
+          ? "Tauschwunsch als erledigt abgehakt."
+          : "Tauschwunsch abgelehnt — die Assistenzkraft sieht deine Antwort.",
+      );
+    } catch (err) {
+      if (!navigator.onLine) return;
+      toast.error(readableApiError(err, "Aktion fehlgeschlagen. Bitte erneut versuchen."));
+    }
+  }
+
   // Vor-/Folgemonat im Hintergrund vorladen (Task #758): ein Klick auf
   // "Vorheriger/Nächster Monat" findet die Daten dann meist schon im Cache.
   // Abhängigkeiten bewusst nur Primitives (nicht das teamParam-Objekt, das
@@ -187,6 +419,7 @@ export default function Dienstplan() {
   }, [queryClient, month, year, selectedTeamId, isTeamScopeReady]);
 
   const updateShift = useUpdateShift();
+  const { frageVertretung: handleVertretungsVorschlag } = useVertretungAktivieren();
   const sendProposalsMutation = useSendShiftProposals();
   const bulkConfirmOwnMutation = useBulkConfirmOwnShifts();
   const [confirmingShiftId, setConfirmingShiftId] = useState<number | null>(null);
@@ -338,6 +571,25 @@ export default function Dienstplan() {
 
   const allShifts: Shift[] = shifts ?? [];
 
+  // Kapazitäts-Ampel für die Vertretungs-Auswahl im ShiftDialog (Kay-Feedback
+  // 28.08.2026): wiederverwendet exakt dieselbe Stundenkonto-Bilanz statt
+  // eigener Berechnung — "frei" > 0 heißt noch freie Vertragsstunden diesen
+  // Monat. Ohne sichtbares Stundenkonto (canSeeStundenkonto=false) bleiben
+  // hoursBalances leer → ShiftDialog zeigt dann einfach keine Punkte an.
+  const stundenkontoEintraege = useStundenkontoEintraege(
+    assistants,
+    allShifts,
+    hoursBalances ?? [],
+    "name",
+  );
+  const capacityByUserId = useMemo(
+    () =>
+      new Map(
+        stundenkontoEintraege.map((e) => [e.id, { frei: e.frei, hasContract: e.hasContract }]),
+      ),
+    [stundenkontoEintraege],
+  );
+
   // Map userId → Set<dayKey "yyyy-MM-dd"> aller Abwesenheitstage im geladenen Monat.
   // Wird ausschließlich in der Tabellenansicht (Zell-Styling + Klick-Sperre) genutzt.
   // Der ShiftDialog führt seinen eigenen monatsgenauen Query aus, damit auch
@@ -460,6 +712,90 @@ export default function Dienstplan() {
       )
     : [];
 
+  // Kay-Feedback 28.08.2026: Vorschlag und Korrektur sind zwei verschiedene
+  // Vorgänge und gehören getrennt. Ein VORSCHLAG betrifft einen noch nicht
+  // gearbeiteten Dienst — Zustimmung zur Planung. Eine KORREKTUR betrifft
+  // einen bereits vergangenen Dienst, den der Planer nachträglich geändert
+  // hat (er fällt dabei auf ANGEBOTEN zurück, s. faelltZurueck in
+  // shifts-crud.ts) — Zustimmung zu einer geänderten Arbeitszeit, also eine
+  // arbeitszeitrechtlich ganz andere Aussage. Deshalb zwei Banner statt einem
+  // Sammel-Hinweis, und beide mit Einzelbestätigung.
+  // Eine BESTRITTENE Korrektur zählt hier NICHT mehr mit: Die Assistenzkraft
+  // hat ihren Teil getan, der Ball liegt beim Planer. Ohne diesen Ausschluss
+  // bliebe der Dienst im Banner und im Prüf-Filter stehen, die Liste leerte
+  // sich nie und die Ansicht sprang nach dem Ablehnen nicht zurück — anders
+  // als nach dem Bestätigen (Kay-Feedback 28.08.2026).
+  // Korrekturen sind seit dem 28.08.2026 KEINE Aufgabe mehr, sondern eine
+  // Information: der Dienst gilt bereits. Die Liste treibt deshalb nur noch
+  // den Hinweis und den Pruef-Filter — bestaetigt wird nichts. Bereits
+  // bestrittene fallen raus (der Ball liegt beim Planer), ebenso die vom
+  // Planer schon zurueckgenommenen (dort ist changeSource nicht planner_edit).
+  const myKorrekturShifts = !isAdmin
+    ? allShifts.filter(
+        (s) =>
+          s.userId === currentUser?.id &&
+          !isMirrorShift(s, selectedTeamId) &&
+          plannerCorrectedShiftIds.has(s.id) &&
+          // Nur VERGANGENE Dienste: ein künftiger, vom Planer geänderter Dienst
+          // fällt auf "Vorschlag" zurück und wird dort bestätigt — er gehört
+          // nicht in den Korrektur-Hinweis (Kay-Test 28.08.2026, 31. August).
+          new Date(s.endTime).getTime() < Date.now(),
+      )
+    : [];
+  // Vorschlaege sind unveraendert echte Aufgaben: alles ANGEBOTEN, das keine
+  // Alt-Korrektur aus der Zeit vor der Umstellung ist.
+  // Alle offenen Vorschlaege — ein vergangener, noch unbestaetigter Vorschlag
+  // ist kein Sonderfall mehr, sondern schlicht ueberfaellig.
+  const myVorschlagShifts = myAngebotenShifts;
+  // Die drei Pruef-Listen der Tagesleiste. Sie werden HIER berechnet, weil nur
+  // die Seite Rolle, Team-Kontext und die Abweichungs-Meldungen kennt; die
+  // Liste filtert damit nur noch.
+  const meldungShiftIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const report of deviationReportsData ?? []) {
+      if (report.status === "PENDING") ids.add(report.shiftId);
+    }
+    return ids;
+  }, [deviationReportsData]);
+  const korrekturIdKey = myKorrekturShifts.map((s) => s.id).join(",");
+  const vorschlagIdKey = myVorschlagShifts.map((s) => s.id).join(",");
+  const pruefListen = useMemo(
+    () => ({
+      korrekturen: new Set(myKorrekturShifts.map((s) => s.id)),
+      vorschlaege: new Set(myVorschlagShifts.map((s) => s.id)),
+      // Nur der Planer handelt auf Meldungen und Widersprüchen — bei der
+      // Assistenzkraft bliebe der Filter sonst als leerer Eintrag im Menü.
+      meldungen: canPlan ? meldungShiftIds : new Set<number>(),
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [korrekturIdKey, vorschlagIdKey, meldungShiftIds, canPlan],
+  );
+
+  // Sprungziel der Tagesleiste. nonce statt boolean, damit derselbe Filter
+  // erneut greift, wenn der Nutzer zwischendurch von Hand umgestellt hat.
+  const [focusFilter, setFocusFilter] = useState<
+    { type: "korrekturen" | "vorschlaege" | "meldungen"; nonce: number } | null
+  >(null);
+  const focusPruefliste = (
+    type: "korrekturen" | "vorschlaege" | "meldungen",
+  ) =>
+    setFocusFilter((prev) => ({ type, nonce: (prev?.nonce ?? 0) + 1 }));
+
+  // Dashboard verlinkt mit ?fokus=... direkt in die gefilterte Tagesleiste,
+  // damit "Korrektur pruefen" nicht nur den Monat oeffnet, sondern sofort die
+  // betroffenen Tageszeilen zeigt (Kay-Feedback 28.08.2026).
+  const fokusParam = searchParams.get("fokus");
+  useEffect(() => {
+    if (
+      fokusParam === "korrekturen" ||
+      fokusParam === "vorschlaege" ||
+      fokusParam === "meldungen"
+    ) {
+      focusPruefliste(fokusParam);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fokusParam]);
+
   async function sendProposals() {
     if (!isAdmin || isBulkConfirming) return;
     if (scopedSendableShifts.length === 0) {
@@ -527,6 +863,29 @@ export default function Dienstplan() {
       toast.error("Versenden fehlgeschlagen. Bitte erneut versuchen.");
     } finally {
       setIsBulkConfirming(false);
+    }
+  }
+
+  /**
+   * Assistenzkraft bestätigt EINEN eigenen Dienst (Vorschlag oder Korrektur).
+   * Eigene Route statt PATCH /shifts/:id — die ist planerpflichtig, weshalb
+   * die Einzelbestätigung für Assistenzkräfte bisher gar nicht möglich war
+   * (nur "Alle bestätigen"). Kay-Feedback 28.08.2026.
+   */
+  async function confirmOwnShift(shift: Shift) {
+    if (confirmingShiftId !== null) return;
+    setConfirmingShiftId(shift.id);
+    try {
+      await confirmOwnShiftMutation.mutateAsync({ id: shift.id });
+      const bestaetigt = { ...shift, planningStatus: "FIX" as const };
+      upsertShiftsInCache(queryClient, [bestaetigt], selectedTeamId);
+      void invalidateShiftDerivedQueries(queryClient);
+      toast.success("Dienst bestätigt — zählt jetzt in Auswertungen und Stundennachweis.");
+    } catch (err) {
+      if (!navigator.onLine) return;
+      toast.error(readableApiError(err, "Bestätigen fehlgeschlagen. Bitte erneut versuchen."));
+    } finally {
+      setConfirmingShiftId(null);
     }
   }
 
@@ -670,6 +1029,7 @@ export default function Dienstplan() {
 
   return (
     <PersonColorsContext.Provider value={personColors}>
+    <CorrectedShiftsProvider shiftIds={correctedShiftIds}>
     <div className="flex flex-col gap-3 animate-in fade-in duration-300">
       {header}
 
@@ -680,15 +1040,18 @@ export default function Dienstplan() {
         </PlanLimitBanner>
       )}
 
-      {/* Assistenz-Banner: Vorgeschlagene Dienste bestätigen */}
-      {!isAdmin && myAngebotenShifts.length > 0 && (
+      {/* Assistenz-Banner 2: echte Dienstvorschläge (noch nicht gearbeitet).
+          Sammelbestätigung bleibt hier erhalten — bei reiner Vorausplanung ist
+          sie eine Erleichterung, keine Gefahr. Einzeln geht jetzt zusätzlich
+          über die Tagesleiste. */}
+      {!isAdmin && myVorschlagShifts.length > 0 && (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3">
           <div className="flex items-center gap-2 text-sky-900">
             <Check className="h-4 w-4 shrink-0 text-sky-600" />
             <span className="text-sm font-medium">
-              {myAngebotenShifts.length === 1
+              {myVorschlagShifts.length === 1
                 ? "1 Dienstvorschlag wartet auf Ihre Bestätigung."
-                : `${myAngebotenShifts.length} Dienstvorschläge warten auf Ihre Bestätigung.`}
+                : `${myVorschlagShifts.length} Dienstvorschläge warten auf Ihre Bestätigung.`}
             </span>
           </div>
           <Button
@@ -885,6 +1248,19 @@ export default function Dienstplan() {
         onDayClick={(day) => openCreate(day)}
         onShiftClick={openEdit}
         onConfirmShift={confirmShift}
+            onConfirmOwnShift={confirmOwnShift}
+            pruefListen={pruefListen}
+            focusFilter={focusFilter}
+        deviationReports={deviationReportsByShiftId}
+        meldungWiederMoeglichShiftIds={meldungWiederMoeglichShiftIds}
+        onReportDeviation={reportDeviation}
+        onAcceptDeviation={canPlan ? acceptDeviation : undefined}
+        onDisputeDeviation={canPlan ? disputeDeviation : undefined}
+        deviationActionPending={deviationActionPending}
+        swapRequests={swapRequestsByShiftId}
+        onRequestSwap={requestSwap}
+        onResolveSwap={canPlan ? resolveSwap : undefined}
+        swapActionPending={swapActionPending}
         canEdit={canPlan}
         selectionMode={isSelectionMode}
         selectedDates={selectedDates}
@@ -968,7 +1344,9 @@ export default function Dienstplan() {
             clearSelection();
             closeDialog();
           }}
+          onVertretungsVorschlag={handleVertretungsVorschlag}
           assistants={assistants}
+          capacityByUserId={capacityByUserId}
           month={month}
           year={year}
           teamId={selectedTeamId}
@@ -1046,6 +1424,7 @@ export default function Dienstplan() {
         />
       )}
     </div>
+    </CorrectedShiftsProvider>
     </PersonColorsContext.Provider>
   );
 }

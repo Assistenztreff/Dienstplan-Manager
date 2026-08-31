@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SHIFT_LIST_STALE_TIME_MS, SHIFT_LIST_GC_TIME_MS } from "@/lib/shift-cache";
+import type { ShiftDeviationReport, ShiftSwapRequest } from "@workspace/api-client-react";
 import {
   isAbsenceShift,
   type Shift,
@@ -30,8 +31,42 @@ import {
   usePersistentState,
 } from "./dienstplan-helpers";
 import { AgendaView } from "./agenda-view";
+import type { DeviationReportValues } from "./deviation-dialog";
 
-type ScheduleListType = "alle" | "dienste" | "abwesenheiten";
+// Drei Prüf-Filter (Kay-Feedback 28.08.2026). Sie beantworten je eine Frage
+// mit Handlungsbedarf und blenden über das bestehende hideEmptyDays alle
+// unbeteiligten Tage aus — vorher musste man jeden Tag einzeln durchklicken:
+//   "korrekturen"  Assistenzkraft: nachträgliche Änderung des Planers offen
+//   "vorschlaege"  Assistenzkraft: gewöhnlicher Dienstvorschlag offen
+//   "meldungen"    Planer: gemeldete Abweichung wartet auf Annehmen/Widerspruch
+type ScheduleListType =
+  | "alle"
+  | "dienste"
+  | "abwesenheiten"
+  | "korrekturen"
+  | "vorschlaege"
+  | "meldungen";
+
+/** Die drei Prüf-Filter — als Menge von Dienst-IDs je Filter. */
+type PruefFilter = "korrekturen" | "vorschlaege" | "meldungen";
+
+export type PruefListen = Partial<Record<PruefFilter, ReadonlySet<number>>>;
+
+const PRUEF_FILTER_LABELS: Record<PruefFilter, string> = {
+  korrekturen: "Offene Korrekturen",
+  vorschlaege: "Offene Vorschläge",
+  meldungen: "Gemeldete Abweichungen",
+};
+
+const PRUEF_FILTER_EMPTY: Record<PruefFilter, string> = {
+  korrekturen: "Keine offenen Korrekturen",
+  vorschlaege: "Keine offenen Vorschläge",
+  meldungen: "Keine gemeldeten Abweichungen",
+};
+
+function istPruefFilter(t: ScheduleListType): t is PruefFilter {
+  return t === "korrekturen" || t === "vorschlaege" || t === "meldungen";
+}
 type ScheduleListRange = "tag" | "woche" | "monat" | "zweiMonate";
 
 /** Vereinheitlichte, KW-gruppierte Wochen-Liste unter Kalender UND Tabelle
@@ -59,12 +94,25 @@ export function ScheduleList({
   onDayClick,
   onShiftClick,
   onConfirmShift,
+  onConfirmOwnShift,
+  pruefListen,
+  focusFilter,
   canEdit,
   selectionMode,
   selectedDates,
   onToggleDate,
   onPrevMonth,
   onNextMonth,
+  deviationReports,
+  meldungWiederMoeglichShiftIds,
+  onReportDeviation,
+  onAcceptDeviation,
+  onDisputeDeviation,
+  deviationActionPending,
+  swapRequests,
+  onRequestSwap,
+  onResolveSwap,
+  swapActionPending,
 }: {
   month: number;
   year: number;
@@ -79,23 +127,78 @@ export function ScheduleList({
   onDayClick: (day: Date) => void;
   onShiftClick: (shift: Shift) => void;
   onConfirmShift?: (shift: Shift) => void;
+  onConfirmOwnShift?: (shift: Shift) => void;
+  /** Dienst-IDs je Prüf-Filter. Wird von der Seite berechnet (dort liegen
+   *  Rolle, Team-Kontext und die Abweichungs-Meldungen) und hier nur zum
+   *  Filtern genutzt. */
+  pruefListen?: PruefListen;
+  /** Setzt die Liste auf einen Prüf-Filter. `nonce` muss sich bei jedem
+   *  Auslösen ändern, damit derselbe Filter erneut greift, auch wenn der
+   *  Nutzer zwischendurch von Hand umgestellt hat. So kann ein Banner (oder
+   *  das Dashboard per URL) die Ansicht setzen, ohne dass der Filterzustand
+   *  aus dieser Komponente herauswandern muss. */
+  focusFilter?: { type: PruefFilter; nonce: number } | null;
   canEdit: boolean;
   selectionMode?: boolean;
   selectedDates?: string[];
   onToggleDate?: (day: Date) => void;
   onPrevMonth?: () => void;
   onNextMonth?: () => void;
+  deviationReports?: Map<number, ShiftDeviationReport>;
+  /** Dienste, bei denen trotz vorhandener (erledigter) Meldung erneut
+   *  gemeldet werden darf — der Planer hat seither nochmals korrigiert. */
+  meldungWiederMoeglichShiftIds?: ReadonlySet<number>;
+  onReportDeviation?: (shift: Shift, values: DeviationReportValues) => void;
+  onAcceptDeviation?: (shift: Shift) => void;
+  onDisputeDeviation?: (shift: Shift, reason: string) => void;
+  deviationActionPending?: boolean;
+  swapRequests?: Map<number, ShiftSwapRequest>;
+  onRequestSwap?: (shift: Shift, reason: string) => void;
+  onResolveSwap?: (shift: Shift, resolution: "REASSIGNED" | "DECLINED", note?: string) => void;
+  swapActionPending?: boolean;
 }) {
   const [detailType, setDetailType] = usePersistentState<ScheduleListType>(
     "dienstplan.scheduleListType",
     "alle",
-    ["alle", "dienste", "abwesenheiten"],
+    ["alle", "dienste", "abwesenheiten", "korrekturen", "vorschlaege", "meldungen"],
   );
   // Zeitraum startet bei JEDEM Seitenaufruf auf „Heute" (Nutzer-Entscheidung
   // 27.08.2026, zweite Runde) — bewusst NICHT persistiert, anders als der
   // Anzeigetyp: Der Tagesblick ist der gewollte Einstieg, Monats-/Wochenblick
   // ist eine bewusste Sitzungs-Entscheidung.
   const [detailRange, setDetailRange] = useState<ScheduleListRange>("tag");
+
+  // Sprung aus einem Banner oder vom Dashboard: Filter und Zeitraum so setzen,
+  // dass ALLE betroffenen Tage des Monats auf einen Blick dastehen. Danach in
+  // den Listenbereich scrollen — sonst landet man weiterhin oben im Kalender
+  // und muesste erst hinunterrollen.
+  useEffect(() => {
+    if (!focusFilter) return;
+    setDetailType(focusFilter.type);
+    setDetailRange("monat");
+    // Doppeltes rAF: Filter- und Einklapp-Effekt müssen erst gelaufen sein,
+    // sonst steht die Zielzeile noch gar nicht im DOM. Ziel ist die ERSTE
+    // betroffene Tageszeile — nicht die Listen-Kopfzeile und erst recht nicht
+    // die aktuelle Woche (Kay-Feedback 28.08.2026).
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const ersteZeile = document.querySelector('[data-testid^="agenda-day-"]');
+        (ersteZeile ?? document.querySelector('[data-testid="schedule-list-header"]'))
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusFilter?.type, focusFilter?.nonce]);
+
+  // Ist der letzte Fall erledigt, waere der Filter eine Sackgasse (leere Liste,
+  // und der Auswahl-Eintrag verschwindet dann auch aus dem Menue). Deshalb
+  // automatisch zurueck auf "Alle".
+  useEffect(() => {
+    if (istPruefFilter(detailType) && (pruefListen?.[detailType]?.size ?? 0) === 0) {
+      setDetailType("alle");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailType, pruefListen]);
 
   // Eingeklappte Wochenkarten (Abnahme 27.08.2026). Bewusst NICHT
   // persistiert: beim nächsten Seitenaufruf sind alle Wochen wieder offen.
@@ -205,6 +308,7 @@ export function ScheduleList({
         if (d < dFrom || d > dTo) return false;
         if (detailType === "dienste") return !isAbsenceShift(s);
         if (detailType === "abwesenheiten") return isAbsenceShift(s);
+        if (istPruefFilter(detailType)) return pruefListen?.[detailType]?.has(s.id) ?? false;
         return true;
       })
       .sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime));
@@ -214,7 +318,7 @@ export function ScheduleList({
     });
     return { rangeShifts: filtered, countShifts: counted, rangeStart: from, rangeEnd: to, displayStart: dFrom, displayEnd: dTo };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMonthShifts, prevMonthShiftsRaw, nextMonthShiftsRaw, afterNextMonthShiftsRaw, selectedDay, detailRange, detailType]);
+  }, [currentMonthShifts, prevMonthShiftsRaw, nextMonthShiftsRaw, afterNextMonthShiftsRaw, selectedDay, detailRange, detailType, pruefListen]);
 
   const rangeDays = useMemo(
     () => eachDayOfInterval({ start: displayStart, end: displayEnd }),
@@ -245,9 +349,15 @@ export function ScheduleList({
   // auch beim Monatswechsel neu, damit der Einstieg vorhersehbar bleibt;
   // „Heute"/„Diese Woche" öffnen immer alles.
   const todayWeekKey = format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd");
-  const displayRangeKey = `${detailRange}|${format(displayStart, "yyyy-MM-dd")}|${format(displayEnd, "yyyy-MM-dd")}`;
+  const displayRangeKey = `${detailRange}|${detailType}|${format(displayStart, "yyyy-MM-dd")}|${format(displayEnd, "yyyy-MM-dd")}`;
   useEffect(() => {
-    if (detailRange === "monat" || detailRange === "zweiMonate") {
+    // Prüf-Filter (Korrekturen, Vorschläge, Meldungen, Widersprüche) zeigen
+    // ohnehin NUR die betroffenen Tage — da ist Einklappen sinnlos und schädlich:
+    // die gesuchte Woche wäre zu und der Fall unsichtbar (Kay-Feedback
+    // 28.08.2026, nach dem ersten Test des Dashboard-Sprungs).
+    if (istPruefFilter(detailType)) {
+      setCollapsedWeeks(new Set());
+    } else if (detailRange === "monat" || detailRange === "zweiMonate") {
       setCollapsedWeeks(new Set(weekKeys.filter((k) => k !== todayWeekKey)));
     } else {
       setCollapsedWeeks(new Set());
@@ -272,6 +382,10 @@ export function ScheduleList({
       (detailRange === "woche" || detailRange === "monat");
     prevDetailRangeRef.current = detailRange;
     if (!enteringWeekOrMonth) return;
+    // Bei einem Prüf-Filter ist die aktuelle Woche das falsche Ziel — dort
+    // steht in aller Regel gar kein Fall. Das Scrollen übernimmt der
+    // Fokus-Effekt weiter oben, der zur ERSTEN betroffenen Zeile springt.
+    if (istPruefFilter(detailType)) return;
     const weekKey =
       detailRange === "woche"
         ? format(startOfWeek(selectedDay, { weekStartsOn: 1 }), "yyyy-MM-dd")
@@ -331,6 +445,13 @@ export function ScheduleList({
             <SelectItem value="alle">Alle</SelectItem>
             <SelectItem value="dienste">Dienste</SelectItem>
             <SelectItem value="abwesenheiten">Abwesenheiten</SelectItem>
+            {(["korrekturen", "vorschlaege", "meldungen"] as const)
+              .filter((k) => (pruefListen?.[k]?.size ?? 0) > 0)
+              .map((k) => (
+                <SelectItem key={k} value={k}>
+                  {PRUEF_FILTER_LABELS[k]}
+                </SelectItem>
+              ))}
           </SelectContent>
         </Select>
         <Select value={detailRange} onValueChange={(v) => setDetailRange(v as ScheduleListRange)}>
@@ -358,12 +479,16 @@ export function ScheduleList({
             {countShifts.length === 0
               ? detailType === "abwesenheiten"
                 ? "Keine Abwesenheiten"
-                : "Keine Dienste geplant"
-              : `${countShifts.length} ${
-                  detailType === "abwesenheiten"
-                    ? countShifts.length === 1 ? "Abwesenheit" : "Abwesenheiten"
-                    : countShifts.length === 1 ? "Dienst" : "Dienste"
-                }`}
+                : istPruefFilter(detailType)
+                  ? PRUEF_FILTER_EMPTY[detailType]
+                  : "Keine Dienste geplant"
+              : istPruefFilter(detailType)
+                ? `${countShifts.length} ${PRUEF_FILTER_LABELS[detailType].toLowerCase()}`
+                : `${countShifts.length} ${
+                    detailType === "abwesenheiten"
+                      ? countShifts.length === 1 ? "Abwesenheit" : "Abwesenheiten"
+                      : countShifts.length === 1 ? "Dienst" : "Dienste"
+                  }`}
           </p>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -402,6 +527,17 @@ export function ScheduleList({
         onDayClick={onDayClick}
         onShiftClick={onShiftClick}
         onConfirmShift={onConfirmShift}
+        onConfirmOwnShift={onConfirmOwnShift}
+        deviationReports={deviationReports}
+        meldungWiederMoeglichShiftIds={meldungWiederMoeglichShiftIds}
+        onReportDeviation={onReportDeviation}
+        onAcceptDeviation={onAcceptDeviation}
+        onDisputeDeviation={onDisputeDeviation}
+        deviationActionPending={deviationActionPending}
+        swapRequests={swapRequests}
+        onRequestSwap={onRequestSwap}
+        onResolveSwap={onResolveSwap}
+        swapActionPending={swapActionPending}
         canEdit={canEdit}
         selectionMode={selectionMode}
         selectedDates={selectedDates}
@@ -409,7 +545,12 @@ export function ScheduleList({
         onPrevMonth={onPrevMonth}
         onNextMonth={onNextMonth}
         selectedDay={selectedDay}
-        hideEmptyDays={detailType !== "alle"}
+        // Leere Tage sind nur fuer Planende nuetzlich — dort ist die leere Zeile
+        // die Stelle, an der ein Dienst angelegt wird. Einer Assistenzkraft
+        // nuetzen sie nichts: sie kann dort nichts eintragen und muss sich durch
+        // lauter leere Zeilen scrollen, um ihre eigenen Dienste zu finden
+        // (Kay-Feedback 28.08.2026). Deshalb blendet "Alle" sie fuer sie aus.
+        hideEmptyDays={detailType !== "alle" || !canEdit}
         anchorInterval={detailRange === "monat" ? { from: rangeStart, to: rangeEnd } : undefined}
         collapsedWeeks={collapsedWeeks}
         onToggleWeek={toggleWeek}

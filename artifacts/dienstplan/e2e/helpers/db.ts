@@ -441,3 +441,40 @@ export async function dbSeedAdmin(
     }
   });
 }
+
+/**
+ * Liest die Loesch-Archive einer (ggf. bereits geloeschten) Person direkt aus
+ * der Test-DB. Ueber die API geht das nicht: die Person existiert nach dem
+ * Loeschen nicht mehr — und genau das ist der Punkt, den ein Test beweisen
+ * muss. `content` kommt bewusst nur als Laenge zurueck, die Bytes selbst
+ * gehoeren nicht in eine Test-Assertion.
+ */
+export async function dbReadDeletionArchives(userId: number): Promise<
+  Array<{
+    id: number;
+    userName: string;
+    fileName: string;
+    byteSize: number;
+    tatsaechlicheGroesse: number;
+    deletedAt: Date | null;
+  }>
+> {
+  return withDbClient(async (client) => {
+    const res = await client.query(
+      `SELECT id, user_name, file_name, byte_size,
+              octet_length(content) AS tatsaechliche_groesse, deleted_at
+         FROM deletion_archives
+        WHERE user_id = $1
+        ORDER BY id`,
+      [userId],
+    );
+    return res.rows.map((r: Record<string, unknown>) => ({
+      id: Number(r["id"]),
+      userName: String(r["user_name"]),
+      fileName: String(r["file_name"]),
+      byteSize: Number(r["byte_size"]),
+      tatsaechlicheGroesse: Number(r["tatsaechliche_groesse"]),
+      deletedAt: r["deleted_at"] == null ? null : new Date(r["deleted_at"] as string),
+    }));
+  });
+}
