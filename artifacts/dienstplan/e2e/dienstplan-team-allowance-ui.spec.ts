@@ -168,7 +168,10 @@ test.describe("Team-Zuschläge greifen im Browser (UI)", () => {
     await page.getByTestId("allowance-scope-select").click();
     await page.getByRole("option", { name: `Team: ${TEAM_NAME}` }).click();
 
-    await expect(page.getByTestId("allowance-scope-hint")).toContainText("eigene Regelung");
+    // Gross-/Kleinschreibung bewusst offen: geprueft wird die Aussage ("fuer
+    // dieses Team gilt eine eigene Regelung"), nicht der genaue Wortlaut — der
+    // darf sich beim Kuerzen der Oberflaechentexte aendern.
+    await expect(page.getByTestId("allowance-scope-hint")).toContainText(/eigene Regelung/i);
     await expect(nightInput).toHaveValue(String(TEAM.nightPercent));
     await expect(sundayInput).toHaveValue(String(TEAM.sundayPercent));
     await expect(holidayInput).toHaveValue(String(TEAM.holidayPercent));
