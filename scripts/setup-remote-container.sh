@@ -1,0 +1,166 @@
+#!/bin/bash
+# Macht einen frischen Claude-Code-Remote-Container startklar (Abhaengigkeiten,
+# Postgres, Playwright-Browser). Idempotent: mehrfaches Ausfuehren ist
+# gefahrlos, jeder Schritt prueft erst, ob er ueberhaupt noetig ist.
+#
+# WARUM: Ein frischer Container hat keine laufende Datenbank, und die
+# vorinstallierten Playwright-Browser passen nicht immer zur im Repo gepinnten
+# Version — ohne diese Handgriffe scheitert JEDER Agent an denselben Stellen,
+# bevor der erste Test laeuft.
+#
+# Der frueher noetige vierte Schritt (Platzhalter fuer das Logo in
+# attached_assets/) ist entfallen: das Logo liegt seit 8772a07 unter
+# artifacts/dienstplan/src/assets/ und ist damit ganz normal versioniert.
+#
+# NICHT fuer Replit oder Kays lokalen Rechner gedacht — dort ist alles vorhanden.
+# Das Skript bricht deshalb ab, wenn es kein Wegwerf-Container ist.
+#
+# Aufruf:  bash scripts/setup-remote-container.sh
+# Danach:  source /tmp/dienstplan-test-env.sh
+set -uo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ENV_FILE="/tmp/dienstplan-test-env.sh"
+PGPORT=5432
+PGDATA=/home/user/pgdata
+PGLOG=/home/user/pgdata.log
+PGBIN=/usr/lib/postgresql/16/bin
+DB_NAME=dienstplan
+
+say() { printf '\n\033[1m── %s\033[0m\n' "$1"; }
+ok()  { printf '   ✅ %s\n' "$1"; }
+warn(){ printf '   ⚠️  %s\n' "$1"; }
+
+# ── Sicherheitsgurt ────────────────────────────────────────────────────────────
+# Nur in einem Wegwerf-Container laufen. Auf Replit gibt es REPL_ID, dort waere
+# ein eigener Postgres-Cluster falsch und wuerde die echte Dev-DB verwirren.
+if [ -n "${REPL_ID:-}" ] || [ -n "${REPLIT_DOMAINS:-}" ]; then
+  echo "Abbruch: Das hier ist eine Replit-Umgebung, nicht ein Wegwerf-Container." >&2
+  echo "Dort sind Datenbank und Assets bereits vorhanden — nichts zu tun." >&2
+  exit 1
+fi
+
+# ── 1. Abhaengigkeiten ────────────────────────────────────────────────────────
+say "1/3  Abhaengigkeiten"
+if [ -d "$REPO_ROOT/node_modules" ]; then
+  ok "node_modules vorhanden — pnpm install uebersprungen"
+else
+  (cd "$REPO_ROOT" && pnpm install --frozen-lockfile) || {
+    warn "pnpm install fehlgeschlagen — bitte Ausgabe oben pruefen"; exit 1; }
+  ok "pnpm install fertig"
+fi
+
+# ── 2. Postgres ───────────────────────────────────────────────────────────────
+say "2/3  Postgres"
+if [ ! -x "$PGBIN/pg_ctl" ]; then
+  warn "Kein Postgres 16 unter $PGBIN gefunden — DB-Schritte uebersprungen"
+else
+  id pg >/dev/null 2>&1 || useradd -m pg 2>/dev/null
+  if [ ! -s "$PGDATA/PG_VERSION" ]; then
+    mkdir -p "$PGDATA" && chown pg:pg "$PGDATA"
+    su pg -c "$PGBIN/initdb -D $PGDATA -U postgres --auth=trust" >/dev/null 2>&1 \
+      && ok "Cluster angelegt" || warn "initdb fehlgeschlagen"
+  else
+    ok "Cluster existiert bereits"
+  fi
+
+  if su pg -c "$PGBIN/pg_ctl -D $PGDATA status" >/dev/null 2>&1; then
+    ok "Server laeuft bereits"
+  else
+    touch "$PGLOG" && chown pg:pg "$PGLOG"
+    su pg -c "$PGBIN/pg_ctl -D $PGDATA -l $PGLOG -o '-p $PGPORT -k /tmp' start" >/dev/null 2>&1
+    # pg_ctl kehrt zurueck, sobald der Postmaster reagiert; kurz gegenpruefen.
+    if psql -h /tmp -p "$PGPORT" -U postgres -c 'SELECT 1' >/dev/null 2>&1; then
+      ok "Server gestartet (Port $PGPORT)"
+    else
+      warn "Server startet nicht — Log: $PGLOG"
+    fi
+  fi
+
+  if psql -h /tmp -p "$PGPORT" -U postgres -lqt 2>/dev/null | cut -d'|' -f1 | grep -qw "$DB_NAME"; then
+    ok "Datenbank '$DB_NAME' existiert bereits"
+  else
+    psql -h /tmp -p "$PGPORT" -U postgres -c "CREATE DATABASE $DB_NAME" >/dev/null 2>&1 \
+      && ok "Datenbank '$DB_NAME' angelegt" || warn "CREATE DATABASE fehlgeschlagen"
+  fi
+fi
+
+# ── 3. Playwright-Browser ─────────────────────────────────────────────────────
+# Das Image bringt eine Chromium-Version mit, die nicht zwingend zur im Repo
+# gepinnten Playwright-Version passt. Playwright sucht dann einen Ordner, den es
+# nicht gibt, und "playwright install" ist hier bewusst nicht erlaubt. Loesung:
+# die erwarteten Pfade auf die vorhandene Version zeigen lassen.
+say "3/3  Playwright-Browser"
+PW_ROOT="${PLAYWRIGHT_BROWSERS_PATH:-/opt/pw-browsers}"
+if [ ! -d "$PW_ROOT" ]; then
+  warn "$PW_ROOT existiert nicht — Browser-Schritt uebersprungen"
+else
+  # Vorhandene (irgendeine) Chromium- und Headless-Shell-Version ermitteln.
+  HAVE_SHELL="$(ls -d "$PW_ROOT"/chromium_headless_shell-* 2>/dev/null | grep -v -- '-0*$' | head -1)"
+  HAVE_FULL="$(ls -d "$PW_ROOT"/chromium-[0-9]* 2>/dev/null | head -1)"
+  # Erwartete Version aus Playwright selbst auslesen (statt zu raten). pnpm legt
+  # playwright-core nur im .pnpm-Store ab, deshalb per find statt require.resolve.
+  BROWSERS_JSON="$(find "$REPO_ROOT/node_modules/.pnpm" -maxdepth 4 -name browsers.json -path '*playwright-core*' 2>/dev/null | head -1)"
+  WANT="$(node -e '
+    try {
+      const j = require(process.argv[1]);
+      const g = n => (j.browsers.find(b => b.name === n) || {}).revision || "";
+      console.log(g("chromium-headless-shell") + " " + g("chromium"));
+    } catch { console.log(" "); }
+  ' "$BROWSERS_JSON" 2>/dev/null)"
+  WANT_SHELL="$(echo "$WANT" | cut -d' ' -f1)"
+  WANT_FULL="$(echo "$WANT" | cut -d' ' -f2)"
+
+  link_browser() {  # $1=vorhandener Ordner  $2=Zielversion  $3=Unterordnername  $4=Binaername
+    local have="$1" want="$2" sub="$3" bin="$4" target
+    [ -z "$have" ] || [ -z "$want" ] && return 0
+    target="$PW_ROOT/$(basename "$have" | sed "s/-[0-9]*$/-$want/")"
+    [ "$target" = "$have" ] && { ok "$(basename "$have") passt bereits"; return 0; }
+    [ -e "$target/$sub/$bin" ] && { ok "$(basename "$target") bereits verknuepft"; return 0; }
+    mkdir -p "$target"
+    ln -sfn "$have/chrome-linux" "$target/$sub"
+    # Aeltere Builds nennen das Binaer anders als neuere Playwright-Versionen erwarten.
+    [ -e "$have/chrome-linux/$bin" ] || ln -sfn "$have/chrome-linux/headless_shell" "$have/chrome-linux/$bin" 2>/dev/null
+    touch "$target/INSTALLATION_COMPLETE" "$target/DEPENDENCIES_VALIDATED"
+    ok "$(basename "$target") -> $(basename "$have")"
+  }
+  link_browser "$HAVE_SHELL" "$WANT_SHELL" "chrome-headless-shell-linux64" "chrome-headless-shell"
+  link_browser "$HAVE_FULL"  "$WANT_FULL"  "chrome-linux"                  "chrome"
+  [ -z "$WANT_SHELL$WANT_FULL" ] && warn "Playwright-Version nicht ermittelbar — Browser-Schritt uebersprungen"
+fi
+
+# ── Env-Datei schreiben ───────────────────────────────────────────────────────
+# PROD_DATABASE_URL ist ein reiner Fingerabdruck: setup-test-db verweigert den
+# Start ohne bekannte Prod-Identitaet, damit es sich nie gegen echte Daten
+# richten kann. Der Wert unten zeigt bewusst ins Leere.
+cat > "$ENV_FILE" <<EOF
+export DATABASE_URL=postgresql://postgres@localhost:$PGPORT/$DB_NAME
+export SESSION_SECRET=local-container-test-secret
+export PROD_DATABASE_URL=postgresql://unused:unused@prod.invalid:5432/never-used
+export PLAYWRIGHT_BROWSERS_PATH=${PLAYWRIGHT_BROWSERS_PATH:-/opt/pw-browsers}
+export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+# Die playwright.config des Repos liest diese Variable und nimmt den im Image
+# vorhandenen Browser, statt einen passenden herunterladen zu wollen
+# (playwright install ist hier bewusst nicht erlaubt).
+export REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE=\${PLAYWRIGHT_BROWSERS_PATH:-/opt/pw-browsers}/chromium
+# vite.config.ts bricht ohne diese beiden hart ab (kein Default hinterlegt).
+export PORT=5000
+export BASE_PATH=/
+EOF
+
+say "Fertig"
+cat <<EOF
+   Umgebungsvariablen laden (in JEDER neuen Shell noetig):
+
+       source $ENV_FILE
+
+   Danach der Reihe nach:
+       pnpm --filter @workspace/db run push                 # Schema in die frische DB
+       pnpm run typecheck
+       pnpm --filter @workspace/scripts run setup-test-db   # einmalig, legt <dbname>_test an
+       pnpm --filter @workspace/dienstplan run test:e2e:api
+
+   Hinweis: "pre-push-sql" ist auf einer FRISCHEN, leeren Datenbank nicht
+   noetig und schlaegt dort fehl (es setzt Bestandstabellen voraus). Es gehoert
+   nur auf gewachsene Datenbanken — dort erledigt es post-merge.sh.
+EOF
