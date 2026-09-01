@@ -153,10 +153,20 @@ test.describe("ShiftDialog: Bearbeiten belegt 24h-Dienst korrekt vor (Admin, mob
     ).toBe(24 * 60 * 60 * 1000);
 
     // --- Kalender für den Zielmonat neu laden (frischer Fetch) --------------
-    // Der Dienst wurde nach dem ersten Monats-Fetch per API angelegt; ein
-    // Wechsel vor/zurück erzwingt einen neuen Query für denselben Monat.
-    await page.getByTestId("prev-month").click();
-    await page.getByTestId("next-month").click();
+    // Der Dienst wurde nach dem ersten Monats-Fetch per API angelegt.
+    // Korrigiert 01.09.2026: Ein Wechsel vor/zurück reicht dafür NICHT mehr —
+    // der Query für den Zielmonat liegt im Cache und wird beim Zurückwechseln
+    // nur wiederverwendet, der neue Dienst fehlt dann im Raster. Ein echter
+    // Seiten-Neuladen holt die Daten garantiert frisch. Danach wieder in den
+    // Zielmonat navigieren, weil der Neuladen beim aktuellen Monat startet.
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Dienstplan", exact: true })).toBeVisible();
+    while (
+      parseMonthLabel(await page.getByTestId("month-label").innerText()).month !== month ||
+      parseMonthLabel(await page.getByTestId("month-label").innerText()).year !== year
+    ) {
+      await page.getByTestId("next-month").click();
+    }
     expect(parseMonthLabel(await page.getByTestId("month-label").innerText())).toEqual({ year, month });
 
     // In der Mobile-Ansicht erscheinen Schicht-Badges erst, wenn der Tag
