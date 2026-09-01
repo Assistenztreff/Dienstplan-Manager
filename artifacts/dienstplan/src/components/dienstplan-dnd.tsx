@@ -50,12 +50,20 @@ export type PlatzZiel = {
 /** Ziel 2: ein besetzter Dienst (die gezogene Person uebernimmt ihn). */
 export type DienstZiel = { art: "dienst"; shiftId: number };
 
-export type ZugZiel = PlatzZiel | DienstZiel;
+/**
+ * Ziel 3: die Vertretungszeile eines Dienstes — die gezogene Person wird als
+ * Vertretung VORGEMERKT, uebernimmt den Dienst also NICHT. Der Unterschied zu
+ * DienstZiel ist fachlich wesentlich: hier aendert sich nichts am Dienst
+ * selbst, es entsteht nur eine Vormerkung fuer den Ausfall-Fall.
+ */
+export type VertretungsZiel = { art: "vertretung"; shiftId: number };
+
+export type ZugZiel = PlatzZiel | DienstZiel | VertretungsZiel;
 
 export function zugZielId(bereich: string, ziel: ZugZiel): string {
-  return ziel.art === "platz"
-    ? `${bereich}-platz-${ziel.datum}-${ziel.dienstId}`
-    : `${bereich}-dienst-${ziel.shiftId}`;
+  if (ziel.art === "platz") return `${bereich}-platz-${ziel.datum}-${ziel.dienstId}`;
+  if (ziel.art === "vertretung") return `${bereich}-vertretung-${ziel.shiftId}`;
+  return `${bereich}-dienst-${ziel.shiftId}`;
 }
 
 /**
@@ -125,7 +133,13 @@ export function ZugZielHuelle({
       ref={setNodeRef}
       className={[
         className ?? "",
-        isOver ? "rounded-[7px] ring-2 ring-[#0f6e8c]" : "",
+        // Vormerken sieht anders aus als Uebernehmen: gestrichelter Ring fuer
+        // die Vertretungszeile, durchgezogener fuer Platz/Dienst.
+        isOver
+          ? ziel.art === "vertretung"
+            ? "rounded-[7px] outline-dashed outline-2 outline-offset-0 outline-[#6d28d9]"
+            : "rounded-[7px] ring-2 ring-[#0f6e8c]"
+          : "",
       ].filter(Boolean).join(" ")}
     >
       {children}

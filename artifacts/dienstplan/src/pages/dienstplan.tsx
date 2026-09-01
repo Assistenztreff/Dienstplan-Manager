@@ -77,6 +77,9 @@ import {
   upsertShiftsInCache,
   removeShiftsFromCache,
   invalidateShiftDerivedQueries,
+  invalidateArbeitsdienstSalden,
+  naechsteTempId,
+  type CachedShiftRow,
 } from "@/lib/shift-cache";
 import {
   istSeitherKorrigiert,
@@ -771,6 +774,27 @@ export default function Dienstplan() {
       const start = new Date(`${ziel.datum}T${ziel.startTime}:00`);
       const ende = new Date(`${ziel.datum}T${ziel.endTime}:00`);
       if (ziel.endTime <= ziel.startTime) ende.setDate(ende.getDate() + 1);
+      // Sofort anzeigen (Kay-Vorgabe 01.09.2026): Die Pille steht im Raster,
+      // BEVOR der Server gefragt wird — bei ~1 s Latenz war das vorher eine
+      // volle Sekunde Warten auf ein Ergebnis, das schon feststand.
+      const tempId = naechsteTempId();
+      upsertShiftsInCache(
+        queryClient,
+        [
+          {
+            id: tempId,
+            userId: person.userId,
+            type: "work",
+            startTime: start.toISOString(),
+            endTime: ende.toISOString(),
+            planningStatus: "VORLAEUFIG",
+            shiftModelId: ziel.dienstId,
+            user: { name: person.name },
+            istVorlaeufig: true,
+          } as unknown as CachedShiftRow,
+        ],
+        selectedTeamId,
+      );
       try {
         const created = await createShiftPerDnd.mutateAsync({
           data: {
@@ -783,24 +807,31 @@ export default function Dienstplan() {
             ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
           } as ShiftInput,
         });
+        // Vorlaeufige Zeile gegen die echte tauschen.
+        removeShiftsFromCache(queryClient, [tempId]);
         upsertShiftsInCache(queryClient, [created], selectedTeamId);
-        void invalidateShiftDerivedQueries(queryClient);
+        void invalidateArbeitsdienstSalden(queryClient);
         const vorname = person.name.trim().split(/\s+/)[0];
         toast.success(`${vorname} eingeplant — als Entwurf.`, {
           action: {
             label: "Rückgängig",
             onClick: () => {
+              // Auch hier sofort: erst aus dem Raster nehmen, dann loeschen.
+              removeShiftsFromCache(queryClient, [created.id]);
               void deleteShiftPerDnd
                 .mutateAsync({ id: created.id })
-                .then(() => {
-                  removeShiftsFromCache(queryClient, [created.id]);
-                  void invalidateShiftDerivedQueries(queryClient);
-                })
-                .catch(() => toast.error("Rückgängig fehlgeschlagen. Bitte erneut versuchen."));
+                .then(() => void invalidateArbeitsdienstSalden(queryClient))
+                .catch(() => {
+                  // Fehlgeschlagen: die Zeile gehoert zurueck ins Raster.
+                  upsertShiftsInCache(queryClient, [created], selectedTeamId);
+                  toast.error("Rückgängig fehlgeschlagen. Bitte erneut versuchen.");
+                });
             },
           },
         });
       } catch (err) {
+        // Zuruecknehmen, was wir vorgegriffen haben.
+        removeShiftsFromCache(queryClient, [tempId]);
         if (!navigator.onLine) return;
         toast.error(
           readableApiError(err, "Einplanen fehlgeschlagen. Bitte erneut versuchen."),
@@ -809,10 +840,8 @@ export default function Dienstplan() {
       return;
     }
 
-    // Ersetzen: gezogene Person uebernimmt einen bestehenden Dienst.
     const shift = allShifts.find((sh) => sh.id === ziel.shiftId);
     if (!shift) return;
-    if (shift.userId === person.userId) return; // nichts zu tun
     if (isMirrorShift(shift, selectedTeamId)) {
       toast.info(
         `Aushilfe-Einsatz aus ${shift.homeTeamName ?? "einem anderen Team"} — bearbeiten im Stammteam.`,
@@ -820,34 +849,116 @@ export default function Dienstplan() {
       return;
     }
     const datum = format(new Date(shift.startTime), "yyyy-MM-dd");
+
+    // ── Vertretung VORMERKEN (Ziel: die Vertretungszeile) ─────────────────
+    // Fachlich etwas ganz anderes als das Ersetzen: Der Dienst bleibt bei
+    // seiner Person, die gezogene Kraft wird nur fuer den Ausfall-Fall
+    // vorgemerkt. Deshalb greift hier auch KEINE Abwesenheitspruefung fuer
+    // den Tag — eine Vormerkung ist eine Planungshilfe, kein Einsatz.
+    if (ziel.art === "vertretung") {
+      if (shift.userId === person.userId) {
+        toast.info("Diese Person hat den Dienst bereits — als eigene Vertretung ergibt das nichts.");
+        return;
+      }
+      if (shift.standbyUserId === person.userId) return; // schon vorgemerkt
+      const vorherStandbyId = shift.standbyUserId ?? null;
+      const vorherStandbyName = shift.standbyUserName ?? null;
+      upsertShiftsInCache(
+        queryClient,
+        [
+          {
+            ...shift,
+            standbyUserId: person.userId,
+            standbyUserName: person.name,
+          } as unknown as CachedShiftRow,
+        ],
+        selectedTeamId,
+      );
+      try {
+        const updated = await updateShift.mutateAsync({
+          id: shift.id,
+          data: { standbyUserId: person.userId } as { standbyUserId: number },
+        });
+        upsertShiftsInCache(queryClient, [updated], selectedTeamId);
+        const vorname = person.name.trim().split(/\s+/)[0];
+        toast.success(`${vorname} als Vertretung vorgemerkt.`, {
+          action: {
+            label: "Rückgängig",
+            onClick: () => {
+              upsertShiftsInCache(
+                queryClient,
+                [
+                  {
+                    ...shift,
+                    standbyUserId: vorherStandbyId,
+                    standbyUserName: vorherStandbyName,
+                  } as unknown as CachedShiftRow,
+                ],
+                selectedTeamId,
+              );
+              void updateShift
+                .mutateAsync({
+                  id: shift.id,
+                  data: { standbyUserId: vorherStandbyId } as { standbyUserId: number | null },
+                })
+                .then((zurueck) => upsertShiftsInCache(queryClient, [zurueck], selectedTeamId))
+                .catch(() => {
+                  upsertShiftsInCache(queryClient, [updated], selectedTeamId);
+                  toast.error("Rückgängig fehlgeschlagen. Bitte erneut versuchen.");
+                });
+            },
+          },
+        });
+      } catch (err) {
+        upsertShiftsInCache(queryClient, [shift as unknown as CachedShiftRow], selectedTeamId);
+        if (!navigator.onLine) return;
+        toast.error(readableApiError(err, "Vormerken fehlgeschlagen. Bitte erneut versuchen."));
+      }
+      return;
+    }
+
+    // ── Ersetzen: gezogene Person uebernimmt den Dienst ───────────────────
+    if (shift.userId === person.userId) return; // nichts zu tun
     if (dndAbwesendGemeldet(person.userId, datum, person.name)) return;
 
     const vorherigeUserId = shift.userId;
     const vorherigerName = shift.user?.name ?? "";
+    // Sofort umbesetzen, dann bestaetigen lassen (s. Kommentar oben).
+    upsertShiftsInCache(
+      queryClient,
+      [{ ...shift, userId: person.userId, user: { name: person.name } } as unknown as CachedShiftRow],
+      selectedTeamId,
+    );
     try {
       const updated = await updateShift.mutateAsync({
         id: shift.id,
         data: { userId: person.userId } as { userId: number },
       });
       upsertShiftsInCache(queryClient, [updated], selectedTeamId);
-      void invalidateShiftDerivedQueries(queryClient);
+      void invalidateArbeitsdienstSalden(queryClient);
       const vorname = person.name.trim().split(/\s+/)[0];
       const vorherVorname = vorherigerName.trim().split(/\s+/)[0] || "die bisherige Person";
       toast.success(`${vorname} übernimmt den Dienst von ${vorherVorname}.`, {
         action: {
           label: "Rückgängig",
           onClick: () => {
+            upsertShiftsInCache(queryClient, [shift as unknown as CachedShiftRow], selectedTeamId);
             void updateShift
               .mutateAsync({ id: shift.id, data: { userId: vorherigeUserId } as { userId: number } })
               .then((zurueck) => {
                 upsertShiftsInCache(queryClient, [zurueck], selectedTeamId);
-                void invalidateShiftDerivedQueries(queryClient);
+                void invalidateArbeitsdienstSalden(queryClient);
               })
-              .catch(() => toast.error("Rückgängig fehlgeschlagen. Bitte erneut versuchen."));
+              .catch(() => {
+                upsertShiftsInCache(queryClient, [updated], selectedTeamId);
+                toast.error("Rückgängig fehlgeschlagen. Bitte erneut versuchen.");
+              });
           },
         },
       });
     } catch (err) {
+      // Umbesetzung zuruecknehmen: die urspruengliche Zeile wieder herstellen.
+      upsertShiftsInCache(queryClient, [shift as unknown as CachedShiftRow], selectedTeamId);
       if (!navigator.onLine) return;
       toast.error(readableApiError(err, "Ersetzen fehlgeschlagen. Bitte erneut versuchen."));
     }

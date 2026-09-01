@@ -62,6 +62,14 @@ export type Shift = {
    * Quelle der Abwesenheits-Stunden im Stundenkonto (stundenkonto-leiste.tsx).
    */
   valuedHours?: number | null;
+  /**
+   * Nur lokal: Diese Zeile wurde optimistisch eingefuegt und wartet noch auf
+   * die Server-Bestaetigung (siehe naechsteTempId in lib/shift-cache.ts).
+   * Sie sieht aus wie eine echte Pille, laesst sich aber nicht anklicken —
+   * ihre ID gibt es serverseitig noch nicht. Das Fenster ist im Normalfall
+   * deutlich unter einer Sekunde lang.
+   */
+  istVorlaeufig?: boolean;
 };
 
 export const PLANNING_STATUS_LABELS: Record<string, string> = {

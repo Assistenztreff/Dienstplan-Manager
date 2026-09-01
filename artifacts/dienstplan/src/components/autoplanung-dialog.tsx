@@ -36,7 +36,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { readableApiError } from "@/lib/api-error";
-import { invalidateShiftDerivedQueries } from "@/lib/shift-cache";
+import {
+  invalidateArbeitsdienstSalden,
+  naechsteTempId,
+  removeShiftsFromCache,
+  upsertShiftsInCache,
+  type CachedShiftRow,
+} from "@/lib/shift-cache";
 import {
   offenePlaetzeFuerTag,
   schichtenNachTag,
@@ -204,13 +210,37 @@ export function AutoplanungDialog({
       const notiz = ruhezeitReduziert
         ? `Automatisch geplant am ${stempel} — Ruhezeit ${ruhezeitZahl} h quittiert.`
         : `Automatisch geplant am ${stempel}.`;
-      // Sequenziell je Person (transaktional PRO Person): schlaegt eine fehl,
-      // bleiben die bereits angelegten stehen — der Hinweis benennt sie.
-      const fehler: string[] = [];
-      let angelegt = 0;
-      for (const [userId, liste] of proPerson) {
-        try {
-          await bulkCreate.mutateAsync({
+      // ── Sofort anzeigen (Kay-Vorgabe 01.09.2026) ─────────────────────
+      // Gemessen: 5 Personen kosteten 5 SEQUENZIELLE Requests plus sieben
+      // Nachlade-Requests — lokal 1 s, auf dem echten Server mit ~1 s Latenz
+      // je Roundtrip 12-15 s. Jetzt stehen alle Pillen im Raster, bevor der
+      // erste Request rausgeht, und die Requests laufen PARALLEL: eine
+      // Latenz statt fuenf, und der Nutzer wartet auf keine davon.
+      const tempIds = new Map<number, number[]>();
+      const vorlaeufige = plan.zuweisungen.map((z) => {
+        const tempId = naechsteTempId();
+        tempIds.set(z.userId, [...(tempIds.get(z.userId) ?? []), tempId]);
+        return {
+          id: tempId,
+          userId: z.userId,
+          type: "work",
+          startTime: z.start.toISOString(),
+          endTime: z.ende.toISOString(),
+          planningStatus: "VORLAEUFIG",
+          shiftModelId: dienst.id,
+          notes: notiz,
+          user: { name: z.name },
+          istVorlaeufig: true,
+        } as unknown as CachedShiftRow;
+      });
+      upsertShiftsInCache(queryClient, vorlaeufige, teamId);
+      // Dialog sofort zu — das Ergebnis steht ja schon im Raster dahinter.
+      onClose();
+
+      const auftraege = [...proPerson.entries()];
+      const ergebnisse = await Promise.allSettled(
+        auftraege.map(([userId, liste]) =>
+          bulkCreate.mutateAsync({
             data: {
               userId,
               type: "work",
@@ -223,20 +253,36 @@ export function AutoplanungDialog({
               notes: notiz,
               ...(teamId != null ? { teamId } : {}),
             },
-          });
-          angelegt += liste.length;
-        } catch (err) {
+          }),
+        ),
+      );
+
+      const fehler: string[] = [];
+      let angelegt = 0;
+      for (const [i, ergebnis] of ergebnisse.entries()) {
+        const [userId, liste] = auftraege[i]!;
+        // Die vorlaeufigen Zeilen dieser Person weichen dem Ergebnis —
+        // egal ob echte Schichten (Erfolg) oder gar nichts (Fehlschlag).
+        removeShiftsFromCache(queryClient, tempIds.get(userId) ?? []);
+        if (ergebnis.status === "fulfilled") {
+          // BulkShiftsResult liefert die angelegten Zeilen in Listen-Form
+          // samt aufgeloestem Team — genau das, was der Cache braucht.
+          const { shifts: angelegteSchichten, teamId: zielTeam } = ergebnis.value;
+          upsertShiftsInCache(queryClient, angelegteSchichten as CachedShiftRow[], zielTeam);
+          angelegt += angelegteSchichten.length;
+        } else {
           fehler.push(
-            `${vorname(liste[0]!.name)}: ${readableApiError(err, "Anlegen fehlgeschlagen")}`,
+            `${vorname(liste[0]!.name)}: ${readableApiError(ergebnis.reason, "Anlegen fehlgeschlagen")}`,
           );
         }
       }
-      void invalidateShiftDerivedQueries(queryClient, { refetchType: "all" });
+      // Nur die beiden Stundenkonto-Salden nachladen; die Schicht-Listen sind
+      // durch den Cache-Abgleich oben bereits richtig (s. shift-cache.ts).
+      void invalidateArbeitsdienstSalden(queryClient);
       if (fehler.length === 0) {
         toast.success(
-          `${angelegt} Dienste als Entwurf angelegt — pruefen, dann wie gewohnt als Vorschlag senden.`,
+          `${angelegt} Dienste als Entwurf angelegt — prüfen, dann wie gewohnt als Vorschlag senden.`,
         );
-        onClose();
       } else {
         toast.error(
           `${angelegt} Dienste angelegt, ${fehler.length} Person(en) fehlgeschlagen: ${fehler.join(" · ")}`,

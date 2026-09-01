@@ -713,7 +713,10 @@ export function MonthGrid({
                         // Task #726: eingeplante Assistenzkraft ist am selben Tag
                         // krank/Kind krank → roter Ausfall-Hinweis an der Pille.
                         const hasAusfall = !isTeam && ausfallUserIds.has(s.userId);
-                        const chipClickable = canEdit && !selectionMode;
+                        // Eine vorlaeufige Zeile (optimistisch eingefuegt,
+                        // Server-Bestaetigung noch unterwegs) hat serverseitig
+                        // noch keine ID — sie darf keinen Dialog oeffnen.
+                        const chipClickable = canEdit && !selectionMode && !s.istVorlaeufig;
                         const timeRange = `${format(new Date(s.startTime), "HH:mm")}–${format(new Date(s.endTime), "HH:mm")}`;
                         const barColor = isTeam ? "#0284c7" : slot.bg;
                         // Arbeitsanweisung 17.08.2026 Punkt 4: der Avatar-Kreis
@@ -888,7 +891,10 @@ export function MonthGrid({
                     // Task #726: eingeplante Assistenzkraft ist am selben Tag
                     // krank/Kind krank → roter Ausfall-Hinweis an der Pille.
                     const hasAusfall = !isTeam && ausfallUserIds.has(s.userId);
-                    const chipClickable = canEdit && !selectionMode;
+                    // Eine vorlaeufige Zeile (optimistisch eingefuegt,
+                    // Server-Bestaetigung noch unterwegs) hat serverseitig
+                    // noch keine ID — sie darf keinen Dialog oeffnen.
+                    const chipClickable = canEdit && !selectionMode && !s.istVorlaeufig;
                     const startOnly = format(new Date(s.startTime), "HH:mm");
                     const timeRange = `${startOnly}–${format(new Date(s.endTime), "HH:mm")}`;
                     const barColor = isTeam ? "#0284c7" : slot.bg;
@@ -1126,11 +1132,19 @@ export function MonthGrid({
                       </span>
                       </ZugZielHuelle>
                       {zeigtVertretung && (
-                        <VertretungsZeile
-                          testId={`day-standby-${s.id}`}
-                          name={s.standbyUserName}
-                          onClick={chipClickable ? () => onShiftClick(s) : undefined}
-                        />
+                        // Auch die Vertretungszeile nimmt eine gezogene Person
+                        // an — dort wird sie VORGEMERKT, nicht eingeteilt.
+                        <ZugZielHuelle
+                          bereich={dndBereich}
+                          ziel={{ art: "vertretung", shiftId: s.id }}
+                          disabled={!chipClickable}
+                        >
+                          <VertretungsZeile
+                            testId={`day-standby-${s.id}`}
+                            name={s.standbyUserName}
+                            onClick={chipClickable ? () => onShiftClick(s) : undefined}
+                          />
+                        </ZugZielHuelle>
                       )}
                       </Fragment>
                     );

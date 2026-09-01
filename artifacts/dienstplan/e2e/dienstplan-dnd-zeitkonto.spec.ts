@@ -86,7 +86,7 @@ test.beforeAll(async () => {
       defaultEndTime: "14:00",
       defaultWeekdays: [1, 2, 3, 4, 5, 6, 7],
       imRegelplan: true,
-      standbySlot: false,
+      standbySlot: true,
       isActive: true,
     },
   });
@@ -124,6 +124,48 @@ test.describe("Drag-and-Drop aus dem Zeitkonto", () => {
     await page.setViewportSize({ width: 1000, height: 800 });
     await page.evaluate(() => localStorage.setItem("dienstplan.desktopView", "grid"));
     await page.goto(`/dienstplan?date=${ZIEL_ISO}`);
+  });
+
+  test("Pille auf die Vertretungszeile ziehen merkt die Person vor", async ({ page }) => {
+    const reihe = page.getByTestId("stundenkonto-reihe-wrapper");
+    const desktop = page.getByTestId("dienstplan-desktop");
+
+    // Ein besetzter Dienst — erst dann gibt es ueberhaupt eine Vertretungszeile.
+    const res = await ctx.post("/api/shifts", {
+      data: {
+        userId: annaId,
+        shiftModelId: dienstId,
+        type: "work",
+        startTime: `${ZIEL_ISO}T06:00:00`,
+        endTime: `${ZIEL_ISO}T14:00:00`,
+      },
+    });
+    expect(res.ok(), `Schicht anlegen fehlgeschlagen (${res.status()})`).toBe(true);
+    const schichtId = ((await res.json()) as { id: number }).id;
+    angelegteSchichten.push(schichtId);
+    await page.reload();
+
+    const vertretung = desktop.getByTestId(`day-standby-${schichtId}`);
+    await expect(vertretung).toBeVisible();
+    await expect(vertretung).toContainText("Vertretung offen");
+
+    // Ben auf die Vertretungszeile ziehen -> vorgemerkt, NICHT eingeteilt.
+    await ziehe(page, reihe.getByTestId(`stundenkonto-pill-${benId}`), vertretung);
+    await expect(page.getByText("Ben als Vertretung vorgemerkt.")).toBeVisible();
+    await expect(vertretung).toContainText("Beispiel");
+
+    // Der Dienst selbst gehoert weiter Anna — das ist der springende Punkt.
+    const nachher = (await (await ctx.get(`/api/shifts/${schichtId}`)).json()) as {
+      userId: number;
+      standbyUserId: number | null;
+    };
+    expect(nachher.userId, "Der Dienst darf NICHT die Person gewechselt haben").toBe(annaId);
+    expect(nachher.standbyUserId).toBe(benId);
+
+    // Wieder abraeumen: die folgenden Tests brauchen den Platz unbesetzt.
+    const del = await ctx.delete(`/api/shifts/${schichtId}`);
+    expect(del.ok(), `Schicht loeschen fehlgeschlagen (${del.status()})`).toBe(true);
+    angelegteSchichten.splice(angelegteSchichten.indexOf(schichtId), 1);
   });
 
   test("Pille auf offenen Platz ziehen legt einen Entwurf an — Klick bleibt Filter", async ({
