@@ -14,7 +14,6 @@ function dienst(over: Partial<GeruestDienst> = {}): GeruestDienst {
   return {
     id: 1,
     name: "24h Assistenz",
-    color: "purple",
     defaultStartTime: "09:00",
     defaultEndTime: "09:00",
     defaultWeekdays: [1, 2, 3, 4, 5, 6, 7],
@@ -66,6 +65,14 @@ describe("regelGiltAnTag", () => {
     expect(regelGiltAnTag(werktags, DIENSTAG)).toBe(true);
     expect(regelGiltAnTag(werktags, SAMSTAG)).toBe(false);
     expect(regelGiltAnTag(werktags, SONNTAG)).toBe(false);
+  });
+
+  it("versteht eine leere Wochentagsliste als ALLE Tage", () => {
+    // In den Einstellungen steht ausdruecklich "Keine Auswahl = alle Tage".
+    const immer = dienst({ defaultWeekdays: [] });
+    expect(regelGiltAnTag(immer, DIENSTAG)).toBe(true);
+    expect(regelGiltAnTag(immer, SAMSTAG)).toBe(true);
+    expect(regelGiltAnTag(immer, SONNTAG)).toBe(true);
   });
 
   it("beachtet drei feste Tage in der Woche", () => {

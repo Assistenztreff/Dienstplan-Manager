@@ -26,9 +26,9 @@
 export type GeruestDienst = {
   id: number;
   name: string;
-  color: string;
   defaultStartTime: string;
   defaultEndTime: string;
+  /** 1 (Montag) bis 7 (Sonntag). Leer = alle Tage (so wie in den Einstellungen). */
   defaultWeekdays: number[];
   isActive: boolean;
   imRegelplan: boolean;
@@ -47,7 +47,6 @@ export type GeruestSchicht = {
 export type OffenerPlatz = {
   dienstId: number;
   name: string;
-  color: string;
   /** "HH:MM" */
   startTime: string;
   /** "HH:MM"; gleich der Startzeit bedeutet 24-Stunden-Dienst. */
@@ -81,7 +80,11 @@ export function tagesSchluessel(tag: Date): string {
  */
 export function regelGiltAnTag(dienst: GeruestDienst, tag: Date): boolean {
   if (!dienst.isActive || !dienst.imRegelplan) return false;
-  if (!dienst.defaultWeekdays.includes(wochentagIso(tag))) return false;
+  // Leere Wochentagsliste heisst in den Einstellungen "alle Tage" (so steht es
+  // dort auch als Hinweis) — nicht "kein Tag". Ohne diese Zeile waere ein
+  // Dienst ohne gesetzte Wochentage im Regelplan stumm.
+  if (dienst.defaultWeekdays.length > 0 && !dienst.defaultWeekdays.includes(wochentagIso(tag)))
+    return false;
   if (dienst.validFrom && tagesSchluessel(tag) < dienst.validFrom) return false;
   return true;
 }
@@ -115,7 +118,6 @@ export function offenePlaetzeFuerTag(
     plaetze.push({
       dienstId: dienst.id,
       name: dienst.name,
-      color: dienst.color,
       startTime: dienst.defaultStartTime,
       endTime: dienst.defaultEndTime,
       standbySlot: dienst.standbySlot,

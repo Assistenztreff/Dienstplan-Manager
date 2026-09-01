@@ -91,6 +91,7 @@ import {
 import { StatusBadge } from "@/components/status-badge";
 import { CorrectedShiftsProvider } from "./corrected-shifts";
 import { MonthGrid } from "./month-grid";
+import type { GeruestDienst } from "@/lib/dienstgeruest";
 import type { DeviationReportValues } from "./deviation-dialog";
 import { readableApiError } from "@/lib/api-error";
 import { ScheduleList } from "./schedule-list";
@@ -569,6 +570,32 @@ export default function Dienstplan() {
     (shiftModels ?? []).map((m) => [m.id, { name: m.name }])
   );
 
+  // ── Dienstgeruest (Kay-Entscheidung 01.09.2026) ───────────────────────────
+  // Die Dienste, die am Regelplan teilnehmen — daraus berechnet das
+  // Monatsraster je Tag die noch offenen Plaetze. Reine Anzeige: es entstehen
+  // dabei keine Schichten, PDF-Export, Stundenliste und Auswertung sehen davon
+  // nichts. Sortierreihenfolge zaehlt: Frueh/Spaet/Nacht sollen an jedem Tag
+  // in derselben Ordnung untereinander stehen.
+  const geruestDienste = useMemo<GeruestDienst[]>(
+    () =>
+      (shiftModels ?? [])
+        .filter((m) => m.isActive && m.imRegelplan)
+        .slice()
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((m) => ({
+          id: m.id,
+          name: m.name,
+          defaultStartTime: m.defaultStartTime,
+          defaultEndTime: m.defaultEndTime,
+          defaultWeekdays: m.defaultWeekdays ?? [],
+          isActive: m.isActive,
+          imRegelplan: m.imRegelplan,
+          validFrom: m.validFrom ?? null,
+          standbySlot: m.standbySlot,
+        })),
+    [shiftModels],
+  );
+
   const allShifts: Shift[] = shifts ?? [];
 
   // Kapazitäts-Ampel für die Vertretungs-Auswahl im ShiftDialog (Kay-Feedback
@@ -621,7 +648,7 @@ export default function Dienstplan() {
   // optisch leicht abgedunkelt (siehe Content-Wrapper weiter unten).
   const isTransitioning = shiftsFetching && !isLoading;
 
-  function openCreate(date: Date, userId?: number) {
+  function openCreate(date: Date, userId?: number, shiftModelId?: number) {
     if (!canPlan) return;
     if (forwardLimit !== null && monthsAhead(date, new Date()) > forwardLimit) {
       toast.error(
@@ -646,7 +673,7 @@ export default function Dienstplan() {
         return;
       }
     }
-    setDialog({ mode: "create", date, userId });
+    setDialog({ mode: "create", date, userId, shiftModelId });
   }
 
   function openEdit(shift: Shift) {
@@ -1097,7 +1124,7 @@ export default function Dienstplan() {
             modelMap={modelMap}
             selectedDay={selectedDay}
             onSelectDay={setSelectedDay}
-            onAddShift={(day) => openCreate(day)}
+            onAddShift={(day, shiftModelId) => openCreate(day, undefined, shiftModelId)}
             onShiftClick={openEdit}
             onConfirmShift={confirmShift}
             canEdit={canPlan}
@@ -1109,6 +1136,7 @@ export default function Dienstplan() {
             onFocusDateHandled={() => setMonthGridFocusDate(null)}
             variant="collapsed"
             onCollapsedDayActivate={scrollToAgendaDay}
+            geruestDienste={geruestDienste}
           />
         )}
         </div>
@@ -1145,7 +1173,7 @@ export default function Dienstplan() {
             modelMap={modelMap}
             selectedDay={selectedDay}
             onSelectDay={setSelectedDay}
-            onAddShift={(day) => openCreate(day)}
+            onAddShift={(day, shiftModelId) => openCreate(day, undefined, shiftModelId)}
             onShiftClick={openEdit}
             onConfirmShift={confirmShift}
             canEdit={canPlan}
@@ -1156,6 +1184,7 @@ export default function Dienstplan() {
             focusDate={monthGridFocusDate}
             onFocusDateHandled={() => setMonthGridFocusDate(null)}
             pillMinimiert={pillMinimiert}
+            geruestDienste={geruestDienste}
           />
         ) : (
           <DienstplanTableView
@@ -1338,6 +1367,7 @@ export default function Dienstplan() {
           onClose={closeDialog}
           preselectedDate={dialog.mode === "create" ? dialog.date : undefined}
           preselectedUserId={dialog.mode === "create" ? dialog.userId : undefined}
+          preselectedShiftModelId={dialog.mode === "create" ? dialog.shiftModelId : undefined}
           editShift={dialog.mode === "edit" ? dialog.shift : undefined}
           bulkDates={dialog.mode === "bulk-create" ? dialog.dates : undefined}
           onSaved={() => {

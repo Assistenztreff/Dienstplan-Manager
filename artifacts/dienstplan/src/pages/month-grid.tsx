@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { format, isSameDay, isToday, getDay, addDays } from "date-fns";
 import { de } from "date-fns/locale";
 import { StatusBadge } from "@/components/status-badge";
@@ -12,6 +12,8 @@ import {
   lastName,
   lastNameInitial,
   PillAvatar,
+  PlatzAvatar,
+  StandbyRing,
   type Shift,
   type ShiftModelInfo,
   usePersonColors,
@@ -20,6 +22,226 @@ import {
   WEEKDAY_LABELS_FULL,
 } from "./dienstplan-helpers";
 import { useCorrectedShiftIds } from "./corrected-shifts";
+import {
+  offenePlaetzeFuerTag,
+  type GeruestDienst,
+  type OffenerPlatz,
+} from "@/lib/dienstgeruest";
+
+// ---------------------------------------------------------------------------
+// Platzhalter-Pillen des Dienstgeruests
+// ---------------------------------------------------------------------------
+// Ein offener Platz ist KEIN Datensatz (siehe lib/dienstgeruest.ts), sondern
+// nur die Anzeige einer Luecke im Regelplan. Er sieht deshalb bewusst anders
+// aus als eine echte Pille: ausgegraut statt weiss, gestrichelter Rand statt
+// durchgezogener Kontur, kein Schatten, kein Statusbalken — ein Platz hat
+// keinen Status, er ist schlicht noch nicht vergeben. Ein Klick oeffnet den
+// Dienst-Dialog mit diesem Dienst bereits vorausgewaehlt.
+
+/** Gemeinsame Optik aller Platzhalter: ausgegraut, gestrichelt, ohne Schatten. */
+const PLATZ_RAHMEN = "border border-dashed border-[#aab5c4]";
+const PLATZ_FLAECHE = "bg-[#eaeef3]";
+const PLATZ_TEXT = "text-[#5b6675]";
+
+function platzZeit(platz: OffenerPlatz): string {
+  return `${platz.startTime}\u2013${platz.endTime}`;
+}
+
+/** Kompakte Uhrzeit fuer die Smartphone-Platzhalter-Pille (~48 px breit):
+ *  volle Stunden ohne Minuten ("6\u201314"), 24h-Dienst als "24h", sonst nur
+ *  der Beginn ("6:30"). Die exakten Zeiten stehen im title-Attribut. */
+function platzZeitKompakt(platz: OffenerPlatz): string {
+  if (platz.startTime === platz.endTime) return "24h";
+  const volleStunde = (hhmm: string): string | null =>
+    hhmm.endsWith(":00") ? String(Number(hhmm.slice(0, 2))) : null;
+  const s = volleStunde(platz.startTime);
+  const e = volleStunde(platz.endTime);
+  if (s !== null && e !== null) return `${s}\u2013${e}`;
+  return platz.startTime.replace(/^0/, "");
+}
+
+/** Desktop/Tablet, zweizeilig — Zeile 1 Dienstname, Zeile 2 Uhrzeit. */
+function PlatzPilleZweizeilig({
+  platz,
+  testId,
+  onClick,
+}: {
+  platz: OffenerPlatz;
+  testId: string;
+  onClick?: () => void;
+}) {
+  return (
+    <span
+      data-testid={testId}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? -1 : undefined}
+      title={`Offener Platz: ${platz.name} \u00b7 ${platzZeit(platz)}`}
+      onClick={onClick ? (e) => { e.stopPropagation(); onClick(); } : undefined}
+      onKeyDown={onClick ? (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onClick(); }
+      } : undefined}
+      className={[
+        "@container relative flex flex-col items-stretch overflow-hidden rounded-[6px]",
+        PLATZ_RAHMEN,
+        onClick ? "cursor-pointer" : "",
+      ].filter(Boolean).join(" ")}
+    >
+      <span className={`flex min-h-[23px] items-center gap-[4px] ${PLATZ_FLAECHE} py-[2px] pl-[6px] pr-[6px] leading-none`}>
+        <PlatzAvatar />
+        <span className={`min-w-0 truncate text-[12px] font-semibold ${PLATZ_TEXT}`}>{platz.name}</span>
+      </span>
+      <span className={`flex min-h-[23px] items-center gap-[3px] bg-[#e1e6ed] py-[2px] pl-[6px] pr-[6px] leading-none ${PLATZ_TEXT}`}>
+        <StatusBadge kind="clock" />
+        <span className="truncate text-[11px] font-semibold">
+          <span className="@max-[97px]:hidden">{platzZeit(platz)}</span>
+          <span className="hidden @max-[97px]:inline">{platz.startTime}</span>
+        </span>
+      </span>
+    </span>
+  );
+}
+
+/** Einzeilig — minimierter Desktop-Modus (mit Dienstname) und Smartphone
+ *  (ohne Dienstname: bei ~48 px Pillenbreite bleibt nur Platz fuer Plus-Kreis
+ *  und Beginn, siehe Messung zur Smartphone-Pille weiter unten). */
+function PlatzPilleEinzeilig({
+  platz,
+  testId,
+  mitName,
+  onClick,
+}: {
+  platz: OffenerPlatz;
+  testId: string;
+  mitName: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <span
+      data-testid={testId}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? -1 : undefined}
+      title={`Offener Platz: ${platz.name} \u00b7 ${platzZeit(platz)}`}
+      onClick={onClick ? (e) => { e.stopPropagation(); onClick(); } : undefined}
+      onKeyDown={onClick ? (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onClick(); }
+      } : undefined}
+      className={[
+        "@container relative flex items-center overflow-hidden",
+        mitName ? "rounded-[6px]" : "rounded-[5px]",
+        PLATZ_RAHMEN,
+        PLATZ_FLAECHE,
+        onClick ? "cursor-pointer" : "",
+      ].filter(Boolean).join(" ")}
+    >
+      <span
+        className={[
+          "flex w-full items-center leading-none",
+          PLATZ_TEXT,
+          mitName
+            ? "min-h-[23px] gap-[4px] py-[2px] pl-[6px] pr-[6px]"
+            : // Jeder Pixel zaehlt: in der ~42px-Innenbreite der Smartphone-
+              // Zelle muessen Plus-Kreis UND Kompaktzeit ("6\u201314") nebeneinander
+              // passen — engere Abstaende als bei den besetzten Pillen.
+              "min-h-[21px] gap-[2px] py-0 pl-[2px] pr-[3px]",
+        ].join(" ")}
+      >
+        <PlatzAvatar klein={!mitName} />
+        {mitName && (
+          <span className="min-w-0 truncate text-[12px] font-semibold">{platz.name}</span>
+        )}
+        <span
+          className={[
+            "min-w-0 flex-1 truncate font-semibold",
+            // 8px wie der Abwesenheits-Text der Smartphone-Zelle: erst damit
+            // passt auch "14\u201322" (fuenf Zeichen) vollstaendig in die Pille.
+            mitName ? "text-[10px]" : "text-[8px]",
+          ].join(" ")}
+        >
+          {mitName ? (
+            <>
+              <span className="@max-[114px]:hidden">{platzZeit(platz)}</span>
+              <span className="hidden @max-[114px]:inline">{platz.startTime}</span>
+            </>
+          ) : (
+            platzZeitKompakt(platz)
+          )}
+        </span>
+      </span>
+    </span>
+  );
+}
+
+/** Vertretungszeile unter einer BESETZTEN Pille (nur zweizeiliger Modus).
+ *  Kay-Entscheidung 01.09.2026: Sie erscheint erst, wenn die Assistenz
+ *  besetzt ist — vorher gibt es nichts zu vertreten. Einzeilig und 10 %
+ *  flacher als eine Dienstzeile (21 px statt 23 px), damit sie sichtbar
+ *  untergeordnet bleibt und die Zelle nicht auf doppelte Hoehe treibt. */
+function VertretungsZeile({
+  testId,
+  name,
+  onClick,
+}: {
+  testId: string;
+  /** Leer = Vertretungsplatz vorgesehen, aber noch niemand vorgemerkt. */
+  name?: string | null;
+  onClick?: () => void;
+}) {
+  const offen = !name;
+  return (
+    <span
+      data-testid={testId}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? -1 : undefined}
+      title={offen ? "Vertretung noch offen" : `Vertretung vorgemerkt: ${name}`}
+      onClick={onClick ? (e) => { e.stopPropagation(); onClick(); } : undefined}
+      onKeyDown={onClick ? (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onClick(); }
+      } : undefined}
+      className={[
+        "relative flex min-h-[21px] items-center gap-[4px] overflow-hidden rounded-[6px] pl-[6px] pr-[6px] leading-none",
+        offen
+          ? `${PLATZ_RAHMEN} ${PLATZ_FLAECHE} ${PLATZ_TEXT}`
+          : "border border-[#c7ced8] bg-white text-[#444444] shadow-[0_2px_3px_rgba(9,41,72,0.10)]",
+        onClick ? "cursor-pointer" : "",
+      ].filter(Boolean).join(" ")}
+    >
+      {offen ? <PlatzAvatar /> : <StandbyRing label={name ? lastNameInitial(name) : undefined} />}
+      <span className="min-w-0 flex-1 truncate text-[11px] font-semibold">
+        {offen ? "Vertretung offen" : lastName(name!)}
+      </span>
+      {!offen && <StatusBadge kind="standby" label="Vertretung vorgemerkt" calendarCompact />}
+    </span>
+  );
+}
+
+/** Assistenz-Avatar mit vorgemerkter Vertretung als ueberlappendem Umriss.
+ *  Nur fuer die EINZEILIGEN Pillen (minimierter Desktop, Smartphone): dort ist
+ *  keine eigene Vertretungszeile moeglich. Der gefuellte Kreis liegt oben auf
+ *  (z-10), der Vertretungs-Umriss 7 px dahinter — Kay-Feedback 30.08.2026. */
+function AvatarMitVertretung({
+  color,
+  label,
+  standbyName,
+}: {
+  color: string;
+  label: string;
+  standbyName?: string | null;
+}) {
+  if (!standbyName) return <PillAvatar color={color} label={label} />;
+  return (
+    <span
+      className="relative flex shrink-0 items-center"
+      title={`Vertretung vorgemerkt: ${standbyName}`}
+    >
+      <span className="relative z-10 flex">
+        <PillAvatar color={color} label={label} />
+      </span>
+      <span className="-ml-[7px] flex">
+        <StandbyRing label={lastNameInitial(standbyName)} />
+      </span>
+    </span>
+  );
+}
 
 export function MonthGrid({
   days,
@@ -41,6 +263,7 @@ export function MonthGrid({
   variant = "full",
   pillMinimiert = false,
   onCollapsedDayActivate,
+  geruestDienste,
 }: {
   days: Date[];
   monthStart: Date;
@@ -48,7 +271,7 @@ export function MonthGrid({
   modelMap: Map<number, ShiftModelInfo>;
   selectedDay: Date;
   onSelectDay: (day: Date) => void;
-  onAddShift: (day: Date) => void;
+  onAddShift: (day: Date, shiftModelId?: number) => void;
   onShiftClick: (shift: Shift) => void;
   onConfirmShift?: (shift: Shift) => void;
   canEdit: boolean;
@@ -70,6 +293,13 @@ export function MonthGrid({
    *  soll zur entsprechenden Zeile in der Wochen-Liste darunter scrollen
    *  (ersetzt das frühere, in MonthGrid eingebettete Tagesdetail-Panel). */
   onCollapsedDayActivate?: (day: Date) => void;
+  /** Dienstgeruest (Kay-Entscheidung 01.09.2026): die Dienste, die am Regelplan
+   *  teilnehmen. Aus ihnen berechnet das Raster je Tag die noch OFFENEN
+   *  Plaetze und zeichnet sie als ausgegraute Platzhalter-Pille. Es entstehen
+   *  dabei keine Datensaetze — PDF, Stundenliste und Auswertung sehen davon
+   *  nichts. Leer/undefiniert = kein Geruest, das Raster sieht aus wie bisher
+   *  (Bestandsschutz: `imRegelplan` steht ueberall auf false). */
+  geruestDienste?: GeruestDienst[];
 }) {
   const personColors = usePersonColors();
   // Dienste mit angenommener Abweichungsmeldung: bleiben FIX, bekommen aber
@@ -83,6 +313,14 @@ export function MonthGrid({
   // ── Kategoriale Personen-Slot-Farben (gemeinsamer Hook mit der mobilen
   //    Listenansicht, damit die Farbzuordnung überall identisch ist) ────────
   const getPersonSlot = usePersonSlotLookup();
+
+  // Dienste, die laut Regelplan eine Vertretung vorsehen (standbySlot). Nur
+  // fuer sie zeigt eine BESETZTE Pille zusaetzlich eine — ggf. noch leere —
+  // Vertretungszeile. Ist an einem Dienst bereits jemand vorgemerkt, wird die
+  // Zeile immer gezeigt, auch ohne Regelplan: die Information gibt es ja.
+  const standbySlotModelle = new Set(
+    (geruestDienste ?? []).filter((d) => d.standbySlot).map((d) => d.id),
+  );
 
   // ── Zeilenhöhe: immer inhaltsbasiert (Task #847) ──────────────────────────
   // Früher gab es zwei Modi: bei ≤2 Einträgen/Tag wurde das Grid künstlich auf
@@ -289,7 +527,25 @@ export function MonthGrid({
            // Initialen-Pillen gleich hoch.
            const pillLimit = variant === "collapsed" ? 2 : 4;
            const visiblePills = nonAbsence.slice(0, pillLimit);
-          const hiddenCount = nonAbsence.length - visiblePills.length;
+          // ── Dienstgeruest: offene Plaetze dieses Tages ────────────────────
+          // Bewusst gegen `nonAbsence` gerechnet, nicht gegen alle Eintraege:
+          // Faellt jemand krank aus und springt niemand ein, ist der Platz
+          // wieder offen und muss auch so aussehen. Eine Vertretung traegt
+          // dasselbe Schichtmodell und schliesst die Luecke daher von selbst.
+          const offenePlaetze =
+            geruestDienste && geruestDienste.length > 0
+              ? offenePlaetzeFuerTag(geruestDienste, day, nonAbsence)
+              : [];
+          // Platzhalter fuellen nur den REST des Pillen-Limits: besetzte
+          // Dienste haben Vorrang, ein offener Platz darf sie nie verdraengen.
+          const sichtbarePlaetze = offenePlaetze.slice(
+            0,
+            Math.max(0, pillLimit - visiblePills.length),
+          );
+          const hiddenCount =
+            nonAbsence.length -
+            visiblePills.length +
+            (offenePlaetze.length - sichtbarePlaetze.length);
           // Task #726: Personen mit einer Ausfall-Abwesenheit (Krank/Kind krank)
           // am selben Tag — deren Dienst-Pillen erhalten das rote Warn-Icon.
           const ausfallUserIds = new Set(
@@ -432,14 +688,14 @@ export function MonthGrid({
                   Smartphone-Darstellung — der bisherige Mini-Balken-Zweig und
                   der Auf-/Zuklapp-Umschalter entfallen ersatzlos. */}
               {variant === "collapsed" ? (
-                (visiblePills.length > 0 || absences.length > 0) && (
+                (visiblePills.length > 0 || sichtbarePlaetze.length > 0 || absences.length > 0) && (
                   // Arbeitsanweisung 17.08.2026 Punkt 6, Folgeauftrag: die
                   // Grauzone war mit #eef0f3 kaum vom weißen Zellenkopf zu
                   // unterscheiden — auf #e4e8ee (spürbar dunkler, dieselbe
                   // Farbe wie am Desktop, s. u.) angehoben, damit sich die
                   // weißen Pillen sichtbar abheben.
                   <div className="flex flex-col gap-[2px] rounded-b-[4px] border-t border-[#dfe4ea] bg-[#e4e8ee] px-[1px] py-[2px]">
-                  {visiblePills.length > 0 && (
+                  {(visiblePills.length > 0 || sichtbarePlaetze.length > 0) && (
                     <div
                       className="flex flex-col min-w-0 gap-[2px]"
                       data-testid={`day-pills-${format(day, "yyyy-MM-dd")}`}
@@ -498,7 +754,16 @@ export function MonthGrid({
                                 13-px-Icons passen (kein Namensfeld, s. Kommentar
                                 oben). */}
                             <span className="flex w-full items-center justify-between gap-[3px] bg-white py-0 pl-[3px] pr-[6px] leading-none">
-                              <PillAvatar color={barColor} label={avatarLabel} />
+                              {/* Kay-Entscheidung 01.09.2026: die vorgemerkte
+                                  Vertretung kehrt zurueck — aber nicht als
+                                  zweiter Avatar nebeneinander (dafuer ist die
+                                  Smartphone-Pille zu schmal), sondern als
+                                  Umriss-Kreis 7 px HINTER dem gefuellten. */}
+                              <AvatarMitVertretung
+                                color={barColor}
+                                label={avatarLabel}
+                                standbyName={s.standbyUserName}
+                              />
                               {/* Arbeitsanweisung 16.08.2026: Status-Icon jetzt
                                   IMMER sichtbar (inkl. grünem Bestätigt-Haken),
                                   nicht mehr nur bei Abweichung. Priorität von
@@ -537,6 +802,22 @@ export function MonthGrid({
                           </span>
                         );
                       })}
+                      {/* Offene Plaetze des Regelplans (Smartphone): ohne
+                          Dienstnamen — bei ~48 px Pillenbreite passen nur
+                          Plus-Kreis und Dienstbeginn. Voller Name im Tooltip. */}
+                      {sichtbarePlaetze.map((platz) => (
+                        <PlatzPilleEinzeilig
+                          key={`platz-${platz.dienstId}`}
+                          platz={platz}
+                          testId={`day-slot-${format(day, "yyyy-MM-dd")}-${platz.dienstId}`}
+                          mitName={false}
+                          onClick={
+                            canEdit && !selectionMode
+                              ? () => onAddShift(day, platz.dienstId)
+                              : undefined
+                          }
+                        />
+                      ))}
                       {hiddenCount > 0 && (
                         <span
                           data-testid={`day-more-${format(day, "yyyy-MM-dd")}`}
@@ -674,11 +955,17 @@ export function MonthGrid({
                             style={{ backgroundColor: statusColor }}
                           />
                           <span className="flex min-h-[23px] w-full items-center gap-[4px] bg-white py-[2px] pl-[6px] pr-[6px] leading-none">
-                            <PillAvatar color={barColor} label={avatarLabel} />
-                            {/* Kein zweiter Avatar mehr (Kay 30.08.2026): Die
-                                Vormerkung stand hier als lila Initialen — auf
-                                dem Smartphone wurde die Pille damit zu voll.
-                                Sie steht weiter im Tooltip und im Dialog. */}
+                            {/* Kay-Entscheidung 01.09.2026: die Vormerkung
+                                stand hier frueher als zweiter, gleichwertiger
+                                Avatar daneben und machte die Pille zu voll.
+                                Jetzt liegt sie als Umriss-Kreis 7 px HINTER
+                                dem gefuellten Assistenz-Kreis — eine Zeile
+                                breiter wird die Pille dadurch nicht. */}
+                            <AvatarMitVertretung
+                              color={barColor}
+                              label={avatarLabel}
+                              standbyName={s.standbyUserName}
+                            />
                             {/* Arbeitsanweisung 17.08.2026, Folgeauftrag: kein
                                 shrink-0 mehr — der Name soll bei wenig Platz
                                 wie im ausgeklappten Modus per truncate mit „…"
@@ -703,9 +990,18 @@ export function MonthGrid({
                         </span>
                       );
                     }
+                    // Vertretungszeile (Kay-Entscheidung 01.09.2026): sichtbar,
+                    // wenn der Dienst laut Regelplan einen Vertretungsplatz
+                    // vorsieht ODER bereits jemand vorgemerkt ist. Sie haengt
+                    // an einer BESETZTEN Pille — vorher gibt es nichts zu
+                    // vertreten. Teamdienste haben keine Vertretung.
+                    const zeigtVertretung =
+                      !isTeam &&
+                      (s.standbyUserId != null ||
+                        (s.shiftModelId != null && standbySlotModelle.has(s.shiftModelId)));
                     return (
+                      <Fragment key={s.id}>
                       <span
-                        key={s.id}
                         data-testid={`day-chip-${s.id}`}
                         {...commonHandlers}
                         className={[
@@ -789,8 +1085,45 @@ export function MonthGrid({
                           </span>
                         </span>
                       </span>
+                      {zeigtVertretung && (
+                        <VertretungsZeile
+                          testId={`day-standby-${s.id}`}
+                          name={s.standbyUserName}
+                          onClick={chipClickable ? () => onShiftClick(s) : undefined}
+                        />
+                      )}
+                      </Fragment>
                     );
                   })}
+                  {/* Offene Plaetze des Regelplans — nach den besetzten Pillen,
+                      damit die echten Dienste oben stehen. Im minimierten Modus
+                      einzeilig, sonst zweizeilig wie eine echte Pille. */}
+                  {sichtbarePlaetze.map((platz) =>
+                    pillMinimiert ? (
+                      <PlatzPilleEinzeilig
+                        key={`platz-${platz.dienstId}`}
+                        platz={platz}
+                        testId={`day-slot-${format(day, "yyyy-MM-dd")}-${platz.dienstId}`}
+                        mitName
+                        onClick={
+                          canEdit && !selectionMode
+                            ? () => onAddShift(day, platz.dienstId)
+                            : undefined
+                        }
+                      />
+                    ) : (
+                      <PlatzPilleZweizeilig
+                        key={`platz-${platz.dienstId}`}
+                        platz={platz}
+                        testId={`day-slot-${format(day, "yyyy-MM-dd")}-${platz.dienstId}`}
+                        onClick={
+                          canEdit && !selectionMode
+                            ? () => onAddShift(day, platz.dienstId)
+                            : undefined
+                        }
+                      />
+                    ),
+                  )}
                   {/* Überlauf-Zähler: liegt IM Pillen-Container, damit er
                       innerhalb der Grauzone bleibt — die füllt die Zelle seit
                       Punkt 3 (15.08.2026) bis ganz unten. */}
