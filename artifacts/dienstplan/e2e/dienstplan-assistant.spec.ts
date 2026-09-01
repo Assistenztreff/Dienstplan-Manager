@@ -6,6 +6,14 @@ import {
   type APIRequestContext,
 } from "@playwright/test";
 
+// Zeitspanne als Muster statt als fester Text (01.09.2026): Die App schreibt
+// sie an zwei Stellen unterschiedlich — die Tabellenansicht mit Leerzeichen
+// um den Gedankenstrich (dienstplan-table-view.tsx), die Listenzeile ohne
+// (day-detail-row.tsx). Ein fester String traf nur eine der beiden; die
+// Gegenproben auf die FREMDE Schicht bestanden dadurch, ohne etwas zu pruefen.
+const ZEIT_EIGEN = /08:00\s*–\s*16:00/;
+const ZEIT_FREMD = /12:00\s*–\s*20:00/;
+
 /**
  * E2E-Test für die eingeschränkte Assistenten-Sicht auf den Dienstplan.
  *
@@ -178,8 +186,8 @@ test.describe("Dienstplan-Sicht als Assistent (eingeschränkte Rechte)", () => {
     // Datenisolation (eindeutig über die Uhrzeit): die eigene Schicht
     // (08:00–16:00) ist sichtbar, die fremde Schicht (12:00–20:00) NICHT —
     // weder in der Tabelle noch irgendwo sonst auf der Seite.
-    await expect(desktop.getByText("08:00–16:00").first()).toBeVisible();
-    await expect(page.getByText("12:00–20:00")).toHaveCount(0);
+    await expect(desktop.getByText(ZEIT_EIGEN).first()).toBeVisible();
+    await expect(page.getByText(ZEIT_FREMD)).toHaveCount(0);
 
     // Tagesgenaue Prüfung im Monatsgitter: der eigene Tag zeigt die Schicht,
     // der fremde Tag ist leer (kein Datenleck über die Tagesauswahl).
@@ -196,15 +204,16 @@ test.describe("Dienstplan-Sicht als Assistent (eingeschränkte Rechte)", () => {
     await desktop.getByTestId(dayCellId(OWN_DAY)).click();
     const ownRow = scheduleList.getByTestId(`agenda-day-${isoDay(OWN_DAY)}`);
     await expect(ownRow).toHaveAttribute("data-anchor", "true");
-    await expect(ownRow).toContainText("08:00–16:00");
+    await expect(ownRow).toContainText(ZEIT_EIGEN);
 
     await desktop.getByTestId(dayCellId(FOREIGN_DAY)).click();
-    const foreignRow = scheduleList.getByTestId(`agenda-day-${isoDay(FOREIGN_DAY)}`);
-    await expect(foreignRow).toHaveAttribute("data-anchor", "true");
-    // Kein Datenleck: die fremde Schicht taucht weder in dieser Zeile noch
-    // sonst irgendwo in der Liste auf.
-    await expect(foreignRow).not.toContainText("12:00–20:00");
-    await expect(scheduleList.getByText("12:00–20:00")).toHaveCount(0);
+    // Korrigiert 01.09.2026: Fuer Assistenzkraefte blendet die Liste leere Tage
+    // aus (hideEmptyDays in schedule-list.tsx haengt an canEdit). Der fremde
+    // Tag traegt fuer DIESE Person keinen Dienst, seine Zeile darf also gar
+    // nicht existieren. Das ist der staerkere Nachweis der Datenisolation als
+    // eine vorhandene, aber leere Zeile.
+    await expect(scheduleList.getByTestId(`agenda-day-${isoDay(FOREIGN_DAY)}`)).toHaveCount(0);
+    await expect(scheduleList.getByText(ZEIT_FREMD)).toHaveCount(0);
   });
 
   test("zeigt keinen Assistenten-Filter", async ({ page }) => {
@@ -219,7 +228,7 @@ test.describe("Dienstplan-Sicht als Assistent (eingeschränkte Rechte)", () => {
     await expect(desktop.getByRole("button", { name: "Schicht", exact: true })).toHaveCount(0);
 
     // Klick auf eine Tabellenzelle darf keinen Dialog öffnen.
-    const cell = desktop.locator("td").filter({ hasText: "08:00–16:00" }).first();
+    const cell = desktop.locator("td").filter({ hasText: ZEIT_EIGEN }).first();
     await cell.click();
     await expect(page.getByText("Neue Schicht anlegen")).toHaveCount(0);
     await expect(page.getByText("Schicht bearbeiten")).toHaveCount(0);
