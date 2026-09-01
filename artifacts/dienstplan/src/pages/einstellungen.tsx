@@ -49,6 +49,7 @@ import { logoSrcFromPath, ACCEPTED_LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/logo
 import { readableApiError, planUpgradeMessage, planFeatureMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
 import { hasAccess, getLimit, isWithinLimit } from "@/lib/entitlements";
 import { PlanLimitBanner, PlanUpgradeLink } from "@/components/plan-limit-banner";
+import { DienstVorlagenDialog } from "@/components/dienst-vorlagen-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAssistantPalette } from "@/lib/use-assistant-palette";
 import { PERSON_SLOTS_LIGHT, PERSON_SLOTS_DARK } from "@/lib/barrierefreie-farben";
@@ -1325,6 +1326,9 @@ export default function Einstellungen() {
   // UX-Gate wie bei den Assistenten; autoritativ setzt der Server durch.
   const modelLimit = getLimit(currentUser, "maxShiftModels");
   const canAddModel = isWithinLimit(currentUser, "maxShiftModels", sortedModels.length);
+  // Schicht-Wizard (Baustein 4): Vorlagen-Pakete anlegen. Der Knopf bleibt
+  // auch am Free-Limit klickbar — der Dialog selbst zeigt das Limit VORAB an.
+  const [vorlagenOpen, setVorlagenOpen] = useState(false);
   const nextSortOrder =
     sortedModels.length > 0 ? Math.max(...sortedModels.map((m) => m.sortOrder)) + 10 : 10;
 
@@ -1412,6 +1416,19 @@ export default function Einstellungen() {
         ) : (
           <div />
         )}
+        <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          onClick={() => setVorlagenOpen(true)}
+          className="gap-2"
+          data-testid="model-vorlagen"
+          disabled={!isTeamScopeReady}
+          title="Fertige Dienst-Sätze (24h, Drei-Schicht, ...) mit einem Klick anlegen"
+        >
+          <CalendarDays className="h-4 w-4" />
+          <span className="hidden sm:inline">Aus Vorlage</span>
+          <span className="sm:hidden">Vorlage</span>
+        </Button>
         {canAddModel ? (
           <Button
             onClick={openCreate}
@@ -1435,7 +1452,18 @@ export default function Einstellungen() {
             <span className="sm:hidden">Neu</span>
           </Button>
         )}
+        </div>
       </div>
+
+      <DienstVorlagenDialog
+        open={vorlagenOpen}
+        onClose={() => setVorlagenOpen(false)}
+        vorhandeneNamen={sortedModels.map((m) => m.name)}
+        vorhandeneAnzahl={sortedModels.length}
+        hoechsterSortOrder={sortedModels.reduce((max, m) => Math.max(max, m.sortOrder), 0)}
+        modelLimit={modelLimit}
+        targetTeamId={modelTeamId}
+      />
       {/* Limit-Hinweis (Free-Plan). Bei Premium ist modelLimit null. */}
       {!canAddModel && modelLimit !== null && (
         <PlanLimitBanner>
