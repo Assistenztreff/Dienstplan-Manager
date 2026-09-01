@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ZiehbarePerson } from "@/components/dienstplan-dnd";
 import { buildPersonColorAssignment, userInitialsClass, nameInitials } from "@/lib/shift-model-colors";
 import { formatHours } from "@/lib/utils";
 import { StatusBadge, STATUS_BADGE_COLORS, type StatusBadgeKind } from "@/components/status-badge";
@@ -35,6 +36,11 @@ export type StundenkontoProps = {
    *  sonst die Plus-/Minusstunden) — Status-Badge sowie Vertrags-/Geplant-
    *  Stunden entfallen, da auf dem Smartphone kein Platz für Details ist. */
   minimal?: boolean;
+  /** Praefix fuer die Drag-and-Drop-Quellen-IDs (Baustein 2, 01.09.2026):
+   *  Panel, Desktop-Reihe und mobile Reihe stehen zeitgleich im DOM — ohne
+   *  Praefix wuerden sich ihre dnd-kit-IDs ueberschreiben. Ohne Wert wird
+   *  nichts ziehbar (z. B. ausserhalb des Dienstplans). */
+  dndBereich?: string;
 };
 
 function formatBalance(b: number) {
@@ -517,6 +523,7 @@ export function StundenkontoPanel({
   budget,
   sortMode = "name",
   onToggleSort,
+  dndBereich,
 }: StundenkontoProps) {
   const personColors = useMemo(
     () => buildPersonColorAssignment(assistants.map((a) => a.id)),
@@ -569,8 +576,14 @@ export function StundenkontoPanel({
             const status = e.status;
 
             return (
-              <button
+              <ZiehbarePerson
                 key={e.id}
+                bereich={dndBereich}
+                userId={e.id}
+                name={e.name}
+                className="block w-full"
+              >
+              <button
                 type="button"
                 data-testid={`stundenkonto-pill-${e.id}`}
                 aria-pressed={isSelected}
@@ -641,6 +654,7 @@ export function StundenkontoPanel({
                   </span>
                 )}
               </button>
+              </ZiehbarePerson>
             );
           })
         )}
@@ -663,7 +677,8 @@ export function StundenkontoReihe({
   budget,
   sortMode = "name",
   onToggleSort,
-  minimal = false
+  minimal = false,
+  dndBereich,
 }: StundenkontoProps) {
   const personColors = useMemo(
     () => buildPersonColorAssignment(assistants.map((a) => a.id)),
@@ -710,8 +725,14 @@ export function StundenkontoReihe({
             const balanced = Math.abs(e.balance) < 0.05;
 
             return (
-              <button
+              <ZiehbarePerson
                 key={e.id}
+                bereich={dndBereich}
+                userId={e.id}
+                name={e.name}
+                className="shrink-0 flex"
+              >
+              <button
                 type="button"
                 data-testid={`stundenkonto-pill-${e.id}`}
                 aria-pressed={isSelected}
@@ -804,6 +825,7 @@ export function StundenkontoReihe({
                   </>
                 )}
               </button>
+              </ZiehbarePerson>
             );
           })
         )}

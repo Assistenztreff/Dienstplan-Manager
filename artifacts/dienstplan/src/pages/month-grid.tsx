@@ -27,6 +27,7 @@ import {
   type GeruestDienst,
   type OffenerPlatz,
 } from "@/lib/dienstgeruest";
+import { ZugZielHuelle } from "@/components/dienstplan-dnd";
 
 // ---------------------------------------------------------------------------
 // Platzhalter-Pillen des Dienstgeruests
@@ -264,6 +265,7 @@ export function MonthGrid({
   pillMinimiert = false,
   onCollapsedDayActivate,
   geruestDienste,
+  dndBereich = "grid",
 }: {
   days: Date[];
   monthStart: Date;
@@ -300,6 +302,10 @@ export function MonthGrid({
    *  nichts. Leer/undefiniert = kein Geruest, das Raster sieht aus wie bisher
    *  (Bestandsschutz: `imRegelplan` steht ueberall auf false). */
   geruestDienste?: GeruestDienst[];
+  /** Praefix fuer die Drag-and-Drop-Ziel-IDs. Mobile und Desktop-Raster
+   *  stehen zeitgleich im DOM (nur eines sichtbar) — ohne Praefix wuerden
+   *  sich ihre Ziele in der dnd-kit-Registry gegenseitig ueberschreiben. */
+  dndBereich?: string;
 }) {
   const personColors = usePersonColors();
   // Dienste mit angenommener Abweichungsmeldung: bleiben FIX, bekommen aber
@@ -724,8 +730,14 @@ export function MonthGrid({
                         const korrigiert = correctedShiftIds.has(s.id);
                         const statusColor = dienstStatusColor(status, hasAusfall, s.isVertretung);
                         return (
-                          <span
+                          <ZugZielHuelle
                             key={s.id}
+                            bereich={dndBereich}
+                            ziel={{ art: "dienst", shiftId: s.id }}
+                            disabled={!chipClickable || isTeam}
+                            className="flex flex-col"
+                          >
+                          <span
                             data-testid={`day-chip-${s.id}`}
                             role={chipClickable ? "button" : undefined}
                             tabIndex={chipClickable ? -1 : undefined}
@@ -800,23 +812,37 @@ export function MonthGrid({
                               </span>
                             </span>
                           </span>
+                          </ZugZielHuelle>
                         );
                       })}
                       {/* Offene Plaetze des Regelplans (Smartphone): ohne
                           Dienstnamen — bei ~48 px Pillenbreite passen nur
                           Plus-Kreis und Dienstbeginn. Voller Name im Tooltip. */}
                       {sichtbarePlaetze.map((platz) => (
-                        <PlatzPilleEinzeilig
+                        <ZugZielHuelle
                           key={`platz-${platz.dienstId}`}
-                          platz={platz}
-                          testId={`day-slot-${format(day, "yyyy-MM-dd")}-${platz.dienstId}`}
-                          mitName={false}
-                          onClick={
-                            canEdit && !selectionMode
-                              ? () => onAddShift(day, platz.dienstId)
-                              : undefined
-                          }
-                        />
+                          bereich={dndBereich}
+                          ziel={{
+                            art: "platz",
+                            datum: format(day, "yyyy-MM-dd"),
+                            dienstId: platz.dienstId,
+                            startTime: platz.startTime,
+                            endTime: platz.endTime,
+                          }}
+                          disabled={!canEdit || selectionMode}
+                          className="flex flex-col"
+                        >
+                          <PlatzPilleEinzeilig
+                            platz={platz}
+                            testId={`day-slot-${format(day, "yyyy-MM-dd")}-${platz.dienstId}`}
+                            mitName={false}
+                            onClick={
+                              canEdit && !selectionMode
+                                ? () => onAddShift(day, platz.dienstId)
+                                : undefined
+                            }
+                          />
+                        </ZugZielHuelle>
                       ))}
                       {hiddenCount > 0 && (
                         <span
@@ -928,8 +954,14 @@ export function MonthGrid({
                     // (< 115 px im Minimiert-Modus → nur Dienstbeginn).
                     if (pillMinimiert) {
                       return (
-                        <span
+                        <ZugZielHuelle
                           key={s.id}
+                          bereich={dndBereich}
+                          ziel={{ art: "dienst", shiftId: s.id }}
+                          disabled={!chipClickable || isTeam}
+                          className="flex flex-col"
+                        >
+                        <span
                           data-testid={`day-chip-${s.id}`}
                           {...commonHandlers}
                           className={[
@@ -988,6 +1020,7 @@ export function MonthGrid({
                             <span className="flex shrink-0 items-center -space-x-[7px]">{statusBadgeStack}</span>
                           </span>
                         </span>
+                        </ZugZielHuelle>
                       );
                     }
                     // Vertretungszeile (Kay-Entscheidung 01.09.2026): sichtbar,
@@ -1001,6 +1034,12 @@ export function MonthGrid({
                         (s.shiftModelId != null && standbySlotModelle.has(s.shiftModelId)));
                     return (
                       <Fragment key={s.id}>
+                      <ZugZielHuelle
+                        bereich={dndBereich}
+                        ziel={{ art: "dienst", shiftId: s.id }}
+                        disabled={!chipClickable || isTeam}
+                        className="flex flex-col"
+                      >
                       <span
                         data-testid={`day-chip-${s.id}`}
                         {...commonHandlers}
@@ -1085,6 +1124,7 @@ export function MonthGrid({
                           </span>
                         </span>
                       </span>
+                      </ZugZielHuelle>
                       {zeigtVertretung && (
                         <VertretungsZeile
                           testId={`day-standby-${s.id}`}
@@ -1098,32 +1138,44 @@ export function MonthGrid({
                   {/* Offene Plaetze des Regelplans — nach den besetzten Pillen,
                       damit die echten Dienste oben stehen. Im minimierten Modus
                       einzeilig, sonst zweizeilig wie eine echte Pille. */}
-                  {sichtbarePlaetze.map((platz) =>
-                    pillMinimiert ? (
-                      <PlatzPilleEinzeilig
-                        key={`platz-${platz.dienstId}`}
-                        platz={platz}
-                        testId={`day-slot-${format(day, "yyyy-MM-dd")}-${platz.dienstId}`}
-                        mitName
-                        onClick={
-                          canEdit && !selectionMode
-                            ? () => onAddShift(day, platz.dienstId)
-                            : undefined
-                        }
-                      />
-                    ) : (
-                      <PlatzPilleZweizeilig
-                        key={`platz-${platz.dienstId}`}
-                        platz={platz}
-                        testId={`day-slot-${format(day, "yyyy-MM-dd")}-${platz.dienstId}`}
-                        onClick={
-                          canEdit && !selectionMode
-                            ? () => onAddShift(day, platz.dienstId)
-                            : undefined
-                        }
-                      />
-                    ),
-                  )}
+                  {sichtbarePlaetze.map((platz) => (
+                    <ZugZielHuelle
+                      key={`platz-${platz.dienstId}`}
+                      bereich={dndBereich}
+                      ziel={{
+                        art: "platz",
+                        datum: format(day, "yyyy-MM-dd"),
+                        dienstId: platz.dienstId,
+                        startTime: platz.startTime,
+                        endTime: platz.endTime,
+                      }}
+                      disabled={!canEdit || selectionMode}
+                      className="flex flex-col"
+                    >
+                      {pillMinimiert ? (
+                        <PlatzPilleEinzeilig
+                          platz={platz}
+                          testId={`day-slot-${format(day, "yyyy-MM-dd")}-${platz.dienstId}`}
+                          mitName
+                          onClick={
+                            canEdit && !selectionMode
+                              ? () => onAddShift(day, platz.dienstId)
+                              : undefined
+                          }
+                        />
+                      ) : (
+                        <PlatzPilleZweizeilig
+                          platz={platz}
+                          testId={`day-slot-${format(day, "yyyy-MM-dd")}-${platz.dienstId}`}
+                          onClick={
+                            canEdit && !selectionMode
+                              ? () => onAddShift(day, platz.dienstId)
+                              : undefined
+                          }
+                        />
+                      )}
+                    </ZugZielHuelle>
+                  ))}
                   {/* Überlauf-Zähler: liegt IM Pillen-Container, damit er
                       innerhalb der Grauzone bleibt — die füllt die Zelle seit
                       Punkt 3 (15.08.2026) bis ganz unten. */}

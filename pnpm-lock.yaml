@@ -192,10 +192,13 @@ importers:
         version: 8.64.0(eslint@10.7.0(jiti@2.7.0))(typescript@5.9.3)
       vitest:
         specifier: ^4.1.8
-        version: 4.1.8(@types/node@25.6.2)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4)
+        version: 4.1.8(@types/node@25.6.2)(jsdom@30.0.1)(vite@7.3.6(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4))
 
   artifacts/dienstplan:
     dependencies:
+      '@dnd-kit/core':
+        specifier: ^6.3.1
+        version: 6.3.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@tanstack/query-sync-storage-persister':
         specifier: 5.100.9
         version: 5.100.9
@@ -442,7 +445,7 @@ importers:
         version: 7.3.6(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4)
       vitest:
         specifier: ^4.1.8
-        version: 4.1.8(@types/node@25.6.2)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4)
+        version: 4.1.8(@types/node@25.6.2)(jsdom@30.0.1)(vite@7.3.6(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4))
       wouter:
         specifier: ^3.3.5
         version: 3.10.0(react@19.1.0)
@@ -683,7 +686,7 @@ importers:
         version: 8.64.0(eslint@10.7.0(jiti@2.7.0))(typescript@5.9.3)
       vitest:
         specifier: ^4.1.8
-        version: 4.1.8(@types/node@25.6.2)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4)
+        version: 4.1.8(@types/node@25.6.2)(jsdom@30.0.1)(vite@7.3.6(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4))
 
   lib/entitlements:
     devDependencies:
@@ -692,7 +695,7 @@ importers:
         version: 25.6.2
       vitest:
         specifier: ^4.1.8
-        version: 4.1.8(@types/node@25.6.2)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4)
+        version: 4.1.8(@types/node@25.6.2)(jsdom@30.0.1)(vite@7.3.6(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4))
 
   lib/shift-defaults: {}
 
@@ -713,7 +716,7 @@ importers:
         version: 8.20.0
       vitest:
         specifier: ^4.1.8
-        version: 4.1.8(@types/node@25.6.2)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4)
+        version: 4.1.8(@types/node@25.6.2)(jsdom@30.0.1)(vite@7.3.6(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4))
 
   scripts:
     dependencies:
@@ -744,7 +747,7 @@ importers:
         version: 4.21.0
       vitest:
         specifier: ^4.1.8
-        version: 4.1.8(@types/node@25.6.2)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4)
+        version: 4.1.8(@types/node@25.6.2)(jsdom@30.0.1)(vite@7.3.6(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4))
 
 packages:
 
@@ -903,6 +906,22 @@ packages:
 
   '@date-fns/tz@1.4.1':
     resolution: {integrity: sha512-P5LUNhtbj6YfI3iJjw5EL9eUAG6OitD0W3fWQcpQjDRc/QIsL0tRNuO1PcDvPccWL1fSTXXdE1ds+l95DV/OFA==}
+
+  '@dnd-kit/accessibility@3.1.1':
+    resolution: {integrity: sha512-2P+YgaXF+gRsIihwwY1gCsQSYnu9Zyj2py8kY5fFvUM1qm2WA2u639R6YNVfU4GWr+ZM5mqEsfHZZLoRONbemw==}
+    peerDependencies:
+      react: '>=16.8.0'
+
+  '@dnd-kit/core@6.3.1':
+    resolution: {integrity: sha512-xkGBRQQab4RLwgXxoqETICr6S5JlogafbhNsidmrkVv2YRs5MLwpjoF2qpiGjQt8S9AoxtIV603s0GIUpY5eYQ==}
+    peerDependencies:
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
+
+  '@dnd-kit/utilities@3.2.2':
+    resolution: {integrity: sha512-+MKAJEOfaBe5SmV6t34p80MMKhjvUz0vRrvVJbPT0WElzaOJ/1xs+D+KDv+tD/NE5ujfrChEcshd4fLn0wpiqg==}
+    peerDependencies:
+      react: '>=16.8.0'
 
   '@drizzle-team/brocli@0.10.2':
     resolution: {integrity: sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==}
@@ -5184,6 +5203,7 @@ packages:
       '@vitest/ui': 4.1.8
       happy-dom: '*'
       jsdom: '*'
+      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
     peerDependenciesMeta:
       '@edge-runtime/vm':
         optional: true
@@ -5496,6 +5516,24 @@ snapshots:
   '@csstools/css-tokenizer@4.0.0': {}
 
   '@date-fns/tz@1.4.1': {}
+
+  '@dnd-kit/accessibility@3.1.1(react@19.1.0)':
+    dependencies:
+      react: 19.1.0
+      tslib: 2.8.1
+
+  '@dnd-kit/core@6.3.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
+    dependencies:
+      '@dnd-kit/accessibility': 3.1.1(react@19.1.0)
+      '@dnd-kit/utilities': 3.2.2(react@19.1.0)
+      react: 19.1.0
+      react-dom: 19.1.0(react@19.1.0)
+      tslib: 2.8.1
+
+  '@dnd-kit/utilities@3.2.2(react@19.1.0)':
+    dependencies:
+      react: 19.1.0
+      tslib: 2.8.1
 
   '@drizzle-team/brocli@0.10.2': {}
 
@@ -9601,7 +9639,7 @@ snapshots:
       tsx: 4.21.0
       yaml: 2.8.4
 
-  vitest@4.1.8(@types/node@25.6.2)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4):
+  vitest@4.1.8(@types/node@25.6.2)(jsdom@30.0.1)(vite@7.3.6(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4)):
     dependencies:
       '@vitest/expect': 4.1.8
       '@vitest/mocker': 4.1.8(vite@7.3.6(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4))
@@ -9627,17 +9665,7 @@ snapshots:
       '@types/node': 25.6.2
       jsdom: 30.0.1
     transitivePeerDependencies:
-      - jiti
-      - less
-      - lightningcss
       - msw
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - terser
-      - tsx
-      - yaml
 
   w3c-xmlserializer@5.0.0:
     dependencies:
