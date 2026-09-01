@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, boolean, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, boolean, date, timestamp, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { teamsTable } from "./teams";
@@ -30,6 +30,30 @@ export const shiftModelsTable = pgTable("shift_models", {
   compensationType: compensationTypeEnum("compensation_type").notNull().default("regular"),
   compensationPercent: integer("compensation_percent"),
   compensationFlatCents: integer("compensation_flat_cents"),
+  // ── Dienstgerüst (Kay-Entscheidung 01.09.2026) ────────────────────────────
+  // Gehört dieser Dienst zum REGELPLAN? Dann zeichnet das Monatsraster an
+  // jedem passenden Tag einen offenen Platz — ohne dafür eine Zeile anzulegen.
+  // Das Gerüst wird ausschliesslich BERECHNET (Wochentag + gültig-ab), es gibt
+  // keine Platzhalter-Datensätze. Für PDF-Export, Stundenliste, Auswertung und
+  // Zeitkonto existiert ein offener Platz deshalb gar nicht; sie lesen weiter
+  // nur echte Schichten.
+  //
+  // Standard FALSE = Bestandsschutz: Bestandsteams sehen nach dem Update
+  // exakt dasselbe wie vorher, bis jemand den Schalter bewusst umlegt.
+  //
+  // Bewusst ein JA/NEIN statt eines Zählers: Die Zahl der Plätze pro Tag ergibt
+  // sich aus der Zahl der Dienste im Regelplan (1×24h = ein Platz, 3×8h = drei),
+  // nicht aus einer Menge am einzelnen Dienst.
+  imRegelplan: boolean("im_regelplan").notNull().default(false),
+  // Ab wann gilt die Regel? NULL = seit jeher. Vor diesem Datum zeichnet das
+  // Raster keinen Platz — damit lässt sich ein neuer Regeldienst einführen,
+  // ohne rückwirkend Lücken in bereits abgeschlossene Monate zu reissen.
+  validFrom: date("valid_from"),
+  // Sieht dieser Dienst eine vorgemerkte Vertretung vor? Dann erscheint unter
+  // der besetzten Dienstpille eine flachere Vertretungspille. Sie hängt an
+  // shifts.standby_user_id und kann es deshalb erst geben, wenn die Assistenz
+  // steht — vorher gibt es die Zeile schlicht nicht.
+  standbySlot: boolean("standby_slot").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

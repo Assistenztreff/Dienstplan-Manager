@@ -33,4 +33,8 @@ export interface ShiftModelInput {
      * @nullable
      */
   compensationFlatCents?: number | null;
+  imRegelplan?: boolean;
+  /** @nullable */
+  validFrom?: Date | null;
+  standbySlot?: boolean;
 }

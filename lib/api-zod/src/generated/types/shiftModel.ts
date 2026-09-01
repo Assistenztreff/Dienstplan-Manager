@@ -31,5 +31,14 @@ export interface ShiftModel {
      * @nullable
      */
   compensationFlatCents?: number | null;
+  /** Gehört der Dienst zum Regelplan? Dann zeichnet das Monatsraster an jedem passenden Tag einen offenen Platz. Rein berechnet — es entstehen dabei keine Datensätze. */
+  imRegelplan: boolean;
+  /**
+     * Ab wann die Regelplan-Regel gilt. null = seit jeher.
+     * @nullable
+     */
+  validFrom?: Date | null;
+  /** Sieht der Dienst eine vorgemerkte Vertretung vor? Die Vertretungs- zeile erscheint erst, wenn die Assistenz besetzt ist. */
+  standbySlot: boolean;
   createdAt: Date;
 }
