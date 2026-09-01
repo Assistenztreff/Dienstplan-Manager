@@ -97,3 +97,24 @@ export async function clearUserShiftsAroundDay(
     }
   }
 }
+
+/**
+ * Öffnet eine Dienst-Zeile der Terminliste (`shift-badge-<id>`) im
+ * Bearbeiten-Dialog.
+ *
+ * Hintergrund (gefunden 01.09.2026): Playwright klickt Elemente in ihrer
+ * MITTE. In einer schmalen Zeile — Smartphone-Breite, gemessen 378 px —
+ * liegt dort der Bestätigen-Knopf (`shift-confirm-<id>`). Der stoppt das
+ * Bubbling, der Klick bestätigt also den Dienst, statt ihn zu öffnen, und
+ * der Dialog geht nie auf.
+ *
+ * Deshalb links oben klicken, wo der Name steht — dieselbe Vorsichtsmaßnahme
+ * wie in selectDayCell oben, dort gegen die Pillen in der Zellenmitte.
+ */
+export async function openShiftRow(page: Page, row: Locator): Promise<Locator> {
+  await expect(row).toBeVisible();
+  await row.click({ position: { x: 12, y: 12 } });
+  const dialog = page.getByTestId("shift-dialog");
+  await expect(dialog).toBeVisible();
+  return dialog;
+}

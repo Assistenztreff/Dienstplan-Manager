@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
-import { selectDayCell } from "./helpers/shifts";
+import { openShiftRow, selectDayCell } from "./helpers/shifts";
 import {
   registerFreeAccount,
   setAccountPlan,
@@ -133,7 +133,7 @@ test("Warn-Toast erscheint beim Anlegen im abgeschlossenen Monat — aber nur ei
   // --- 2. Änderung im selben Monat: Schicht bearbeiten ---------------------
   const badge = mobile.locator(`[data-testid^="shift-badge-"]`).first();
   await expect(badge).toBeVisible();
-  await badge.click();
+  await openShiftRow(page, badge);
   const editDialog = page.getByTestId("shift-dialog");
   await expect(editDialog).toBeVisible();
   await editDialog.getByTestId("shift-dialog-start").fill("10:00");

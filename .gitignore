@@ -51,3 +51,7 @@ Thumbs.db
 
 # Hochgeladene Assets (nur lokal, nicht versioniert)
 attached_assets/
+
+# Playwright-Laufausgaben (Screenshots, Traces, Fehlerkontext je Fehlschlag)
+test-results/
+playwright-report/

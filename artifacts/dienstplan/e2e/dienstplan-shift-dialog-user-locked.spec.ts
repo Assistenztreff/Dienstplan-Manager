@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
-import { clearUserShiftsAroundDay, selectDayCell } from "./helpers/shifts";
+import { clearUserShiftsAroundDay, openShiftRow, selectDayCell } from "./helpers/shifts";
 
 /**
  * E2E-Test: Im Bearbeiten-Modus des ShiftDialogs ist das Assistenten-Feld
@@ -176,7 +176,7 @@ test.describe("ShiftDialog: Assistent im Bearbeiten-Modus gesperrt (Admin, mobil
     // --- Schicht im Bearbeiten-Modus öffnen --------------------------------
     const badge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${shiftId}`);
     await expect(badge).toBeVisible();
-    await badge.click();
+    await openShiftRow(page, badge);
 
     const editDialog = page.getByTestId("shift-dialog");
     await expect(editDialog).toBeVisible();

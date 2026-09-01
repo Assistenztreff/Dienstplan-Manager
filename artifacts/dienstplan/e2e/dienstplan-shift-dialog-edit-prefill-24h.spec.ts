@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
-import { clearUserShiftsAroundDay, selectDayCell } from "./helpers/shifts";
+import { clearUserShiftsAroundDay, openShiftRow, selectDayCell } from "./helpers/shifts";
 
 /**
  * E2E-Test: Beim Öffnen eines 24h-DIENSTES (identische Start-/Endzeit, z. B.
@@ -168,7 +168,7 @@ test.describe("ShiftDialog: Bearbeiten belegt 24h-Dienst korrekt vor (Admin, mob
     // --- Schicht im Bearbeiten-Modus öffnen --------------------------------
     const badge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${shiftId}`);
     await expect(badge).toBeVisible();
-    await badge.click();
+    await openShiftRow(page, badge);
 
     const editDialog = page.getByTestId("shift-dialog");
     await expect(editDialog).toBeVisible();
