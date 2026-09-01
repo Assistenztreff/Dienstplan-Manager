@@ -40,6 +40,7 @@ import { Check, X, CalendarPlus, Trash2, Pencil, ChevronsLeft } from "lucide-rea
 import { ShiftDialog } from "@/components/shift-dialog";
 import { useVertretungAktivieren } from "@/lib/vertretung-aktivieren";
 import { BulkDeleteDialog } from "@/components/bulk-delete-dialog";
+import { AutoplanungDialog } from "@/components/autoplanung-dialog";
 import { BulkEditDialog } from "@/components/bulk-edit-dialog";
 import { useTeam } from "@/context/team";
 import { useAuth, hasTeamAccessLevel } from "@/context/auth";
@@ -491,6 +492,10 @@ export default function Dienstplan() {
   // bisherigen Einzel-Filter (selectedAssistant oben) — "unverändert" ist
   // hier Teil der Anforderung, kein Zufall.
   const canSeeStundenkonto = isAdmin && hasAccess(currentUser, "advancedAnalytics");
+  // Automatische Planung (Baustein 3): reines UI-Gate — der Assistent nutzt
+  // nur Endpunkte, die ein Planer ohnehin aufrufen darf (POST /shifts/bulk).
+  const canAutoPlan = canPlan && hasAccess(currentUser, "autoScheduling");
+  const [autoplanungOpen, setAutoplanungOpen] = useState(false);
   const {
     selectedUserIds: multiSelectedUserIds,
     toggleUser: toggleStundenkontoUser,
@@ -1169,6 +1174,8 @@ export default function Dienstplan() {
       canSeeStundenkonto={canSeeStundenkonto}
       stundenkontoOpen={stundenkontoOpen}
       onToggleStundenkonto={() => setStundenkontoOpenFlag(stundenkontoOpen ? "0" : "1")}
+      canAutoPlan={canAutoPlan}
+      onAutoPlanung={() => setAutoplanungOpen(true)}
     />
   );
 
@@ -1587,6 +1594,21 @@ export default function Dienstplan() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+      )}
+
+      {canPlan && canAutoPlan && (
+        <AutoplanungDialog
+          open={autoplanungOpen}
+          onClose={() => setAutoplanungOpen(false)}
+          geruestDienste={geruestDienste}
+          days={days}
+          monatsLabel={format(currentDate, "MMMM yyyy", { locale: de })}
+          shifts={allShifts.filter((s) => !isMirrorShift(s, selectedTeamId))}
+          assistants={assistants}
+          absenceByUser={absenceByUser}
+          eintraege={stundenkontoEintraege}
+          teamId={selectedTeamId}
+        />
       )}
 
       {canPlan && (

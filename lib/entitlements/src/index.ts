@@ -69,7 +69,8 @@ export type PlanFeature =
   | "calendarSync" // Export in eigene Kalender-App
   | "caregiverLogin" // Assistenzkraefte erhalten Zugang zur Team-Ansicht
   | "absenceTracking" // Tracking/Zaehlung von Urlaubs- & Krankheitstagen (Resturlaub, Statistik)
-  | "timeTrackingSettings"; // Schalter Zeiterfassung an/aus + Pausen-Vorbefuellung/-Abzug aendern
+  | "timeTrackingSettings" // Schalter Zeiterfassung an/aus + Pausen-Vorbefuellung/-Abzug aendern
+  | "autoScheduling"; // Automatische Planung: Regelplan-Dienste reihum auf Personen verteilen
 
 /** Numerische Limits pro Plan (`null` = unbegrenzt). */
 export type PlanLimit =
@@ -105,6 +106,10 @@ export const PLAN_CONFIG: Record<Plan, PlanConfig> = {
       // wirksam — gesperrt ist nur das AENDERN der drei Schalter (Server prueft
       // auf Wert-Aenderung, nicht auf das Feld selbst).
       timeTrackingSettings: false,
+      // Der Planungs-Assistent verteilt nur, was man auch von Hand anlegen
+      // koennte — Premium ist hier die BEQUEMLICHKEIT, kein Datenzugriff.
+      // Deshalb reicht das UI-Gate; es gibt keinen eigenen Server-Endpunkt.
+      autoScheduling: false,
     },
     limits: {
       maxAssistants: 6,
@@ -132,6 +137,7 @@ export const PLAN_CONFIG: Record<Plan, PlanConfig> = {
       caregiverLogin: true,
       absenceTracking: true,
       timeTrackingSettings: true,
+      autoScheduling: true,
     },
     limits: {
       maxAssistants: null, // unbegrenzt
