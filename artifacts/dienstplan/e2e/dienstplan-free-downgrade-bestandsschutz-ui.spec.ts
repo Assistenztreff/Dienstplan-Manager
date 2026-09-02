@@ -1,5 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { addMonths, format } from "date-fns";
+import { DEFAULT_SHIFT_MODELS } from "@workspace/shift-defaults";
+import { PLAN_CONFIG } from "@workspace/entitlements";
 import {
   deleteFreeAccount,
   registerFreeAccount,
@@ -41,7 +43,17 @@ import {
 
 const FREE_MAX_ASSISTANTS = 6;
 const OVER_LIMIT_ASSISTANTS = FREE_MAX_ASSISTANTS + 1; // 7 — einer ueber dem Cap
-const EXTRA_MODEL_COUNT = 2; // 5 Seeds + 2 = 7 > Free-Limit 5
+
+// Dienste: abgeleitet statt abgeschrieben. Der Test stand frueher auf
+// „5 Seeds + 2 = 7"; seit nur noch die Teamsitzung geseedet wird (02.09.2026),
+// waeren das 1 + 2 = 3 gewesen — UNTER dem Free-Limit. Der Test waere nicht
+// nur rot geworden, er haette seinen Zweck verloren: Er soll zeigen, dass
+// Bestandsdaten OBERHALB des Limits sichtbar bleiben. Deshalb wird die Zahl
+// der Zusatz-Dienste so berechnet, dass am Ende immer LIMIT + 2 stehen.
+const SEED_MODEL_COUNT = DEFAULT_SHIFT_MODELS.length;
+const FREE_MAX_MODELS = PLAN_CONFIG.free.limits.maxShiftModels!;
+const TARGET_MODEL_COUNT = FREE_MAX_MODELS + 2; // 7 — zwei ueber dem Cap
+const EXTRA_MODEL_COUNT = TARGET_MODEL_COUNT - SEED_MODEL_COUNT;
 
 const SECOND_TEAM_NAME = "E2E Downgrade Zweitteam";
 
@@ -85,11 +97,14 @@ test.describe("Downgrade auf Free: Bestandsdaten bleiben im UI sichtbar", () => 
     standardTeamId = teams[0].id;
     standardTeamName = teams[0].name;
 
-    // Namen der 5 geseedeten Standard-Dienste merken (Sichtbarkeits-Assertions).
+    // Namen der geseedeten Standard-Dienste merken (Sichtbarkeits-Assertions).
     const modelsRes = await acc.ctx.get("/api/shift-models");
     expect(modelsRes.ok(), "Dienste-Liste sollte ladbar sein").toBe(true);
     const seeded = (await modelsRes.json()) as { id: number; name: string }[];
-    expect(seeded.length, "Registrierung sollte 5 Standard-Dienste seeden").toBe(5);
+    expect(
+      seeded.length,
+      `Registrierung sollte ${SEED_MODEL_COUNT} Standard-Dienst(e) seeden`,
+    ).toBe(SEED_MODEL_COUNT);
     for (const m of seeded) seededModelNames.push(m.name);
 
     // === Premium: ueber alle Free-Caps hinaus Bestandsdaten aufbauen ========
@@ -118,7 +133,7 @@ test.describe("Downgrade auf Free: Bestandsdaten bleiben im UI sichtbar", () => 
       assistantNames.push(name);
     }
 
-    // 2 Zusatz-Dienste (5 Seeds + 2 = 7 > Free-Limit 5).
+    // Zusatz-Dienste auffuellen, bis TARGET_MODEL_COUNT (= Free-Limit + 2) steht.
     for (let i = 1; i <= EXTRA_MODEL_COUNT; i++) {
       const name = `E2E Zusatzdienst ${unique}-${i}`;
       const res = await acc.ctx.post("/api/shift-models", {
@@ -162,7 +177,7 @@ test.describe("Downgrade auf Free: Bestandsdaten bleiben im UI sichtbar", () => 
     await deleteFreeAccount(acc);
   });
 
-  test("Einstellungen: alle 7 Dienste bleiben sichtbar und bearbeitbar, nur Neu-Anlegen ist gesperrt", async ({
+  test(`Einstellungen: alle ${TARGET_MODEL_COUNT} Dienste bleiben sichtbar und bearbeitbar, nur Neu-Anlegen ist gesperrt`, async ({
     page,
   }) => {
     test.setTimeout(60000);
@@ -182,13 +197,16 @@ test.describe("Downgrade auf Free: Bestandsdaten bleiben im UI sichtbar", () => 
 
     // Bearbeiten bleibt fuer ein Modell UEBER dem Limit nutzbar: der Dialog
     // oeffnet sich (kein deaktivierter Button, kein Sperr-Hinweis).
-    const overLimitRow = page.locator("li", { hasText: extraModelNames[1] });
+    // Letzter Zusatz-Dienst: der liegt garantiert ueber dem Free-Limit,
+    // unabhaengig davon, wie viele geseedet wurden.
+    const ueberLimitName = extraModelNames[extraModelNames.length - 1]!;
+    const overLimitRow = page.locator("li", { hasText: ueberLimitName });
     const editButton = overLimitRow.getByRole("button").first();
     await expect(editButton, "Bearbeiten muss aktiv bleiben").toBeEnabled();
     await editButton.click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText("Schichtmodell bearbeiten")).toBeVisible();
-    await expect(dialog.getByPlaceholder("z.B. Aktivdienst")).toHaveValue(extraModelNames[1]);
+    await expect(dialog.getByPlaceholder("z.B. Aktivdienst")).toHaveValue(ueberLimitName);
     await page.keyboard.press("Escape");
     await expect(dialog).not.toBeVisible();
 
