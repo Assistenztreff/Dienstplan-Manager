@@ -115,6 +115,7 @@ router.put("/allowance-settings", requireAdmin, async (req, res): Promise<void> 
       holidayPercent: body.data.holidayPercent,
       state: body.data.state,
       billingMethod: body.data.billingMethod,
+      vertretungEnabled: body.data.vertretungEnabled,
       vertretungCompensationMode: body.data.vertretungCompensationMode,
       vertretungCompensationValue: body.data.vertretungCompensationValue,
     };

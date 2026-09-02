@@ -4372,6 +4372,7 @@ components:
           pauseThreshold2Hours,
           pauseMinutes2,
           deductPausesEnabled,
+          vertretungEnabled,
           vertretungCompensationMode,
           vertretungCompensationValue,
           updatedAt,
@@ -4479,6 +4480,13 @@ components:
             Pausenminuten die gewerteten Stunden und den Grundlohn der
             Arbeitsdienste in BEIDEN Abrechnungsarten (zur Lesezeit angewandt);
             Zuschlagsstunden bleiben unberührt.
+        vertretungEnabled:
+          type: boolean
+          description: >-
+            Mit Vertretungen planen? Team-Override-fähig (Team-Override →
+            Konto-Zeile des Team-Eigentümers → AUS). Bei AUS bietet der
+            Schicht-Dialog das Feld "Vertretung vormerken" nicht mehr an;
+            bereits vorgemerkte Vertretungen bleiben bestehen und bearbeitbar.
         vertretungCompensationMode:
           type: string
           enum: [none, percent, flat]
@@ -4589,6 +4597,9 @@ components:
           description: >-
             Pausen von den bezahlten Stunden abziehen (konto-global, kein
             Team-Override).
+        vertretungEnabled:
+          type: boolean
+          description: Mit Vertretungen planen (Team-Override-fähig).
         vertretungCompensationMode:
           type: string
           enum: [none, percent, flat]

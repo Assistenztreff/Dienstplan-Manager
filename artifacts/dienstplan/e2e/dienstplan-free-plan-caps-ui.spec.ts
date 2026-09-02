@@ -40,10 +40,12 @@ test.describe("Free-Limit Schichtmodelle (UI)", () => {
   const createdModelIds: number[] = [];
 
   test.beforeAll(async () => {
-    // Registrierung seedet 5 Standard-Dienste = genau das Free-Limit (5). Für
-    // das Race-Szenario (Dialog offen, Limit wird währenddessen erreicht) wird
-    // ein Seed-Dienst gelöscht, damit das Konto UNTER dem Limit startet und
-    // der Anlege-Button im UI aktiv ist.
+    // Das Konto muss UNTER dem Limit starten, damit der Anlege-Button im UI
+    // aktiv ist — das Limit wird spaeter absichtlich erreicht, waehrend der
+    // Dialog schon offen ist. Seit dem 30.08.2026 seedet die Registrierung nur
+    // noch die Teamsitzung, das Konto liegt also ohnehin darunter; der
+    // Sicherheitsnetz-Zweig raeumt einen Seed-Dienst ab, falls die Seed-Liste
+    // wieder waechst.
     free = await registerFreeAccount("privat", "free.ui.model");
     const listRes = await free.ctx.get("/api/shift-models");
     expect(listRes.ok(), "Dienste-Liste sollte ladbar sein").toBe(true);
@@ -52,6 +54,10 @@ test.describe("Free-Limit Schichtmodelle (UI)", () => {
       const delRes = await free.ctx.delete(`/api/shift-models/${models[models.length - 1]!.id}`);
       expect(delRes.ok(), "Seed-Dienst sollte löschbar sein").toBe(true);
     }
+    expect(
+      (await (await free.ctx.get("/api/shift-models")).json() as { id: number }[]).length,
+      "Vorbedingung: das Konto muss unter dem Free-Limit starten",
+    ).toBeLessThan(FREE_MAX_SHIFT_MODELS);
   });
 
   test.afterAll(async () => {
@@ -80,8 +86,8 @@ test.describe("Free-Limit Schichtmodelle (UI)", () => {
     test.setTimeout(60000);
     await adoptSession(page, free);
 
-    // Mit 4 Diensten laden -> der Anlege-Button ist aktiv und der Dialog laesst
-    // sich oeffnen. Das 5. Modell wird DANACH per API angelegt (Race-Szenario:
+    // Unter dem Limit laden -> der Anlege-Button ist aktiv und der Dialog laesst
+    // sich oeffnen. Bis ans Limit wird DANACH per API aufgefuellt (Race-Szenario:
     // Limit wird erreicht, waehrend der Dialog schon offen ist). Der Submit
     // muss dann den servergemappten Upgrade-Hinweis anzeigen — genau der Pfad,
     // der bei einer Regression still verschluckt wuerde.
@@ -97,7 +103,7 @@ test.describe("Free-Limit Schichtmodelle (UI)", () => {
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText("Neues Schichtmodell")).toBeVisible();
 
-    // Jetzt serverseitig ans Limit fahren (5. Dienst per API).
+    // Jetzt serverseitig ans Limit fahren (per API auffuellen).
     await ensureModelCount(FREE_MAX_SHIFT_MODELS);
 
     await dialog.getByPlaceholder("z.B. Aktivdienst").fill("Sechster Dienst");

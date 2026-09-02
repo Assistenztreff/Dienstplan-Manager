@@ -1484,6 +1484,8 @@ export interface AllowanceSettings {
   pauseMinutes2: number;
   /** Pausen von den bezahlten Stunden abziehen? Konto-global (kein Team-Override); Standard AUS. Bei AN reduzieren die unbezahlten Pausenminuten die gewerteten Stunden und den Grundlohn der Arbeitsdienste in BEIDEN Abrechnungsarten (zur Lesezeit angewandt); Zuschlagsstunden bleiben unberührt. */
   deductPausesEnabled: boolean;
+  /** Mit Vertretungen planen? Team-Override-fähig (Team-Override → Konto-Zeile des Team-Eigentümers → AUS). Bei AUS bietet der Schicht-Dialog das Feld "Vertretung vormerken" nicht mehr an; bereits vorgemerkte Vertretungen bleiben bestehen und bearbeitbar. */
+  vertretungEnabled: boolean;
   /** Vergütung für aktivierte Vertretungen (isVertretung=true). Team-Override-fähig (wie night-/sunday-/holidayPercent oben): Team-Override → Konto-Zeile des Team-Eigentümers → "none". none = regulärer Lohn wie jeder andere Dienst; percent = Prozentsatz des eigenen Stundenlohns der Vertretung für diesen Tag; flat = fester Euro-Betrag für den Tag, unabhängig von der Dienstlänge. */
   vertretungCompensationMode: AllowanceSettingsVertretungCompensationMode;
   /** Bei "percent" ein Prozentsatz (z. B. 80 = 80 % des eigenen Stundenlohns), bei "flat" ein Euro-Betrag; bei "none" unbenutzt. */
@@ -1633,6 +1635,8 @@ export interface AllowanceSettingsInput {
   pauseMinutes2?: number;
   /** Pausen von den bezahlten Stunden abziehen (konto-global, kein Team-Override). */
   deductPausesEnabled?: boolean;
+  /** Mit Vertretungen planen (Team-Override-fähig). */
+  vertretungEnabled?: boolean;
   /** Vergütung für aktivierte Vertretungen (Team-Override-fähig). */
   vertretungCompensationMode?: AllowanceSettingsInputVertretungCompensationMode;
   /**

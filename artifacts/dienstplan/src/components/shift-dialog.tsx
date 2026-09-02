@@ -365,6 +365,14 @@ export function ShiftDialog({
     { query: { staleTime: REFERENCE_DATA_STALE_TIME_MS } } as unknown as Parameters<typeof useGetAllowanceSettings>[1],
   ) as { data?: AllowanceSettings };
   const teamMeetingEnabled = allowanceSettings?.teamMeetingEnabled === true;
+  // Team-Schalter „Mit Vertretungen planen" (Kay-Entscheidung 30.08.2026).
+  // Ist er aus, faellt das Feld „Vertretung vormerken" hier ganz weg — im
+  // Drei-Schicht-Modell hat es den Dialog nur aufgeblaeht und wurde uebersehen.
+  // AUSNAHME: haengt an DIESEM Dienst schon eine Vertretung, bleibt das Feld
+  // sichtbar. Sonst waere eine bestehende Vormerkung nicht mehr aenderbar —
+  // ein Schalter darf Bestandsdaten einsperren so wenig wie loeschen.
+  const vertretungEnabled =
+    allowanceSettings?.vertretungEnabled === true || editShift?.standbyUserId != null;
   // Schichten des Monats (gleicher Query wie die Kalender-Seite, kommt daher
   // aus dem Cache — dieselbe Gültigkeitsdauer verhindert einen doppelten
   // Reload beim Öffnen des Dialogs kurz nach dem Seitenaufruf): Basis für
@@ -1723,8 +1731,9 @@ export function ShiftDialog({
               unabhängig von "Vertretung" oben (das markiert DIESEN Dienst
               rückwirkend als Vertretung für jemand anderen). Nur beim
               Einzel-Anlegen/-Bearbeiten — Sammelaufträge kennen keine
-              einzelne Vormerkung pro Tag. */}
-          {!isAbsence && !isTeam && !isBulk && (
+              einzelne Vormerkung pro Tag. Und nur, wenn das Team ueberhaupt
+              mit Vertretungen plant (Einstellung „Mit Vertretungen planen"). */}
+          {!isAbsence && !isTeam && !isBulk && vertretungEnabled && (
             <div className="space-y-1.5">
               <Label>Vertretung vormerken – falls dieser Dienst ausfällt (optional)</Label>
               <Select

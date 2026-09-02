@@ -123,6 +123,21 @@ export const allowanceSettingsTable = pgTable(
     // Neuberechnung). Zuschlagsstunden bleiben unberührt (Pausenlage unbekannt).
     // Default AUS = Bestandsschutz (Pausen bleiben reine Info-Kennzahl).
     deductPausesEnabled: boolean("deduct_pauses_enabled").notNull().default(false),
+    // Vertretungen überhaupt benutzen? Team-Override-fähig, damit ein
+    // Dienstleister das pro Team entscheiden kann.
+    //
+    // KAY-ENTSCHEIDUNG 30.08.2026: Ob mit Vertretungen geplant wird, ist eine
+    // Grundsatzentscheidung des Teams — keine, die zu jedem einzelnen Dienst
+    // neu getroffen wird. Im Drei-Schicht-Modell hat das Vertretungs-Feld im
+    // Schicht-Dialog nur den Dialog aufgeblaeht und wurde uebersehen. Deshalb
+    // steht der Schalter jetzt EINMAL in den Team-Einstellungen, direkt ueber
+    // der Vertretungsverguetung, zu der er gehoert.
+    //
+    // Default AUS: die App startet ohne dieses Feld, wer es braucht, schaltet
+    // es an. Bereits vorgemerkte Vertretungen bleiben unangetastet und
+    // bearbeitbar — der Schicht-Dialog zeigt das Feld weiterhin, wenn an
+    // einem Dienst schon eine Vertretung haengt.
+    vertretungEnabled: boolean("vertretung_enabled").notNull().default(false),
     // Vertretungsvergütung: Team-Override-fähig (wie night-/sunday-/
     // holidayPercent oben) — Fallback-Kette Team-Override → Konto-Zeile des
     // Team-Eigentümers → "none". value ist bei "percent" ein Prozentsatz

@@ -61,6 +61,7 @@ type FormState = {
   pauseThreshold2Hours: string;
   pauseMinutes2: string;
   deductPausesEnabled: boolean;
+  vertretungEnabled: boolean;
   vertretungCompensationMode: string;
   vertretungCompensationValue: string;
 };
@@ -213,6 +214,7 @@ export function AllowanceSettingsForm() {
     pauseThreshold2Hours: "9",
     pauseMinutes2: "45",
     deductPausesEnabled: false,
+    vertretungEnabled: false,
     vertretungCompensationMode: "none",
     vertretungCompensationValue: "0",
   });
@@ -259,6 +261,7 @@ export function AllowanceSettingsForm() {
         pauseThreshold2Hours: String(settings.pauseThreshold2Hours ?? 9),
         pauseMinutes2: String(settings.pauseMinutes2 ?? 45),
         deductPausesEnabled: settings.deductPausesEnabled ?? false,
+        vertretungEnabled: settings.vertretungEnabled ?? false,
         vertretungCompensationMode: settings.vertretungCompensationMode ?? "none",
         vertretungCompensationValue: String(settings.vertretungCompensationValue ?? 0),
       });
@@ -294,7 +297,9 @@ export function AllowanceSettingsForm() {
     errs.holidayPercent = validatePercent(form.holidayPercent);
     if (!TIME_PATTERN.test(form.nightStart)) errs.nightStart = "Ungültige Uhrzeit";
     if (!TIME_PATTERN.test(form.nightEnd)) errs.nightEnd = "Ungültige Uhrzeit";
-    if (form.vertretungCompensationMode !== "none") {
+    // Nur pruefen, was auch sichtbar ist: bei ausgeschalteten Vertretungen
+    // ist das Feld ausgeblendet, ein Fehler daran waere nicht behebbar.
+    if (form.vertretungEnabled && form.vertretungCompensationMode !== "none") {
       const vcv = Number(form.vertretungCompensationValue);
       if (form.vertretungCompensationValue === "" || Number.isNaN(vcv) || vcv < 0) {
         errs.vertretungCompensationValue = "Mindestens 0";
@@ -371,6 +376,7 @@ export function AllowanceSettingsForm() {
           billingMethod: (f.billingMethod === INHERIT_BILLING
             ? null
             : f.billingMethod) as AllowanceSettingsInputBillingMethod,
+          vertretungEnabled: f.vertretungEnabled,
           vertretungCompensationMode:
             f.vertretungCompensationMode as AllowanceSettingsInputVertretungCompensationMode,
           vertretungCompensationValue: Number(f.vertretungCompensationValue),
@@ -604,6 +610,38 @@ export function AllowanceSettingsForm() {
                 </p>
               </div>
 
+              {/* Kay-Entscheidung 30.08.2026: Ob ueberhaupt mit Vertretungen
+                  geplant wird, ist eine Grundsatzentscheidung des Teams — sie
+                  gehoert einmal hierher, nicht in jeden einzelnen
+                  Schicht-Dialog. Im Drei-Schicht-Modell hat das Feld dort nur
+                  den Dialog aufgeblaeht und wurde uebersehen. */}
+              <div className="border-t border-border/60 pt-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="vertretungEnabled" className="text-sm font-semibold">
+                      Mit Vertretungen planen
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Blendet im Schicht-Dialog das Feld „Vertretung vormerken" ein: zu jedem
+                      Dienst lässt sich eine Person hinterlegen, die bei Ausfall einspringt.
+                      Ausgeschaltet bleibt der Dialog schlank. Bereits vorgemerkte Vertretungen
+                      bleiben in jedem Fall erhalten und lassen sich weiter ändern.
+                    </p>
+                  </div>
+                  <Switch
+                    id="vertretungEnabled"
+                    data-testid="allowance-vertretung-enabled-switch"
+                    checked={form.vertretungEnabled}
+                    onCheckedChange={(v) => set("vertretungEnabled", v)}
+                  />
+                </div>
+              </div>
+
+              {/* Die Verguetung ist eine Folgefrage — ohne Vertretungen gibt es
+                  nichts zu verguetenden. Der gespeicherte Wert bleibt im
+                  Formularzustand und wird beim Speichern unveraendert
+                  mitgeschickt; Ausblenden verliert also nichts. */}
+              {form.vertretungEnabled && (
               <div className="space-y-1.5">
                 <Label htmlFor="vertretungCompensationMode">Vertretungsvergütung</Label>
                 <Select
@@ -646,6 +684,7 @@ export function AllowanceSettingsForm() {
                   Betrag. "Keine Sonderregel" = regulärer Lohn wie jeder andere Dienst.
                 </p>
               </div>
+              )}
 
               {!isTeamScope && (
                 <>
