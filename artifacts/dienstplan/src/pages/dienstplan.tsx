@@ -1,5 +1,5 @@
 import { isAdminRole } from "@/lib/roles";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams, useLocation } from "wouter";
 import {
@@ -41,6 +41,24 @@ import { ShiftDialog } from "@/components/shift-dialog";
 import { useVertretungAktivieren } from "@/lib/vertretung-aktivieren";
 import { BulkDeleteDialog } from "@/components/bulk-delete-dialog";
 import { AutoplanungDialog } from "@/components/autoplanung-dialog";
+import {
+  PlanungsmodusLeiste,
+  RUHEZEIT_REGELFALL,
+  type PlanungsGrenzen,
+} from "@/components/planungsmodus-leiste";
+import {
+  planeMonat,
+  naechsteBesetzung,
+  dienstZeiten,
+  type PlanDienst,
+} from "@/lib/planungslauf";
+import { offenePlaetzeFuerTag, schichtenNachTag } from "@/lib/dienstgeruest";
+import {
+  useGetAllowanceSettings,
+  useUpdateAllowanceSettings,
+  useBulkCreateShifts,
+  useBulkDeleteShifts,
+} from "@workspace/api-client-react";
 import { BulkEditDialog } from "@/components/bulk-edit-dialog";
 import { useTeam } from "@/context/team";
 import { useAuth, hasTeamAccessLevel } from "@/context/auth";
@@ -439,6 +457,9 @@ export default function Dienstplan() {
   // besetzter Pille — beides mit Rueckgaengig direkt im Hinweis.
   const createShiftPerDnd = useCreateShift();
   const deleteShiftPerDnd = useDeleteShift();
+  // Automatische Planung: anlegen je Person, abraeumen beim Neu-Wuerfeln.
+  const bulkCreateShifts = useBulkCreateShifts();
+  const bulkDeleteShifts = useBulkDeleteShifts();
   const { frageVertretung: handleVertretungsVorschlag } = useVertretungAktivieren();
   const sendProposalsMutation = useSendShiftProposals();
   const bulkConfirmOwnMutation = useBulkConfirmOwnShifts();
@@ -499,6 +520,17 @@ export default function Dienstplan() {
   // nur Endpunkte, die ein Planer ohnehin aufrufen darf (POST /shifts/bulk).
   const canAutoPlan = canPlan && hasAccess(currentUser, "autoScheduling");
   const [autoplanungOpen, setAutoplanungOpen] = useState(false);
+
+  // ── Planungsmodus (Etappe 2, Kay 02.09.2026) ─────────────────────────────
+  // Der Modus muss sichtbar sein: In ihm dreht ein Klick auf die Pille die
+  // Person weiter, statt den Bearbeiten-Dialog zu oeffnen. Ohne sichtbaren
+  // Zustand waere jeder Fehlklick eine stille Umbesetzung.
+  const [planungsmodus, setPlanungsmodus] = useState(false);
+  const [automatikLaeuft, setAutomatikLaeuft] = useState(false);
+  // Was der letzte Automatiklauf angelegt hat — Grundlage fuer „Neu wuerfeln"
+  // und „Rueckgaengig" im Hinweis. Nur diese Entwuerfe fasst das Wuerfeln an;
+  // was der Planer danach von Hand geaendert oder bestaetigt hat, bleibt.
+  const letzterLaufIds = useRef<number[]>([]);
   const {
     selectedUserIds: multiSelectedUserIds,
     toggleUser: toggleStundenkontoUser,
@@ -655,6 +687,309 @@ export default function Dienstplan() {
     }
     return map;
   }, [allShifts]);
+
+  // ── Grenzen der automatischen Planung (am Team gespeichert) ─────────────
+  const { data: planungsSettings } = useGetAllowanceSettings(
+    selectedTeamId != null ? { teamId: selectedTeamId } : undefined,
+    { query: { staleTime: REFERENCE_DATA_STALE_TIME_MS, enabled: canAutoPlan } } as unknown as
+      Parameters<typeof useGetAllowanceSettings>[1],
+  ) as { data?: { planungBlockLaenge?: number; planungRuhezeitStunden?: number } };
+  const updateAllowanceSettings = useUpdateAllowanceSettings();
+  // Lokaler Entwurf der Grenzen: Das Zahnrad tippt hier hinein, gespeichert
+  // wird erst beim Zuklappen — sonst ginge je Tastendruck ein Request raus.
+  const [grenzenEntwurf, setGrenzenEntwurf] = useState<PlanungsGrenzen | null>(null);
+  const grenzen: PlanungsGrenzen = grenzenEntwurf ?? {
+    blockLaenge: planungsSettings?.planungBlockLaenge ?? 1,
+    ruhezeitStunden: planungsSettings?.planungRuhezeitStunden ?? RUHEZEIT_REGELFALL,
+  };
+
+  async function speichereGrenzen() {
+    if (!grenzenEntwurf) return;
+    const aktuell = planungsSettings as Record<string, unknown> | undefined;
+    if (!aktuell) return;
+    try {
+      // PUT ist ein Voll-Ersetzen: die fuenf Zuschlagsfelder sind Pflicht und
+      // muessen unveraendert mitgehen, sonst 400.
+      await updateAllowanceSettings.mutateAsync({
+        data: {
+          nightPercent: aktuell.nightPercent as number,
+          nightStart: aktuell.nightStart as string,
+          nightEnd: aktuell.nightEnd as string,
+          sundayPercent: aktuell.sundayPercent as number,
+          holidayPercent: aktuell.holidayPercent as number,
+          planungBlockLaenge: grenzenEntwurf.blockLaenge,
+          planungRuhezeitStunden: grenzenEntwurf.ruhezeitStunden,
+        },
+        params: selectedTeamId != null ? { teamId: selectedTeamId } : undefined,
+      } as unknown as Parameters<typeof updateAllowanceSettings.mutateAsync>[0]);
+      setGrenzenEntwurf(null);
+      void queryClient.invalidateQueries({
+        predicate: (q) => q.queryKey[0] === "/api/allowance-settings",
+      });
+    } catch (err) {
+      toast.error(readableApiError(err, "Grenzen konnten nicht gespeichert werden."));
+    }
+  }
+
+  /** Die Regelplan-Dienste in der Form, die der Planungslauf braucht. */
+  const planDienste: PlanDienst[] = useMemo(
+    () =>
+      geruestDienste.map((d) => ({
+        id: d.id,
+        name: d.name,
+        startTime: d.defaultStartTime,
+        endTime: d.defaultEndTime,
+        standbySlot: d.standbySlot,
+      })),
+    [geruestDienste],
+  );
+
+  /**
+   * Fuehrt einen Planungslauf aus und legt das Ergebnis als Entwuerfe an.
+   *
+   * `nurLuecken=false` (Neu wuerfeln) raeumt vorher die Entwuerfe des letzten
+   * Laufs ab — und NUR die. Was der Planer danach von Hand geaendert oder
+   * bestaetigt hat, bleibt stehen; ein Wuerfeln, das eigene Arbeit wegwirft,
+   * waere keine Hilfe.
+   */
+  async function starteAutomatik(nurLuecken = true): Promise<void> {
+    if (automatikLaeuft || !canAutoPlan) return;
+    if (planDienste.length === 0) {
+      toast.info(
+        "Kein Dienst nimmt am Regelplan teil. Unter Einstellungen bei einem Dienst „Im Regelplan\u201c einschalten.",
+      );
+      return;
+    }
+    setAutomatikLaeuft(true);
+    try {
+      let basis = allShifts;
+      if (!nurLuecken && letzterLaufIds.current.length > 0) {
+        const wegIds = new Set(letzterLaufIds.current);
+        // Sofort aus dem Raster nehmen, dann loeschen (Echtzeit-Regel).
+        removeShiftsFromCache(queryClient, wegIds);
+        basis = allShifts.filter((sh) => !wegIds.has(sh.id));
+        try {
+          await bulkDeleteShifts.mutateAsync({ data: { ids: [...wegIds] } });
+        } catch {
+          toast.error("Die alten Entwürfe ließen sich nicht abräumen.");
+          void invalidateShiftDerivedQueries(queryClient);
+          setAutomatikLaeuft(false);
+          return;
+        }
+        letzterLaufIds.current = [];
+      }
+
+      // Offene Tage je Dienst — dieselbe Ableitung wie die Platzhalter im
+      // Raster, damit Vorschau und Anzeige nie auseinanderlaufen. Ab heute,
+      // nicht rueckwirkend: vergangene Luecken nachtraeglich mit Entwuerfen
+      // zu fuellen erzeugt nur Aufraeumarbeit.
+      const heute = format(new Date(), "yyyy-MM-dd");
+      const echteSchichten = basis.filter((sh) => !isAbsenceShift(sh));
+      const proTag = schichtenNachTag(
+        echteSchichten as { shiftModelId?: number | null; startTime: string }[],
+      );
+      const offeneTageJeDienst = new Map<number, string[]>();
+      for (const dienst of geruestDienste) {
+        const tage: string[] = [];
+        for (const tag of days) {
+          const key = format(tag, "yyyy-MM-dd");
+          if (key < heute) continue;
+          if (offenePlaetzeFuerTag([dienst], tag, proTag.get(key) ?? []).length > 0) {
+            tage.push(key);
+          }
+        }
+        offeneTageJeDienst.set(dienst.id, tage);
+      }
+      const offeneGesamt = [...offeneTageJeDienst.values()].reduce((n, l) => n + l.length, 0);
+      if (offeneGesamt === 0) {
+        // Kay-Variante 1: Auch wenn nichts zu fuellen ist, steht das Wuerfeln
+        // hier — sonst gaebe es keinen Weg dorthin, wenn der Monat voll ist.
+        toast.info("Alles besetzt — es sind keine Plätze offen.", {
+          action:
+            letzterLaufIds.current.length > 0
+              ? { label: "Neu würfeln", onClick: () => void starteAutomatik(false) }
+              : undefined,
+        });
+        return;
+      }
+
+      const { besetzungen, offen } = planeMonat({
+        dienste: planDienste,
+        offeneTageJeDienst,
+        personen: assistants.map((a) => ({ id: a.id, name: a.name })),
+        grenzen: { blockLaenge: grenzen.blockLaenge, ruhezeitStunden: grenzen.ruhezeitStunden },
+        bestehende: echteSchichten,
+        abwesend: absenceByUser,
+      });
+      if (besetzungen.length === 0) {
+        toast.info(
+          `Niemand konnte eingeteilt werden — ${offen.length} Plätze bleiben offen (Abwesenheit, Ruhezeit oder schon belegt).`,
+        );
+        return;
+      }
+
+      // Sofort anzeigen, dann anlegen (Echtzeit-Regel, s. shift-cache.ts).
+      const proPerson = new Map<number, typeof besetzungen>();
+      for (const b of besetzungen) {
+        const liste = proPerson.get(b.userId) ?? [];
+        liste.push(b);
+        proPerson.set(b.userId, liste);
+      }
+      const tempIds = new Map<number, number[]>();
+      const vorlaeufig = besetzungen.map((b) => {
+        const tempId = naechsteTempId();
+        tempIds.set(b.userId, [...(tempIds.get(b.userId) ?? []), tempId]);
+        return {
+          id: tempId,
+          userId: b.userId,
+          type: "work",
+          startTime: b.start.toISOString(),
+          endTime: b.ende.toISOString(),
+          planningStatus: "VORLAEUFIG",
+          shiftModelId: b.dienstId,
+          user: { name: b.userName },
+          standbyUserId: b.standbyUserId,
+          standbyUserName: b.standbyUserName,
+          istVorlaeufig: true,
+        } as unknown as CachedShiftRow;
+      });
+      upsertShiftsInCache(queryClient, vorlaeufig, selectedTeamId);
+
+      const auftraege = [...proPerson.entries()];
+      const ergebnisse = await Promise.allSettled(
+        auftraege.map(([userId, liste]) =>
+          bulkCreateShifts.mutateAsync({
+            data: {
+              userId,
+              type: "work",
+              days: liste.map((b) => ({
+                startTime: b.start.toISOString(),
+                endTime: b.ende.toISOString(),
+                standbyUserId: b.standbyUserId,
+              })),
+              planningStatus: "VORLAEUFIG",
+              shiftModelId: liste[0]!.dienstId,
+              ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
+            },
+          }),
+        ),
+      );
+
+      const neueIds: number[] = [];
+      const fehler: string[] = [];
+      let angelegt = 0;
+      for (const [i, ergebnis] of ergebnisse.entries()) {
+        const [userId, liste] = auftraege[i]!;
+        removeShiftsFromCache(queryClient, tempIds.get(userId) ?? []);
+        if (ergebnis.status === "fulfilled") {
+          const { shifts: neu, teamId: zielTeam } = ergebnis.value;
+          upsertShiftsInCache(queryClient, neu as CachedShiftRow[], zielTeam);
+          for (const sh of neu) neueIds.push(sh.id);
+          angelegt += neu.length;
+        } else {
+          const vorname = liste[0]!.userName.trim().split(/\s+/)[0];
+          fehler.push(`${vorname}: ${readableApiError(ergebnis.reason, "fehlgeschlagen")}`);
+        }
+      }
+      void invalidateArbeitsdienstSalden(queryClient);
+      letzterLaufIds.current = neueIds;
+
+      if (fehler.length > 0) {
+        toast.error(`${angelegt} Dienste angelegt, ${fehler.length} fehlgeschlagen: ${fehler.join(" · ")}`);
+        return;
+      }
+      // Variante 1 (Kays Wahl): Der Hinweis traegt beide Folge-Aktionen —
+      // dann steht das Wuerfeln genau im Moment der Entscheidung, ohne ein
+      // zweites Symbol in der Leiste.
+      toast.success(
+        `${angelegt} Dienste als Entwurf eingeplant${offen.length > 0 ? `, ${offen.length} Plätze bleiben offen` : ""}.`,
+        {
+          duration: 8000,
+          action: { label: "Neu würfeln", onClick: () => void starteAutomatik(false) },
+          cancel: {
+            label: "Rückgängig",
+            onClick: () => {
+              removeShiftsFromCache(queryClient, neueIds);
+              letzterLaufIds.current = [];
+              void bulkDeleteShifts
+                .mutateAsync({ data: { ids: neueIds } })
+                .then(() => void invalidateArbeitsdienstSalden(queryClient))
+                .catch(() => {
+                  toast.error("Rückgängig fehlgeschlagen.");
+                  void invalidateShiftDerivedQueries(queryClient);
+                });
+            },
+          },
+        },
+      );
+    } finally {
+      setAutomatikLaeuft(false);
+    }
+  }
+
+  /**
+   * Klick auf eine Pille im Planungsmodus: naechste Person im Rundlauf.
+   * Uebersprungen wird, wer an dem Tag nicht kann (Kays Wahl) — so klickt man
+   * sich nie in eine Besetzung, die der Server danach abweist.
+   */
+  async function rotierePille(shift: Shift): Promise<void> {
+    if (!canPlan || isMirrorShift(shift, selectedTeamId)) return;
+    const datum = format(new Date(shift.startTime), "yyyy-MM-dd");
+    const start = new Date(shift.startTime);
+    const ende = new Date(shift.endTime);
+
+    const einsatzfaehig = (userId: number): boolean => {
+      if (absenceByUser.get(userId)?.has(datum)) return false;
+      for (const s of allShifts) {
+        if (s.id === shift.id || s.userId !== userId || isAbsenceShift(s)) continue;
+        const sStart = new Date(s.startTime);
+        const sEnde = new Date(s.endTime);
+        if (format(sStart, "yyyy-MM-dd") === datum) return false;
+        if (sStart < ende && start < sEnde) return false;
+        const abstand =
+          sEnde <= start ? start.getTime() - sEnde.getTime() : sStart.getTime() - ende.getTime();
+        if (abstand < grenzen.ruhezeitStunden * 60 * 60 * 1000) return false;
+      }
+      return true;
+    };
+
+    const naechste = naechsteBesetzung({
+      aktuelleUserId: shift.userId,
+      kandidaten: assistants.map((a) => ({ id: a.id, name: a.name })),
+      istEinsatzfaehig: einsatzfaehig,
+    });
+
+    if (naechste === null) {
+      // Rundlauf zu Ende: Platz leeren. Im Regelplan taucht dort danach
+      // wieder die ausgegraute Platzhalter-Pille auf.
+      removeShiftsFromCache(queryClient, [shift.id]);
+      try {
+        await deleteShiftPerDnd.mutateAsync({ id: shift.id });
+        void invalidateArbeitsdienstSalden(queryClient);
+      } catch (err) {
+        upsertShiftsInCache(queryClient, [shift as unknown as CachedShiftRow], selectedTeamId);
+        toast.error(readableApiError(err, "Platz leeren fehlgeschlagen."));
+      }
+      return;
+    }
+
+    upsertShiftsInCache(
+      queryClient,
+      [{ ...shift, userId: naechste.id, user: { name: naechste.name } } as unknown as CachedShiftRow],
+      selectedTeamId,
+    );
+    try {
+      const aktualisiert = await updateShift.mutateAsync({
+        id: shift.id,
+        data: { userId: naechste.id } as { userId: number },
+      });
+      upsertShiftsInCache(queryClient, [aktualisiert], selectedTeamId);
+      void invalidateArbeitsdienstSalden(queryClient);
+    } catch (err) {
+      upsertShiftsInCache(queryClient, [shift as unknown as CachedShiftRow], selectedTeamId);
+      toast.error(readableApiError(err, "Wechsel fehlgeschlagen."));
+    }
+  }
 
   const visibleShifts: Shift[] =
     effectiveSelectedUserIds === "all"
@@ -1287,6 +1622,18 @@ export default function Dienstplan() {
       onToggleStundenkonto={() => setStundenkontoOpenFlag(stundenkontoOpen ? "0" : "1")}
       canAutoPlan={canAutoPlan}
       onAutoPlanung={() => setAutoplanungOpen(true)}
+      planungsmodus={planungsmodus}
+      onTogglePlanungsmodus={() => {
+        setPlanungsmodus((an) => {
+          // Beim Verlassen die Mehrtagesauswahl mit aufraeumen — sie gehoert
+          // zum Modus und waere sonst unsichtbar weiter aktiv.
+          if (an) {
+            setIsSelectionMode(false);
+            setSelectedDates([]);
+          }
+          return !an;
+        });
+      }}
     />
   );
 
@@ -1355,6 +1702,27 @@ export default function Dienstplan() {
         </div>
       )}
 
+      {canAutoPlan && planungsmodus && (
+        <div className="mb-3" data-testid="planungsmodus-wrapper">
+          <PlanungsmodusLeiste
+            grenzen={grenzen}
+            onGrenzenAendern={setGrenzenEntwurf}
+            grenzenSpeichern={() => void speichereGrenzen()}
+            laeuft={automatikLaeuft}
+            onAutomatik={() => void starteAutomatik(true)}
+            auswahlAktiv={isSelectionMode}
+            onAuswahlUmschalten={toggleSelectionMode}
+            anzahlAusgewaehlt={selectedDates.length}
+            onAuswahlLoeschen={() => setDialog({ mode: "bulk-delete", dates: selectedDates })}
+            onBeenden={() => {
+              setPlanungsmodus(false);
+              setIsSelectionMode(false);
+              setSelectedDates([]);
+            }}
+          />
+        </div>
+      )}
+
       <div className="flex flex-col md:hidden" data-testid="dienstplan-mobile">
         {canSeeStundenkonto && (
           <div className="mb-3 rounded-lg border bg-card" data-testid="stundenkonto-reihe-wrapper-mobile">
@@ -1388,7 +1756,7 @@ export default function Dienstplan() {
             selectedDay={selectedDay}
             onSelectDay={setSelectedDay}
             onAddShift={(day, shiftModelId) => openCreate(day, undefined, shiftModelId)}
-            onShiftClick={openEdit}
+            onShiftClick={planungsmodus ? (sh) => void rotierePille(sh) : openEdit}
             onConfirmShift={confirmShift}
             canEdit={canPlan}
             selectionMode={isSelectionMode}
@@ -1439,7 +1807,7 @@ export default function Dienstplan() {
             selectedDay={selectedDay}
             onSelectDay={setSelectedDay}
             onAddShift={(day, shiftModelId) => openCreate(day, undefined, shiftModelId)}
-            onShiftClick={openEdit}
+            onShiftClick={planungsmodus ? (sh) => void rotierePille(sh) : openEdit}
             onConfirmShift={confirmShift}
             canEdit={canPlan}
             selectionMode={isSelectionMode}

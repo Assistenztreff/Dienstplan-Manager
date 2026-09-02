@@ -115,6 +115,8 @@ export function DienstplanHeader({
   onToggleStundenkonto,
   canAutoPlan,
   onAutoPlanung,
+  planungsmodus,
+  onTogglePlanungsmodus,
 }: {
   isAdmin: boolean;
   canPlan: boolean;
@@ -156,6 +158,11 @@ export function DienstplanHeader({
    *  dasselbe Muster wie beim gesperrten "Auswaehlen". */
   canAutoPlan: boolean;
   onAutoPlanung: () => void;
+  /** Planungsmodus (Etappe 2): In ihm dreht ein Klick auf die Pille die
+   *  Person weiter, statt den Bearbeiten-Dialog zu oeffnen. Deshalb ist der
+   *  Zustand sichtbar und liegt links, wo der Blick zuerst hinfaellt. */
+  planungsmodus: boolean;
+  onTogglePlanungsmodus: () => void;
 }) {
   const { selectedTeamId } = useTeam();
   const personColors = usePersonColors();
@@ -185,9 +192,35 @@ export function DienstplanHeader({
   const stacked = tier === "stack";
 
   const title = (
-    <h1 className={`text-lg md:text-xl font-serif font-bold text-foreground ${stacked ? "min-w-0 shrink truncate" : "shrink-0"}`}>
-      Dienstplan
-    </h1>
+    <span className="flex min-w-0 items-center gap-2">
+      <h1 className={`text-lg md:text-xl font-serif font-bold text-foreground ${stacked ? "min-w-0 shrink truncate" : "shrink-0"}`}>
+        Dienstplan
+      </h1>
+      {/* Umschalter oben links (Kays Punkt 5): Er sitzt direkt am Titel, weil
+          der Planungsmodus die Bedeutung von Klicks im Raster aendert — das
+          gehoert dorthin, wo der Blick zuerst hinfaellt, nicht ins
+          Ueberlauf-Menue. Ohne das Recht bleibt er ganz weg statt gesperrt:
+          Der Modus ist kein Einzelbefehl, den man erklaeren muesste, sondern
+          eine ganze Arbeitsweise. */}
+      {canPlan && canAutoPlan && (
+        <Button
+          variant={planungsmodus ? "default" : "outline"}
+          size="sm"
+          className="h-8 shrink-0 gap-1.5 px-2.5"
+          onClick={onTogglePlanungsmodus}
+          aria-pressed={planungsmodus}
+          title={
+            planungsmodus
+              ? "Planungsmodus beenden — Klick auf eine Pille öffnet wieder den Dialog"
+              : "Planungsmodus: Klick auf eine Pille wechselt die Person, automatische Planung verfügbar"
+          }
+          data-testid="toggle-planungsmodus"
+        >
+          <Wand2 className="h-4 w-4" />
+          <span className="hidden sm:inline">Planen</span>
+        </Button>
+      )}
+    </span>
   );
 
   // Task #857: Für canSeeStundenkonto-Admins ersetzt das Stundenkonto (Panel/

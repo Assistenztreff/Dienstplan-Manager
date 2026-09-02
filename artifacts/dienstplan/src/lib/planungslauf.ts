@@ -315,6 +315,55 @@ export function planeMonat(eingabe: {
   return { besetzungen, offen };
 }
 
+// ---------------------------------------------------------------------------
+// Klick-Rotation im Planungsmodus
+// ---------------------------------------------------------------------------
+// Kay-Auftrag: Im Planungsmodus schaltet ein Klick auf die Pille die Person
+// weiter, statt den Bearbeiten-Dialog zu oeffnen.
+//
+// Der Rundlauf ist: leer -> erste -> zweite -> ... -> letzte -> leer -> ...
+// Kay hatte die Folge als „waehlen, abwaehlen, andere waehlen" beschrieben,
+// also einen Leerzustand ZWISCHEN je zwei Personen. Das kostet doppelt so
+// viele Klicks und bringt nichts: Der Leerzustand ist am Ende des Rundlaufs
+// genauso erreichbar, und bei nur einer einsatzfaehigen Person ergibt sich
+// Kays Folge von selbst (leer -> A -> leer -> A). Widerspricht er, ist es eine
+// Zeile hier.
+//
+// Uebersprungen wird, wer an dem Tag nicht kann (abwesend, schon eingeteilt,
+// Ruhezeit) — Kays Wahl. So klickt man sich nie in eine Besetzung, die der
+// Server danach abweist oder die eine Doppelbelegung waere. Die aktuell
+// eingeteilte Person ist von dieser Pruefung ausgenommen: Sie HAT den Dienst
+// ja, sie wuerde sich sonst selbst blockieren.
+
+/**
+ * Die naechste Person im Rundlauf; null bedeutet „Platz leeren".
+ *
+ * `istEinsatzfaehig` kapselt Abwesenheit, Belegung und Ruhezeit — die
+ * Rotation selbst kennt diese Regeln nicht, sie fragt nur.
+ */
+export function naechsteBesetzung(eingabe: {
+  /** Wer den Platz gerade hat; null = offener Platz. */
+  aktuelleUserId: number | null;
+  /** Alle waehlbaren Personen in Anzeigereihenfolge. */
+  kandidaten: PlanPerson[];
+  istEinsatzfaehig: (userId: number) => boolean;
+}): PlanPerson | null {
+  const { aktuelleUserId, kandidaten, istEinsatzfaehig } = eingabe;
+  if (kandidaten.length === 0) return null;
+
+  // Ab welcher Stelle wird weitergesucht? Steht die aktuelle Person nicht in
+  // der Liste (etwa weil sie herausgefiltert ist), beginnt der Rundlauf vorn.
+  const start =
+    aktuelleUserId == null ? 0 : kandidaten.findIndex((p) => p.id === aktuelleUserId) + 1;
+
+  for (let i = start; i < kandidaten.length; i++) {
+    const p = kandidaten[i]!;
+    if (p.id !== aktuelleUserId && istEinsatzfaehig(p.id)) return p;
+  }
+  // Nichts mehr dahinter: Platz leeren. Der naechste Klick faengt wieder vorn an.
+  return null;
+}
+
 /** Stunden einer Besetzung (brutto, ohne Pausen/Wertung). */
 export function besetzungsStunden(b: Pick<Besetzung, "start" | "ende">): number {
   return (b.ende.getTime() - b.start.getTime()) / (60 * 60 * 1000);

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   dienstZeiten,
   planeMonat,
+  naechsteBesetzung,
   besetzungsStunden,
   type PlanDienst,
   type PlanPerson,
@@ -249,5 +250,61 @@ describe("planeMonat — was der Lauf nicht anfasst", () => {
     });
     expect(besetzungen.every((b) => b.dienstId === TAG24.id)).toBe(true);
     expect(besetzungen).toHaveLength(2);
+  });
+});
+
+describe("naechsteBesetzung — Klick-Rotation", () => {
+  const alle = [ANNA, BEN, CLARA];
+  const immerFrei = () => true;
+
+  it("startet bei einem leeren Platz mit der ersten Person", () => {
+    expect(naechsteBesetzung({ aktuelleUserId: null, kandidaten: alle, istEinsatzfaehig: immerFrei }))
+      .toEqual(ANNA);
+  });
+
+  it("schaltet der Reihe nach weiter", () => {
+    expect(naechsteBesetzung({ aktuelleUserId: ANNA.id, kandidaten: alle, istEinsatzfaehig: immerFrei }))
+      .toEqual(BEN);
+    expect(naechsteBesetzung({ aktuelleUserId: BEN.id, kandidaten: alle, istEinsatzfaehig: immerFrei }))
+      .toEqual(CLARA);
+  });
+
+  it("leert den Platz nach der letzten Person", () => {
+    expect(naechsteBesetzung({ aktuelleUserId: CLARA.id, kandidaten: alle, istEinsatzfaehig: immerFrei }))
+      .toBeNull();
+  });
+
+  it("ueberspringt, wer an dem Tag nicht kann", () => {
+    // Ben ist abwesend -> von Anna aus geht es direkt zu Clara.
+    const ohneBen = (id: number) => id !== BEN.id;
+    expect(naechsteBesetzung({ aktuelleUserId: ANNA.id, kandidaten: alle, istEinsatzfaehig: ohneBen }))
+      .toEqual(CLARA);
+  });
+
+  it("prueft die aktuelle Person NICHT gegen ihre eigene Belegung", () => {
+    // Anna hat den Dienst, gilt deshalb als „belegt" — sie wuerde sich sonst
+    // selbst blockieren und der Rundlauf bliebe stehen.
+    const nurAnnaBelegt = (id: number) => id !== ANNA.id;
+    expect(naechsteBesetzung({ aktuelleUserId: ANNA.id, kandidaten: alle, istEinsatzfaehig: nurAnnaBelegt }))
+      .toEqual(BEN);
+  });
+
+  it("leert den Platz, wenn hinter der aktuellen Person niemand mehr kann", () => {
+    const nurAnna = (id: number) => id === ANNA.id;
+    expect(naechsteBesetzung({ aktuelleUserId: ANNA.id, kandidaten: alle, istEinsatzfaehig: nurAnna }))
+      .toBeNull();
+  });
+
+  it("bei einer einzigen Person entsteht Kays Folge: waehlen, abwaehlen, waehlen", () => {
+    const einer = [ANNA];
+    expect(naechsteBesetzung({ aktuelleUserId: null, kandidaten: einer, istEinsatzfaehig: immerFrei }))
+      .toEqual(ANNA);
+    expect(naechsteBesetzung({ aktuelleUserId: ANNA.id, kandidaten: einer, istEinsatzfaehig: immerFrei }))
+      .toBeNull();
+  });
+
+  it("liefert ohne Kandidaten nichts", () => {
+    expect(naechsteBesetzung({ aktuelleUserId: null, kandidaten: [], istEinsatzfaehig: immerFrei }))
+      .toBeNull();
   });
 });
