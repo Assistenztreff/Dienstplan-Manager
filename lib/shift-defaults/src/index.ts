@@ -1,9 +1,17 @@
 // ---------------------------------------------------------------------------
 // Standard-Dienste (Single Source of Truth)
 // ---------------------------------------------------------------------------
-// Die 5 Standard-Dienste, die jedem frisch angelegten Team vorinstalliert
-// werden (Registrierung, erster Dev-Login, POST /teams) UND die der Backfill
+// Der EINE Standard-Dienst, den jedes frisch angelegte Team vorinstalliert
+// bekommt (Registrierung, erster Dev-Login, POST /teams) UND den der Backfill
 // nachzieht (bestehende Teams ohne ein einziges Schichtmodell).
+//
+// KAY-ENTSCHEIDUNG 30.08.2026: Frueher waren es fuenf (Frueh-, Spaet-,
+// Nachtdienst, Bereitschaft, 24h). Das ist eine Annahme ueber den Alltag, die
+// fast nie stimmt: jedes Assistenz-Team schneidet seine Dienste anders zu.
+// Wer die fuenf nicht braucht, muss sie erst wegraeumen — mehr Arbeit als sie
+// anzulegen. Geblieben ist die Teamsitzung, weil die praktisch jedes Team hat
+// und ihre Zeiten selten abweichen. Alles andere legt das Team selbst an,
+// ueber eine Vorlage oder den Dialog "Schicht anlegen".
 //
 // Diese Liste lag frueher DOPPELT vor: im API-Server
 // (artifacts/api-server/src/lib/default-shift-models.ts, genutzt beim Seeding)
@@ -31,53 +39,17 @@ export type DefaultShiftModel = {
 
 export const DEFAULT_SHIFT_MODELS: readonly DefaultShiftModel[] = [
   {
-    name: "Frühdienst",
-    color: "amber",
-    valuationPercent: 100,
-    sortOrder: 0,
-    defaultStartTime: "08:00",
-    defaultEndTime: "16:00",
-    defaultWeekdays: [1, 2, 3, 4, 5],
-    compensationType: "regular",
-  },
-  {
-    name: "Spätdienst",
-    color: "indigo",
-    valuationPercent: 100,
-    sortOrder: 1,
-    defaultStartTime: "16:00",
-    defaultEndTime: "23:00",
-    defaultWeekdays: [1, 2, 3, 4, 5],
-    compensationType: "regular",
-  },
-  {
-    name: "Nachtdienst",
-    color: "slate",
-    valuationPercent: 100,
-    sortOrder: 2,
-    defaultStartTime: "23:00",
-    defaultEndTime: "08:00",
-    defaultWeekdays: [1, 2, 3, 4, 5],
-    compensationType: "regular",
-  },
-  {
-    name: "Bereitschaft",
+    name: "Teamsitzung",
     color: "teal",
     valuationPercent: 100,
-    sortOrder: 3,
-    defaultStartTime: "08:00",
-    defaultEndTime: "14:00",
-    defaultWeekdays: [6, 7],
-    compensationType: "regular",
-  },
-  {
-    name: "24h Dienst",
-    color: "purple",
-    valuationPercent: 100,
-    sortOrder: 4,
-    defaultStartTime: "09:00",
-    defaultEndTime: "09:00",
-    defaultWeekdays: [1, 2, 3, 4, 5, 6, 7],
+    sortOrder: 0,
+    defaultStartTime: "15:00",
+    defaultEndTime: "16:00",
+    // Wochentag: Montag als Vorauswahl. Eine Teamsitzung ist in aller Regel
+    // woechentlich, nicht taeglich — Mo-Fr wuerde beim Sammel-Anlegen und
+    // spaeter bei der automatischen Planung ein Meeting pro Werktag erzeugen.
+    // Das Team verschiebt den Tag im Dienst selbst, wenn es anders sitzt.
+    defaultWeekdays: [1],
     compensationType: "regular",
   },
 ] as const;

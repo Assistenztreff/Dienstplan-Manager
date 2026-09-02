@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { PLAN_CONFIG } from "@workspace/entitlements";
 import {
   deleteFreeAccount,
   registerFreeAccount,
@@ -47,6 +48,12 @@ function monthDay(offset: number): string {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   return `${yyyy}-${mm}-15`;
 }
+
+// Das Free-Limit fuer Schichtmodelle wird aus der Plan-Konfiguration
+// abgeleitet, nicht abgeschrieben — sonst prueft der Test nach einer
+// Limit-Aenderung still das Falsche. Modulebene, weil beforeAll und die Tests
+// denselben Wert brauchen.
+const LIMIT = PLAN_CONFIG.free.limits.maxShiftModels!;
 
 let acc: FreeAccount;
 
@@ -106,9 +113,19 @@ test.beforeAll(async () => {
   expect(shiftRes.status(), "Schicht 2 Monate voraus sollte als Premium 201 liefern").toBe(201);
   farShiftId = ((await shiftRes.json()) as Entity).id;
 
-  // Über maxShiftModels = 5 hinaus: Registrierung seedet 5 Standard-Dienste;
-  // zwei eigene ergeben 7 Bestands-Modelle (> Free-Limit 5).
-  for (let i = 0; i < 2; i++) {
+  // Ueber das Free-Limit hinaus kommen — egal, wie viele Dienste die
+  // Registrierung geseedet hat. Frueher rechnete dieser Test mit "5 Seeds + 2
+  // eigene = 7"; seit die Seed-Liste geschrumpft ist (30.08.2026) waere das
+  // still zu wenig gewesen und der Bestandsschutz gar nicht mehr geprueft
+  // worden. Jetzt wird bis LIMIT + 2 aufgefuellt.
+  // Team-gescoped zaehlen: das zweite Team bekommt beim Anlegen seine eigenen
+  // Standard-Dienste geseedet, eine ungefilterte Abfrage wuerde die
+  // mitzaehlen und das Standard-Team am Ende unter dem Limit lassen.
+  const vorhandenRes = await acc.ctx.get(`/api/shift-models?teamId=${teamIds[0]}`);
+  const vorhanden = ((await vorhandenRes.json()) as Entity[]).length;
+  const anzulegen = LIMIT + 2 - vorhanden;
+  expect(anzulegen, "Vorbedingung: es muss noch Platz ueber dem Limit geben").toBeGreaterThan(0);
+  for (let i = 0; i < anzulegen; i++) {
     const modelRes = await acc.ctx.post("/api/shift-models", {
       data: { name: `E2E Downgrade Dienst ${unique}-${i}`, valuationPercent: 100 },
     });
@@ -154,13 +171,16 @@ test("Bestandsschutz: alle über den Free-Caps angelegten Zeilen bleiben nach de
     "Weit voraus geplante Schicht sollte nach Downgrade sichtbar bleiben",
   ).toBe(true);
 
-  // Schichtmodelle: alle 7 des Standard-Teams (über maxShiftModels = 5)
-  // bleiben sichtbar. Team-gescoped abfragen, weil das 2. Team beim Anlegen
-  // inzwischen ebenfalls 5 Standard-Dienste geseedet bekommt.
+  // Schichtmodelle: alle über maxShiftModels hinaus angelegten des
+  // Standard-Teams bleiben sichtbar. Team-gescoped abfragen, weil das 2. Team
+  // beim Anlegen ebenfalls Standard-Dienste geseedet bekommt.
   const modelsRes = await acc.ctx.get(`/api/shift-models?teamId=${teamIds[0]}`);
   expect(modelsRes.ok(), "GET /api/shift-models fehlgeschlagen").toBe(true);
   const models = (await modelsRes.json()) as Entity[];
-  expect(models.length, "Alle 7 Schichtmodelle des Standard-Teams sollten nach Downgrade sichtbar bleiben").toBe(7);
+  expect(
+    models.length,
+    "Alle Bestands-Schichtmodelle sollten nach dem Downgrade sichtbar bleiben",
+  ).toBe(LIMIT + 2);
   for (const id of shiftModelIds) {
     expect(models.some((m) => m.id === id), `Modell ${id} sollte nach Downgrade sichtbar bleiben`).toBe(true);
   }

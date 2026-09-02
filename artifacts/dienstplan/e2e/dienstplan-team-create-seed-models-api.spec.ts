@@ -5,15 +5,21 @@ import {
   deleteFreeAccount,
   type FreeAccount,
 } from "./helpers/teams";
+import { DEFAULT_SHIFT_MODELS } from "@workspace/shift-defaults";
 
 /**
  * API-Test (Task: Schicht-Dialog: Dienste team-bezogen laden):
  *
- * 1. Ein NEU angelegtes Team (POST /api/teams) startet mit den 5 Standard-
- *    Diensten (Frühdienst, Spätdienst, Nachtdienst, Bereitschaft, 24h Dienst) —
- *    wie bei der Registrierung. Vorher hatten Zusatz-Teams KEINE Dienste, und
- *    der Schicht-Dialog bot fremde Modelle an, deren Speichern der Server mit
- *    403 ablehnte.
+ * 1. Ein NEU angelegtes Team (POST /api/teams) startet mit genau denselben
+ *    Standard-Diensten wie ein Team aus der Registrierung. Vorher hatten
+ *    Zusatz-Teams KEINE Dienste, und der Schicht-Dialog bot fremde Modelle an,
+ *    deren Speichern der Server mit 403 ablehnte.
+ *
+ *    Die Erwartung wird aus `DEFAULT_SHIFT_MODELS` ABGELEITET, nicht
+ *    abgeschrieben: die Liste hat sich am 30.08.2026 von fünf Diensten auf die
+ *    Teamsitzung reduziert, und eine hier festgetippte Kopie wäre genau dann
+ *    still falsch geworden. Der Test prüft die Zusicherung („neues Team bekommt
+ *    dieselben Standard-Dienste"), nicht eine Momentaufnahme ihrer Namen.
  * 2. GET /api/shift-models?teamId=... liefert strikt nur die Modelle des
  *    angefragten Teams (Grundlage des Team-Filters im Schicht-Dialog).
  * 3. Sicherheits-Sanity: Das Anlegen einer Schicht mit einem TEAM-FREMDEN
@@ -29,13 +35,7 @@ type Team = { id: number; name: string };
 type ShiftModel = { id: number; name: string; teamId?: number };
 type Member = { userId: number };
 
-const EXPECTED_MODEL_NAMES = [
-  "24h Dienst",
-  "Bereitschaft",
-  "Frühdienst",
-  "Nachtdienst",
-  "Spätdienst",
-];
+const EXPECTED_MODEL_NAMES = DEFAULT_SHIFT_MODELS.map((m) => m.name).slice().sort();
 
 let acc: FreeAccount;
 let standardTeamId: number;
@@ -92,7 +92,10 @@ test("Neues Team startet mit den 5 Standard-Diensten", async () => {
   const modelsRes = await acc.ctx.get(`/api/shift-models?teamId=${newTeamId}`);
   expect(modelsRes.ok(), await modelsRes.text()).toBe(true);
   const models = (await modelsRes.json()) as ShiftModel[];
-  expect(models.length, "Neues Team sollte 5 Standard-Dienste haben").toBe(5);
+  expect(
+    models.length,
+    `Neues Team sollte ${EXPECTED_MODEL_NAMES.length} Standard-Dienst(e) haben`,
+  ).toBe(EXPECTED_MODEL_NAMES.length);
   expect(models.map((m) => m.name).sort()).toEqual(EXPECTED_MODEL_NAMES);
 });
 
@@ -100,7 +103,7 @@ test("GET /shift-models?teamId liefert nur Modelle des angefragten Teams", async
   const standardRes = await acc.ctx.get(`/api/shift-models?teamId=${standardTeamId}`);
   expect(standardRes.ok()).toBe(true);
   const standardModels = (await standardRes.json()) as ShiftModel[];
-  expect(standardModels.length).toBe(5);
+  expect(standardModels.length).toBe(EXPECTED_MODEL_NAMES.length);
 
   const newRes = await acc.ctx.get(`/api/shift-models?teamId=${newTeamId}`);
   const newModels = (await newRes.json()) as ShiftModel[];

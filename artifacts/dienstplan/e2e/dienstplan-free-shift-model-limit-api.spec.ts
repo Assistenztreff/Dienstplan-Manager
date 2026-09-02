@@ -4,35 +4,35 @@ import {
   request as playwrightRequest,
   type APIRequestContext,
 } from "@playwright/test";
+import { DEFAULT_SHIFT_MODELS } from "@workspace/shift-defaults";
+import { PLAN_CONFIG } from "@workspace/entitlements";
 
 /**
- * API-Test: Ein frisch registriertes Free-Konto startet mit den 5 geseedeten
- * Standard-Diensten (Frühdienst, Spätdienst, Nachtdienst, Bereitschaft,
- * 24h Dienst) und damit bewusst genau AM Free-Limit (maxShiftModels = 5).
+ * API-Test: Das Free-Limit für Schichtmodelle (`maxShiftModels`) zählt und
+ * blockiert das Anlegen darüber — blendet aber nichts aus (Bestandsschutz:
+ * vorhandene Modelle bleiben nutzbar und löschbar).
  *
- * Hintergrund: Produktentscheidung — die 5 Standard-Dienste bleiben beim
- * Seeding erhalten, das Free-Limit entspricht exakt der Seed-Anzahl. Ein
- * weiterer (eigener) Dienst ist im Free-Tarif erst nach dem Löschen eines
- * Standard-Dienstes möglich (Bestandsschutz: vorhandene Modelle bleiben voll
- * nutzbar/löschbar, nur das Anlegen ÜBER dem Limit ist gesperrt).
- * Die bestehende Test-DB setzt den Standard-Admin auf Premium, daher prüft
- * dieser Test den Free-Pfad end-to-end gegen ein eigens registriertes
- * Free-Konto (Default-Plan `free`):
+ * HINWEIS ZUR HISTORIE (30.08.2026): Früher setzte dieser Test voraus, dass ein
+ * frisches Free-Konto mit fünf geseedeten Standard-Diensten startet und damit
+ * zufällig GENAU am Limit steht. Seit die Seed-Liste auf die Teamsitzung
+ * reduziert wurde, stimmt das nicht mehr — ein Free-Konto startet unter dem
+ * Limit und darf eigene Dienste anlegen. Das ist gewollt: das Limit ist eine
+ * Tarifgrenze, die Seed-Liste eine Starthilfe; sie zufällig gleich groß zu
+ * halten war nie die Zusicherung.
  *
- * - Registrierung legt einen Admin (Plan `free`) inkl. Standard-Team an und
- *   meldet ihn an (Session-Cookie im Request-Kontext).
- * - GET /api/shift-models liefert die 5 geseedeten Standard-Dienste.
- * - Das Anlegen eines 6. Dienstes wird mit 403
- *   {code:"plan_limit_reached", limit:"maxShiftModels"} abgelehnt.
- * - Nach dem Löschen eines Standard-Dienstes (4 verbleibend) gelingt das
- *   Anlegen eines eigenen Dienstes (201) — das Limit zählt, blendet aber
- *   nichts aus.
+ * Der Test füllt deshalb jetzt SELBST bis ans Limit auf und leitet beide
+ * Zahlen aus der Quelle ab (`DEFAULT_SHIFT_MODELS`, `PLAN_CONFIG`), statt sie
+ * abzuschreiben. Ändert sich eine davon, wandert der Test mit.
  *
  * Läuft rein über die API gegen den isolierten Test-Stack und ist unabhängig
  * vom (auf Premium gesetzten) Test-Admin.
  */
 
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
+
+/** Free-Limit und Seed-Anzahl aus der Quelle, nicht abgeschrieben. */
+const LIMIT = PLAN_CONFIG.free.limits.maxShiftModels!;
+const SEEDS = DEFAULT_SHIFT_MODELS.length;
 
 type AuthUser = { id: number; plan: string; accountType: string };
 type ShiftModel = { id: number; name: string };
@@ -92,39 +92,55 @@ test.afterAll(async () => {
   await ctx.dispose();
 });
 
-test("Free-Konto startet am Limit (5 Seeds): 6. Dienst wird blockiert, nach Löschen eines Seeds ist ein eigener Dienst erlaubt", async () => {
-  // --- Start: genau die 5 geseedeten Standard-Dienste (= am Free-Limit) ---
+test("Das Free-Limit blockiert den Dienst darueber; nach dem Loeschen eines Dienstes geht es wieder", async () => {
+  // --- Start: die geseedeten Standard-Dienste, UNTER dem Limit ---
   const seededRes = await ctx.get("/api/shift-models");
   expect(seededRes.ok(), "GET /api/shift-models fehlgeschlagen").toBe(true);
   const seeded = (await seededRes.json()) as ShiftModel[];
-  expect(seeded.length, "Neues Free-Konto sollte mit 5 Standard-Diensten starten").toBe(5);
+  expect(
+    seeded.length,
+    `Neues Free-Konto sollte mit ${SEEDS} Standard-Dienst(en) starten`,
+  ).toBe(SEEDS);
+  expect(
+    SEEDS,
+    "Vorbedingung dieses Tests: die Seeds allein duerfen das Limit nicht schon fuellen",
+  ).toBeLessThanOrEqual(LIMIT);
 
-  // --- 6. Dienst: blockiert (403 plan_limit_reached) ---
+  // --- Selbst bis ans Limit auffuellen ---
+  for (let i = seeded.length; i < LIMIT; i++) {
+    const res = await ctx.post("/api/shift-models", {
+      data: { name: `Eigener Dienst ${i}`, valuationPercent: 100 },
+    });
+    expect(res.status(), `Dienst ${i + 1} unter dem Limit sollte 201 liefern`).toBe(201);
+  }
+  const amLimitRes = await ctx.get("/api/shift-models");
+  const amLimit = (await amLimitRes.json()) as ShiftModel[];
+  expect(amLimit.length, "Jetzt genau am Limit").toBe(LIMIT);
+
+  // --- Ein Dienst zu viel: blockiert (403 plan_limit_reached) ---
   const blockedRes = await ctx.post("/api/shift-models", {
     data: { name: "Ein Dienst zu viel", valuationPercent: 100 },
   });
-  expect(blockedRes.status(), "6. Dienst sollte am Free-Limit 403 liefern").toBe(403);
+  expect(blockedRes.status(), "Ueber dem Free-Limit sollte 403 kommen").toBe(403);
   const body = (await blockedRes.json()) as { code?: string; limit?: string };
   expect(body.code).toBe("plan_limit_reached");
   expect(body.limit).toBe("maxShiftModels");
 
-  // Es wurde KEIN 6. Dienst angelegt (weiterhin 5).
+  // Es wurde KEIN Dienst angelegt.
   const afterBlockRes = await ctx.get("/api/shift-models");
   const afterBlock = (await afterBlockRes.json()) as ShiftModel[];
-  expect(afterBlock.length, "Der abgelehnte Versuch darf keinen Dienst anlegen").toBe(5);
+  expect(afterBlock.length, "Der abgelehnte Versuch darf keinen Dienst anlegen").toBe(LIMIT);
 
-  // --- Bestandsschutz-Gegenprobe: ein Standard-Dienst ist löschbar ---
-  const deleteRes = await ctx.delete(`/api/shift-models/${seeded[seeded.length - 1]!.id}`);
-  expect(deleteRes.ok(), "Standard-Dienst sollte löschbar sein").toBe(true);
+  // --- Bestandsschutz-Gegenprobe: ein Dienst ist loeschbar ---
+  const deleteRes = await ctx.delete(`/api/shift-models/${afterBlock[afterBlock.length - 1]!.id}`);
+  expect(deleteRes.ok(), "Ein vorhandener Dienst sollte loeschbar sein").toBe(true);
 
-  // --- Unter dem Limit (4): ein eigener Dienst ist wieder erlaubt (201) ---
-  const okRes = await ctx.post("/api/shift-models", {
-    data: { name: "Mein eigener Dienst", valuationPercent: 100 },
+  // --- Unter dem Limit: ein eigener Dienst ist wieder erlaubt (201) ---
+  const allowedRes = await ctx.post("/api/shift-models", {
+    data: { name: "Eigener Dienst nach Loeschen", valuationPercent: 100 },
   });
-  expect(okRes.status(), "Eigener Dienst unter dem Limit sollte 201 liefern").toBe(201);
-
-  // Jetzt wieder 5 Dienste (am Free-Limit).
-  const finalRes = await ctx.get("/api/shift-models");
-  const finalModels = (await finalRes.json()) as ShiftModel[];
-  expect(finalModels.length, "Nach dem eigenen Dienst sollten es wieder 5 sein").toBe(5);
+  expect(
+    allowedRes.status(),
+    `Unter dem Limit sollte das Anlegen 201 liefern (${await allowedRes.text()})`,
+  ).toBe(201);
 });

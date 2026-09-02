@@ -12,12 +12,15 @@ import {
  * erscheinen — damit eine stille Regression in der Balance-Berechnung sofort
  * auffällt.
  *
- * Die Bereitschaft wird über das Standard-Schichtmodell "Bereitschaft"
- * identifiziert (`modelName === "Bereitschaft"` in dashboard-hours-balance.ts).
- * Das Modell wird bei jeder Konto-Registrierung automatisch angelegt.
+ * Die Bereitschaft wird ueber den NAMEN des Schichtmodells identifiziert
+ * (`modelName === "Bereitschaft"` in dashboard-hours-balance.ts) — nicht über
+ * ein Flag. Der Test legt das Modell deshalb selbst an, statt sich auf die
+ * Seed-Liste zu verlassen (die seit 30.08.2026 nur noch die Teamsitzung
+ * enthält).
  *
  * Aufbau:
  * - Frisches Dienstleister-Konto mit einer Assistenzkraft und einem Vertrag.
+ * - Ein selbst angelegtes Schichtmodell "Bereitschaft".
  * - Ein verbindlicher (FIX) Bereitschafts-Dienst im Vormonat.
  *
  * Geprüft:
@@ -76,25 +79,36 @@ test.beforeAll(async () => {
   });
   expect(contractRes.status(), "Vertrag anlegen").toBe(201);
 
-  // Bereitschafts-Schichtmodell finden (wird bei Registrierung geseedet).
-  const modelsRes = await acc.ctx.get("/api/shift-models");
-  expect(modelsRes.ok(), "Schichtmodelle abfragen").toBe(true);
-  const models = (await modelsRes.json()) as Array<{
-    id: number;
-    name: string;
-    defaultType?: string;
-    type?: string;
-  }>;
-  const bereitschaftModel = models.find((m) => m.name === "Bereitschaft");
-  if (!bereitschaftModel) {
-    throw new Error(
-      `Standard-Schichtmodell 'Bereitschaft' nicht gefunden. Vorhandene Modelle: ${models.map((m) => m.name).join(", ")}`,
-    );
-  }
+  // Bereitschafts-Schichtmodell ANLEGEN, nicht suchen. Bis zum 30.08.2026 kam
+  // "Bereitschaft" als einer von fünf Standard-Diensten aus der Registrierung;
+  // seitdem seedet ein neues Team nur noch die Teamsitzung. Ein Test, der auf
+  // ein geseedetes Modell wartet, misst damit die Seed-Liste statt der Sache,
+  // um die es hier geht: dass die Auswertung einen Dienst NAMENS "Bereitschaft"
+  // als Bereitschaft zählt (`modelName === "Bereitschaft"` in
+  // dashboard-hours-balance.ts). Der Name ist die Zusicherung — also stellt der
+  // Test ihn selbst her.
+  const modelRes = await acc.ctx.post("/api/shift-models", {
+    data: {
+      name: "Bereitschaft",
+      color: "teal",
+      valuationPercent: 100,
+      defaultStartTime: "08:00",
+      defaultEndTime: "14:00",
+      defaultWeekdays: [6, 7],
+      compensationType: "regular",
+    },
+  });
+  expect(
+    modelRes.status(),
+    `Bereitschafts-Schichtmodell anlegen (${await modelRes.text()})`,
+  ).toBe(201);
+  const bereitschaftModel = (await modelRes.json()) as { id: number; name: string };
+  expect(bereitschaftModel.name, "Der Name ist das Erkennungsmerkmal der Auswertung").toBe(
+    "Bereitschaft",
+  );
 
-  // Der Schichttyp aus dem Modell ableiten (Fallback: "standby", das ist der
-  // typische Typ für Bereitschaftsdienste).
-  const bereitschaftType = bereitschaftModel.defaultType ?? bereitschaftModel.type ?? "standby";
+  // Schichttyp für Bereitschaftsdienste.
+  const bereitschaftType = "standby";
 
   // FIX-Bereitschaftsdienst im Vormonat anlegen.
   // teamId wird serverseitig aus dem Kontext der Assistenzkraft aufgelöst.

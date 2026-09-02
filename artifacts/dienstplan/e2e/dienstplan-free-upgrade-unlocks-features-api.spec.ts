@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { PLAN_CONFIG } from "@workspace/entitlements";
 import {
   deleteFreeAccount,
   registerFreeAccount,
@@ -68,17 +69,25 @@ test("Premium-Freischaltung hebt maxShiftModels und bulkEdit sofort auf", async 
 
   // --- Free-Phase: an die Sperren fahren --------------------------------
 
-  // Registrierung seedet 5 Standard-Dienste — genau das Free-Limit
-  // (maxShiftModels = 5); ein 6. Dienst ist im Free-Tarif blockiert.
+  // Bis ans Free-Limit auffuellen und erst DANN gegen die Sperre fahren.
+  // Frueher stand hier "die Registrierung seedet 5 Dienste = genau das Limit" —
+  // seit die Seed-Liste auf die Teamsitzung geschrumpft ist (30.08.2026) waere
+  // das still falsch. Das Limit kommt aus der Quelle.
+  const LIMIT = PLAN_CONFIG.free.limits.maxShiftModels!;
   const seededRes = await acc.ctx.get("/api/shift-models");
   expect(seededRes.ok(), "GET /api/shift-models fehlgeschlagen").toBe(true);
   const seeded = (await seededRes.json()) as { id: number }[];
-  expect(seeded.length, "Neues Free-Konto sollte mit 5 Standard-Diensten starten").toBe(5);
+  for (let i = seeded.length; i < LIMIT; i++) {
+    const fill = await acc.ctx.post("/api/shift-models", {
+      data: { name: `E2E Auffueller ${unique}-${i}`, valuationPercent: 100 },
+    });
+    expect(fill.status(), `Dienst ${i + 1} unter dem Limit sollte 201 liefern`).toBe(201);
+  }
 
   const fifthFree = await acc.ctx.post("/api/shift-models", {
     data: { name: "Ein Dienst zu viel", valuationPercent: 100 },
   });
-  expect(fifthFree.status(), "6. Dienst sollte im Free-Tarif 403 liefern").toBe(403);
+  expect(fifthFree.status(), "Ueber dem Free-Limit sollte 403 kommen").toBe(403);
   const fifthFreeBody = (await fifthFree.json()) as LimitError;
   expect(fifthFreeBody.code).toBe("plan_limit_reached");
   expect(fifthFreeBody.limit).toBe("maxShiftModels");
