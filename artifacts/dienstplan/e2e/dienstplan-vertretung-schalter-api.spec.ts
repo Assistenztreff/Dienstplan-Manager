@@ -26,7 +26,17 @@ import {
  *   4. Der Override ist entfernbar; danach greift wieder der Konto-Wert.
  */
 
-type Settings = { vertretungEnabled: boolean; isOverride: boolean; teamId: number | null };
+type Settings = {
+  vertretungEnabled: boolean;
+  isOverride: boolean;
+  teamId: number | null;
+  // Die fuenf Zuschlagsfelder, die PUT als Pflicht verlangt (s. schreibe()).
+  nightPercent: number;
+  nightStart: string;
+  nightEnd: string;
+  sundayPercent: number;
+  holidayPercent: number;
+};
 
 let acc: FreeAccount;
 let teamId = 0;
@@ -56,12 +66,32 @@ async function lies(scopeTeamId?: number): Promise<Settings> {
   return (await res.json()) as Settings;
 }
 
+/**
+ * Setzt den Schalter — auf demselben Weg wie das Einstellungs-Formular.
+ *
+ * PUT /allowance-settings ist ein VOLL-Ersetzen, kein Teil-Update: Die fuenf
+ * Zuschlagsfelder sind im Schema Pflicht, und die Route schreibt den ganzen
+ * Satz teamOverridable-Werte. Ein Aufruf mit nur `vertretungEnabled` waere
+ * deshalb 400 — und wuerde ausserdem einen Weg testen, den die App gar nicht
+ * geht. Der Helper liest daher erst den aktuellen Stand des jeweiligen Scopes
+ * und schickt ihn unveraendert mit, genau wie das Formular.
+ */
 async function schreibe(wert: boolean, scopeTeamId?: number): Promise<Settings> {
   const url =
     scopeTeamId === undefined
       ? "/api/allowance-settings"
       : `/api/allowance-settings?teamId=${scopeTeamId}`;
-  const res = await acc.ctx.put(url, { data: { vertretungEnabled: wert } });
+  const aktuell = await lies(scopeTeamId);
+  const res = await acc.ctx.put(url, {
+    data: {
+      nightPercent: aktuell.nightPercent,
+      nightStart: aktuell.nightStart,
+      nightEnd: aktuell.nightEnd,
+      sundayPercent: aktuell.sundayPercent,
+      holidayPercent: aktuell.holidayPercent,
+      vertretungEnabled: wert,
+    },
+  });
   expect(res.ok(), `${url}: ${await res.text()}`).toBe(true);
   return (await res.json()) as Settings;
 }

@@ -1378,10 +1378,11 @@ export default function Einstellungen() {
               </Button>
             </div>
           ) : (
-            <ul className="divide-y divide-border/50">
+            <ul className="divide-y divide-border/50" data-testid="model-list">
               {sortedModels.map((model) => (
                 <li
                   key={model.id}
+                  data-testid={`model-row-${model.id}`}
                   className="flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors"
                 >
                   <GripVertical className="h-4 w-4 text-muted-foreground/40 shrink-0" />

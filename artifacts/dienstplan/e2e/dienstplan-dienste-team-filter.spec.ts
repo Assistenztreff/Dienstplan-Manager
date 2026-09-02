@@ -7,6 +7,7 @@ import {
   FREE_ACCOUNT_PASSWORD,
   type FreeAccount,
 } from "./helpers/teams";
+import { DEFAULT_SHIFT_MODELS } from "@workspace/shift-defaults";
 
 /**
  * E2E-Test für den Team-Filter im Dienste-Bereich der Einstellungen (#486).
@@ -177,8 +178,18 @@ test.describe("Dienste-Bereich: Team-Filter lenkt Liste und Neuanlagen", () => {
     await loginViaUi(page, privatAcc!.email, FREE_ACCOUNT_PASSWORD);
     await gotoEinstellungen(page);
 
-    // Der Dienste-Bereich ist da (geseedete Standard-Modelle sichtbar) ...
-    await expect(page.getByText("Frühdienst")).toBeVisible();
+    // Der Dienste-Bereich ist da (geseedete Standard-Dienste sichtbar) ...
+    // Der Name kommt aus DEFAULT_SHIFT_MODELS, nicht abgeschrieben: Die
+    // Seed-Liste hat sich schon einmal geaendert (von fuenf Diensten auf die
+    // Teamsitzung), und ein festgetippter Name laesst diesen Test dann ins
+    // Leere laufen — er prueft hier ja nur, DASS der Bereich befuellt ist.
+    // Gesucht wird INNERHALB der Dienste-Liste: "Teamsitzung" steht auf der
+    // Einstellungsseite auch am Schalter "Team-Dienst (Teamsitzung)", eine
+    // seitenweite Textsuche traefe beide.
+    const ersterStandardDienst = DEFAULT_SHIFT_MODELS[0]!.name;
+    await expect(
+      page.getByTestId("model-list").getByText(ersterStandardDienst, { exact: true }),
+    ).toBeVisible();
     // ... aber ohne Team-Dropdown.
     await expect(page.getByTestId("model-team-filter")).toHaveCount(0);
   });

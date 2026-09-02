@@ -33,6 +33,35 @@ async function adoptSession(page: Page, account: FreeAccount): Promise<void> {
   await page.context().addCookies(state.cookies);
 }
 
+/**
+ * Setzt den Schalter über die API — auf demselben Weg wie das Formular.
+ *
+ * PUT /allowance-settings ist ein VOLL-Ersetzen: Die fünf Zuschlagsfelder sind
+ * im Schema Pflicht. Ein Aufruf mit nur `vertretungEnabled` wäre 400. Der
+ * Helper liest deshalb erst den aktuellen Stand und schickt ihn unverändert
+ * mit, genau wie das Einstellungs-Formular es tut.
+ */
+async function setzeSchalter(account: FreeAccount, wert: boolean): Promise<void> {
+  const aktuell = (await (await account.ctx.get("/api/allowance-settings")).json()) as {
+    nightPercent: number;
+    nightStart: string;
+    nightEnd: string;
+    sundayPercent: number;
+    holidayPercent: number;
+  };
+  const res = await account.ctx.put("/api/allowance-settings", {
+    data: {
+      nightPercent: aktuell.nightPercent,
+      nightStart: aktuell.nightStart,
+      nightEnd: aktuell.nightEnd,
+      sundayPercent: aktuell.sundayPercent,
+      holidayPercent: aktuell.holidayPercent,
+      vertretungEnabled: wert,
+    },
+  });
+  expect(res.ok(), await res.text()).toBe(true);
+}
+
 /** Öffnet den Dienstplan in der Listenansicht, ganzer Monat, alles ausgeklappt. */
 async function openDienstplanList(page: Page): Promise<void> {
   await page.goto("/dienstplan");
@@ -133,8 +162,7 @@ test.describe("Schalter „Mit Vertretungen planen“ (UI)", () => {
     test.setTimeout(90000);
 
     // Dienst MIT Vertretung anlegen, solange der Schalter AN ist ...
-    const on = await acc.ctx.put("/api/allowance-settings", { data: { vertretungEnabled: true } });
-    expect(on.ok(), await on.text()).toBe(true);
+    await setzeSchalter(acc, true);
     const shiftRes = await acc.ctx.post("/api/shifts", {
       data: {
         userId: assistantId,
@@ -148,8 +176,7 @@ test.describe("Schalter „Mit Vertretungen planen“ (UI)", () => {
     const shiftId = ((await shiftRes.json()) as { id: number }).id;
 
     // ... dann den Schalter wieder AUS.
-    const off = await acc.ctx.put("/api/allowance-settings", { data: { vertretungEnabled: false } });
-    expect(off.ok(), await off.text()).toBe(true);
+    await setzeSchalter(acc, false);
 
     await adoptSession(page, acc);
     await openDienstplanList(page);
