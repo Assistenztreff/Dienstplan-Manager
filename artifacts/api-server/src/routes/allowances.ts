@@ -118,6 +118,11 @@ router.put("/allowance-settings", requireAdmin, async (req, res): Promise<void> 
       vertretungEnabled: body.data.vertretungEnabled,
       vertretungCompensationMode: body.data.vertretungCompensationMode,
       vertretungCompensationValue: body.data.vertretungCompensationValue,
+      // Planungs-Grenzen: Team-Override-faehig wie die Zuschlaege, weil ein
+      // Dienstleister oft ein Drei-Schicht-Team neben einem Ein-Personen-Team
+      // fuehrt (Kay 02.09.2026).
+      planungBlockLaenge: body.data.planungBlockLaenge,
+      planungRuhezeitStunden: body.data.planungRuhezeitStunden,
     };
     // Upsert des Team-Overrides (UNIQUE team_id).
     const [saved] = await db

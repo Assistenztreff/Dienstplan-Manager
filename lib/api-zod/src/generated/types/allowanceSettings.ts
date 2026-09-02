@@ -65,6 +65,18 @@ export interface AllowanceSettings {
   pauseMinutes2: number;
   /** Pausen von den bezahlten Stunden abziehen? Konto-global (kein Team-Override); Standard AUS. Bei AN reduzieren die unbezahlten Pausenminuten die gewerteten Stunden und den Grundlohn der Arbeitsdienste in BEIDEN Abrechnungsarten (zur Lesezeit angewandt); Zuschlagsstunden bleiben unberührt. */
   deductPausesEnabled: boolean;
+  /**
+     * Automatische Planung: Dienste am Stück je Person und Dienst (1 = täglich wechseln). Team-Override-fähig — ein Drei-Schicht-Team und ein Ein-Personen-Team planen sich grundverschieden.
+     * @minimum 1
+     * @maximum 14
+     */
+  planungBlockLaenge: number;
+  /**
+     * Automatische Planung: Mindestabstand zwischen zwei Diensten einer Person. 11 h ist der gesetzliche Regelfall (ArbZG § 5); eine Abweichung nach unten ist nur auf tariflicher Grundlage zulässig (§ 7) und deshalb einstellbar statt fest verdrahtet. Team-Override-fähig.
+     * @minimum 0
+     * @maximum 48
+     */
+  planungRuhezeitStunden: number;
   /** Mit Vertretungen planen? Team-Override-fähig (Team-Override → Konto-Zeile des Team-Eigentümers → AUS). Bei AUS bietet der Schicht-Dialog das Feld "Vertretung vormerken" nicht mehr an; bereits vorgemerkte Vertretungen bleiben bestehen und bearbeitbar. */
   vertretungEnabled: boolean;
   /** Vergütung für aktivierte Vertretungen (isVertretung=true). Team-Override-fähig (wie night-/sunday-/holidayPercent oben): Team-Override → Konto-Zeile des Team-Eigentümers → "none". none = regulärer Lohn wie jeder andere Dienst; percent = Prozentsatz des eigenen Stundenlohns der Vertretung für diesen Tag; flat = fester Euro-Betrag für den Tag, unabhängig von der Dienstlänge. */

@@ -95,6 +95,18 @@ export interface AllowanceSettingsInput {
   pauseMinutes2?: number;
   /** Pausen von den bezahlten Stunden abziehen (konto-global, kein Team-Override). */
   deductPausesEnabled?: boolean;
+  /**
+     * Automatische Planung — Dienste am Stück (Team-Override-fähig).
+     * @minimum 1
+     * @maximum 14
+     */
+  planungBlockLaenge?: number;
+  /**
+     * Automatische Planung — Ruhezeit in Stunden (Team-Override-fähig).
+     * @minimum 0
+     * @maximum 48
+     */
+  planungRuhezeitStunden?: number;
   /** Mit Vertretungen planen (Team-Override-fähig). */
   vertretungEnabled?: boolean;
   /** Vergütung für aktivierte Vertretungen (Team-Override-fähig). */

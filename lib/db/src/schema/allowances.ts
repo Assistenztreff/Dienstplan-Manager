@@ -147,6 +147,23 @@ export const allowanceSettingsTable = pgTable(
       .notNull()
       .default("none"),
     vertretungCompensationValue: real("vertretung_compensation_value").notNull().default(0),
+    // Grenzen der automatischen Planung (Kay-Entscheidung 02.09.2026).
+    // Team-Override-faehig wie die Zuschlaege: Ein Dienstleister fuehrt oft ein
+    // Drei-Schicht-Team neben einem Ein-Personen-Team, und die planen sich
+    // grundverschieden.
+    //
+    // Am TEAM gespeichert, nicht im Browser: Die Werte sind eine Absprache des
+    // Teams, keine Ansichtssache eines Geraets. Wer im Zahnrad Dreierbloecke
+    // einstellt, soll das nicht auf jedem Rechner neu tun — und die naechste
+    // planende Person soll dieselbe Regel vorfinden.
+    //
+    // planungBlockLaenge: Dienste am Stueck je Person und Dienst. 1 = taeglich
+    // wechseln. planungRuhezeitStunden: Mindestabstand zwischen zwei Diensten
+    // einer Person; 11 h ist der gesetzliche Regelfall (ArbZG § 5), Abweichung
+    // nach unten nur auf tariflicher Grundlage (§ 7) und deshalb bewusst
+    // einstellbar statt fest verdrahtet.
+    planungBlockLaenge: integer("planung_block_laenge").notNull().default(1),
+    planungRuhezeitStunden: integer("planung_ruhezeit_stunden").notNull().default(11),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [

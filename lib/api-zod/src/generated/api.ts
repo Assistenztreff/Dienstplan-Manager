@@ -1465,6 +1465,13 @@ export const GetAllowanceSettingsQueryParams = zod.object({
   "teamId": zod.coerce.number().optional().describe('Optionaler Team-Kontext; liefert den Team-Override, sonst (isOverride=false) die Konto-Einstellungen des Eigentümers. Nur eigene Teams erlaubt.')
 })
 
+export const getAllowanceSettingsResponsePlanungBlockLaengeMax = 14;
+
+export const getAllowanceSettingsResponsePlanungRuhezeitStundenMin = 0;
+export const getAllowanceSettingsResponsePlanungRuhezeitStundenMax = 48;
+
+
+
 export const GetAllowanceSettingsResponse = zod.object({
   "id": zod.number(),
   "teamId": zod.number().nullish().describe('Team-ID des Overrides oder null bei Konto-Einstellungen.'),
@@ -1493,6 +1500,8 @@ export const GetAllowanceSettingsResponse = zod.object({
   "pauseThreshold2Hours": zod.number().describe('Ab dieser Dienstdauer (Stunden) gilt Pausen-Stufe 2 (Standard 9).'),
   "pauseMinutes2": zod.number().describe('Pausenminuten der Stufe 2 (Standard 45).'),
   "deductPausesEnabled": zod.boolean().describe('Pausen von den bezahlten Stunden abziehen? Konto-global (kein Team-Override); Standard AUS. Bei AN reduzieren die unbezahlten Pausenminuten die gewerteten Stunden und den Grundlohn der Arbeitsdienste in BEIDEN Abrechnungsarten (zur Lesezeit angewandt); Zuschlagsstunden bleiben unberührt.'),
+  "planungBlockLaenge": zod.number().min(1).max(getAllowanceSettingsResponsePlanungBlockLaengeMax).describe('Automatische Planung: Dienste am Stück je Person und Dienst (1 = täglich wechseln). Team-Override-fähig — ein Drei-Schicht-Team und ein Ein-Personen-Team planen sich grundverschieden.'),
+  "planungRuhezeitStunden": zod.number().min(getAllowanceSettingsResponsePlanungRuhezeitStundenMin).max(getAllowanceSettingsResponsePlanungRuhezeitStundenMax).describe('Automatische Planung: Mindestabstand zwischen zwei Diensten einer Person. 11 h ist der gesetzliche Regelfall (ArbZG § 5); eine Abweichung nach unten ist nur auf tariflicher Grundlage zulässig (§ 7) und deshalb einstellbar statt fest verdrahtet. Team-Override-fähig.'),
   "vertretungEnabled": zod.boolean().describe('Mit Vertretungen planen? Team-Override-fähig (Team-Override → Konto-Zeile des Team-Eigentümers → AUS). Bei AUS bietet der Schicht-Dialog das Feld \"Vertretung vormerken\" nicht mehr an; bereits vorgemerkte Vertretungen bleiben bestehen und bearbeitbar.'),
   "vertretungCompensationMode": zod.enum(['none', 'percent', 'flat']).describe('Vergütung für aktivierte Vertretungen (isVertretung=true). Team-Override-fähig (wie night-\/sunday-\/holidayPercent oben): Team-Override → Konto-Zeile des Team-Eigentümers → \"none\". none = regulärer Lohn wie jeder andere Dienst; percent = Prozentsatz des eigenen Stundenlohns der Vertretung für diesen Tag; flat = fester Euro-Betrag für den Tag, unabhängig von der Dienstlänge.'),
   "vertretungCompensationValue": zod.number().describe('Bei \"percent\" ein Prozentsatz (z. B. 80 = 80 % des eigenen Stundenlohns), bei \"flat\" ein Euro-Betrag; bei \"none\" unbenutzt.'),
@@ -1539,6 +1548,11 @@ export const updateAllowanceSettingsBodyPauseThreshold2HoursMin = 0.1;
 export const updateAllowanceSettingsBodyPauseMinutes2Min = 0;
 export const updateAllowanceSettingsBodyPauseMinutes2Max = 1440;
 
+export const updateAllowanceSettingsBodyPlanungBlockLaengeMax = 14;
+
+export const updateAllowanceSettingsBodyPlanungRuhezeitStundenMin = 0;
+export const updateAllowanceSettingsBodyPlanungRuhezeitStundenMax = 48;
+
 export const updateAllowanceSettingsBodyVertretungCompensationValueMin = 0;
 
 
@@ -1568,10 +1582,19 @@ export const UpdateAllowanceSettingsBody = zod.object({
   "pauseThreshold2Hours": zod.number().min(updateAllowanceSettingsBodyPauseThreshold2HoursMin).optional().describe('Ab dieser Dienstdauer (Stunden) gilt Pausen-Stufe 2.'),
   "pauseMinutes2": zod.number().min(updateAllowanceSettingsBodyPauseMinutes2Min).max(updateAllowanceSettingsBodyPauseMinutes2Max).optional().describe('Pausenminuten der Stufe 2.'),
   "deductPausesEnabled": zod.boolean().optional().describe('Pausen von den bezahlten Stunden abziehen (konto-global, kein Team-Override).'),
+  "planungBlockLaenge": zod.number().min(1).max(updateAllowanceSettingsBodyPlanungBlockLaengeMax).optional().describe('Automatische Planung — Dienste am Stück (Team-Override-fähig).'),
+  "planungRuhezeitStunden": zod.number().min(updateAllowanceSettingsBodyPlanungRuhezeitStundenMin).max(updateAllowanceSettingsBodyPlanungRuhezeitStundenMax).optional().describe('Automatische Planung — Ruhezeit in Stunden (Team-Override-fähig).'),
   "vertretungEnabled": zod.boolean().optional().describe('Mit Vertretungen planen (Team-Override-fähig).'),
   "vertretungCompensationMode": zod.enum(['none', 'percent', 'flat']).optional().describe('Vergütung für aktivierte Vertretungen (Team-Override-fähig).'),
   "vertretungCompensationValue": zod.number().min(updateAllowanceSettingsBodyVertretungCompensationValueMin).optional().describe('Prozentsatz (mode=percent) oder Euro-Betrag (mode=flat).')
 })
+
+export const updateAllowanceSettingsResponsePlanungBlockLaengeMax = 14;
+
+export const updateAllowanceSettingsResponsePlanungRuhezeitStundenMin = 0;
+export const updateAllowanceSettingsResponsePlanungRuhezeitStundenMax = 48;
+
+
 
 export const UpdateAllowanceSettingsResponse = zod.object({
   "id": zod.number(),
@@ -1601,6 +1624,8 @@ export const UpdateAllowanceSettingsResponse = zod.object({
   "pauseThreshold2Hours": zod.number().describe('Ab dieser Dienstdauer (Stunden) gilt Pausen-Stufe 2 (Standard 9).'),
   "pauseMinutes2": zod.number().describe('Pausenminuten der Stufe 2 (Standard 45).'),
   "deductPausesEnabled": zod.boolean().describe('Pausen von den bezahlten Stunden abziehen? Konto-global (kein Team-Override); Standard AUS. Bei AN reduzieren die unbezahlten Pausenminuten die gewerteten Stunden und den Grundlohn der Arbeitsdienste in BEIDEN Abrechnungsarten (zur Lesezeit angewandt); Zuschlagsstunden bleiben unberührt.'),
+  "planungBlockLaenge": zod.number().min(1).max(updateAllowanceSettingsResponsePlanungBlockLaengeMax).describe('Automatische Planung: Dienste am Stück je Person und Dienst (1 = täglich wechseln). Team-Override-fähig — ein Drei-Schicht-Team und ein Ein-Personen-Team planen sich grundverschieden.'),
+  "planungRuhezeitStunden": zod.number().min(updateAllowanceSettingsResponsePlanungRuhezeitStundenMin).max(updateAllowanceSettingsResponsePlanungRuhezeitStundenMax).describe('Automatische Planung: Mindestabstand zwischen zwei Diensten einer Person. 11 h ist der gesetzliche Regelfall (ArbZG § 5); eine Abweichung nach unten ist nur auf tariflicher Grundlage zulässig (§ 7) und deshalb einstellbar statt fest verdrahtet. Team-Override-fähig.'),
   "vertretungEnabled": zod.boolean().describe('Mit Vertretungen planen? Team-Override-fähig (Team-Override → Konto-Zeile des Team-Eigentümers → AUS). Bei AUS bietet der Schicht-Dialog das Feld \"Vertretung vormerken\" nicht mehr an; bereits vorgemerkte Vertretungen bleiben bestehen und bearbeitbar.'),
   "vertretungCompensationMode": zod.enum(['none', 'percent', 'flat']).describe('Vergütung für aktivierte Vertretungen (isVertretung=true). Team-Override-fähig (wie night-\/sunday-\/holidayPercent oben): Team-Override → Konto-Zeile des Team-Eigentümers → \"none\". none = regulärer Lohn wie jeder andere Dienst; percent = Prozentsatz des eigenen Stundenlohns der Vertretung für diesen Tag; flat = fester Euro-Betrag für den Tag, unabhängig von der Dienstlänge.'),
   "vertretungCompensationValue": zod.number().describe('Bei \"percent\" ein Prozentsatz (z. B. 80 = 80 % des eigenen Stundenlohns), bei \"flat\" ein Euro-Betrag; bei \"none\" unbenutzt.'),

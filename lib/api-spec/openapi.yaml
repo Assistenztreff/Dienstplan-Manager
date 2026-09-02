@@ -4413,6 +4413,8 @@ components:
           vertretungEnabled,
           vertretungCompensationMode,
           vertretungCompensationValue,
+          planungBlockLaenge,
+          planungRuhezeitStunden,
           updatedAt,
         ]
       properties:
@@ -4518,6 +4520,24 @@ components:
             Pausenminuten die gewerteten Stunden und den Grundlohn der
             Arbeitsdienste in BEIDEN Abrechnungsarten (zur Lesezeit angewandt);
             Zuschlagsstunden bleiben unberührt.
+        planungBlockLaenge:
+          type: integer
+          minimum: 1
+          maximum: 14
+          description: >-
+            Automatische Planung: Dienste am Stück je Person und Dienst
+            (1 = täglich wechseln). Team-Override-fähig — ein Drei-Schicht-Team
+            und ein Ein-Personen-Team planen sich grundverschieden.
+        planungRuhezeitStunden:
+          type: integer
+          minimum: 0
+          maximum: 48
+          description: >-
+            Automatische Planung: Mindestabstand zwischen zwei Diensten einer
+            Person. 11 h ist der gesetzliche Regelfall (ArbZG § 5); eine
+            Abweichung nach unten ist nur auf tariflicher Grundlage zulässig
+            (§ 7) und deshalb einstellbar statt fest verdrahtet.
+            Team-Override-fähig.
         vertretungEnabled:
           type: boolean
           description: >-
@@ -4635,6 +4655,16 @@ components:
           description: >-
             Pausen von den bezahlten Stunden abziehen (konto-global, kein
             Team-Override).
+        planungBlockLaenge:
+          type: integer
+          minimum: 1
+          maximum: 14
+          description: Automatische Planung — Dienste am Stück (Team-Override-fähig).
+        planungRuhezeitStunden:
+          type: integer
+          minimum: 0
+          maximum: 48
+          description: Automatische Planung — Ruhezeit in Stunden (Team-Override-fähig).
         vertretungEnabled:
           type: boolean
           description: Mit Vertretungen planen (Team-Override-fähig).
