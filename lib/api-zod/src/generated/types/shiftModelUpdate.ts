@@ -31,4 +31,8 @@ export interface ShiftModelUpdate {
      * @nullable
      */
   compensationFlatCents?: number | null;
+  imRegelplan?: boolean;
+  /** @nullable */
+  validFrom?: Date | null;
+  standbySlot?: boolean;
 }

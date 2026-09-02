@@ -14,6 +14,7 @@ import {
   FileDown,
   SquareDashedMousePointer,
   Scale,
+  Wand2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTeam } from "@/context/team";
@@ -112,6 +113,8 @@ export function DienstplanHeader({
   canSeeStundenkonto,
   stundenkontoOpen,
   onToggleStundenkonto,
+  canAutoPlan,
+  onAutoPlanung,
 }: {
   isAdmin: boolean;
   canPlan: boolean;
@@ -148,6 +151,11 @@ export function DienstplanHeader({
   canSeeStundenkonto: boolean;
   stundenkontoOpen: boolean;
   onToggleStundenkonto: () => void;
+  /** Automatische Planung (Baustein 3): Premium-Recht autoScheduling.
+   *  false blendet den Eintrag nicht aus, sondern fuehrt zur Preise-Seite —
+   *  dasselbe Muster wie beim gesperrten "Auswaehlen". */
+  canAutoPlan: boolean;
+  onAutoPlanung: () => void;
 }) {
   const { selectedTeamId } = useTeam();
   const personColors = usePersonColors();
@@ -403,7 +411,32 @@ export function DienstplanHeader({
               <span>Auswählen</span>
             </DropdownMenuItem>
           ))}
-        {(canBasicExport || showSelectionEntry) && <DropdownMenuSeparator />}
+        {canPlan &&
+          (canAutoPlan ? (
+            <DropdownMenuItem
+              className="min-h-[44px] gap-2"
+              onSelect={onAutoPlanung}
+              title="Offene Plätze des Regelplans reihum auf Assistenzkräfte verteilen (als Entwürfe)."
+              data-testid="open-autoplanung"
+            >
+              <Wand2 className="h-4 w-4" />
+              <span>Automatische Planung</span>
+            </DropdownMenuItem>
+          ) : (
+            // Wie beim gesperrten "Auswaehlen": klickbar statt disabled, weil
+            // Touch-Geraete keinen Tooltip haben — der Klick erklaert Premium.
+            <DropdownMenuItem
+              className="min-h-[44px] gap-2"
+              onSelect={() => navigateHeader("/preise")}
+              title="Automatische Planung ist in Premium enthalten. Preise & Premium ansehen."
+              aria-label="Automatische Planung (Premium) — Preise & Premium ansehen"
+              data-testid="open-autoplanung-locked"
+            >
+              <Lock className="h-4 w-4" />
+              <span>Automatische Planung</span>
+            </DropdownMenuItem>
+          ))}
+        {(canBasicExport || showSelectionEntry || canPlan) && <DropdownMenuSeparator />}
         <DropdownMenuItem
           className="min-h-[44px] gap-2"
           onSelect={() => setAbsCalOpen(true)}

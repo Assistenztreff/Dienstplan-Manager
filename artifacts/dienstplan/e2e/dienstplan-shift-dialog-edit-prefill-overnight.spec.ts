@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
-import { clearUserShiftsAroundDay, selectDayCell } from "./helpers/shifts";
+import { clearUserShiftsAroundDay, openShiftRow, selectDayCell } from "./helpers/shifts";
 
 /**
  * E2E-Test: Beim Öffnen einer Nachtschicht ÜBER MITTERNACHT (z. B. 22:00–06:00)
@@ -189,7 +189,7 @@ test.describe("ShiftDialog: Bearbeiten belegt Nachtschicht über Mitternacht kor
     // --- Schicht im Bearbeiten-Modus öffnen --------------------------------
     const badge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${shiftId}`);
     await expect(badge).toBeVisible();
-    await badge.click();
+    await openShiftRow(page, badge);
 
     const editDialog = page.getByTestId("shift-dialog");
     await expect(editDialog).toBeVisible();

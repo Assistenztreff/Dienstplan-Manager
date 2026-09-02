@@ -197,7 +197,12 @@ test("Desktop-Monatsgitter (Assistent): 1. Klick markiert, 2. Klick öffnet NICH
     // Seit der UI-Vereinheitlichung (26.08.2026) engt die Zellenauswahl die
     // Wochen-Liste NICHT mehr ein (Standard-Zeitraum bleibt „Dieser Monat") —
     // die Zeile des gewählten Tages bekommt stattdessen den Anker-Rahmen.
-    await expect(page.getByTestId(dayCellId(year, month1, dayA).replace("day-cell-", "agenda-day-"))).toHaveAttribute("data-anchor", "true");
+    // Anker-Zeile in der Wochen-Liste wird hier bewusst NICHT geprueft
+    // (korrigiert 01.09.2026): Fuer Assistenzkraefte blendet die Liste leere
+    // Tage aus (hideEmptyDays in schedule-list.tsx haengt an canEdit), und
+    // dieser Tag traegt absichtlich keine Schicht. Die Zeile kann es also
+    // gar nicht geben. Der Anker ist durch die beiden Tests weiter unten
+    // abgedeckt, die vorher eine Schicht anlegen.
     await expect(dialog).toHaveCount(0);
 
     // --- 2. Klick: darf für Assistenten KEINEN Dialog öffnen. ---

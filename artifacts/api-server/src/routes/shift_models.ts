@@ -50,6 +50,26 @@ router.get("/shift-models", requireAuth, async (req, res): Promise<void> => {
   res.json(rows);
 });
 
+/**
+ * `validFrom` kommt als Date aus der generierten Pruefung (OpenAPI
+ * `format: date` -> zod.coerce.date), die Spalte ist aber ein DATE und will
+ * "YYYY-MM-DD". Gleiches Muster wie in hour_budgets.ts und contracts.ts —
+ * dort bewusst je Route lokal, statt einen gemeinsamen Helfer zu erzwingen.
+ */
+function toDateString(val: unknown): string {
+  if (val instanceof Date) return val.toISOString().split("T")[0]!;
+  return String(val);
+}
+
+/** validFrom im Schreib-Payload auf den Spaltentyp bringen (null bleibt null). */
+function mitDatumsfeld<T extends { validFrom?: Date | string | null }>(
+  daten: T,
+): Omit<T, "validFrom"> & { validFrom?: string | null } {
+  const { validFrom, ...rest } = daten;
+  if (validFrom === undefined) return rest as Omit<T, "validFrom">;
+  return { ...rest, validFrom: validFrom === null ? null : toDateString(validFrom) };
+}
+
 router.post("/shift-models", requireAdmin, async (req, res): Promise<void> => {
   const body = CreateShiftModelBody.safeParse(req.body);
   if (!body.success) {
@@ -87,7 +107,10 @@ router.post("/shift-models", requireAdmin, async (req, res): Promise<void> => {
     return;
   }
 
-  const [model] = await db.insert(shiftModelsTable).values({ ...body.data, teamId: write.teamId }).returning();
+  const [model] = await db
+    .insert(shiftModelsTable)
+    .values({ ...mitDatumsfeld(body.data), teamId: write.teamId })
+    .returning();
   res.status(201).json(model);
 });
 
@@ -105,7 +128,7 @@ router.patch("/shift-models/:id", requireAdmin, async (req, res): Promise<void> 
   const allowedTeams = await getAllowedTeamIds(req.session.userId!);
   const [updated] = await db
     .update(shiftModelsTable)
-    .set(body.data)
+    .set(mitDatumsfeld(body.data))
     .where(and(eq(shiftModelsTable.id, params.data.id), inArray(shiftModelsTable.teamId, allowedTeams)))
     .returning();
   if (!updated) {

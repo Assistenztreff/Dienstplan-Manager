@@ -133,6 +133,10 @@ type ShiftDialogProps = {
   onClose: () => void;
   preselectedDate?: Date;
   preselectedUserId?: number;
+  /** Dienstgeruest (01.09.2026): Klick auf einen offenen Platz im Monatsraster
+   *  oeffnet den Dialog mit genau diesem Dienst — samt seiner Standardzeiten —
+   *  bereits ausgewaehlt. Der Nutzer muss dann nur noch die Person waehlen. */
+  preselectedShiftModelId?: number;
   editShift?: ShiftForEdit;
   assistants: Assistant[];
   /**
@@ -335,6 +339,7 @@ export function ShiftDialog({
   onClose,
   preselectedDate,
   preselectedUserId,
+  preselectedShiftModelId,
   editShift,
   assistants,
   capacityByUserId,
@@ -423,6 +428,12 @@ export function ShiftDialog({
     : format(new Date(), "yyyy-MM-dd");
 
   function buildInitialForm(): FormState {
+    // Vorausgewaehlter Dienst schlaegt den Standard-Dienst (firstModel) —
+    // aber nur beim Anlegen; beim Bearbeiten gilt immer der Dienst der Schicht.
+    const vorgewaehlt =
+      !editShift && preselectedShiftModelId != null
+        ? allModels.find((m) => m.id === preselectedShiftModelId)
+        : undefined;
     return {
       userId: editShift ? String(editShift.userId) : preselectedUserId ? String(preselectedUserId) : "",
       // Im Mehrfach-Modus ist das einzelne Datumsfeld bedeutungslos (die Tage
@@ -430,11 +441,13 @@ export function ShiftDialog({
       date: editShift ? toDateString(editShift.startTime) : isBulk ? bulkDates![0] : defaultDate,
       startTime: editShift
         ? toTimeString(editShift.startTime)
-        : firstModel?.defaultStartTime || "08:00",
+        : vorgewaehlt?.defaultStartTime || firstModel?.defaultStartTime || "08:00",
       endTime: editShift
         ? toTimeString(editShift.endTime)
-        : firstModel?.defaultEndTime || "16:00",
-      selection: initialSelection(editShift, firstModelId),
+        : vorgewaehlt?.defaultEndTime || firstModel?.defaultEndTime || "16:00",
+      selection: vorgewaehlt
+        ? `model:${vorgewaehlt.id}`
+        : initialSelection(editShift, firstModelId),
       absenceRangeMode: "full",
       // Beim Bearbeiten den gespeicherten Status übernehmen; neue Schichten
       // starten bewusst als Entwurf (Beginn des Planungs-Workflows).
@@ -533,25 +546,34 @@ export function ShiftDialog({
       setForm(buildInitialForm());
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, editShift?.id, preselectedUserId, preselectedDate, bulkDates]);
+  }, [open, editShift?.id, preselectedUserId, preselectedShiftModelId, preselectedDate, bulkDates]);
 
   // Sobald die Modelle geladen sind, im Anlegen-Modus eine Standardauswahl setzen,
-  // falls der Nutzer noch nichts gewählt hat.
+  // falls der Nutzer noch nichts gewählt hat. Wichtig fuer das Dienstgeruest:
+  // beim Oeffnen ueber einen offenen Platz sind die Modelle oft noch nicht da,
+  // buildInitialForm() findet den vorausgewaehlten Dienst dann nicht — hier
+  // hat er Vorrang vor dem Standard-Dienst, sonst kippt die Vorauswahl still
+  // auf den ersten Dienst der Liste.
   useEffect(() => {
-    if (open && !isEditing && firstModel) {
-      setForm((f) =>
-        f.selection === ""
-          ? {
-              ...f,
-              selection: `model:${firstModel.id}`,
-              startTime: firstModel.defaultStartTime || f.startTime,
-              endTime: firstModel.defaultEndTime || f.endTime,
-            }
-          : f,
-      );
-    }
+    if (!open || isEditing) return;
+    const vorgewaehlt =
+      preselectedShiftModelId != null
+        ? allModels.find((m) => m.id === preselectedShiftModelId)
+        : undefined;
+    const ziel = vorgewaehlt ?? firstModel;
+    if (!ziel) return;
+    setForm((f) =>
+      f.selection === ""
+        ? {
+            ...f,
+            selection: `model:${ziel.id}`,
+            startTime: ziel.defaultStartTime || f.startTime,
+            endTime: ziel.defaultEndTime || f.endTime,
+          }
+        : f,
+    );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, firstModelId, isEditing]);
+  }, [open, firstModelId, isEditing, preselectedShiftModelId, allModels.length]);
 
   function set<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [field]: value }));

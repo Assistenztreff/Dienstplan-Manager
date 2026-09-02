@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { loginViaUi } from "./helpers/auth";
-import { clearUserShiftsAroundDay, pickShiftDialogDate, selectDayCell } from "./helpers/shifts";
+import { clearUserShiftsAroundDay, openShiftRow, pickShiftDialogDate, selectDayCell } from "./helpers/shifts";
 
 /**
  * E2E-Test: Beim Bearbeiten einer bestehenden Schicht werden geänderte Werte
@@ -168,7 +168,7 @@ test.describe("ShiftDialog: Bearbeiten speichert geändertes Datum/Zeit korrekt 
     // --- Schicht im Bearbeiten-Modus öffnen --------------------------------
     const badge = page.getByTestId("schedule-list").getByTestId(`shift-badge-${shiftId}`);
     await expect(badge).toBeVisible();
-    await badge.click();
+    await openShiftRow(page, badge);
 
     const editDialog = page.getByTestId("shift-dialog");
     await expect(editDialog).toBeVisible();

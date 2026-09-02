@@ -4228,7 +4228,7 @@ components:
 
     ShiftModel:
       type: object
-      required: [id, name, valuationPercent, sortOrder, isActive, defaultStartTime, defaultEndTime, defaultWeekdays, compensationType, createdAt]
+      required: [id, name, valuationPercent, sortOrder, isActive, defaultStartTime, defaultEndTime, defaultWeekdays, compensationType, imRegelplan, standbySlot, createdAt]
       properties:
         id:
           type: integer
@@ -4263,6 +4263,21 @@ components:
         compensationFlatCents:
           type: ["integer", "null"]
           description: Festbetrag pro Schicht in Cent bei compensationType=flat.
+        imRegelplan:
+          type: boolean
+          description: >-
+            Gehört der Dienst zum Regelplan? Dann zeichnet das Monatsraster an
+            jedem passenden Tag einen offenen Platz. Rein berechnet — es
+            entstehen dabei keine Datensätze.
+        validFrom:
+          type: ["string", "null"]
+          format: date
+          description: Ab wann die Regelplan-Regel gilt. null = seit jeher.
+        standbySlot:
+          type: boolean
+          description: >-
+            Sieht der Dienst eine vorgemerkte Vertretung vor? Die Vertretungs-
+            zeile erscheint erst, wenn die Assistenz besetzt ist.
         createdAt:
           type: string
           format: date-time
@@ -4307,6 +4322,13 @@ components:
         compensationFlatCents:
           type: ["integer", "null"]
           minimum: 0
+        imRegelplan:
+          type: boolean
+        validFrom:
+          type: ["string", "null"]
+          format: date
+        standbySlot:
+          type: boolean
 
     ShiftModelUpdate:
       type: object
@@ -4344,6 +4366,13 @@ components:
         compensationFlatCents:
           type: ["integer", "null"]
           minimum: 0
+        imRegelplan:
+          type: boolean
+        validFrom:
+          type: ["string", "null"]
+          format: date
+        standbySlot:
+          type: boolean
 
     AllowanceSettings:
       type: object

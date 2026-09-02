@@ -39,6 +39,7 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, GripVertical, Upload, ImageIcon, KeyRound, Mail, User as UserIcon, Lock, CalendarDays, Copy, RefreshCw } from "lucide-react";
@@ -48,6 +49,7 @@ import { logoSrcFromPath, ACCEPTED_LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/logo
 import { readableApiError, planUpgradeMessage, planFeatureMessage, PLAN_FEATURE_MESSAGES } from "@/lib/api-error";
 import { hasAccess, getLimit, isWithinLimit } from "@/lib/entitlements";
 import { PlanLimitBanner, PlanUpgradeLink } from "@/components/plan-limit-banner";
+import { DienstVorlagenDialog } from "@/components/dienst-vorlagen-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAssistantPalette } from "@/lib/use-assistant-palette";
 import { PERSON_SLOTS_LIGHT, PERSON_SLOTS_DARK } from "@/lib/barrierefreie-farben";
@@ -66,6 +68,9 @@ type ShiftModel = {
   compensationFlatCents?: number | null;
   sortOrder: number;
   isActive: boolean;
+  imRegelplan?: boolean;
+  validFrom?: string | null;
+  standbySlot?: boolean;
 };
 
 type FormState = {
@@ -79,6 +84,12 @@ type FormState = {
   compensationFlatEuro: string;
   sortOrder: string;
   isActive: boolean;
+  /** Regelplan (01.09.2026): Nimmt dieser Dienst am Dienstgeruest teil? */
+  imRegelplan: boolean;
+  /** "YYYY-MM-DD" oder "" = seit jeher. */
+  validFrom: string;
+  /** Sieht der Dienst eine vorgemerkte Vertretung vor? */
+  standbySlot: boolean;
 };
 
 const TIME_PATTERN = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
@@ -95,6 +106,11 @@ function emptyForm(nextSort: number): FormState {
     compensationFlatEuro: "",
     sortOrder: String(nextSort),
     isActive: true,
+    // Bestandsschutz: ein neuer Dienst steht erst einmal NICHT im Regelplan.
+    // Wer das Geruest will, schaltet es bewusst ein.
+    imRegelplan: false,
+    validFrom: "",
+    standbySlot: false,
   };
 }
 
@@ -151,6 +167,9 @@ function ModelDialog({ open, onClose, editModel, nextSortOrder, targetTeamId }: 
               : "",
           sortOrder: String(editModel.sortOrder),
           isActive: editModel.isActive,
+          imRegelplan: editModel.imRegelplan ?? false,
+          validFrom: editModel.validFrom ?? "",
+          standbySlot: editModel.standbySlot ?? false,
         }
       : emptyForm(nextSortOrder)
   );
@@ -202,6 +221,10 @@ function ModelDialog({ open, onClose, editModel, nextSortOrder, targetTeamId }: 
             : null,
         sortOrder: Number(form.sortOrder) || 0,
         isActive: form.isActive,
+        imRegelplan: form.imRegelplan,
+        // Leeres Feld = kein Stichtag; der Server erwartet dann null, nicht "".
+        validFrom: form.validFrom ? form.validFrom : null,
+        standbySlot: form.imRegelplan ? form.standbySlot : false,
       };
       if (isEditing && editModel) {
         await updateModel.mutateAsync({ id: editModel.id, data: payload });
@@ -303,6 +326,65 @@ function ModelDialog({ open, onClose, editModel, nextSortOrder, targetTeamId }: 
               Übliche Tage dieses Dienstes. Nur ein Vorschlag im Dienstplan — an anderen Tagen bleibt
               das Anlegen möglich. Keine Auswahl = alle Tage.
             </p>
+          </div>
+
+          {/* ── Regelplan (Dienstgerüst, 01.09.2026) ───────────────────────
+              Steht der Dienst im Regelplan, zeichnet das Monatsraster an
+              jedem passenden Tag einen ausgegrauten offenen Platz. Das ist
+              reine Anzeige: es entstehen KEINE Schichten, und PDF-Export,
+              Stundenliste und Auswertung sehen davon nichts. Standard ist
+              aus — bestehende Dienstpläne verändern sich dadurch nicht. */}
+          <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="model-im-regelplan">Im Regelplan</Label>
+                <p className="text-xs text-muted-foreground">
+                  Das Monatsraster zeigt diesen Dienst an jedem passenden Tag als offenen Platz,
+                  solange er nicht besetzt ist. Ein Klick darauf legt ihn an.
+                </p>
+              </div>
+              <Switch
+                id="model-im-regelplan"
+                data-testid="model-im-regelplan"
+                checked={form.imRegelplan}
+                onCheckedChange={(v) => set("imRegelplan", v)}
+              />
+            </div>
+
+            {form.imRegelplan && (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="model-valid-from">Gilt ab</Label>
+                  <Input
+                    id="model-valid-from"
+                    data-testid="model-valid-from"
+                    type="date"
+                    value={form.validFrom}
+                    onChange={(e) => set("validFrom", e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Optional. Vor diesem Tag bleibt das Raster leer — nützlich, wenn sich der
+                    Regelplan ab einem Stichtag ändert. Leer = seit jeher.
+                  </p>
+                </div>
+
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="model-standby-slot">Vertretung vorsehen</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Unter einem besetzten Dienst erscheint zusätzlich eine flache Zeile für die
+                      vorgemerkte Vertretung — erst dann, denn vorher gibt es nichts zu vertreten.
+                    </p>
+                  </div>
+                  <Switch
+                    id="model-standby-slot"
+                    data-testid="model-standby-slot"
+                    checked={form.standbySlot}
+                    onCheckedChange={(v) => set("standbySlot", v)}
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -1244,6 +1326,9 @@ export default function Einstellungen() {
   // UX-Gate wie bei den Assistenten; autoritativ setzt der Server durch.
   const modelLimit = getLimit(currentUser, "maxShiftModels");
   const canAddModel = isWithinLimit(currentUser, "maxShiftModels", sortedModels.length);
+  // Schicht-Wizard (Baustein 4): Vorlagen-Pakete anlegen. Der Knopf bleibt
+  // auch am Free-Limit klickbar — der Dialog selbst zeigt das Limit VORAB an.
+  const [vorlagenOpen, setVorlagenOpen] = useState(false);
   const nextSortOrder =
     sortedModels.length > 0 ? Math.max(...sortedModels.map((m) => m.sortOrder)) + 10 : 10;
 
@@ -1331,6 +1416,19 @@ export default function Einstellungen() {
         ) : (
           <div />
         )}
+        <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          onClick={() => setVorlagenOpen(true)}
+          className="gap-2"
+          data-testid="model-vorlagen"
+          disabled={!isTeamScopeReady}
+          title="Fertige Dienst-Sätze (24h, Drei-Schicht, ...) mit einem Klick anlegen"
+        >
+          <CalendarDays className="h-4 w-4" />
+          <span className="hidden sm:inline">Aus Vorlage</span>
+          <span className="sm:hidden">Vorlage</span>
+        </Button>
         {canAddModel ? (
           <Button
             onClick={openCreate}
@@ -1354,7 +1452,18 @@ export default function Einstellungen() {
             <span className="sm:hidden">Neu</span>
           </Button>
         )}
+        </div>
       </div>
+
+      <DienstVorlagenDialog
+        open={vorlagenOpen}
+        onClose={() => setVorlagenOpen(false)}
+        vorhandeneNamen={sortedModels.map((m) => m.name)}
+        vorhandeneAnzahl={sortedModels.length}
+        hoechsterSortOrder={sortedModels.reduce((max, m) => Math.max(max, m.sortOrder), 0)}
+        modelLimit={modelLimit}
+        targetTeamId={modelTeamId}
+      />
       {/* Limit-Hinweis (Free-Plan). Bei Premium ist modelLimit null. */}
       {!canAddModel && modelLimit !== null && (
         <PlanLimitBanner>

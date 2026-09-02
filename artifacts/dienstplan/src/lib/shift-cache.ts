@@ -163,6 +163,69 @@ export function upsertShiftsInCache(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Sofort-Anzeige (optimistisch) — Kay-Vorgabe 01.09.2026: Echtzeit
+// ---------------------------------------------------------------------------
+// Gemessen am 01.09.2026: Ein Drop kostete 2 Roundtrips (POST, dann GET), die
+// automatische Planung 5 SEQUENZIELLE POSTs plus 7 GETs — lokal 1 s, auf dem
+// echten Server mit ~1 s Latenz je Roundtrip 12-15 s. Die Rechenzeit war nie
+// das Problem, die Anzahl der Roundtrips war es.
+//
+// Deshalb gilt fuer jeden Schreibvorgang im Dienstplan ab jetzt:
+//   1. Ergebnis SOFORT in den Cache schreiben (vorlaeufige Zeile, temp-ID),
+//      bevor der Server gefragt wird — die Oberflaeche wartet nie auf Latenz.
+//   2. Requests parallel schicken, nie nacheinander.
+//   3. Danach nur die Queries nachladen, die sich wirklich geaendert haben.
+// Schlaegt der Server fehl, nimmt der Aufrufer die vorlaeufige Zeile per
+// removeShiftsFromCache wieder heraus und meldet den Fehler.
+
+let tempZaehler = 0;
+
+/**
+ * Vergibt eine temporaere ID fuer eine noch nicht bestaetigte Schicht.
+ * Negativ, damit sie garantiert nie mit einer echten Server-ID kollidiert —
+ * daran erkennt die Oberflaeche auch, dass die Zeile noch unterwegs ist.
+ */
+export function naechsteTempId(): number {
+  tempZaehler += 1;
+  return -tempZaehler;
+}
+
+/** Ist diese Zeile nur vorlaeufig (noch keine Server-Bestaetigung)? */
+export function istTempId(id: number): boolean {
+  return id < 0;
+}
+
+/**
+ * Nachladen nach dem Anlegen/Umbesetzen eines ARBEITSDIENSTES.
+ *
+ * Bewusst schmaler als invalidateShiftDerivedQueries: Ein Arbeitsdienst
+ * beruehrt weder Urlaubszaehler (/api/contracts) noch Zeiterfassung noch
+ * Abweichungen/Tauschwuensche — nur die beiden Salden des Stundenkontos. Die
+ * Schicht-Listen selbst sind durch upsertShiftsInCache bereits korrekt und
+ * werden daher nur als veraltet MARKIERT (refetchType "none"), statt einen
+ * ganzen Monat erneut zu laden. Das spart auf einer langsamen Verbindung
+ * fuenf von sieben Roundtrips.
+ *
+ * Fuer Abwesenheiten weiter invalidateShiftDerivedQueries verwenden — die
+ * wirken tatsaechlich auf Urlaubskonto und Zeiterfassung.
+ */
+export function invalidateArbeitsdienstSalden(queryClient: QueryClient): Promise<void> {
+  void queryClient.invalidateQueries({
+    predicate: (q) => q.queryKey[0] === "/api/shifts",
+    refetchType: "none",
+  });
+  return queryClient.invalidateQueries({
+    predicate: (q) => {
+      const key = q.queryKey[0];
+      return (
+        key === "/api/dashboard/hours-balance" || key === "/api/dashboard/hour-budget-balance"
+      );
+    },
+    refetchType: "active",
+  });
+}
+
 /**
  * Key-Präfixe aller Queries, deren Daten von Schichten/Abwesenheiten
  * abgeleitet sind: Listen selbst, Verträge (Urlaubszähler inkl.

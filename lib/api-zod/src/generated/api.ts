@@ -1191,6 +1191,9 @@ export const ListShiftModelsResponseItem = zod.object({
   "compensationType": zod.enum(['regular', 'percentage', 'flat']).describe('Vergütungstyp (Geld) — regulär, prozentualer Stundenlohn oder Festbetrag pro Schicht.'),
   "compensationPercent": zod.number().nullish().describe('Prozentsatz des Stundenlohns bei compensationType=percentage.'),
   "compensationFlatCents": zod.number().nullish().describe('Festbetrag pro Schicht in Cent bei compensationType=flat.'),
+  "imRegelplan": zod.boolean().describe('Gehört der Dienst zum Regelplan? Dann zeichnet das Monatsraster an jedem passenden Tag einen offenen Platz. Rein berechnet — es entstehen dabei keine Datensätze.'),
+  "validFrom": zod.coerce.date().nullish().describe('Ab wann die Regelplan-Regel gilt. null = seit jeher.'),
+  "standbySlot": zod.boolean().describe('Sieht der Dienst eine vorgemerkte Vertretung vor? Die Vertretungs- zeile erscheint erst, wenn die Assistenz besetzt ist.'),
   "createdAt": zod.coerce.date()
 })
 export const ListShiftModelsResponse = zod.array(ListShiftModelsResponseItem)
@@ -1224,7 +1227,10 @@ export const CreateShiftModelBody = zod.object({
   "defaultWeekdays": zod.array(zod.number().min(1).max(createShiftModelBodyDefaultWeekdaysItemMax)).optional(),
   "compensationType": zod.enum(['regular', 'percentage', 'flat']).optional(),
   "compensationPercent": zod.number().min(createShiftModelBodyCompensationPercentMin).nullish(),
-  "compensationFlatCents": zod.number().min(createShiftModelBodyCompensationFlatCentsMin).nullish()
+  "compensationFlatCents": zod.number().min(createShiftModelBodyCompensationFlatCentsMin).nullish(),
+  "imRegelplan": zod.boolean().optional(),
+  "validFrom": zod.coerce.date().nullish(),
+  "standbySlot": zod.boolean().optional()
 })
 
 
@@ -1259,7 +1265,10 @@ export const UpdateShiftModelBody = zod.object({
   "defaultWeekdays": zod.array(zod.number().min(1).max(updateShiftModelBodyDefaultWeekdaysItemMax)).optional(),
   "compensationType": zod.enum(['regular', 'percentage', 'flat']).optional(),
   "compensationPercent": zod.number().min(updateShiftModelBodyCompensationPercentMin).nullish(),
-  "compensationFlatCents": zod.number().min(updateShiftModelBodyCompensationFlatCentsMin).nullish()
+  "compensationFlatCents": zod.number().min(updateShiftModelBodyCompensationFlatCentsMin).nullish(),
+  "imRegelplan": zod.boolean().optional(),
+  "validFrom": zod.coerce.date().nullish(),
+  "standbySlot": zod.boolean().optional()
 })
 
 export const updateShiftModelResponseDefaultWeekdaysItemMax = 7;
@@ -1278,6 +1287,9 @@ export const UpdateShiftModelResponse = zod.object({
   "compensationType": zod.enum(['regular', 'percentage', 'flat']).describe('Vergütungstyp (Geld) — regulär, prozentualer Stundenlohn oder Festbetrag pro Schicht.'),
   "compensationPercent": zod.number().nullish().describe('Prozentsatz des Stundenlohns bei compensationType=percentage.'),
   "compensationFlatCents": zod.number().nullish().describe('Festbetrag pro Schicht in Cent bei compensationType=flat.'),
+  "imRegelplan": zod.boolean().describe('Gehört der Dienst zum Regelplan? Dann zeichnet das Monatsraster an jedem passenden Tag einen offenen Platz. Rein berechnet — es entstehen dabei keine Datensätze.'),
+  "validFrom": zod.coerce.date().nullish().describe('Ab wann die Regelplan-Regel gilt. null = seit jeher.'),
+  "standbySlot": zod.boolean().describe('Sieht der Dienst eine vorgemerkte Vertretung vor? Die Vertretungs- zeile erscheint erst, wenn die Assistenz besetzt ist.'),
   "createdAt": zod.coerce.date()
 })
 

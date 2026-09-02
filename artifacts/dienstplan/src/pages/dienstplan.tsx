@@ -6,6 +6,8 @@ import {
   useListShifts,
   useListUsers,
   useListShiftModels,
+  useCreateShift,
+  useDeleteShift,
   useUpdateShift,
   useSendShiftProposals,
   useBulkConfirmOwnShifts,
@@ -21,6 +23,7 @@ import {
   useDisputeShiftDeviation,
   useGetHourBudgetBalance,
   type ShiftInputType,
+  type ShiftInput,
   type User,
   type ShiftModel,
   type HoursBalance,
@@ -37,6 +40,7 @@ import { Check, X, CalendarPlus, Trash2, Pencil, ChevronsLeft } from "lucide-rea
 import { ShiftDialog } from "@/components/shift-dialog";
 import { useVertretungAktivieren } from "@/lib/vertretung-aktivieren";
 import { BulkDeleteDialog } from "@/components/bulk-delete-dialog";
+import { AutoplanungDialog } from "@/components/autoplanung-dialog";
 import { BulkEditDialog } from "@/components/bulk-edit-dialog";
 import { useTeam } from "@/context/team";
 import { useAuth, hasTeamAccessLevel } from "@/context/auth";
@@ -71,7 +75,11 @@ import {
   REFERENCE_DATA_STALE_TIME_MS,
   prefetchAdjacentMonthShifts,
   upsertShiftsInCache,
+  removeShiftsFromCache,
   invalidateShiftDerivedQueries,
+  invalidateArbeitsdienstSalden,
+  naechsteTempId,
+  type CachedShiftRow,
 } from "@/lib/shift-cache";
 import {
   istSeitherKorrigiert,
@@ -91,6 +99,14 @@ import {
 import { StatusBadge } from "@/components/status-badge";
 import { CorrectedShiftsProvider } from "./corrected-shifts";
 import { MonthGrid } from "./month-grid";
+import type { GeruestDienst } from "@/lib/dienstgeruest";
+import {
+  DienstplanDnd,
+  type DragEndEvent as DndDragEndEvent,
+  type DragStartEvent as DndDragStartEvent,
+  type PersonZug,
+  type ZugZiel,
+} from "@/components/dienstplan-dnd";
 import type { DeviationReportValues } from "./deviation-dialog";
 import { readableApiError } from "@/lib/api-error";
 import { ScheduleList } from "./schedule-list";
@@ -419,6 +435,10 @@ export default function Dienstplan() {
   }, [queryClient, month, year, selectedTeamId, isTeamScopeReady]);
 
   const updateShift = useUpdateShift();
+  // Drag-and-Drop (Baustein 2): Anlegen auf offenem Platz, Ersetzen auf
+  // besetzter Pille — beides mit Rueckgaengig direkt im Hinweis.
+  const createShiftPerDnd = useCreateShift();
+  const deleteShiftPerDnd = useDeleteShift();
   const { frageVertretung: handleVertretungsVorschlag } = useVertretungAktivieren();
   const sendProposalsMutation = useSendShiftProposals();
   const bulkConfirmOwnMutation = useBulkConfirmOwnShifts();
@@ -475,6 +495,10 @@ export default function Dienstplan() {
   // bisherigen Einzel-Filter (selectedAssistant oben) — "unverändert" ist
   // hier Teil der Anforderung, kein Zufall.
   const canSeeStundenkonto = isAdmin && hasAccess(currentUser, "advancedAnalytics");
+  // Automatische Planung (Baustein 3): reines UI-Gate — der Assistent nutzt
+  // nur Endpunkte, die ein Planer ohnehin aufrufen darf (POST /shifts/bulk).
+  const canAutoPlan = canPlan && hasAccess(currentUser, "autoScheduling");
+  const [autoplanungOpen, setAutoplanungOpen] = useState(false);
   const {
     selectedUserIds: multiSelectedUserIds,
     toggleUser: toggleStundenkontoUser,
@@ -569,6 +593,32 @@ export default function Dienstplan() {
     (shiftModels ?? []).map((m) => [m.id, { name: m.name }])
   );
 
+  // ── Dienstgeruest (Kay-Entscheidung 01.09.2026) ───────────────────────────
+  // Die Dienste, die am Regelplan teilnehmen — daraus berechnet das
+  // Monatsraster je Tag die noch offenen Plaetze. Reine Anzeige: es entstehen
+  // dabei keine Schichten, PDF-Export, Stundenliste und Auswertung sehen davon
+  // nichts. Sortierreihenfolge zaehlt: Frueh/Spaet/Nacht sollen an jedem Tag
+  // in derselben Ordnung untereinander stehen.
+  const geruestDienste = useMemo<GeruestDienst[]>(
+    () =>
+      (shiftModels ?? [])
+        .filter((m) => m.isActive && m.imRegelplan)
+        .slice()
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((m) => ({
+          id: m.id,
+          name: m.name,
+          defaultStartTime: m.defaultStartTime,
+          defaultEndTime: m.defaultEndTime,
+          defaultWeekdays: m.defaultWeekdays ?? [],
+          isActive: m.isActive,
+          imRegelplan: m.imRegelplan,
+          validFrom: m.validFrom ?? null,
+          standbySlot: m.standbySlot,
+        })),
+    [shiftModels],
+  );
+
   const allShifts: Shift[] = shifts ?? [];
 
   // Kapazitäts-Ampel für die Vertretungs-Auswahl im ShiftDialog (Kay-Feedback
@@ -621,7 +671,7 @@ export default function Dienstplan() {
   // optisch leicht abgedunkelt (siehe Content-Wrapper weiter unten).
   const isTransitioning = shiftsFetching && !isLoading;
 
-  function openCreate(date: Date, userId?: number) {
+  function openCreate(date: Date, userId?: number, shiftModelId?: number) {
     if (!canPlan) return;
     if (forwardLimit !== null && monthsAhead(date, new Date()) > forwardLimit) {
       toast.error(
@@ -646,7 +696,7 @@ export default function Dienstplan() {
         return;
       }
     }
-    setDialog({ mode: "create", date, userId });
+    setDialog({ mode: "create", date, userId, shiftModelId });
   }
 
   function openEdit(shift: Shift) {
@@ -682,6 +732,235 @@ export default function Dienstplan() {
       toast.error("Bestätigen fehlgeschlagen. Bitte erneut versuchen.");
     } finally {
       setConfirmingShiftId(null);
+    }
+  }
+
+  // ── Drag-and-Drop (Baustein 2, Kay-Entscheidung 01.09.2026) ──────────────
+  // Eine Zeitkonto-Pille wird auf das Raster gezogen. Zwei Zielarten:
+  //   offener Platz  -> Dienst als ENTWURF anlegen (Zeiten des Platzes),
+  //   besetzte Pille -> die gezogene Person uebernimmt den Dienst.
+  // Beide Wege haben ein Rueckgaengig direkt im Hinweis — Ersetzen ist damit
+  // gefahrlos, obwohl keine Nachfrage dazwischen liegt (Kay: lieber fluessig
+  // arbeiten und im Zweifel zurueknoepfen als jedes Mal bestaetigen).
+  const [gezogenePerson, setGezogenePerson] = useState<PersonZug | null>(null);
+
+  function dndAbwesendGemeldet(userId: number, datum: string, name: string): boolean {
+    if (!absenceByUser.get(userId)?.has(datum)) return false;
+    const vorname = name.trim().split(/\s+/)[0];
+    toast.info(`${vorname} ist an diesem Tag abwesend.`);
+    return true;
+  }
+
+  async function handleDndDrop(event: DndDragEndEvent) {
+    const person = gezogenePerson;
+    setGezogenePerson(null);
+    const ziel = event.over?.data.current as ZugZiel | undefined;
+    if (!person || !ziel || !canPlan) return;
+
+    if (ziel.art === "platz") {
+      // Dieselben Wachposten wie openCreate: Vorausplanungs-Limit + Abwesenheit.
+      const zielTag = new Date(`${ziel.datum}T00:00:00`);
+      if (forwardLimit !== null && monthsAhead(zielTag, new Date()) > forwardLimit) {
+        toast.error(
+          "Im Free-Tarif nur bis nächsten Monat planbar. Für eine längere Vorausplanung auf Premium upgraden.",
+          { action: { label: "Zu Premium", onClick: () => navigate("/preise") } },
+        );
+        return;
+      }
+      if (dndAbwesendGemeldet(person.userId, ziel.datum, person.name)) return;
+
+      // Zeiten des Platzes: Ende gleich Start = 24h-Dienst, Ende vor Start =
+      // Tagesuebergang — identisch zur Logik des Dienst-Dialogs (buildTimes).
+      const start = new Date(`${ziel.datum}T${ziel.startTime}:00`);
+      const ende = new Date(`${ziel.datum}T${ziel.endTime}:00`);
+      if (ziel.endTime <= ziel.startTime) ende.setDate(ende.getDate() + 1);
+      // Sofort anzeigen (Kay-Vorgabe 01.09.2026): Die Pille steht im Raster,
+      // BEVOR der Server gefragt wird — bei ~1 s Latenz war das vorher eine
+      // volle Sekunde Warten auf ein Ergebnis, das schon feststand.
+      const tempId = naechsteTempId();
+      upsertShiftsInCache(
+        queryClient,
+        [
+          {
+            id: tempId,
+            userId: person.userId,
+            type: "work",
+            startTime: start.toISOString(),
+            endTime: ende.toISOString(),
+            planningStatus: "VORLAEUFIG",
+            shiftModelId: ziel.dienstId,
+            user: { name: person.name },
+            istVorlaeufig: true,
+          } as unknown as CachedShiftRow,
+        ],
+        selectedTeamId,
+      );
+      try {
+        const created = await createShiftPerDnd.mutateAsync({
+          data: {
+            userId: person.userId,
+            startTime: start.toISOString(),
+            endTime: ende.toISOString(),
+            type: "work",
+            planningStatus: "VORLAEUFIG",
+            shiftModelId: ziel.dienstId,
+            ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
+          } as ShiftInput,
+        });
+        // Vorlaeufige Zeile gegen die echte tauschen.
+        removeShiftsFromCache(queryClient, [tempId]);
+        upsertShiftsInCache(queryClient, [created], selectedTeamId);
+        void invalidateArbeitsdienstSalden(queryClient);
+        const vorname = person.name.trim().split(/\s+/)[0];
+        toast.success(`${vorname} eingeplant — als Entwurf.`, {
+          action: {
+            label: "Rückgängig",
+            onClick: () => {
+              // Auch hier sofort: erst aus dem Raster nehmen, dann loeschen.
+              removeShiftsFromCache(queryClient, [created.id]);
+              void deleteShiftPerDnd
+                .mutateAsync({ id: created.id })
+                .then(() => void invalidateArbeitsdienstSalden(queryClient))
+                .catch(() => {
+                  // Fehlgeschlagen: die Zeile gehoert zurueck ins Raster.
+                  upsertShiftsInCache(queryClient, [created], selectedTeamId);
+                  toast.error("Rückgängig fehlgeschlagen. Bitte erneut versuchen.");
+                });
+            },
+          },
+        });
+      } catch (err) {
+        // Zuruecknehmen, was wir vorgegriffen haben.
+        removeShiftsFromCache(queryClient, [tempId]);
+        if (!navigator.onLine) return;
+        toast.error(
+          readableApiError(err, "Einplanen fehlgeschlagen. Bitte erneut versuchen."),
+        );
+      }
+      return;
+    }
+
+    const shift = allShifts.find((sh) => sh.id === ziel.shiftId);
+    if (!shift) return;
+    if (isMirrorShift(shift, selectedTeamId)) {
+      toast.info(
+        `Aushilfe-Einsatz aus ${shift.homeTeamName ?? "einem anderen Team"} — bearbeiten im Stammteam.`,
+      );
+      return;
+    }
+    const datum = format(new Date(shift.startTime), "yyyy-MM-dd");
+
+    // ── Vertretung VORMERKEN (Ziel: die Vertretungszeile) ─────────────────
+    // Fachlich etwas ganz anderes als das Ersetzen: Der Dienst bleibt bei
+    // seiner Person, die gezogene Kraft wird nur fuer den Ausfall-Fall
+    // vorgemerkt. Deshalb greift hier auch KEINE Abwesenheitspruefung fuer
+    // den Tag — eine Vormerkung ist eine Planungshilfe, kein Einsatz.
+    if (ziel.art === "vertretung") {
+      if (shift.userId === person.userId) {
+        toast.info("Diese Person hat den Dienst bereits — als eigene Vertretung ergibt das nichts.");
+        return;
+      }
+      if (shift.standbyUserId === person.userId) return; // schon vorgemerkt
+      const vorherStandbyId = shift.standbyUserId ?? null;
+      const vorherStandbyName = shift.standbyUserName ?? null;
+      upsertShiftsInCache(
+        queryClient,
+        [
+          {
+            ...shift,
+            standbyUserId: person.userId,
+            standbyUserName: person.name,
+          } as unknown as CachedShiftRow,
+        ],
+        selectedTeamId,
+      );
+      try {
+        const updated = await updateShift.mutateAsync({
+          id: shift.id,
+          data: { standbyUserId: person.userId } as { standbyUserId: number },
+        });
+        upsertShiftsInCache(queryClient, [updated], selectedTeamId);
+        const vorname = person.name.trim().split(/\s+/)[0];
+        toast.success(`${vorname} als Vertretung vorgemerkt.`, {
+          action: {
+            label: "Rückgängig",
+            onClick: () => {
+              upsertShiftsInCache(
+                queryClient,
+                [
+                  {
+                    ...shift,
+                    standbyUserId: vorherStandbyId,
+                    standbyUserName: vorherStandbyName,
+                  } as unknown as CachedShiftRow,
+                ],
+                selectedTeamId,
+              );
+              void updateShift
+                .mutateAsync({
+                  id: shift.id,
+                  data: { standbyUserId: vorherStandbyId } as { standbyUserId: number | null },
+                })
+                .then((zurueck) => upsertShiftsInCache(queryClient, [zurueck], selectedTeamId))
+                .catch(() => {
+                  upsertShiftsInCache(queryClient, [updated], selectedTeamId);
+                  toast.error("Rückgängig fehlgeschlagen. Bitte erneut versuchen.");
+                });
+            },
+          },
+        });
+      } catch (err) {
+        upsertShiftsInCache(queryClient, [shift as unknown as CachedShiftRow], selectedTeamId);
+        if (!navigator.onLine) return;
+        toast.error(readableApiError(err, "Vormerken fehlgeschlagen. Bitte erneut versuchen."));
+      }
+      return;
+    }
+
+    // ── Ersetzen: gezogene Person uebernimmt den Dienst ───────────────────
+    if (shift.userId === person.userId) return; // nichts zu tun
+    if (dndAbwesendGemeldet(person.userId, datum, person.name)) return;
+
+    const vorherigeUserId = shift.userId;
+    const vorherigerName = shift.user?.name ?? "";
+    // Sofort umbesetzen, dann bestaetigen lassen (s. Kommentar oben).
+    upsertShiftsInCache(
+      queryClient,
+      [{ ...shift, userId: person.userId, user: { name: person.name } } as unknown as CachedShiftRow],
+      selectedTeamId,
+    );
+    try {
+      const updated = await updateShift.mutateAsync({
+        id: shift.id,
+        data: { userId: person.userId } as { userId: number },
+      });
+      upsertShiftsInCache(queryClient, [updated], selectedTeamId);
+      void invalidateArbeitsdienstSalden(queryClient);
+      const vorname = person.name.trim().split(/\s+/)[0];
+      const vorherVorname = vorherigerName.trim().split(/\s+/)[0] || "die bisherige Person";
+      toast.success(`${vorname} übernimmt den Dienst von ${vorherVorname}.`, {
+        action: {
+          label: "Rückgängig",
+          onClick: () => {
+            upsertShiftsInCache(queryClient, [shift as unknown as CachedShiftRow], selectedTeamId);
+            void updateShift
+              .mutateAsync({ id: shift.id, data: { userId: vorherigeUserId } as { userId: number } })
+              .then((zurueck) => {
+                upsertShiftsInCache(queryClient, [zurueck], selectedTeamId);
+                void invalidateArbeitsdienstSalden(queryClient);
+              })
+              .catch(() => {
+                upsertShiftsInCache(queryClient, [updated], selectedTeamId);
+                toast.error("Rückgängig fehlgeschlagen. Bitte erneut versuchen.");
+              });
+          },
+        },
+      });
+    } catch (err) {
+      // Umbesetzung zuruecknehmen: die urspruengliche Zeile wieder herstellen.
+      upsertShiftsInCache(queryClient, [shift as unknown as CachedShiftRow], selectedTeamId);
+      if (!navigator.onLine) return;
+      toast.error(readableApiError(err, "Ersetzen fehlgeschlagen. Bitte erneut versuchen."));
     }
   }
 
@@ -1006,6 +1285,8 @@ export default function Dienstplan() {
       canSeeStundenkonto={canSeeStundenkonto}
       stundenkontoOpen={stundenkontoOpen}
       onToggleStundenkonto={() => setStundenkontoOpenFlag(stundenkontoOpen ? "0" : "1")}
+      canAutoPlan={canAutoPlan}
+      onAutoPlanung={() => setAutoplanungOpen(true)}
     />
   );
 
@@ -1030,6 +1311,14 @@ export default function Dienstplan() {
   return (
     <PersonColorsContext.Provider value={personColors}>
     <CorrectedShiftsProvider shiftIds={correctedShiftIds}>
+    <DienstplanDnd
+      aktiv={canPlan && canSeeStundenkonto}
+      gezogen={gezogenePerson}
+      onDragStart={(e: DndDragStartEvent) =>
+        setGezogenePerson((e.active.data.current as PersonZug | undefined) ?? null)
+      }
+      onDragEnd={(e) => void handleDndDrop(e)}
+    >
     <div className="flex flex-col gap-3 animate-in fade-in duration-300">
       {header}
 
@@ -1081,6 +1370,7 @@ export default function Dienstplan() {
               sortMode={stundenkontoSort}
               onToggleSort={toggleStundenkontoSort}
               minimal
+              dndBereich="mobil"
             />
           </div>
         )}
@@ -1097,7 +1387,7 @@ export default function Dienstplan() {
             modelMap={modelMap}
             selectedDay={selectedDay}
             onSelectDay={setSelectedDay}
-            onAddShift={(day) => openCreate(day)}
+            onAddShift={(day, shiftModelId) => openCreate(day, undefined, shiftModelId)}
             onShiftClick={openEdit}
             onConfirmShift={confirmShift}
             canEdit={canPlan}
@@ -1109,6 +1399,8 @@ export default function Dienstplan() {
             onFocusDateHandled={() => setMonthGridFocusDate(null)}
             variant="collapsed"
             onCollapsedDayActivate={scrollToAgendaDay}
+            geruestDienste={geruestDienste}
+            dndBereich="mobil"
           />
         )}
         </div>
@@ -1132,6 +1424,7 @@ export default function Dienstplan() {
               budget={hourBudget}
               sortMode={stundenkontoSort}
               onToggleSort={toggleStundenkontoSort}
+              dndBereich="reihe"
             />
           </div>
         )}
@@ -1145,7 +1438,7 @@ export default function Dienstplan() {
             modelMap={modelMap}
             selectedDay={selectedDay}
             onSelectDay={setSelectedDay}
-            onAddShift={(day) => openCreate(day)}
+            onAddShift={(day, shiftModelId) => openCreate(day, undefined, shiftModelId)}
             onShiftClick={openEdit}
             onConfirmShift={confirmShift}
             canEdit={canPlan}
@@ -1156,6 +1449,8 @@ export default function Dienstplan() {
             focusDate={monthGridFocusDate}
             onFocusDateHandled={() => setMonthGridFocusDate(null)}
             pillMinimiert={pillMinimiert}
+            geruestDienste={geruestDienste}
+            dndBereich="desktop"
           />
         ) : (
           <DienstplanTableView
@@ -1199,6 +1494,7 @@ export default function Dienstplan() {
                 budget={hourBudget}
                 sortMode={stundenkontoSort}
                 onToggleSort={toggleStundenkontoSort}
+                dndBereich="panel"
               />
             </div>
           ) : (
@@ -1338,6 +1634,7 @@ export default function Dienstplan() {
           onClose={closeDialog}
           preselectedDate={dialog.mode === "create" ? dialog.date : undefined}
           preselectedUserId={dialog.mode === "create" ? dialog.userId : undefined}
+          preselectedShiftModelId={dialog.mode === "create" ? dialog.shiftModelId : undefined}
           editShift={dialog.mode === "edit" ? dialog.shift : undefined}
           bulkDates={dialog.mode === "bulk-create" ? dialog.dates : undefined}
           onSaved={() => {
@@ -1410,6 +1707,21 @@ export default function Dienstplan() {
         </AlertDialog>
       )}
 
+      {canPlan && canAutoPlan && (
+        <AutoplanungDialog
+          open={autoplanungOpen}
+          onClose={() => setAutoplanungOpen(false)}
+          geruestDienste={geruestDienste}
+          days={days}
+          monatsLabel={format(currentDate, "MMMM yyyy", { locale: de })}
+          shifts={allShifts.filter((s) => !isMirrorShift(s, selectedTeamId))}
+          assistants={assistants}
+          absenceByUser={absenceByUser}
+          eintraege={stundenkontoEintraege}
+          teamId={selectedTeamId}
+        />
+      )}
+
       {canPlan && (
         <BulkDeleteDialog
           open={dialog.mode === "bulk-delete"}
@@ -1424,6 +1736,7 @@ export default function Dienstplan() {
         />
       )}
     </div>
+    </DienstplanDnd>
     </CorrectedShiftsProvider>
     </PersonColorsContext.Provider>
   );

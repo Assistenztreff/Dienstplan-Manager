@@ -52,6 +52,8 @@ Thumbs.db
 # Hochgeladene Assets (nur lokal, nicht versioniert)
 attached_assets/
 
-# Playwright-Artefakte, wenn die Suite versehentlich aus dem Wurzelverzeichnis
-# statt aus artifacts/dienstplan laeuft (dort ist test-results/ schon ignoriert)
+# Playwright-Laufausgaben (Screenshots, Traces, Fehlerkontext je Fehlschlag).
+# Ohne Pfad-Praefix, damit sie auch greifen, wenn die Suite versehentlich aus
+# dem Wurzelverzeichnis statt aus artifacts/dienstplan laeuft.
 test-results/
+playwright-report/

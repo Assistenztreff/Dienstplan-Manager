@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ZiehbarePerson } from "@/components/dienstplan-dnd";
 import { buildPersonColorAssignment, userInitialsClass, nameInitials } from "@/lib/shift-model-colors";
 import { formatHours } from "@/lib/utils";
 import { StatusBadge, STATUS_BADGE_COLORS, type StatusBadgeKind } from "@/components/status-badge";
@@ -35,6 +36,11 @@ export type StundenkontoProps = {
    *  sonst die Plus-/Minusstunden) — Status-Badge sowie Vertrags-/Geplant-
    *  Stunden entfallen, da auf dem Smartphone kein Platz für Details ist. */
   minimal?: boolean;
+  /** Praefix fuer die Drag-and-Drop-Quellen-IDs (Baustein 2, 01.09.2026):
+   *  Panel, Desktop-Reihe und mobile Reihe stehen zeitgleich im DOM — ohne
+   *  Praefix wuerden sich ihre dnd-kit-IDs ueberschreiben. Ohne Wert wird
+   *  nichts ziehbar (z. B. ausserhalb des Dienstplans). */
+  dndBereich?: string;
 };
 
 function formatBalance(b: number) {
@@ -517,6 +523,7 @@ export function StundenkontoPanel({
   budget,
   sortMode = "name",
   onToggleSort,
+  dndBereich,
 }: StundenkontoProps) {
   const personColors = useMemo(
     () => buildPersonColorAssignment(assistants.map((a) => a.id)),
@@ -569,8 +576,14 @@ export function StundenkontoPanel({
             const status = e.status;
 
             return (
-              <button
+              <ZiehbarePerson
                 key={e.id}
+                bereich={dndBereich}
+                userId={e.id}
+                name={e.name}
+                className="block w-full"
+              >
+              <button
                 type="button"
                 data-testid={`stundenkonto-pill-${e.id}`}
                 aria-pressed={isSelected}
@@ -641,6 +654,7 @@ export function StundenkontoPanel({
                   </span>
                 )}
               </button>
+              </ZiehbarePerson>
             );
           })
         )}
@@ -663,7 +677,8 @@ export function StundenkontoReihe({
   budget,
   sortMode = "name",
   onToggleSort,
-  minimal = false
+  minimal = false,
+  dndBereich,
 }: StundenkontoProps) {
   const personColors = useMemo(
     () => buildPersonColorAssignment(assistants.map((a) => a.id)),
@@ -675,7 +690,12 @@ export function StundenkontoReihe({
     <div className="flex flex-col">
       <StundenkontoKopf budget={budget} sortMode={sortMode} onToggleSort={onToggleSort} />
       <div
-        className="flex flex-row items-center gap-2 overflow-x-auto whitespace-nowrap py-2 px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        // Kay-Befund 01.09.2026: Die Reihe scrollte zwar (overflow-x-auto),
+        // aber die Bildlaufleiste war komplett ausgeblendet — am Desktop mit
+        // Maus gab es damit KEINEN Weg zu den hinteren Pillen (kein Rad-
+        // Mapping, nichts zum Anfassen). Jetzt eine duenne, dezente Leiste
+        // in Rahmengrau; Touch-Geraete wischen weiterhin einfach.
+        className="flex flex-row items-center gap-2 overflow-x-auto whitespace-nowrap py-2 px-4 [scrollbar-width:thin] [scrollbar-color:#c7ced8_transparent] [&::-webkit-scrollbar]:h-[6px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#c7ced8]"
         role="group"
         aria-label="Assistenzkräfte filtern"
       >
@@ -705,8 +725,14 @@ export function StundenkontoReihe({
             const balanced = Math.abs(e.balance) < 0.05;
 
             return (
-              <button
+              <ZiehbarePerson
                 key={e.id}
+                bereich={dndBereich}
+                userId={e.id}
+                name={e.name}
+                className="shrink-0 flex"
+              >
+              <button
                 type="button"
                 data-testid={`stundenkonto-pill-${e.id}`}
                 aria-pressed={isSelected}
@@ -726,7 +752,10 @@ export function StundenkontoReihe({
                     bleibt die Spur leer (nichts zu messen). */}
                 <div aria-hidden="true" className="absolute left-0 right-0 bottom-0 h-[3px] bg-muted">
                   <div
-                    className="h-full bg-assistenz-brand transition-[width] duration-200"
+                    // Kay-Entscheidung 01.09.2026: neutraler grauer Balken
+                    // statt Markendunkelblau — der Fuellstand ist eine stille
+                    // Hintergrund-Information, keine Aktionsfarbe.
+                    className="h-full bg-[#8f9cad] transition-[width] duration-200"
                     style={{ width: `${fortschrittProzent(e)}%` }}
                   />
                 </div>
@@ -764,26 +793,23 @@ export function StundenkontoReihe({
                     )}
                   </>
                 ) : (
+                  /* Kay-Entscheidung 01.09.2026: kurze Pille. Die Stunden-
+                     Aufzaehlung (Vertrag/verplant/Entwurf, je Icon + Zahl)
+                     machte jede Pille ~176 px lang — bei einem vollen Team
+                     war die Reihe damit endlos. Es bleiben Avatar, Name,
+                     Status, Entwurfs-Stift und die Bilanz; die vollstaendigen
+                     Stunden stehen im Tooltip (pillTitle) und im seitlichen
+                     Panel der breiten Ansicht. */
                   <>
                     {status.hasShifts && (
                       <StatusBadge kind={status.kind} label={status.label} compact />
                     )}
-
-                    <span className="flex items-center gap-0.5 text-xs leading-none text-muted-foreground">
-                      <FileSignature className="w-3 h-3 shrink-0" aria-hidden="true" />
-                      {e.hasContract ? `${formatHours(e.contractTarget)} h` : "—"}
-                    </span>
-                    <span className="flex items-center gap-0.5 text-xs leading-none text-muted-foreground">
-                      <CalendarClock className="w-3 h-3 shrink-0" aria-hidden="true" />
-                      {formatHours(e.verplant)} h
-                    </span>
                     {e.entwurf > 0 && (
-                      <span className="flex items-center gap-0.5 text-xs leading-none text-muted-foreground">
-                        <PencilLine className="w-3 h-3 shrink-0" aria-hidden="true" />
-                        {formatHours(e.entwurf)} h
-                      </span>
+                      <PencilLine
+                        className="w-3 h-3 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
                     )}
-
                     {e.hasContract ? (
                       <span
                         className={`flex items-center gap-0.5 text-xs font-semibold tabular-nums leading-none ${e.balance > 0 ? "text-green-600" : e.balance < 0 ? "text-amber-600" : "text-muted-foreground"}`}
@@ -799,6 +825,7 @@ export function StundenkontoReihe({
                   </>
                 )}
               </button>
+              </ZiehbarePerson>
             );
           })
         )}

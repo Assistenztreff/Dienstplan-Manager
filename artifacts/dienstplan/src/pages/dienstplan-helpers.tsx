@@ -62,6 +62,14 @@ export type Shift = {
    * Quelle der Abwesenheits-Stunden im Stundenkonto (stundenkonto-leiste.tsx).
    */
   valuedHours?: number | null;
+  /**
+   * Nur lokal: Diese Zeile wurde optimistisch eingefuegt und wartet noch auf
+   * die Server-Bestaetigung (siehe naechsteTempId in lib/shift-cache.ts).
+   * Sie sieht aus wie eine echte Pille, laesst sich aber nicht anklicken —
+   * ihre ID gibt es serverseitig noch nicht. Das Fenster ist im Normalfall
+   * deutlich unter einer Sekunde lang.
+   */
+  istVorlaeufig?: boolean;
 };
 
 export const PLANNING_STATUS_LABELS: Record<string, string> = {
@@ -235,6 +243,42 @@ export function PillAvatar({ color, label }: { color: string; label: string }) {
       style={{ backgroundColor: color }}
     >
       {label}
+    </span>
+  );
+}
+
+/** Platzhalter-Avatar fuer einen OFFENEN Platz des Dienstgeruests: gestrichelter
+ *  Umriss-Kreis mit Plus, exakt so gross wie PillAvatar (17x17 px), damit die
+ *  leere Pille buendig unter einer besetzten steht. Kein Statusfarbwert — der
+ *  Platz hat keinen Status, er ist schlicht noch nicht vergeben. */
+export function PlatzAvatar({ klein = false }: { klein?: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={[
+        "flex shrink-0 items-center justify-center rounded-full border border-dashed border-[#8f9cad] font-bold leading-none text-[#5b6675]",
+        // klein: Smartphone-Platzhalter — neben dem 17px-Kreis bliebe in der
+        // ~48px-Pille kein lesbarer Platz mehr fuer die Uhrzeit.
+        klein ? "h-[12px] w-[12px] text-[9px]" : "h-[17px] w-[17px] text-[10px]",
+      ].join(" ")}
+    >
+      +
+    </span>
+  );
+}
+
+/** Umriss-Kreis fuer eine VORGEMERKTE Vertretung in den einzeiligen Pillen
+ *  (minimiert/Smartphone). Dort ist keine eigene Vertretungszeile moeglich,
+ *  deshalb liegt der gefuellte Assistenz-Avatar 7 px ueberlappend DARUEBER —
+ *  Kay-Entscheidung 30.08.2026: das wichtigere Zeichen gehoert nach oben.
+ *  Ist `label` leer, ist der Platz noch unbesetzt (reiner Umriss). */
+export function StandbyRing({ label }: { label?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-[#6d28d9] bg-white text-[8px] font-bold leading-none text-[#6d28d9]"
+    >
+      {label ?? ""}
     </span>
   );
 }
@@ -573,7 +617,7 @@ export function TeamAbsenceOverview({
 
 export type DialogState =
   | { mode: "closed" }
-  | { mode: "create"; date: Date; userId?: number }
+  | { mode: "create"; date: Date; userId?: number; shiftModelId?: number }
   | { mode: "edit"; shift: Shift }
   | { mode: "bulk-create"; dates: string[] }
   | { mode: "bulk-edit"; dates: string[] }

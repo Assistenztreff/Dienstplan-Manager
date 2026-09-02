@@ -1294,6 +1294,15 @@ export interface ShiftModel {
      * @nullable
      */
   compensationFlatCents?: number | null;
+  /** Gehört der Dienst zum Regelplan? Dann zeichnet das Monatsraster an jedem passenden Tag einen offenen Platz. Rein berechnet — es entstehen dabei keine Datensätze. */
+  imRegelplan: boolean;
+  /**
+     * Ab wann die Regelplan-Regel gilt. null = seit jeher.
+     * @nullable
+     */
+  validFrom?: string | null;
+  /** Sieht der Dienst eine vorgemerkte Vertretung vor? Die Vertretungs- zeile erscheint erst, wenn die Assistenz besetzt ist. */
+  standbySlot: boolean;
   createdAt: string;
 }
 
@@ -1332,6 +1341,10 @@ export interface ShiftModelInput {
      * @nullable
      */
   compensationFlatCents?: number | null;
+  imRegelplan?: boolean;
+  /** @nullable */
+  validFrom?: string | null;
+  standbySlot?: boolean;
 }
 
 export type ShiftModelUpdateCompensationType = typeof ShiftModelUpdateCompensationType[keyof typeof ShiftModelUpdateCompensationType];
@@ -1367,6 +1380,10 @@ export interface ShiftModelUpdate {
      * @nullable
      */
   compensationFlatCents?: number | null;
+  imRegelplan?: boolean;
+  /** @nullable */
+  validFrom?: string | null;
+  standbySlot?: boolean;
 }
 
 /**
