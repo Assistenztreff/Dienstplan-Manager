@@ -677,7 +677,8 @@ export const BulkCreateShiftsBody = zod.object({
   "type": zod.enum(['active', 'standby', 'night', 'full_day', 'work', 'team']).describe('Dienstart — nur Arbeitsdienste und Team-Einträge sind hier erlaubt; Abwesenheiten laufen über \/shifts\/bulk-absence.'),
   "days": zod.array(zod.object({
   "startTime": zod.coerce.date(),
-  "endTime": zod.coerce.date()
+  "endTime": zod.coerce.date(),
+  "standbyUserId": zod.number().nullish().describe('Vertretung für DIESEN Tag vormerken. Steht je Tag, weil die automatische Planung an jedem Tag eine andere Person vormerkt — ein Wert für den ganzen Sammelauftrag wäre dafür unbrauchbar. Es gelten dieselben Regeln wie beim Einzel-Anlegen: nur für Arbeitsdienste, Mitglied desselben Teams, nicht die zugewiesene Person, kein Teamkoordinator.')
 })).min(1).max(bulkCreateShiftsBodyDaysMax).describe('Ein Eintrag pro Kalendertag mit den konkreten Start-\/End-Zeiten dieses Tages (Tagesübergang erlaubt, max. 24 h). Doppelte Kalendertage innerhalb der Liste werden zusammengefasst.'),
   "planningStatus": zod.enum(['VORLAEUFIG', 'ANGEBOTEN', 'FIX']).optional().describe('Optionaler Planungsstatus (Default FIX): VORLAEUFIG = Entwurf, ANGEBOTEN = Vorschlag, FIX = verbindlich bestätigt. Team-Einträge sind serverseitig immer FIX.'),
   "shiftModelId": zod.number().nullish(),

@@ -868,6 +868,11 @@ export const BulkShiftsInputType = {
 export type BulkShiftsInputDaysItem = {
   startTime: string;
   endTime: string;
+  /**
+     * Vertretung für DIESEN Tag vormerken. Steht je Tag, weil die automatische Planung an jedem Tag eine andere Person vormerkt — ein Wert für den ganzen Sammelauftrag wäre dafür unbrauchbar. Es gelten dieselben Regeln wie beim Einzel-Anlegen: nur für Arbeitsdienste, Mitglied desselben Teams, nicht die zugewiesene Person, kein Teamkoordinator.
+     * @nullable
+     */
+  standbyUserId?: number | null;
 };
 
 /**

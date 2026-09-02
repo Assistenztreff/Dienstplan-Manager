@@ -316,7 +316,7 @@ router.post("/shifts/bulk", requireAuth, async (req, res): Promise<void> => {
   //   abgelehnt, weil sie zwei UTC-Tage überspannt).
   // Reguläre Dienste: strikt ≤ 24 h, damit kein Mehrtages-Dienst als
   //   einzelner Tag durchrutscht.
-  const dayMap = new Map<string, { startTime: Date; endTime: Date }>();
+  const dayMap = new Map<string, { startTime: Date; endTime: Date; standbyUserId: number | null }>();
   for (const d of body.data.days) {
     const durationMs = d.endTime.getTime() - d.startTime.getTime();
     if (durationMs <= 0) {
@@ -345,10 +345,55 @@ router.post("/shifts/bulk", requireAuth, async (req, res): Promise<void> => {
       }
     }
     const key = startDay;
-    if (!dayMap.has(key)) dayMap.set(key, { startTime: d.startTime, endTime: d.endTime });
+    if (!dayMap.has(key)) {
+      dayMap.set(key, {
+        startTime: d.startTime,
+        endTime: d.endTime,
+        standbyUserId: d.standbyUserId ?? null,
+      });
+    }
   }
   const days = [...dayMap.entries()].sort(([a], [b]) => a.localeCompare(b));
   const latest = days[days.length - 1]![1].startTime;
+
+  // ── Vertretungen je Tag pruefen ────────────────────────────────────────────
+  // Dieselben vier Wachposten wie beim Einzel-Anlegen (shifts-crud.ts): nur
+  // fuer Arbeitsdienste, nicht die zugewiesene Person selbst, Mitglied
+  // desselben Teams, kein Teamkoordinator. Geprueft wird EINMAL je
+  // vorkommender Person statt je Tag — ein Monatslauf nennt dieselben paar
+  // Personen dutzendfach, und jede Pruefung ist eine DB-Abfrage.
+  const standbyIds = [
+    ...new Set(days.map(([, t]) => t.standbyUserId).filter((id): id is number => id != null)),
+  ];
+  if (standbyIds.length > 0) {
+    if (type === "team") {
+      res
+        .status(400)
+        .json({ error: "Eine Vertretung kann nur für Arbeitsdienste vorgemerkt werden." });
+      return;
+    }
+    if (standbyIds.includes(userId)) {
+      res.status(400).json({ error: "Die Vertretung darf nicht dieselbe Person sein." });
+      return;
+    }
+    const geprueft = await Promise.all(
+      standbyIds.map(async (id) => ({
+        id,
+        imTeam: await isUserMemberOfTeam(id, write.teamId),
+        koordinator: await isKoordinatorUser(id),
+      })),
+    );
+    if (geprueft.some((p) => !p.imTeam)) {
+      res.status(403).json({ error: "Vertretung gehört nicht zu diesem Team" });
+      return;
+    }
+    if (geprueft.some((p) => p.koordinator)) {
+      res
+        .status(403)
+        .json({ error: "Für Teamkoordinatoren kann keine Vertretung vorgemerkt werden." });
+      return;
+    }
+  }
 
   // ── Gruppe 2 (parallel): Mitgliedschaft, Modell-Scope, Teamsitzungs-Schalter ─
   // Alle drei brauchen write.teamId (→ nach Gruppe 1) und keinen DB-Wert des
@@ -516,6 +561,7 @@ router.post("/shifts/bulk", requireAuth, async (req, res): Promise<void> => {
     // ── Batch-INSERT (1 Query statt N) ───────────────────────────────────────
     const insertValues = days.map(([, t]) => {
       let { startTime, endTime } = t;
+      const standbyUserId = t.standbyUserId ?? null;
       if (type === "team") {
         const normalized = normalizeTeamEntryTimes(startTime);
         startTime = normalized.startTime;
@@ -530,12 +576,13 @@ router.post("/shifts/bulk", requireAuth, async (req, res): Promise<void> => {
         shiftModelId: shiftModelId ?? null,
         notes: body.data.notes ?? null,
         ...(type === "team"
-          ? { planningStatus: "FIX" as const, isVertretung: false, pauseMinutes: 0 }
+          ? { planningStatus: "FIX" as const, isVertretung: false, pauseMinutes: 0, standbyUserId: null }
           : {
               ...(body.data.planningStatus ? { planningStatus: body.data.planningStatus } : {}),
               isVertretung: body.data.isVertretung ?? false,
               pauseMinutes: Math.max(0, body.data.pauseMinutes ?? 0),
               einsatzTeamId: body.data.einsatzTeamId ?? null,
+              standbyUserId,
             }),
       };
     });
