@@ -27,5 +27,34 @@ test.describe("Dev-Modus: Test-Nutzer-Wechsler sichtbar", () => {
     // Er öffnet sich und bietet mindestens einen Test-Nutzer an.
     await trigger.click();
     await expect(page.getByRole("option").first()).toBeVisible({ timeout: 10_000 });
+
+    // Die geöffnete Liste muss IM Viewport bleiben und bei Bedarf scrollen.
+    // Regression: die Tailwind-v3-Kurzform fuer CSS-Variablen in eckigen
+    // Klammern (ohne var()) erzeugt unter Tailwind v4 ungueltiges CSS. Die
+    // Hoehenbegrenzung des Select-Menues fiel damit weg und die Liste wuchs
+    // mit jedem Testaccount unter den Bildschirmrand — die unteren Eintraege
+    // waren nicht mehr erreichbar.
+    const listbox = page.getByRole("listbox");
+    const box = await listbox.boundingBox();
+    expect(box).not.toBeNull();
+    const viewport = page.viewportSize();
+    expect(viewport).not.toBeNull();
+    expect(box!.y + box!.height).toBeLessThanOrEqual(viewport!.height);
+
+    // Scrollbar/Scrollfunktion: der scrollende Bereich ist entweder selbst
+    // schon länger als sichtbar (dann muss er scrollbar sein) oder passt
+    // komplett hinein — beides ist in Ordnung, verdeckte Einträge nicht.
+    const overflow = await listbox.evaluate((el) => {
+      const scroller =
+        el.scrollHeight > el.clientHeight
+          ? el
+          : (Array.from(el.querySelectorAll("*")) as HTMLElement[]).find(
+              (n) => n.scrollHeight > n.clientHeight,
+            ) ?? el;
+      return { hidden: scroller.scrollHeight - scroller.clientHeight, scrollable: getComputedStyle(scroller).overflowY };
+    });
+    if (overflow.hidden > 0) {
+      expect(["auto", "scroll"]).toContain(overflow.scrollable);
+    }
   });
 });

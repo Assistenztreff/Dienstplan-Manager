@@ -66,7 +66,12 @@ function DevUserSwitcherInner() {
         <SelectTrigger className="h-8 w-auto min-w-[10rem] text-xs" aria-label="Test-Nutzer wechseln">
           <SelectValue placeholder="Test-Nutzer wählen" />
         </SelectTrigger>
-        <SelectContent>
+        {/* Die Liste wird mit jedem angelegten Testaccount laenger. Ohne Deckel
+            waechst das Menue ueber den unteren Bildschirmrand hinaus und die
+            letzten Eintraege sind nicht mehr erreichbar. Daher: hoechstens
+            24rem hoch, nie hoeher als der Platz unter dem Trigger — darueber
+            hinaus scrollt die Liste (Mausrad, Tastatur, Scrollbalken). */}
+        <SelectContent className="max-h-[min(24rem,var(--radix-select-content-available-height))]">
           {users.map((u) => (
             <SelectItem key={u.id} value={String(u.id)}>
               {u.name} ({roleLabel(u)})
