@@ -223,19 +223,21 @@ function AvatarMitVertretung({
   color,
   label,
   standbyName,
+  ausgewaehlt = false,
 }: {
   color: string;
   label: string;
   standbyName?: string | null;
+  ausgewaehlt?: boolean;
 }) {
-  if (!standbyName) return <PillAvatar color={color} label={label} />;
+  if (!standbyName) return <PillAvatar color={color} label={label} ausgewaehlt={ausgewaehlt} />;
   return (
     <span
       className="relative flex shrink-0 items-center"
       title={`Vertretung vorgemerkt: ${standbyName}`}
     >
       <span className="relative z-10 flex">
-        <PillAvatar color={color} label={label} />
+        <PillAvatar color={color} label={label} ausgewaehlt={ausgewaehlt} />
       </span>
       <span className="-ml-[7px] flex">
         <StandbyRing label={lastNameInitial(standbyName)} />
@@ -266,6 +268,10 @@ export function MonthGrid({
   onCollapsedDayActivate,
   geruestDienste,
   dndBereich = "grid",
+  auswahlModus = false,
+  ausgewaehlteShiftIds,
+  onShiftAuswahl,
+  onTagAuswahl,
 }: {
   days: Date[];
   monthStart: Date;
@@ -306,6 +312,16 @@ export function MonthGrid({
    *  stehen zeitgleich im DOM (nur eines sichtbar) — ohne Praefix wuerden
    *  sich ihre Ziele in der dnd-kit-Registry gegenseitig ueberschreiben. */
   dndBereich?: string;
+  /** Auswahl auf DIENST-Ebene (Planungsmodus, Kay-Auftrag 03.09.2026 Weg 1).
+   *  Unterschied zu `selectionMode`: Der waehlt ganze TAGE aus und wird zum
+   *  Eintragen und Aendern benutzt. Hier geht es um einzelne Dienste, und
+   *  ausgewaehlt wird durch einen Klick auf die Pille selbst — sie bekommt
+   *  einen Rahmen, und ihr Avatar wird zum Haken. */
+  auswahlModus?: boolean;
+  ausgewaehlteShiftIds?: Set<number>;
+  onShiftAuswahl?: (shiftId: number) => void;
+  /** Klick auf die freie Flaeche der Zelle: alle Dienste des Tages umschalten. */
+  onTagAuswahl?: (day: Date) => void;
 }) {
   const personColors = usePersonColors();
   // Dienste mit angenommener Abweichungsmeldung: bleiben FIX, bekommen aber
@@ -578,6 +594,7 @@ export function MonthGrid({
               aria-selected={selectionMode ? bulkSelected : selected}
               aria-label={format(day, "EEEE, d. MMMM yyyy", { locale: de })}
               onClick={() => {
+                if (auswahlModus) { onTagAuswahl?.(day); return; }
                 if (selectionMode) { onToggleDate?.(day); return; }
                 // 3.4: Klick auf Zelle/Datum wählt den Tag nur aus — das Anlegen
                 // erfolgt ausschließlich über das Plus in der Zellen-Kopfzeile.
@@ -716,7 +733,9 @@ export function MonthGrid({
                         // Eine vorlaeufige Zeile (optimistisch eingefuegt,
                         // Server-Bestaetigung noch unterwegs) hat serverseitig
                         // noch keine ID — sie darf keinen Dialog oeffnen.
-                        const chipClickable = canEdit && !selectionMode && !s.istVorlaeufig;
+                        const chipWaehlbar = auswahlModus && canEdit && !s.istVorlaeufig;
+                        const istAusgewaehlt = chipWaehlbar && (ausgewaehlteShiftIds?.has(s.id) ?? false);
+                        const chipClickable = canEdit && !selectionMode && !auswahlModus && !s.istVorlaeufig;
                         const timeRange = `${format(new Date(s.startTime), "HH:mm")}–${format(new Date(s.endTime), "HH:mm")}`;
                         const barColor = isTeam ? "#0284c7" : slot.bg;
                         // Arbeitsanweisung 17.08.2026 Punkt 4: der Avatar-Kreis
@@ -742,17 +761,30 @@ export function MonthGrid({
                           >
                           <span
                             data-testid={`day-chip-${s.id}`}
-                            role={chipClickable ? "button" : undefined}
-                            tabIndex={chipClickable ? -1 : undefined}
+                            role={chipClickable || chipWaehlbar ? "button" : undefined}
+                            tabIndex={chipClickable || chipWaehlbar ? -1 : undefined}
+                            aria-pressed={chipWaehlbar ? istAusgewaehlt : undefined}
                             title={`${s.user?.name ?? ""} · ${timeRange}${s.isVertretung ? " · Vertretung" : ""}${s.standbyUserId != null ? ` · Vertretung vorgemerkt: ${s.standbyUserName ?? ""}` : ""}`.trim()}
-                            onClick={chipClickable ? (e) => { e.stopPropagation(); onShiftClick(s); } : undefined}
-                            onKeyDown={chipClickable ? (e) => {
-                              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onShiftClick(s); }
+                            onClick={
+                              chipWaehlbar
+                                ? (e) => { e.stopPropagation(); onShiftAuswahl?.(s.id); }
+                                : chipClickable
+                                  ? (e) => { e.stopPropagation(); onShiftClick(s); }
+                                  : undefined
+                            }
+                            onKeyDown={chipClickable || chipWaehlbar ? (e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (chipWaehlbar) onShiftAuswahl?.(s.id); else onShiftClick(s);
+                              }
                             } : undefined}
+                            data-ausgewaehlt={istAusgewaehlt ? "true" : undefined}
                             className={[
                               "relative flex items-stretch overflow-hidden rounded-[5px] border border-[#e6e6e2]",
                               "shadow-[0_2px_3px_rgba(9,41,72,0.12)]",
-                              chipClickable ? "cursor-pointer" : "",
+                              chipClickable || chipWaehlbar ? "cursor-pointer" : "",
+                              istAusgewaehlt ? "ring-2 ring-inset ring-[#0f766e]" : "",
                             ].filter(Boolean).join(" ")}
                           >
                             {/* Punkt 3 (17.08.2026): rechter 4px-Statusfarbbalken —
@@ -778,6 +810,7 @@ export function MonthGrid({
                                 color={barColor}
                                 label={avatarLabel}
                                 standbyName={s.standbyUserName}
+                                ausgewaehlt={istAusgewaehlt}
                               />
                               {/* Arbeitsanweisung 16.08.2026: Status-Icon jetzt
                                   IMMER sichtbar (inkl. grünem Bestätigt-Haken),
@@ -894,7 +927,9 @@ export function MonthGrid({
                     // Eine vorlaeufige Zeile (optimistisch eingefuegt,
                     // Server-Bestaetigung noch unterwegs) hat serverseitig
                     // noch keine ID — sie darf keinen Dialog oeffnen.
-                    const chipClickable = canEdit && !selectionMode && !s.istVorlaeufig;
+                    const chipWaehlbar = auswahlModus && canEdit && !s.istVorlaeufig;
+                        const istAusgewaehlt = chipWaehlbar && (ausgewaehlteShiftIds?.has(s.id) ?? false);
+                        const chipClickable = canEdit && !selectionMode && !auswahlModus && !s.istVorlaeufig;
                     const startOnly = format(new Date(s.startTime), "HH:mm");
                     const timeRange = `${startOnly}–${format(new Date(s.endTime), "HH:mm")}`;
                     const barColor = isTeam ? "#0284c7" : slot.bg;
@@ -908,12 +943,22 @@ export function MonthGrid({
                     const statusColor = dienstStatusColor(status, hasAusfall, s.isVertretung);
                     const statusLabel = dienstStatusLabel(status, hasAusfall, s.isVertretung);
                     const commonHandlers = {
-                      role: chipClickable ? ("button" as const) : undefined,
-                      tabIndex: chipClickable ? -1 : undefined,
+                      role: chipClickable || chipWaehlbar ? ("button" as const) : undefined,
+                      tabIndex: chipClickable || chipWaehlbar ? -1 : undefined,
+                      "aria-pressed": chipWaehlbar ? istAusgewaehlt : undefined,
+                      "data-ausgewaehlt": istAusgewaehlt ? "true" : undefined,
                       title: `${s.user?.name ?? ""} · ${timeRange}${s.isVertretung ? " · Vertretung" : ""}${s.standbyUserId != null ? ` · Vertretung vorgemerkt: ${s.standbyUserName ?? ""}` : ""}`.trim(),
-                      onClick: chipClickable ? (e: React.MouseEvent) => { e.stopPropagation(); onShiftClick(s); } : undefined,
-                      onKeyDown: chipClickable ? (e: React.KeyboardEvent) => {
-                        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onShiftClick(s); }
+                      onClick: chipWaehlbar
+                        ? (e: React.MouseEvent) => { e.stopPropagation(); onShiftAuswahl?.(s.id); }
+                        : chipClickable
+                          ? (e: React.MouseEvent) => { e.stopPropagation(); onShiftClick(s); }
+                          : undefined,
+                      onKeyDown: chipClickable || chipWaehlbar ? (e: React.KeyboardEvent) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (chipWaehlbar) onShiftAuswahl?.(s.id); else onShiftClick(s);
+                        }
                       } : undefined,
                     };
                     // Kay-Entscheidung 30.08.2026: GENAU EIN Icon je Pille.
@@ -979,7 +1024,8 @@ export function MonthGrid({
                             // Inhaltshöhe 21px → wirkte 2px niedriger als Zeile 1.
                             "@container relative flex items-center overflow-hidden rounded-[6px] border",
                             "border-[#c7ced8] shadow-[0_3px_5px_rgba(9,41,72,0.13)]",
-                            chipClickable ? "cursor-pointer" : "",
+                            chipClickable || chipWaehlbar ? "cursor-pointer" : "",
+                            istAusgewaehlt ? "ring-2 ring-inset ring-[#0f766e]" : "",
                           ].filter(Boolean).join(" ")}
                         >
                           {/* Punkt 3 (17.08.2026): rechter 4px-Statusfarbbalken —
@@ -1003,6 +1049,7 @@ export function MonthGrid({
                               color={barColor}
                               label={avatarLabel}
                               standbyName={s.standbyUserName}
+                              ausgewaehlt={istAusgewaehlt}
                             />
                             {/* Arbeitsanweisung 17.08.2026, Folgeauftrag: kein
                                 shrink-0 mehr — der Name soll bei wenig Platz
@@ -1054,7 +1101,8 @@ export function MonthGrid({
                           // Punkt 5 (15.08.2026): Desktop-Pillen leicht erhaben —
                           // Kontur #c7ced8 + weicher Schatten.
                           "border-[#c7ced8] shadow-[0_3px_5px_rgba(9,41,72,0.13)]",
-                          chipClickable ? "cursor-pointer" : "",
+                          chipClickable || chipWaehlbar ? "cursor-pointer" : "",
+                          istAusgewaehlt ? "ring-2 ring-inset ring-[#0f766e]" : "",
                         ].filter(Boolean).join(" ")}
                       >
                         {/* Punkt 3 (17.08.2026): rechter 4px-Statusfarbbalken —
@@ -1074,7 +1122,7 @@ export function MonthGrid({
                             wirken die Status-Icons überproportional groß. */}
                         <span className="flex min-h-[23px] items-center justify-between gap-1 bg-white py-[2px] pl-[6px] pr-[6px] leading-none">
                           <span className="flex min-w-0 items-center gap-[4px]">
-                            <PillAvatar color={barColor} label={avatarLabel} />
+                            <PillAvatar color={barColor} label={avatarLabel} ausgewaehlt={istAusgewaehlt} />
                             <span className="min-w-0 truncate text-[12px] font-bold text-[#151515]">
                               <span className="@max-[154px]:hidden">{fullName}</span>
                               <span className="hidden @max-[154px]:inline">{shortNameLabel}</span>

@@ -219,42 +219,45 @@ test.describe("Premium", () => {
     expect(nachher.length, "Ein zweiter Lauf darf nichts doppelt anlegen").toBe(vorher.length);
   });
 
-  test("der Auswahl-Knopf waehlt alle Tage mit Eintraegen auf einmal", async ({ page }) => {
+  test("Auswahl: alles auf einen Druck, einzelne Pillen wieder abwaehlen", async ({ page }) => {
     test.setTimeout(90_000);
     // Der Monat ist aus den vorigen Tests gefuellt.
     const vorhanden = (await schichtenDesMonats()).filter((s) => s.shiftModelId === dienstId);
     expect(vorhanden.length, "Voraussetzung: der Monat ist gefuellt").toBeGreaterThan(3);
-    const tageMitEintraegen = new Set(vorhanden.map((s) => s.startTime.slice(0, 10))).size;
 
     await page.goto(`/dienstplan?date=${ZIEL_ISO}`);
-    await expect(page.getByTestId("dienstplan-desktop").getByTestId("month-grid")).toBeVisible();
+    const desktop = page.getByTestId("dienstplan-desktop");
+    await expect(desktop.getByTestId("month-grid")).toBeVisible();
     await page.getByTestId("toggle-planungsmodus").click();
 
     const auswahl = page.getByTestId("planungsmodus-auswahl");
     await expect(auswahl).toHaveAttribute("aria-pressed", "false");
     await auswahl.click();
 
-    // Ein Druck: alles ausgewaehlt. Der Zaehler steht im Knopf, der
-    // Muelleimer erscheint.
+    // Ein Druck: alle Dienste ausgewaehlt, der Zaehler steht im Knopf.
     await expect(auswahl).toHaveAttribute("aria-pressed", "true");
-    await expect(auswahl).toContainText(String(tageMitEintraegen));
+    await expect(auswahl).toContainText(String(vorhanden.length));
     await expect(page.getByTestId("planungsmodus-loeschen")).toBeVisible();
-    await expect(page.getByTestId("bulk-selected-count")).toContainText(
-      `${tageMitEintraegen} Tage ausgewählt`,
-    );
 
-    // Ein Klick auf einen ausgewaehlten Tag nimmt ihn wieder heraus.
-    const ersterTag = [...new Set(vorhanden.map((s) => s.startTime.slice(0, 10)))].sort()[0]!;
-    await page
-      .getByTestId("dienstplan-desktop")
-      .getByTestId(`day-cell-${ersterTag}`)
-      .click({ position: { x: 8, y: 8 } });
-    await expect(auswahl).toContainText(String(tageMitEintraegen - 1));
+    // Weg 1: Die Pille IST der Haken — ein Klick waehlt sie wieder ab.
+    const erste = vorhanden.slice().sort((a, b) => a.startTime.localeCompare(b.startTime))[0]!;
+    const pille = desktop.getByTestId(`day-chip-${erste.id}`);
+    await expect(pille).toHaveAttribute("data-ausgewaehlt", "true");
+    await pille.click();
+    await expect(pille).not.toHaveAttribute("data-ausgewaehlt", "true");
+    await expect(auswahl).toContainText(String(vorhanden.length - 1));
+    // Und kein Dialog, kein Personenwechsel — der Klick hat nur ausgewaehlt.
+    await expect(page.getByTestId("shift-dialog")).toHaveCount(0);
 
-    // Und der zweite Druck hebt die ganze Auswahl auf.
-    await auswahl.click();
+    // Loeschen trifft genau die Auswahl: der abgewaehlte Dienst bleibt.
+    await page.getByTestId("planungsmodus-loeschen").click();
+    await page.getByTestId("auswahl-loeschen-bestaetigen").click();
+    await expect(page.getByText(/gelöscht/)).toBeVisible({ timeout: 20_000 });
+
+    const uebrig = (await schichtenDesMonats()).filter((s) => s.shiftModelId === dienstId);
+    expect(uebrig.map((s) => s.id)).toEqual([erste.id]);
+    // Nach dem Loeschen ist der Auswahlmodus wieder aus.
     await expect(auswahl).toHaveAttribute("aria-pressed", "false");
-    await expect(page.getByTestId("planungsmodus-loeschen")).toHaveCount(0);
   });
 
   test("das Zahnrad speichert die Grenzen am Team", async ({ page }) => {

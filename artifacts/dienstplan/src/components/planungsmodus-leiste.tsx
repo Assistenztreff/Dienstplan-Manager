@@ -13,10 +13,11 @@
 // ohne Ziel ist nur eine Stolperfalle.
 //
 // Das Auswahl-Symbol waehlt seit dem 03.09.2026 (Kays Punkt 4) mit EINEM
-// Druck alle Tage aus, die Eintraege tragen. Der Grund ist die Praxis: Wer im
+// Druck alle Dienste des Monats aus. Der Grund ist die Praxis: Wer im
 // Planungsmodus etwas loescht, raeumt fast immer den ganzen Monat ab und
-// behaelt ein paar Tage. Erst auswaehlen und dann 30-mal klicken waere die
-// Arbeit andersherum.
+// behaelt ein paar Dienste. Erst auswaehlen und dann 30-mal klicken waere die
+// Arbeit andersherum. Abgewaehlt wird danach durch einen Klick auf die Pille
+// selbst — sie ist der Haken (Weg 1 von drei Vorschlaegen, Kays Wahl).
 import { useState } from "react";
 import { Wand2, Settings2, SquareDashedMousePointer, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -53,10 +54,10 @@ export function PlanungsmodusLeiste({
   laeuft: boolean;
   onAutomatik: () => void;
   auswahlAktiv: boolean;
-  /** Ein Druck waehlt ALLE Tage mit Eintraegen; der naechste hebt sie auf. */
+  /** Ein Druck waehlt ALLE Dienste des Monats; der naechste hebt sie auf. */
   onAuswahlUmschalten: () => void;
   anzahlAusgewaehlt: number;
-  /** Wie viele Tage des Monats ueberhaupt Eintraege tragen. */
+  /** Wie viele Dienste im Monat ueberhaupt auswaehlbar sind. */
   anzahlAuswaehlbar: number;
   onAuswahlLoeschen: () => void;
   onBeenden: () => void;
@@ -70,7 +71,9 @@ export function PlanungsmodusLeiste({
     >
       <span className="text-sm font-semibold text-[#151515]">Planungsmodus</span>
       <span className="hidden text-xs text-muted-foreground sm:inline">
-        Klick auf eine Pille wechselt die Person
+        {auswahlAktiv
+          ? "Klick auf eine Pille wählt sie ab"
+          : "Klick auf eine Pille wechselt die Person"}
       </span>
 
       <span className="ml-auto flex flex-wrap items-center gap-2">
@@ -160,12 +163,11 @@ export function PlanungsmodusLeiste({
           </PopoverContent>
         </Popover>
 
-        {/* Kay-Auftrag 03.09.2026, Punkt 4: Ein Druck waehlt ALLES aus, was
-            der Monat an Eintraegen hat — danach klickt man die wenigen Tage
-            wieder ab, die bleiben sollen. Das ist der haeufigere Weg:
-            „fast alles weg" statt „ein paar einzelne weg". Der Zaehler steht
-            im Knopf, damit man ohne Nachzaehlen sieht, worauf der Muelleimer
-            gleich zielt. */}
+        {/* Kay-Auftrag 03.09.2026, Punkt 4: Ein Druck waehlt alle Dienste des
+            Monats — danach klickt man die wenigen Pillen wieder ab, die
+            bleiben sollen. Das ist der haeufigere Weg: „fast alles weg" statt
+            „ein paar einzelne weg". Der Zaehler steht im Knopf, damit man ohne
+            Nachzaehlen sieht, worauf der Muelleimer gleich zielt. */}
         <Button
           size="sm"
           variant={auswahlAktiv ? "default" : "outline"}
@@ -176,10 +178,10 @@ export function PlanungsmodusLeiste({
             auswahlAktiv
               ? "Auswahl aufheben"
               : anzahlAuswaehlbar === 0
-                ? "Keine Einträge zum Auswählen"
-                : `Alle ${anzahlAuswaehlbar} Tage mit Einträgen auswählen`
+                ? "Keine Dienste zum Auswählen"
+                : `Alle ${anzahlAuswaehlbar} Dienste auswählen`
           }
-          aria-label={auswahlAktiv ? "Auswahl aufheben" : "Alle Tage mit Einträgen auswählen"}
+          aria-label={auswahlAktiv ? "Auswahl aufheben" : "Alle Dienste auswählen"}
           aria-pressed={auswahlAktiv}
           data-testid="planungsmodus-auswahl"
         >
@@ -194,8 +196,8 @@ export function PlanungsmodusLeiste({
             variant="destructive"
             className="gap-1.5"
             onClick={onAuswahlLoeschen}
-            title={`Einträge an ${anzahlAusgewaehlt} ${anzahlAusgewaehlt === 1 ? "Tag" : "Tagen"} löschen`}
-            aria-label={`Einträge an ${anzahlAusgewaehlt} ${anzahlAusgewaehlt === 1 ? "Tag" : "Tagen"} löschen`}
+            title={`${anzahlAusgewaehlt} ${anzahlAusgewaehlt === 1 ? "Dienst" : "Dienste"} löschen`}
+            aria-label={`${anzahlAusgewaehlt} ${anzahlAusgewaehlt === 1 ? "Dienst" : "Dienste"} löschen`}
             data-testid="planungsmodus-loeschen"
           >
             <Trash2 className="h-4 w-4" />

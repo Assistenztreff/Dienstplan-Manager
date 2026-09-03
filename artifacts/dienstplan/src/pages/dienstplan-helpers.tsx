@@ -235,14 +235,26 @@ export function dienstStatusLabel(
  *  Hintergrund = Personen-/Slot-Farbe (barColor/slot.bg, keine neue
  *  Farbquelle), zentrierte weiße fette Initiale. Gemeinsam für alle drei
  *  Pillen-Varianten (zweizeilig, minimiert, Smartphone-einzeilig). */
-export function PillAvatar({ color, label }: { color: string; label: string }) {
+export function PillAvatar({
+  color,
+  label,
+  ausgewaehlt = false,
+}: {
+  color: string;
+  label: string;
+  /** Kay-Auftrag 03.09.2026, Weg 1: Im Auswahlmodus WIRD der Avatar zum Haken.
+   *  Bewusst kein zusaetzliches Kaestchen und kein Muelleimer in der Pille —
+   *  auf dem Smartphone ist sie rund 48 px breit, dort ist fuer ein weiteres
+   *  Bedienelement kein Platz (s. smartphone-pill-width-budget). */
+  ausgewaehlt?: boolean;
+}) {
   return (
     <span
       aria-hidden="true"
       className="flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full text-[8px] font-bold leading-none text-white"
-      style={{ backgroundColor: color }}
+      style={{ backgroundColor: ausgewaehlt ? "#0f766e" : color }}
     >
-      {label}
+      {ausgewaehlt ? <Check className="h-[11px] w-[11px]" strokeWidth={3.5} /> : label}
     </span>
   );
 }
@@ -622,6 +634,8 @@ export type DialogState =
   | { mode: "bulk-create"; dates: string[] }
   | { mode: "bulk-edit"; dates: string[] }
   | { mode: "bulk-delete"; dates: string[] }
+  /** Planungsmodus: die per Pillen-Klick ausgewaehlten Dienste loeschen. */
+  | { mode: "auswahl-loeschen" }
   | { mode: "confirm-all" }
   | { mode: "send-proposals" };
 

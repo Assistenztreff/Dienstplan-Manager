@@ -95,6 +95,7 @@ import {
   prefetchAdjacentMonthShifts,
   upsertShiftsInCache,
   removeShiftsFromCache,
+  chunkIds,
   invalidateShiftDerivedQueries,
   invalidateArbeitsdienstSalden,
   naechsteTempId,
@@ -203,6 +204,9 @@ export default function Dienstplan() {
   const [selectedDay, setSelectedDay] = useState<Date>(() => initialDate);
 
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+  // Auswahl einzelner Dienste im Planungsmodus (Kay-Auftrag 03.09.2026).
+  const [dienstAuswahlModus, setDienstAuswahlModus] = useState(false);
+  const [dienstAuswahl, setDienstAuswahl] = useState<number[]>([]);
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
 
   const month = currentDate.getMonth() + 1;
@@ -1603,26 +1607,86 @@ export default function Dienstplan() {
     });
   }
 
-  /**
-   * Kay-Auftrag 03.09.2026, Punkt 4: Im Planungsmodus waehlt der Auswahl-Knopf
-   * ALLE Tage mit Eintraegen auf einmal — der zweite Druck hebt die Auswahl
-   * wieder auf. Danach klickt man die wenigen Tage ab, die bleiben sollen.
-   * Ausserhalb des Planungsmodus bleibt es beim reinen Umschalten: Dort ist
-   * die Mehrfachauswahl ein Werkzeug zum Eintragen, nicht zum Abraeumen.
-   */
-  const tageMitEintraegen = useMemo(() => {
-    const eigene = allShifts.filter((s) => !isMirrorShift(s, selectedTeamId));
-    return [...new Set(eigene.map((s) => format(new Date(s.startTime), "yyyy-MM-dd")))].sort();
-  }, [allShifts, selectedTeamId]);
+  // ── Auswahl einzelner Dienste im Planungsmodus (Kay-Auftrag 03.09.2026,
+  //    Punkt 4, Weg 1) ─────────────────────────────────────────────────────
+  // Bewusst NICHT die vorhandene Mehrtagesauswahl (`isSelectionMode` /
+  // `selectedDates`): Die waehlt ganze Tage und dient dem Eintragen und
+  // Aendern. Hier geht es ums Abraeumen einzelner Dienste, und ausgewaehlt
+  // wird durch einen Klick auf die Pille selbst — kein zusaetzliches
+  // Kaestchen und kein Muelleimer IN der Pille (auf dem Smartphone ist dafuer
+  // kein Platz, s. smartphone-pill-width-budget).
+  //
+  // Auswaehlbar sind nur eigene Arbeits- und Team-Eintraege: Abwesenheiten
+  // gehoeren nicht in den Planungsmodus, und Spiegel-Eintraege fremder Teams
+  // sind ohnehin schreibgeschuetzt.
+  const auswaehlbareShifts = useMemo(
+    () =>
+      allShifts.filter(
+        (s) => !isMirrorShift(s, selectedTeamId) && !isAbsenceShift(s) && s.id > 0,
+      ),
+    [allShifts, selectedTeamId],
+  );
 
-  function alleTageAuswaehlen() {
-    if (isSelectionMode) {
-      setSelectedDates([]);
-      setIsSelectionMode(false);
+  const dienstAuswahlSet = useMemo(() => new Set(dienstAuswahl), [dienstAuswahl]);
+
+  function toggleDienstAuswahl(shiftId: number) {
+    setDienstAuswahl((prev) =>
+      prev.includes(shiftId) ? prev.filter((id) => id !== shiftId) : [...prev, shiftId],
+    );
+  }
+
+  /** Klick auf die freie Flaeche einer Zelle: den ganzen Tag umschalten. */
+  function toggleTagAuswahl(day: Date) {
+    const key = format(day, "yyyy-MM-dd");
+    const desTages = auswaehlbareShifts
+      .filter((s) => format(new Date(s.startTime), "yyyy-MM-dd") === key)
+      .map((s) => s.id);
+    if (desTages.length === 0) return;
+    setDienstAuswahl((prev) => {
+      const alleDrin = desTages.every((id) => prev.includes(id));
+      if (alleDrin) return prev.filter((id) => !desTages.includes(id));
+      return [...new Set([...prev, ...desTages])];
+    });
+  }
+
+  /**
+   * Der Auswahl-Knopf der Planungsleiste: Ein Druck waehlt ALLE Dienste des
+   * Monats, der zweite hebt die Auswahl auf. Danach klickt man die wenigen
+   * Pillen ab, die bleiben sollen — das ist der haeufigere Weg.
+   */
+  function alleDiensteAuswaehlen() {
+    if (dienstAuswahlModus) {
+      setDienstAuswahl([]);
+      setDienstAuswahlModus(false);
       return;
     }
-    setIsSelectionMode(true);
-    setSelectedDates(tageMitEintraegen);
+    setDienstAuswahlModus(true);
+    setDienstAuswahl(auswaehlbareShifts.map((s) => s.id));
+  }
+
+  /** Loescht die ausgewaehlten Dienste — sofort im Raster, dann am Server. */
+  async function loescheAuswahl(): Promise<void> {
+    const ids = [...dienstAuswahl];
+    if (ids.length === 0) return;
+    const vorher = allShifts.filter((s) => ids.includes(s.id));
+    setDienstAuswahl([]);
+    setDienstAuswahlModus(false);
+    setDialog({ mode: "closed" });
+    removeShiftsFromCache(queryClient, ids);
+    try {
+      for (const block of chunkIds(ids)) {
+        await bulkDeleteShifts.mutateAsync({ data: { ids: block } });
+      }
+      void invalidateShiftDerivedQueries(queryClient);
+      toast.success(`${ids.length} ${ids.length === 1 ? "Dienst" : "Dienste"} gelöscht.`);
+    } catch (err) {
+      // Der Server loescht je Block ganz oder gar nicht. Was noch da ist,
+      // holt die Invalidierung zurueck; die eigene Anzeige stellen wir sofort
+      // wieder her, damit niemand vor einem leeren Raster steht.
+      upsertShiftsInCache(queryClient, vorher as unknown as CachedShiftRow[], selectedTeamId);
+      void invalidateShiftDerivedQueries(queryClient);
+      toast.error(readableApiError(err, "Löschen fehlgeschlagen."));
+    }
   }
 
   function toggleDate(day: Date) {
@@ -1715,6 +1779,8 @@ export default function Dienstplan() {
           if (an) {
             setIsSelectionMode(false);
             setSelectedDates([]);
+            setDienstAuswahlModus(false);
+            setDienstAuswahl([]);
           }
           return !an;
         });
@@ -1795,15 +1861,17 @@ export default function Dienstplan() {
             grenzenSpeichern={() => void speichereGrenzen()}
             laeuft={automatikLaeuft}
             onAutomatik={() => void starteAutomatik(true)}
-            auswahlAktiv={isSelectionMode}
-            onAuswahlUmschalten={alleTageAuswaehlen}
-            anzahlAusgewaehlt={selectedDates.length}
-            anzahlAuswaehlbar={tageMitEintraegen.length}
-            onAuswahlLoeschen={() => setDialog({ mode: "bulk-delete", dates: selectedDates })}
+            auswahlAktiv={dienstAuswahlModus}
+            onAuswahlUmschalten={alleDiensteAuswaehlen}
+            anzahlAusgewaehlt={dienstAuswahl.length}
+            anzahlAuswaehlbar={auswaehlbareShifts.length}
+            onAuswahlLoeschen={() => setDialog({ mode: "auswahl-loeschen" })}
             onBeenden={() => {
               setPlanungsmodus(false);
               setIsSelectionMode(false);
               setSelectedDates([]);
+              setDienstAuswahlModus(false);
+              setDienstAuswahl([]);
             }}
           />
         </div>
@@ -1843,6 +1911,10 @@ export default function Dienstplan() {
             onSelectDay={setSelectedDay}
             onAddShift={(day, shiftModelId) => openCreate(day, undefined, shiftModelId)}
             onShiftClick={planungsmodus ? (sh) => void rotierePille(sh) : openEdit}
+            auswahlModus={planungsmodus && dienstAuswahlModus}
+            ausgewaehlteShiftIds={dienstAuswahlSet}
+            onShiftAuswahl={toggleDienstAuswahl}
+            onTagAuswahl={toggleTagAuswahl}
             onConfirmShift={confirmShift}
             canEdit={canPlan}
             selectionMode={isSelectionMode}
@@ -1894,6 +1966,10 @@ export default function Dienstplan() {
             onSelectDay={setSelectedDay}
             onAddShift={(day, shiftModelId) => openCreate(day, undefined, shiftModelId)}
             onShiftClick={planungsmodus ? (sh) => void rotierePille(sh) : openEdit}
+            auswahlModus={planungsmodus && dienstAuswahlModus}
+            ausgewaehlteShiftIds={dienstAuswahlSet}
+            onShiftAuswahl={toggleDienstAuswahl}
+            onTagAuswahl={toggleTagAuswahl}
             onConfirmShift={confirmShift}
             canEdit={canPlan}
             selectionMode={isSelectionMode}
@@ -2174,6 +2250,34 @@ export default function Dienstplan() {
           eintraege={stundenkontoEintraege}
           teamId={selectedTeamId}
         />
+      )}
+
+      {canPlan && (
+        <AlertDialog
+          open={dialog.mode === "auswahl-loeschen"}
+          onOpenChange={(offen) => { if (!offen) closeDialog(); }}
+        >
+          <AlertDialogContent data-testid="auswahl-loeschen-dialog">
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {dienstAuswahl.length} {dienstAuswahl.length === 1 ? "Dienst" : "Dienste"} löschen?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Die ausgewählten Einträge werden entfernt. Das lässt sich nicht rückgängig
+                machen.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => void loescheAuswahl()}
+                data-testid="auswahl-loeschen-bestaetigen"
+              >
+                Löschen
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
 
       {canPlan && (
