@@ -568,6 +568,30 @@ export function MonthGrid({
             0,
             Math.max(0, pillLimit - visiblePills.length),
           );
+          // ── Reihenfolge in der Zelle: streng nach Uhrzeit ─────────────────
+          // Kay-Fehlermeldung 03.09.2026: Im Drei-Schicht-Modell rutschte der
+          // Nachtdienst nach oben, sobald Frueh- und Spaetdienst noch offen
+          // waren — besetzte Pillen wurden vor den Platzhaltern gezeichnet,
+          // unabhaengig von der Uhrzeit. Ein Dienstplan, in dem 22:00 ueber
+          // 06:00 steht, ist nicht lesbar.
+          //
+          // Beide Listen sind fuer sich chronologisch. Statt den ganzen
+          // Zellen-Aufbau umzubauen, bekommt jedes Element seinen Platz in der
+          // gemeinsamen Zeitreihe als CSS-`order` mit — der Flex-Container
+          // zeichnet danach. Die Zeitreihe entsteht aus beiden Listen
+          // zusammen, damit Pille und Platzhalter dieselbe Skala benutzen.
+          const zeitReihe = [
+            ...visiblePills.map((s) => ({
+              key: `dienst-${s.id}`,
+              zeit: format(new Date(s.startTime), "HH:mm"),
+            })),
+            ...sichtbarePlaetze.map((p) => ({
+              key: `platz-${p.dienstId}`,
+              zeit: p.startTime,
+            })),
+          ].sort((a, b) => a.zeit.localeCompare(b.zeit));
+          const reihenfolge = new Map(zeitReihe.map((e, i) => [e.key, i]));
+
           const hiddenCount =
             nonAbsence.length -
             visiblePills.length +
@@ -762,6 +786,7 @@ export function MonthGrid({
                             ziel={{ art: "dienst", shiftId: s.id }}
                             disabled={!chipClickable || isTeam}
                             className="flex flex-col"
+                            style={{ order: reihenfolge.get(`dienst-${s.id}`) ?? 0 }}
                           >
                           <span
                             data-testid={`day-chip-${s.id}`}
@@ -876,6 +901,7 @@ export function MonthGrid({
                           }}
                           disabled={!canEdit || selectionMode}
                           className="flex flex-col"
+                          style={{ order: reihenfolge.get(`platz-${platz.dienstId}`) ?? 0 }}
                         >
                           <PlatzPilleEinzeilig
                             platz={platz}
@@ -1028,6 +1054,7 @@ export function MonthGrid({
                           ziel={{ art: "dienst", shiftId: s.id }}
                           disabled={!chipClickable || isTeam}
                           className="flex flex-col"
+                          style={{ order: reihenfolge.get(`dienst-${s.id}`) ?? 0 }}
                         >
                         <span
                           data-testid={`day-chip-${s.id}`}
@@ -1109,6 +1136,7 @@ export function MonthGrid({
                         ziel={{ art: "dienst", shiftId: s.id }}
                         disabled={!chipClickable || isTeam}
                         className="flex flex-col"
+                        style={{ order: reihenfolge.get(`dienst-${s.id}`) ?? 0 }}
                       >
                       <span
                         data-testid={`day-chip-${s.id}`}
@@ -1230,6 +1258,7 @@ export function MonthGrid({
                       }}
                       disabled={!canEdit || selectionMode}
                       className="flex flex-col"
+                      style={{ order: reihenfolge.get(`platz-${platz.dienstId}`) ?? 0 }}
                     >
                       {pillMinimiert ? (
                         <PlatzPilleEinzeilig

@@ -29,7 +29,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 export type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 
@@ -115,12 +115,15 @@ export function ZugZielHuelle({
   ziel,
   disabled = false,
   className,
+  style,
   children,
 }: {
   bereich: string;
   ziel: ZugZiel;
   disabled?: boolean;
   className?: string;
+  /** Nur fuer die Reihenfolge in der Tageszelle (CSS `order`), s. month-grid. */
+  style?: CSSProperties;
   children: ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({
@@ -131,6 +134,7 @@ export function ZugZielHuelle({
   return (
     <span
       ref={setNodeRef}
+      style={style}
       className={[
         className ?? "",
         // Vormerken sieht anders aus als Uebernehmen: gestrichelter Ring fuer

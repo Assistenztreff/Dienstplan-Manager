@@ -81,3 +81,18 @@ bestaetigt nur ANGEBOTENE eines ganzen Monats, hier geht es um eine freie
 Auswahl, die auch Entwuerfe enthaelt. Die Requests laufen parallel und das
 Raster zeigt das Ergebnis sofort — es bleibt bei einer Wartezeit. Der Knopf
 erscheint nur, wenn die Auswahl ueberhaupt Entwuerfe enthaelt.
+
+## Klick auf die Pille loescht nicht mehr (03.09.2026)
+
+`naechsteBesetzung` ist jetzt ein RINGSCHLUSS: hinter der letzten Person kommt
+wieder die erste, und `null` heisst nur noch „es gibt keine andere Person".
+Frueher wurde der Dienst am Ende des Rundlaufs geloescht.
+
+Warum das im Alltag zuschlug: Bei einem 24-Stunden-Dienst sperrt die Ruhezeit
+fast alle Nachbarn — oft blieben ein bis zwei waehlbare Personen. Der Rundlauf
+war damit nach einem Klick zu Ende, der naechste Klick warf den Dienst weg. Fuer
+Kay sah das aus wie „die Rotation bleibt haengen und loescht dann alles".
+
+Geloescht wird ausschliesslich ueber den Muelleimer an der Pille. Findet die
+Rotation niemanden, sagt ein Hinweis warum (abwesend, Ruhezeit, schon
+eingeteilt) und der Dienst bleibt stehen.

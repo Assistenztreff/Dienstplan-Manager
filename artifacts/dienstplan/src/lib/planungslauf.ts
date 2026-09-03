@@ -558,13 +558,17 @@ export function offenErklaerung(offen: OffenGeblieben[]): string | null {
 // Kay-Auftrag: Im Planungsmodus schaltet ein Klick auf die Pille die Person
 // weiter, statt den Bearbeiten-Dialog zu oeffnen.
 //
-// Der Rundlauf ist: leer -> erste -> zweite -> ... -> letzte -> leer -> ...
-// Kay hatte die Folge als „waehlen, abwaehlen, andere waehlen" beschrieben,
-// also einen Leerzustand ZWISCHEN je zwei Personen. Das kostet doppelt so
-// viele Klicks und bringt nichts: Der Leerzustand ist am Ende des Rundlaufs
-// genauso erreichbar, und bei nur einer einsatzfaehigen Person ergibt sich
-// Kays Folge von selbst (leer -> A -> leer -> A). Widerspricht er, ist es eine
-// Zeile hier.
+// Der Rundlauf ist ein RINGSCHLUSS: hinter der letzten Person kommt wieder die
+// erste. Er endet nie im Leeren.
+//
+// Bis zum 03.09.2026 wurde der Platz am Ende des Rundlaufs GELEERT — der
+// Dienst also geloescht. Kay hat das als Fehler gemeldet, und zu Recht: Bei
+// einem 24-Stunden-Dienst sperrt die Ruhezeit fast alle Nachbarn, oft bleiben
+// ein oder zwei waehlbare Personen uebrig. Der Rundlauf war damit nach einem
+// Klick zu Ende und der naechste Klick loeschte den Dienst — es sah aus, als
+// bliebe die Rotation haengen und wuerfe dann alles weg. Geloescht wird jetzt
+// ausschliesslich ueber den Muelleimer an der Pille; ein Klick wechselt nur
+// noch die Person.
 //
 // Uebersprungen wird, wer an dem Tag nicht kann (abwesend, schon eingeteilt,
 // Ruhezeit) — Kays Wahl. So klickt man sich nie in eine Besetzung, die der
@@ -573,7 +577,7 @@ export function offenErklaerung(offen: OffenGeblieben[]): string | null {
 // ja, sie wuerde sich sonst selbst blockieren.
 
 /**
- * Die naechste Person im Rundlauf; null bedeutet „Platz leeren".
+ * Die naechste Person im Rundlauf; null heisst „es gibt keine andere".
  *
  * `istEinsatzfaehig` kapselt Abwesenheit, Belegung und Ruhezeit — die
  * Rotation selbst kennt diese Regeln nicht, sie fragt nur.
@@ -593,11 +597,11 @@ export function naechsteBesetzung(eingabe: {
   const start =
     aktuelleUserId == null ? 0 : kandidaten.findIndex((p) => p.id === aktuelleUserId) + 1;
 
-  for (let i = start; i < kandidaten.length; i++) {
-    const p = kandidaten[i]!;
+  for (let i = 0; i < kandidaten.length; i++) {
+    const p = kandidaten[(start + i) % kandidaten.length]!;
     if (p.id !== aktuelleUserId && istEinsatzfaehig(p.id)) return p;
   }
-  // Nichts mehr dahinter: Platz leeren. Der naechste Klick faengt wieder vorn an.
+  // Niemand sonst kann an diesem Tag — der Dienst bleibt, wie er ist.
   return null;
 }
 

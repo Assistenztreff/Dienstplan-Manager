@@ -91,6 +91,61 @@ async function ensureMembership(client: pg.Client, teamId: number, userId: numbe
 }
 
 /**
+ * Legt einen Teamkoordinator des Test-Dienstleisters an (Kay-Auftrag
+ * 03.09.2026) und haengt ihn an ein Team.
+ *
+ * Koordinatoren sind Verwaltungspersonen, kein Personal: Sie bekommen KEINEN
+ * Vertrag, KEINE Schichten und tauchen in keiner Assistenz-Liste auf. Was sie
+ * duerfen, haengt am Zugriffs-Level ihrer Mitgliedschaft — deshalb bekommen
+ * die beiden bewusst verschiedene Stufen, damit sich beide Seiten der
+ * Team-Koordination im Dev-Umschalter durchspielen lassen:
+ *   Alex Teamer  -> stufe2 + Teamleiter (darf im Team alles verwalten)
+ *   Anja Teamer  -> stufe1 (darf sehen und planen, aber nicht verwalten)
+ *
+ * `managed_by_user_id` ist Pflicht: GET /users ist mitgliedschafts-gescoped,
+ * und ohne diese Verknuepfung waere ein Koordinator fuer den Dienstleister
+ * unsichtbar.
+ */
+async function ensureKoordinator(
+  client: pg.Client,
+  vorname: string,
+  teamId: number,
+  dienstleisterId: number,
+  stufe: "stufe1" | "stufe2",
+  teamleiter: boolean,
+): Promise<void> {
+  const email = `${vorname.toLowerCase()}.teamer@dienstplan.local`;
+  const name = `${vorname} Teamer`;
+
+  let user = await findUser(client, email);
+  if (!user) {
+    const res = await client.query<UserRow>(
+      `INSERT INTO users (name, email, role, is_active, managed_by_user_id)
+       VALUES ($1, $2, 'koordinator', true, $3)
+       RETURNING id, role`,
+      [name, email, dienstleisterId],
+    );
+    user = res.rows[0]!;
+    console.log(`  Koordinator angelegt: ${name} (id ${user.id})`);
+  } else {
+    // Bestandskonto einsammeln: Rolle und Verknuepfung koennen aus einem
+    // frueheren Lauf abweichen.
+    await client.query(
+      "UPDATE users SET role = 'koordinator', managed_by_user_id = $2, is_active = true WHERE id = $1",
+      [user.id, dienstleisterId],
+    );
+  }
+
+  await client.query(
+    `INSERT INTO team_members (team_id, user_id, access_level, is_teamleiter)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (team_id, user_id)
+     DO UPDATE SET access_level = EXCLUDED.access_level, is_teamleiter = EXCLUDED.is_teamleiter`,
+    [teamId, user.id, stufe, teamleiter],
+  );
+}
+
+/**
  * Legt einen Dummy-Assistenten (Max Mustermann N) an, falls er noch nicht
  * existiert, und stellt Team-Mitgliedschaft + Basis-Vertrag sicher.
  * Bewusst OHNE Premium-Lohndaten (Lohn-/SV-Felder bleiben NULL) und ohne
@@ -412,8 +467,12 @@ async function main(): Promise<void> {
     for (let n = 5; n <= 9; n++) {
       await ensureDummyAssistant(client, n, dlTeamId);
     }
+    // Zwei Teamkoordinatoren zum Durchspielen der Team-Koordination
+    // (Kay-Auftrag 03.09.2026). Sie erscheinen im Dev-Umschalter.
+    await ensureKoordinator(client, "Alex", dlTeamId, dienstleister.id, "stufe2", true);
+    await ensureKoordinator(client, "Anja", dlTeamId, dienstleister.id, "stufe1", false);
     await client.query("UPDATE users SET plan = 'premium' WHERE id = $1", [dienstleister.id]);
-    console.log("Test-Dienstleister -> premium.");
+    console.log("Test-Dienstleister -> premium, 2 Teamkoordinatoren bereit.");
 
     // ------------------------------------------------------------------
     // 4) Test-Assistent ins Betreiber-Team + Basis-Vertrag.

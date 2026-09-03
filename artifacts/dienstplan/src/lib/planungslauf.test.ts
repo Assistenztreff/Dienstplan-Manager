@@ -270,9 +270,11 @@ describe("naechsteBesetzung — Klick-Rotation", () => {
       .toEqual(CLARA);
   });
 
-  it("leert den Platz nach der letzten Person", () => {
+  it("faengt nach der letzten Person wieder vorn an", () => {
+    // Ringschluss statt Leeren (Kay-Fehlermeldung 03.09.2026): Ein Klick
+    // wechselt nur noch die Person, geloescht wird ueber den Muelleimer.
     expect(naechsteBesetzung({ aktuelleUserId: CLARA.id, kandidaten: alle, istEinsatzfaehig: immerFrei }))
-      .toBeNull();
+      .toEqual(ANNA);
   });
 
   it("ueberspringt, wer an dem Tag nicht kann", () => {
@@ -290,16 +292,30 @@ describe("naechsteBesetzung — Klick-Rotation", () => {
       .toEqual(BEN);
   });
 
-  it("leert den Platz, wenn hinter der aktuellen Person niemand mehr kann", () => {
+  it("gibt null zurueck, wenn niemand sonst an dem Tag kann", () => {
+    // Nur Anna ist einsatzfaehig, und sie hat den Dienst bereits — es gibt
+    // keine andere Person. Der Dienst bleibt unveraendert stehen.
     const nurAnna = (id: number) => id === ANNA.id;
     expect(naechsteBesetzung({ aktuelleUserId: ANNA.id, kandidaten: alle, istEinsatzfaehig: nurAnna }))
       .toBeNull();
   });
 
-  it("bei einer einzigen Person entsteht Kays Folge: waehlen, abwaehlen, waehlen", () => {
+  it("springt bei zwei Einsatzfaehigen zwischen ihnen hin und her", () => {
+    // Der Alltagsfall im 24-Stunden-Modell: Die Ruhezeit sperrt fast alle
+    // Nachbarn. Frueher endete der Rundlauf hier nach einem Klick und der
+    // naechste loeschte den Dienst.
+    const annaOderClara = (id: number) => id === ANNA.id || id === CLARA.id;
+    expect(naechsteBesetzung({ aktuelleUserId: ANNA.id, kandidaten: alle, istEinsatzfaehig: annaOderClara }))
+      .toEqual(CLARA);
+    expect(naechsteBesetzung({ aktuelleUserId: CLARA.id, kandidaten: alle, istEinsatzfaehig: annaOderClara }))
+      .toEqual(ANNA);
+  });
+
+  it("bei einer einzigen Person bleibt der Dienst bei ihr stehen", () => {
     const einer = [ANNA];
     expect(naechsteBesetzung({ aktuelleUserId: null, kandidaten: einer, istEinsatzfaehig: immerFrei }))
       .toEqual(ANNA);
+    // Zweiter Klick: Es gibt keine andere Person, also passiert nichts.
     expect(naechsteBesetzung({ aktuelleUserId: ANNA.id, kandidaten: einer, istEinsatzfaehig: immerFrei }))
       .toBeNull();
   });

@@ -641,6 +641,32 @@ export default function Dienstplan() {
   // dabei keine Schichten, PDF-Export, Stundenliste und Auswertung sehen davon
   // nichts. Sortierreihenfolge zaehlt: Frueh/Spaet/Nacht sollen an jedem Tag
   // in derselben Ordnung untereinander stehen.
+  // ── Team-Einstellungen: Vertretungen und Grenzen der Planung ────────────
+  // Bewusst NICHT auf Premium beschraenkt: Der Vertretungs-Schalter steht
+  // jedem Tarif zu, nur die Planungsgrenzen darunter sind ein Premium-Thema.
+  const { data: planungsSettings } = useGetAllowanceSettings(
+    selectedTeamId != null ? { teamId: selectedTeamId } : undefined,
+    { query: { staleTime: REFERENCE_DATA_STALE_TIME_MS, enabled: isTeamScopeReady } } as unknown as
+      Parameters<typeof useGetAllowanceSettings>[1],
+  ) as {
+    data?: {
+      planungBlockLaenge?: number;
+      planungRuhezeitStunden?: number;
+      vertretungEnabled?: boolean;
+    };
+  };
+
+  /**
+   * Plant dieses Team mit Vertretungen? (Kay-Entscheidung 03.09.2026)
+   *
+   * Der Schalter steht EINMAL in den Team-Einstellungen, direkt ueber der
+   * Vertretungsverguetung, zu der er gehoert — nicht mehr an jedem einzelnen
+   * Dienst. Ob mit Vertretungen geplant wird, ist eine Grundsatzentscheidung
+   * des Teams; im Drei-Schicht-Modell hat der Haken am Dienst den Dialog nur
+   * aufgeblaeht und wurde uebersehen.
+   */
+  const vertretungEnabled = planungsSettings?.vertretungEnabled === true;
+
   const geruestDienste = useMemo<GeruestDienst[]>(
     () =>
       (shiftModels ?? [])
@@ -656,9 +682,10 @@ export default function Dienstplan() {
           isActive: m.isActive,
           imRegelplan: m.imRegelplan,
           validFrom: m.validFrom ?? null,
-          standbySlot: m.standbySlot,
+          // Nicht mehr je Dienst, sondern einmal fuers Team (s. oben).
+          standbySlot: vertretungEnabled,
         })),
-    [shiftModels],
+    [shiftModels, vertretungEnabled],
   );
 
   const allShifts: Shift[] = shifts ?? [];
@@ -737,12 +764,6 @@ export default function Dienstplan() {
     return map;
   }, [allShifts]);
 
-  // ── Grenzen der automatischen Planung (am Team gespeichert) ─────────────
-  const { data: planungsSettings } = useGetAllowanceSettings(
-    selectedTeamId != null ? { teamId: selectedTeamId } : undefined,
-    { query: { staleTime: REFERENCE_DATA_STALE_TIME_MS, enabled: canAutoPlan } } as unknown as
-      Parameters<typeof useGetAllowanceSettings>[1],
-  ) as { data?: { planungBlockLaenge?: number; planungRuhezeitStunden?: number } };
   const updateAllowanceSettings = useUpdateAllowanceSettings();
   // Lokaler Entwurf der Grenzen: Das Zahnrad tippt hier hinein, gespeichert
   // wird erst beim Zuklappen — sonst ginge je Tastendruck ein Request raus.
@@ -1081,16 +1102,12 @@ export default function Dienstplan() {
     });
 
     if (naechste === null) {
-      // Rundlauf zu Ende: Platz leeren. Im Regelplan taucht dort danach
-      // wieder die ausgegraute Platzhalter-Pille auf.
-      removeShiftsFromCache(queryClient, [shift.id]);
-      try {
-        await deleteShiftPerDnd.mutateAsync({ id: shift.id });
-        void invalidateArbeitsdienstSalden(queryClient);
-      } catch (err) {
-        upsertShiftsInCache(queryClient, [shift as unknown as CachedShiftRow], selectedTeamId);
-        toast.error(readableApiError(err, "Platz leeren fehlgeschlagen."));
-      }
+      // Kay-Fehlermeldung 03.09.2026: Frueher wurde der Dienst hier GELOESCHT.
+      // Bei einem 24-Stunden-Dienst sperrt die Ruhezeit fast alle Nachbarn —
+      // der Rundlauf war nach einem Klick zu Ende und der naechste warf den
+      // Dienst weg. Jetzt bleibt er stehen, und der Hinweis sagt warum.
+      // Geloescht wird ausschliesslich ueber den Muelleimer an der Pille.
+      toast.info("Niemand sonst kann an diesem Tag — Abwesenheit, Ruhezeit oder schon eingeteilt.");
       return;
     }
 

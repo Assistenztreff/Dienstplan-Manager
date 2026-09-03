@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTeam } from "@/context/team";
 import {
   useListUsers,
   useListContracts,
@@ -273,14 +274,27 @@ export default function Abwesenheiten() {
   // kräfte) — für Assistenzkräfte gar nicht erst abfragen.
   // Doppelter Cast (Optionen + Ergebnis): Die generierten Hooks verlieren die
   // Datentyp-Inferenz, sobald Optionen ohne queryKey übergeben werden.
-  const { data: users, isLoading: usersLoading } = useListUsers(undefined, {
-    query: { enabled: canManage, staleTime: REFERENCE_DATA_STALE_TIME_MS },
+  // ── Team-Bindung (Kay-Fehlermeldung 03.09.2026) ─────────────────────────
+  // Ohne teamId liefert GET /users die VEREINIGUNG aller Teams, auf die der
+  // Anmeldende Zugriff hat. Ein Dienstleister sah dadurch beim Eintragen einer
+  // Abwesenheit die Assistenzkraefte ALLER seiner Teams — und im Resturlaub
+  // ebenso. Die Auswahl ist aber teamgebunden, genau wie der
+  // Vertretungs-Schalter in den Einstellungen. Alle drei Abfragen dieser Seite
+  // kennen den Parameter bereits, sie bekamen ihn nur nie.
+  const { selectedTeamId, isTeamScopeReady } = useTeam();
+  const teamParam = selectedTeamId != null ? { teamId: selectedTeamId } : undefined;
+
+  const { data: users, isLoading: usersLoading } = useListUsers(teamParam, {
+    query: {
+      enabled: canManage && isTeamScopeReady,
+      staleTime: REFERENCE_DATA_STALE_TIME_MS,
+    },
   } as unknown as Parameters<typeof useListUsers>[1]) as {
     data?: User[];
     isLoading: boolean;
   };
-  const { data: contracts, isLoading: contractsLoading } = useListContracts(undefined, {
-    query: { staleTime: REFERENCE_DATA_STALE_TIME_MS },
+  const { data: contracts, isLoading: contractsLoading } = useListContracts(teamParam, {
+    query: { enabled: isTeamScopeReady, staleTime: REFERENCE_DATA_STALE_TIME_MS },
   } as unknown as Parameters<typeof useListContracts>[1]) as {
     data?: Contract[];
     isLoading: boolean;
@@ -319,9 +333,9 @@ export default function Abwesenheiten() {
   const {
     data: vacationBalances,
     isFetching: vacationBalancesFetching,
-  } = useListVacationBalances(undefined, {
+  } = useListVacationBalances(teamParam, {
     query: {
-      enabled: !trackingLocked,
+      enabled: !trackingLocked && isTeamScopeReady,
       staleTime: 0,
       refetchOnMount: "always",
     },

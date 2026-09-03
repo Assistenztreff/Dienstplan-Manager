@@ -18,6 +18,10 @@ export function DevUserSwitcher() {
 
 function roleLabel(u: AuthUser): string {
   if (u.role === "assistant") return "Assistenzkraft";
+  // Kay-Auftrag 03.09.2026: Die beiden Teamkoordinatoren des Test-
+  // Dienstleisters sollen im Umschalter als solche erkennbar sein — sonst
+  // sehen sie wie ein zweiter Admin aus.
+  if (u.role === "koordinator") return "Teamkoordination";
   return u.accountType === "dienstleister" ? "Admin · Dienstleister" : "Admin · Privat";
 }
 

@@ -368,21 +368,11 @@ function ModelDialog({ open, onClose, editModel, nextSortOrder, targetTeamId }: 
                   </p>
                 </div>
 
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="model-standby-slot">Vertretung vorsehen</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Unter einem besetzten Dienst erscheint zusätzlich eine flache Zeile für die
-                      vorgemerkte Vertretung — erst dann, denn vorher gibt es nichts zu vertreten.
-                    </p>
-                  </div>
-                  <Switch
-                    id="model-standby-slot"
-                    data-testid="model-standby-slot"
-                    checked={form.standbySlot}
-                    onCheckedChange={(v) => set("standbySlot", v)}
-                  />
-                </div>
+                {/* Kay-Entscheidung 03.09.2026: Der Vertretungs-Schalter ist
+                    hier weg. Ob mit Vertretungen geplant wird, entscheidet das
+                    Team einmal — weiter unten bei der Vertretungsvergütung, zu
+                    der er gehört. Im Drei-Schicht-Modell musste man ihn sonst
+                    an jedem Dienst einzeln setzen, und er wurde übersehen. */}
               </>
             )}
           </div>
