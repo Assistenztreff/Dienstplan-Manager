@@ -61,7 +61,7 @@ meisten „Preview ist leer"-Momente:
 ```bash
 pnpm install
 rm -rf artifacts/dienstplan/node_modules/.vite
-pnpm run db:push
+pnpm --filter @workspace/db run push
 ```
 
 Danach die Workflows neu starten (Frontend **und** API-Server) und die Seite
@@ -73,9 +73,9 @@ Warum jede Zeile nötig ist:
   App beim Laden ab.
 - `rm -rf ... .vite` — löscht den Zwischenspeicher. Ohne das arbeitet die
   Vorschau mit Dateien vom alten Ast weiter.
-- `pnpm run db:push` — bringt die Datenbank auf den Stand des Asts.
+- die dritte Zeile bringt die Datenbank auf den Stand des Asts.
 
-**Fragt `db:push` nach Datenverlust?** Beim Wechsel **auf** einen Ast mit neuen
+**Fragt die dritte Zeile nach Datenverlust?** Beim Wechsel **auf** einen Ast mit neuen
 Feldern: bestätigen. Beim Wechsel **zurück auf `main`**: mit „No, abort"
 abbrechen. Die zusätzlichen Spalten stören `main` nicht, und beim nächsten
 Wechsel sind sie noch da.
