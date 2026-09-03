@@ -12,6 +12,7 @@ import {
   lastName,
   lastNameInitial,
   PillAvatar,
+  PillMuelleimer,
   PlatzAvatar,
   StandbyRing,
   type Shift,
@@ -272,6 +273,7 @@ export function MonthGrid({
   ausgewaehlteShiftIds,
   onShiftAuswahl,
   onTagAuswahl,
+  onShiftLoeschen,
 }: {
   days: Date[];
   monthStart: Date;
@@ -322,6 +324,8 @@ export function MonthGrid({
   onShiftAuswahl?: (shiftId: number) => void;
   /** Klick auf die freie Flaeche der Zelle: alle Dienste des Tages umschalten. */
   onTagAuswahl?: (day: Date) => void;
+  /** Muelleimer an einer ausgewaehlten Pille: genau diesen Dienst loeschen. */
+  onShiftLoeschen?: (shiftId: number) => void;
 }) {
   const personColors = usePersonColors();
   // Dienste mit angenommener Abweichungsmeldung: bleiben FIX, bekommen aber
@@ -819,7 +823,12 @@ export function MonthGrid({
                                   Vertretung < Ausfall — das wichtigste Icon
                                   liegt im Badge-Stack rechts oben. */}
                               <span className="flex shrink-0 items-center -space-x-[7px]">
-                                {status === "FIX" ? (
+                                {istAusgewaehlt && onShiftLoeschen ? (
+                                  <PillMuelleimer
+                                    name={s.user?.name ?? "diesem Dienst"}
+                                    onClick={() => onShiftLoeschen(s.id)}
+                                  />
+                                ) : status === "FIX" ? (
                                   <StatusBadge kind="confirmed" label="Bestätigt" calendarCompact />
                                 ) : (
                                   <StatusBadge
@@ -828,17 +837,17 @@ export function MonthGrid({
                                     calendarCompact
                                   />
                                 )}
-                                {korrigiert && (
+                                {!istAusgewaehlt && korrigiert && (
                                   <StatusBadge
                                     kind="correction"
                                     label="Nachträglich korrigiert"
                                     calendarCompact
                                   />
                                 )}
-                                {s.isVertretung && (
+                                {!istAusgewaehlt && s.isVertretung && (
                                   <StatusBadge kind="vertretung" label="Vertretung" calendarCompact />
                                 )}
-                                {hasAusfall && (
+                                {!istAusgewaehlt && hasAusfall && (
                                   <StatusBadge
                                     kind="krank"
                                     label="Ausfall: Assistenzkraft abwesend"
@@ -970,7 +979,15 @@ export function MonthGrid({
                     //   2. Korrektur — nachtraeglich geaenderte Arbeitszeit
                     //   3. Vertretung — dieser Dienst ist ein Einspringen
                     //   4. Planungsstatus (Entwurf/Vorschlag/Bestaetigt)
-                    const statusBadgeStack = hasAusfall ? (
+                    // Kay-Auftrag 03.09.2026: An einer ausgewaehlten Pille
+                    // steht statt des Status-Icons der Muelleimer. Der Status
+                    // ist in dem Moment die unwichtigste Information.
+                    const statusBadgeStack = istAusgewaehlt && onShiftLoeschen ? (
+                      <PillMuelleimer
+                        name={s.user?.name ?? "diesem Dienst"}
+                        onClick={() => onShiftLoeschen(s.id)}
+                      />
+                    ) : hasAusfall ? (
                       <StatusBadge
                         kind="krank"
                         label="Ausfall: Assistenzkraft abwesend"

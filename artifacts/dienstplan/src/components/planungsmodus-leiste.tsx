@@ -19,7 +19,7 @@
 // Arbeit andersherum. Abgewaehlt wird danach durch einen Klick auf die Pille
 // selbst — sie ist der Haken (Weg 1 von drei Vorschlaegen, Kays Wahl).
 import { useState } from "react";
-import { Wand2, Settings2, SquareDashedMousePointer, Trash2, X } from "lucide-react";
+import { Wand2, Settings2, SquareDashedMousePointer, Trash2, CheckCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,6 +43,8 @@ export function PlanungsmodusLeiste({
   onAuswahlUmschalten,
   anzahlAusgewaehlt,
   anzahlAuswaehlbar,
+  anzahlZuBestaetigen,
+  onAuswahlBestaetigen,
   onAuswahlLoeschen,
   onBeenden,
 }: {
@@ -59,6 +61,9 @@ export function PlanungsmodusLeiste({
   anzahlAusgewaehlt: number;
   /** Wie viele Dienste im Monat ueberhaupt auswaehlbar sind. */
   anzahlAuswaehlbar: number;
+  /** Wie viele der ausgewaehlten Dienste noch Entwurf oder Vorschlag sind. */
+  anzahlZuBestaetigen: number;
+  onAuswahlBestaetigen: () => void;
   onAuswahlLoeschen: () => void;
   onBeenden: () => void;
 }) {
@@ -188,6 +193,24 @@ export function PlanungsmodusLeiste({
           <SquareDashedMousePointer className="h-4 w-4" />
           {anzahlAusgewaehlt > 0 && <span>{anzahlAusgewaehlt}</span>}
         </Button>
+
+        {/* Kay-Auftrag 03.09.2026: Aus der Auswahl heraus direkt bestaetigen.
+            Erscheint nur, wenn die Auswahl ueberhaupt Entwuerfe enthaelt —
+            bei lauter bereits bestaetigten Diensten waere der Knopf wirkungslos. */}
+        {anzahlZuBestaetigen > 0 && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 border-emerald-600 text-emerald-800 hover:bg-emerald-50"
+            onClick={onAuswahlBestaetigen}
+            title={`${anzahlZuBestaetigen} ${anzahlZuBestaetigen === 1 ? "Entwurf" : "Entwürfe"} bestätigen`}
+            aria-label={`${anzahlZuBestaetigen} ${anzahlZuBestaetigen === 1 ? "Entwurf" : "Entwürfe"} bestätigen`}
+            data-testid="planungsmodus-bestaetigen"
+          >
+            <CheckCheck className="h-4 w-4" />
+            {anzahlZuBestaetigen}
+          </Button>
+        )}
 
         {/* Erst mit Ziel: ein Loeschknopf ohne Auswahl ist nur eine Falle. */}
         {anzahlAusgewaehlt > 0 && (

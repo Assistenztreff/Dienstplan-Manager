@@ -53,12 +53,24 @@
 // ---------------------------------------------------------------------------
 
 // ── Die vorgemerkte Vertretung ───────────────────────────────────────────────
-// Sie verbraucht keine Vertragsstunden — vorgemerkt heisst nicht gearbeitet.
-// Trotzdem entscheidet der Vertrag mit: Wer vorgemerkt ist, wird im Ernstfall
-// auch geholt, und bei einer Aushilfe waere das schnell eine Verdoppelung
-// ihres Monats. Vorgemerkt wird deshalb nur, wessen Vertrag den Dienst noch
-// traegt — und unter diesen die Person mit den WENIGSTEN bisherigen
-// Vormerkungen, damit sich die Bereitschaft verteilt.
+// Kay-Entscheidung 03.09.2026 (zweite Fassung): Jeder Vertretungsplatz des
+// Monats wird besetzt, solange ueberhaupt jemand kann. Die Reihenfolge:
+//   1. Wer im Monat noch GAR KEINE Vertretung hat, kommt zuerst dran.
+//   2. Haben alle eine, geht die zweite an die TEILZEITkraefte.
+//   3. Erst danach an die Vollzeitkraefte (ab 168 Stunden Monats-Soll).
+// Innerhalb einer Stufe entscheidet die Rotationsreihenfolge. Abwesenheit,
+// Belegung und Ruhezeit gelten unveraendert — wer an dem Tag nicht kann, wird
+// auch nicht vorgemerkt.
+//
+// Die erste Fassung liess nur vormerken, wessen Vertrag den Dienst noch trug
+// (Minijob-Ueberlegung). Kay hat das verworfen: Eine Vertretung ist eine
+// Bereitschaft, kein geplanter Dienst — ob sie tatsaechlich geholt wird und
+// was das fuer die Geringfuegigkeitsgrenze bedeutet, entscheidet sich erst im
+// Ernstfall. Der Verteilungsschluessel oben sorgt dafuer, dass die Last
+// trotzdem nicht immer dieselben trifft.
+
+/** Ab hier gilt eine Kraft als Vollzeit (Kay-Vorgabe 03.09.2026). */
+export const VOLLZEIT_STUNDEN = 168;
 
 export type PlanPerson = { id: number; name: string };
 
@@ -258,23 +270,7 @@ class Stundenbedarf {
     return this.aktiv ? (this.frei.get(personId) ?? Number.NEGATIVE_INFINITY) : 0;
   }
 
-  /**
-   * Traegt der Vertrag diesen Dienst noch, wenn die Person einspringen muesste?
-   *
-   * Kay-Frage 03.09.2026 (Minijob): Wer als Vertretung vorgemerkt ist, wird im
-   * Ernstfall auch geholt. Bei einer Aushilfe mit 24 Vertragsstunden waere das
-   * eine Verdoppelung ihres Monats. Das Gesetz laesst so etwas nur als
-   * UNVORHERGESEHENES Ueberschreiten zu (§ 8 Abs. 1b SGB IV, hoechstens zwei
-   * Monate im Jahr) — eine im Voraus eingeplante Vormerkung ist genau das
-   * nicht mehr. Deshalb bekommt eine Person die Vormerkung nur, solange ihr
-   * Vertrag den Dienst noch traegt.
-   */
-  traegtNoch(personId: number, stunden: number): boolean {
-    if (!this.aktiv) return true;
-    const rest = this.frei.get(personId);
-    if (rest === undefined) return false;
-    return rest >= stunden;
-  }
+
 
   abbuchen(personId: number, stunden: number): void {
     if (!this.aktiv) return;
@@ -319,6 +315,11 @@ export function planeMonat(eingabe: {
    * Vertragsstunden stehen darin. Weggelassen oder leer = reines Reihum.
    */
   freieStunden?: Map<number, number>;
+  /**
+   * Vertragliches Monats-Soll je Person. Entscheidet allein darueber, wer als
+   * Teilzeit gilt und damit die zweite Vertretung frueher bekommt.
+   */
+  monatsSollStunden?: Map<number, number>;
 }): LaufErgebnis {
   const { dienste, offeneTageJeDienst, personen, bestehende, abwesend } = eingabe;
   const sperrzeiten = eingabe.sperrzeiten ?? new Map<number, Sperrzeit[]>();
@@ -342,6 +343,11 @@ export function planeMonat(eingabe: {
   /** Wie oft ist jede Person bisher als Vertretung vorgemerkt? Verteilt die
    *  Vormerkungen, statt sie immer derselben Person zu geben. */
   const vormerkungen = new Map<number, number>();
+  /** Ohne hinterlegtes Monats-Soll gilt niemand als Vollzeit — dann entscheidet
+   *  allein die Zahl der bisherigen Vormerkungen. */
+  const monatsSoll = eingabe.monatsSollStunden;
+  const istVollzeit = (personId: number): boolean =>
+    (monatsSoll?.get(personId) ?? 0) >= VOLLZEIT_STUNDEN;
   const rotationen = new Map<number, Rotation>(
     dienste.map((d) => [d.id, { person: null, rest: 0, vorheriges: null, naechsterStart: 0 }]),
   );
@@ -436,13 +442,12 @@ export function planeMonat(eingabe: {
       //    keine Rolle — eine Vormerkung verbraucht keine.
       let standby: PlanPerson | null = null;
       if (dienst.standbySlot) {
-        // Kay-Fehlermeldung 03.09.2026: Bisher nahm diese Schleife immer die
-        // ERSTE freie Person ab dem Rotationszeiger. Dadurch landete die
-        // Vormerkung dutzendfach bei denselben zwei Aushilfen — ausgerechnet
-        // bei denen, deren Monat nach einem einzigen Dienst voll ist.
-        // Jetzt zaehlt: Traegt der Vertrag den Dienst noch? Und wer wurde
-        // bisher am seltensten vorgemerkt? Erst danach die Reihenfolge.
-        let bester: { kandidat: PlanPerson; abstand: number } | null = null;
+        // Kay-Regel 03.09.2026: Jeder Platz wird besetzt, solange jemand kann.
+        // Sortiert wird nach (1) bisherige Vormerkungen, (2) Teilzeit vor
+        // Vollzeit, (3) Rotationsreihenfolge — siehe Kopf der Datei.
+        let bester:
+          | { kandidat: PlanPerson; bisher: number; vollzeit: boolean }
+          | null = null;
         for (let versuch = 0; versuch < personen.length; versuch++) {
           const idx = (rot.naechsterStart + versuch) % personen.length;
           const kandidat = personen[idx]!;
@@ -453,10 +458,17 @@ export function planeMonat(eingabe: {
           ) {
             continue;
           }
-          if (!bedarf.traegtNoch(kandidat.id, stunden)) continue;
-          const bisher = vormerkungen.get(kandidat.id) ?? 0;
-          if (bester === null || bisher < (vormerkungen.get(bester.kandidat.id) ?? 0)) {
-            bester = { kandidat, abstand: versuch };
+          const eintrag = {
+            kandidat,
+            bisher: vormerkungen.get(kandidat.id) ?? 0,
+            vollzeit: istVollzeit(kandidat.id),
+          };
+          if (
+            bester === null ||
+            eintrag.bisher < bester.bisher ||
+            (eintrag.bisher === bester.bisher && !eintrag.vollzeit && bester.vollzeit)
+          ) {
+            bester = eintrag;
           }
         }
         if (bester !== null) {

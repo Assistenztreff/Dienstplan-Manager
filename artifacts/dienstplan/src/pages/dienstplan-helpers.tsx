@@ -11,7 +11,7 @@ import {
 } from "date-fns";
 import { de } from "date-fns/locale";
 import { Card } from "@/components/ui/card";
-import { Check, ChevronDown, Users, MessageSquare } from "lucide-react";
+import { Check, ChevronDown, Users, MessageSquare, Trash2 } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { useTeam } from "@/context/team";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -242,19 +242,72 @@ export function PillAvatar({
 }: {
   color: string;
   label: string;
-  /** Kay-Auftrag 03.09.2026, Weg 1: Im Auswahlmodus WIRD der Avatar zum Haken.
-   *  Bewusst kein zusaetzliches Kaestchen und kein Muelleimer in der Pille —
-   *  auf dem Smartphone ist sie rund 48 px breit, dort ist fuer ein weiteres
-   *  Bedienelement kein Platz (s. smartphone-pill-width-budget). */
+  /** Kay-Auftrag 03.09.2026, Weg 1: Im Auswahlmodus WIRD der Avatar zum
+   *  Auswahlzeichen. Bewusst kein zusaetzliches Kaestchen — auf dem Smartphone
+   *  ist die Pille rund 48 px breit (s. smartphone-pill-width-budget).
+   *
+   *  Die Form ist mit Absicht ein ECKIGES Feld, kein Kreis: Der gruene
+   *  Bestaetigt-Haken rechts an der Pille ist rund, und Kay hat am 03.09.2026
+   *  zu Recht angemerkt, dass zwei runde Haken nebeneinander wie derselbe
+   *  Zustand aussehen. Eckig + dunkelblau (Hausfarbe) heisst „von mir
+   *  ausgewaehlt", rund + gruen heisst „vom Planer bestaetigt". Das Feld ist
+   *  ausserdem etwas groesser als das Status-Icon, damit die Auswahl beim
+   *  Ueberfliegen des Monats sofort ins Auge faellt. */
   ausgewaehlt?: boolean;
 }) {
+  if (ausgewaehlt) {
+    return (
+      <span
+        aria-hidden="true"
+        className="flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-[5px] text-white ring-1 ring-white"
+        style={{ backgroundColor: "#092948" }}
+      >
+        <Check className="h-[14px] w-[14px]" strokeWidth={3.5} />
+      </span>
+    );
+  }
   return (
     <span
       aria-hidden="true"
       className="flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full text-[8px] font-bold leading-none text-white"
-      style={{ backgroundColor: ausgewaehlt ? "#0f766e" : color }}
+      style={{ backgroundColor: color }}
     >
-      {ausgewaehlt ? <Check className="h-[11px] w-[11px]" strokeWidth={3.5} /> : label}
+      {label}
+    </span>
+  );
+}
+
+/**
+ * Roter Muelleimer an einer ausgewaehlten Pille (Kay-Auftrag 03.09.2026).
+ *
+ * Steht im Auswahlmodus dort, wo sonst das Status-Icon sitzt: Der Status einer
+ * Pille, die man gerade zum Loeschen auswaehlt, ist in dem Moment die
+ * unwichtigste Information. Etwas groesser als das Status-Icon, weil er ein
+ * Bedienelement ist und kein Schild — 20 px sind auch auf dem Smartphone
+ * sicher zu treffen.
+ */
+export function PillMuelleimer({ onClick, name }: { onClick: () => void; name: string }) {
+  return (
+    <span
+      role="button"
+      tabIndex={-1}
+      data-testid="pill-loeschen"
+      aria-label={`Dienst von ${name} löschen`}
+      title={`Dienst von ${name} löschen`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.stopPropagation();
+          onClick();
+        }
+      }}
+      className="flex h-[20px] w-[20px] shrink-0 cursor-pointer items-center justify-center rounded-[5px] bg-[#c0342b] text-white ring-1 ring-white transition-colors hover:bg-[#96271f]"
+    >
+      <Trash2 className="h-[13px] w-[13px]" strokeWidth={2.5} />
     </span>
   );
 }

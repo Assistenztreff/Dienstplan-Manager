@@ -479,6 +479,10 @@ export default function Dienstplan() {
   ) as { data?: User[]; isLoading: boolean };
 
   const goToMonth = (newDate: Date) => {
+    // Die gemerkten Entwuerfe des letzten Laufs gehoeren zum ANGEZEIGTEN
+    // Monat. Beim Wechsel verlieren sie ihren Bezug — „Neu würfeln" wuerde
+    // sonst im neuen Monat die Entwuerfe des alten loeschen wollen.
+    letzterLaufIds.current = [];
     setCurrentDate(newDate);
     setSelectedDay(startOfMonth(newDate));
     clearSelection();
@@ -684,6 +688,16 @@ export default function Dienstplan() {
     return map;
   }, [stundenkontoEintraege]);
 
+  /** Vertragliches Monats-Soll — entscheidet, wer als Teilzeit gilt und die
+   *  zweite Vertretung frueher bekommt (Kay-Regel 03.09.2026). */
+  const monatsSollByUserId = useMemo(
+    () =>
+      new Map(
+        stundenkontoEintraege.filter((e) => e.hasContract).map((e) => [e.id, e.contractTarget]),
+      ),
+    [stundenkontoEintraege],
+  );
+
   const capacityByUserId = useMemo(
     () =>
       new Map(
@@ -799,19 +813,35 @@ export default function Dienstplan() {
     try {
       let basis = allShifts;
       if (!nurLuecken && letzterLaufIds.current.length > 0) {
-        const wegIds = new Set(letzterLaufIds.current);
-        // Sofort aus dem Raster nehmen, dann loeschen (Echtzeit-Regel).
-        removeShiftsFromCache(queryClient, wegIds);
-        basis = allShifts.filter((sh) => !wegIds.has(sh.id));
-        try {
-          await bulkDeleteShifts.mutateAsync({ data: { ids: [...wegIds] } });
-        } catch {
-          toast.error("Die alten Entwürfe ließen sich nicht abräumen.");
-          void invalidateShiftDerivedQueries(queryClient);
-          setAutomatikLaeuft(false);
-          return;
-        }
+        // Nur loeschen, was es NOCH GIBT. Der Server loescht einen Sammel-
+        // auftrag ganz oder gar nicht und antwortet 404, sobald eine ID fehlt.
+        // Genau das passierte Kay am 03.09.2026: Die gemerkten IDs stammten
+        // teils aus einem Lauf, dessen Entwuerfe er zwischendurch geloescht
+        // hatte — „Die alten Entwürfe ließen sich nicht abräumen", und der
+        // Lauf brach ab, statt einfach neu zu planen.
+        const vorhanden = new Set(allShifts.map((sh) => sh.id));
+        const wegIds = letzterLaufIds.current.filter((id) => vorhanden.has(id));
         letzterLaufIds.current = [];
+        if (wegIds.length > 0) {
+          // Sofort aus dem Raster nehmen, dann loeschen (Echtzeit-Regel).
+          removeShiftsFromCache(queryClient, wegIds);
+          basis = allShifts.filter((sh) => !wegIds.includes(sh.id));
+          try {
+            for (const block of chunkIds(wegIds)) {
+              await bulkDeleteShifts.mutateAsync({ data: { ids: block } });
+            }
+          } catch (err) {
+            // Kein Abbruch mehr: Das Wuerfeln soll auch dann etwas tun, wenn
+            // das Abraeumen scheitert. Was stehen bleibt, faellt gleich als
+            // „schon besetzt" durch — der Lauf fuellt dann nur die Luecken.
+            toast.warning(
+              readableApiError(err, "Die alten Entwürfe ließen sich nicht abräumen.") +
+                " Es werden nur die offenen Plätze neu besetzt.",
+            );
+            void invalidateShiftDerivedQueries(queryClient);
+            basis = allShifts;
+          }
+        }
       }
 
       // Offene Tage je Dienst — dieselbe Ableitung wie die Platzhalter im
@@ -857,6 +887,7 @@ export default function Dienstplan() {
         abwesend: absenceByUser,
         sperrzeiten: sperrzeitenByUser,
         freieStunden: freieStundenByUserId,
+        monatsSollStunden: monatsSollByUserId,
       });
       if (besetzungen.length === 0) {
         toast.info(
@@ -1687,6 +1718,71 @@ export default function Dienstplan() {
     setDienstAuswahl(auswaehlbareShifts.map((s) => s.id));
   }
 
+  /** Muelleimer an einer Pille: genau diesen Dienst loeschen. */
+  async function loescheEinzelnenDienst(shiftId: number): Promise<void> {
+    const vorher = allShifts.find((s) => s.id === shiftId);
+    if (!vorher) return;
+    setDienstAuswahl((prev) => prev.filter((id) => id !== shiftId));
+    removeShiftsFromCache(queryClient, [shiftId]);
+    try {
+      await deleteShiftPerDnd.mutateAsync({ id: shiftId });
+      void invalidateShiftDerivedQueries(queryClient);
+    } catch (err) {
+      upsertShiftsInCache(queryClient, [vorher as unknown as CachedShiftRow], selectedTeamId);
+      toast.error(readableApiError(err, "Löschen fehlgeschlagen."));
+    }
+  }
+
+  /**
+   * Setzt die ausgewaehlten Entwuerfe auf bestaetigt (Kay-Auftrag 03.09.2026).
+   *
+   * Bewusst je Dienst ein Request statt einer neuen Sammelroute: Der
+   * vorhandene Sammel-Endpunkt bestaetigt nur ANGEBOTENE eines ganzen Monats,
+   * hier geht es aber um eine freie Auswahl, die auch Entwuerfe enthaelt. Die
+   * Requests laufen parallel, und das Raster zeigt das Ergebnis sofort — es
+   * bleibt bei EINER Wartezeit, nicht bei dreissig hintereinander.
+   */
+  const zuBestaetigen = useMemo(
+    () =>
+      allShifts.filter(
+        (s) => dienstAuswahlSet.has(s.id) && (s.planningStatus ?? "FIX") !== "FIX",
+      ),
+    [allShifts, dienstAuswahlSet],
+  );
+
+  async function bestaetigeAuswahl(): Promise<void> {
+    const ziele = [...zuBestaetigen];
+    if (ziele.length === 0) return;
+    setDialog({ mode: "closed" });
+    upsertShiftsInCache(
+      queryClient,
+      ziele.map((s) => ({ ...s, planningStatus: "FIX" }) as unknown as CachedShiftRow),
+      selectedTeamId,
+    );
+    const ergebnisse = await Promise.allSettled(
+      ziele.map((s) =>
+        updateShift.mutateAsync({
+          id: s.id,
+          data: { planningStatus: "FIX", force: true } as { planningStatus: "FIX" },
+        }),
+      ),
+    );
+    const gescheitert = ergebnisse.filter((e) => e.status === "rejected");
+    void invalidateShiftDerivedQueries(queryClient);
+    if (gescheitert.length > 0) {
+      toast.error(
+        `${ziele.length - gescheitert.length} bestätigt, ${gescheitert.length} nicht: ${readableApiError((gescheitert[0] as PromiseRejectedResult).reason, "Bestätigen fehlgeschlagen.")}`,
+        { duration: Infinity, closeButton: true },
+      );
+      return;
+    }
+    setDienstAuswahl([]);
+    setDienstAuswahlModus(false);
+    toast.success(
+      `${ziele.length} ${ziele.length === 1 ? "Dienst" : "Dienste"} bestätigt — zählen jetzt in Auswertungen und Stundennachweis.`,
+    );
+  }
+
   /** Loescht die ausgewaehlten Dienste — sofort im Raster, dann am Server. */
   async function loescheAuswahl(): Promise<void> {
     const ids = [...dienstAuswahl];
@@ -1888,6 +1984,8 @@ export default function Dienstplan() {
             onAuswahlUmschalten={alleDiensteAuswaehlen}
             anzahlAusgewaehlt={dienstAuswahl.length}
             anzahlAuswaehlbar={auswaehlbareShifts.length}
+            anzahlZuBestaetigen={zuBestaetigen.length}
+            onAuswahlBestaetigen={() => void bestaetigeAuswahl()}
             onAuswahlLoeschen={() => setDialog({ mode: "auswahl-loeschen" })}
             onBeenden={() => {
               setPlanungsmodus(false);
@@ -1938,6 +2036,7 @@ export default function Dienstplan() {
             ausgewaehlteShiftIds={dienstAuswahlSet}
             onShiftAuswahl={toggleDienstAuswahl}
             onTagAuswahl={toggleTagAuswahl}
+            onShiftLoeschen={(id) => void loescheEinzelnenDienst(id)}
             onConfirmShift={confirmShift}
             canEdit={canPlan}
             selectionMode={isSelectionMode}
@@ -1993,6 +2092,7 @@ export default function Dienstplan() {
             ausgewaehlteShiftIds={dienstAuswahlSet}
             onShiftAuswahl={toggleDienstAuswahl}
             onTagAuswahl={toggleTagAuswahl}
+            onShiftLoeschen={(id) => void loescheEinzelnenDienst(id)}
             onConfirmShift={confirmShift}
             canEdit={canPlan}
             selectionMode={isSelectionMode}

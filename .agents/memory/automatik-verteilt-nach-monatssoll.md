@@ -82,7 +82,22 @@ verschwindet, erklaert die Luecken im Raster niemandem.
 Gegengeprobt: Ohne Rettungsleine 2 verlieren sechs von sieben Personen ihren
 ganzen Monat — genau Kays Symptom.
 
-## Die vorgemerkte Vertretung folgt dem Vertrag
+## Die vorgemerkte Vertretung: zweite Fassung (Kay, 03.09.2026 nachmittags)
+
+**Die Regel unten wurde ersetzt — sie steht hier nur noch als Begruendung.**
+Kay will, dass JEDER Vertretungsplatz besetzt wird, solange ueberhaupt jemand
+kann. Die Reihenfolge:
+1. Wer im Monat noch gar keine Vertretung hat, kommt zuerst.
+2. Haben alle eine, geht die zweite an die Teilzeitkraefte.
+3. Erst danach an die Vollzeitkraefte (ab `VOLLZEIT_STUNDEN` = 168 h Soll).
+Innerhalb einer Stufe entscheidet die Rotationsreihenfolge; Abwesenheit,
+Belegung und Ruhezeit gelten unveraendert.
+
+Dafuer bekommt `planeMonat` zusaetzlich `monatsSollStunden` (aus
+`contractTarget` des Stundenkontos). Ohne hinterlegtes Soll gilt niemand als
+Vollzeit — dann entscheidet allein die Zahl der bisherigen Vormerkungen.
+
+## Verworfen: die vorgemerkte Vertretung folgt dem Vertrag
 
 Vorgemerkt wird nur, wessen Vertrag den Dienst noch traegt
 (`Stundenbedarf.traegtNoch`), und unter diesen die Person mit den WENIGSTEN
@@ -97,3 +112,21 @@ Zulaessig ist so etwas nur als UNVORHERGESEHENES Ueberschreiten (§ 8 Abs. 1b
 SGB IV, hoechstens zwei Kalendermonate im Zwoelfmonatszeitraum, je hoechstens
 das Doppelte der Grenze) — eine im Voraus eingeplante Vormerkung ist genau das
 nicht mehr. Traegt kein Vertrag den Dienst, bleibt die Vormerkung leer.
+
+
+## Nachtrag: „Die alten Entwuerfe liessen sich nicht abraeumen"
+
+`letzterLaufIds` merkt sich die IDs des letzten Laufs fuer „Neu wuerfeln".
+Zwei Loecher darin haben Kay am 03.09.2026 den Lauf abbrechen lassen:
+
+1. Die IDs ueberlebten den MONATSWECHSEL. `goToMonth` leert sie jetzt — sonst
+   loescht das Wuerfeln im November die Entwuerfe des Oktobers.
+2. Waren einzelne davon inzwischen anderweitig geloescht, antwortete
+   `bulk-delete` mit 404 (die Route loescht ganz oder gar nicht), und der Lauf
+   brach ab, ohne irgendetwas zu planen. Jetzt wird vorher gegen die geladenen
+   Schichten gefiltert, in Bloecken zu 200 geloescht, und ein Fehlschlag ist
+   nur noch eine Warnung: Der Lauf fuellt dann die offenen Plaetze.
+
+Merksatz fuer jede gemerkte ID-Liste im Dienstplan: Sie gilt nur fuer den
+angezeigten Monat und nur, solange die Zeilen existieren. Vor dem Loeschen
+gegen `allShifts` filtern.

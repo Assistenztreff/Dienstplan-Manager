@@ -260,6 +260,70 @@ test.describe("Premium", () => {
     await expect(auswahl).toHaveAttribute("aria-pressed", "false");
   });
 
+  test("Muelleimer an der Pille loescht einen einzelnen Dienst", async ({ page }) => {
+    test.setTimeout(90_000);
+    await raeumeMonatAb();
+    const angelegt: number[] = [];
+    for (const [i, person] of personen.entries()) {
+      const tag = new Date(`${ZIEL_ISO}T12:00:00`);
+      tag.setDate(tag.getDate() + i);
+      const iso = tag.toISOString().slice(0, 10);
+      const res = await ctx.post("/api/shifts", {
+        data: {
+          userId: person.id,
+          shiftModelId: dienstId,
+          type: "work",
+          startTime: `${iso}T08:00:00`,
+          endTime: `${iso}T16:00:00`,
+          planningStatus: "VORLAEUFIG",
+        },
+      });
+      expect(res.ok(), await res.text()).toBe(true);
+      angelegt.push(((await res.json()) as { id: number }).id);
+    }
+
+    await page.goto(`/dienstplan?date=${ZIEL_ISO}`);
+    const desktop = page.getByTestId("dienstplan-desktop");
+    await expect(desktop.getByTestId("month-grid")).toBeVisible();
+    await page.getByTestId("toggle-planungsmodus").click();
+    await page.getByTestId("planungsmodus-auswahl").click();
+
+    // An einer ausgewaehlten Pille steht der Muelleimer statt des Status-Icons.
+    const pille = desktop.getByTestId(`day-chip-${angelegt[0]}`);
+    await expect(pille).toHaveAttribute("data-ausgewaehlt", "true");
+    await pille.getByTestId("pill-loeschen").click();
+    await expect(pille).toHaveCount(0);
+
+    const uebrig = (await schichtenDesMonats()).map((s) => s.id);
+    expect(uebrig).not.toContain(angelegt[0]);
+    expect(uebrig).toContain(angelegt[1]);
+  });
+
+  test("die Auswahl laesst sich in einem Zug bestaetigen", async ({ page }) => {
+    test.setTimeout(90_000);
+    const vorhanden = await schichtenDesMonats();
+    const entwuerfe = vorhanden.filter((s) => s.planningStatus === "VORLAEUFIG");
+    expect(entwuerfe.length, "Voraussetzung: es liegen Entwuerfe vor").toBeGreaterThan(0);
+
+    await page.goto(`/dienstplan?date=${ZIEL_ISO}`);
+    await expect(page.getByTestId("dienstplan-desktop").getByTestId("month-grid")).toBeVisible();
+    await page.getByTestId("toggle-planungsmodus").click();
+    await page.getByTestId("planungsmodus-auswahl").click();
+
+    const bestaetigen = page.getByTestId("planungsmodus-bestaetigen");
+    await expect(bestaetigen).toContainText(String(entwuerfe.length));
+    await bestaetigen.click();
+    await expect(page.getByText(/bestätigt/)).toBeVisible({ timeout: 20_000 });
+
+    const nachher = await schichtenDesMonats();
+    expect(
+      nachher.filter((s) => s.planningStatus !== "FIX"),
+      "nach dem Bestaetigen ist nichts mehr Entwurf",
+    ).toEqual([]);
+    // Und der Knopf ist weg, weil es nichts mehr zu bestaetigen gibt.
+    await expect(page.getByTestId("planungsmodus-bestaetigen")).toHaveCount(0);
+  });
+
   test("das Zahnrad speichert die Grenzen am Team", async ({ page }) => {
     await page.goto(`/dienstplan?date=${ZIEL_ISO}`);
     await expect(page.getByTestId("dienstplan-desktop").getByTestId("month-grid")).toBeVisible();

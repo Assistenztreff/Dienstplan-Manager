@@ -49,3 +49,35 @@ die freie Flaeche einer Zelle schaltet alle Dienste dieses Tages um.
   eingesetzt — sonst steht der Planer vor einem leeren Raster.
 - Beim Verlassen des Planungsmodus BEIDE Auswahlen abraeumen. Eine unsichtbar
   weiterlaufende Auswahl ist eine Falle.
+
+## Icons im Auswahlmodus (Kay, 03.09.2026 nachmittags)
+
+Kay sah zwei gruene Haken nebeneinander und hielt sie fuer denselben Zustand.
+Sie bedeuten Verschiedenes, also sehen sie jetzt verschieden aus:
+
+- **Links, statt des Avatars:** ein ECKIGES dunkelblaues Feld mit Haken
+  (`PillAvatar` mit `ausgewaehlt`) = „von mir ausgewaehlt".
+- **Rechts, wo sonst das Status-Icon sitzt:** ein gruener RUNDER Haken =
+  „vom Planer bestaetigt".
+
+An einer ausgewaehlten Pille verschwindet das Status-Icon ganz und der rote
+Muelleimer (`PillMuelleimer`) tritt an seine Stelle — er loescht genau diesen
+einen Dienst. Der Status ist in dem Moment die unwichtigste Information.
+
+Beide Zeichen sind mit 20 px etwas groesser als das Status-Icon (13 px im
+Kalender): Das Auswahlfeld, damit die Auswahl beim Ueberfliegen des Monats
+auffaellt; der Muelleimer, weil er ein Bedienelement ist und auf dem
+Smartphone getroffen werden muss.
+
+Beides ist in ALLEN DREI Pillen-Varianten von `month-grid.tsx` verdrahtet
+(Smartphone, Desktop minimiert, Desktop voll) — die beiden Desktop-Varianten
+teilen sich `statusBadgeStack`, die Smartphone-Variante hat ihren eigenen.
+
+## Bestaetigen aus der Auswahl heraus
+
+Der Haken-Knopf der Leiste setzt die ausgewaehlten Entwuerfe auf FIX. Bewusst
+je Dienst ein PATCH statt einer neuen Sammelroute: `POST /shifts/bulk-confirm`
+bestaetigt nur ANGEBOTENE eines ganzen Monats, hier geht es um eine freie
+Auswahl, die auch Entwuerfe enthaelt. Die Requests laufen parallel und das
+Raster zeigt das Ergebnis sofort — es bleibt bei einer Wartezeit. Der Knopf
+erscheint nur, wenn die Auswahl ueberhaupt Entwuerfe enthaelt.
