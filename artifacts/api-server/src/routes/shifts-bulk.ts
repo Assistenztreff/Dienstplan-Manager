@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { istTagesdienst } from "../lib/dienst-dauer";
 import { db } from "@workspace/db";
 import { shiftsTable, usersTable, shiftModelsTable, teamsTable } from "@workspace/db";
 import { eq, and, sql, notInArray, lt, gt, gte, inArray } from "drizzle-orm";
@@ -314,8 +315,12 @@ router.post("/shifts/bulk", requireAuth, async (req, res): Promise<void> => {
   // Team-Einträge: UTC-Tagesgrenz-Prüfung wie bulk-absence (DST-neutral;
   //   T00:00:00Z–T23:59:59Z besteht immer, 25-h-Berliner-Mitternacht wird
   //   abgelehnt, weil sie zwei UTC-Tage überspannt).
-  // Reguläre Dienste: strikt ≤ 24 h, damit kein Mehrtages-Dienst als
-  //   einzelner Tag durchrutscht.
+  // Reguläre Dienste: höchstens 24 h AUF DER UHR, damit kein Mehrtages-Dienst
+  //   als einzelner Tag durchrutscht. Bewusst nicht in Millisekunden gerechnet
+  //   (s. lib/dienst-dauer.ts): Am Wochenende der Zeitumstellung dauert ein
+  //   09:00–09:00-Dienst real 25 bzw. 23 Stunden — geplant ist er trotzdem
+  //   genau ein Tag. Die Millisekunden-Prüfung wies ihn im Oktober 2026 ab und
+  //   kostete damit den ganzen Monatsauftrag der betroffenen Person.
   const dayMap = new Map<string, { startTime: Date; endTime: Date; standbyUserId: number | null }>();
   for (const d of body.data.days) {
     const durationMs = d.endTime.getTime() - d.startTime.getTime();
@@ -336,7 +341,7 @@ router.post("/shifts/bulk", requireAuth, async (req, res): Promise<void> => {
         return;
       }
     } else {
-      if (durationMs > 24 * 60 * 60 * 1000) {
+      if (!istTagesdienst(d.startTime, d.endTime)) {
         res.status(400).json({
           error:
             "Ungültiger Tageseintrag: Ende muss nach dem Beginn liegen und innerhalb eines Kalendertags enden.",
