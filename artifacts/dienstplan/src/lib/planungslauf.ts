@@ -52,6 +52,14 @@
 // waere falsch.
 // ---------------------------------------------------------------------------
 
+// ── Die vorgemerkte Vertretung ───────────────────────────────────────────────
+// Sie verbraucht keine Vertragsstunden — vorgemerkt heisst nicht gearbeitet.
+// Trotzdem entscheidet der Vertrag mit: Wer vorgemerkt ist, wird im Ernstfall
+// auch geholt, und bei einer Aushilfe waere das schnell eine Verdoppelung
+// ihres Monats. Vorgemerkt wird deshalb nur, wessen Vertrag den Dienst noch
+// traegt — und unter diesen die Person mit den WENIGSTEN bisherigen
+// Vormerkungen, damit sich die Bereitschaft verteilt.
+
 export type PlanPerson = { id: number; name: string };
 
 export type PlanDienst = {
@@ -250,6 +258,24 @@ class Stundenbedarf {
     return this.aktiv ? (this.frei.get(personId) ?? Number.NEGATIVE_INFINITY) : 0;
   }
 
+  /**
+   * Traegt der Vertrag diesen Dienst noch, wenn die Person einspringen muesste?
+   *
+   * Kay-Frage 03.09.2026 (Minijob): Wer als Vertretung vorgemerkt ist, wird im
+   * Ernstfall auch geholt. Bei einer Aushilfe mit 24 Vertragsstunden waere das
+   * eine Verdoppelung ihres Monats. Das Gesetz laesst so etwas nur als
+   * UNVORHERGESEHENES Ueberschreiten zu (§ 8 Abs. 1b SGB IV, hoechstens zwei
+   * Monate im Jahr) — eine im Voraus eingeplante Vormerkung ist genau das
+   * nicht mehr. Deshalb bekommt eine Person die Vormerkung nur, solange ihr
+   * Vertrag den Dienst noch traegt.
+   */
+  traegtNoch(personId: number, stunden: number): boolean {
+    if (!this.aktiv) return true;
+    const rest = this.frei.get(personId);
+    if (rest === undefined) return false;
+    return rest >= stunden;
+  }
+
   abbuchen(personId: number, stunden: number): void {
     if (!this.aktiv) return;
     const rest = this.frei.get(personId);
@@ -313,6 +339,9 @@ export function planeMonat(eingabe: {
 
   const belegungen = new Belegungen(personen, bestehende);
   const bedarf = new Stundenbedarf(personen, eingabe.freieStunden);
+  /** Wie oft ist jede Person bisher als Vertretung vorgemerkt? Verteilt die
+   *  Vormerkungen, statt sie immer derselben Person zu geben. */
+  const vormerkungen = new Map<number, number>();
   const rotationen = new Map<number, Rotation>(
     dienste.map((d) => [d.id, { person: null, rest: 0, vorheriges: null, naechsterStart: 0 }]),
   );
@@ -407,6 +436,13 @@ export function planeMonat(eingabe: {
       //    keine Rolle — eine Vormerkung verbraucht keine.
       let standby: PlanPerson | null = null;
       if (dienst.standbySlot) {
+        // Kay-Fehlermeldung 03.09.2026: Bisher nahm diese Schleife immer die
+        // ERSTE freie Person ab dem Rotationszeiger. Dadurch landete die
+        // Vormerkung dutzendfach bei denselben zwei Aushilfen — ausgerechnet
+        // bei denen, deren Monat nach einem einzigen Dienst voll ist.
+        // Jetzt zaehlt: Traegt der Vertrag den Dienst noch? Und wer wurde
+        // bisher am seltensten vorgemerkt? Erst danach die Reihenfolge.
+        let bester: { kandidat: PlanPerson; abstand: number } | null = null;
         for (let versuch = 0; versuch < personen.length; versuch++) {
           const idx = (rot.naechsterStart + versuch) % personen.length;
           const kandidat = personen[idx]!;
@@ -417,8 +453,15 @@ export function planeMonat(eingabe: {
           ) {
             continue;
           }
-          standby = kandidat;
-          break;
+          if (!bedarf.traegtNoch(kandidat.id, stunden)) continue;
+          const bisher = vormerkungen.get(kandidat.id) ?? 0;
+          if (bester === null || bisher < (vormerkungen.get(bester.kandidat.id) ?? 0)) {
+            bester = { kandidat, abstand: versuch };
+          }
+        }
+        if (bester !== null) {
+          standby = bester.kandidat;
+          vormerkungen.set(standby.id, (vormerkungen.get(standby.id) ?? 0) + 1);
         }
       }
 

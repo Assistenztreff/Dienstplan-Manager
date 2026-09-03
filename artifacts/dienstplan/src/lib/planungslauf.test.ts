@@ -494,3 +494,126 @@ describe("Fehler 3 — Abwesenheiten sperren auch hineinragende Dienste", () => 
     expect(offenErklaerung(offen)).toBe("abwesend");
   });
 });
+
+describe("Vertretung — Vertrag und Verteilung entscheiden mit", () => {
+  const MIT_VERTRETUNG: PlanDienst = { ...TAG24, standbySlot: true };
+
+  it("merkt niemanden vor, dessen Vertrag den Dienst nicht mehr traegt", () => {
+    // Kays Minijob-Fall: Ben hat noch 8 freie Stunden, der Dienst dauert 24.
+    // Wuerde er einspringen, waere sein Monat verdoppelt.
+    const { besetzungen } = planeMonat({
+      dienste: [MIT_VERTRETUNG],
+      offeneTageJeDienst: new Map([[MIT_VERTRETUNG.id, TAGE(1, 1)]]),
+      personen: [ANNA, BEN, CLARA],
+      grenzen: { blockLaenge: 1, ruhezeitStunden: 11 },
+      bestehende: [],
+      abwesend: new Map(),
+      freieStunden: new Map([[ANNA.id, 96], [BEN.id, 8], [CLARA.id, 96]]),
+    });
+    expect(besetzungen[0]!.userName).toBe("Anna Muster");
+    expect(besetzungen[0]!.standbyUserName).toBe("Clara Test");
+  });
+
+  it("laesst die Vormerkung leer, wenn kein Vertrag den Dienst mehr traegt", () => {
+    const { besetzungen } = planeMonat({
+      dienste: [MIT_VERTRETUNG],
+      offeneTageJeDienst: new Map([[MIT_VERTRETUNG.id, TAGE(1, 1)]]),
+      personen: [ANNA, BEN],
+      grenzen: { blockLaenge: 1, ruhezeitStunden: 11 },
+      bestehende: [],
+      abwesend: new Map(),
+      freieStunden: new Map([[ANNA.id, 96], [BEN.id, 0]]),
+    });
+    expect(besetzungen[0]!.userName).toBe("Anna Muster");
+    expect(besetzungen[0]!.standbyUserId).toBeNull();
+  });
+
+  it("verteilt die Vormerkungen, statt immer dieselbe Person zu nehmen", () => {
+    // Vier Personen, reichlich Vertragsstunden, ein Monat lang jeden zweiten
+    // Tag ein Dienst — die Bereitschaft muss sich verteilen.
+    const personen = [ANNA, BEN, CLARA, DORA];
+    const { besetzungen } = planeMonat({
+      dienste: [MIT_VERTRETUNG],
+      offeneTageJeDienst: new Map([[MIT_VERTRETUNG.id, TAGE(1, 12)]]),
+      personen,
+      grenzen: { blockLaenge: 1, ruhezeitStunden: 11 },
+      bestehende: [],
+      abwesend: new Map(),
+      freieStunden: new Map(personen.map((p) => [p.id, 200])),
+    });
+    const proPerson = new Map<number, number>();
+    for (const b of besetzungen) {
+      if (b.standbyUserId == null) continue;
+      proPerson.set(b.standbyUserId, (proPerson.get(b.standbyUserId) ?? 0) + 1);
+    }
+    const zahlen = [...proPerson.values()];
+    expect(zahlen).toHaveLength(personen.length);
+    // Niemand traegt mehr als eine Vormerkung mehr als eine andere Person.
+    expect(Math.max(...zahlen) - Math.min(...zahlen)).toBeLessThanOrEqual(1);
+  });
+
+  it("merkt ohne hinterlegte Vertragsstunden weiterhin reihum vor", () => {
+    const { besetzungen } = planeMonat({
+      dienste: [MIT_VERTRETUNG],
+      offeneTageJeDienst: new Map([[MIT_VERTRETUNG.id, TAGE(1, 1)]]),
+      personen: [ANNA, BEN, CLARA],
+      grenzen: { blockLaenge: 1, ruhezeitStunden: 11 },
+      bestehende: [],
+      abwesend: new Map(),
+    });
+    expect(besetzungen[0]!.standbyUserName).toBe("Ben Beispiel");
+  });
+});
+
+describe("Kays Monat vom 03.09.2026 — sieben Personen, 24-Stunden-Dienst", () => {
+  const LEUTE = [
+    { id: 1, name: "Neubert", soll: 191.36 },
+    { id: 2, name: "Kennedy", soll: 23.92 },
+    { id: 3, name: "Kahraman", soll: 167.44 },
+    { id: 4, name: "Thierer", soll: 119.6 },
+    { id: 5, name: "Reller", soll: 119.6 },
+    { id: 6, name: "Appler", soll: 119.6 },
+    { id: 7, name: "Emmendoerfer", soll: 23.92 },
+  ];
+  const OKTOBER = Array.from(
+    { length: 31 },
+    (_, i) => `2026-10-${String(i + 1).padStart(2, "0")}`,
+  );
+
+  function kaysLauf() {
+    return planeMonat({
+      dienste: [{ id: 1, name: "24-Stunden-Assistenz", startTime: "09:00", endTime: "09:00", standbySlot: true }],
+      offeneTageJeDienst: new Map([[1, OKTOBER]]),
+      personen: LEUTE.map((p) => ({ id: p.id, name: p.name })),
+      grenzen: { blockLaenge: 1, ruhezeitStunden: 11 },
+      bestehende: [],
+      abwesend: new Map(),
+      freieStunden: new Map(LEUTE.map((p) => [p.id, p.soll])),
+    });
+  }
+
+  it("besetzt alle 31 Tage und laesst niemanden leer ausgehen", () => {
+    const { besetzungen, offen } = kaysLauf();
+    expect(offen).toEqual([]);
+    expect(besetzungen).toHaveLength(31);
+    const stunden = new Map<string, number>();
+    for (const b of besetzungen) {
+      stunden.set(b.userName, (stunden.get(b.userName) ?? 0) + besetzungsStunden(b));
+    }
+    for (const p of LEUTE) {
+      const h = stunden.get(p.name) ?? 0;
+      expect(h, `${p.name} bekam ${h} h bei ${p.soll} h Soll`).toBeGreaterThan(0);
+      // Kays Vorgabe: hoechstens eine Schicht ueber dem Soll.
+      expect(h, `${p.name}: ${h} h bei ${p.soll} h Soll`).toBeLessThanOrEqual(p.soll + 24);
+    }
+  });
+
+  it("merkt die beiden Aushilfen nicht als Vertretung vor", () => {
+    const { besetzungen } = kaysLauf();
+    const aushilfen = new Set([2, 7]); // Kennedy und Emmendoerfer
+    const vorgemerkt = besetzungen
+      .map((b) => b.standbyUserId)
+      .filter((id): id is number => id != null);
+    expect(vorgemerkt.filter((id) => aushilfen.has(id))).toEqual([]);
+  });
+});

@@ -234,6 +234,47 @@ test.describe("Automatische Planung — Verteilung nach Monats-Soll", () => {
     ).toEqual([]);
   });
 
+  test("ein abgewiesener Sammelauftrag kostet nicht den ganzen Monat", async ({ page }) => {
+    test.setTimeout(180_000);
+    await raeumeArbeitsdiensteAb();
+
+    // Der Server legt einen Sammelauftrag GANZ oder GAR NICHT an und prueft
+    // die vorgemerkten Vertretungen monatsweit. Ist eine davon kein
+    // Teammitglied mehr oder inzwischen Koordinatorin, weist er den kompletten
+    // Monat dieser Person ab — genau so ging Kahraman am 03.09.2026 leer aus.
+    // Hier nachgestellt, indem jeder Auftrag MIT Vormerkung abgelehnt wird.
+    let abgelehnt = 0;
+    await page.route("**/api/shifts/bulk", async (route) => {
+      // Der erzeugte Client schickt den Inhalt direkt als Rumpf, ohne die
+      // `data`-Huelle des Hooks.
+      const body = route.request().postDataJSON() as
+        | { days?: { standbyUserId?: number | null }[] }
+        | null;
+      if (body?.days?.some((d) => d.standbyUserId != null)) {
+        abgelehnt += 1;
+        await route.fulfill({
+          status: 403,
+          contentType: "application/json",
+          body: JSON.stringify({ error: "Vertretung gehört nicht zu diesem Team" }),
+        });
+        return;
+      }
+      await route.continue();
+    });
+
+    const hinweis = await planeDurch(page);
+    expect(abgelehnt, "Voraussetzung: mindestens ein Auftrag wurde abgewiesen").toBeGreaterThan(0);
+    expect(hinweis, hinweis).toContain("als Entwurf eingeplant");
+    expect(hinweis, hinweis).toContain("ohne vorgemerkte Vertretung");
+
+    const angelegt = (await schichten()).filter((s) => s.shiftModelId === dienstId);
+    const besetzteTage = new Set(angelegt.map((s) => s.startTime.slice(0, 10)));
+    expect(
+      besetzteTage.size,
+      `Trotz abgewiesener Vormerkungen muss der Monat stehen — Hinweis: ${hinweis}`,
+    ).toBe(TAGE_IM_MONAT);
+  });
+
   test("Punkt 3: ein Abwesenheitstag sperrt auch den Dienst des Vortags", async ({ page }) => {
     test.setTimeout(180_000);
     // Deterministisch aufgebaut: Erst planen und schauen, WER den 3. bekommt.

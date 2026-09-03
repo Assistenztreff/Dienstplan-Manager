@@ -892,31 +892,45 @@ export default function Dienstplan() {
       });
       upsertShiftsInCache(queryClient, vorlaeufig, selectedTeamId);
 
-      // Ein Auftrag je Person. Meldet der Server eine Ueberschneidung, legt er
-      // GAR NICHTS an — die Person waere dann im ganzen Monat leer, und genau
-      // so entstanden Kays unbesetzte Tage (Fehlermeldung 03.09.2026, Punkt 1).
-      // Deshalb einmal nachfassen: die vom Server benannten Tage weglassen und
-      // den Rest anlegen. Nur EIN Nachfassversuch — ein zweiter Konflikt haette
-      // eine andere Ursache und gehoert gemeldet, nicht wegprobiert.
+      // Ein Auftrag je Person — und zwei Rettungsleinen, weil der Server
+      // einen Sammelauftrag immer GANZ oder GAR NICHT anlegt. Ohne sie kostet
+      // ein einziger strittiger Tag die komplette Monatsplanung dieser Person,
+      // und im Raster bleiben Luecken stehen, deren Grund niemand sieht
+      // (Kays Fehlermeldung 03.09.2026: Kahraman ging so voellig leer aus).
+      //
+      // 1. Ueberschneidung (409): die vom Server benannten Tage weglassen.
+      // 2. Alles andere: denselben Auftrag ohne die vorgemerkten Vertretungen
+      //    schicken. Der Server prueft jede Vertretung monatsweit — ist EINE
+      //    davon kein Teammitglied mehr oder inzwischen Koordinatorin, weist
+      //    er den ganzen Monat ab. Die Dienste sind wichtiger als die
+      //    Vormerkung; sie laesst sich danach von Hand setzen.
+      let uebersprungen = 0;
+      let ohneVertretung = 0;
+
       async function legeAn(userId: number, liste: typeof besetzungen) {
-        const auftrag = (teile: typeof besetzungen) => ({
+        const auftrag = (teile: typeof besetzungen, mitVertretung: boolean) => ({
           data: {
             userId,
             type: "work" as const,
             days: teile.map((b) => ({
               startTime: b.start.toISOString(),
               endTime: b.ende.toISOString(),
-              standbyUserId: b.standbyUserId,
+              standbyUserId: mitVertretung ? b.standbyUserId : null,
             })),
             planningStatus: "VORLAEUFIG" as const,
             shiftModelId: teile[0]!.dienstId,
             ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
           },
         });
-        try {
-          return await bulkCreateShifts.mutateAsync(
-            auftrag(liste) as unknown as Parameters<typeof bulkCreateShifts.mutateAsync>[0],
+        const schicke = (teile: typeof besetzungen, mitVertretung: boolean) =>
+          bulkCreateShifts.mutateAsync(
+            auftrag(teile, mitVertretung) as unknown as Parameters<
+              typeof bulkCreateShifts.mutateAsync
+            >[0],
           );
+
+        try {
+          return await schicke(liste, true);
         } catch (err) {
           const konflikte =
             err instanceof ApiError &&
@@ -924,20 +938,24 @@ export default function Dienstplan() {
             (err.data as { code?: string } | null)?.code === "shift_overlap"
               ? ((err.data as { conflictDates?: string[] }).conflictDates ?? [])
               : [];
-          if (konflikte.length === 0) throw err;
-          // Der Server schluesselt die Tage nach UTC-Startdatum.
-          const weg = new Set(konflikte);
-          const rest = liste.filter((b) => !weg.has(b.start.toISOString().slice(0, 10)));
-          if (rest.length === 0) throw err;
-          uebersprungen += liste.length - rest.length;
-          return await bulkCreateShifts.mutateAsync(
-            auftrag(rest) as unknown as Parameters<typeof bulkCreateShifts.mutateAsync>[0],
-          );
+          if (konflikte.length > 0) {
+            // Der Server schluesselt die Tage nach UTC-Startdatum.
+            const weg = new Set(konflikte);
+            const rest = liste.filter((b) => !weg.has(b.start.toISOString().slice(0, 10)));
+            if (rest.length === 0) throw err;
+            uebersprungen += liste.length - rest.length;
+            return await schicke(rest, true);
+          }
+          // Zweite Rettungsleine: ohne Vormerkungen. Hatte gar keine, dann
+          // liegt es nicht daran und der Fehler gehoert gemeldet.
+          if (!liste.some((b) => b.standbyUserId != null)) throw err;
+          const ergebnis = await schicke(liste, false);
+          ohneVertretung += liste.length;
+          return ergebnis;
         }
       }
 
       const auftraege = [...proPerson.entries()];
-      let uebersprungen = 0;
       const ergebnisse = await Promise.allSettled(
         auftraege.map(([userId, liste]) => legeAn(userId, liste)),
       );
@@ -962,14 +980,19 @@ export default function Dienstplan() {
       letzterLaufIds.current = neueIds;
 
       if (fehler.length > 0) {
-        toast.error(`${angelegt} Dienste angelegt, ${fehler.length} fehlgeschlagen: ${fehler.join(" · ")}`);
+        // Bewusst ohne Selbstschliessen: Ein Hinweis, der nach vier Sekunden
+        // verschwindet, erklaert die Luecken im Raster niemandem.
+        toast.error(
+          `${angelegt} Dienste angelegt, für ${fehler.length} ${fehler.length === 1 ? "Person" : "Personen"} nicht: ${fehler.join(" · ")}`,
+          { duration: Infinity, closeButton: true },
+        );
         return;
       }
       // Variante 1 (Kays Wahl): Der Hinweis traegt beide Folge-Aktionen —
       // dann steht das Wuerfeln genau im Moment der Entscheidung, ohne ein
       // zweites Symbol in der Leiste.
       toast.success(
-        `${angelegt} Dienste als Entwurf eingeplant${offen.length > 0 ? `, ${offen.length} Plätze bleiben offen (${offenErklaerung(offen) ?? "kein Grund ermittelbar"})` : ""}${uebersprungen > 0 ? `, ${uebersprungen} Tage übersprungen (Überschneidung)` : ""}.`,
+        `${angelegt} Dienste als Entwurf eingeplant${offen.length > 0 ? `, ${offen.length} Plätze bleiben offen (${offenErklaerung(offen) ?? "kein Grund ermittelbar"})` : ""}${uebersprungen > 0 ? `, ${uebersprungen} Tage übersprungen (Überschneidung)` : ""}${ohneVertretung > 0 ? `, bei ${ohneVertretung} ohne vorgemerkte Vertretung` : ""}.`,
         {
           duration: 8000,
           action: { label: "Neu würfeln", onClick: () => void starteAutomatik(false) },

@@ -55,3 +55,45 @@ nach: Die vom Server in `conflictDates` benannten Tage (UTC-Startdatum!)
 fliegen raus, der Rest wird angelegt und im Hinweis als „uebersprungen"
 gemeldet. Ein zweiter Konflikt haette eine andere Ursache und wird gemeldet,
 nicht wegprobiert.
+
+## Nachtrag 03.09.2026: Warum eine Person voellig leer ausging
+
+Kahraman hatte 167 h Soll und bekam 0 h; sieben Tage blieben offen. Der
+Rechenkern war NICHT schuld — mit denselben Zahlen nachgestellt verteilt er
+sauber (Test „Kays Monat vom 03.09.2026"). Es scheiterte am Speichern.
+
+Die Route prueft die vorgemerkten Vertretungen MONATSWEIT und ueber alle Tage
+des Auftrags hinweg (`geprueft.some(...)`): Ist EINE Vormerkung kein
+Teammitglied mehr oder inzwischen Koordinatorin, antwortet sie 403 und legt
+gar nichts an. Da der Client einen Auftrag je Person schickt, kostet das den
+kompletten Monat dieser Person — im Raster stehen dann Luecken, deren Grund
+niemand sieht.
+
+`starteAutomatik` hat deshalb ZWEI Rettungsleinen, in dieser Reihenfolge:
+1. 409 `shift_overlap` → die in `conflictDates` genannten Tage (UTC-Startdatum)
+   weglassen, den Rest anlegen.
+2. Jeder andere Fehler, sofern der Auftrag Vormerkungen enthielt → denselben
+   Auftrag noch einmal OHNE `standbyUserId` schicken. Die Dienste sind
+   wichtiger als die Vormerkung; sie laesst sich danach von Hand setzen.
+Erst danach gilt der Auftrag als gescheitert. Der Fehlerhinweis bleibt seitdem
+stehen (`duration: Infinity`) — ein Hinweis, der nach vier Sekunden
+verschwindet, erklaert die Luecken im Raster niemandem.
+
+Gegengeprobt: Ohne Rettungsleine 2 verlieren sechs von sieben Personen ihren
+ganzen Monat — genau Kays Symptom.
+
+## Die vorgemerkte Vertretung folgt dem Vertrag
+
+Vorgemerkt wird nur, wessen Vertrag den Dienst noch traegt
+(`Stundenbedarf.traegtNoch`), und unter diesen die Person mit den WENIGSTEN
+bisherigen Vormerkungen. Vorher nahm die Schleife immer die erste freie Person
+ab dem Rotationszeiger — die Vormerkung landete dutzendfach bei denselben zwei
+Aushilfen, ausgerechnet bei denen, deren Monat nach einem einzigen Dienst voll
+ist.
+
+Der Grund ist nicht nur Fairness: Wer vorgemerkt ist, wird im Ernstfall geholt.
+Bei einem Minijob waere das schnell die Verdoppelung des Monatsverdienstes.
+Zulaessig ist so etwas nur als UNVORHERGESEHENES Ueberschreiten (§ 8 Abs. 1b
+SGB IV, hoechstens zwei Kalendermonate im Zwoelfmonatszeitraum, je hoechstens
+das Doppelte der Grenze) — eine im Voraus eingeplante Vormerkung ist genau das
+nicht mehr. Traegt kein Vertrag den Dienst, bleibt die Vormerkung leer.
