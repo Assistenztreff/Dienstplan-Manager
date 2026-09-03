@@ -48,6 +48,7 @@ import {
 } from "@/components/planungsmodus-leiste";
 import {
   planeMonat,
+  offenErklaerung,
   naechsteBesetzung,
   dienstZeiten,
   type PlanDienst,
@@ -127,6 +128,7 @@ import {
 } from "@/components/dienstplan-dnd";
 import type { DeviationReportValues } from "./deviation-dialog";
 import { readableApiError } from "@/lib/api-error";
+import { ApiError } from "@workspace/api-client-react";
 import { ScheduleList } from "./schedule-list";
 import { DienstplanHeader } from "./dienstplan-header";
 import { DienstplanTableView } from "./dienstplan-table-view";
@@ -664,6 +666,20 @@ export default function Dienstplan() {
     hoursBalances ?? [],
     "name",
   );
+  // Noch freie Vertragsstunden je Person — die Zahl, die im Stundenkonto
+  // rechts neben dem Raster steht. Kay-Fehlermeldung 03.09.2026: Die
+  // automatische Planung soll nach BEDARF verteilen, nicht stur reihum, und
+  // niemanden mehr einteilen, dessen Monat schon erfuellt ist. Personen ohne
+  // hinterlegte Vertragsstunden stehen bewusst NICHT in der Map — ihr Bedarf
+  // ist unbekannt (der Lauf behandelt sie dann gesondert).
+  const freieStundenByUserId = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const e of stundenkontoEintraege) {
+      if (e.hasContract) map.set(e.id, e.frei);
+    }
+    return map;
+  }, [stundenkontoEintraege]);
+
   const capacityByUserId = useMemo(
     () =>
       new Map(
@@ -684,6 +700,21 @@ export default function Dienstplan() {
       let set = map.get(s.userId);
       if (!set) { set = new Set<string>(); map.set(s.userId, set); }
       set.add(dk);
+    }
+    return map;
+  }, [allShifts]);
+
+  // Abwesenheiten als ZEITFENSTER (Kays Punkt 3, 03.09.2026). Die Tages-Map
+  // oben sperrt den Kalendertag; sie sieht aber nicht, dass ein
+  // 24-Stunden-Dienst vom Vortag bis in den Urlaubstag hineinreicht. Der
+  // Planungslauf prueft deshalb zusaetzlich gegen diese Fenster.
+  const sperrzeitenByUser = useMemo(() => {
+    const map = new Map<number, { start: Date; ende: Date }[]>();
+    for (const s of allShifts) {
+      if (!isAbsenceShift(s)) continue;
+      const liste = map.get(s.userId) ?? [];
+      liste.push({ start: new Date(s.startTime), ende: new Date(s.endTime) });
+      map.set(s.userId, liste);
     }
     return map;
   }, [allShifts]);
@@ -820,10 +851,12 @@ export default function Dienstplan() {
         grenzen: { blockLaenge: grenzen.blockLaenge, ruhezeitStunden: grenzen.ruhezeitStunden },
         bestehende: echteSchichten,
         abwesend: absenceByUser,
+        sperrzeiten: sperrzeitenByUser,
+        freieStunden: freieStundenByUserId,
       });
       if (besetzungen.length === 0) {
         toast.info(
-          `Niemand konnte eingeteilt werden — ${offen.length} Plätze bleiben offen (Abwesenheit, Ruhezeit oder schon belegt).`,
+          `Niemand konnte eingeteilt werden — ${offen.length} Plätze bleiben offen (${offenErklaerung(offen) ?? "kein Grund ermittelbar"}).`,
         );
         return;
       }
@@ -855,24 +888,54 @@ export default function Dienstplan() {
       });
       upsertShiftsInCache(queryClient, vorlaeufig, selectedTeamId);
 
+      // Ein Auftrag je Person. Meldet der Server eine Ueberschneidung, legt er
+      // GAR NICHTS an — die Person waere dann im ganzen Monat leer, und genau
+      // so entstanden Kays unbesetzte Tage (Fehlermeldung 03.09.2026, Punkt 1).
+      // Deshalb einmal nachfassen: die vom Server benannten Tage weglassen und
+      // den Rest anlegen. Nur EIN Nachfassversuch — ein zweiter Konflikt haette
+      // eine andere Ursache und gehoert gemeldet, nicht wegprobiert.
+      async function legeAn(userId: number, liste: typeof besetzungen) {
+        const auftrag = (teile: typeof besetzungen) => ({
+          data: {
+            userId,
+            type: "work" as const,
+            days: teile.map((b) => ({
+              startTime: b.start.toISOString(),
+              endTime: b.ende.toISOString(),
+              standbyUserId: b.standbyUserId,
+            })),
+            planningStatus: "VORLAEUFIG" as const,
+            shiftModelId: teile[0]!.dienstId,
+            ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
+          },
+        });
+        try {
+          return await bulkCreateShifts.mutateAsync(
+            auftrag(liste) as unknown as Parameters<typeof bulkCreateShifts.mutateAsync>[0],
+          );
+        } catch (err) {
+          const konflikte =
+            err instanceof ApiError &&
+            err.status === 409 &&
+            (err.data as { code?: string } | null)?.code === "shift_overlap"
+              ? ((err.data as { conflictDates?: string[] }).conflictDates ?? [])
+              : [];
+          if (konflikte.length === 0) throw err;
+          // Der Server schluesselt die Tage nach UTC-Startdatum.
+          const weg = new Set(konflikte);
+          const rest = liste.filter((b) => !weg.has(b.start.toISOString().slice(0, 10)));
+          if (rest.length === 0) throw err;
+          uebersprungen += liste.length - rest.length;
+          return await bulkCreateShifts.mutateAsync(
+            auftrag(rest) as unknown as Parameters<typeof bulkCreateShifts.mutateAsync>[0],
+          );
+        }
+      }
+
       const auftraege = [...proPerson.entries()];
+      let uebersprungen = 0;
       const ergebnisse = await Promise.allSettled(
-        auftraege.map(([userId, liste]) =>
-          bulkCreateShifts.mutateAsync({
-            data: {
-              userId,
-              type: "work",
-              days: liste.map((b) => ({
-                startTime: b.start.toISOString(),
-                endTime: b.ende.toISOString(),
-                standbyUserId: b.standbyUserId,
-              })),
-              planningStatus: "VORLAEUFIG",
-              shiftModelId: liste[0]!.dienstId,
-              ...(selectedTeamId != null ? { teamId: selectedTeamId } : {}),
-            },
-          }),
-        ),
+        auftraege.map(([userId, liste]) => legeAn(userId, liste)),
       );
 
       const neueIds: number[] = [];
@@ -902,7 +965,7 @@ export default function Dienstplan() {
       // dann steht das Wuerfeln genau im Moment der Entscheidung, ohne ein
       // zweites Symbol in der Leiste.
       toast.success(
-        `${angelegt} Dienste als Entwurf eingeplant${offen.length > 0 ? `, ${offen.length} Plätze bleiben offen` : ""}.`,
+        `${angelegt} Dienste als Entwurf eingeplant${offen.length > 0 ? `, ${offen.length} Plätze bleiben offen (${offenErklaerung(offen) ?? "kein Grund ermittelbar"})` : ""}${uebersprungen > 0 ? `, ${uebersprungen} Tage übersprungen (Überschneidung)` : ""}.`,
         {
           duration: 8000,
           action: { label: "Neu würfeln", onClick: () => void starteAutomatik(false) },

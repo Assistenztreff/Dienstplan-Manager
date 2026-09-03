@@ -27,6 +27,29 @@
 // dann wechselt die Person — nicht Frueh/Spaet/Nacht am selben Tag
 // durchgereicht. Ein gemeinsamer Zeiger ueber alle Dienste wuerde genau das
 // erzeugen und damit jede Ruhezeit sprengen.
+//
+// ── Wer bekommt den Platz? Wer am meisten Stunden braucht. ──────────────────
+// Kay-Fehlermeldung 03.09.2026: Reines Reihum verteilt gleich viele Dienste
+// an alle — eine Aushilfe mit 24 Vertragsstunden bekam so 96 h, die
+// Vollzeitkraefte blieben im Minus. Kays Vorgabe: „Jeder soll sein Monats-
+// Soll erfuellen, Abweichung hoechstens plus/minus eine Schicht."
+//
+// Deshalb entscheidet nicht mehr die Reihenfolge, sondern der Bedarf: Von
+// allen, die den Platz uebernehmen KOENNEN, bekommt ihn die Person mit den
+// meisten noch freien Vertragsstunden. Die Reihenfolge bleibt nur als
+// Gleichstandsregel — bei gleichen Vertraegen ergibt sich damit von selbst
+// das alte Reihum. Wer sein Soll erreicht hat, wird uebersprungen; ein
+// Platz, den niemand mehr braucht, bleibt offen (Kays Antwort 4: der Planer
+// entscheidet, nicht der Automat). Die Stunden kommen aus dem Stundenkonto —
+// derselben Rechnung, die im Raster daneben steht, inklusive bezahlter
+// Abwesenheiten und Entwuerfe. So erklaert sich jede Entscheidung des Laufs
+// mit den Zahlen, die man ohnehin sieht.
+//
+// Hat NIEMAND Vertragsstunden hinterlegt, gibt es keinen Bedarf, an dem man
+// sich orientieren koennte — dann gilt weiter das reine Reihum. Sobald aber
+// eine Person Vertragsstunden hat, bleiben die anderen ohne Vertrag aussen
+// vor: Ihr Bedarf ist unbekannt, und den Vertragsleuten Stunden wegzunehmen
+// waere falsch.
 // ---------------------------------------------------------------------------
 
 export type PlanPerson = { id: number; name: string };
@@ -46,6 +69,9 @@ export type BestehendeSchicht = {
   startTime: string | Date;
   endTime: string | Date;
 };
+
+/** Ein Zeitfenster, in dem eine Person nicht arbeiten kann (Abwesenheit). */
+export type Sperrzeit = { start: Date; ende: Date };
 
 /** Ein Platz, den der Lauf besetzt hat. */
 export type Besetzung = {
@@ -71,7 +97,22 @@ export type OffenGeblieben = {
   gruende: { userId: number; name: string; grund: Hinderungsgrund }[];
 };
 
-export type Hinderungsgrund = "abwesend" | "belegt" | "ruhezeit";
+export type Hinderungsgrund =
+  | "abwesend"
+  | "belegt"
+  | "ruhezeit"
+  /** Monats-Soll erreicht — keine freien Vertragsstunden mehr. */
+  | "soll_erfuellt"
+  /** Andere haben Vertragsstunden, diese Person nicht — Bedarf unbekannt. */
+  | "keine_vertragsstunden";
+
+export const HINDERUNGSGRUND_TEXT: Record<Hinderungsgrund, string> = {
+  abwesend: "abwesend",
+  belegt: "schon eingeteilt",
+  ruhezeit: "Ruhezeit",
+  soll_erfuellt: "Monats-Soll erreicht",
+  keine_vertragsstunden: "keine Vertragsstunden hinterlegt",
+};
 
 export type LaufErgebnis = {
   besetzungen: Besetzung[];
@@ -136,6 +177,12 @@ class Belegungen {
   /**
    * Erster Hinderungsgrund einer Person fuer diesen Platz; null = frei.
    *
+   * Abwesenheiten sperren zweifach: den Kalendertag (`abwesend`) UND ihr
+   * Zeitfenster (`sperrzeiten`). Letzteres faengt, was der Tag allein nicht
+   * sieht — ein 24-Stunden-Dienst vom Vortag reicht bis in den Urlaubstag
+   * hinein (Kays Punkt 3, 03.09.2026). Auf Sperrzeiten gilt keine Ruhezeit:
+   * Wer am Tag nach dem Urlaub um 9 Uhr beginnt, hatte frei genug.
+   *
    * `ohne` klammert genau EIN Intervall aus: den unmittelbar vorangegangenen
    * Dienst desselben Blocks. Wer laut Blocklaenge mehrere Dienste am Stueck
    * uebernimmt, tut das bewusst — der Block selbst ist die quittierte
@@ -148,9 +195,13 @@ class Belegungen {
     neu: { start: Date; ende: Date },
     ruhezeitMs: number,
     abwesend: Map<number, Set<string>>,
+    sperrzeiten: Map<number, Sperrzeit[]>,
     ohne: Intervall | null = null,
   ): Hinderungsgrund | null {
     if (abwesend.get(personId)?.has(datum)) return "abwesend";
+    for (const sperre of sperrzeiten.get(personId) ?? []) {
+      if (ueberlappt(sperre, neu)) return "abwesend";
+    }
     for (const i of this.proPerson.get(personId) ?? []) {
       if (i === ohne) continue;
       if (i.tag === datum) return "belegt"; // hoechstens ein Dienst pro Tag
@@ -162,6 +213,47 @@ class Belegungen {
       if (abstand < ruhezeitMs) return "ruhezeit";
     }
     return null;
+  }
+}
+
+/**
+ * Buchfuehrung ueber die noch freien Vertragsstunden je Person — Startwert
+ * aus dem Stundenkonto, abzueglich allem, was dieser Lauf vergibt.
+ */
+class Stundenbedarf {
+  /** false = niemand hat Vertragsstunden, es gilt reines Reihum. */
+  readonly aktiv: boolean;
+  private readonly frei = new Map<number, number>();
+
+  constructor(personen: PlanPerson[], freieStunden: Map<number, number> | undefined) {
+    this.aktiv = freieStunden !== undefined && personen.some((p) => freieStunden.has(p.id));
+    if (!this.aktiv) return;
+    for (const p of personen) {
+      const wert = freieStunden!.get(p.id);
+      if (wert !== undefined) this.frei.set(p.id, wert);
+    }
+  }
+
+  /** Warum diese Person den Platz NICHT bekommen soll; null = sie braucht ihn. */
+  hindernis(personId: number): Hinderungsgrund | null {
+    if (!this.aktiv) return null;
+    const rest = this.frei.get(personId);
+    if (rest === undefined) return "keine_vertragsstunden";
+    // Wer noch irgendetwas braucht, darf den Dienst nehmen — auch wenn er
+    // damit ueber das Soll rutscht. Das ist Kays „hoechstens eine Schicht
+    // Abweichung": vorher unter Soll, danach hoechstens einen Dienst drueber.
+    return rest > 0 ? null : "soll_erfuellt";
+  }
+
+  /** Vergleichswert: je groesser, desto dringender braucht die Person Stunden. */
+  bedarf(personId: number): number {
+    return this.aktiv ? (this.frei.get(personId) ?? Number.NEGATIVE_INFINITY) : 0;
+  }
+
+  abbuchen(personId: number, stunden: number): void {
+    if (!this.aktiv) return;
+    const rest = this.frei.get(personId);
+    if (rest !== undefined) this.frei.set(personId, rest - stunden);
   }
 }
 
@@ -186,15 +278,24 @@ export function planeMonat(eingabe: {
   dienste: PlanDienst[];
   /** Je Dienst-ID die noch offenen Tage ("YYYY-MM-DD"), aufsteigend sortiert. */
   offeneTageJeDienst: Map<number, string[]>;
-  /** In Rotationsreihenfolge — die erste Person beginnt. */
+  /** In Rotationsreihenfolge — die erste Person beginnt (bei gleichem Bedarf). */
   personen: PlanPerson[];
   grenzen: LaufGrenzen;
   /** ALLE bestehenden Arbeits-Schichten des Zeitraums. */
   bestehende: BestehendeSchicht[];
   /** Abwesenheitstage je Person ("YYYY-MM-DD"). */
   abwesend: Map<number, Set<string>>;
+  /** Abwesenheiten als Zeitfenster je Person — fuer Dienste, die hineinragen. */
+  sperrzeiten?: Map<number, Sperrzeit[]>;
+  /**
+   * Noch freie Vertragsstunden des Monats je Person (Stundenkonto: Soll minus
+   * Verplantes inkl. Entwuerfen und bezahlten Abwesenheiten). Nur Personen MIT
+   * Vertragsstunden stehen darin. Weggelassen oder leer = reines Reihum.
+   */
+  freieStunden?: Map<number, number>;
 }): LaufErgebnis {
   const { dienste, offeneTageJeDienst, personen, bestehende, abwesend } = eingabe;
+  const sperrzeiten = eingabe.sperrzeiten ?? new Map<number, Sperrzeit[]>();
   const blockLaenge = Math.max(1, Math.floor(eingabe.grenzen.blockLaenge));
   const ruhezeitMs = Math.max(0, eingabe.grenzen.ruhezeitStunden) * 60 * 60 * 1000;
 
@@ -211,6 +312,7 @@ export function planeMonat(eingabe: {
   }
 
   const belegungen = new Belegungen(personen, bestehende);
+  const bedarf = new Stundenbedarf(personen, eingabe.freieStunden);
   const rotationen = new Map<number, Rotation>(
     dienste.map((d) => [d.id, { person: null, rest: 0, vorheriges: null, naechsterStart: 0 }]),
   );
@@ -225,19 +327,24 @@ export function planeMonat(eingabe: {
       if (!(offeneTageJeDienst.get(dienst.id) ?? []).includes(datum)) continue;
 
       const neu = dienstZeiten(datum, dienst);
+      const stunden = (neu.ende.getTime() - neu.start.getTime()) / (60 * 60 * 1000);
       const rot = rotationen.get(dienst.id)!;
       const gruende: OffenGeblieben["gruende"] = [];
       let vergeben: PlanPerson | null = null;
       let eingetragen: Intervall | null = null;
 
-      // 1. Laeuft ein Block? Dann hat dessen Person Vorrang.
+      // 1. Laeuft ein Block? Dann hat dessen Person Vorrang — solange sie
+      //    noch Stunden braucht.
       if (rot.person !== null && rot.rest > 0) {
-        const grund = belegungen.hindernis(
-          rot.person.id, datum, neu, ruhezeitMs, abwesend, rot.vorheriges,
-        );
+        const grund =
+          bedarf.hindernis(rot.person.id) ??
+          belegungen.hindernis(
+            rot.person.id, datum, neu, ruhezeitMs, abwesend, sperrzeiten, rot.vorheriges,
+          );
         if (grund === null) {
           eingetragen = { ...neu, tag: datum };
           belegungen.eintragen(rot.person.id, eingetragen);
+          bedarf.abbuchen(rot.person.id, stunden);
           vergeben = rot.person;
           rot.rest -= 1;
           rot.vorheriges = eingetragen;
@@ -249,27 +356,38 @@ export function planeMonat(eingabe: {
         }
       }
 
-      // 2. Sonst reihum die naechste verfuegbare Person.
+      // 2. Sonst: Von allen, die koennen, die Person mit dem groessten Bedarf.
+      //    Reihenfolge ab dem Rotationszeiger — bei gleichem Bedarf gewinnt,
+      //    wer als Naechstes dran ist (reines Reihum ohne Vertragsstunden).
       if (vergeben === null) {
         rot.person = null;
         rot.rest = 0;
         rot.vorheriges = null;
+        let beste: { idx: number; person: PlanPerson } | null = null;
         for (let versuch = 0; versuch < personen.length; versuch++) {
           const idx = (rot.naechsterStart + versuch) % personen.length;
           const p = personen[idx]!;
-          const grund = belegungen.hindernis(p.id, datum, neu, ruhezeitMs, abwesend);
+          const grund =
+            bedarf.hindernis(p.id) ??
+            belegungen.hindernis(p.id, datum, neu, ruhezeitMs, abwesend, sperrzeiten);
           if (grund !== null) {
             gruende.push({ userId: p.id, name: p.name, grund });
             continue;
           }
+          if (beste === null || bedarf.bedarf(p.id) > bedarf.bedarf(beste.person.id)) {
+            beste = { idx, person: p };
+          }
+          if (!bedarf.aktiv) break; // Reihum: die erste freie Person nimmt.
+        }
+        if (beste !== null) {
           eingetragen = { ...neu, tag: datum };
-          belegungen.eintragen(p.id, eingetragen);
-          vergeben = p;
-          rot.person = p;
+          belegungen.eintragen(beste.person.id, eingetragen);
+          bedarf.abbuchen(beste.person.id, stunden);
+          vergeben = beste.person;
+          rot.person = beste.person;
           rot.rest = blockLaenge - 1;
           rot.vorheriges = eingetragen;
-          rot.naechsterStart = (idx + 1) % personen.length;
-          break;
+          rot.naechsterStart = (beste.idx + 1) % personen.length;
         }
       }
 
@@ -285,14 +403,20 @@ export function planeMonat(eingabe: {
       //    bleibt die Pille leer — eine Vormerkung, die nicht einspringen
       //    KANN, ist keine. Geprueft wird deshalb mit denselben Regeln wie
       //    fuer den Dienst selbst, nur ohne Block-Ausnahme: Die Vertretung
-      //    steht ja ausserhalb jedes Blocks.
+      //    steht ja ausserhalb jedes Blocks. Vertragsstunden spielen hier
+      //    keine Rolle — eine Vormerkung verbraucht keine.
       let standby: PlanPerson | null = null;
       if (dienst.standbySlot) {
         for (let versuch = 0; versuch < personen.length; versuch++) {
           const idx = (rot.naechsterStart + versuch) % personen.length;
           const kandidat = personen[idx]!;
           if (kandidat.id === vergeben.id) continue;
-          if (belegungen.hindernis(kandidat.id, datum, neu, ruhezeitMs, abwesend) !== null) continue;
+          if (
+            belegungen.hindernis(kandidat.id, datum, neu, ruhezeitMs, abwesend, sperrzeiten) !==
+            null
+          ) {
+            continue;
+          }
           standby = kandidat;
           break;
         }
@@ -313,6 +437,23 @@ export function planeMonat(eingabe: {
   }
 
   return { besetzungen, offen };
+}
+
+/**
+ * Kurze Erklaerung, warum Plaetze offen geblieben sind — der haeufigste
+ * Grund ueber alle offenen Plaetze, fuer den Hinweis nach dem Lauf.
+ */
+export function offenErklaerung(offen: OffenGeblieben[]): string | null {
+  const zaehler = new Map<Hinderungsgrund, number>();
+  for (const o of offen) {
+    for (const g of o.gruende) zaehler.set(g.grund, (zaehler.get(g.grund) ?? 0) + 1);
+  }
+  let top: Hinderungsgrund | null = null;
+  for (const [grund, n] of zaehler) {
+    if (top === null || n > (zaehler.get(top) ?? 0)) top = grund;
+  }
+  if (top === null) return offen.length > 0 ? "niemand zur Auswahl" : null;
+  return HINDERUNGSGRUND_TEXT[top];
 }
 
 // ---------------------------------------------------------------------------

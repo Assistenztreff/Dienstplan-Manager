@@ -4,6 +4,7 @@ import {
   planeMonat,
   naechsteBesetzung,
   besetzungsStunden,
+  offenErklaerung,
   type PlanDienst,
   type PlanPerson,
 } from "./planungslauf";
@@ -306,5 +307,190 @@ describe("naechsteBesetzung — Klick-Rotation", () => {
   it("liefert ohne Kandidaten nichts", () => {
     expect(naechsteBesetzung({ aktuelleUserId: null, kandidaten: [], istEinsatzfaehig: immerFrei }))
       .toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Kay-Fehlermeldungen 03.09.2026
+// ---------------------------------------------------------------------------
+// 1. Die automatische Planung liess Tage leer.
+// 2. Aushilfen mit erfuelltem Monat bekamen weiter Dienste.
+// 3. Abwesenheiten wurden nicht durchgaengig beachtet.
+// Die folgenden Tests halten genau diese drei Faelle fest.
+
+/** Ein Monat aus 24-Stunden-Diensten — Kays echter Fall. */
+const OKT = (bis = 31) =>
+  Array.from({ length: bis }, (_, i) => `2026-10-${String(i + 1).padStart(2, "0")}`);
+
+describe("Fehler 1 — kein Tag bleibt grundlos leer", () => {
+  it("besetzt bei acht Personen jeden der 31 Tage", () => {
+    const personen = Array.from({ length: 8 }, (_, i) => ({ id: i + 1, name: `P${i + 1}` }));
+    const { besetzungen, offen } = planeMonat({
+      dienste: [{ ...TAG24, standbySlot: true }],
+      offeneTageJeDienst: new Map([[TAG24.id, OKT()]]),
+      personen,
+      grenzen: { blockLaenge: 1, ruhezeitStunden: 11 },
+      bestehende: [],
+      abwesend: new Map(),
+    });
+    expect(offen).toEqual([]);
+    expect(besetzungen).toHaveLength(31);
+  });
+
+  it("laesst auch mit Vertragsstunden keinen Tag offen, solange jemand Bedarf hat", () => {
+    const personen = Array.from({ length: 8 }, (_, i) => ({ id: i + 1, name: `P${i + 1}` }));
+    // 8 Personen x 120 h = 960 h Bedarf; 31 Tage x 24 h = 744 h Angebot.
+    const freieStunden = new Map(personen.map((p) => [p.id, 120]));
+    const { besetzungen, offen } = planeMonat({
+      dienste: [TAG24],
+      offeneTageJeDienst: new Map([[TAG24.id, OKT()]]),
+      personen,
+      grenzen: { blockLaenge: 1, ruhezeitStunden: 11 },
+      bestehende: [],
+      abwesend: new Map(),
+      freieStunden,
+    });
+    expect(offen).toEqual([]);
+    expect(besetzungen).toHaveLength(31);
+  });
+});
+
+describe("Fehler 2 — das Monats-Soll steuert die Verteilung", () => {
+  it("gibt der Person mit dem groessten Bedarf den Dienst", () => {
+    const { besetzungen } = planeMonat({
+      dienste: [TAG24],
+      offeneTageJeDienst: new Map([[TAG24.id, TAGE(1, 3)]]),
+      personen: [ANNA, BEN, CLARA],
+      grenzen: { blockLaenge: 1, ruhezeitStunden: 11 },
+      bestehende: [],
+      abwesend: new Map(),
+      // Clara braucht am meisten, dann Ben, dann Anna.
+      freieStunden: new Map([[ANNA.id, 24], [BEN.id, 48], [CLARA.id, 96]]),
+    });
+    expect(vornamenJeTag(besetzungen)).toEqual(["Clara", "Ben", "Clara"]);
+  });
+
+  it("ueberspringt, wer sein Soll erfuellt hat (Kays Aushilfen)", () => {
+    const { besetzungen, offen } = planeMonat({
+      dienste: [TAG24],
+      offeneTageJeDienst: new Map([[TAG24.id, TAGE(1, 4)]]),
+      personen: [ANNA, BEN, CLARA],
+      grenzen: { blockLaenge: 1, ruhezeitStunden: 11 },
+      bestehende: [],
+      abwesend: new Map(),
+      // Anna und Ben sind Aushilfen: Monat durch Absagen bereits erfuellt.
+      freieStunden: new Map([[ANNA.id, 0], [BEN.id, -8], [CLARA.id, 96]]),
+    });
+    expect(besetzungen.every((b) => b.userId === CLARA.id)).toBe(true);
+    // Clara bleibt als Einzige uebrig — und der 24-Stunden-Dienst endet
+    // genau dann, wenn der naechste beginnt. Zwischen zwei Tagen liegt also
+    // NULL Stunden Ruhezeit: Clara kann nur jeden zweiten Tag. Die anderen
+    // beiden Tage bleiben offen, mit der Ruhezeit als Grund.
+    expect(besetzungen.map((b) => b.datum)).toEqual(["2026-09-01", "2026-09-03"]);
+    expect(offen.map((o) => o.datum)).toEqual(["2026-09-02", "2026-09-04"]);
+    // Clara scheitert an der Ruhezeit, Anna und Ben am erfuellten Soll — die
+    // Erklaerung nennt den haeufigsten Grund.
+    expect(offen[0]!.gruende.find((g) => g.userId === CLARA.id)!.grund).toBe("ruhezeit");
+    expect(offenErklaerung(offen)).toBe("Monats-Soll erreicht");
+  });
+
+  it("laesst den Platz offen, wenn niemand mehr Stunden braucht", () => {
+    const { besetzungen, offen } = planeMonat({
+      dienste: [TAG24],
+      offeneTageJeDienst: new Map([[TAG24.id, TAGE(1, 2)]]),
+      personen: [ANNA, BEN],
+      grenzen: { blockLaenge: 1, ruhezeitStunden: 11 },
+      bestehende: [],
+      abwesend: new Map(),
+      freieStunden: new Map([[ANNA.id, 0], [BEN.id, 0]]),
+    });
+    expect(besetzungen).toEqual([]);
+    expect(offen).toHaveLength(2);
+    expect(offen[0]!.gruende.every((g) => g.grund === "soll_erfuellt")).toBe(true);
+    expect(offenErklaerung(offen)).toBe("Monats-Soll erreicht");
+  });
+
+  it("bleibt beim reinen Reihum, wenn niemand Vertragsstunden hat", () => {
+    const { besetzungen } = planeMonat({
+      dienste: [TAG24],
+      offeneTageJeDienst: new Map([[TAG24.id, TAGE(1, 3)]]),
+      personen: [ANNA, BEN, CLARA],
+      grenzen: { blockLaenge: 1, ruhezeitStunden: 11 },
+      bestehende: [],
+      abwesend: new Map(),
+      freieStunden: new Map(),
+    });
+    expect(vornamenJeTag(besetzungen)).toEqual(["Anna", "Ben", "Clara"]);
+  });
+
+  it("laesst Personen ohne Vertragsstunden aussen vor, sobald andere welche haben", () => {
+    const { besetzungen, offen } = planeMonat({
+      dienste: [TAG24],
+      offeneTageJeDienst: new Map([[TAG24.id, TAGE(1, 2)]]),
+      personen: [ANNA, BEN],
+      grenzen: { blockLaenge: 1, ruhezeitStunden: 11 },
+      bestehende: [],
+      abwesend: new Map(),
+      freieStunden: new Map([[BEN.id, 48]]),
+    });
+    expect(besetzungen.every((b) => b.userId === BEN.id)).toBe(true);
+    // Anna springt nicht ein, obwohl sie koennte: Ohne hinterlegte
+    // Vertragsstunden ist ihr Bedarf unbekannt, und den Vertragsleuten
+    // Stunden wegzunehmen waere falsch. Der zweite Tag bleibt lieber offen.
+    expect(besetzungen).toHaveLength(1);
+    expect(offen).toHaveLength(1);
+    expect(offen[0]!.gruende.some((g) => g.grund === "keine_vertragsstunden")).toBe(true);
+  });
+
+  it("haelt einen laufenden Block an, sobald das Soll erreicht ist", () => {
+    const { besetzungen, offen } = planeMonat({
+      dienste: [TAG24],
+      offeneTageJeDienst: new Map([[TAG24.id, TAGE(1, 4)]]),
+      personen: [ANNA, BEN],
+      grenzen: { blockLaenge: 3, ruhezeitStunden: 11 },
+      bestehende: [],
+      abwesend: new Map(),
+      // Anna reicht fuer genau zwei Dienste, obwohl der Block drei vorsieht.
+      freieStunden: new Map([[ANNA.id, 30], [BEN.id, 10]]),
+    });
+    // Tag 3 gehoerte noch zu Annas Block — ihr Soll ist aber aufgebraucht,
+    // also reisst der Block und Ben rueckt nach. Tag 4 braucht niemand mehr.
+    expect(vornamenJeTag(besetzungen)).toEqual(["Anna", "Anna", "Ben"]);
+    expect(offen.map((o) => o.datum)).toEqual(["2026-09-04"]);
+  });
+});
+
+describe("Fehler 3 — Abwesenheiten sperren auch hineinragende Dienste", () => {
+  it("laesst keinen 24-Stunden-Dienst in den Urlaubstag hineinlaufen", () => {
+    // Urlaub am 2.9. ganztaegig; der Dienst am 1.9. laeuft bis 2.9. 09:00.
+    const sperrzeiten = new Map([
+      [ANNA.id, [{ start: new Date(2026, 8, 2, 0, 0), ende: new Date(2026, 8, 2, 23, 59) }]],
+    ]);
+    const { besetzungen } = planeMonat({
+      dienste: [TAG24],
+      offeneTageJeDienst: new Map([[TAG24.id, TAGE(1, 1)]]),
+      personen: [ANNA, BEN],
+      grenzen: { blockLaenge: 1, ruhezeitStunden: 11 },
+      bestehende: [],
+      abwesend: new Map([[ANNA.id, new Set(["2026-09-02"])]]),
+      sperrzeiten,
+    });
+    expect(vornamenJeTag(besetzungen)).toEqual(["Ben"]);
+  });
+
+  it("nennt Abwesenheit als Grund, wenn deshalb niemand kann", () => {
+    const { offen } = planeMonat({
+      dienste: [TAG24],
+      offeneTageJeDienst: new Map([[TAG24.id, TAGE(1, 1)]]),
+      personen: [ANNA, BEN],
+      grenzen: { blockLaenge: 1, ruhezeitStunden: 11 },
+      bestehende: [],
+      abwesend: new Map([
+        [ANNA.id, new Set(["2026-09-01"])],
+        [BEN.id, new Set(["2026-09-01"])],
+      ]),
+    });
+    expect(offen).toHaveLength(1);
+    expect(offenErklaerung(offen)).toBe("abwesend");
   });
 });
