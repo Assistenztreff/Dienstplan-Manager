@@ -6,6 +6,7 @@ import {
   setAccountPlan,
   FREE_ACCOUNT_PASSWORD,
   type FreeAccount,
+  setVertretungEnabled,
 } from "./helpers/teams";
 
 /**
@@ -74,6 +75,9 @@ async function ziehe(page: Page, quelle: Locator, ziel: Locator): Promise<void> 
 test.beforeAll(async () => {
   test.setTimeout(120_000);
   acc = await registerFreeAccount("privat", "dnd");
+  // Der Vertretungsplatz haengt seit dem 03.09.2026 an der
+  // Team-Einstellung, nicht mehr am einzelnen Dienst.
+  await setVertretungEnabled(acc.ctx, true);
   await setAccountPlan(acc.email, "premium");
   ctx = acc.ctx;
 

@@ -4,6 +4,7 @@ import {
   registerFreeAccount,
   deleteFreeAccount,
   setAccountPlan,
+  setVertretungEnabled,
   FREE_ACCOUNT_PASSWORD,
   type FreeAccount,
 } from "./helpers/teams";
@@ -74,6 +75,10 @@ test.beforeAll(async () => {
   test.setTimeout(120_000);
   acc = await registerFreeAccount("privat", "planungsmodus");
   ctx = acc.ctx;
+
+  // Der Vertretungsplatz haengt seit dem 03.09.2026 an der
+  // Team-Einstellung, nicht mehr am einzelnen Dienst.
+  await setVertretungEnabled(ctx, true);
 
   const models = (await (await ctx.get("/api/shift-models")).json()) as { id: number }[];
   dienstId = models[0]!.id;

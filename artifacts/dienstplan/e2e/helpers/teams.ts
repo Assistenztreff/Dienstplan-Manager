@@ -505,3 +505,46 @@ export class TeamTestHarness {
     await this.baseCtx.dispose();
   }
 }
+
+/**
+ * Schaltet „Mit Vertretungen planen" fuer das Konto (oder ein Team) ein.
+ *
+ * Seit dem 03.09.2026 haengt der Vertretungsplatz im Raster NICHT mehr am
+ * einzelnen Dienst, sondern an dieser Team-Einstellung — ein Spec, das
+ * `standbySlot: true` am Schichtmodell setzt, bekommt ohne diesen Aufruf keine
+ * Vertretungszeile und keine vorgemerkte Vertretung mehr.
+ *
+ * PUT /allowance-settings ist ein VOLL-Ersetzen: Die fuenf Zuschlagsfelder
+ * sind im Schema Pflicht. Der Helfer liest deshalb erst den aktuellen Stand
+ * und schickt ihn unveraendert mit, genau wie das Einstellungs-Formular.
+ */
+export async function setVertretungEnabled(
+  ctx: APIRequestContext,
+  wert: boolean,
+  teamId?: number,
+): Promise<void> {
+  const url =
+    teamId === undefined
+      ? "/api/allowance-settings"
+      : `/api/allowance-settings?teamId=${teamId}`;
+  const gelesen = await ctx.get(url);
+  expect(gelesen.ok(), `${url}: ${await gelesen.text()}`).toBe(true);
+  const aktuell = (await gelesen.json()) as {
+    nightPercent: number;
+    nightStart: string;
+    nightEnd: string;
+    sundayPercent: number;
+    holidayPercent: number;
+  };
+  const res = await ctx.put(url, {
+    data: {
+      nightPercent: aktuell.nightPercent,
+      nightStart: aktuell.nightStart,
+      nightEnd: aktuell.nightEnd,
+      sundayPercent: aktuell.sundayPercent,
+      holidayPercent: aktuell.holidayPercent,
+      vertretungEnabled: wert,
+    },
+  });
+  expect(res.ok(), `${url}: ${await res.text()}`).toBe(true);
+}

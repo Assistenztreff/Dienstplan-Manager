@@ -5,6 +5,7 @@ import {
   deleteFreeAccount,
   FREE_ACCOUNT_PASSWORD,
   type FreeAccount,
+  setVertretungEnabled,
 } from "./helpers/teams";
 
 /**
@@ -89,6 +90,9 @@ test.beforeAll(async () => {
   test.setTimeout(120_000);
   acc = await registerFreeAccount("privat", "geruest");
   ctx = acc.ctx;
+  // Der Vertretungsplatz haengt seit dem 03.09.2026 an der
+  // Team-Einstellung, nicht mehr am einzelnen Dienst.
+  await setVertretungEnabled(acc.ctx, true);
 
   const modelsRes = await ctx.get("/api/shift-models");
   expect(modelsRes.ok(), "Dienste lesen fehlgeschlagen").toBe(true);
@@ -217,11 +221,14 @@ test.describe("Dienstgeruest im Monatsraster", () => {
     await expect(vertretung).toBeVisible();
     await expect(vertretung).toContainText("Vertretung offen");
 
-    // Ohne Vertretungsplatz verschwindet sie wieder.
-    await setzeRegel({ standbySlot: false });
+    // Schaltet das TEAM die Vertretungen ab, verschwindet die Zeile wieder.
+    // Kay-Entscheidung 03.09.2026: Das entscheidet nicht mehr der einzelne
+    // Dienst, sondern einmal das Team — direkt ueber der Vertretungsverguetung.
+    await setVertretungEnabled(ctx, false);
     await page.reload();
     await expect(desktop.getByTestId(`day-chip-${schichtId}`)).toBeVisible();
     await expect(vertretung).toHaveCount(0);
+    await setVertretungEnabled(ctx, true);
 
     // Wieder abraeumen: die folgenden Tests brauchen den Zieltag unbesetzt.
     const del = await ctx.delete(`/api/shifts/${schichtId}`);
