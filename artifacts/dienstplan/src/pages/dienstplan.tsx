@@ -1603,6 +1603,28 @@ export default function Dienstplan() {
     });
   }
 
+  /**
+   * Kay-Auftrag 03.09.2026, Punkt 4: Im Planungsmodus waehlt der Auswahl-Knopf
+   * ALLE Tage mit Eintraegen auf einmal — der zweite Druck hebt die Auswahl
+   * wieder auf. Danach klickt man die wenigen Tage ab, die bleiben sollen.
+   * Ausserhalb des Planungsmodus bleibt es beim reinen Umschalten: Dort ist
+   * die Mehrfachauswahl ein Werkzeug zum Eintragen, nicht zum Abraeumen.
+   */
+  const tageMitEintraegen = useMemo(() => {
+    const eigene = allShifts.filter((s) => !isMirrorShift(s, selectedTeamId));
+    return [...new Set(eigene.map((s) => format(new Date(s.startTime), "yyyy-MM-dd")))].sort();
+  }, [allShifts, selectedTeamId]);
+
+  function alleTageAuswaehlen() {
+    if (isSelectionMode) {
+      setSelectedDates([]);
+      setIsSelectionMode(false);
+      return;
+    }
+    setIsSelectionMode(true);
+    setSelectedDates(tageMitEintraegen);
+  }
+
   function toggleDate(day: Date) {
     const key = format(day, "yyyy-MM-dd");
     setSelectedDates((prev) =>
@@ -1774,8 +1796,9 @@ export default function Dienstplan() {
             laeuft={automatikLaeuft}
             onAutomatik={() => void starteAutomatik(true)}
             auswahlAktiv={isSelectionMode}
-            onAuswahlUmschalten={toggleSelectionMode}
+            onAuswahlUmschalten={alleTageAuswaehlen}
             anzahlAusgewaehlt={selectedDates.length}
+            anzahlAuswaehlbar={tageMitEintraegen.length}
             onAuswahlLoeschen={() => setDialog({ mode: "bulk-delete", dates: selectedDates })}
             onBeenden={() => {
               setPlanungsmodus(false);

@@ -8,9 +8,15 @@
 // kann, statt es im Ueberlauf-Menue zu verstecken.
 //
 // Aufbau (Kays Punkt 5): Zauberstab = automatische Planung, Zahnrad = ihre
-// Grenzen, Auswahl-Symbol = Mehrtagesauswahl, Muelleimer = Auswahl loeschen.
+// Grenzen, Auswahl-Symbol = alles auswaehlen, Muelleimer = Auswahl loeschen.
 // Der Muelleimer erscheint erst, wenn Tage ausgewaehlt sind — ein Loeschknopf
 // ohne Ziel ist nur eine Stolperfalle.
+//
+// Das Auswahl-Symbol waehlt seit dem 03.09.2026 (Kays Punkt 4) mit EINEM
+// Druck alle Tage aus, die Eintraege tragen. Der Grund ist die Praxis: Wer im
+// Planungsmodus etwas loescht, raeumt fast immer den ganzen Monat ab und
+// behaelt ein paar Tage. Erst auswaehlen und dann 30-mal klicken waere die
+// Arbeit andersherum.
 import { useState } from "react";
 import { Wand2, Settings2, SquareDashedMousePointer, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -35,6 +41,7 @@ export function PlanungsmodusLeiste({
   auswahlAktiv,
   onAuswahlUmschalten,
   anzahlAusgewaehlt,
+  anzahlAuswaehlbar,
   onAuswahlLoeschen,
   onBeenden,
 }: {
@@ -46,8 +53,11 @@ export function PlanungsmodusLeiste({
   laeuft: boolean;
   onAutomatik: () => void;
   auswahlAktiv: boolean;
+  /** Ein Druck waehlt ALLE Tage mit Eintraegen; der naechste hebt sie auf. */
   onAuswahlUmschalten: () => void;
   anzahlAusgewaehlt: number;
+  /** Wie viele Tage des Monats ueberhaupt Eintraege tragen. */
+  anzahlAuswaehlbar: number;
   onAuswahlLoeschen: () => void;
   onBeenden: () => void;
 }) {
@@ -150,17 +160,31 @@ export function PlanungsmodusLeiste({
           </PopoverContent>
         </Popover>
 
+        {/* Kay-Auftrag 03.09.2026, Punkt 4: Ein Druck waehlt ALLES aus, was
+            der Monat an Eintraegen hat — danach klickt man die wenigen Tage
+            wieder ab, die bleiben sollen. Das ist der haeufigere Weg:
+            „fast alles weg" statt „ein paar einzelne weg". Der Zaehler steht
+            im Knopf, damit man ohne Nachzaehlen sieht, worauf der Muelleimer
+            gleich zielt. */}
         <Button
           size="sm"
           variant={auswahlAktiv ? "default" : "outline"}
-          className="h-9 w-9 px-0"
+          className={anzahlAusgewaehlt > 0 ? "gap-1.5" : "h-9 w-9 px-0"}
           onClick={onAuswahlUmschalten}
-          title="Mehrere Tage auswählen"
-          aria-label="Mehrere Tage auswählen"
+          disabled={anzahlAuswaehlbar === 0 && !auswahlAktiv}
+          title={
+            auswahlAktiv
+              ? "Auswahl aufheben"
+              : anzahlAuswaehlbar === 0
+                ? "Keine Einträge zum Auswählen"
+                : `Alle ${anzahlAuswaehlbar} Tage mit Einträgen auswählen`
+          }
+          aria-label={auswahlAktiv ? "Auswahl aufheben" : "Alle Tage mit Einträgen auswählen"}
           aria-pressed={auswahlAktiv}
           data-testid="planungsmodus-auswahl"
         >
           <SquareDashedMousePointer className="h-4 w-4" />
+          {anzahlAusgewaehlt > 0 && <span>{anzahlAusgewaehlt}</span>}
         </Button>
 
         {/* Erst mit Ziel: ein Loeschknopf ohne Auswahl ist nur eine Falle. */}
@@ -170,11 +194,11 @@ export function PlanungsmodusLeiste({
             variant="destructive"
             className="gap-1.5"
             onClick={onAuswahlLoeschen}
-            title={`Einträge an ${anzahlAusgewaehlt} Tagen löschen`}
+            title={`Einträge an ${anzahlAusgewaehlt} ${anzahlAusgewaehlt === 1 ? "Tag" : "Tagen"} löschen`}
+            aria-label={`Einträge an ${anzahlAusgewaehlt} ${anzahlAusgewaehlt === 1 ? "Tag" : "Tagen"} löschen`}
             data-testid="planungsmodus-loeschen"
           >
             <Trash2 className="h-4 w-4" />
-            {anzahlAusgewaehlt}
           </Button>
         )}
 
