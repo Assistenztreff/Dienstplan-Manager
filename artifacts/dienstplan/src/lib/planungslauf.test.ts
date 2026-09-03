@@ -370,7 +370,7 @@ describe("Fehler 2 — das Monats-Soll steuert die Verteilung", () => {
     expect(vornamenJeTag(besetzungen)).toEqual(["Clara", "Ben", "Clara"]);
   });
 
-  it("ueberspringt, wer sein Soll erfuellt hat (Kays Aushilfen)", () => {
+  it("stellt zurueck, wer sein Soll erfuellt hat (Kays Aushilfen)", () => {
     const { besetzungen, offen } = planeMonat({
       dienste: [TAG24],
       offeneTageJeDienst: new Map([[TAG24.id, TAGE(1, 4)]]),
@@ -380,21 +380,23 @@ describe("Fehler 2 — das Monats-Soll steuert die Verteilung", () => {
       abwesend: new Map(),
       // Anna und Ben sind Aushilfen: Monat durch Absagen bereits erfuellt.
       freieStunden: new Map([[ANNA.id, 0], [BEN.id, -8], [CLARA.id, 96]]),
+      monatsSollStunden: new Map([[ANNA.id, 24], [BEN.id, 24], [CLARA.id, 180]]),
     });
-    expect(besetzungen.every((b) => b.userId === CLARA.id)).toBe(true);
-    // Clara bleibt als Einzige uebrig — und der 24-Stunden-Dienst endet
-    // genau dann, wenn der naechste beginnt. Zwischen zwei Tagen liegt also
-    // NULL Stunden Ruhezeit: Clara kann nur jeden zweiten Tag. Die anderen
-    // beiden Tage bleiben offen, mit der Ruhezeit als Grund.
-    expect(besetzungen.map((b) => b.datum)).toEqual(["2026-09-01", "2026-09-03"]);
-    expect(offen.map((o) => o.datum)).toEqual(["2026-09-02", "2026-09-04"]);
-    // Clara scheitert an der Ruhezeit, Anna und Ben am erfuellten Soll — die
-    // Erklaerung nennt den haeufigsten Grund.
-    expect(offen[0]!.gruende.find((g) => g.userId === CLARA.id)!.grund).toBe("ruhezeit");
-    expect(offenErklaerung(offen)).toBe("Monats-Soll erreicht");
+    // Clara braucht als Einzige noch Stunden und bekommt deshalb Vorrang.
+    // Der 24-Stunden-Dienst endet genau dann, wenn der naechste beginnt —
+    // zwischen zwei Tagen liegt also NULL Stunden Ruhezeit, Clara kann nur
+    // jeden zweiten Tag.
+    const claraTage = besetzungen.filter((b) => b.userId === CLARA.id).map((b) => b.datum);
+    expect(claraTage).toEqual(["2026-09-01", "2026-09-03"]);
+    // An den beiden Tagen dazwischen kann Clara nicht. Statt sie offen zu
+    // lassen, springen die Aushilfen ein (Kay-Regel 03.09.2026).
+    expect(besetzungen).toHaveLength(4);
+    expect(offen).toEqual([]);
   });
 
-  it("laesst den Platz offen, wenn niemand mehr Stunden braucht", () => {
+  it("vergibt den Platz trotzdem, wenn niemand mehr Stunden braucht", () => {
+    // Kay-Regel 03.09.2026: Ein offener Dienst ist schlimmer als eine
+    // Ueberstunde — schwankende Monatsstunden sind in der Assistenz ueblich.
     const { besetzungen, offen } = planeMonat({
       dienste: [TAG24],
       offeneTageJeDienst: new Map([[TAG24.id, TAGE(1, 2)]]),
@@ -403,11 +405,60 @@ describe("Fehler 2 — das Monats-Soll steuert die Verteilung", () => {
       bestehende: [],
       abwesend: new Map(),
       freieStunden: new Map([[ANNA.id, 0], [BEN.id, 0]]),
+      monatsSollStunden: new Map([[ANNA.id, 80], [BEN.id, 80]]),
+    });
+    expect(offen).toEqual([]);
+    expect(besetzungen).toHaveLength(2);
+  });
+
+  it("gibt die Ueberstunden zuerst der Teilzeitkraft", () => {
+    const { besetzungen } = planeMonat({
+      dienste: [TAG24],
+      offeneTageJeDienst: new Map([[TAG24.id, TAGE(1, 1)]]),
+      personen: [ANNA, BEN],
+      grenzen: { blockLaenge: 1, ruhezeitStunden: 11 },
+      bestehende: [],
+      abwesend: new Map(),
+      freieStunden: new Map([[ANNA.id, 0], [BEN.id, 0]]),
+      // Anna Vollzeit, Ben Teilzeit — Ben kommt zuerst.
+      monatsSollStunden: new Map([[ANNA.id, 180], [BEN.id, 80]]),
+    });
+    expect(besetzungen[0]!.userName).toBe("Ben Beispiel");
+  });
+
+  it("nimmt die Vollzeitkraft, wenn die Teilzeitkraft an dem Tag nicht kann", () => {
+    const { besetzungen } = planeMonat({
+      dienste: [TAG24],
+      offeneTageJeDienst: new Map([[TAG24.id, TAGE(1, 1)]]),
+      personen: [ANNA, BEN],
+      grenzen: { blockLaenge: 1, ruhezeitStunden: 11 },
+      bestehende: [],
+      abwesend: new Map([[BEN.id, new Set(["2026-09-01"])]]),
+      freieStunden: new Map([[ANNA.id, 0], [BEN.id, 0]]),
+      monatsSollStunden: new Map([[ANNA.id, 180], [BEN.id, 80]]),
+    });
+    expect(besetzungen[0]!.userName, "Ben ist abwesend").toBe("Anna Muster");
+  });
+
+  it("laesst den Platz offen, wenn niemand an dem Tag KANN", () => {
+    // Der Unterschied zum Fall darueber: „hat schon genug" stellt zurueck,
+    // „kann nicht" schliesst aus. Die Ruhezeit bleibt eine Grenze.
+    const { besetzungen, offen } = planeMonat({
+      dienste: [TAG24],
+      offeneTageJeDienst: new Map([[TAG24.id, TAGE(1, 1)]]),
+      personen: [ANNA, BEN],
+      grenzen: { blockLaenge: 1, ruhezeitStunden: 11 },
+      bestehende: [],
+      abwesend: new Map([
+        [ANNA.id, new Set(["2026-09-01"])],
+        [BEN.id, new Set(["2026-09-01"])],
+      ]),
+      freieStunden: new Map([[ANNA.id, 0], [BEN.id, 0]]),
+      monatsSollStunden: new Map([[ANNA.id, 80], [BEN.id, 80]]),
     });
     expect(besetzungen).toEqual([]);
-    expect(offen).toHaveLength(2);
-    expect(offen[0]!.gruende.every((g) => g.grund === "soll_erfuellt")).toBe(true);
-    expect(offenErklaerung(offen)).toBe("Monats-Soll erreicht");
+    expect(offen).toHaveLength(1);
+    expect(offenErklaerung(offen)).toBe("abwesend");
   });
 
   it("bleibt beim reinen Reihum, wenn niemand Vertragsstunden hat", () => {
@@ -423,7 +474,7 @@ describe("Fehler 2 — das Monats-Soll steuert die Verteilung", () => {
     expect(vornamenJeTag(besetzungen)).toEqual(["Anna", "Ben", "Clara"]);
   });
 
-  it("laesst Personen ohne Vertragsstunden aussen vor, sobald andere welche haben", () => {
+  it("stellt Personen ohne Vertragsstunden hinter die Vertragsleute", () => {
     const { besetzungen, offen } = planeMonat({
       dienste: [TAG24],
       offeneTageJeDienst: new Map([[TAG24.id, TAGE(1, 2)]]),
@@ -433,13 +484,13 @@ describe("Fehler 2 — das Monats-Soll steuert die Verteilung", () => {
       abwesend: new Map(),
       freieStunden: new Map([[BEN.id, 48]]),
     });
-    expect(besetzungen.every((b) => b.userId === BEN.id)).toBe(true);
-    // Anna springt nicht ein, obwohl sie koennte: Ohne hinterlegte
-    // Vertragsstunden ist ihr Bedarf unbekannt, und den Vertragsleuten
-    // Stunden wegzunehmen waere falsch. Der zweite Tag bleibt lieber offen.
-    expect(besetzungen).toHaveLength(1);
-    expect(offen).toHaveLength(1);
-    expect(offen[0]!.gruende.some((g) => g.grund === "keine_vertragsstunden")).toBe(true);
+    // Tag 1 geht an Ben: Er hat einen Vertrag und braucht die Stunden.
+    expect(besetzungen[0]!.userId).toBe(BEN.id);
+    // Tag 2 kann Ben wegen der Ruhezeit nicht (24-Stunden-Dienst). Statt den
+    // Platz offen zu lassen, springt Anna ein — auch ohne hinterlegten
+    // Vertrag ist sie besser als eine Luecke (Kay-Regel 03.09.2026).
+    expect(besetzungen[1]!.userId).toBe(ANNA.id);
+    expect(offen).toEqual([]);
   });
 
   it("haelt einen laufenden Block an, sobald das Soll erreicht ist", () => {
@@ -454,9 +505,11 @@ describe("Fehler 2 — das Monats-Soll steuert die Verteilung", () => {
       freieStunden: new Map([[ANNA.id, 30], [BEN.id, 10]]),
     });
     // Tag 3 gehoerte noch zu Annas Block — ihr Soll ist aber aufgebraucht,
-    // also reisst der Block und Ben rueckt nach. Tag 4 braucht niemand mehr.
-    expect(vornamenJeTag(besetzungen)).toEqual(["Anna", "Anna", "Ben"]);
-    expect(offen.map((o) => o.datum)).toEqual(["2026-09-04"]);
+    // also reisst der Block und Ben rueckt nach. Tag 4 braucht niemand mehr;
+    // er bleibt trotzdem nicht offen, sondern geht an Anna zurueck, die am
+    // wenigsten drueber liegt.
+    expect(vornamenJeTag(besetzungen)).toEqual(["Anna", "Anna", "Ben", "Anna"]);
+    expect(offen).toEqual([]);
   });
 });
 

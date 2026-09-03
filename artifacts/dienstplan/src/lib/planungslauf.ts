@@ -50,6 +50,19 @@
 // eine Person Vertragsstunden hat, bleiben die anderen ohne Vertrag aussen
 // vor: Ihr Bedarf ist unbekannt, und den Vertragsleuten Stunden wegzunehmen
 // waere falsch.
+//
+// ── Wenn alle ihr Soll haben, der Monat aber noch Luecken ───────────────────
+// Kay-Regel 03.09.2026: „Schwankende Monatsstunden sind in der Assistenz
+// üblich." Ein offener Dienst ist schlimmer als eine Ueberstunde. Braucht
+// niemand mehr Stunden, wird der Platz deshalb trotzdem vergeben — zuerst an
+// Teilzeitkraefte, dann an Vollzeitkraefte (ab 168 Stunden Monats-Soll),
+// zuletzt an Personen ohne hinterlegte Vertragsstunden. Innerhalb einer Stufe
+// bekommt ihn, wer am wenigsten drueber liegt.
+//
+// Der Unterschied, auf den es dabei ankommt: „hat schon genug" ist ein Grund
+// zurueckzustehen, „kann an dem Tag nicht" ist ein Ausschluss. Wer abwesend,
+// schon eingeteilt oder in der Ruhezeit ist, steht auch im Ersatzweg nicht zur
+// Wahl — sonst waere die Ruhezeit nur noch eine Empfehlung.
 // ---------------------------------------------------------------------------
 
 // ── Die vorgemerkte Vertretung ───────────────────────────────────────────────
@@ -394,19 +407,46 @@ export function planeMonat(eingabe: {
       // 2. Sonst: Von allen, die koennen, die Person mit dem groessten Bedarf.
       //    Reihenfolge ab dem Rotationszeiger — bei gleichem Bedarf gewinnt,
       //    wer als Naechstes dran ist (reines Reihum ohne Vertragsstunden).
+      //
+      //    Braucht NIEMAND mehr Stunden, bleibt der Platz trotzdem nicht leer
+      //    (Kay-Regel 03.09.2026: „Schwankende Monatsstunden sind in der
+      //    Assistenz üblich"). Dann greift der Ersatzweg, und zwar in dieser
+      //    Reihenfolge: erst Teilzeitkraefte, dann Vollzeitkraefte, zuletzt
+      //    Personen ohne hinterlegte Vertragsstunden. Innerhalb einer Stufe
+      //    bekommt sie, wer am wenigsten drueber liegt.
+      //
+      //    Wer an dem Tag WIRKLICH nicht kann — abwesend, schon eingeteilt,
+      //    Ruhezeit — steht auch im Ersatzweg nicht zur Wahl. Das ist der
+      //    Unterschied zwischen „hat schon genug" und „geht nicht".
       if (vergeben === null) {
         rot.person = null;
         rot.rest = 0;
         rot.vorheriges = null;
         let beste: { idx: number; person: PlanPerson } | null = null;
+        let ersatz: { idx: number; person: PlanPerson; stufe: number; rest: number } | null = null;
         for (let versuch = 0; versuch < personen.length; versuch++) {
           const idx = (rot.naechsterStart + versuch) % personen.length;
           const p = personen[idx]!;
-          const grund =
-            bedarf.hindernis(p.id) ??
-            belegungen.hindernis(p.id, datum, neu, ruhezeitMs, abwesend, sperrzeiten);
-          if (grund !== null) {
-            gruende.push({ userId: p.id, name: p.name, grund });
+          const verhindert = belegungen.hindernis(
+            p.id, datum, neu, ruhezeitMs, abwesend, sperrzeiten,
+          );
+          if (verhindert !== null) {
+            gruende.push({ userId: p.id, name: p.name, grund: verhindert });
+            continue;
+          }
+          const stundenGrund = bedarf.hindernis(p.id);
+          if (stundenGrund !== null) {
+            gruende.push({ userId: p.id, name: p.name, grund: stundenGrund });
+            const stufe =
+              stundenGrund === "keine_vertragsstunden" ? 2 : istVollzeit(p.id) ? 1 : 0;
+            const kandidat = { idx, person: p, stufe, rest: bedarf.bedarf(p.id) };
+            if (
+              ersatz === null ||
+              kandidat.stufe < ersatz.stufe ||
+              (kandidat.stufe === ersatz.stufe && kandidat.rest > ersatz.rest)
+            ) {
+              ersatz = kandidat;
+            }
             continue;
           }
           if (beste === null || bedarf.bedarf(p.id) > bedarf.bedarf(beste.person.id)) {
@@ -414,6 +454,7 @@ export function planeMonat(eingabe: {
           }
           if (!bedarf.aktiv) break; // Reihum: die erste freie Person nimmt.
         }
+        beste ??= ersatz;
         if (beste !== null) {
           eingetragen = { ...neu, tag: datum };
           belegungen.eintragen(beste.person.id, eingetragen);

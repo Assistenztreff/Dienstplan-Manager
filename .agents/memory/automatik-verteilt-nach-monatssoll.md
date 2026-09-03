@@ -9,6 +9,19 @@ Dienste. Eine Aushilfe mit rund 24 Vertragsstunden im Monat bekam damit 96 h
 soll sein Monats-Soll erfuellen, Abweichung hoechstens plus/minus eine
 Schicht."
 
+**Wenn alle ihr Soll haben, der Monat aber noch Luecken hat** (Kay-Regel
+03.09.2026, „Schwankende Monatsstunden sind in der Assistenz üblich"): Der
+Platz bleibt trotzdem nicht leer. Greift der normale Weg nicht, waehlt der
+Ersatzweg — erst Teilzeitkraefte, dann Vollzeitkraefte (ab `VOLLZEIT_STUNDEN`
+= 168 h Soll), zuletzt Personen ohne hinterlegte Vertragsstunden; innerhalb
+einer Stufe bekommt ihn, wer am wenigsten drueber liegt.
+
+Der Unterschied, auf den es dabei ankommt: „hat schon genug" ist ein Grund
+zurueckzustehen, „kann an dem Tag nicht" (abwesend, schon eingeteilt,
+Ruhezeit) ist ein Ausschluss — auch im Ersatzweg. Sonst waere die Ruhezeit nur
+noch eine Empfehlung. `soll_erfuellt` und `keine_vertragsstunden` sind seitdem
+praktisch keine Gruende mehr, warum ein Platz offen bleibt.
+
 **Wie es jetzt entscheidet.** `planeMonat` bekommt `freieStunden` — je Person
 die noch offenen Vertragsstunden des Monats. Von allen, die den Platz
 uebernehmen KOENNEN, bekommt ihn die Person mit dem groessten Rest. Die
