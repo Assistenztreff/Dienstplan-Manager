@@ -223,24 +223,31 @@ test.describe("Premium", () => {
       "Entwurf erstellen",
     );
     await knopf.click();
-    await expect(page.getByText(/als Entwurf eingeplant/)).toBeVisible({ timeout: 30_000 });
+    // Nach dem zweiten Lauf stehen kurzzeitig ZWEI Hinweise nebeneinander —
+    // deshalb immer den neuesten pruefen, nicht „irgendeinen".
+    const hinweis = page.getByText(/als Entwurf eingeplant/).last();
+    await expect(hinweis).toBeVisible({ timeout: 30_000 });
     const ersterLauf = (await schichtenDesMonats()).filter((s) => s.shiftModelId === dienstId);
     expect(ersterLauf.length).toBeGreaterThan(3);
 
     // Der Knopf hat umbenannt — und wuerfelt jetzt neu.
     await expect(knopf, "danach heisst der Knopf: Neuer Entwurf").toContainText("Neuer Entwurf");
     await knopf.click();
-    await expect(page.getByText(/als Entwurf eingeplant/)).toBeVisible({ timeout: 30_000 });
-
-    const zweiterLauf = (await schichtenDesMonats()).filter((s) => s.shiftModelId === dienstId);
-    expect(
-      zweiterLauf.length,
-      "Der zweite Lauf besetzt denselben Monat noch einmal, nicht doppelt",
-    ).toBe(ersterLauf.length);
-    expect(
-      zweiterLauf.map((s) => s.id).some((id) => ersterLauf.some((a) => a.id === id)),
-      "Die alten Entwuerfe muessen abgeraeumt sein — es sind neue Eintraege",
-    ).toBe(false);
+    // Abwarten, bis der zweite Lauf durch ist: Er raeumt erst ab und legt dann
+    // neu an — dazwischen steht der Monat kurz halbleer da.
+    await expect
+      .poll(
+        async () => {
+          const jetzt = (await schichtenDesMonats()).filter((s) => s.shiftModelId === dienstId);
+          const alleNeu = jetzt.every((s) => !ersterLauf.some((a) => a.id === s.id));
+          return `${jetzt.length}/${alleNeu}`;
+        },
+        {
+          message: "Der zweite Lauf muss denselben Monat noch einmal besetzen, mit neuen Einträgen",
+          timeout: 40_000,
+        },
+      )
+      .toBe(`${ersterLauf.length}/true`);
   });
 
   test("Auswahl: alles auf einen Druck, einzelne Pillen wieder abwaehlen", async ({ page }) => {

@@ -1231,6 +1231,14 @@ export function MonthGrid({
                           bereich={dndBereich}
                           ziel={{ art: "vertretung", shiftId: s.id }}
                           disabled={!chipClickable}
+                          // Kay-Fehlermeldung 03.09.2026: Ohne eigene Position
+                          // fiel jede Vertretungszeile auf `order: 0` zurueck
+                          // und sammelte sich unter der ERSTEN Pille des Tages,
+                          // statt unter ihrer eigenen. Sie traegt deshalb
+                          // dieselbe Position wie ihr Dienst — bei gleichem
+                          // Wert zeichnet der Flex-Container in Dokument-
+                          // Reihenfolge, also Pille und darunter ihre Zeile.
+                          style={{ order: reihenfolge.get(`dienst-${s.id}`) ?? 0 }}
                         >
                           <VertretungsZeile
                             testId={`day-standby-${s.id}`}

@@ -30,3 +30,25 @@ die Zelle als Ganzes beschriftet ist.
 pruefbar. `dienstplan-schicht-reihenfolge.spec.ts` misst deshalb die
 `boundingBox().y` der Elemente. Wer hier auf `nth()` oder die Reihenfolge im
 Markup prueft, testet am Verhalten vorbei.
+
+
+## Nachtrag: JEDES Element der Zelle braucht seine Position
+
+Kay-Fehlermeldung 03.09.2026: Im Drei-Schicht-Modell sammelten sich alle
+Vertretungszeilen unter der ERSTEN Dienstpille des Tages, statt jeweils unter
+ihrer eigenen.
+
+Grund: Die Pillen und die Platzhalter bekamen eine `order`, die Vertretungs-
+zeile nicht — sie fiel damit auf den CSS-Standard `order: 0` zurueck und
+sortierte sich vor bzw. zwischen die frueheste Gruppe.
+
+Die Zeile traegt jetzt DIESELBE Position wie ihr Dienst. Bei gleichem Wert
+zeichnet der Flex-Container in Dokument-Reihenfolge, also Pille und direkt
+darunter ihre Zeile.
+
+**Die Regel dahinter, fuer jede weitere Zeile in der Tageszelle:** Sobald ein
+Container mit `order` sortiert, braucht JEDES seiner Kinder einen Wert. Ein
+vergessenes Kind faellt nicht ans Ende, sondern auf 0 — also nach ganz oben.
+Das ist der Preis der CSS-Sortierung und der Grund, warum
+`dienstplan-schicht-reihenfolge.spec.ts` die Abfolge Pille/Zeile/Pille/Zeile
+komplett durchmisst statt nur die Pillen.

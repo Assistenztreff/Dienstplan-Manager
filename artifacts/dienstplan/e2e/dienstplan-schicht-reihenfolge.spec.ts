@@ -4,6 +4,7 @@ import {
   registerFreeAccount,
   deleteFreeAccount,
   setAccountPlan,
+  setVertretungEnabled,
   FREE_ACCOUNT_PASSWORD,
   type FreeAccount,
 } from "./helpers/teams";
@@ -60,6 +61,7 @@ test.beforeAll(async () => {
   acc = await registerFreeAccount("privat", "reihenfolge");
   ctx = acc.ctx;
   await setAccountPlan(acc.email, "premium");
+  await setVertretungEnabled(ctx, true);
 
   // Drei Schichtmodelle, alle im Regelplan und an jedem Wochentag.
   const vorhanden = (await (await ctx.get("/api/shift-models")).json()) as { id: number }[];
@@ -201,4 +203,61 @@ test("Punkt 4: ein Klick auf die Pille wechselt die Person und löscht sie nie",
   const uebrig = await schichtenDesMonats();
   expect(uebrig.map((s) => s.id), "Der Dienst darf nie verschwinden").toEqual([schichtId]);
   expect(uebrig[0]!.userId).toBe(personen[1]!.id);
+});
+
+test("jede Vertretungszeile steht unter IHRER Pille, nicht unter der ersten", async ({ page }) => {
+  test.setTimeout(120_000);
+  // Kay-Fehlermeldung 03.09.2026: „Sind mehrere Dienste und Vertretungen an
+  // einem Tag geplant, erscheinen die Vertretungen alle unter der ersten
+  // Dienstpille." Ursache war die Uhrzeit-Sortierung: Die Pillen bekamen eine
+  // Position, ihre Vertretungszeilen nicht — die fielen damit auf Position 0
+  // und sammelten sich ganz oben.
+  await raeumeAb();
+  const ids: number[] = [];
+  for (const [i, s] of SCHICHTEN.entries()) {
+    const res = await ctx.post("/api/shifts", {
+      data: {
+        userId: personen[i]!.id,
+        shiftModelId: modellIds[i],
+        type: "work",
+        startTime: `${ZIEL_ISO}T${s.start}:00`,
+        endTime: `${ZIEL_ISO}T${s.ende}:00`,
+        planningStatus: "VORLAEUFIG",
+      },
+    });
+    expect(res.ok(), await res.text()).toBe(true);
+    ids.push(((await res.json()) as { id: number }).id);
+  }
+
+  await loginViaUi(page, acc!.email, FREE_ACCOUNT_PASSWORD);
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.evaluate(() => {
+    localStorage.setItem("dienstplan.desktopView", "grid");
+    localStorage.setItem("dienstplan.pillMinimiert", "0");
+  });
+  await page.goto(`/dienstplan?date=${ZIEL_ISO}`);
+  const desktop = page.getByTestId("dienstplan-desktop");
+  await expect(desktop.getByTestId("month-grid")).toBeVisible();
+
+  const yVon = async (testId: string) => {
+    const box = await desktop.getByTestId(testId).boundingBox();
+    expect(box, `${testId} muss sichtbar sein`).not.toBeNull();
+    return box!.y;
+  };
+
+  // Erwartete Abfolge: Pille Frueh, Zeile Frueh, Pille Spaet, Zeile Spaet,
+  // Pille Nacht, Zeile Nacht — streng von oben nach unten.
+  const folge: string[] = [];
+  for (const id of ids) {
+    folge.push(`day-chip-${id}`, `day-standby-${id}`);
+  }
+  const hoehen: number[] = [];
+  for (const testId of folge) hoehen.push(await yVon(testId));
+
+  for (let i = 1; i < hoehen.length; i++) {
+    expect(
+      hoehen[i]!,
+      `${folge[i]} muss unter ${folge[i - 1]} stehen (gemessen ${hoehen[i]} vs ${hoehen[i - 1]})`,
+    ).toBeGreaterThan(hoehen[i - 1]!);
+  }
 });
