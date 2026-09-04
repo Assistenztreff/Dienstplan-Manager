@@ -150,6 +150,50 @@ test.describe("Schalter „Mit Vertretungen planen“ (UI)", () => {
     ).toHaveCount(0);
   });
 
+  test("die Vergütung am Dienst ist weg und eine alte Regel wird abgeräumt", async ({ page }) => {
+    test.setTimeout(90000);
+    // Kay-Entscheidung 03.09.2026: Bereitschaft laeuft ueber die ZEITWERTUNG,
+    // nicht ueber eine zweite Geldregel je Dienst. Das Feld ist raus.
+    // Weil es die Premium-Lohnauswertung fuettert, darf eine bestehende Regel
+    // nicht unsichtbar weiterlaufen — sie wird angezeigt und beim Speichern
+    // entfernt.
+    const modelle = (await (await acc.ctx.get("/api/shift-models")).json()) as { id: number }[];
+    const zielId = modelle[0]!.id;
+    const vorbereiten = await acc.ctx.patch(`/api/shift-models/${zielId}`, {
+      data: { compensationType: "flat", compensationFlatCents: 5000 },
+    });
+    expect(vorbereiten.ok(), await vorbereiten.text()).toBe(true);
+
+    await adoptSession(page, acc);
+    await page.goto("/einstellungen");
+    await expect(page.getByRole("heading", { name: "Einstellungen" })).toBeVisible();
+    const bearbeiten = page.getByTestId(`model-edit-${zielId}`);
+    await bearbeiten.scrollIntoViewIfNeeded();
+    await bearbeiten.click();
+
+    // Kein Auswahlfeld mehr — aber ein offener Hinweis auf die Altlast.
+    await expect(page.getByRole("combobox", { name: /Vergütung/ })).toHaveCount(0);
+    const hinweis = page.getByTestId("model-alte-verguetungsregel");
+    await expect(hinweis).toBeVisible();
+    await expect(hinweis).toContainText("50,00 € pro Schicht");
+
+    await page.getByTestId("model-save").click();
+    await expect
+      .poll(
+        async () => {
+          const m = (await (await acc.ctx.get("/api/shift-models")).json()) as {
+            id: number;
+            compensationType: string;
+            compensationFlatCents: number | null;
+          }[];
+          const ziel = m.find((x) => x.id === zielId)!;
+          return `${ziel.compensationType}/${ziel.compensationFlatCents ?? "null"}`;
+        },
+        { message: "Speichern muss die alte Vergütungsregel entfernen" },
+      )
+      .toBe("regular/null");
+  });
+
   test("Schalter in den Einstellungen umlegen: der Dialog zeigt das Feld", async ({ page }) => {
     test.setTimeout(90000);
     await adoptSession(page, acc);

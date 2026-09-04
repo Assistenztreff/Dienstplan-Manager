@@ -188,16 +188,6 @@ function ModelDialog({ open, onClose, editModel, nextSortOrder, targetTeamId }: 
     if (form.valuationPercent === "" || Number.isNaN(vp) || vp < 0) errs.valuationPercent = "Muss mindestens 0 sein";
     if (!TIME_PATTERN.test(form.defaultStartTime)) errs.defaultStartTime = "Ungültige Uhrzeit";
     if (!TIME_PATTERN.test(form.defaultEndTime)) errs.defaultEndTime = "Ungültige Uhrzeit";
-    if (form.compensationType === "percentage") {
-      const cp = Number(form.compensationPercent);
-      if (form.compensationPercent === "" || Number.isNaN(cp) || cp < 0)
-        errs.compensationPercent = "Muss mindestens 0 sein";
-    }
-    if (form.compensationType === "flat") {
-      const fe = Number(form.compensationFlatEuro);
-      if (form.compensationFlatEuro === "" || Number.isNaN(fe) || fe < 0)
-        errs.compensationFlatEuro = "Betrag in Euro angeben";
-    }
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -212,13 +202,11 @@ function ModelDialog({ open, onClose, editModel, nextSortOrder, targetTeamId }: 
         defaultStartTime: form.defaultStartTime,
         defaultEndTime: form.defaultEndTime,
         defaultWeekdays: form.defaultWeekdays,
-        compensationType: form.compensationType,
-        compensationPercent:
-          form.compensationType === "percentage" ? Number(form.compensationPercent) : null,
-        compensationFlatCents:
-          form.compensationType === "flat"
-            ? Math.round(Number(form.compensationFlatEuro) * 100)
-            : null,
+        // Nicht mehr einstellbar (s. Dialog): Speichern setzt die Vergütung
+        // dieses Dienstes auf den regulären Stundenlohn zurück.
+        compensationType: "regular" as CompensationType,
+        compensationPercent: null,
+        compensationFlatCents: null,
         sortOrder: Number(form.sortOrder) || 0,
         isActive: form.isActive,
         imRegelplan: form.imRegelplan,
@@ -398,67 +386,32 @@ function ModelDialog({ open, onClose, editModel, nextSortOrder, targetTeamId }: 
             {errors.valuationPercent && <p className="text-xs text-destructive">{errors.valuationPercent}</p>}
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Vergütung</Label>
-            <Select
-              value={form.compensationType}
-              onValueChange={(v) => set("compensationType", v as CompensationType)}
+          {/* Kay-Entscheidung 03.09.2026: Das Verguetungsfeld ist hier weg.
+              Bereitschaft wird ueber die ZEITWERTUNG darueber abgebildet (z. B.
+              50 % der Zeit als Sollstunden) — eine zweite, davon unabhaengige
+              Geldregel je Dienst hat er nie gebraucht; sie stammte noch aus der
+              alten Vertretungs-Einstellung im Schichtmenue.
+
+              Weil die Regel die Premium-Lohnauswertung fuettert, darf sie nicht
+              unsichtbar weiterlaufen: Traegt ein Dienst noch eine, sagt der
+              Hinweis das offen an, und Speichern raeumt sie ab. Ohne Hinweis
+              wuerde ein Festbetrag von 50 € je Schicht weiter Geld berechnen,
+              ohne dass irgendwo steht, warum. */}
+          {isEditing && form.compensationType !== "regular" && (
+            <div
+              className="rounded-md border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900"
+              data-testid="model-alte-verguetungsregel"
             >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="regular">Regulär (Stundenlohn)</SelectItem>
-                <SelectItem value="percentage">Prozentualer Stundenlohn</SelectItem>
-                <SelectItem value="flat">Festbetrag pro Schicht</SelectItem>
-              </SelectContent>
-            </Select>
-            {form.compensationType === "percentage" && (
-              <>
-                <div className="relative mt-2">
-                  <Input
-                    type="number"
-                    min="0"
-                    value={form.compensationPercent}
-                    onChange={(e) => set("compensationPercent", e.target.value)}
-                    className={errors.compensationPercent ? "border-destructive" : ""}
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
-                    %
-                  </span>
-                </div>
-                {errors.compensationPercent && (
-                  <p className="text-xs text-destructive">{errors.compensationPercent}</p>
-                )}
-              </>
-            )}
-            {form.compensationType === "flat" && (
-              <>
-                <div className="relative mt-2">
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.compensationFlatEuro}
-                    onChange={(e) => set("compensationFlatEuro", e.target.value)}
-                    placeholder="0,00"
-                    className={errors.compensationFlatEuro ? "border-destructive" : ""}
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
-                    €
-                  </span>
-                </div>
-                {errors.compensationFlatEuro && (
-                  <p className="text-xs text-destructive">{errors.compensationFlatEuro}</p>
-                )}
-              </>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Regulär: normaler Stundenlohn der Assistenzkraft. Prozentual: Anteil des Stundenlohns
-              (z.B. 50 % für Bereitschaft). Festbetrag: fixe Vergütung je Schicht, unabhängig von der
-              Dauer.
-            </p>
-          </div>
+              Dieser Dienst trägt noch eine alte Vergütungsregel:{" "}
+              <strong>
+                {form.compensationType === "flat"
+                  ? `Festbetrag ${(form.compensationFlatEuro || "0").replace(".", ",")} € pro Schicht`
+                  : `${form.compensationPercent || "0"} % des Stundenlohns`}
+              </strong>
+              . Sie stammt aus einer früheren Fassung und wird beim Speichern entfernt — ab dann
+              zählt der reguläre Stundenlohn. Die Zeitwertung oben bleibt unberührt.
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -491,7 +444,7 @@ function ModelDialog({ open, onClose, editModel, nextSortOrder, targetTeamId }: 
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Abbrechen
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button onClick={handleSave} disabled={saving} data-testid="model-save">
             {saving ? "Speichern..." : isEditing ? "Speichern" : "Anlegen"}
           </Button>
         </DialogFooter>
