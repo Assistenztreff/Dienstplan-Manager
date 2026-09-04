@@ -458,7 +458,10 @@ export function AllowanceSettingsForm() {
   return (
     <Card className="border-border/50 shadow-sm">
       <CardHeader>
-        <CardTitle className="font-serif text-xl">Zuschläge</CardTitle>
+        {/* Kay-Rueckmeldung 03.09.2026: Der Vertretungs-Schalter war unter dem
+            Titel „Zuschlaege" nicht zu finden — niemand sucht Vertretungen
+            unter Zuschlaegen. Der Titel nennt jetzt beides. */}
+        <CardTitle className="font-serif text-xl">Vertretungen und Zuschläge</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-5">
@@ -496,6 +499,97 @@ export function AllowanceSettingsForm() {
             </div>
           ) : (
             <>
+              {/* Kay-Rueckmeldung 03.09.2026: „Ich kann die Funktion in den
+                  Einstellungen nicht finden." Sie stand ganz unten in einer
+                  langen Karte namens „Zuschlaege" — hinter Nacht-, Sonntags-
+                  und Feiertagszuschlag, Bundesland und Abrechnungsart. Wer
+                  nach „Vertretung" sucht, scrollt so weit nicht.
+                  Jetzt steht der Block GANZ OBEN mit eigener Ueberschrift und
+                  eigenem Sprungziel (#vertretungen). */}
+              <div id="vertretungen" className="scroll-mt-4">
+                <h3 className="text-sm font-semibold mb-3">Vertretungen</h3>
+                <div className="space-y-4">
+              {/* Kay-Entscheidung 30.08.2026: Ob ueberhaupt mit Vertretungen
+                  geplant wird, ist eine Grundsatzentscheidung des Teams — sie
+                  gehoert einmal hierher, nicht in jeden einzelnen
+                  Schicht-Dialog. Im Drei-Schicht-Modell hat das Feld dort nur
+                  den Dialog aufgeblaeht und wurde uebersehen. */}
+              <div>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="vertretungEnabled" className="text-sm font-semibold">
+                      Mit Vertretungen planen
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Zu jedem Dienst lässt sich eine Person hinterlegen, die bei Ausfall
+                      einspringt. Eingeschaltet erscheint das Feld „Vertretung vormerken" im
+                      Schicht-Dialog, im Monatsraster kommt unter jedem besetzten Dienst eine
+                      flache Vertretungszeile dazu, und die automatische Planung merkt die
+                      Vertretungen gleich mit vor. Ausgeschaltet bleibt alles schlank. Bereits
+                      vorgemerkte Vertretungen bleiben in jedem Fall erhalten und lassen sich
+                      weiter ändern.
+                    </p>
+                  </div>
+                  <Switch
+                    id="vertretungEnabled"
+                    data-testid="allowance-vertretung-enabled-switch"
+                    checked={form.vertretungEnabled}
+                    onCheckedChange={(v) => set("vertretungEnabled", v)}
+                  />
+                </div>
+              </div>
+
+              {/* Die Verguetung ist eine Folgefrage — ohne Vertretungen gibt es
+                  nichts zu verguetenden. Der gespeicherte Wert bleibt im
+                  Formularzustand und wird beim Speichern unveraendert
+                  mitgeschickt; Ausblenden verliert also nichts. */}
+              {form.vertretungEnabled && (
+              <div className="space-y-1.5">
+                <Label htmlFor="vertretungCompensationMode">Vertretungsvergütung</Label>
+                <Select
+                  value={form.vertretungCompensationMode}
+                  onValueChange={(v) => set("vertretungCompensationMode", v)}
+                >
+                  <SelectTrigger id="vertretungCompensationMode" data-testid="allowance-vertretung-compensation-mode-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Keine Sonderregel</SelectItem>
+                    <SelectItem value="percent">Zuschlag (% des Dienst-Lohns)</SelectItem>
+                    <SelectItem value="flat">Pauschale (€ pro Dienst)</SelectItem>
+                  </SelectContent>
+                </Select>
+                {form.vertretungCompensationMode !== "none" && (
+                  <div className="relative max-w-[160px]">
+                    <Input
+                      id="vertretungCompensationValue"
+                      type="number"
+                      min="0"
+                      step={form.vertretungCompensationMode === "percent" ? "1" : "0.01"}
+                      value={form.vertretungCompensationValue}
+                      onChange={(e) => set("vertretungCompensationValue", e.target.value)}
+                      className={errors.vertretungCompensationValue ? "border-destructive pr-8" : "pr-8"}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                      {form.vertretungCompensationMode === "percent" ? "%" : "€"}
+                    </span>
+                  </div>
+                )}
+                {errors.vertretungCompensationValue && (
+                  <p className="text-xs text-destructive">{errors.vertretungCompensationValue}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Gilt für Dienste, die als Vertretung eingesetzt wurden. Die Vergütung kommt
+                  ZUSÄTZLICH zum normalen Lohn — wer kurzfristig einspringt, verdient nicht
+                  weniger, sondern bekommt einen Aufschlag. "Zuschlag" rechnet einen Prozentsatz
+                  des für diesen Dienst verdienten Lohns obendrauf, "Pauschale" einen festen
+                  Betrag. "Keine Sonderregel" = regulärer Lohn wie jeder andere Dienst.
+                </p>
+              </div>
+              )}
+                </div>
+              </div>
+
               <div>
                 <h3 className="text-sm font-semibold mb-3">Nachtzuschlag</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -609,85 +703,6 @@ export function AllowanceSettingsForm() {
                   vor dieser {isTeamScope ? "Team-" : "Konto-"}Regelung.
                 </p>
               </div>
-
-              {/* Kay-Entscheidung 30.08.2026: Ob ueberhaupt mit Vertretungen
-                  geplant wird, ist eine Grundsatzentscheidung des Teams — sie
-                  gehoert einmal hierher, nicht in jeden einzelnen
-                  Schicht-Dialog. Im Drei-Schicht-Modell hat das Feld dort nur
-                  den Dialog aufgeblaeht und wurde uebersehen. */}
-              <div className="border-t border-border/60 pt-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="vertretungEnabled" className="text-sm font-semibold">
-                      Mit Vertretungen planen
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      Zu jedem Dienst lässt sich eine Person hinterlegen, die bei Ausfall
-                      einspringt. Eingeschaltet erscheint das Feld „Vertretung vormerken" im
-                      Schicht-Dialog, im Monatsraster kommt unter jedem besetzten Dienst eine
-                      flache Vertretungszeile dazu, und die automatische Planung merkt die
-                      Vertretungen gleich mit vor. Ausgeschaltet bleibt alles schlank. Bereits
-                      vorgemerkte Vertretungen bleiben in jedem Fall erhalten und lassen sich
-                      weiter ändern.
-                    </p>
-                  </div>
-                  <Switch
-                    id="vertretungEnabled"
-                    data-testid="allowance-vertretung-enabled-switch"
-                    checked={form.vertretungEnabled}
-                    onCheckedChange={(v) => set("vertretungEnabled", v)}
-                  />
-                </div>
-              </div>
-
-              {/* Die Verguetung ist eine Folgefrage — ohne Vertretungen gibt es
-                  nichts zu verguetenden. Der gespeicherte Wert bleibt im
-                  Formularzustand und wird beim Speichern unveraendert
-                  mitgeschickt; Ausblenden verliert also nichts. */}
-              {form.vertretungEnabled && (
-              <div className="space-y-1.5">
-                <Label htmlFor="vertretungCompensationMode">Vertretungsvergütung</Label>
-                <Select
-                  value={form.vertretungCompensationMode}
-                  onValueChange={(v) => set("vertretungCompensationMode", v)}
-                >
-                  <SelectTrigger id="vertretungCompensationMode" data-testid="allowance-vertretung-compensation-mode-select">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Keine Sonderregel</SelectItem>
-                    <SelectItem value="percent">Zuschlag (% des Dienst-Lohns)</SelectItem>
-                    <SelectItem value="flat">Pauschale (€ pro Dienst)</SelectItem>
-                  </SelectContent>
-                </Select>
-                {form.vertretungCompensationMode !== "none" && (
-                  <div className="relative max-w-[160px]">
-                    <Input
-                      id="vertretungCompensationValue"
-                      type="number"
-                      min="0"
-                      step={form.vertretungCompensationMode === "percent" ? "1" : "0.01"}
-                      value={form.vertretungCompensationValue}
-                      onChange={(e) => set("vertretungCompensationValue", e.target.value)}
-                      className={errors.vertretungCompensationValue ? "border-destructive pr-8" : "pr-8"}
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
-                      {form.vertretungCompensationMode === "percent" ? "%" : "€"}
-                    </span>
-                  </div>
-                )}
-                {errors.vertretungCompensationValue && (
-                  <p className="text-xs text-destructive">{errors.vertretungCompensationValue}</p>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Gilt für Dienste, die als Vertretung eingesetzt wurden. Die Vergütung kommt
-                  ZUSÄTZLICH zum normalen Lohn — wer kurzfristig einspringt, verdient nicht
-                  weniger, sondern bekommt einen Aufschlag. "Zuschlag" rechnet einen Prozentsatz
-                  des für diesen Dienst verdienten Lohns obendrauf, "Pauschale" einen festen
-                  Betrag. "Keine Sonderregel" = regulärer Lohn wie jeder andere Dienst.
-                </p>
-              </div>
-              )}
 
               {!isTeamScope && (
                 <>

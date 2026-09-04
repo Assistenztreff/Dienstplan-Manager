@@ -1507,6 +1507,8 @@ export default function Einstellungen() {
                     size="sm"
                     className="gap-1.5"
                     onClick={() => openEdit(model)}
+                    aria-label={`${model.name} bearbeiten`}
+                    data-testid={`model-edit-${model.id}`}
                   >
                     <Pencil className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">Bearbeiten</span>

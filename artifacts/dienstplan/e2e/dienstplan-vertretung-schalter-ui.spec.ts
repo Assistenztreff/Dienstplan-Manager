@@ -120,6 +120,36 @@ test.describe("Schalter „Mit Vertretungen planen“ (UI)", () => {
     await expect(dialog.getByTestId("shift-dialog-standby")).toHaveCount(0);
   });
 
+  test("der Schalter ist auffindbar und steht nicht mehr am einzelnen Dienst", async ({
+    page,
+  }) => {
+    test.setTimeout(90000);
+    // Kay-Rueckmeldung 03.09.2026: „Ich kann die Funktion in den Einstellungen
+    // nicht finden. Vertretungen werden immer noch in den Einstellungen der
+    // Dienste ausgewaehlt." Beides wird hier festgehalten.
+    await adoptSession(page, acc);
+    await page.goto("/einstellungen");
+    await expect(page.getByRole("heading", { name: "Einstellungen" })).toBeVisible();
+
+    // Die Karte nennt die Vertretungen im Titel, und der Block hat eine
+    // eigene Ueberschrift — wer danach sucht, findet sie ohne zu scrollen.
+    await expect(page.getByText("Vertretungen und Zuschläge")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Vertretungen", exact: true })).toBeVisible();
+    await expect(page.getByTestId("allowance-vertretung-enabled-switch")).toBeVisible();
+
+    // Und am einzelnen Dienst gibt es den Schalter nicht mehr.
+    const modelle = (await (await acc.ctx.get("/api/shift-models")).json()) as { id: number }[];
+    expect(modelle.length, "Voraussetzung: es gibt einen Dienst").toBeGreaterThan(0);
+    const bearbeiten = page.getByTestId(`model-edit-${modelle[0]!.id}`);
+    await bearbeiten.scrollIntoViewIfNeeded();
+    await bearbeiten.click();
+    await expect(page.getByTestId("model-im-regelplan")).toBeVisible();
+    await expect(
+      page.getByTestId("model-standby-slot"),
+      "Der Vertretungs-Schalter gehört ins Team, nicht an jeden Dienst",
+    ).toHaveCount(0);
+  });
+
   test("Schalter in den Einstellungen umlegen: der Dialog zeigt das Feld", async ({ page }) => {
     test.setTimeout(90000);
     await adoptSession(page, acc);
