@@ -38,6 +38,7 @@ export function PlanungsmodusLeiste({
   onGrenzenAendern,
   grenzenSpeichern,
   laeuft,
+  hatEntwurf,
   onAutomatik,
   auswahlAktiv,
   onAuswahlUmschalten,
@@ -54,6 +55,8 @@ export function PlanungsmodusLeiste({
   /** Beim Schliessen des Zahnrads: an den Server. */
   grenzenSpeichern: () => void;
   laeuft: boolean;
+  /** Steht schon ein Entwurf aus dieser Sitzung im Raster? */
+  hatEntwurf: boolean;
   onAutomatik: () => void;
   auswahlAktiv: boolean;
   /** Ein Druck waehlt ALLE Dienste des Monats; der naechste hebt sie auf. */
@@ -82,16 +85,31 @@ export function PlanungsmodusLeiste({
       </span>
 
       <span className="ml-auto flex flex-wrap items-center gap-2">
+        {/* Kay-Auftrag 03.09.2026: EIN Knopf, zwei Zustaende. Beim ersten Mal
+            legt er den Entwurf an; danach heisst er „Neuer Entwurf" und
+            wuerfelt neu — er raeumt also erst die Entwuerfe des letzten Laufs
+            ab und plant dann von vorn.
+
+            Vorher hing das Wuerfeln als Knopf im Hinweis, der nach acht
+            Sekunden verschwand. Zwei Nachteile auf einmal: Man musste sich
+            beeilen, und der Knopf rief eine eingefrorene Fassung der
+            Planungsfunktion auf — mit dem Datenstand von VOR dem Lauf. Das
+            Abraeumen fand deshalb nichts, und der neue Lauf kollidierte mit
+            allem („0 Dienste angelegt, Überschneidung an 8 Tagen"). */}
         <Button
           size="sm"
           className="gap-1.5"
           onClick={onAutomatik}
           disabled={laeuft}
-          title="Offene Plätze des Regelplans reihum besetzen — als Entwürfe"
+          title={
+            hatEntwurf
+              ? "Die Entwürfe dieses Laufs verwerfen und neu würfeln"
+              : "Offene Plätze des Regelplans besetzen — als Entwürfe"
+          }
           data-testid="planungsmodus-automatik"
         >
           <Wand2 className="h-4 w-4" />
-          {laeuft ? "Plane..." : "Automatisch planen"}
+          {laeuft ? "Plane..." : hatEntwurf ? "Neuer Entwurf" : "Entwurf erstellen"}
         </Button>
 
         <Popover

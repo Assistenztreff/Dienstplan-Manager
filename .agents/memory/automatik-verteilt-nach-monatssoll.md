@@ -143,3 +143,33 @@ Zwei Loecher darin haben Kay am 03.09.2026 den Lauf abbrechen lassen:
 Merksatz fuer jede gemerkte ID-Liste im Dienstplan: Sie gilt nur fuer den
 angezeigten Monat und nur, solange die Zeilen existieren. Vor dem Loeschen
 gegen `allShifts` filtern.
+
+## Nachtrag 2: Kein Knopf in einem Hinweis, der verschwindet
+
+Kay-Fehlermeldung 03.09.2026 (spaeter Nachmittag): Nach dem ersten Lauf brachte
+„Neu würfeln" die Meldung „0 Dienste angelegt, für 6 Personen nicht:
+Überschneidung mit bestehenden Diensten an 8 Tagen".
+
+Der Grund ist ein Klassiker: Der Knopf im Toast rief eine EINGEFRORENE Fassung
+von `starteAutomatik` auf — die aus dem Moment, in dem der Toast entstand, also
+mit dem `allShifts`-Stand von VOR dem Lauf. Die frisch angelegten Entwuerfe
+standen dort nicht drin. Der Filter „nur loeschen, was es noch gibt" fand
+deshalb nichts, es wurde nichts abgeraeumt, und der neue Lauf kollidierte mit
+jedem einzelnen Dienst des alten.
+
+Zwei Konsequenzen:
+
+1. `allShiftsRef` haelt den aktuellen Schichtstand. `starteAutomatik` liest
+   ausschliesslich daraus, nie aus der `allShifts`-Variablen des Renders. Wer
+   hier eine Funktion aus einem Toast, einem Timer oder einem Event-Handler
+   aufruft, bekommt sonst den Stand von damals.
+2. Der Hinweis traegt gar keine Knoepfe mehr (Kay-Auftrag): Ein Knopf, der nach
+   acht Sekunden verschwindet, ist ohnehin kein guter Ort fuer eine Aktion.
+   Das Wuerfeln sitzt jetzt im Knopf der Leiste, der zwei Zustaende hat:
+   „Entwurf erstellen" -> `starteAutomatik(true)` (nur Luecken fuellen),
+   „Neuer Entwurf"     -> `starteAutomatik(false)` (abraeumen und neu wuerfeln).
+   Umgeschaltet wird ueber `hatEntwurf`, gesetzt nach jedem erfolgreichen Lauf
+   und geleert beim Monatswechsel.
+
+Mit dem Wegfall des Toasts ist auch „Rueckgaengig" verschwunden. Ersatz ist der
+Auswahlmodus: alles auswaehlen, Muelleimer.

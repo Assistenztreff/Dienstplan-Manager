@@ -205,23 +205,42 @@ test.describe("Premium", () => {
     expect(new Set(proTagPerson).size).toBe(proTagPerson.length);
   });
 
-  test("ein zweiter Lauf legt nichts doppelt an und bietet Neu würfeln", async ({ page }) => {
-    test.setTimeout(90_000);
-    // Der vorige Test hat den Monat gefuellt — Stand festhalten.
-    const vorher = (await schichtenDesMonats()).filter((s) => s.shiftModelId === dienstId);
-    expect(vorher.length, "Voraussetzung: der Monat ist gefuellt").toBeGreaterThan(3);
-
+  test("zweiter Druck wuerfelt neu, ohne Ueberschneidungs-Fehler", async ({ page }) => {
+    test.setTimeout(120_000);
+    // Kay-Fehlermeldung 03.09.2026: Nach dem ersten Lauf brachte das Wuerfeln
+    // „0 Dienste angelegt, für 6 Personen nicht: Überschneidung mit
+    // bestehenden Diensten an 8 Tagen". Der Knopf im Hinweis rief eine
+    // eingefrorene Fassung der Planungsfunktion auf — mit dem Datenstand von
+    // VOR dem Lauf. Das Abraeumen fand nichts, der neue Lauf kollidierte mit
+    // allem. Deshalb wird hier zweimal in EINER Sitzung geplant.
+    await raeumeMonatAb();
     await page.goto(`/dienstplan?date=${ZIEL_ISO}`);
     await expect(page.getByTestId("dienstplan-desktop").getByTestId("month-grid")).toBeVisible();
     await page.getByTestId("toggle-planungsmodus").click();
-    await page.getByTestId("planungsmodus-automatik").click();
 
-    // Variante 1: Ist alles besetzt, sagt der Hinweis das — und traegt das
-    // Wuerfeln, damit es dafuer keinen zweiten Knopf braucht.
-    await expect(page.getByText(/Alles besetzt/)).toBeVisible({ timeout: 20_000 });
+    const knopf = page.getByTestId("planungsmodus-automatik");
+    await expect(knopf, "beim ersten Mal heisst der Knopf: Entwurf erstellen").toContainText(
+      "Entwurf erstellen",
+    );
+    await knopf.click();
+    await expect(page.getByText(/als Entwurf eingeplant/)).toBeVisible({ timeout: 30_000 });
+    const ersterLauf = (await schichtenDesMonats()).filter((s) => s.shiftModelId === dienstId);
+    expect(ersterLauf.length).toBeGreaterThan(3);
 
-    const nachher = (await schichtenDesMonats()).filter((s) => s.shiftModelId === dienstId);
-    expect(nachher.length, "Ein zweiter Lauf darf nichts doppelt anlegen").toBe(vorher.length);
+    // Der Knopf hat umbenannt — und wuerfelt jetzt neu.
+    await expect(knopf, "danach heisst der Knopf: Neuer Entwurf").toContainText("Neuer Entwurf");
+    await knopf.click();
+    await expect(page.getByText(/als Entwurf eingeplant/)).toBeVisible({ timeout: 30_000 });
+
+    const zweiterLauf = (await schichtenDesMonats()).filter((s) => s.shiftModelId === dienstId);
+    expect(
+      zweiterLauf.length,
+      "Der zweite Lauf besetzt denselben Monat noch einmal, nicht doppelt",
+    ).toBe(ersterLauf.length);
+    expect(
+      zweiterLauf.map((s) => s.id).some((id) => ersterLauf.some((a) => a.id === id)),
+      "Die alten Entwuerfe muessen abgeraeumt sein — es sind neue Eintraege",
+    ).toBe(false);
   });
 
   test("Auswahl: alles auf einen Druck, einzelne Pillen wieder abwaehlen", async ({ page }) => {

@@ -483,6 +483,7 @@ export default function Dienstplan() {
     // Monat. Beim Wechsel verlieren sie ihren Bezug — „Neu würfeln" wuerde
     // sonst im neuen Monat die Entwuerfe des alten loeschen wollen.
     letzterLaufIds.current = [];
+    setHatEntwurf(false);
     setCurrentDate(newDate);
     setSelectedDay(startOfMonth(newDate));
     clearSelection();
@@ -541,6 +542,26 @@ export default function Dienstplan() {
   // und „Rueckgaengig" im Hinweis. Nur diese Entwuerfe fasst das Wuerfeln an;
   // was der Planer danach von Hand geaendert oder bestaetigt hat, bleibt.
   const letzterLaufIds = useRef<number[]>([]);
+  /**
+   * Steht ein Entwurf aus einem Lauf dieser Sitzung im Raster? Steuert die
+   * Beschriftung des Knopfes: „Entwurf erstellen" beim ersten Mal, danach
+   * „Neuer Entwurf" (Kay-Auftrag 03.09.2026). Bewusst ein State und kein
+   * Ref-Lesen, weil die Leiste darauf neu zeichnen muss.
+   */
+  const [hatEntwurf, setHatEntwurf] = useState(false);
+  /**
+   * Die aktuellen Schichten als Ref.
+   *
+   * Kay-Fehlermeldung 03.09.2026: „Neu würfeln" scheiterte mit „0 Dienste
+   * angelegt, Überschneidung mit bestehenden Diensten". Der Hinweis-Knopf rief
+   * eine EINGEFRORENE Fassung von starteAutomatik auf — die aus dem Moment, in
+   * dem der Hinweis entstand, also mit dem Stand VOR dem Lauf. Die frisch
+   * angelegten Entwuerfe standen dort noch nicht, also fand das Abraeumen
+   * nichts zu loeschen, und der neue Lauf kollidierte mit allem.
+   *
+   * Ein Ref haelt immer den aktuellen Stand, egal wie alt die Funktion ist.
+   */
+  const allShiftsRef = useRef<Shift[]>([]);
   const {
     selectedUserIds: multiSelectedUserIds,
     toggleUser: toggleStundenkontoUser,
@@ -689,6 +710,7 @@ export default function Dienstplan() {
   );
 
   const allShifts: Shift[] = shifts ?? [];
+  allShiftsRef.current = allShifts;
 
   // Kapazitäts-Ampel für die Vertretungs-Auswahl im ShiftDialog (Kay-Feedback
   // 28.08.2026): wiederverwendet exakt dieselbe Stundenkonto-Bilanz statt
@@ -832,7 +854,7 @@ export default function Dienstplan() {
     }
     setAutomatikLaeuft(true);
     try {
-      let basis = allShifts;
+      let basis = allShiftsRef.current;
       if (!nurLuecken && letzterLaufIds.current.length > 0) {
         // Nur loeschen, was es NOCH GIBT. Der Server loescht einen Sammel-
         // auftrag ganz oder gar nicht und antwortet 404, sobald eine ID fehlt.
@@ -840,13 +862,13 @@ export default function Dienstplan() {
         // teils aus einem Lauf, dessen Entwuerfe er zwischendurch geloescht
         // hatte — „Die alten Entwürfe ließen sich nicht abräumen", und der
         // Lauf brach ab, statt einfach neu zu planen.
-        const vorhanden = new Set(allShifts.map((sh) => sh.id));
+        const vorhanden = new Set(allShiftsRef.current.map((sh) => sh.id));
         const wegIds = letzterLaufIds.current.filter((id) => vorhanden.has(id));
         letzterLaufIds.current = [];
         if (wegIds.length > 0) {
           // Sofort aus dem Raster nehmen, dann loeschen (Echtzeit-Regel).
           removeShiftsFromCache(queryClient, wegIds);
-          basis = allShifts.filter((sh) => !wegIds.includes(sh.id));
+          basis = allShiftsRef.current.filter((sh) => !wegIds.includes(sh.id));
           try {
             for (const block of chunkIds(wegIds)) {
               await bulkDeleteShifts.mutateAsync({ data: { ids: block } });
@@ -860,7 +882,7 @@ export default function Dienstplan() {
                 " Es werden nur die offenen Plätze neu besetzt.",
             );
             void invalidateShiftDerivedQueries(queryClient);
-            basis = allShifts;
+            basis = allShiftsRef.current;
           }
         }
       }
@@ -888,14 +910,9 @@ export default function Dienstplan() {
       }
       const offeneGesamt = [...offeneTageJeDienst.values()].reduce((n, l) => n + l.length, 0);
       if (offeneGesamt === 0) {
-        // Kay-Variante 1: Auch wenn nichts zu fuellen ist, steht das Wuerfeln
-        // hier — sonst gaebe es keinen Weg dorthin, wenn der Monat voll ist.
-        toast.info("Alles besetzt — es sind keine Plätze offen.", {
-          action:
-            letzterLaufIds.current.length > 0
-              ? { label: "Neu würfeln", onClick: () => void starteAutomatik(false) }
-              : undefined,
-        });
+        // Kein Knopf im Hinweis mehr (Kay-Auftrag 03.09.2026): Das Wuerfeln
+        // sitzt im Knopf der Leiste, der dann „Neuer Entwurf" heisst.
+        toast.info("Alles besetzt — es sind keine Plätze offen.");
         return;
       }
 
@@ -1030,6 +1047,7 @@ export default function Dienstplan() {
       }
       void invalidateArbeitsdienstSalden(queryClient);
       letzterLaufIds.current = neueIds;
+      setHatEntwurf(neueIds.length > 0);
 
       if (fehler.length > 0) {
         // Bewusst ohne Selbstschliessen: Ein Hinweis, der nach vier Sekunden
@@ -1040,29 +1058,13 @@ export default function Dienstplan() {
         );
         return;
       }
-      // Variante 1 (Kays Wahl): Der Hinweis traegt beide Folge-Aktionen —
-      // dann steht das Wuerfeln genau im Moment der Entscheidung, ohne ein
-      // zweites Symbol in der Leiste.
+      // Kay-Auftrag 03.09.2026: Der Hinweis traegt keine Knoepfe mehr. Ein
+      // Hinweis, der verschwindet, ist kein guter Ort fuer eine Aktion — und
+      // sein Knopf rief eine eingefrorene Fassung dieser Funktion auf (s.
+      // allShiftsRef). Neu wuerfeln geht jetzt ueber den Knopf der Leiste, der
+      // nach dem ersten Entwurf „Neuer Entwurf" heisst.
       toast.success(
         `${angelegt} Dienste als Entwurf eingeplant${offen.length > 0 ? `, ${offen.length} Plätze bleiben offen (${offenErklaerung(offen) ?? "kein Grund ermittelbar"})` : ""}${uebersprungen > 0 ? `, ${uebersprungen} Tage übersprungen (Überschneidung)` : ""}${ohneVertretung > 0 ? `, bei ${ohneVertretung} ohne vorgemerkte Vertretung` : ""}.`,
-        {
-          duration: 8000,
-          action: { label: "Neu würfeln", onClick: () => void starteAutomatik(false) },
-          cancel: {
-            label: "Rückgängig",
-            onClick: () => {
-              removeShiftsFromCache(queryClient, neueIds);
-              letzterLaufIds.current = [];
-              void bulkDeleteShifts
-                .mutateAsync({ data: { ids: neueIds } })
-                .then(() => void invalidateArbeitsdienstSalden(queryClient))
-                .catch(() => {
-                  toast.error("Rückgängig fehlgeschlagen.");
-                  void invalidateShiftDerivedQueries(queryClient);
-                });
-            },
-          },
-        },
       );
     } finally {
       setAutomatikLaeuft(false);
@@ -1996,7 +1998,8 @@ export default function Dienstplan() {
             onGrenzenAendern={setGrenzenEntwurf}
             grenzenSpeichern={() => void speichereGrenzen()}
             laeuft={automatikLaeuft}
-            onAutomatik={() => void starteAutomatik(true)}
+            hatEntwurf={hatEntwurf}
+            onAutomatik={() => void starteAutomatik(!hatEntwurf)}
             auswahlAktiv={dienstAuswahlModus}
             onAuswahlUmschalten={alleDiensteAuswaehlen}
             anzahlAusgewaehlt={dienstAuswahl.length}
