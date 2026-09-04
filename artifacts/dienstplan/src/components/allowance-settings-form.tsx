@@ -622,10 +622,13 @@ export function AllowanceSettingsForm() {
                       Mit Vertretungen planen
                     </Label>
                     <p className="text-xs text-muted-foreground">
-                      Blendet im Schicht-Dialog das Feld „Vertretung vormerken" ein: zu jedem
-                      Dienst lässt sich eine Person hinterlegen, die bei Ausfall einspringt.
-                      Ausgeschaltet bleibt der Dialog schlank. Bereits vorgemerkte Vertretungen
-                      bleiben in jedem Fall erhalten und lassen sich weiter ändern.
+                      Zu jedem Dienst lässt sich eine Person hinterlegen, die bei Ausfall
+                      einspringt. Eingeschaltet erscheint das Feld „Vertretung vormerken" im
+                      Schicht-Dialog, im Monatsraster kommt unter jedem besetzten Dienst eine
+                      flache Vertretungszeile dazu, und die automatische Planung merkt die
+                      Vertretungen gleich mit vor. Ausgeschaltet bleibt alles schlank. Bereits
+                      vorgemerkte Vertretungen bleiben in jedem Fall erhalten und lassen sich
+                      weiter ändern.
                     </p>
                   </div>
                   <Switch
