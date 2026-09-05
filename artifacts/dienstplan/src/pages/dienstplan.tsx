@@ -75,6 +75,8 @@ import {
   useIsWideStundenkontoLayout,
   useStundenkontoSort,
   useStundenkontoEintraege,
+  berechneStundenkontoEintraege,
+  type StundenkontoUserShift,
 } from "@/components/stundenkonto-leiste";
 import { PlanLimitBanner } from "@/components/plan-limit-banner";
 import { exportSimpleMonthPdf } from "@/lib/pdf-export";
@@ -723,29 +725,11 @@ export default function Dienstplan() {
     hoursBalances ?? [],
     "name",
   );
-  // Noch freie Vertragsstunden je Person — die Zahl, die im Stundenkonto
-  // rechts neben dem Raster steht. Kay-Fehlermeldung 03.09.2026: Die
-  // automatische Planung soll nach BEDARF verteilen, nicht stur reihum, und
-  // niemanden mehr einteilen, dessen Monat schon erfuellt ist. Personen ohne
-  // hinterlegte Vertragsstunden stehen bewusst NICHT in der Map — ihr Bedarf
-  // ist unbekannt (der Lauf behandelt sie dann gesondert).
-  const freieStundenByUserId = useMemo(() => {
-    const map = new Map<number, number>();
-    for (const e of stundenkontoEintraege) {
-      if (e.hasContract) map.set(e.id, e.frei);
-    }
-    return map;
-  }, [stundenkontoEintraege]);
-
-  /** Vertragliches Monats-Soll — entscheidet, wer als Teilzeit gilt und die
-   *  zweite Vertretung frueher bekommt (Kay-Regel 03.09.2026). */
-  const monatsSollByUserId = useMemo(
-    () =>
-      new Map(
-        stundenkontoEintraege.filter((e) => e.hasContract).map((e) => [e.id, e.contractTarget]),
-      ),
-    [stundenkontoEintraege],
-  );
+  // Die freien Vertragsstunden und das Monats-Soll fuer den Planungslauf
+  // stehen BEWUSST nicht hier als Memo (Kay-Fehlermeldung 05.09.2026):
+  // starteAutomatik loescht beim Neu-Wuerfeln erst die alten Entwuerfe und
+  // rechnet die Konten danach selbst aus — ein Memo waere in dem Moment noch
+  // der Stand von vor dem Abraeumen. Siehe berechneStundenkontoEintraege.
 
   const capacityByUserId = useMemo(
     () =>
@@ -916,6 +900,29 @@ export default function Dienstplan() {
         return;
       }
 
+      // Konten JETZT ausrechnen, nicht aus dem Memo des letzten Renders
+      // nehmen (Kays Fehlermeldung 05.09.2026, s. berechneStundenkontoEintraege):
+      // Beim Neu-Wuerfeln sind die alten Entwuerfe eine Zeile weiter oben
+      // gerade geloescht worden, ohne dass React dazwischen gerendert haette.
+      // Das Memo haette ihre Stunden noch als verbraucht gemeldet — alle
+      // waeren als „Soll erfuellt" durchgefallen und der Lauf haette die
+      // Dienste ueber den Ersatzweg an Teilzeit und Aushilfen verteilt,
+      // waehrend die Vollzeitkraft leer ausging. „basis" ist der Stand nach
+      // dem Abraeumen und enthaelt bewusst auch die Abwesenheiten, weil
+      // bezahlte Abwesenheit Vertragszeit verbraucht.
+      const kontenJetzt = berechneStundenkontoEintraege(
+        assistants.map((a) => ({ id: a.id, name: a.name })),
+        basis as StundenkontoUserShift[],
+        hoursBalances ?? [],
+      );
+      const freieStundenJetzt = new Map<number, number>();
+      const monatsSollJetzt = new Map<number, number>();
+      for (const e of kontenJetzt) {
+        if (!e.hasContract) continue;
+        freieStundenJetzt.set(e.id, e.frei);
+        monatsSollJetzt.set(e.id, e.contractTarget);
+      }
+
       const { besetzungen, offen } = planeMonat({
         dienste: planDienste,
         offeneTageJeDienst,
@@ -924,8 +931,8 @@ export default function Dienstplan() {
         bestehende: echteSchichten,
         abwesend: absenceByUser,
         sperrzeiten: sperrzeitenByUser,
-        freieStunden: freieStundenByUserId,
-        monatsSollStunden: monatsSollByUserId,
+        freieStunden: freieStundenJetzt,
+        monatsSollStunden: monatsSollJetzt,
       });
       if (besetzungen.length === 0) {
         toast.info(

@@ -31,12 +31,29 @@ uebersprungen (`soll_erfuellt`); wer noch etwas braucht, darf den ganzen
 Dienst nehmen, auch wenn er damit drueber rutscht — das ist die „eine Schicht
 Toleranz".
 
-**Woher die Zahl kommt.** `freieStundenByUserId` in `dienstplan.tsx` liest
-`useStundenkontoEintraege(...).frei` — dieselbe Rechnung, die im Stundenkonto
+**Woher die Zahl kommt.** `starteAutomatik` in `dienstplan.tsx` ruft
+`berechneStundenkontoEintraege(...)` — dieselbe Rechnung, die im Stundenkonto
 neben dem Raster steht, inklusive Entwuerfen und bezahlter Abwesenheiten
 (Urlaub, Krank, vom Arbeitgeber abgesagt). Deshalb erklaert sich jede
 Entscheidung des Laufs mit Zahlen, die der Planer ohnehin sieht. Keine zweite
 Rechnung aufmachen.
+
+**Aber im Lauf selbst rechnen, nicht aus dem Memo lesen** (Kay-Fehlermeldung
+05.09.2026: „Nach jedem zweiten Entwurf bekommt Neubert keine Stunden, Timo
+und Oliver weit ueber Soll"). „Neuer Entwurf" loescht erst die alten
+Entwuerfe und plant dann — in EINEM Ablauf, React rendert dazwischen nicht.
+Ein `useMemo` aus dem letzten Render meldete deshalb noch die Stunden der
+gerade geloeschten Entwuerfe als verbraucht: alle galten als `soll_erfuellt`,
+der Ersatzweg verteilte reihum an Teilzeit, dann an die Aushilfen (Gegenprobe
+im E2E: Timo 96 h bei 23,8 h Soll), und die Vollzeitkraft ganz hinten ging
+leer aus. Der Lauf rechnet die Konten jetzt aus `basis`, dem Stand nach dem
+Abraeumen. Gleiche Falle wie `allShiftsRef` — alles, was der Lauf nach dem
+Abraeumen braucht, muss aus `basis` kommen, nicht aus dem Render.
+
+**Beim Messen im E2E:** `plannedHours` aus `/api/dashboard/hours-balance`
+zaehlt NUR bestaetigte Dienste. Die Automatik legt Entwuerfe an — wer damit
+misst, sieht ueberall 0 h und ein „niemand ueber Soll" ist immer wahr. Die
+Spec summiert deshalb die Dauer der Schichten aus `/api/shifts` selbst.
 
 **Zwei Sonderfaelle, die bewusst so sind.**
 - Hat NIEMAND Vertragsstunden, gibt es keinen Bedarf — dann gilt weiter reines

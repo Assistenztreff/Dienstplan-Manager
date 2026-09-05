@@ -75,16 +75,27 @@ async function raeumeArbeitsdiensteAb(): Promise<void> {
   }
 }
 
+/**
+ * Soll aus der Bilanz, verplante Stunden aus den Schichten selbst. Bewusst
+ * NICHT plannedHours der Bilanz: Die zaehlt nur bestaetigte Dienste, die
+ * Automatik legt aber Entwuerfe an — mit plannedHours stand hier fuer jede
+ * Person 0 h, und „niemand ueber Soll" war immer wahr.
+ */
 async function monatsSoll(): Promise<Map<number, { soll: number; verplant: number }>> {
   const res = await ctx.get(`/api/dashboard/hours-balance?month=${MONAT}&year=${JAHR}`);
   expect(res.ok(), `Stundenkonto lesen fehlgeschlagen (${res.status()})`).toBe(true);
-  const zeilen = (await res.json()) as {
-    userId: number;
-    contractMonthlyTargetHours: number;
-    plannedHours: number;
-  }[];
+  const zeilen = (await res.json()) as { userId: number; contractMonthlyTargetHours: number }[];
+  const verplant = new Map<number, number>();
+  for (const s of await schichten()) {
+    if (s.type !== "work") continue;
+    const h = (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3_600_000;
+    verplant.set(s.userId, (verplant.get(s.userId) ?? 0) + h);
+  }
   return new Map(
-    zeilen.map((z) => [z.userId, { soll: z.contractMonthlyTargetHours, verplant: z.plannedHours }]),
+    zeilen.map((z) => [
+      z.userId,
+      { soll: z.contractMonthlyTargetHours, verplant: verplant.get(z.userId) ?? 0 },
+    ]),
   );
 }
 
@@ -237,6 +248,65 @@ test.describe("Automatische Planung — Verteilung nach Monats-Soll", () => {
       angelegt.filter((s) => s.userId === kennedyId),
       "Kennedys Monat ist erfuellt — die Automatik darf nichts mehr draufpacken",
     ).toEqual([]);
+  });
+
+  test("Punkt 4: auch der ZWEITE Entwurf verteilt nach dem Monats-Soll", async ({ page }) => {
+    test.setTimeout(180_000);
+    // Kays Fehlermeldung 05.09.2026: „Nach jedem zweiten Entwurf bekommt
+    // Camillo Neubert keine Stunden und Timo/Oliver Dienste weit ueber ihrem
+    // Soll." Der zweite Lauf raeumt erst die Entwuerfe des ersten ab und plant
+    // dann neu — beides in EINEM Durchlauf, React rendert dazwischen nicht.
+    // Wer die freien Stunden aus dem Stand von vor dem Abraeumen liest, haelt
+    // alle Konten fuer voll: Der Lauf faellt auf den Ersatzweg zurueck und
+    // verteilt reihum, statt nach Bedarf. Deshalb wird hier zweimal in
+    // derselben Sitzung geplant — ohne Neuladen dazwischen.
+    await raeumeArbeitsdiensteAb();
+    await page.goto(`/dienstplan?date=${ZIEL_ISO}`);
+    await expect(page.getByTestId("dienstplan-desktop").getByTestId("month-grid")).toBeVisible();
+    await page.getByTestId("toggle-planungsmodus").click();
+
+    const knopf = page.getByTestId("planungsmodus-automatik");
+    await knopf.click();
+    await expect(page.getByText(/als Entwurf eingeplant/).last()).toBeVisible({ timeout: 30_000 });
+    const ersterLauf = (await schichten()).filter((s) => s.shiftModelId === dienstId);
+    expect(ersterLauf.length, "Voraussetzung: der erste Lauf hat besetzt").toBeGreaterThan(3);
+
+    await expect(knopf).toContainText("Neuer Entwurf");
+    await knopf.click();
+    // Der zweite Lauf loescht erst und legt dann neu an — abwarten, bis
+    // wirklich nur noch neue Eintraege im Monat stehen.
+    await expect
+      .poll(
+        async () => {
+          const jetzt = (await schichten()).filter((s) => s.shiftModelId === dienstId);
+          return jetzt.length > 3 && jetzt.every((s) => !ersterLauf.some((a) => a.id === s.id));
+        },
+        { message: "Der zweite Lauf muss den Monat neu besetzen", timeout: 60_000 },
+      )
+      .toBe(true);
+
+    // Und jetzt dasselbe Mass wie bei Punkt 2 — der zweite Entwurf darf nicht
+    // schlechter verteilen als der erste.
+    const konto = await monatsSoll();
+    const abweichungen: string[] = [];
+    for (const [kurz, id] of ids) {
+      const zeile = konto.get(id);
+      if (!zeile) continue;
+      if (zeile.verplant > zeile.soll + 24.01) {
+        abweichungen.push(
+          `${kurz}: ${zeile.verplant.toFixed(1)} h verplant bei ${zeile.soll.toFixed(1)} h Soll`,
+        );
+      }
+    }
+    expect(abweichungen, abweichungen.join(" · ")).toEqual([]);
+
+    // Neubert hat den groessten Vertrag — genau die Person, die bei Kay im
+    // zweiten Entwurf mit 0 Stunden dastand.
+    const neubert = konto.get(ids.get("Neubert")!)!;
+    expect(
+      neubert.verplant,
+      `Die Vollzeitkraft darf im zweiten Entwurf nicht leer ausgehen (${neubert.verplant} h von ${neubert.soll} h)`,
+    ).toBeGreaterThan(neubert.soll / 2);
   });
 
   test("ein abgewiesener Sammelauftrag kostet nicht den ganzen Monat", async ({ page }) => {

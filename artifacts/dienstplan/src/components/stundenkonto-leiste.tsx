@@ -195,10 +195,62 @@ export function useStundenkontoSort(): {
 }
 
 /**
- * Baut die Bilanz-Zeilen je Assistenzkraft und sortiert sie. "kapazitaet"
- * stellt die Person mit den meisten freien Vertragsstunden nach oben — beim
- * Fuellen einer Luecke steht die passende Person damit vorn. Personen ohne
- * hinterlegte Vertragsstunden landen ans Ende (keine Kapazitaet berechenbar).
+ * Baut die Bilanz-Zeilen je Assistenzkraft — ohne Hook, damit sie auch
+ * MITTEN in einem Ablauf mit einem frisch zusammengestellten Schichtstand
+ * gerufen werden kann.
+ *
+ * Kays Fehlermeldung 05.09.2026 („nach jedem zweiten Entwurf bekommt Neubert
+ * keine Stunden"): Der Lauf las die freien Stunden aus dem useMemo des
+ * letzten Renders. Beim Neu-Wuerfeln loescht er aber ZUERST die alten
+ * Entwuerfe — React rendert dazwischen nicht, das Memo zeigte also weiter die
+ * verbrauchten Stunden von eben. Alle galten als „Soll erfuellt", der Lauf
+ * fiel auf den Ersatzweg zurueck und verteilte reihum an Teilzeit, dann an
+ * Aushilfen ohne Vertrag; die Vollzeitkraft ganz hinten ging leer aus.
+ * Deshalb rechnet der Lauf die Konten jetzt selbst aus dem Stand nach dem
+ * Abraeumen — genau wie das Ref fuer die Schichten (s. allShiftsRef).
+ */
+export function berechneStundenkontoEintraege(
+  assistants: { id: number; name: string }[],
+  shifts: StundenkontoUserShift[],
+  balances: HoursBalance[],
+): StundenkontoEintrag[] {
+  const balanceMap = new Map(balances.map((b) => [b.userId, b]));
+  const summen = new Map<number, { verplant: number; entwurf: number }>();
+  for (const s of shifts) {
+    const stunden = planungsStunden(s);
+    if (stunden === 0) continue;
+    const eintrag = summen.get(s.userId) ?? { verplant: 0, entwurf: 0 };
+    eintrag.verplant += stunden;
+    if (isUnbestaetigt(s)) eintrag.entwurf += stunden;
+    summen.set(s.userId, eintrag);
+  }
+
+  return assistants.map((a) => {
+    const b = balanceMap.get(a.id);
+    const contractTarget = b?.contractMonthlyTargetHours ?? 0;
+    const summe = summen.get(a.id) ?? { verplant: 0, entwurf: 0 };
+    // Teamsitzungs-Gutschrift kommt aus der Bilanz (ein Team-Eintrag gilt
+    // fuer alle Mitglieder, nicht nur den zugewiesenen Nutzer).
+    const verplant = summe.verplant + (b?.teamsitzungStunden ?? 0);
+    return {
+      id: a.id,
+      name: a.name,
+      contractTarget,
+      verplant,
+      entwurf: summe.entwurf,
+      balance: verplant - contractTarget,
+      frei: contractTarget - verplant,
+      hasContract: contractTarget > 0,
+      status: getUserStatus(a.id, shifts),
+    };
+  });
+}
+
+/**
+ * Sortierte Fassung fuer die Anzeige. "kapazitaet" stellt die Person mit den
+ * meisten freien Vertragsstunden nach oben — beim Fuellen einer Luecke steht
+ * die passende Person damit vorn. Personen ohne hinterlegte Vertragsstunden
+ * landen ans Ende (keine Kapazitaet berechenbar).
  */
 export function useStundenkontoEintraege(
   assistants: { id: number; name: string }[],
@@ -206,39 +258,10 @@ export function useStundenkontoEintraege(
   balances: HoursBalance[],
   sortMode: StundenkontoSortMode,
 ): StundenkontoEintrag[] {
-  const balanceMap = useMemo(() => new Map(balances.map((b) => [b.userId, b])), [balances]);
-
-  const eintraege = useMemo(() => {
-    const summen = new Map<number, { verplant: number; entwurf: number }>();
-    for (const s of shifts) {
-      const stunden = planungsStunden(s);
-      if (stunden === 0) continue;
-      const eintrag = summen.get(s.userId) ?? { verplant: 0, entwurf: 0 };
-      eintrag.verplant += stunden;
-      if (isUnbestaetigt(s)) eintrag.entwurf += stunden;
-      summen.set(s.userId, eintrag);
-    }
-
-    return assistants.map((a) => {
-      const b = balanceMap.get(a.id);
-      const contractTarget = b?.contractMonthlyTargetHours ?? 0;
-      const summe = summen.get(a.id) ?? { verplant: 0, entwurf: 0 };
-      // Teamsitzungs-Gutschrift kommt aus der Bilanz (ein Team-Eintrag gilt
-      // fuer alle Mitglieder, nicht nur den zugewiesenen Nutzer).
-      const verplant = summe.verplant + (b?.teamsitzungStunden ?? 0);
-      return {
-        id: a.id,
-        name: a.name,
-        contractTarget,
-        verplant,
-        entwurf: summe.entwurf,
-        balance: verplant - contractTarget,
-        frei: contractTarget - verplant,
-        hasContract: contractTarget > 0,
-        status: getUserStatus(a.id, shifts),
-      };
-    });
-  }, [assistants, shifts, balanceMap]);
+  const eintraege = useMemo(
+    () => berechneStundenkontoEintraege(assistants, shifts, balances),
+    [assistants, shifts, balances],
+  );
 
   return useMemo(() => {
     if (sortMode !== "kapazitaet") return eintraege;
