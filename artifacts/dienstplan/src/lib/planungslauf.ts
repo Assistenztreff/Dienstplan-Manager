@@ -333,8 +333,22 @@ export function planeMonat(eingabe: {
    * Teilzeit gilt und damit die zweite Vertretung frueher bekommt.
    */
   monatsSollStunden?: Map<number, number>;
+  /**
+   * Zufallsquelle (0 ≤ x < 1) zum Mischen (Kay-Auftrag 05.09.2026: „Neuer
+   * Entwurf muss die Dienste neu mischen"). Ohne sie ist der Lauf
+   * vollstaendig vorhersagbar — derselbe Stand ergibt denselben Plan.
+   *
+   * Gemischt wird nur, wo es das Soll nicht kostet: Unter allen, die den
+   * Platz nehmen koennen und deren Bedarf hoechstens EINE Schicht unter dem
+   * Spitzenreiter liegt, entscheidet der Zufall (Kays Toleranz „plus/minus
+   * eine Schicht"). Ausserdem beginnt jede Rotation an zufaelliger Stelle.
+   */
+  zufall?: () => number;
 }): LaufErgebnis {
   const { dienste, offeneTageJeDienst, personen, bestehende, abwesend } = eingabe;
+  const zufall = eingabe.zufall;
+  const wuerfel = (n: number): number =>
+    zufall === undefined ? 0 : Math.min(n - 1, Math.floor(zufall() * n));
   const sperrzeiten = eingabe.sperrzeiten ?? new Map<number, Sperrzeit[]>();
   const blockLaenge = Math.max(1, Math.floor(eingabe.grenzen.blockLaenge));
   const ruhezeitMs = Math.max(0, eingabe.grenzen.ruhezeitStunden) * 60 * 60 * 1000;
@@ -362,7 +376,10 @@ export function planeMonat(eingabe: {
   const istVollzeit = (personId: number): boolean =>
     (monatsSoll?.get(personId) ?? 0) >= VOLLZEIT_STUNDEN;
   const rotationen = new Map<number, Rotation>(
-    dienste.map((d) => [d.id, { person: null, rest: 0, vorheriges: null, naechsterStart: 0 }]),
+    dienste.map((d) => [
+      d.id,
+      { person: null, rest: 0, vorheriges: null, naechsterStart: wuerfel(personen.length) },
+    ]),
   );
 
   // Tagweise, damit sich die Dienste eines Tages gegenseitig sehen: Wer den
@@ -423,6 +440,8 @@ export function planeMonat(eingabe: {
         rot.rest = 0;
         rot.vorheriges = null;
         let beste: { idx: number; person: PlanPerson } | null = null;
+        /** Alle, die koennen UND noch Stunden brauchen — fuers Mischen. */
+        const frei: { idx: number; person: PlanPerson }[] = [];
         let ersatz: { idx: number; person: PlanPerson; stufe: number; rest: number } | null = null;
         for (let versuch = 0; versuch < personen.length; versuch++) {
           const idx = (rot.naechsterStart + versuch) % personen.length;
@@ -449,10 +468,18 @@ export function planeMonat(eingabe: {
             }
             continue;
           }
+          frei.push({ idx, person: p });
           if (beste === null || bedarf.bedarf(p.id) > bedarf.bedarf(beste.person.id)) {
             beste = { idx, person: p };
           }
           if (!bedarf.aktiv) break; // Reihum: die erste freie Person nimmt.
+        }
+        if (beste !== null && zufall !== undefined && bedarf.aktiv) {
+          // Mischen innerhalb der Toleranz: Wer hoechstens eine Schicht
+          // weniger braucht als der Spitzenreiter, darf ihn vertreten.
+          const spitze = bedarf.bedarf(beste.person.id);
+          const kandidaten = frei.filter((k) => bedarf.bedarf(k.person.id) > spitze - stunden);
+          beste = kandidaten[wuerfel(kandidaten.length)] ?? beste;
         }
         beste ??= ersatz;
         if (beste !== null) {

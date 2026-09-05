@@ -309,6 +309,46 @@ test.describe("Automatische Planung — Verteilung nach Monats-Soll", () => {
     ).toBeGreaterThan(neubert.soll / 2);
   });
 
+  test("Punkt 5: Neuer Entwurf mischt die Dienste neu", async ({ page }) => {
+    test.setTimeout(180_000);
+    // Kay-Auftrag 05.09.2026: „Wenn nach dem ersten Entwurf erneut auf Neuer
+    // Entwurf geklickt wird, erscheint exakt derselbe Dienstplan. Neuer
+    // Entwurf muss die Dienste neu mischen." Gemischt wird nur innerhalb der
+    // Toleranz von einer Schicht — das Soll bleibt (siehe Punkt 4).
+    await raeumeArbeitsdiensteAb();
+    await page.goto(`/dienstplan?date=${ZIEL_ISO}`);
+    await expect(page.getByTestId("dienstplan-desktop").getByTestId("month-grid")).toBeVisible();
+    await page.getByTestId("toggle-planungsmodus").click();
+
+    const knopf = page.getByTestId("planungsmodus-automatik");
+    await knopf.click();
+    await expect(page.getByText(/als Entwurf eingeplant/).last()).toBeVisible({ timeout: 30_000 });
+    const erster = (await schichten()).filter((s) => s.shiftModelId === dienstId);
+    const zuordnung = (liste: ShiftRow[]) =>
+      liste
+        .map((s) => `${s.startTime.slice(0, 10)}:${s.userId}`)
+        .sort()
+        .join(",");
+    const ersteZuordnung = zuordnung(erster);
+
+    await expect(knopf).toContainText("Neuer Entwurf");
+    await knopf.click();
+    await expect
+      .poll(
+        async () => {
+          const jetzt = (await schichten()).filter((s) => s.shiftModelId === dienstId);
+          return jetzt.length === erster.length && jetzt.every((s) => !erster.some((a) => a.id === s.id));
+        },
+        { message: "Der zweite Lauf muss den Monat neu besetzen", timeout: 60_000 },
+      )
+      .toBe(true);
+    const zweiter = (await schichten()).filter((s) => s.shiftModelId === dienstId);
+    expect(
+      zuordnung(zweiter),
+      "Der zweite Entwurf muss anders besetzt sein als der erste",
+    ).not.toBe(ersteZuordnung);
+  });
+
   test("ein abgewiesener Sammelauftrag kostet nicht den ganzen Monat", async ({ page }) => {
     test.setTimeout(180_000);
     await raeumeArbeitsdiensteAb();

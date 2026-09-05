@@ -190,3 +190,12 @@ Zwei Konsequenzen:
 
 Mit dem Wegfall des Toasts ist auch „Rueckgaengig" verschwunden. Ersatz ist der
 Auswahlmodus: alles auswaehlen, Muelleimer.
+
+**„Neuer Entwurf" mischt** (Kay-Auftrag 05.09.2026: „erscheint exakt noch
+mal derselbe Dienstplan"). `planeMonat` ist ohne `zufall` vollstaendig
+vorhersagbar — gut fuer Tests, schlecht fuer den Knopf. `dienstplan.tsx` gibt
+`zufall: Math.random` mit. Gemischt wird nur, wo es das Soll nicht kostet:
+unter allen, die koennen und hoechstens eine Schicht weniger brauchen als der
+Spitzenreiter, entscheidet der Zufall; ausserdem startet jede Rotation an
+zufaelliger Stelle. Tests bleiben deterministisch, weil sie `zufall`
+weglassen oder einen Seed (mulberry32) mitgeben.

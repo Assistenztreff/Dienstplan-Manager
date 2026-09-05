@@ -173,6 +173,59 @@ test.describe("Premium", () => {
     await ctx.delete(`/api/shifts/${schichtId}`);
   });
 
+  test("schnelle Klicks auf die Pille landen bei der richtigen Person", async ({ page }) => {
+    // Kay-Fehlermeldung 05.09.2026: „Klickt man schnell auf eine Dienstpille,
+    // erscheint zuerst die richtige Person, dann springt die Ansicht kurz
+    // zurueck und zeigt nacheinander alle bis zum letzten Klick." Jeder Klick
+    // schickte seinen eigenen Auftrag, und jede Antwort schrieb „ihren" Stand
+    // ins Raster. Nachgestellt, indem die ERSTE Antwort spaeter eintrifft als
+    // die zweite — dann muss das Raster trotzdem beim letzten Klick bleiben.
+    await raeumeMonatAb();
+    const res = await ctx.post("/api/shifts", {
+      data: {
+        userId: personen[0]!.id,
+        shiftModelId: dienstId,
+        type: "work",
+        startTime: `${ZIEL_ISO}T08:00:00`,
+        endTime: `${ZIEL_ISO}T16:00:00`,
+      },
+    });
+    expect(res.ok(), await res.text()).toBe(true);
+    const schichtId = ((await res.json()) as { id: number }).id;
+
+    let antworten = 0;
+    await page.route(`**/api/shifts/${schichtId}`, async (route) => {
+      if (route.request().method() === "GET") return route.continue();
+      antworten += 1;
+      const meine = antworten;
+      const antwort = await route.fetch();
+      // Die erste Antwort kommt bewusst als LETZTE beim Browser an.
+      if (meine === 1) await new Promise((r) => setTimeout(r, 1500));
+      await route.fulfill({ response: antwort });
+    });
+
+    await page.goto(`/dienstplan?date=${ZIEL_ISO}`);
+    const pille = page.getByTestId("dienstplan-desktop").getByTestId(`day-chip-${schichtId}`);
+    await expect(pille).toContainText("Anna");
+    await page.getByTestId("toggle-planungsmodus").click();
+    await expect(page.getByTestId("planungsmodus-leiste")).toBeVisible();
+
+    // Zwei Klicks, so schnell wie moeglich: Anna → Ben → Clara.
+    await pille.click();
+    await pille.click();
+    await expect(pille).toContainText("Clara");
+    // ... und auch NACH dem Eintreffen der verspaeteten ersten Antwort.
+    await page.waitForTimeout(2500);
+    await expect(pille, "Die verspaetete erste Antwort darf nichts zuruecksetzen").toContainText(
+      "Clara",
+    );
+    const nachher = (await schichtenDesMonats()).find((s) => s.id === schichtId);
+    expect(nachher!.userId, "Der Server steht ebenfalls auf Clara").toBe(personen[2]!.id);
+
+    await page.unroute(`**/api/shifts/${schichtId}`);
+    await ctx.delete(`/api/shifts/${schichtId}`);
+  });
+
   test("die automatische Planung füllt den Monat als Entwürfe, mit Vertretung", async ({
     page,
   }) => {

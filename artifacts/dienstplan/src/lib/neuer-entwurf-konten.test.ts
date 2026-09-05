@@ -150,3 +150,70 @@ describe("Neuer Entwurf — Konten nach dem Abraeumen", () => {
     expect(stunden.get(APPLER.id) ?? 0).toBeGreaterThan(144);
   });
 });
+
+/** Kleiner, wiederholbarer Zufall (mulberry32) — damit der Test stabil bleibt. */
+function seedZufall(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function laufMitZufall(zufall?: () => number) {
+  const konten = berechneStundenkontoEintraege(PERSONEN, [], BILANZEN);
+  const freieStunden = new Map<number, number>();
+  const monatsSollStunden = new Map<number, number>();
+  for (const e of konten) {
+    if (!e.hasContract) continue;
+    freieStunden.set(e.id, e.frei);
+    monatsSollStunden.set(e.id, e.contractTarget);
+  }
+  return planeMonat({
+    dienste: [TAG24],
+    offeneTageJeDienst: new Map([[TAG24.id, TAGE]]),
+    personen: PERSONEN,
+    grenzen: { blockLaenge: 1, ruhezeitStunden: 11 },
+    bestehende: [],
+    abwesend: new Map(),
+    freieStunden,
+    monatsSollStunden,
+    zufall,
+  });
+}
+
+const zuordnung = (b: { datum: string; userId: number }[]) =>
+  b.map((x) => `${x.datum}:${x.userId}`).join(",");
+
+describe("Neuer Entwurf — mischt, ohne das Soll zu verlieren", () => {
+  it("ist ohne Zufall vorhersagbar", () => {
+    expect(zuordnung(laufMitZufall().besetzungen)).toBe(zuordnung(laufMitZufall().besetzungen));
+  });
+
+  it("ergibt mit Zufall verschiedene Plaene (Kay-Auftrag 05.09.2026)", () => {
+    const a = laufMitZufall(seedZufall(1)).besetzungen;
+    const b = laufMitZufall(seedZufall(2)).besetzungen;
+    expect(a.length).toBe(31);
+    expect(b.length).toBe(31);
+    expect(zuordnung(a)).not.toBe(zuordnung(b));
+  });
+
+  it("haelt beim Mischen die Toleranz von einer Schicht je Person", () => {
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const stunden = stundenJePerson(alsEntwuerfe(laufMitZufall(seedZufall(seed)).besetzungen));
+      // Bedarf 744 h bei 717,6 h Soll: jede Vertragsperson nah am Soll,
+      // Aushilfen ohne Vertrag bleiben aussen vor.
+      expect(stunden.get(NEUBERT.id)).toBeGreaterThanOrEqual(168);
+      expect(stunden.get(KAHRAMAN.id)).toBeGreaterThanOrEqual(144);
+      for (const p of [THIERER, APPLER, RELLER]) {
+        expect(stunden.get(p.id), p.name).toBeGreaterThanOrEqual(96);
+        expect(stunden.get(p.id), p.name).toBeLessThanOrEqual(144);
+      }
+      expect(stunden.get(TIMO.id) ?? 0).toBe(0);
+      expect(stunden.get(OLIVER.id) ?? 0).toBe(0);
+    }
+  });
+});

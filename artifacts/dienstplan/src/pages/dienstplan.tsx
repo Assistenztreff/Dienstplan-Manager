@@ -933,6 +933,9 @@ export default function Dienstplan() {
         sperrzeiten: sperrzeitenByUser,
         freieStunden: freieStundenJetzt,
         monatsSollStunden: monatsSollJetzt,
+        // Kay-Auftrag 05.09.2026: „Neuer Entwurf muss die Dienste neu
+        // mischen." Ohne Zufall ergab derselbe Stand exakt denselben Plan.
+        zufall: Math.random,
       });
       if (besetzungen.length === 0) {
         toast.info(
@@ -1083,6 +1086,19 @@ export default function Dienstplan() {
    * Uebersprungen wird, wer an dem Tag nicht kann (Kays Wahl) — so klickt man
    * sich nie in eine Besetzung, die der Server danach abweist.
    */
+  /**
+   * Laufende Wechsel je Dienst (Kay-Fehlermeldung 05.09.2026: „Klickt man
+   * schnell auf eine Pille, springt die Ansicht kurz zurueck und zeigt
+   * nacheinander alle Personen bis zum letzten Klick").
+   *
+   * Frueher schickte jeder Klick sofort seinen eigenen Auftrag und schrieb
+   * die Antwort ins Raster — drei schnelle Klicks, drei Antworten, und jede
+   * setzte kurz „ihren" Stand. Jetzt merkt sich jeder Dienst nur noch das
+   * ZIEL; ein Sender je Dienst schickt immer nur den juengsten Stand und
+   * uebernimmt eine Antwort nur, wenn sie noch dem Ziel entspricht.
+   */
+  const rotationsLauf = useRef(new Map<number, { ziel: number; laeuft: boolean }>());
+
   async function rotierePille(shift: Shift): Promise<void> {
     if (!canPlan || isMirrorShift(shift, selectedTeamId)) return;
     const datum = format(new Date(shift.startTime), "yyyy-MM-dd");
@@ -1104,8 +1120,12 @@ export default function Dienstplan() {
       return true;
     };
 
+    // Ausgangspunkt ist das zuletzt gewaehlte Ziel, nicht die Pille selbst:
+    // Bei schnellen Klicks hat das Raster den vorigen Klick evtl. noch nicht
+    // gezeichnet — sonst wuerde zweimal dieselbe „naechste" Person gewaehlt.
+    const lauf = rotationsLauf.current.get(shift.id) ?? { ziel: shift.userId, laeuft: false };
     const naechste = naechsteBesetzung({
-      aktuelleUserId: shift.userId,
+      aktuelleUserId: lauf.ziel,
       kandidaten: assistants.map((a) => ({ id: a.id, name: a.name })),
       istEinsatzfaehig: einsatzfaehig,
     });
@@ -1125,16 +1145,41 @@ export default function Dienstplan() {
       [{ ...shift, userId: naechste.id, user: { name: naechste.name } } as unknown as CachedShiftRow],
       selectedTeamId,
     );
+    lauf.ziel = naechste.id;
+    rotationsLauf.current.set(shift.id, lauf);
+    if (lauf.laeuft) return; // Der laufende Sender holt das neue Ziel nach.
+
+    lauf.laeuft = true;
+    let gesendet = shift.userId; // Stand, den der Server zuletzt bestaetigt hat
     try {
-      const aktualisiert = await updateShift.mutateAsync({
-        id: shift.id,
-        data: { userId: naechste.id } as { userId: number },
-      });
-      upsertShiftsInCache(queryClient, [aktualisiert], selectedTeamId);
+      while (lauf.ziel !== gesendet) {
+        const ziel = lauf.ziel;
+        const aktualisiert = await updateShift.mutateAsync({
+          id: shift.id,
+          data: { userId: ziel } as { userId: number },
+        });
+        gesendet = ziel;
+        // Nur uebernehmen, wenn inzwischen nicht weitergeklickt wurde —
+        // sonst wuerde die Antwort das Raster kurz zurueckspringen lassen.
+        if (lauf.ziel === ziel) upsertShiftsInCache(queryClient, [aktualisiert], selectedTeamId);
+      }
       void invalidateArbeitsdienstSalden(queryClient);
     } catch (err) {
-      upsertShiftsInCache(queryClient, [shift as unknown as CachedShiftRow], selectedTeamId);
+      const zurueck = assistants.find((a) => a.id === gesendet);
+      upsertShiftsInCache(
+        queryClient,
+        [
+          {
+            ...shift,
+            userId: gesendet,
+            user: { name: zurueck?.name ?? shift.user?.name ?? "" },
+          } as unknown as CachedShiftRow,
+        ],
+        selectedTeamId,
+      );
       toast.error(readableApiError(err, "Wechsel fehlgeschlagen."));
+    } finally {
+      rotationsLauf.current.delete(shift.id);
     }
   }
 
