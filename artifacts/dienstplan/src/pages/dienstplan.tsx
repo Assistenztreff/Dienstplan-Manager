@@ -40,7 +40,6 @@ import { Check, X, CalendarPlus, Trash2, Pencil, ChevronsLeft } from "lucide-rea
 import { ShiftDialog } from "@/components/shift-dialog";
 import { useVertretungAktivieren } from "@/lib/vertretung-aktivieren";
 import { BulkDeleteDialog } from "@/components/bulk-delete-dialog";
-import { AutoplanungDialog } from "@/components/autoplanung-dialog";
 import {
   PlanungsmodusLeiste,
   RUHEZEIT_REGELFALL,
@@ -481,11 +480,12 @@ export default function Dienstplan() {
   ) as { data?: User[]; isLoading: boolean };
 
   const goToMonth = (newDate: Date) => {
-    // Die gemerkten Entwuerfe des letzten Laufs gehoeren zum ANGEZEIGTEN
-    // Monat. Beim Wechsel verlieren sie ihren Bezug — „Neu würfeln" wuerde
-    // sonst im neuen Monat die Entwuerfe des alten loeschen wollen.
-    letzterLaufIds.current = [];
-    setHatEntwurf(false);
+    // Kay-Fehlermeldung 05.09.2026: Eine offene Mehrfachauswahl wirkte nach
+    // dem Monatswechsel weiter auf die Dienste des VORmonats — die IDs
+    // blieben stehen, die Ansicht zeigte laengst etwas anderes. Beim Wechsel
+    // wird sie deshalb geschlossen.
+    setDienstAuswahl([]);
+    setDienstAuswahlModus(false);
     setCurrentDate(newDate);
     setSelectedDay(startOfMonth(newDate));
     clearSelection();
@@ -532,7 +532,6 @@ export default function Dienstplan() {
   // Automatische Planung (Baustein 3): reines UI-Gate — der Assistent nutzt
   // nur Endpunkte, die ein Planer ohnehin aufrufen darf (POST /shifts/bulk).
   const canAutoPlan = canPlan && hasAccess(currentUser, "autoScheduling");
-  const [autoplanungOpen, setAutoplanungOpen] = useState(false);
 
   // ── Planungsmodus (Etappe 2, Kay 02.09.2026) ─────────────────────────────
   // Der Modus muss sichtbar sein: In ihm dreht ein Klick auf die Pille die
@@ -540,17 +539,6 @@ export default function Dienstplan() {
   // Zustand waere jeder Fehlklick eine stille Umbesetzung.
   const [planungsmodus, setPlanungsmodus] = useState(false);
   const [automatikLaeuft, setAutomatikLaeuft] = useState(false);
-  // Was der letzte Automatiklauf angelegt hat — Grundlage fuer „Neu wuerfeln"
-  // und „Rueckgaengig" im Hinweis. Nur diese Entwuerfe fasst das Wuerfeln an;
-  // was der Planer danach von Hand geaendert oder bestaetigt hat, bleibt.
-  const letzterLaufIds = useRef<number[]>([]);
-  /**
-   * Steht ein Entwurf aus einem Lauf dieser Sitzung im Raster? Steuert die
-   * Beschriftung des Knopfes: „Entwurf erstellen" beim ersten Mal, danach
-   * „Neuer Entwurf" (Kay-Auftrag 03.09.2026). Bewusst ein State und kein
-   * Ref-Lesen, weil die Leiste darauf neu zeichnen muss.
-   */
-  const [hatEntwurf, setHatEntwurf] = useState(false);
   /**
    * Die aktuellen Schichten als Ref.
    *
@@ -807,6 +795,28 @@ export default function Dienstplan() {
     }
   }
 
+  /**
+   * Steht im angezeigten Monat mindestens ein Entwurf, den ein neuer Lauf
+   * anfassen darf? Steuert die Beschriftung des Knopfes: „Entwurf erstellen"
+   * beim ersten Mal, danach „Neuer Entwurf". Bewusst aus den DATEN und nicht
+   * aus einem State — nach einem Monatswechsel stimmte der sonst nicht mehr
+   * (Kay-Fehlermeldung 05.09.2026).
+   */
+  const hatEntwurf = useMemo(() => {
+    const geruestIds = new Set(geruestDienste.map((d) => d.id));
+    const heute = format(new Date(), "yyyy-MM-dd");
+    return allShifts.some(
+      (sh) =>
+        sh.id > 0 &&
+        (sh.planningStatus ?? "FIX") === "VORLAEUFIG" &&
+        sh.shiftModelId != null &&
+        geruestIds.has(sh.shiftModelId) &&
+        !isMirrorShift(sh, selectedTeamId) &&
+        !isAbsenceShift(sh) &&
+        format(new Date(sh.startTime), "yyyy-MM-dd") >= heute,
+    );
+  }, [allShifts, geruestDienste, selectedTeamId]);
+
   /** Die Regelplan-Dienste in der Form, die der Planungslauf braucht. */
   const planDienste: PlanDienst[] = useMemo(
     () =>
@@ -821,14 +831,43 @@ export default function Dienstplan() {
   );
 
   /**
+   * Die Entwuerfe, die ein neuer Lauf im ANGEZEIGTEN Monat abraeumen darf.
+   *
+   * Kay-Fehlermeldung 05.09.2026: Frueher merkte sich ein Ref die IDs des
+   * letzten Laufs. Nach einem Monatswechsel war es leer — der Knopf hiess
+   * wieder „Entwurf erstellen" und meldete „Alles besetzt", obwohl der Monat
+   * voller Entwuerfe stand. Jetzt entscheidet der Zustand im Raster:
+   *
+   *  - nur ENTWUERFE (VORLAEUFIG). Versendete (ANGEBOTEN) und bestaetigte
+   *    (FIX) Dienste fasst der Lauf nie an — sie sind bereits eine Zusage.
+   *  - nur Dienste des Regelplans, ab heute; Vergangenes bleibt stehen.
+   *  - keine Abwesenheiten, keine Spiegel-Eintraege fremder Teams.
+   *  - bei offener Mehrfachauswahl NUR die ausgewaehlten: Was der Planer
+   *    per Haken abgewaehlt hat, soll ein neuer Entwurf nicht wegwerfen.
+   */
+  function abraeumbareEntwuerfe(liste: Shift[]): number[] {
+    const heute = format(new Date(), "yyyy-MM-dd");
+    const geruestIds = new Set(geruestDienste.map((d) => d.id));
+    const auswahlAktiv = planungsmodus && dienstAuswahlModus;
+    return liste
+      .filter((sh) => {
+        if (sh.id <= 0 || isMirrorShift(sh, selectedTeamId) || isAbsenceShift(sh)) return false;
+        if ((sh.planningStatus ?? "FIX") !== "VORLAEUFIG") return false;
+        if (sh.shiftModelId == null || !geruestIds.has(sh.shiftModelId)) return false;
+        if (format(new Date(sh.startTime), "yyyy-MM-dd") < heute) return false;
+        return !auswahlAktiv || dienstAuswahlSet.has(sh.id);
+      })
+      .map((sh) => sh.id);
+  }
+
+  /**
    * Fuehrt einen Planungslauf aus und legt das Ergebnis als Entwuerfe an.
    *
-   * `nurLuecken=false` (Neu wuerfeln) raeumt vorher die Entwuerfe des letzten
-   * Laufs ab — und NUR die. Was der Planer danach von Hand geaendert oder
-   * bestaetigt hat, bleibt stehen; ein Wuerfeln, das eigene Arbeit wegwirft,
-   * waere keine Hilfe.
+   * Raeumt zuvor die Entwuerfe des Monats ab (s. abraeumbareEntwuerfe) und
+   * besetzt die frei gewordenen Plaetze neu. Beim ersten Lauf gibt es nichts
+   * abzuraeumen — dann fuellt er einfach die offenen Plaetze.
    */
-  async function starteAutomatik(nurLuecken = true): Promise<void> {
+  async function starteAutomatik(): Promise<void> {
     if (automatikLaeuft || !canAutoPlan) return;
     if (planDienste.length === 0) {
       toast.info(
@@ -839,20 +878,13 @@ export default function Dienstplan() {
     setAutomatikLaeuft(true);
     try {
       let basis = allShiftsRef.current;
-      if (!nurLuecken && letzterLaufIds.current.length > 0) {
-        // Nur loeschen, was es NOCH GIBT. Der Server loescht einen Sammel-
-        // auftrag ganz oder gar nicht und antwortet 404, sobald eine ID fehlt.
-        // Genau das passierte Kay am 03.09.2026: Die gemerkten IDs stammten
-        // teils aus einem Lauf, dessen Entwuerfe er zwischendurch geloescht
-        // hatte — „Die alten Entwürfe ließen sich nicht abräumen", und der
-        // Lauf brach ab, statt einfach neu zu planen.
-        const vorhanden = new Set(allShiftsRef.current.map((sh) => sh.id));
-        const wegIds = letzterLaufIds.current.filter((id) => vorhanden.has(id));
-        letzterLaufIds.current = [];
+      {
+        const wegIds = abraeumbareEntwuerfe(allShiftsRef.current);
         if (wegIds.length > 0) {
           // Sofort aus dem Raster nehmen, dann loeschen (Echtzeit-Regel).
           removeShiftsFromCache(queryClient, wegIds);
-          basis = allShiftsRef.current.filter((sh) => !wegIds.includes(sh.id));
+          const weg = new Set(wegIds);
+          basis = allShiftsRef.current.filter((sh) => !weg.has(sh.id));
           try {
             for (const block of chunkIds(wegIds)) {
               await bulkDeleteShifts.mutateAsync({ data: { ids: block } });
@@ -1039,7 +1071,6 @@ export default function Dienstplan() {
         auftraege.map(([userId, liste]) => legeAn(userId, liste)),
       );
 
-      const neueIds: number[] = [];
       const fehler: string[] = [];
       let angelegt = 0;
       for (const [i, ergebnis] of ergebnisse.entries()) {
@@ -1048,7 +1079,6 @@ export default function Dienstplan() {
         if (ergebnis.status === "fulfilled") {
           const { shifts: neu, teamId: zielTeam } = ergebnis.value;
           upsertShiftsInCache(queryClient, neu as CachedShiftRow[], zielTeam);
-          for (const sh of neu) neueIds.push(sh.id);
           angelegt += neu.length;
         } else {
           const vorname = liste[0]!.userName.trim().split(/\s+/)[0];
@@ -1056,8 +1086,6 @@ export default function Dienstplan() {
         }
       }
       void invalidateArbeitsdienstSalden(queryClient);
-      letzterLaufIds.current = neueIds;
-      setHatEntwurf(neueIds.length > 0);
 
       if (fehler.length > 0) {
         // Bewusst ohne Selbstschliessen: Ein Hinweis, der nach vier Sekunden
@@ -1825,6 +1853,11 @@ export default function Dienstplan() {
     const ziele = [...zuBestaetigen];
     if (ziele.length === 0) return;
     setDialog({ mode: "closed" });
+    // Kay-Auftrag 05.09.2026: Die Auswahl schliesst SOFORT, nicht erst nach
+    // der letzten Server-Antwort. Sie hat ihren Zweck erfuellt; bei 87
+    // Diensten stand sie sonst noch lange offen (wie beim Loeschen auch).
+    setDienstAuswahl([]);
+    setDienstAuswahlModus(false);
     upsertShiftsInCache(
       queryClient,
       ziele.map((s) => ({ ...s, planningStatus: "FIX" }) as unknown as CachedShiftRow),
@@ -1847,8 +1880,6 @@ export default function Dienstplan() {
       );
       return;
     }
-    setDienstAuswahl([]);
-    setDienstAuswahlModus(false);
     toast.success(
       `${ziele.length} ${ziele.length === 1 ? "Dienst" : "Dienste"} bestätigt — zählen jetzt in Auswertungen und Stundennachweis.`,
     );
@@ -1960,7 +1991,6 @@ export default function Dienstplan() {
       stundenkontoOpen={stundenkontoOpen}
       onToggleStundenkonto={() => setStundenkontoOpenFlag(stundenkontoOpen ? "0" : "1")}
       canAutoPlan={canAutoPlan}
-      onAutoPlanung={() => setAutoplanungOpen(true)}
       planungsmodus={planungsmodus}
       onTogglePlanungsmodus={() => {
         setPlanungsmodus((an) => {
@@ -2051,7 +2081,7 @@ export default function Dienstplan() {
             grenzenSpeichern={() => void speichereGrenzen()}
             laeuft={automatikLaeuft}
             hatEntwurf={hatEntwurf}
-            onAutomatik={() => void starteAutomatik(!hatEntwurf)}
+            onAutomatik={() => void starteAutomatik()}
             auswahlAktiv={dienstAuswahlModus}
             onAuswahlUmschalten={alleDiensteAuswaehlen}
             anzahlAusgewaehlt={dienstAuswahl.length}
@@ -2099,6 +2129,7 @@ export default function Dienstplan() {
             days={days}
             monthStart={start}
             shifts={visibleShifts}
+            alleShifts={allShifts}
             modelMap={modelMap}
             selectedDay={selectedDay}
             onSelectDay={setSelectedDay}
@@ -2155,6 +2186,7 @@ export default function Dienstplan() {
             days={days}
             monthStart={start}
             shifts={visibleShifts}
+            alleShifts={allShifts}
             modelMap={modelMap}
             selectedDay={selectedDay}
             onSelectDay={setSelectedDay}
@@ -2432,20 +2464,6 @@ export default function Dienstplan() {
         </AlertDialog>
       )}
 
-      {canPlan && canAutoPlan && (
-        <AutoplanungDialog
-          open={autoplanungOpen}
-          onClose={() => setAutoplanungOpen(false)}
-          geruestDienste={geruestDienste}
-          days={days}
-          monatsLabel={format(currentDate, "MMMM yyyy", { locale: de })}
-          shifts={allShifts.filter((s) => !isMirrorShift(s, selectedTeamId))}
-          assistants={assistants}
-          absenceByUser={absenceByUser}
-          eintraege={stundenkontoEintraege}
-          teamId={selectedTeamId}
-        />
-      )}
 
       {canPlan && (
         <AlertDialog

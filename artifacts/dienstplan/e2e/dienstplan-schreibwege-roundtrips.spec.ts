@@ -124,15 +124,14 @@ test("automatische Planung: parallel statt nacheinander, Ergebnis sofort sichtba
     if (r.url().includes("/api/")) requests += 1;
   });
 
-  await page.getByTestId("header-overflow").click();
-  await page.getByTestId("open-autoplanung").click();
-  const dialog = page.getByTestId("autoplanung-dialog");
-  for (const id of personIds) await dialog.getByTestId(`autoplanung-person-${id}`).click();
-  await expect(dialog.getByTestId("autoplanung-vorschau")).toBeVisible();
+  // Seit dem 05.09.2026 sitzt die automatische Planung ausschliesslich in der
+  // Planungsmodus-Leiste; der alte Dialog im Ueberlauf-Menue ist weg.
+  await page.getByTestId("toggle-planungsmodus").click();
+  await expect(page.getByTestId("planungsmodus-leiste")).toBeVisible();
 
   requests = 0;
   const t0 = Date.now();
-  await dialog.getByTestId("autoplanung-anlegen").click();
+  await page.getByTestId("planungsmodus-automatik").click();
 
   // Kern der Zusage: Die Pillen stehen im Raster, WAEHREND die Requests noch
   // unterwegs sind — deutlich vor Ablauf einer einzigen Latenz.
@@ -145,10 +144,7 @@ test("automatische Planung: parallel statt nacheinander, Ergebnis sofort sichtba
     `Das Raster wartete ${tSichtbar} ms auf den Server (Latenz ${LATENZ_MS} ms) — die Anzeige muss vorlegen, nicht warten.`,
   ).toBeLessThan(LATENZ_MS);
 
-  // Und der Dialog ist sofort zu, nicht erst nach der letzten Antwort.
-  await expect(dialog).toHaveCount(0);
-
-  await expect(page.getByText(/Dienste als Entwurf angelegt/)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/Dienste als Entwurf eingeplant/)).toBeVisible({ timeout: 15_000 });
   await page.waitForLoadState("networkidle");
 
   // Parallel, nicht nacheinander: Fuenf Personen, aber die Schreibphase dauert

@@ -251,6 +251,7 @@ export function MonthGrid({
   days,
   monthStart,
   shifts,
+  alleShifts,
   modelMap,
   selectedDay,
   onSelectDay,
@@ -278,6 +279,16 @@ export function MonthGrid({
   days: Date[];
   monthStart: Date;
   shifts: Shift[];
+  /**
+   * ALLE Schichten des Monats — auch die, die der Personenfilter gerade
+   * ausblendet. Nur fuer die Frage „ist dieser Dienst schon besetzt?".
+   *
+   * Kay-Fehlermeldung 05.09.2026: Waehlt man im Stundenkonto eine einzelne
+   * Assistenzkraft, erschienen offene Plaetze fuer Dienste, die laengst von
+   * jemand anderem besetzt sind — die Zelle rechnete gegen die GEFILTERTE
+   * Liste. Ohne diesen Wert faellt die Zelle auf `shifts` zurueck.
+   */
+  alleShifts?: Shift[];
   modelMap: Map<number, ShiftModelInfo>;
   selectedDay: Date;
   onSelectDay: (day: Date) => void;
@@ -511,6 +522,11 @@ export function MonthGrid({
         ))}
         {days.map((day, dayIdx) => {
           const dayShifts = shifts.filter((s) => isSameDay(new Date(s.startTime), day));
+          // Belegung immer gegen ALLE Schichten des Tages, nie gegen die vom
+          // Personenfilter uebrig gelassenen (s. Prop alleShifts).
+          const dayShiftsAlle = (alleShifts ?? shifts).filter((s) =>
+            isSameDay(new Date(s.startTime), day),
+          );
           const selected = isSameDay(day, selectedDay);
           const today = isToday(day);
           // Chronologisch sortieren: das Pillen-Limit (2 bzw. 4) soll immer die
@@ -560,7 +576,11 @@ export function MonthGrid({
           // dasselbe Schichtmodell und schliesst die Luecke daher von selbst.
           const offenePlaetze =
             geruestDienste && geruestDienste.length > 0
-              ? offenePlaetzeFuerTag(geruestDienste, day, nonAbsence)
+              ? offenePlaetzeFuerTag(
+                  geruestDienste,
+                  day,
+                  dayShiftsAlle.filter((s) => !isAbsenceShift(s)),
+                )
               : [];
           // Platzhalter fuellen nur den REST des Pillen-Limits: besetzte
           // Dienste haben Vorrang, ein offener Platz darf sie nie verdraengen.

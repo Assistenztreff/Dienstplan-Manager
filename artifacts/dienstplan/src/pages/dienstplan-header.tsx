@@ -114,7 +114,6 @@ export function DienstplanHeader({
   stundenkontoOpen,
   onToggleStundenkonto,
   canAutoPlan,
-  onAutoPlanung,
   planungsmodus,
   onTogglePlanungsmodus,
 }: {
@@ -153,11 +152,12 @@ export function DienstplanHeader({
   canSeeStundenkonto: boolean;
   stundenkontoOpen: boolean;
   onToggleStundenkonto: () => void;
-  /** Automatische Planung (Baustein 3): Premium-Recht autoScheduling.
-   *  false blendet den Eintrag nicht aus, sondern fuehrt zur Preise-Seite —
-   *  dasselbe Muster wie beim gesperrten "Auswaehlen". */
+  /** Planungsmodus (Premium-Recht autoScheduling): schaltet den Umschalter
+   *  am Titel frei. Die automatische Planung sitzt seit dem 05.09.2026
+   *  ausschliesslich in der Planungsmodus-Leiste — der alte Dialog im
+   *  Ueberlauf-Menue ist weg (Kay-Auftrag: „Alte automatische Planung aus
+   *  dem Menü und den Dialog löschen"). */
   canAutoPlan: boolean;
-  onAutoPlanung: () => void;
   /** Planungsmodus (Etappe 2): In ihm dreht ein Klick auf die Pille die
    *  Person weiter, statt den Bearbeiten-Dialog zu oeffnen. Deshalb ist der
    *  Zustand sichtbar und liegt links, wo der Blick zuerst hinfaellt. */
@@ -442,31 +442,6 @@ export function DienstplanHeader({
             >
               <Lock className="h-4 w-4" />
               <span>Auswählen</span>
-            </DropdownMenuItem>
-          ))}
-        {canPlan &&
-          (canAutoPlan ? (
-            <DropdownMenuItem
-              className="min-h-[44px] gap-2"
-              onSelect={onAutoPlanung}
-              title="Offene Plätze des Regelplans reihum auf Assistenzkräfte verteilen (als Entwürfe)."
-              data-testid="open-autoplanung"
-            >
-              <Wand2 className="h-4 w-4" />
-              <span>Automatische Planung</span>
-            </DropdownMenuItem>
-          ) : (
-            // Wie beim gesperrten "Auswaehlen": klickbar statt disabled, weil
-            // Touch-Geraete keinen Tooltip haben — der Klick erklaert Premium.
-            <DropdownMenuItem
-              className="min-h-[44px] gap-2"
-              onSelect={() => navigateHeader("/preise")}
-              title="Automatische Planung ist in Premium enthalten. Preise & Premium ansehen."
-              aria-label="Automatische Planung (Premium) — Preise & Premium ansehen"
-              data-testid="open-autoplanung-locked"
-            >
-              <Lock className="h-4 w-4" />
-              <span>Automatische Planung</span>
             </DropdownMenuItem>
           ))}
         {(canBasicExport || showSelectionEntry || canPlan) && <DropdownMenuSeparator />}
