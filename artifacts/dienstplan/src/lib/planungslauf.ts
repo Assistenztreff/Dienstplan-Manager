@@ -258,12 +258,21 @@ class Stundenbedarf {
   readonly aktiv: boolean;
   private readonly frei = new Map<number, number>();
 
-  constructor(personen: PlanPerson[], freieStunden: Map<number, number> | undefined) {
+  /** Monats-Soll je Person — macht den Bedarf vergleichbar (s. dringlichkeit). */
+  private readonly soll = new Map<number, number>();
+
+  constructor(
+    personen: PlanPerson[],
+    freieStunden: Map<number, number> | undefined,
+    monatsSoll: Map<number, number> | undefined,
+  ) {
     this.aktiv = freieStunden !== undefined && personen.some((p) => freieStunden.has(p.id));
     if (!this.aktiv) return;
     for (const p of personen) {
       const wert = freieStunden!.get(p.id);
       if (wert !== undefined) this.frei.set(p.id, wert);
+      const soll = monatsSoll?.get(p.id);
+      if (soll !== undefined && soll > 0) this.soll.set(p.id, soll);
     }
   }
 
@@ -278,9 +287,34 @@ class Stundenbedarf {
     return rest > 0 ? null : "soll_erfuellt";
   }
 
-  /** Vergleichswert: je groesser, desto dringender braucht die Person Stunden. */
+  /** Noch offene Stunden dieser Person (Ersatzweg: wer liegt am wenigsten drueber). */
   bedarf(personId: number): number {
     return this.aktiv ? (this.frei.get(personId) ?? Number.NEGATIVE_INFINITY) : 0;
+  }
+
+  /**
+   * Vergleichswert fuer die Vergabe: je groesser, desto dringender.
+   *
+   * Mit bekanntem Monats-Soll ist das der ANTEIL des Solls, der noch offen
+   * ist — nicht die absolute Stundenzahl. Kay-Fehlermeldung 05.09.2026:
+   * „Neubert bleibt immer an erster Stelle, bis zum 19. bleiben die Schichten
+   * fast gleich." Nach absolutem Rest steht die Vollzeitkraft strukturell
+   * vorn (191 h vor 120 h), die Teilzeitkraefte kommen erst spaeter im Monat
+   * gehaeuft dran, und zum Mischen gab es am Monatsanfang nur zwei
+   * Kandidaten. Nach Anteil sind am 1. alle bei 0 % — alle gleichauf, jede
+   * Person kommt gleichmaessig ueber den Monat verteilt dran, und der Zufall
+   * hat wirklich etwas zu entscheiden. Ohne Soll bleibt der absolute Rest.
+   */
+  dringlichkeit(personId: number): number {
+    const rest = this.bedarf(personId);
+    const soll = this.soll.get(personId);
+    return soll === undefined ? rest : rest / soll;
+  }
+
+  /** Um wie viel sinkt die Dringlichkeit dieser Person durch EINEN Dienst? */
+  schrittweite(personId: number, stunden: number): number {
+    const soll = this.soll.get(personId);
+    return soll === undefined ? stunden : stunden / soll;
   }
 
 
@@ -366,7 +400,7 @@ export function planeMonat(eingabe: {
   }
 
   const belegungen = new Belegungen(personen, bestehende);
-  const bedarf = new Stundenbedarf(personen, eingabe.freieStunden);
+  const bedarf = new Stundenbedarf(personen, eingabe.freieStunden, eingabe.monatsSollStunden);
   /** Wie oft ist jede Person bisher als Vertretung vorgemerkt? Verteilt die
    *  Vormerkungen, statt sie immer derselben Person zu geben. */
   const vormerkungen = new Map<number, number>();
@@ -421,8 +455,9 @@ export function planeMonat(eingabe: {
         }
       }
 
-      // 2. Sonst: Von allen, die koennen, die Person mit dem groessten Bedarf.
-      //    Reihenfolge ab dem Rotationszeiger — bei gleichem Bedarf gewinnt,
+      // 2. Sonst: Von allen, die koennen, die Person mit der groessten
+      //    Dringlichkeit — dem groessten noch offenen ANTEIL ihres Solls.
+      //    Reihenfolge ab dem Rotationszeiger — bei Gleichstand gewinnt,
       //    wer als Naechstes dran ist (reines Reihum ohne Vertragsstunden).
       //
       //    Braucht NIEMAND mehr Stunden, bleibt der Platz trotzdem nicht leer
@@ -469,7 +504,10 @@ export function planeMonat(eingabe: {
             continue;
           }
           frei.push({ idx, person: p });
-          if (beste === null || bedarf.bedarf(p.id) > bedarf.bedarf(beste.person.id)) {
+          if (
+            beste === null ||
+            bedarf.dringlichkeit(p.id) > bedarf.dringlichkeit(beste.person.id)
+          ) {
             beste = { idx, person: p };
           }
           if (!bedarf.aktiv) break; // Reihum: die erste freie Person nimmt.
@@ -477,8 +515,12 @@ export function planeMonat(eingabe: {
         if (beste !== null && zufall !== undefined && bedarf.aktiv) {
           // Mischen innerhalb der Toleranz: Wer hoechstens eine Schicht
           // weniger braucht als der Spitzenreiter, darf ihn vertreten.
-          const spitze = bedarf.bedarf(beste.person.id);
-          const kandidaten = frei.filter((k) => bedarf.bedarf(k.person.id) > spitze - stunden);
+          const spitze = bedarf.dringlichkeit(beste.person.id);
+          const kandidaten = frei.filter(
+            (k) =>
+              bedarf.dringlichkeit(k.person.id) + bedarf.schrittweite(k.person.id, stunden) >
+              spitze,
+          );
           beste = kandidaten[wuerfel(kandidaten.length)] ?? beste;
         }
         beste ??= ersatz;

@@ -23,13 +23,22 @@ noch eine Empfehlung. `soll_erfuellt` und `keine_vertragsstunden` sind seitdem
 praktisch keine Gruende mehr, warum ein Platz offen bleibt.
 
 **Wie es jetzt entscheidet.** `planeMonat` bekommt `freieStunden` — je Person
-die noch offenen Vertragsstunden des Monats. Von allen, die den Platz
-uebernehmen KOENNEN, bekommt ihn die Person mit dem groessten Rest. Die
-Reihenfolge der Personenliste ist nur noch Gleichstandsregel; bei gleichen
-Vertraegen ergibt sich damit exakt das alte Reihum. Wer bei ≤ 0 steht, wird
-uebersprungen (`soll_erfuellt`); wer noch etwas braucht, darf den ganzen
-Dienst nehmen, auch wenn er damit drueber rutscht — das ist die „eine Schicht
-Toleranz".
+die noch offenen Vertragsstunden des Monats — und `monatsSollStunden`. Von
+allen, die den Platz uebernehmen KOENNEN, bekommt ihn die Person mit dem
+groessten noch offenen ANTEIL ihres Solls (`dringlichkeit`), nicht mit dem
+groessten absoluten Rest. Kay-Fehlermeldung 05.09.2026 („Neubert bleibt
+immer an erster Stelle, bis zum 19. bleiben die Schichten fast gleich"):
+Nach absolutem Rest steht die Vollzeitkraft strukturell vorn und die
+Teilzeitkraefte kommen erst spaeter im Monat gehaeuft dran. Nach Anteil sind
+am 1. alle bei 0 %, jede Person verteilt sich gleichmaessig ueber den Monat.
+Folge: Hat der Monat weniger Dienste als alle zusammen Soll, fehlt jedem ein
+aehnlicher Anteil (Neubert 144–168 h von 191, Teilzeit 96–120 von 120) —
+das ist gewollt, nicht „Neubert bekommt zu wenig". Ohne Soll gilt der
+absolute Rest. Die Reihenfolge der Personenliste ist nur noch
+Gleichstandsregel; bei gleichen Vertraegen ergibt sich damit exakt das alte
+Reihum. Wer bei ≤ 0 steht, wird uebersprungen (`soll_erfuellt`); wer noch
+etwas braucht, darf den ganzen Dienst nehmen, auch wenn er damit drueber
+rutscht — das ist die „eine Schicht Toleranz".
 
 **Woher die Zahl kommt.** `starteAutomatik` in `dienstplan.tsx` ruft
 `berechneStundenkontoEintraege(...)` — dieselbe Rechnung, die im Stundenkonto
@@ -195,7 +204,9 @@ Auswahlmodus: alles auswaehlen, Muelleimer.
 mal derselbe Dienstplan"). `planeMonat` ist ohne `zufall` vollstaendig
 vorhersagbar — gut fuer Tests, schlecht fuer den Knopf. `dienstplan.tsx` gibt
 `zufall: Math.random` mit. Gemischt wird nur, wo es das Soll nicht kostet:
-unter allen, die koennen und hoechstens eine Schicht weniger brauchen als der
-Spitzenreiter, entscheidet der Zufall; ausserdem startet jede Rotation an
-zufaelliger Stelle. Tests bleiben deterministisch, weil sie `zufall`
+unter allen, die koennen und deren Dringlichkeit hoechstens eine eigene
+Schicht (`schrittweite`) unter dem Spitzenreiter liegt, entscheidet der
+Zufall; ausserdem startet jede Rotation an zufaelliger Stelle. Gemessen mit
+Kays Zahlen: zwischen zwei Entwuerfen sind nur 2–6 von 30 Tagen gleich
+besetzt, der 1. wechselt jedes Mal. Tests bleiben deterministisch, weil sie `zufall`
 weglassen oder einen Seed (mulberry32) mitgeben.
